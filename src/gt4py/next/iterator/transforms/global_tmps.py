@@ -177,6 +177,7 @@ def _transform_stmt(
 def create_global_tmps(
     program: itir.Program,
     offset_provider: common.OffsetProvider,
+    symbolic_domain_sizes: Optional[dict[str, str]],
     *,
     uids: Optional[eve_utils.UIDGenerator] = None,
 ) -> itir.Program:
@@ -186,7 +187,9 @@ def create_global_tmps(
     This pass looks at all `as_fieldop` calls and transforms field-typed subexpressions of its
     arguments into temporaries.
     """
-    program = infer_domain.infer_program(program, offset_provider=offset_provider)
+    program = infer_domain.infer_program(
+        program, offset_provider=offset_provider, symbolic_domain_sizes=symbolic_domain_sizes
+    )
     program = type_inference.infer(
         program, offset_provider_type=common.offset_provider_to_type(offset_provider)
     )

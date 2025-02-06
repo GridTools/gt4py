@@ -126,7 +126,12 @@ def apply_common_transforms(
 
     if extract_temporaries:
         ir = infer(ir, inplace=True, offset_provider_type=offset_provider_type)
-        ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider, uids=tmp_uids)
+        ir = global_tmps.create_global_tmps(
+            ir,
+            offset_provider=offset_provider,
+            symbolic_domain_sizes=symbolic_domain_sizes,
+            uids=tmp_uids,
+        )
 
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
