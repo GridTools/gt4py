@@ -621,7 +621,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
             #  node can be removed (`\mathbb{E}`) or has to be restored (`\mathbb{S}`).
             #  Note that "removed" here means that it is reconstructed by a new
             #  output of the second map.
-            if self.is_shared_data(intermediate_node, sdfg):
+            if self.is_shared_data(data=intermediate_node, state=state, sdfg=sdfg):
                 # The intermediate data is used somewhere else, either in this or another state.
                 shared_outputs.add(out_edge)
             else:
@@ -798,7 +798,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
             #  It will only have the shape `new_inter_shape` which is basically its
             #  output within one Map iteration.
             #  NOTE: The insertion process might generate a new name.
-            new_inter_name: str = f"__s{sdfg.node_id(state)}_n{state.node_id(out_edge.src)}{out_edge.src_conn}_n{state.node_id(out_edge.dst)}{out_edge.dst_conn}"
+            new_inter_name: str = f"__s{self.state_id}_n{state.node_id(out_edge.src)}{out_edge.src_conn}_n{state.node_id(out_edge.dst)}{out_edge.dst_conn}"
 
             # Now generate the intermediate data container.
             if len(new_inter_shape) == 0:
