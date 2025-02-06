@@ -587,15 +587,13 @@ def translate_concat_where(
     assert len(node.args) == 3
 
     # First argument should be the domain expression to infer the domain of next
-    # two arguments: it is used by the domain inference pass and just ignored here.
-    assert cpm.is_call_to(node.args[0], "cartesian_domain")
-    if len(node.args[0].args) != 1:
+    # two arguments: the range extent is used by the domain inference pass and
+    # just ignored here; we only extract the dimension along which we need to
+    # concatenate the field arguments.
+    concat_domain = extract_domain(node.args[0])
+    if len(concat_domain) != 1:
         raise NotImplementedError("Expected `concat_where` along single axis.")
-    assert cpm.is_call_to(node.args[0].args[0], "named_range")
-    assert len(node.args[0].args[0].args) == 3
-    axis_arg = node.args[0].args[0].args[0]
-    assert isinstance(axis_arg, gtir.AxisLiteral)
-    concat_dim = gtx_common.Dimension(axis_arg.value, axis_arg.kind)
+    concat_dim, _, _ = concat_domain[0]
 
     f1, f2 = (sdfg_builder.visit(node.args[i], sdfg=sdfg, head_state=state) for i in [1, 2])
 
