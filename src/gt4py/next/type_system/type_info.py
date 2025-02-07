@@ -567,7 +567,9 @@ def promote(
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
 
-    >>> promote(ts.FieldType(dims=[J, I], dtype=dtype), ts.FieldType(dims=[K], dtype=dtype))
+    >>> promoted: ts.FieldType = promote(
+    ...     ts.FieldType(dims=[J, I], dtype=dtype), ts.FieldType(dims=[K], dtype=dtype)
+    ... )
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
     """

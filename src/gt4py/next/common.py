@@ -1132,9 +1132,9 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         >>> K = Dimension("K", DimensionKind.VERTICAL)
         >>> E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
         >>> E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
-        >>> promote_dims_new([K, J], [I, K]) == [I, J, K]
+        >>> promote_dims([K, J], [I, K]) == [I, J, K]
         True
-        >>> promote_dims_new([K, I], [E2C, E2V]) == [I, K, E2C, E2V]
+        >>> promote_dims([K, I], [E2C, E2V]) == [I, K, E2C, E2V]
         True
     """
 
