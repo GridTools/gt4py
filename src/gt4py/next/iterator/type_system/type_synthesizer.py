@@ -93,13 +93,19 @@ def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
 
 
 @_register_builtin_type_synthesizer(fun_names=builtins.BINARY_MATH_NUMBER_BUILTINS)
-def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType:
+def _(
+    lhs: ts.ScalarType | ts.FieldType, rhs: ts.ScalarType | ts.FieldType
+) -> ts.ScalarType | ts.FieldType:
     if isinstance(lhs, ts.DeferredType):
         return rhs
     if isinstance(rhs, ts.DeferredType):
         return lhs
-    assert lhs == rhs
-    return lhs
+    if lhs == rhs:
+        return lhs
+    else:
+        assert isinstance(lhs, ts.FieldType) and isinstance(rhs, ts.FieldType)
+        assert lhs.dtype == rhs.dtype
+        return ts.FieldType(dims=common.promote_dims_new(*[lhs.dims, rhs.dims]), dtype=lhs.dtype)
 
 
 @_register_builtin_type_synthesizer(

@@ -23,7 +23,6 @@ from gt4py.next.common import (
     named_range,
     NamedRange,
     promote_dims,
-    promote_dims_new,
     unit_range,
 )
 
@@ -336,11 +335,9 @@ def test_domain_intersection_different_dimensions(a_domain, second_domain, expec
 def test_domain_intersection_reversed_dimensions(a_domain):
     domain2 = Domain(dims=(JDim, IDim), ranges=(UnitRange(2, 12), UnitRange(7, 17)))
 
-    with pytest.raises(
-        ValueError,
-        match="Dimensions can not be promoted. The following dimensions appear in contradicting order: IDim, JDim.",
-    ):
-        a_domain & domain2
+    assert a_domain & domain2 == Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(7, 10), UnitRange(5, 12), UnitRange(20, 30))
+    )
 
 
 @pytest.mark.parametrize(
@@ -576,36 +573,6 @@ def test_domain_replace(index, named_ranges, domain, expected):
 
 
 def dimension_promotion_cases() -> (
-    list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
-):
-    raw_list = [
-        # list of list of dimensions, expected result, expected error message
-        ([["I", "J"], ["I"]], ["I", "J"], None),
-        ([["I", "J"], ["J"]], ["I", "J"], None),
-        ([["I", "J"], ["J", "K"]], ["I", "J", "K"], None),
-        (
-            [["I", "J"], ["J", "I"]],
-            None,
-            r"The following dimensions appear in contradicting order: I, J.",
-        ),
-        (
-            [["I", "K"], ["J", "K"]],
-            None,
-            r"Could not determine order of the following dimensions: I, J",
-        ),
-    ]
-    # transform dimension names into Dimension objects
-    return [
-        (
-            [[Dimension(el) for el in arg] for arg in args],
-            [Dimension(el) for el in result] if result else result,
-            msg,
-        )
-        for args, result, msg in raw_list
-    ]
-
-
-def dimension_promotion_cases_new() -> (
     list[tuple[list[list[Dimension]], list[Dimension]]]
 ):  # TODO: rename and remove promote_dims
     raw_list = [
@@ -639,27 +606,12 @@ def dimension_promotion_cases_new() -> (
     ]
 
 
-@pytest.mark.parametrize("dim_list,expected_result", dimension_promotion_cases_new())
-def test_new_dimension_promotion(  # TODO: rename and remove promote_dims
-    dim_list: list[list[Dimension]],
-    expected_result: Optional[list[Dimension]],
-):
-    assert promote_dims_new(*dim_list) == expected_result
-
-
-@pytest.mark.parametrize("dim_list,expected_result,expected_error_msg", dimension_promotion_cases())
+@pytest.mark.parametrize("dim_list,expected_result", dimension_promotion_cases())
 def test_dimension_promotion(
     dim_list: list[list[Dimension]],
     expected_result: Optional[list[Dimension]],
-    expected_error_msg: Optional[str],
 ):
-    if expected_result:
-        assert promote_dims(*dim_list) == expected_result
-    else:
-        with pytest.raises(Exception) as exc_info:
-            promote_dims(*dim_list)
-
-        assert exc_info.match(expected_error_msg)
+    assert promote_dims(*dim_list) == expected_result
 
 
 class TestCartesianConnectivity:

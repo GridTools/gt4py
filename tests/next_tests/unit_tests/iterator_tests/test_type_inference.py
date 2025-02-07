@@ -43,7 +43,7 @@ from next_tests.integration_tests.cases import (
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import simple_mesh
-
+from next_tests.integration_tests.cases import IField, JField
 
 bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
@@ -52,8 +52,11 @@ float64_list_type = ts.ListType(element_type=float64_type)
 int_list_type = ts.ListType(element_type=int_type)
 
 float_i_field = ts.FieldType(dims=[IDim], dtype=float64_type)
+float_j_field = ts.FieldType(dims=[JDim], dtype=float64_type)
+float_ij_field = ts.FieldType(dims=[IDim, JDim], dtype=float64_type)
 float_vertex_k_field = ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
 float_edge_k_field = ts.FieldType(dims=[Edge, KDim], dtype=float64_type)
+float_edge_field = ts.FieldType(dims=[Edge], dtype=float64_type)
 float_vertex_v2e_field = ts.FieldType(dims=[Vertex, V2EDim], dtype=float64_type)
 
 it_on_v_of_e_type = it_ts.IteratorType(
@@ -75,6 +78,7 @@ def expression_test_cases():
         (im.call("abs")(1), int_type),
         (im.call("power")(2.0, 2), float64_type),
         (im.plus(1, 2), int_type),
+        (im.plus(im.ref("inp1", float_i_field), im.ref("inp2", float_j_field)), float_ij_field),
         (im.eq(1, 2), bool_type),
         (im.deref(im.ref("it", it_on_e_of_e_type)), it_on_e_of_e_type.element_type),
         (im.can_deref(im.ref("it", it_on_e_of_e_type)), bool_type),
@@ -185,6 +189,8 @@ def expression_test_cases():
             ),
             ts.DeferredType(constraint=None),
         ),
+        # (im.as_fieldop(im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))))(
+        #    im.ref("inp1", float_i_field), im.ref("inp2", float_j_field)), float_ij_field),
         # if in field-view scope
         (
             im.if_(
@@ -486,6 +492,21 @@ def test_if_stmt():
     )
     assert result.cond.type == bool_type
     assert result.true_branch[0].expr.type == float_i_field
+
+
+def test_as_fieldop_without_domain_new():
+    stencil = im.lambda_("it")(im.deref(im.shift("V2E", 0)("it")))
+    result_stencil = itir_type_inference.infer(
+        stencil, offset_provider_type={"V2E": V2E}, allow_undeclared_symbols=False
+    )
+    testee = im.as_fieldop(stencil)(im.ref("inp", float_edge_field))
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={"V2E": V2E}, allow_undeclared_symbols=False
+    )
+    assert result.type == ts.FieldType(dims=[Vertex], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype
+    )
 
 
 def test_as_fieldop_without_domain():
