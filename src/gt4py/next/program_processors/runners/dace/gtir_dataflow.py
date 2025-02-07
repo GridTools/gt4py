@@ -533,14 +533,17 @@ class LambdaToDataflow(eve.NodeVisitor):
             assert isinstance(node.type, ts.ScalarType)
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, subset="0")
 
-        # default case: deref a field with one or more dimensions
+        # handle default case below: deref a field with one or more dimensions
+
+        # when the indices are all dace symbolic expressions, the deref is lowered
+        # to a memlet, where the index is the memlet subset
         if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
             # when all indices are symbolic expressions, we can perform direct field access through a memlet
             field_subset = arg_expr.get_memlet_subset(self.sdfg)
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, field_subset)
 
-        # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
-        # either indirection through connectivity table or dynamic cartesian offset.
+        # when any of the indices is a runtime value (either a dynamic cartesian
+        # offset or a connectivity offset), the deref is lowered to a tasklet
         assert all(dim in arg_expr.indices for dim, _ in arg_expr.field_domain)
         assert len(field_desc.shape) == len(arg_expr.field_domain)
         field_indices = [(dim, arg_expr.indices[dim]) for dim, _ in arg_expr.field_domain]
@@ -559,7 +562,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             for dim, index in field_indices
         )
         deref_node = self._add_tasklet(
-            "runtime_deref",
+            "deref",
             {"field"} | set(index_connectors),
             {"val"},
             code=f"val = field[{index_internals}]",
