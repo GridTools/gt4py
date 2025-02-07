@@ -217,7 +217,9 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
                 math.ceil(shape[dims_layout[-1]] / items_per_aligned_block)
                 * items_per_aligned_block
             )
-        padded_shape = tuple(padded_shape_lst)
+        padded_shape = tuple(
+            int(size) for size in padded_shape_lst
+        )  # convert np.int16/32/64 to python builtin integer type (int16 could overflow)
         assert core_defs.is_valid_tensor_shape(padded_shape)
         total_length = item_size * functools.reduce(operator.mul, padded_shape, 1) + (
             byte_alignment - 1
