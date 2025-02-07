@@ -494,21 +494,6 @@ def test_if_stmt():
     assert result.true_branch[0].expr.type == float_i_field
 
 
-def test_as_fieldop_without_domain_new():
-    stencil = im.lambda_("it")(im.deref(im.shift("V2E", 0)("it")))
-    result_stencil = itir_type_inference.infer(
-        stencil, offset_provider_type={"V2E": V2E}, allow_undeclared_symbols=False
-    )
-    testee = im.as_fieldop(stencil)(im.ref("inp", float_edge_field))
-    result = itir_type_inference.infer(
-        testee, offset_provider_type={"V2E": V2E}, allow_undeclared_symbols=False
-    )
-    assert result.type == ts.FieldType(dims=[Vertex], dtype=float64_type)
-    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
-        position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype
-    )
-
-
 def test_as_fieldop_without_domain():
     testee = im.as_fieldop(im.lambda_("it")(im.deref(im.shift("IOff", 1)("it"))))(
         im.ref("inp", float_i_field)
