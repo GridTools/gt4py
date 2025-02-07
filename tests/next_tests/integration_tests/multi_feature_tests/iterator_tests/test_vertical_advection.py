@@ -62,7 +62,13 @@ def tridiag_reference():
     a = rng.normal(size=shape)
     b = rng.normal(size=shape) * 2
     c = rng.normal(size=shape)
-    d = rng.normal(size=shape)
+    # Changed in NumPY version 2.0: In a linear matrix equation ax = b, the b array
+    # is only treated as a shape (M,) column vector if it is exactly 1-dimensional.
+    # In all other instances it is treated as a stack of (M, K) matrices. Therefore
+    # below we add an extra dimension (K) of size 1. Previously b would be treated
+    # as a stack of (M,) vectors if b.ndim was equal to a.ndim - 1.
+    # Refer to https://numpy.org/doc/2.0/reference/generated/numpy.linalg.solve.html
+    d = rng.normal(size=shape + (1,))
 
     matrices = np.zeros(shape + shape[-1:])
     i = np.arange(shape[2])
@@ -70,7 +76,7 @@ def tridiag_reference():
     matrices[:, :, i, i] = b
     matrices[:, :, i[:-1], i[1:]] = c[:, :, :-1]
     x = np.linalg.solve(matrices, d)
-    return a, b, c, d, x
+    return a, b, c, d[:, :, :, 0], x[:, :, :, 0]
 
 
 @fendef
