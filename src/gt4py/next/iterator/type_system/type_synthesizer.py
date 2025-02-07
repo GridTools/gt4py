@@ -105,7 +105,7 @@ def _(
     else:
         assert isinstance(lhs, ts.FieldType) and isinstance(rhs, ts.FieldType)
         assert lhs.dtype == rhs.dtype
-        return ts.FieldType(dims=common.promote_dims_new(*[lhs.dims, rhs.dims]), dtype=lhs.dtype)
+        return ts.FieldType(dims=common.promote_dims(*[lhs.dims, rhs.dims]), dtype=lhs.dtype)
 
 
 @_register_builtin_type_synthesizer(
