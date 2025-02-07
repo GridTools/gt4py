@@ -391,25 +391,30 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
         assert isinstance(it, it_ts.IteratorType)
         if it.position_dims == "unknown":  # nothing to do here
             return it
-        new_position_dims = [*it.position_dims]
-        assert len(offset_literals) % 2 == 0
-        for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
-            assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
-                offset_axis.value, common.Dimension
-            )
-            type_ = offset_provider_type[offset_axis.value.value]
-            if isinstance(type_, common.Dimension):
-                pass
-            elif isinstance(type_, common.NeighborConnectivityType):
-                found = False
-                for i, dim in enumerate(new_position_dims):
-                    if dim.value == type_.source_dim.value:
-                        assert not found
-                        new_position_dims[i] = type_.codomain
-                        found = True
-                assert found
-            else:
-                raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
+        new_position_dims: list[common.Dimension] | str
+        if offset_provider_type:
+            new_position_dims = [*it.position_dims]
+            assert len(offset_literals) % 2 == 0
+            for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
+                assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
+                    offset_axis.value, common.Dimension
+                )
+                type_ = offset_provider_type[offset_axis.value.value]
+                if isinstance(type_, common.Dimension):
+                    pass
+                elif isinstance(type_, common.NeighborConnectivityType):
+                    found = False
+                    for i, dim in enumerate(new_position_dims):
+                        if dim.value == type_.source_dim.value:
+                            assert not found
+                            new_position_dims[i] = type_.codomain
+                            found = True
+                    assert found
+                else:
+                    raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
+        else:
+            # during re-inference we don't have an offset provider type
+            new_position_dims = "unknown"
         return it_ts.IteratorType(
             position_dims=new_position_dims,
             defined_dims=it.defined_dims,
