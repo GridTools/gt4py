@@ -12,7 +12,7 @@ import collections.abc
 import functools
 import math
 import numbers
-from typing import Any, Final, Literal, Optional, Sequence, Tuple, Union, cast
+from typing import Any, Final, Literal, Optional, Sequence, Tuple, Type, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -26,7 +26,7 @@ from gt4py.storage import allocators
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
     from numpy.typing import DTypeLike
 else:
-    DTypeLike = Any  # type: ignore[misc]  # assign multiple types in both branches
+    DTypeLike: Type = Any  # type: ignore[no-redef]  # assign multiple types in both branches
 
 try:
     import cupy as cp
