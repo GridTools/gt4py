@@ -41,22 +41,19 @@ class KBoundaryVisitor(eve.NodeVisitor):
         node: gtir.FieldAccess,
         vloop: gtir.VerticalLoop,
         field_boundaries: Dict[str, Tuple[Union[float, int], Union[float, int]]],
-        include_center_interval: bool,
-        **kwargs: Any,
+        **_: Any,
     ):
         boundary = field_boundaries[node.name]
         interval = vloop.interval
-        if not isinstance(node.offset, gtir.VariableKOffset):
-            if interval.start.level == LevelMarker.START and (
-                include_center_interval or interval.end.level == LevelMarker.START
-            ):
+        if not isinstance(node.offset, gtir.VariableKOffset) and not isinstance(
+            node.offset, gtir.AbsoluteKIndex
+        ):
+            if interval.start.level == LevelMarker.START:
                 boundary = (
                     max(-interval.start.offset - node.offset.k, boundary[0]),
                     boundary[1],
                 )
-            if (
-                include_center_interval or interval.start.level == LevelMarker.END
-            ) and interval.end.level == LevelMarker.END:
+            if interval.end.level == LevelMarker.END:
                 boundary = (
                     boundary[0],
                     max(interval.end.offset + node.offset.k, boundary[1]),
@@ -69,11 +66,9 @@ class KBoundaryVisitor(eve.NodeVisitor):
         field_boundaries[node.name] = boundary
 
 
-def compute_k_boundary(
-    node: gtir.Stencil, include_center_interval=True
-) -> Dict[str, Tuple[int, int]]:
+def compute_k_boundary(node: gtir.Stencil) -> Dict[str, Tuple[int, int]]:
     # loop from START to END is not considered as it might be empty. additional check possible in the future
-    return KBoundaryVisitor().visit(node, include_center_interval=include_center_interval)
+    return KBoundaryVisitor().visit(node)
 
 
 def compute_min_k_size(node: gtir.Stencil) -> int:
