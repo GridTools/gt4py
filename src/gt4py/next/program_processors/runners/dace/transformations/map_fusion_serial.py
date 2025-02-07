@@ -1045,7 +1045,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
             squeezed_dims: List[int] = []  # These are the dimensions we removed.
             new_inter_shape: List[int] = []  # This is the final shape of the new intermediate.
             for dim, (proposed_dim_size, full_dim_size) in enumerate(
-                zip(new_inter_shape_raw, inter_shape)
+                zip(new_inter_shape_raw, inter_shape, strict=True)
             ):
                 if full_dim_size == 1:  # Must be kept!
                     new_inter_shape.append(proposed_dim_size)
