@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import warnings
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Optional
 
 import dace
 import numpy as np
@@ -24,32 +24,40 @@ except ImportError:
     cp = None
 
 
-def _convert_arg(arg: Any, sdfg_param: str) -> Any:
+def _convert_arg(arg: Any) -> tuple[Any, Optional[gtx_common.Domain]]:
     if not isinstance(arg, gtx_common.Field):
-        return arg
+        return arg, None
     if len(arg.domain.dims) == 0:
         # Pass zero-dimensional fields as scalars.
-        return arg.as_scalar()
-    # field domain offsets are not supported
-    non_zero_offsets = [
-        (dim, dim_range)
-        for dim, dim_range in zip(arg.domain.dims, arg.domain.ranges, strict=True)
-        if dim_range.start != 0
-    ]
-    if non_zero_offsets:
-        dim, dim_range = non_zero_offsets[0]
-        raise RuntimeError(
-            f"Field '{sdfg_param}' passed as array slice with offset {dim_range.start} on dimension {dim.value}."
-        )
-    return arg.ndarray
+        return arg.as_scalar(), None
+    return arg.ndarray, arg.domain
 
 
 def _get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
     sdfg_params: Sequence[str] = sdfg.arg_names
-    return {
-        sdfg_param: _convert_arg(arg, sdfg_param)
-        for sdfg_param, arg in zip(sdfg_params, args, strict=True)
-    }
+    sdfg_arguments = {}
+    range_symbols: dict[str, int] = {}
+    for sdfg_param, arg in zip(sdfg_params, args, strict=True):
+        sdfg_arg, domain = _convert_arg(arg)
+        sdfg_arguments[sdfg_param] = sdfg_arg
+        if domain:
+            assert gtx_common.Domain.is_finite(domain)
+            range_symbols |= {
+                gtx_dace_utils.range_start_symbol(sdfg_param, i): r.start
+                for i, r in enumerate(domain.ranges)
+            }
+            range_symbols |= {
+                gtx_dace_utils.range_stop_symbol(sdfg_param, i): r.stop
+                for i, r in enumerate(domain.ranges)
+            }
+    # sanity check in case range symbols are passed as explicit program arguments
+    for range_symbol, value in range_symbols.items():
+        if (sdfg_arg := sdfg_arguments.get(range_symbol, None)) is not None:
+            if sdfg_arg != value:
+                raise ValueError(
+                    f"Received program argument {range_symbol} with value {sdfg_arg}, expected {value}."
+                )
+    return sdfg_arguments | range_symbols
 
 
 def _ensure_is_on_device(
@@ -129,31 +137,37 @@ def get_sdfg_args(
     *args: Any,
     check_args: bool = False,
     on_gpu: bool = False,
-    **kwargs: Any,
 ) -> dict[str, Any]:
     """Extracts the arguments needed to call the SDFG.
 
-    This function can handle the same arguments that are passed to dace runner.
+    This function can handle the arguments that are passed to the dace runner
+    and that end up in the decoration stage of the dace backend workflow.
 
     Args:
         sdfg:               The SDFG for which we want to get the arguments.
-        offset_provider:    Offset provider.
+        offset_provider:    The offset provider.
+        args:               The list of arguments passed to the dace runner.
+        check_args:         If True, return only the arguments that are expected
+                            according to the SDFG signature.
+        on_gpu:             If True, this method ensures that the arrays for the
+                            connectivity tables are allocated in GPU memory.
+
+    Returns:
+        A dictionary of keyword arguments to be passed in the SDFG call.
     """
 
     dace_args = _get_args(sdfg, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
+    dace_field_strides = _get_stride_args(sdfg.arrays, dace_field_args)
     dace_conn_args = get_sdfg_conn_args(sdfg, offset_provider, on_gpu)
-    dace_shapes = _get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = _get_shape_args(sdfg.arrays, dace_conn_args)
-    dace_strides = _get_stride_args(sdfg.arrays, dace_field_args)
     dace_conn_strides = _get_stride_args(sdfg.arrays, dace_conn_args)
     all_args = {
         **dace_args,
         **dace_conn_args,
-        **dace_shapes,
         **dace_conn_shapes,
-        **dace_strides,
         **dace_conn_strides,
+        **dace_field_strides,
     }
 
     if check_args:

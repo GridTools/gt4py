@@ -14,6 +14,7 @@ from typing import (
     Any,
     Dict,
     Final,
+    Iterable,
     List,
     Optional,
     Protocol,
@@ -29,7 +30,7 @@ from dace import subsets as dace_subsets
 
 from gt4py import eve
 from gt4py.next import common as gtx_common, utils as gtx_utils
-from gt4py.next.iterator import builtins, ir as gtir
+from gt4py.next.iterator import builtins as gtir_builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.program_processors.runners.dace import (
@@ -113,7 +114,7 @@ class IteratorExpr:
 
     field: dace.nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
-    field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymExpr]]
+    field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymbolicType]]
     indices: dict[gtx_common.Dimension, DataExpr]
 
     def get_field_type(self) -> ts.FieldType:
@@ -233,8 +234,12 @@ class DataflowOutputEdge:
     ) -> None:
         # retrieve the node which writes the result
         last_node = self.state.in_edges(self.result.dc_node)[0].src
-        if isinstance(last_node, (dace.nodes.Tasklet, dace.nodes.NestedSDFG)):
+        if isinstance(last_node, dace.nodes.Tasklet):
             # the last transient node can be deleted
+            # Note that it could also be applied when `last_node` is a NestedSDFG,
+            # but an exception would be when the inner write to global data is a
+            # WCR memlet, because that prevents fusion of the outer map. This case
+            # happens for the reduce with skip values, which uses a map with WCR.
             last_node_connector = self.state.in_edges(self.result.dc_node)[0].src_conn
             self.state.remove_node(self.result.dc_node)
         else:
@@ -528,14 +533,17 @@ class LambdaToDataflow(eve.NodeVisitor):
             assert isinstance(node.type, ts.ScalarType)
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, subset="0")
 
-        # default case: deref a field with one or more dimensions
+        # handle default case below: deref a field with one or more dimensions
+
+        # when the indices are all dace symbolic expressions, the deref is lowered
+        # to a memlet, where the index is the memlet subset
         if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
             # when all indices are symbolic expressions, we can perform direct field access through a memlet
             field_subset = arg_expr.get_memlet_subset(self.sdfg)
             return MemletExpr(arg_expr.field, arg_expr.gt_dtype, field_subset)
 
-        # we use a tasklet to dereference an iterator when one or more indices are the result of some computation,
-        # either indirection through connectivity table or dynamic cartesian offset.
+        # when any of the indices is a runtime value (either a dynamic cartesian
+        # offset or a connectivity offset), the deref is lowered to a tasklet
         assert all(dim in arg_expr.indices for dim, _ in arg_expr.field_domain)
         assert len(field_desc.shape) == len(arg_expr.field_domain)
         field_indices = [(dim, arg_expr.indices[dim]) for dim, _ in arg_expr.field_domain]
@@ -554,7 +562,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             for dim, index in field_indices
         )
         deref_node = self._add_tasklet(
-            "runtime_deref",
+            "deref",
             {"field"} | set(index_connectors),
             {"val"},
             code=f"val = field[{index_internals}]",
@@ -598,6 +606,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         if_branch_state: dace.SDFGState,
         param_name: str,
         arg: IteratorExpr | DataExpr,
+        deref_on_input_memlet: bool,
         if_sdfg_input_memlets: dict[str, MemletExpr | ValueExpr],
     ) -> IteratorExpr | ValueExpr:
         """
@@ -608,35 +617,56 @@ class LambdaToDataflow(eve.NodeVisitor):
             if_branch_state: The state inside the nested SDFG where the if branch is lowered.
             param_name: The parameter name of the input argument.
             arg: The input argument expression.
+            deref_on_input_memlet: When True, the given iterator argument can be dereferenced on the input memlet.
             if_sdfg_input_memlets: The memlets that provide input data to the nested SDFG, will be update inside this function.
         """
+        use_full_shape = False
         if isinstance(arg, (MemletExpr, ValueExpr)):
+            arg_desc = arg.dc_node.desc(self.sdfg)
             arg_expr = arg
-            arg_node = arg.dc_node
-            arg_desc = arg_node.desc(self.sdfg)
-            if isinstance(arg, MemletExpr):
-                assert arg.subset.num_elements() == 1
-                arg_desc = dace.data.Scalar(arg_desc.dtype)
-            else:
-                assert isinstance(arg_desc, dace.data.Scalar)
         elif isinstance(arg, IteratorExpr):
-            arg_node = arg.field
-            arg_desc = arg_node.desc(self.sdfg)
-            arg_expr = MemletExpr(arg_node, arg.gt_dtype, dace_subsets.Range.from_array(arg_desc))
+            arg_desc = arg.field.desc(self.sdfg)
+            if deref_on_input_memlet:
+                # If the iterator is just dereferenced inside the branch state,
+                # we can access the array outside the nested SDFG and pass the
+                # local data. This approach makes the data dependencies of nested
+                # structures more explicit and thus makes it easier for MapFusion
+                # to correctly infer the data dependencies.
+                memlet_subset = arg.get_memlet_subset(self.sdfg)
+                arg_expr = MemletExpr(arg.field, arg.gt_dtype, memlet_subset)
+            else:
+                # In order to shift the iterator inside the branch dataflow,
+                # we have to pass the full array shape.
+                arg_expr = MemletExpr(
+                    arg.field, arg.gt_dtype, dace_subsets.Range.from_array(arg_desc)
+                )
+                use_full_shape = True
         else:
             raise TypeError(f"Unexpected {arg} as input argument.")
 
-        if param_name in if_sdfg.arrays:
-            inner_desc = if_sdfg.data(param_name)
-            assert not inner_desc.transient
-        else:
+        if use_full_shape:
             inner_desc = arg_desc.clone()
             inner_desc.transient = False
+        elif isinstance(arg.gt_dtype, ts.ScalarType):
+            inner_desc = dace.data.Scalar(arg_desc.dtype)
+        else:
+            # for list of values, we retrieve the local size from the corresponding offset
+            assert arg.gt_dtype.offset_type is not None
+            offset_provider_type = self.subgraph_builder.get_offset_provider_type(
+                arg.gt_dtype.offset_type.value
+            )
+            assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+            inner_desc = dace.data.Array(arg_desc.dtype, [offset_provider_type.max_neighbors])
+
+        if param_name in if_sdfg.arrays:
+            # the data desciptor was added by the visitor of the other branch expression
+            assert if_sdfg.data(param_name) == inner_desc
+        else:
             if_sdfg.add_datadesc(param_name, inner_desc)
             if_sdfg_input_memlets[param_name] = arg_expr
 
         inner_node = if_branch_state.add_access(param_name)
-        if isinstance(arg, IteratorExpr):
+        if isinstance(arg, IteratorExpr) and use_full_shape:
             return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, arg.indices)
         else:
             return ValueExpr(inner_node, arg.gt_dtype)
@@ -647,6 +677,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         if_branch_state: dace.SDFGState,
         expr: gtir.Expr,
         if_sdfg_input_memlets: dict[str, MemletExpr | ValueExpr],
+        direct_deref_iterators: Iterable[str],
     ) -> tuple[
         list[DataflowInputEdge],
         tuple[DataflowOutputEdge | tuple[Any, ...], ...],
@@ -661,6 +692,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             if_branch_state: The state inside the nested SDFG where the if branch is lowered.
             expr: The if branch expression to lower.
             if_sdfg_input_memlets: The memlets that provide input data to the nested SDFG, will be update inside this function.
+            direct_deref_iterators: Fields that are accessed with direct iterator deref, without any shift.
 
         Returns:
             A tuple containing:
@@ -677,15 +709,29 @@ class LambdaToDataflow(eve.NodeVisitor):
                 ptype = get_tuple_type(arg)  # type: ignore[arg-type]
                 psymbol = im.sym(pname, ptype)
                 psymbol_tree = gtir_sdfg_utils.make_symbol_tree(pname, ptype)
+                deref_on_input_memlet = pname in direct_deref_iterators
                 inner_arg = gtx_utils.tree_map(
-                    lambda tsym, targ: self._visit_if_branch_arg(
-                        if_sdfg, if_branch_state, tsym.id, targ, if_sdfg_input_memlets
+                    lambda tsym,
+                    targ,
+                    deref_on_input_memlet=deref_on_input_memlet: self._visit_if_branch_arg(
+                        if_sdfg,
+                        if_branch_state,
+                        tsym.id,
+                        targ,
+                        deref_on_input_memlet,
+                        if_sdfg_input_memlets,
                     )
                 )(psymbol_tree, arg)
             else:
                 psymbol = im.sym(pname, arg.gt_dtype)  # type: ignore[union-attr]
+                deref_on_input_memlet = pname in direct_deref_iterators
                 inner_arg = self._visit_if_branch_arg(
-                    if_sdfg, if_branch_state, pname, arg, if_sdfg_input_memlets
+                    if_sdfg,
+                    if_branch_state,
+                    pname,
+                    arg,
+                    deref_on_input_memlet,
+                    if_sdfg_input_memlets,
                 )
             lambda_args.append(inner_arg)
             lambda_params.append(psymbol)
@@ -693,7 +739,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # visit each branch of the if-statement as if it was a Lambda node
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
         input_edges, output_tree = translate_lambda_to_dataflow(
-            if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, args=lambda_args
+            if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, lambda_args
         )
 
         for data_node in if_branch_state.data_nodes():
@@ -736,7 +782,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         """
         Lowers an if-expression with exclusive branch execution into a nested SDFG,
         in which each branch is lowered into a dataflow in a separate state and
-        the if-condition is represented as the inter-state edge condtion.
+        the if-condition is represented as the inter-state edge condition.
         """
 
         def write_output_of_nested_sdfg_to_temporary(inner_value: ValueExpr) -> ValueExpr:
@@ -757,9 +803,6 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         assert len(node.args) == 3
 
-        # TODO(edopao): enable once supported in next DaCe release
-        use_conditional_block: Final[bool] = False
-
         # evaluate the if-condition that will write to a boolean scalar node
         condition_value = self.visit(node.args[0])
         assert (
@@ -775,28 +818,21 @@ class LambdaToDataflow(eve.NodeVisitor):
         nsdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=self.sdfg.debuginfo)
 
         # create states inside the nested SDFG for the if-branches
-        if use_conditional_block:
-            if_region = dace.sdfg.state.ConditionalBlock("if")
-            nsdfg.add_node(if_region)
-            entry_state = nsdfg.add_state("entry", is_start_block=True)
-            nsdfg.add_edge(entry_state, if_region, dace.InterstateEdge())
+        if_region = dace.sdfg.state.ConditionalBlock("if")
+        nsdfg.add_node(if_region)
+        entry_state = nsdfg.add_state("entry", is_start_block=True)
+        nsdfg.add_edge(entry_state, if_region, dace.InterstateEdge())
 
-            then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=nsdfg)
-            tstate = then_body.add_state("true_branch", is_start_block=True)
-            if_region.add_branch(dace.sdfg.state.CodeBlock("__cond"), then_body)
+        then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=nsdfg)
+        tstate = then_body.add_state("true_branch", is_start_block=True)
+        if_region.add_branch(dace.sdfg.state.CodeBlock("__cond"), then_body)
 
-            else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=nsdfg)
-            fstate = else_body.add_state("false_branch", is_start_block=True)
-            if_region.add_branch(dace.sdfg.state.CodeBlock("not (__cond)"), else_body)
-
-        else:
-            entry_state = nsdfg.add_state("entry", is_start_block=True)
-            tstate = nsdfg.add_state("true_branch")
-            nsdfg.add_edge(entry_state, tstate, dace.InterstateEdge(condition="__cond"))
-            fstate = nsdfg.add_state("false_branch")
-            nsdfg.add_edge(entry_state, fstate, dace.InterstateEdge(condition="not (__cond)"))
+        else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=nsdfg)
+        fstate = else_body.add_state("false_branch", is_start_block=True)
+        if_region.add_branch(dace.sdfg.state.CodeBlock("not (__cond)"), else_body)
 
         input_memlets: dict[str, MemletExpr | ValueExpr] = {}
+        nsdfg_symbols_mapping: Optional[dict[str, dace.symbol]] = None
 
         # define scalar or symbol for the condition value inside the nested SDFG
         if isinstance(condition_value, SymbolExpr):
@@ -805,9 +841,41 @@ class LambdaToDataflow(eve.NodeVisitor):
             nsdfg.add_scalar("__cond", dace.dtypes.bool)
             input_memlets["__cond"] = condition_value
 
+        # Collect all field iterators that are shifted inside any of the then/else
+        # branch expressions. Iterator shift expressions require the field argument
+        # as iterator, therefore the corresponding array has to be passed with full
+        # shape into the nested SDFG where the if_ expression is lowered. When the
+        # branch expression simply does `deref` on the iterator, without any shifting,
+        # it corresponds to a direct element access. Such `deref` expressions can
+        # be lowered outside the nested SDFG, so that just the local value (a scalar
+        # or a list of values) is passed as input to the nested SDFG.
+        shifted_iterator_symbols = set()
+        for branch_expr in node.args[1:3]:
+            for shift_node in eve.walk_values(branch_expr).filter(
+                lambda x: cpm.is_applied_shift(x)
+            ):
+                shifted_iterator_symbols |= (
+                    eve.walk_values(shift_node)
+                    .if_isinstance(gtir.SymRef)
+                    .map(lambda x: str(x.id))
+                    .filter(lambda x: isinstance(self.symbol_map.get(x, None), IteratorExpr))
+                    .to_set()
+                )
+        iterator_symbols = {
+            sym_name
+            for sym_name, sym_type in self.symbol_map.items()
+            if isinstance(sym_type, IteratorExpr)
+        }
+        direct_deref_iterators = (
+            set(symbol_ref_utils.collect_symbol_refs(node.args[1:3], iterator_symbols))
+            - shifted_iterator_symbols
+        )
+
         for nstate, arg in zip([tstate, fstate], node.args[1:3]):
             # visit each if-branch in the corresponding state of the nested SDFG
-            in_edges, output_tree = self._visit_if_branch(nsdfg, nstate, arg, input_memlets)
+            in_edges, output_tree = self._visit_if_branch(
+                nsdfg, nstate, arg, input_memlets, direct_deref_iterators
+            )
             for edge in in_edges:
                 edge.connect(map_entry=None)
 
@@ -835,12 +903,16 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 
+        # all free symbols are mapped to the symbols available in parent SDFG
+        nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
+        if isinstance(condition_value, SymbolExpr):
+            nsdfg_symbols_mapping["__cond"] = condition_value.value
         nsdfg_node = self.state.add_nested_sdfg(
             nsdfg,
             self.sdfg,
             inputs=set(input_memlets.keys()),
             outputs=outputs,
-            symbol_mapping=None,  # implicitly map all free symbols to the symbols available in parent SDFG
+            symbol_mapping=nsdfg_symbols_mapping,
         )
 
         for inner, input_expr in input_memlets.items():
@@ -1494,7 +1566,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             shifted_indices[neighbor_dim] = MemletExpr(
                 dc_node=offset_table_node,
                 gt_dtype=it.gt_dtype,
-                subset=dace_subsets.Indices([origin_index.value, offset_expr.value]),
+                subset=dace_subsets.Range.from_string(f"{origin_index.value}, {offset_expr.value}"),
             )
         else:
             # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
@@ -1507,7 +1579,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
         # convert builtin-index type to dace type
         IndexDType: Final = gtx_dace_utils.as_dace_type(
-            ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
+            ts.ScalarType(kind=getattr(ts.ScalarKind, gtir_builtins.INTEGER_INDEX_BUILTIN.upper()))
         )
 
         assert isinstance(node.fun, gtir.FunCall)
