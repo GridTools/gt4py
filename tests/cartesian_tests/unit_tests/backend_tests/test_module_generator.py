@@ -36,7 +36,7 @@ def sample_builder():
 
 @pytest.fixture
 def sample_args_data():
-    dtype = np.dtype(np.double)
+    dtype = np.dtype(np.float64)
     yield ModuleData(
         field_info={
             "in_field": FieldInfo(

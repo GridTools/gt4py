@@ -758,7 +758,7 @@ def test_solve_triag(cartesian_case):
         # below we add an extra dimension (K) of size 1. Previously b would be treated
         # as a stack of (M,) vectors if b.ndim was equal to a.ndim - 1.
         # Refer to https://numpy.org/doc/2.0/reference/generated/numpy.linalg.solve.html
-        d_ext = np.empty(shape=shape + (1,))
+        d_ext = np.empty(shape=(*shape, 1))
         d_ext[:, :, :, 0] = d
         x = np.linalg.solve(matrices, d_ext)
         return x[:, :, :, 0]

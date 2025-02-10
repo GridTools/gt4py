@@ -26,8 +26,8 @@ except ImportError:
 def test_numpy_allocators(backend, order):
     xp = get_array_library(backend)
     shape = (20, 10, 5)
-    inp = xp.array(xp.random.randn(*shape), order=order, dtype=xp.double)
-    outp = xp.zeros(shape=shape, order=order, dtype=xp.double)
+    inp = xp.array(xp.random.randn(*shape), order=order, dtype=xp.float64)
+    outp = xp.zeros(shape=shape, order=order, dtype=xp.float64)
 
     stencil = gtscript.stencil(definition=copy_stencil, backend=backend)
     stencil(field_a=inp, field_b=outp)
@@ -43,8 +43,8 @@ def test_bad_layout_warns(backend):
 
     shape = (10, 10, 10)
 
-    inp = xp.array(xp.random.randn(*shape), dtype=xp.double)
-    outp = gt_storage.zeros(backend=backend, shape=shape, dtype=xp.double, aligned_index=(0, 0, 0))
+    inp = xp.array(xp.random.randn(*shape), dtype=xp.float64)
+    outp = gt_storage.zeros(backend=backend, shape=shape, dtype=xp.float64, aligned_index=(0, 0, 0))
 
     # set up non-optimal storage layout:
     if backend_cls.storage_info["is_optimal_layout"](inp, "IJK"):

@@ -68,7 +68,7 @@ def tridiag_reference():
     # below we add an extra dimension (K) of size 1. Previously b would be treated
     # as a stack of (M,) vectors if b.ndim was equal to a.ndim - 1.
     # Refer to https://numpy.org/doc/2.0/reference/generated/numpy.linalg.solve.html
-    d = rng.normal(size=shape + (1,))
+    d = rng.normal(size=(*shape, 1))
 
     matrices = np.zeros(shape + shape[-1:])
     i = np.arange(shape[2])

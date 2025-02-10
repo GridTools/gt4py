@@ -12,21 +12,17 @@ import collections.abc
 import functools
 import math
 import numbers
-from typing import Any, Final, Literal, Optional, Sequence, Tuple, Type, Union, cast
+from typing import Final, Literal, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 import numpy.typing as npt
+from numpy.typing import DTypeLike
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
 from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
 from gt4py.storage import allocators
 
-
-if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
-    from numpy.typing import DTypeLike
-else:
-    DTypeLike: Type = Any  # type: ignore[no-redef]  # assign multiple types in both branches
 
 try:
     import cupy as cp

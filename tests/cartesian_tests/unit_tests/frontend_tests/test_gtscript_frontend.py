@@ -720,7 +720,7 @@ class TestIntervalSyntax:
 
 class TestRegions:
     def test_one_interval_only(self):
-        def stencil(in_f: gtscript.Field[np.double]):
+        def stencil(in_f: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...), horizontal(region[I[0:3], :]):
                 in_f = 1.0
 
@@ -732,7 +732,7 @@ class TestRegions:
         assert isinstance(def_ir.computations[0].body.stmts[0], nodes.HorizontalIf)
 
     def test_one_interval_only_single(self):
-        def stencil(in_f: gtscript.Field[np.double]):
+        def stencil(in_f: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...), horizontal(region[I[0], :]):
                 in_f = 1.0
 
@@ -744,7 +744,7 @@ class TestRegions:
         assert def_ir.computations[0].body.stmts[0].intervals["I"].is_single_index
 
     def test_from_external(self):
-        def stencil(in_f: gtscript.Field[np.double]):
+        def stencil(in_f: gtscript.Field[np.float64]):
             from gt4py.cartesian.__externals__ import i1
 
             with computation(PARALLEL), interval(...), horizontal(region[i1, :]):
@@ -766,7 +766,7 @@ class TestRegions:
         assert def_ir.computations[0].body.stmts[0].intervals["I"].is_single_index
 
     def test_multiple_inline(self):
-        def stencil(in_f: gtscript.Field[np.double]):
+        def stencil(in_f: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_f = in_f + 1.0
                 with horizontal(region[I[0], :], region[:, J[-1]]):
@@ -789,7 +789,7 @@ class TestRegions:
 
             return field
 
-        def stencil(in_f: gtscript.Field[np.double]):
+        def stencil(in_f: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_f = region_func()
 
@@ -801,7 +801,7 @@ class TestRegions:
         )
 
     def test_error_undefined(self):
-        def stencil(in_f: gtscript.Field[np.double]):
+        def stencil(in_f: gtscript.Field[np.float64]):
             from gt4py.cartesian.__externals__ import i0  # forget to add 'ia'
 
             with computation(PARALLEL), interval(...):
@@ -813,7 +813,7 @@ class TestRegions:
             parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_error_nested(self):
-        def stencil(in_f: gtscript.Field[np.double]):
+        def stencil(in_f: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_f = in_f + 1.0
                 with horizontal(region[I[0], :]):
@@ -1054,9 +1054,9 @@ class TestCompileTimeAssertions:
 class TestReducedDimensions:
     def test_syntax(self):
         def definition_func(
-            field_3d: gtscript.Field[gtscript.IJK, np.double],
-            field_2d: gtscript.Field[gtscript.IJ, np.double],
-            field_1d: gtscript.Field[gtscript.K, np.double],
+            field_3d: gtscript.Field[gtscript.IJK, np.float64],
+            field_2d: gtscript.Field[gtscript.IJ, np.float64],
+            field_1d: gtscript.Field[gtscript.K, np.float64],
         ):
             with computation(FORWARD), interval(...):
                 field_2d = field_1d[1]
@@ -1085,8 +1085,8 @@ class TestReducedDimensions:
 
     def test_error_syntax(self):
         def definition(
-            field_in: gtscript.Field[gtscript.K, np.double],
-            field_out: gtscript.Field[gtscript.IJK, np.double],
+            field_in: gtscript.Field[gtscript.K, np.float64],
+            field_out: gtscript.Field[gtscript.IJK, np.float64],
         ):
             with computation(PARALLEL), interval(...):
                 field_out = field_in[0, 0, 1]
@@ -1099,8 +1099,8 @@ class TestReducedDimensions:
 
     def test_error_write_1d(self):
         def definition(
-            field_in: gtscript.Field[gtscript.IJK, np.double],
-            field_out: gtscript.Field[gtscript.K, np.double],
+            field_in: gtscript.Field[gtscript.IJK, np.float64],
+            field_out: gtscript.Field[gtscript.K, np.float64],
         ):
             with computation(PARALLEL), interval(...):
                 field_out = field_in[0, 0, 0]
@@ -1113,10 +1113,10 @@ class TestReducedDimensions:
 
     def test_higher_dim_temp(self):
         def definition(
-            field_in: gtscript.Field[gtscript.IJK, np.double],
-            field_out: gtscript.Field[gtscript.IJK, np.double],
+            field_in: gtscript.Field[gtscript.IJK, np.float64],
+            field_out: gtscript.Field[gtscript.IJK, np.float64],
         ):
-            tmp: Field[IJK, (np.double, (2,))] = 0.0
+            tmp: Field[IJK, (np.float64, (2,))] = 0.0
             with computation(PARALLEL), interval(...):
                 tmp[0, 0, 0][0] = field_in
                 field_out = tmp[0, 0, 0][0]
@@ -1125,10 +1125,10 @@ class TestReducedDimensions:
 
     def test_typed_temp_missing(self):
         def definition(
-            field_in: gtscript.Field[gtscript.IJK, np.double],
-            field_out: gtscript.Field[gtscript.IJK, np.double],
+            field_in: gtscript.Field[gtscript.IJK, np.float64],
+            field_out: gtscript.Field[gtscript.IJK, np.float64],
         ):
-            tmp: Field[IJ, np.double] = 0.0
+            tmp: Field[IJ, np.float64] = 0.0
             with computation(FORWARD), interval(1, None):
                 tmp = field_in[0, 0, -1]
                 field_out = tmp
@@ -1143,9 +1143,9 @@ class TestReducedDimensions:
 class TestDataDimensions:
     def test_syntax(self):
         def definition(
-            field_in: gtscript.Field[np.double],
-            another_field: gtscript.Field[(np.double, 3)],
-            field_out: gtscript.Field[gtscript.IJK, (np.double, (3,))],
+            field_in: gtscript.Field[np.float64],
+            another_field: gtscript.Field[(np.float64, 3)],
+            field_out: gtscript.Field[gtscript.IJK, (np.float64, (3,))],
         ):
             with computation(PARALLEL), interval(...):
                 field_out[0, 0, 0][0] = field_in
@@ -1156,8 +1156,8 @@ class TestDataDimensions:
 
     def test_syntax_no_datadim(self):
         def definition(
-            field_in: gtscript.Field[np.double],
-            field_out: gtscript.Field[gtscript.IJK, (np.double, (3,))],
+            field_in: gtscript.Field[np.float64],
+            field_out: gtscript.Field[gtscript.IJK, (np.float64, (3,))],
         ):
             with computation(PARALLEL), interval(...):
                 field_out[0, 0, 0][0] = field_in
@@ -1169,8 +1169,8 @@ class TestDataDimensions:
 
     def test_syntax_out_bounds(self):
         def definition(
-            field_in: gtscript.Field[np.double],
-            field_out: gtscript.Field[gtscript.IJK, (np.double, (3,))],
+            field_in: gtscript.Field[np.float64],
+            field_out: gtscript.Field[gtscript.IJK, (np.float64, (3,))],
         ):
             with computation(PARALLEL), interval(...):
                 field_out[0, 0, 0][3] = field_in[0, 0, 0]
@@ -1180,8 +1180,8 @@ class TestDataDimensions:
 
     def test_indirect_access_read(self):
         def definition(
-            field_3d: gtscript.Field[np.double],
-            field_4d: gtscript.Field[gtscript.IJK, (np.double, (2,))],
+            field_3d: gtscript.Field[np.float64],
+            field_4d: gtscript.Field[gtscript.IJK, (np.float64, (2,))],
             variable: float,
         ):
             with computation(PARALLEL), interval(...):
@@ -1194,8 +1194,8 @@ class TestDataDimensions:
 
     def test_indirect_access_write(self):
         def definition(
-            field_3d: gtscript.Field[np.double],
-            field_4d: gtscript.Field[gtscript.IJK, (np.double, (2,))],
+            field_3d: gtscript.Field[np.float64],
+            field_4d: gtscript.Field[gtscript.IJK, (np.float64, (2,))],
             variable: float,
         ):
             with computation(PARALLEL), interval(...):
@@ -1381,14 +1381,14 @@ class TestBuiltinDTypes:
 
 class TestAssignmentSyntax:
     def test_ellipsis(self):
-        def func(in_field: gtscript.Field[np.double], out_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 out_field[...] = in_field
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_offset(self):
-        def func(in_field: gtscript.Field[np.double], out_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 out_field[0, 0, 0] = in_field
 
@@ -1397,15 +1397,15 @@ class TestAssignmentSyntax:
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
             def func(
-                in_field: gtscript.Field[np.double],
-                out_field: gtscript.Field[np.double],
+                in_field: gtscript.Field[np.float64],
+                out_field: gtscript.Field[np.float64],
             ):
                 with computation(PARALLEL), interval(...):
                     out_field[0, 0, 1] = in_field
 
             parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-        def func(in_field: gtscript.Field[np.double], out_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]):
             from gt4py.cartesian.__externals__ import offset
 
             with computation(PARALLEL), interval(...):
@@ -1471,8 +1471,8 @@ class TestAssignmentSyntax:
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
             def func(
-                in_field: gtscript.Field[np.double],
-                out_field: gtscript.Field[np.double],
+                in_field: gtscript.Field[np.float64],
+                out_field: gtscript.Field[np.float64],
             ):
                 with computation(PARALLEL), interval(...):
                     out_field[:, :, :] = in_field
@@ -1483,8 +1483,8 @@ class TestAssignmentSyntax:
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
             def func(
-                in_field: gtscript.Field[np.double],
-                out_field: gtscript.Field[np.double],
+                in_field: gtscript.Field[np.float64],
+                out_field: gtscript.Field[np.float64],
             ):
                 with computation(PARALLEL), interval(...):
                     out_field["a_key"] = in_field
@@ -1492,7 +1492,7 @@ class TestAssignmentSyntax:
             parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_augmented(self):
-        def func(in_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_field += 2.0
                 in_field -= 0.5
@@ -1589,7 +1589,7 @@ class TestAssignmentSyntax:
 
 class TestNestedWithSyntax:
     def test_nested_with(self):
-        def definition(in_field: gtscript.Field[np.double], out_field: gtscript.Field[np.double]):
+        def definition(in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]):
             with computation(PARALLEL):
                 with interval(...):
                     in_field = out_field
@@ -1598,7 +1598,7 @@ class TestNestedWithSyntax:
 
     def test_nested_with_ordering(self):
         def definition_fw(
-            in_field: gtscript.Field[np.double], out_field: gtscript.Field[np.double]
+            in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]
         ):
             from gt4py.cartesian.__gtscript__ import FORWARD, computation, interval
 
@@ -1609,7 +1609,7 @@ class TestNestedWithSyntax:
                     in_field = out_field + 2
 
         def definition_bw(
-            in_field: gtscript.Field[np.double], out_field: gtscript.Field[np.double]
+            in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]
         ):
             from gt4py.cartesian.__gtscript__ import FORWARD, computation, interval
 
@@ -1633,35 +1633,35 @@ class TestNestedWithSyntax:
 
 class TestNativeFunctions:
     def test_simple_call(self):
-        def func(in_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_field += sin(in_field)
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_offset_arg(self):
-        def func(in_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_field += sin(in_field[1, 0, 0])
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_nested_calls(self):
-        def func(in_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_field += sin(abs(in_field))
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_nested_external_call(self):
-        def func(in_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_field += sin(add_external_const(in_field))
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_multi_nested_calls(self):
-        def func(in_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_field += min(abs(sin(add_external_const(in_field))), -0.5)
 
@@ -1672,28 +1672,28 @@ class TestNativeFunctions:
         def sinus(field_in):
             return sin(field_in)
 
-        def func(in_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_field += sinus(in_field)
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_native_function_unary(self):
-        def func(in_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_field = not isfinite(in_field)
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_native_function_binary(self):
-        def func(in_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_field = asin(in_field) + 1
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_native_function_ternary(self):
-        def func(in_field: gtscript.Field[np.double]):
+        def func(in_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 in_field = asin(in_field) + 1 if 1 < in_field else sin(in_field)
 
@@ -1702,7 +1702,7 @@ class TestNativeFunctions:
 
 class TestWarnInlined:
     def test_inlined_emits_warning(self):
-        def func(field: gtscript.Field[np.double]):
+        def func(field: gtscript.Field[np.float64]):
             from gt4py.cartesian.__externals__ import SET_TO_ONE
 
             with computation(PARALLEL), interval(...):

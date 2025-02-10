@@ -211,15 +211,14 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
 
         # Compute the padding required in the contiguous dimension to get aligned blocks
         dims_layout = [layout_map.index(i) for i in range(len(shape))]
-        padded_shape_lst = list(shape)
+        # Convert shape size to same data type (note that `np.int16` can overflow)
+        padded_shape_lst = [np.int32(x) for x in shape]
         if ndim > 0:
-            padded_shape_lst[dims_layout[-1]] = (
+            padded_shape_lst[dims_layout[-1]] = (  # type: ignore[call-overload]
                 math.ceil(shape[dims_layout[-1]] / items_per_aligned_block)
                 * items_per_aligned_block
             )
-        padded_shape = tuple(
-            int(size) for size in padded_shape_lst
-        )  # convert np.int16/32/64 to python builtin integer type (int16 could overflow)
+        padded_shape = tuple(padded_shape_lst)
         assert core_defs.is_valid_tensor_shape(padded_shape)
         total_length = item_size * functools.reduce(operator.mul, padded_shape, 1) + (
             byte_alignment - 1
