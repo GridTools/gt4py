@@ -380,6 +380,14 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             ):
                 return False
 
+        elif isinstance(node_to_classify, dace.nodes.NestedSDFG):
+            # Similar checks apply to a nested SDFG node
+            if not all(
+                isinstance(out_edge.dst, dace_nodes.AccessNode)
+                for out_edge in state.out_edges(node_to_classify)
+            ):
+                return False
+
         elif isinstance(node_to_classify, dace_nodes.AccessNode):
             # AccessNodes need to have some special properties.
             node_desc: dace.data.Data = node_to_classify.desc(sdfg)

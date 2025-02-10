@@ -589,9 +589,6 @@ class MapFusionSerial(mfh.MapFusionHelper):
                 ):
                     if inner_consumer_edge.data.src_subset is None:
                         return None
-                    if inner_consumer_edge.data.dynamic:
-                        # TODO(phimuell): Is this restriction necessary, I am not sure.
-                        return None
                     consumer_subsets.append(inner_consumer_edge.data.src_subset)
             assert (
                 found_second_map
