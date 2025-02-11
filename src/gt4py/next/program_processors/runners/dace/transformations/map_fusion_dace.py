@@ -78,7 +78,7 @@ class MapFusion(transformation.SingleStateTransformation):
     pass and `MapFusion`.
 
     By default this transformation only handles the case where to maps are right after each other,
-    separated by an intermediate array. However, by setting `allow_parallel_fusion` to `True`,
+    separated by an intermediate array. However, by setting `allow_parallel_map_fusion` to `True`,
     the transformation will be _in addition_ also be able to handle the case where the Maps are
     parallel (parallel here means that neither of the two Map can be reached from the other; see
     `is_parallel()`). If you only want to perform parallel map fusion you also have to set
@@ -89,7 +89,7 @@ class MapFusion(transformation.SingleStateTransformation):
     :param strict_dataflow: Which dataflow mode should be used, see above.
     :param assume_always_shared: Assume that all intermediates are shared.
     :param allow_serial_map_fusion: Allow serial map fusion, by default `True`.
-    :param allow_parallel_fusion: Allow to merge parallel maps, by default `False`.
+    :param allow_parallel_map_fusion: Allow to merge parallel maps, by default `False`.
     :param only_if_common_ancestor: In parallel map fusion mode, only fuse if both map
         have a common direct ancestor.
 
@@ -140,7 +140,7 @@ class MapFusion(transformation.SingleStateTransformation):
         desc="If `True`, the default, then allow serial map fusion.",
     )
 
-    allow_parallel_fusion = properties.Property(
+    allow_parallel_map_fusion = properties.Property(
         dtype=bool,
         default=False,
         desc="If `True` then also perform parallel map fusion, disabled by default.",
@@ -158,7 +158,7 @@ class MapFusion(transformation.SingleStateTransformation):
         strict_dataflow: Optional[bool] = None,
         assume_always_shared: Optional[bool] = None,
         allow_serial_map_fusion: Optional[bool] = None,
-        allow_parallel_fusion: Optional[bool] = None,
+        allow_parallel_map_fusion: Optional[bool] = None,
         only_if_common_ancestor: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
@@ -173,8 +173,8 @@ class MapFusion(transformation.SingleStateTransformation):
             self.assume_always_shared = assume_always_shared
         if allow_serial_map_fusion is not None:
             self.allow_serial_map_fusion = allow_serial_map_fusion
-        if allow_parallel_fusion is not None:
-            self.allow_parallel_fusion = allow_parallel_fusion
+        if allow_parallel_map_fusion is not None:
+            self.allow_parallel_map_fusion = allow_parallel_map_fusion
         if only_if_common_ancestor is not None:
             self.only_if_common_ancestor = only_if_common_ancestor
 
@@ -223,7 +223,7 @@ class MapFusion(transformation.SingleStateTransformation):
         `can_parallel_map_fusion_be_applied()`, see there for more information.
         """
         # Perform some checks of the deferred configuration data.
-        if not (self.allow_parallel_fusion or self.allow_serial_map_fusion):
+        if not (self.allow_parallel_map_fusion or self.allow_serial_map_fusion):
             raise ValueError("Disabled serial and parallel map fusion.")
         assert expr_index == self.expr_index
         assert self.expr_index in [0, 1], f"Found invalid 'expr_index' {self.expr_index}"
@@ -240,7 +240,7 @@ class MapFusion(transformation.SingleStateTransformation):
                 sdfg=sdfg,
             )
 
-        elif self.allow_parallel_fusion and expr_index == 1:
+        elif self.allow_parallel_map_fusion and expr_index == 1:
             return self.can_parallel_map_fusion_be_applied(
                 graph=graph,
                 sdfg=sdfg,
@@ -260,7 +260,7 @@ class MapFusion(transformation.SingleStateTransformation):
         `apply_serial_map_fusion()` or to `apply_parallel_map_fusion()`.
         """
         # Perform some checks of the deferred configuration data.
-        if not (self.allow_parallel_fusion or self.allow_serial_map_fusion):
+        if not (self.allow_parallel_map_fusion or self.allow_serial_map_fusion):
             raise ValueError("Disabled serial and parallel map fusion.")
         assert self.expr_index in [0, 1]
 
@@ -278,7 +278,7 @@ class MapFusion(transformation.SingleStateTransformation):
             )
 
         elif self.expr_index == 1:
-            assert self.allow_parallel_fusion
+            assert self.allow_parallel_map_fusion
             return self.apply_parallel_map_fusion(
                 graph=graph,
                 sdfg=sdfg,
