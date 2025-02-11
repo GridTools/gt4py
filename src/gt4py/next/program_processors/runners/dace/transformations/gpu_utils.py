@@ -171,7 +171,7 @@ def gt_gpu_transform_non_standard_memlet(
     # This function allows to restrict any fusion operation to the maps
     #  that we have just created.
     def restrict_fusion_to_newly_created_maps(
-        self: gtx_transformations.map_fusion_helper.MapFusionHelper,
+        self: gtx_transformations.MapFusion,
         map_entry_1: dace_nodes.MapEntry,
         map_entry_2: dace_nodes.MapEntry,
         graph: Union[dace.SDFGState, dace.SDFG],
