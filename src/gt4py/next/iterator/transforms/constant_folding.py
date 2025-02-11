@@ -25,6 +25,11 @@ def value_from_literal(literal: ir.Literal):
 
 
 class UndoCanonicalizeMinus(eve.NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = (
+        "type",
+        "domain",
+    )
+
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
         node = super().generic_visit(node, **kwargs)
         # `a + (-b)` -> `a - b` , `-a + b` -> `b - a`, `-a + (-b)` -> `-a - b`
