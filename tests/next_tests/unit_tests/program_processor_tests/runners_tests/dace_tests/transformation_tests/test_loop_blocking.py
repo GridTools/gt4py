@@ -598,7 +598,7 @@ def _make_loop_blocking_sdfg_with_inner_map(
                 state.add_edge(me_out, "OUT_A", nsdfg_node, nsdfg_inp, dace.Memlet("A[1, 1]"))
                 state.add_edge(nsdfg_node, nsdfg_out, tmp, None, dace.Memlet("tmp[0]"))
             case _:
-                assert False  # can never be reached
+                raise NotImplementedError()
 
     sdfg.validate()
     return sdfg, state, me_out, me_in
