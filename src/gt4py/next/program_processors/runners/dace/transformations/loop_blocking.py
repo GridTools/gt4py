@@ -381,10 +381,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 return False
 
         elif isinstance(node_to_classify, dace.nodes.NestedSDFG):
-            # Similar checks apply to a nested SDFG node
+            # Same check as for Tasklets applies to the outputs of a nested SDFG node
             if not all(
                 isinstance(out_edge.dst, dace_nodes.AccessNode)
                 for out_edge in state.out_edges(node_to_classify)
+                if not out_edge.data.is_empty()
             ):
                 return False
 
@@ -439,6 +440,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             and self.blocking_parameter in node_to_classify.free_symbols
         ):
             return False
+
+        # Test if the symbol mapping of a NestedSDFG node depends on the block variable.
+        if isinstance(node_to_classify, dace.nodes.NestedSDFG):
+            for v in node_to_classify.symbol_mapping.values():
+                if self.blocking_parameter in v.free_symbols:
+                    return False
 
         # Now we have to look at incoming edges individually.
         #  We will inspect the subset of the Memlet to see if they depend on the
