@@ -876,6 +876,44 @@ class TestHorizontalRegions(gt_testing.StencilTestSuite):
         field_out[:, -1, :] = field_in[:, -1, :] - 1.0
 
 
+class TestHorizontalRegionsPartialWrites(gt_testing.StencilTestSuite):
+    """Use horizontal regions to only write to certain parts of the field.
+
+    This test is different from the corner case below because the corner
+    case follows a different code path (we have specific optimizations for
+    them)."""
+
+    dtypes = {"field_in": np.float32, "field_out": np.float32}
+    domain_range = [(4, 4), (4, 4), (2, 2)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(42, 42), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL), interval(...):
+            with horizontal(region[I[0], :], region[I[-1], :]):
+                field_out = (  # noqa: F841 [unused-variable]
+                    field_in + 1.0
+                )
+            with horizontal(region[:, J[0]], region[:, J[-1]]):
+                field_out = (  # noqa: F841 [unused-variable]
+                    field_in - 1.0
+                )
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, :] = 42
+        field_out[0, :, :] = field_in[0, :, :] + 1.0
+        field_out[-1, :, :] = field_in[-1, :, :] + 1.0
+        field_out[:, 0, :] = field_in[:, 0, :] - 1.0
+        field_out[:, -1, :] = field_in[:, -1, :] - 1.0
+
+
 class TestHorizontalRegionsCorners(gt_testing.StencilTestSuite):
     dtypes = {"field_in": np.float32, "field_out": np.float32}
     domain_range = [(4, 4), (4, 4), (2, 2)]
@@ -885,7 +923,7 @@ class TestHorizontalRegionsCorners(gt_testing.StencilTestSuite):
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
         ),
         "field_out": gt_testing.field(
-            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+            in_range=(42, 42), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
         ),
     }
 
@@ -901,6 +939,7 @@ class TestHorizontalRegionsCorners(gt_testing.StencilTestSuite):
                 )
 
     def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, :] = 42
         field_out[0:2, 0:2, :] = field_in[0:2, 0:2, :] + 1.0
         field_out[-3:-1, -3:-1, :] = field_in[-3:-1, -3:-1, :] + 1.0
         field_out[0:2, -3:-1, :] = field_in[0:2, -3:-1, :] - 1.0
