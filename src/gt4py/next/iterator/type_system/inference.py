@@ -492,6 +492,11 @@ class ITIRTypeInference(eve.NodeTranslator):
             #  probably just change the behaviour of the lowering. Until then we do this more
             #  complicated comparison.
             if isinstance(target_type, ts.FieldType) and isinstance(expr_type, ts.FieldType):
+                if not (
+                    set(expr_type.dims).issubset(set(target_type.dims))
+                    and target_type.dtype == expr_type.dtype
+                ):
+                    breakpoint()
                 assert (
                     set(expr_type.dims).issubset(set(target_type.dims))
                     and target_type.dtype == expr_type.dtype

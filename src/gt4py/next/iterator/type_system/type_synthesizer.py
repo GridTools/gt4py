@@ -14,7 +14,9 @@ import inspect
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
-from gt4py.next.iterator import builtins
+from gt4py.next.ffront import fbuiltins
+from gt4py.next.iterator import builtins, ir as itir
+from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -305,7 +307,7 @@ def as_fieldop(
     # have, but not the dimensions of a field.
     # Note that it might appear as if using the TraceShift pass would allow us to deduce the return
     # type of `as_fieldop` without a domain, but this is not the case, since we don't have
-    # information on the ordering of dimensions. In this example
+    # information on the ordering of dimensions. In this example #Todo: update comment
     #   `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
     # it is unclear if the result has dimension I, J or J, I.
     if domain is None:
@@ -320,17 +322,77 @@ def as_fieldop(
         ):
             return ts.DeferredType(constraint=None)
 
+        input_dims = common.promote_dims(
+            *[field.dims for field in fields if isinstance(field, ts.FieldType)]
+        )
+        output_dims, seen = [], set()
+
+        if isinstance(stencil.node, itir.Expr):
+            shifts_results = trace_shifts.trace_stencil(
+                stencil.node, num_args=len(fields)
+            )  # TODO: access node differently?
+
+            def resolve_shift(input_dim, shift_tuple):
+                if not shift_tuple:
+                    return None
+
+                final_target = None
+                for off_literal in shift_tuple[::2]:
+                    off = off_literal.value
+                    offset_type = offset_provider_type[off]
+
+                    if isinstance(offset_type, common.Dimension):
+                        if input_dim != offset_type:
+                            pass
+                        final_target = offset_type
+
+                    elif isinstance(
+                        offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)
+                    ):
+                        off_source = (
+                            offset_type.source
+                            if isinstance(offset_type, fbuiltins.FieldOffset)
+                            else offset_type.codomain
+                        )
+                        off_targets = (
+                            offset_type.target
+                            if isinstance(offset_type, fbuiltins.FieldOffset)
+                            else offset_type.domain
+                        )
+
+                        if input_dim == off_source:
+                            for target in off_targets:
+                                if target.value != off:
+                                    input_dim = final_target = target
+
+                return final_target
+
+            if any(shift_tuple for shift_list in shifts_results for shift_tuple in shift_list):
+                for input_dim in input_dims:
+                    for shifts_list in shifts_results:
+                        for shift_tuple in shifts_list:
+                            final_dim = resolve_shift(input_dim, shift_tuple)
+                            if final_dim and final_dim not in seen:
+                                seen.add(final_dim)
+                                output_dims.append(final_dim)
+                            elif input_dim not in seen:
+                                seen.add(input_dim)
+                                output_dims.append(input_dim)
+            else:
+                output_dims.extend(input_dims)
+
+        else:
+            output_dims = domain.dims
+
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
             offset_provider_type=offset_provider_type,
         )
+
         assert isinstance(stencil_return, ts.DataType)
-        return type_info.apply_to_primitive_constituents(
-            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
-            if domain.dims != "unknown"
-            else ts.DeferredType(constraint=ts.FieldType),
-            stencil_return,
-        )
+        return ts.FieldType(
+            dims=common.promote_dims(output_dims), dtype=stencil_return
+        )  # TODO: not yet working for Tuples
 
     return applied_as_fieldop
 
