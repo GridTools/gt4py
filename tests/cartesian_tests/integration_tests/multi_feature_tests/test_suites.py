@@ -47,7 +47,7 @@ class TestIdentity(gt_testing.StencilTestSuite):
 class TestCopy(gt_testing.StencilTestSuite):
     """Copy stencil."""
 
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 25), (1, 25), (1, 25)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -66,7 +66,7 @@ class TestCopy(gt_testing.StencilTestSuite):
 class TestAugAssign(gt_testing.StencilTestSuite):
     """Increment by one stencil."""
 
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 25), (1, 25), (1, 25)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -90,7 +90,7 @@ class TestAugAssign(gt_testing.StencilTestSuite):
 class TestGlobalScale(gt_testing.StencilTestSuite):
     """Scale stencil using a global global_name."""
 
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -112,7 +112,7 @@ class TestGlobalScale(gt_testing.StencilTestSuite):
 class TestParametricScale(gt_testing.StencilTestSuite):
     """Scale stencil using a parameter."""
 
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -136,7 +136,7 @@ class TestParametricMix(gt_testing.StencilTestSuite):
         ("USE_ALPHA",): np.int_,
         ("field_a", "field_b", "field_c"): np.float64,
         ("field_out",): np.float32,
-        ("weight", "alpha_factor"): np.float_,
+        ("weight", "alpha_factor"): np.float64,
     }
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ALL_BACKENDS
@@ -177,7 +177,7 @@ class TestParametricMix(gt_testing.StencilTestSuite):
 
 
 class TestHeatEquation_FTCS_3D(gt_testing.StencilTestSuite):
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -206,7 +206,7 @@ class TestHeatEquation_FTCS_3D(gt_testing.StencilTestSuite):
 class TestHorizontalDiffusion(gt_testing.StencilTestSuite):
     """Diffusion in a horizontal 2D plane ."""
 
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -270,7 +270,7 @@ def fwd_diff_op_y(field):
 class TestHorizontalDiffusionSubroutines(gt_testing.StencilTestSuite):
     """Diffusion in a horizontal 2D plane ."""
 
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -305,7 +305,7 @@ class TestHorizontalDiffusionSubroutines(gt_testing.StencilTestSuite):
 class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
     """Diffusion in a horizontal 2D plane ."""
 
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -346,7 +346,7 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
 class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
     """Tests runtime ifs."""
 
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
@@ -365,7 +365,7 @@ class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
 class TestRuntimeIfNested(gt_testing.StencilTestSuite):
     """Tests nested runtime ifs."""
 
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
@@ -391,7 +391,7 @@ def add_one(field_in):
 
 
 class Test3FoldNestedIf(gt_testing.StencilTestSuite):
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(3, 3), (3, 3), (3, 3)]
     backends = ALL_BACKENDS
     symbols = dict(field_a=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]))
@@ -411,7 +411,7 @@ class Test3FoldNestedIf(gt_testing.StencilTestSuite):
 
 
 class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(3, 3), (3, 3), (3, 3)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -447,7 +447,7 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
 class TestRuntimeIfNestedWhile(gt_testing.StencilTestSuite):
     """Test conditional while statements."""
 
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -475,7 +475,7 @@ class TestRuntimeIfNestedWhile(gt_testing.StencilTestSuite):
 
 
 class TestTernaryOp(gt_testing.StencilTestSuite):
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -496,7 +496,7 @@ class TestTernaryOp(gt_testing.StencilTestSuite):
 
 
 class TestThreeWayAnd(gt_testing.StencilTestSuite):
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -518,7 +518,7 @@ class TestThreeWayAnd(gt_testing.StencilTestSuite):
 
 
 class TestThreeWayOr(gt_testing.StencilTestSuite):
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -540,7 +540,7 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
 
 
 class TestOptionalField(gt_testing.StencilTestSuite):
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 32), (1, 32), (1, 32)]
     backends = ALL_BACKENDS
     symbols = dict(
@@ -568,7 +568,7 @@ class TestNotSpecifiedOptionalField(TestOptionalField):
 
 
 class TestTwoOptionalFields(gt_testing.StencilTestSuite):
-    dtypes = (np.float_,)
+    dtypes = (np.float64,)
     domain_range = [(1, 32), (1, 32), (1, 32)]
     backends = ALL_BACKENDS
     symbols = dict(
