@@ -9,10 +9,12 @@
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
+one = im.literal_from_value(1)
+
 
 def test_constant_folding_plus():
+    testee = im.plus(one, one)
     expected = im.literal_from_value(2)
-    testee = im.plus(im.literal_from_value(1), im.literal_from_value(1))
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
@@ -38,331 +40,263 @@ def test_constant_folding_math_op():
 
 
 def test_constant_folding_if():
-    expected = im.plus("a", 2)
+    expected = im.plus("sym", 2)
     testee = im.if_(
         im.literal_from_value(True),
-        im.plus(im.ref("a"), im.literal_from_value(2)),
+        im.plus("sym", im.literal_from_value(2)),
         im.minus(im.literal_from_value(9), im.literal_from_value(5)),
     )
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
 
-def test_constant_folding_minimum():
-    testee = im.minimum("a", "a")
-    expected = im.ref("a")
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_literal_plus0():
-    testee = im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-    testee = im.plus(im.literal_from_value(1), im.ref("__out_size_1"))
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_literal_minus0():
-    testee = im.minus(im.ref("__out_size_1"), im.literal_from_value(1))
-    expected = im.minus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-    testee = im.minus(im.literal_from_value(1), im.ref("__out_size_1"))
-    expected = im.minus(im.literal_from_value(1), im.ref("__out_size_1"))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_funcall_literal():
-    testee = im.plus(
-        im.plus(im.ref("__out_size_1"), im.literal_from_value(1)), im.literal_from_value(1)
-    )
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(2))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-    testee = im.plus(
-        im.literal_from_value(1), im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    )
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(2))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_minus():
-    testee = im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-    testee = im.plus(im.literal_from_value(1), im.ref("__out_size_1"))
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus1():
-    testee = im.call("maximum")(
-        im.call("maximum")(im.ref("__out_size_1"), im.literal_from_value(1)),
-        im.literal_from_value(1),
-    )
-    expected = im.call("maximum")(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus2():
-    testee = im.call("maximum")(
-        im.call("maximum")(im.literal_from_value(1), im.ref("__out_size_1")),
-        im.literal_from_value(1),
-    )
-    expected = im.call("maximum")(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus3():
-    testee = im.call("maximum")(
-        im.call("maximum")(im.literal_from_value(1), im.ref("__out_size_1")),
-        im.call("maximum")(im.literal_from_value(1), im.ref("__out_size_1")),
-    )
-    expected = im.call("maximum")(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus4():
-    testee = im.call("maximum")(
-        im.call("maximum")(im.literal_from_value(1), im.ref("__out_size_1")),
-        im.call("maximum")(im.ref("__out_size_1"), im.literal_from_value(1)),
-    )
-    expected = im.call("maximum")(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus5():
-    testee = im.call("maximum")(
-        im.ref("__out_size_1"), im.call("maximum")(im.literal_from_value(1), im.ref("__out_size_1"))
-    )
-    expected = im.call("maximum")(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus6():
-    testee = im.call("maximum")(
-        im.plus(im.ref("__out_size_1"), im.literal_from_value(1)),
-        im.plus(im.ref("__out_size_1"), im.literal_from_value(0)),
-    )
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus7():
-    testee = im.minus(
-        im.plus(im.ref("__out_size_1"), im.literal_from_value(1)),
-        im.plus(im.literal_from_value(1), im.literal_from_value(1)),
-    )
-    expected = im.minus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus8():
-    testee = im.plus(
-        im.plus(im.ref("__out_size_1"), im.literal_from_value(1)),
-        im.plus(im.literal_from_value(1), im.literal_from_value(1)),
-    )
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(3))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus9():
-    testee = im.call("maximum")(
-        im.plus(im.ref("__out_size_1"), im.literal_from_value(1)),
-        im.plus(
-            im.plus(im.ref("__out_size_1"), im.literal_from_value(1)), im.literal_from_value(0)
-        ),
-    )
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus10():
-    testee = im.call("maximum")(
-        im.plus(im.ref("__out_size_1"), im.literal_from_value(1)), im.ref("__out_size_1")
-    )
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus10a():
-    testee = im.plus(
-        im.ref("__out_size_1"),
-        im.call("maximum")(im.literal_from_value(0), im.literal_from_value(-1)),
-    )
-
-    expected = im.ref("__out_size_1")
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus11():
-    testee = im.call("maximum")(
-        im.ref("__out_size_1"), im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    )
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus12():
-    testee = im.call("maximum")(
-        im.ref("__out_size_1"), im.plus(im.ref("__out_size_1"), im.literal_from_value(-1))
-    )
-    expected = im.ref("__out_size_1")
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus13():
-    testee = im.call("maximum")(
-        im.minus(im.ref("__out_size_1"), im.literal_from_value(1)), im.ref("__out_size_1")
-    )
-    expected = im.ref("__out_size_1")
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus14():
-    testee = im.call("maximum")(
-        im.ref("__out_size_1"), im.minus(im.ref("__out_size_1"), im.literal_from_value(1))
-    )
-    expected = im.ref("__out_size_1")
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus15():
-    testee = im.call("maximum")(
-        im.ref("__out_size_1"), im.minus(im.ref("__out_size_1"), im.literal_from_value(-1))
-    )
-    expected = im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus16():
-    testee = im.call("minimum")(
-        im.plus(im.ref("__out_size_1"), im.literal_from_value(1)), im.ref("__out_size_1")
-    )
-    expected = im.ref("__out_size_1")
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus17():
-    testee = im.call("minimum")(
-        im.ref("__out_size_1"), im.plus(im.ref("__out_size_1"), im.literal_from_value(1))
-    )
-    expected = im.ref("__out_size_1")
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus18():
-    testee = im.call("minimum")(
-        im.ref("__out_size_1"), im.plus(im.ref("__out_size_1"), im.literal_from_value(-1))
-    )
-    expected = im.minus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus19():
-    testee = im.call("minimum")(
-        im.minus(im.ref("__out_size_1"), im.literal_from_value(1)), im.ref("__out_size_1")
-    )
-    expected = im.minus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus20():
-    testee = im.call("minimum")(
-        im.ref("__out_size_1"), im.minus(im.ref("__out_size_1"), im.literal_from_value(1))
-    )
-    expected = im.minus(im.ref("__out_size_1"), im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_maximum_literal_plus21():
-    testee = im.call("minimum")(
-        im.ref("__out_size_1"), im.minus(im.ref("__out_size_1"), im.literal_from_value(-1))
-    )
-    expected = im.ref("__out_size_1")
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_literal():
-    testee = im.plus(im.literal_from_value(1), im.literal_from_value(2))
-    expected = im.literal_from_value(3)
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_literal_maximum():
-    testee = im.maximum(im.literal_from_value(1), im.literal_from_value(2))
+def test_constant_folding_maximum_literal():
+    testee = im.maximum(one, im.literal_from_value(2))
     expected = im.literal_from_value(2)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
 
+def test_constant_folding_minimum():
+    testee = im.minimum("sym", "sym")
+    expected = im.ref("sym")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.maximum(0, 0)
+    expected = im.literal_from_value(0)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_cannonicalize_plus_funcall_symref_literal():
+    testee = im.plus("sym", one)
+    expected = im.plus("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.plus(one, "sym")
+    expected = im.plus("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_canonicalize_minus():
+    testee = im.minus("sym", one)
+    expected = im.minus("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.minus(one, "sym")
+    expected = im.minus(one, "sym")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_canonicalize_fold_op_funcall_symref_literal():
+    testee = im.plus(im.plus("sym", one), one)
+    expected = im.plus("sym", im.literal_from_value(2))
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.plus(one, im.plus("sym", one))
+    expected = im.plus("sym", im.literal_from_value(2))
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_constant_folding_nested_maximum():
+    testee = im.maximum(im.maximum("sym", one), one)
+    expected = im.maximum("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.maximum(im.maximum(one, "sym"), one)
+    expected = im.maximum("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.maximum("sym", im.maximum(one, "sym"))
+    expected = im.maximum("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.maximum(im.maximum(one, "sym"), im.maximum(one, "sym"))
+    expected = im.maximum("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.maximum(im.maximum(one, "sym"), im.maximum("sym", one))
+    expected = im.maximum("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.maximum(im.minimum("sym", 1), "sym")
+    expected = im.maximum(im.minimum("sym", 1), "sym")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_constant_folding_maximum_plus():
+    testee = im.maximum(im.plus("sym", one), im.plus("sym", im.literal_from_value(0)))
+    expected = im.plus("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.maximum(im.plus("sym", one), im.plus(im.plus("sym", one), im.literal_from_value(0)))
+    expected = im.plus("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.maximum("sym", im.plus("sym", one))
+    expected = im.plus("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.maximum("sym", im.plus("sym", im.literal_from_value(-1)))
+    expected = im.ref("sym")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.plus("sym", im.maximum(im.literal_from_value(0), im.literal_from_value(-1)))
+    expected = im.ref("sym")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_constant_folding_plus_minus():
+    testee = im.minus(im.plus("sym", one), im.plus(one, one))
+    expected = im.minus("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.plus(im.minus("sym", one), im.literal_from_value(2))
+    expected = im.plus("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.plus(im.minus(one, "sym"), one)
+    expected = im.minus(im.literal_from_value(2), "sym")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_constant_folding_nested_plus():
+    testee = im.plus(im.plus("sym", one), im.plus(one, one))
+    expected = im.plus("sym", im.literal_from_value(3))
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.plus(
+        im.plus("sym", im.literal_from_value(-1)), im.plus("sym", im.literal_from_value(3))
+    )
+    expected = im.plus(im.minus("sym", one), im.plus("sym", im.literal_from_value(3)))
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_constant_folding_maximum_minus():
+    testee = im.maximum(im.minus("sym", one), "sym")
+    expected = im.ref("sym")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.maximum("sym", im.minus("sym", im.literal_from_value(-1)))
+    expected = im.plus("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.maximum(im.plus("sym", im.literal_from_value(-1)), one)
+    expected = im.maximum(im.minus("sym", one), one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_constant_folding_minimum_plus_minus():
+    testee = im.minimum(im.plus("sym", one), "sym")
+    expected = im.ref("sym")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.minimum("sym", im.plus("sym", im.literal_from_value(-1)))
+    expected = im.minus("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.minimum(im.minus("sym", one), "sym")
+    expected = im.minus("sym", one)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+    testee = im.minimum("sym", im.minus("sym", im.literal_from_value(-1)))
+    expected = im.ref("sym")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_constant_folding_max_syms():
+    testee = im.maximum("sym1", im.maximum("sym2", "sym1"))
+    expected = im.maximum("sym2", "sym1")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_constant_folding_max_tuple_get():
+    testee = im.maximum(
+        im.plus(im.tuple_get(1, "sym"), 1),
+        im.maximum(im.tuple_get(1, "sym"), im.plus(im.tuple_get(1, "sym"), 1)),
+    )
+    expected = im.plus(im.tuple_get(1, "sym"), 1)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_constant_folding_nested_max_plus():
+    # maximum(maximum(1 + sym, 1), 1 + sym)
+    testee = im.maximum(im.maximum(im.plus(one, "sym"), 1), im.plus(one, "sym"))
+
+    # maximum(sym + 1, 1)
+    expected = im.maximum(im.plus("sym", one), 1)
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
+def test_constant_folding_divides_float32():
+    sym = im.ref("sym", "float32")
+    testee = im.divides_(
+        im.minus(im.literal("1", "float32"), sym), im.plus(im.literal("2", "float32"), sym)
+    )
+    expected = im.divides_(
+        im.minus(im.literal("1", "float32"), sym), im.plus(sym, im.literal("2", "float32"))
+    )
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected
+
+
 def test_constant_folding_complex():
-    sym = im.ref("sym")
     # 1 - max(max(1, max(1, sym), min(1, sym), sym), 1 + (min(-1, 2) + max(-1, 1 - sym)))
     testee = im.minus(
-        im.literal_from_value(1),
-        im.call("maximum")(
-            im.call("maximum")(
-                im.literal_from_value(1),
-                im.call("maximum")(im.literal_from_value(1), im.ref("sym")),
-                im.call("minimum")(im.literal_from_value(1), im.ref("sym")),
-                im.ref("sym"),
+        one,
+        im.maximum(
+            im.maximum(
+                im.maximum(one, im.maximum(one, "sym")),
+                im.maximum(im.maximum(one, "sym"), "sym"),
             ),
             im.plus(
-                im.literal_from_value(1),
+                one,
                 im.plus(
-                    im.call("minimum")(im.literal_from_value(-1), 2),
-                    im.call("maximum")(
-                        im.literal_from_value(-1), im.minus(im.literal_from_value(1), im.ref("sym"))
-                    ),
+                    im.minimum(im.literal_from_value(-1), 2),
+                    im.maximum(im.literal_from_value(-1), im.minus(one, "sym")),
                 ),
             ),
         ),
     )
-    # neg(maximum(maximum(sym, 1), maximum(neg(sym) + 1, -1))) + 1
+    # 1 - maximum(maximum(sym, 1), maximum(1 - sym, -1))
     expected = im.minus(
-        im.literal_from_value(1),
-        im.call("maximum")(
-            im.call("maximum")(im.ref("sym"), im.literal_from_value(1)),
-            im.call("maximum")(
-                im.minus(im.literal_from_value(1), sym),
-                im.literal_from_value(-1),
-            ),
+        one,
+        im.maximum(
+            im.maximum("sym", one),
+            im.maximum(im.minus(one, "sym"), im.literal_from_value(-1)),
         ),
     )
     actual = ConstantFolding.apply(testee)
@@ -370,35 +304,24 @@ def test_constant_folding_complex():
 
 
 def test_constant_folding_complex_1():
-    sym = im.ref("sym")
     # maximum(sym, 1 + sym) + (maximum(1, maximum(1, sym)) + (sym - 1 + (1 + (sym + 1) + 1))) - 2
     testee = im.minus(
         im.plus(
-            im.call("maximum")(sym, im.plus(im.literal_from_value(1), sym)),
+            im.maximum("sym", im.plus(one, "sym")),
             im.plus(
-                im.call("maximum")(
-                    im.literal_from_value(1), im.call("maximum")(im.literal_from_value(1), sym)
-                ),
-                im.plus(
-                    im.minus(sym, im.literal_from_value(1)),
-                    im.plus(
-                        im.plus(im.literal_from_value(1), im.plus(sym, im.literal_from_value(1))),
-                        im.literal_from_value(1),
-                    ),
-                ),
+                im.maximum(one, im.maximum(one, "sym")),
+                im.plus(im.minus("sym", one), im.plus(im.plus(one, im.plus("sym", one)), one)),
             ),
         ),
         im.literal_from_value(2),
     )
-    # sym + 1 + (maximum(sym, 1) + (sym + -1 + (sym + 3))) + -2
+    # sym + 1 + (maximum(sym, 1) + (sym - 1 + (sym + 3))) - 2
     expected = im.minus(
         im.plus(
-            im.plus(sym, 1),
+            im.plus("sym", 1),
             im.plus(
-                im.call("maximum")(sym, im.literal_from_value(1)),
-                im.plus(
-                    im.minus(sym, im.literal_from_value(1)), im.plus(sym, im.literal_from_value(3))
-                ),
+                im.maximum("sym", one),
+                im.plus(im.minus("sym", one), im.plus("sym", im.literal_from_value(3))),
             ),
         ),
         im.literal_from_value(2),
@@ -408,143 +331,18 @@ def test_constant_folding_complex_1():
 
 
 def test_constant_folding_complex_3():
-    sym = im.ref("sym")
     # minimum(1 - sym, 1 + sym) + (maximum(maximum(1 - sym, 1 + sym), 1 - sym) + maximum(1 - sym, 1 - sym))
     testee = im.plus(
-        im.call("minimum")(
-            im.minus(im.literal_from_value(1), sym), im.plus(im.literal_from_value(1), sym)
-        ),
+        im.minimum(im.minus(one, "sym"), im.plus(one, "sym")),
         im.plus(
-            im.call("maximum")(
-                im.call("maximum")(
-                    im.minus(im.literal_from_value(1), sym), im.plus(im.literal_from_value(1), sym)
-                ),
-                im.minus(im.literal_from_value(1), sym),
-            ),
-            im.call("maximum")(
-                im.minus(im.literal_from_value(1), sym), im.minus(im.literal_from_value(1), sym)
-            ),
+            im.maximum(im.maximum(im.minus(one, "sym"), im.plus(one, "sym")), im.minus(one, "sym")),
+            im.maximum(im.minus(one, "sym"), im.minus(one, "sym")),
         ),
     )
-    # minimum(neg(sym) + 1, sym + 1) + (maximum(neg(sym) + 1, sym + 1) + (neg(sym) + 1))
+    # minimum(1 - sym, sym + 1) + (maximum(1 - sym, sym + 1) + (1 - sym))
     expected = im.plus(
-        im.call("minimum")(
-            im.minus(im.literal_from_value(1), sym),
-            im.plus(sym, im.literal_from_value(1)),
-        ),
-        im.plus(
-            im.call("maximum")(
-                im.minus(im.literal_from_value(1), sym),
-                im.plus(sym, im.literal_from_value(1)),
-            ),
-            im.minus(im.literal_from_value(1), sym),
-        ),
+        im.minimum(im.minus(one, "sym"), im.plus("sym", one)),
+        im.plus(im.maximum(im.minus(one, "sym"), im.plus("sym", one)), im.minus(one, "sym")),
     )
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_complex_3a():
-    sym = im.ref("sym")
-    # maximum(maximum(1 + sym, 1), 1 + sym)
-    testee = im.call("maximum")(
-        im.call("maximum")(im.plus(im.literal_from_value(1), sym), 1),
-        im.plus(im.literal_from_value(1), sym),
-    )
-    # maximum(1 + sym, 1)
-    expected = im.call("maximum")(im.plus(sym, im.literal_from_value(1)), 1)
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_complex_2():
-    sym = im.ref("sym")
-    testee = im.plus(
-        im.plus(sym, im.literal_from_value(-1)), im.plus(sym, im.literal_from_value(3))
-    )
-    expected = im.plus(
-        im.minus(sym, im.literal_from_value(1)), im.plus(sym, im.literal_from_value(3))
-    )
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_complex_4():
-    sym = im.ref("sym", "float32")
-    testee = im.divides_(
-        im.minus(im.literal("1", "float32"), sym), im.minus(im.literal("2", "float32"), sym)
-    )
-    expected = im.divides_(
-        im.minus(im.literal("1", "float32"), sym),
-        im.minus(im.literal("2", "float32"), sym),
-    )
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_max():
-    testee = im.call("maximum")(0, 0)
-    expected = im.literal_from_value(0)
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding_plus_new():
-    sym = im.ref("sym")
-    testee = im.plus(im.minus(sym, im.literal_from_value(1)), im.literal_from_value(2))
-    expected = im.plus(sym, im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_minus():
-    sym = im.ref("sym")
-    testee = im.plus(im.minus(im.literal_from_value(1), sym), im.literal_from_value(1))
-    expected = im.minus(im.literal_from_value(2), sym)
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_fold_min_max_plus():
-    sym = im.ref("sym")
-    testee = im.call("minimum")(im.plus(sym, im.literal_from_value(-1)), sym)
-    expected = im.minus(sym, im.literal_from_value(1))
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_max_tuple_get():
-    sym = im.ref("sym")
-    testee = im.call("maximum")(
-        im.plus(im.tuple_get(1, sym), 1),
-        im.call("maximum")(im.tuple_get(1, sym), im.plus(im.tuple_get(1, sym), 1)),
-    )
-    expected = im.plus(im.tuple_get(1, sym), 1)
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_max_syms():
-    sym1 = im.ref("sym1")
-    sym2 = im.ref("sym2")
-    testee = im.call("maximum")(sym1, im.call("maximum")(sym2, sym1))
-    expected = im.call("maximum")(sym2, sym1)
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_max_min():
-    sym = im.ref("sym1")
-    testee = im.call("maximum")(im.call("minimum")(sym, 1), sym)
-    expected = im.call("maximum")(im.call("minimum")(sym, 1), sym)
-    actual = ConstantFolding.apply(testee)
-    assert actual == expected
-
-
-def test_minus_1():
-    sym = im.ref("sym")
-    testee = im.maximum(im.plus(sym, im.literal_from_value(-1)), im.literal_from_value(1))
-    expected = im.maximum(im.minus(sym, im.literal_from_value(1)), im.literal_from_value(1))
-
     actual = ConstantFolding.apply(testee)
     assert actual == expected
