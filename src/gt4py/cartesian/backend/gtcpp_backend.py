@@ -25,6 +25,7 @@ from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.eve import codegen
+from gt4py.storage.cartesian.layout import StorageDevice
 
 from .gtc_common import BaseGTBackend, CUDAPyExtModuleGenerator
 
@@ -85,7 +86,9 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             if kwargs["external_arg"]:
                 return "py::{pybind_type} {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
                     pybind_type=(
-                        "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
+                        "object"
+                        if self.backend.storage_info["device"] == StorageDevice.GPU
+                        else "buffer"
                     ),
                     name=node.name,
                     sid_ndim=sid_ndim,

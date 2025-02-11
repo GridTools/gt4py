@@ -11,6 +11,8 @@ import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
+from gt4py.storage.cartesian.layout import StorageDevice
+
 
 try:
     import cupy as cp
@@ -23,12 +25,14 @@ from gt4py.storage.cartesian.utils import allocate_cpu, allocate_gpu, normalize_
 
 
 CPU_LAYOUTS = [
-    name for name, info in gt4py.storage.layout.REGISTRY.items() if info["device"] == "cpu"
+    name
+    for name, info in gt4py.storage.layout.REGISTRY.items()
+    if info["device"] == StorageDevice.CPU
 ]
 GPU_LAYOUTS = [
     pytest.param(name, marks=pytest.mark.requires_gpu)
     for name, info in gt4py.storage.layout.REGISTRY.items()
-    if info["device"] == "gpu"
+    if info["device"] == StorageDevice.GPU
 ]
 
 try:

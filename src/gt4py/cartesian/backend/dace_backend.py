@@ -47,6 +47,7 @@ from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
 from gt4py.eve import codegen
 from gt4py.eve.codegen import MakoTemplate as as_mako
+from gt4py.storage.cartesian.layout import StorageDevice
 
 
 if TYPE_CHECKING:
@@ -408,7 +409,7 @@ class DaCeExtGenerator(BackendCodegen):
             stencil_ir, sdfg, module_name=self.module_name, backend=self.backend
         )
 
-        bindings_ext = "cu" if self.backend.storage_info["device"] == "gpu" else "cpp"
+        bindings_ext = "cu" if self.backend.storage_info["device"] == StorageDevice.GPU else "cpp"
         sources = {
             "computation": {"computation.hpp": implementation},
             "bindings": {f"bindings.{bindings_ext}": bindings},
@@ -662,7 +663,9 @@ class DaCeBindingsCodegen:
                 res[name] = (
                     "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
                         pybind_type=(
-                            "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
+                            "object"
+                            if self.backend.storage_info["device"] == StorageDevice.GPU
+                            else "buffer"
                         ),
                         name=name,
                         ndim=len(data.shape),
@@ -766,7 +769,7 @@ class DaceCPUBackend(BaseDaceBackend):
     languages = {"computation": "c++", "bindings": ["python"]}
     storage_info = {
         "alignment": 1,
-        "device": "cpu",
+        "device": StorageDevice.CPU,
         "layout_map": gt_storage.layout.layout_maker_factory((0, 1, 2)),
         "is_optimal_layout": gt_storage.layout.layout_checker_factory(
             gt_storage.layout.layout_maker_factory((0, 1, 2))
@@ -788,7 +791,7 @@ class DaceGPUBackend(BaseDaceBackend):
     languages = {"computation": "cuda", "bindings": ["python"]}
     storage_info = {
         "alignment": 32,
-        "device": "gpu",
+        "device": StorageDevice.GPU,
         "layout_map": gt_storage.layout.layout_maker_factory((2, 1, 0)),
         "is_optimal_layout": gt_storage.layout.layout_checker_factory(
             gt_storage.layout.layout_maker_factory((2, 1, 0))

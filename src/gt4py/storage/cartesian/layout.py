@@ -6,13 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
     Dict,
     Final,
-    Literal,
     Optional,
     Sequence,
     Tuple,
@@ -30,9 +30,14 @@ if TYPE_CHECKING:
         cp = None
 
 
+class StorageDevice(Enum):
+    CPU = 1
+    GPU = 2
+
+
 class LayoutInfo(TypedDict):
     alignment: int  # measured in bytes
-    device: Literal["cpu", "gpu"]
+    device: StorageDevice
     layout_map: Callable[[Tuple[str, ...]], Tuple[Optional[int], ...]]
     is_optimal_layout: Callable[[Any, Tuple[str, ...]], bool]
 
@@ -136,7 +141,7 @@ def make_cuda_layout_map(dimensions: Tuple[str, ...]) -> Tuple[Optional[int], ..
 
 NaiveCPULayout: Final[LayoutInfo] = {
     "alignment": 1,
-    "device": "cpu",
+    "device": StorageDevice.CPU,
     "layout_map": lambda axes: tuple(i for i in range(len(axes))),
     "is_optimal_layout": lambda *_: True,
 }
@@ -144,7 +149,7 @@ register("naive_cpu", NaiveCPULayout)
 
 CPUIFirstLayout: Final[LayoutInfo] = {
     "alignment": 8,
-    "device": "cpu",
+    "device": StorageDevice.CPU,
     "layout_map": make_gtcpu_ifirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_ifirst_layout_map),
 }
@@ -153,7 +158,7 @@ register("cpu_ifirst", CPUIFirstLayout)
 
 CPUKFirstLayout: Final[LayoutInfo] = {
     "alignment": 1,
-    "device": "cpu",
+    "device": StorageDevice.CPU,
     "layout_map": make_gtcpu_kfirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_kfirst_layout_map),
 }
@@ -162,7 +167,7 @@ register("cpu_kfirst", CPUKFirstLayout)
 
 CUDALayout: Final[LayoutInfo] = {
     "alignment": 32,
-    "device": "gpu",
+    "device": StorageDevice.GPU,
     "layout_map": make_cuda_layout_map,
     "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
 }

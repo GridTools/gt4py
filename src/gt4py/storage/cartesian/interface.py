@@ -81,7 +81,7 @@ def empty(
     _error_on_invalid_preset(backend)
     storage_info = layout.from_name(backend)
     assert storage_info is not None
-    if storage_info["device"] == "gpu":
+    if storage_info["device"] == layout.StorageDevice.GPU:
         allocate_f = storage_utils.allocate_gpu
     else:
         allocate_f = storage_utils.allocate_cpu

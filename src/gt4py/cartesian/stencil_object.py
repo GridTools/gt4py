@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from numbers import Number
 from pickle import dumps
-from typing import Any, Callable, ClassVar, Dict, Literal, Optional, Tuple, Union, cast
+from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union, cast
 
 import numpy as np
 
@@ -24,6 +24,7 @@ import gt4py.storage.cartesian.utils as storage_utils
 from gt4py import cartesian as gt4pyc
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gt4py.cartesian.gtc.definitions import Index, Shape
+from gt4py.storage.cartesian.layout import StorageDevice
 
 
 try:
@@ -51,7 +52,7 @@ def _compute_domain_origin_cache_key(
 
 @dataclass
 class ArgsInfo:
-    device: str
+    device: StorageDevice
     array: FieldType
     original_object: Optional[Any] = None
     origin: Optional[Tuple[int, ...]] = None
@@ -59,7 +60,7 @@ class ArgsInfo:
 
 
 def _extract_array_infos(
-    field_args: Dict[str, Optional[FieldType]], device: Literal["cpu", "gpu"]
+    field_args: Dict[str, Optional[FieldType]], device: StorageDevice
 ) -> Dict[str, Optional[ArgsInfo]]:
     array_infos: Dict[str, Optional[ArgsInfo]] = {}
     for name, arg in field_args.items():

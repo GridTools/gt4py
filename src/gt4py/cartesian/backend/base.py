@@ -84,7 +84,7 @@ class Backend(abc.ABC):
     #: Backend-specific storage parametrization:
     #:
     #:  - "alignment": in bytes
-    #:  - "device": "cpu" | "gpu"
+    #:  - "device": StorageDevice.CPU | StorageDevice.GPU
     #:  - "layout_map": callback converting a mask to a layout
     #:  - "is_optimal_layout": callback checking if a storage has compatible layout
     storage_info: ClassVar[gt_storage.layout.LayoutInfo]
