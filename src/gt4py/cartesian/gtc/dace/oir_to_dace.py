@@ -17,6 +17,7 @@ import dace.subsets
 
 import gt4py.cartesian.gtc.oir as oir
 from gt4py import eve
+from gt4py._core.definitions import DeviceType
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.constants import CONNECTOR_PREFIX_IN, CONNECTOR_PREFIX_OUT
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
@@ -31,17 +32,16 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
     AccessCollector,
     compute_horizontal_block_extents,
 )
-from gt4py.storage.cartesian.layout import StorageDevice
 
 
-transient_storage_per_device: Dict[StorageDevice, dace.StorageType] = {
-    StorageDevice.CPU: dace.StorageType.Default,
-    StorageDevice.GPU: dace.StorageType.GPU_Global,
+transient_storage_per_device: Dict[DeviceType, dace.StorageType] = {
+    DeviceType.CPU: dace.StorageType.Default,
+    DeviceType.CUDA: dace.StorageType.GPU_Global,
 }
 
-device_type_per_device: Dict[StorageDevice, dace.DeviceType] = {
-    StorageDevice.CPU: dace.DeviceType.CPU,
-    StorageDevice.GPU: dace.DeviceType.GPU,
+device_type_per_device: Dict[DeviceType, dace.DeviceType] = {
+    DeviceType.CPU: dace.DeviceType.CPU,
+    DeviceType.CUDA: dace.DeviceType.GPU,
 }
 
 
@@ -115,7 +115,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
         node: oir.VerticalLoop,
         *,
         ctx: OirSDFGBuilder.SDFGContext,
-        device: StorageDevice,
+        device: DeviceType,
     ) -> None:
         declarations = {
             acc.name: ctx.decls[acc.name]
@@ -156,7 +156,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 library_node, connector_name, access_node, None, dace.Memlet(field, subset=subset)
             )
 
-    def visit_Stencil(self, node: oir.Stencil, *, device: StorageDevice) -> dace.SDFG:
+    def visit_Stencil(self, node: oir.Stencil, *, device: DeviceType) -> dace.SDFG:
         ctx = OirSDFGBuilder.SDFGContext(node)
         for param in node.params:
             if isinstance(param, oir.FieldDecl):

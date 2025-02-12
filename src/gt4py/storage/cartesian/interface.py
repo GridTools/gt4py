@@ -13,6 +13,7 @@ from typing import Optional, Sequence, Union
 
 import numpy as np
 
+from gt4py._core.definitions import DeviceType
 from gt4py.storage import allocators
 from gt4py.storage.cartesian import layout, utils as storage_utils
 
@@ -81,10 +82,14 @@ def empty(
     _error_on_invalid_preset(backend)
     storage_info = layout.from_name(backend)
     assert storage_info is not None
-    if storage_info["device"] == layout.StorageDevice.GPU:
+    if storage_info["device"] == DeviceType.CUDA:
         allocate_f = storage_utils.allocate_gpu
-    else:
+    elif storage_info["device"] == DeviceType.CPU:
         allocate_f = storage_utils.allocate_cpu
+    else:
+        raise ValueError(
+            f"Allocation is only defined for DeviceTypes {DeviceType.CPU} (CPU) and {DeviceType.CUDA} (CUDA). Got {storage_info['device']} instead."
+        )
 
     aligned_index, shape, dtype, dimensions = storage_utils.normalize_storage_spec(
         aligned_index, shape, dtype, dimensions

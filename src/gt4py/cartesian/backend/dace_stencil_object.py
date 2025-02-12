@@ -20,14 +20,14 @@ import dace.frontend.python.common
 from dace.frontend.python.common import SDFGClosure, SDFGConvertible
 
 from gt4py import cartesian as gt4pyc
+from gt4py._core.definitions import DeviceType
 from gt4py.cartesian.backend.dace_backend import freeze_origin_domain_sdfg
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo
 from gt4py.cartesian.stencil_object import ArgsInfo, FrozenStencil, StencilObject
 from gt4py.cartesian.utils import shash
-from gt4py.storage.cartesian.layout import StorageDevice
 
 
-def _extract_array_infos(field_args, device: StorageDevice) -> Dict[str, Optional[ArgsInfo]]:
+def _extract_array_infos(field_args, device: DeviceType) -> Dict[str, Optional[ArgsInfo]]:
     return {
         name: ArgsInfo(
             array=arg,

@@ -24,7 +24,7 @@ from gt4py.cartesian.definitions import AccessKind, FieldInfo
 from gt4py.cartesian.gtc.definitions import Boundary, CartesianSpace, Index, Shape
 from gt4py.cartesian.stencil_object import StencilObject
 from gt4py.storage.cartesian import utils as storage_utils
-from gt4py.storage.cartesian.layout import StorageDevice
+from gt4py.storage.cartesian.layout import is_gpu_device
 
 from .input_strategies import (
     SymbolKind,
@@ -207,10 +207,7 @@ class SuiteMeta(type):
                 )
 
                 marks = test["marks"].copy()
-                if (
-                    gt4pyc.backend.from_name(test["backend"]).storage_info["device"]
-                    == StorageDevice.GPU
-                ):
+                if is_gpu_device(gt4pyc.backend.from_name(test["backend"]).storage_info):
                     marks.append(pytest.mark.requires_gpu)
                 # Run generation and implementation tests in the same group to ensure
                 # (thread-) safe parallelization of stencil tests.
@@ -244,10 +241,7 @@ class SuiteMeta(type):
                 )
 
                 marks = test["marks"].copy()
-                if (
-                    gt4pyc.backend.from_name(test["backend"]).storage_info["device"]
-                    == StorageDevice.GPU
-                ):
+                if is_gpu_device(gt4pyc.backend.from_name(test["backend"]).storage_info):
                     marks.append(pytest.mark.requires_gpu)
                 # Run generation and implementation tests in the same group to ensure
                 # (thread-) safe parallelization of stencil tests.

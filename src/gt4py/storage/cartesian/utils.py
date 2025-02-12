@@ -22,7 +22,6 @@ from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
 from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
 from gt4py.storage import allocators
-from gt4py.storage.cartesian.layout import StorageDevice
 
 
 try:
@@ -183,16 +182,18 @@ def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]) -> np.ndarray:
         return np.array(array)
 
 
-def asarray(array: FieldLike, *, device: Optional[StorageDevice] = None) -> np.ndarray | cp.ndarray:
+def asarray(
+    array: FieldLike, *, device: Optional[core_defs.DeviceType] = None
+) -> np.ndarray | cp.ndarray:
     if hasattr(array, "ndarray"):
         # extract the buffer from a gt4py.next.Field
         # TODO(havogt): probably `Field` should provide the array interface methods when applicable
         array = array.ndarray
 
     xp = None
-    if device == StorageDevice.CPU:
+    if device == core_defs.DeviceType.CPU:
         xp = np
-    elif device == StorageDevice.GPU:
+    elif device == core_defs.DeviceType.CUDA:
         assert cp is not None
         xp = cp
     elif not device:

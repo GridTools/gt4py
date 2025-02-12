@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -22,6 +21,8 @@ from typing import (
 
 import numpy as np
 
+from gt4py._core.definitions import DeviceType
+
 
 if TYPE_CHECKING:
     try:
@@ -30,34 +31,32 @@ if TYPE_CHECKING:
         cp = None
 
 
-class StorageDevice(Enum):
-    CPU = 1
-    GPU = 2
-
-
 class LayoutInfo(TypedDict):
     alignment: int  # measured in bytes
-    device: StorageDevice
+    device: DeviceType
     layout_map: Callable[[Tuple[str, ...]], Tuple[Optional[int], ...]]
     is_optimal_layout: Callable[[Any, Tuple[str, ...]], bool]
 
 
+# Registry of LayoutInfo per backend name.
 REGISTRY: Dict[str, LayoutInfo] = {}
 
 
-def from_name(name: str) -> Optional[LayoutInfo]:
-    return REGISTRY.get(name, None)
+def from_name(backend_name: str) -> Optional[LayoutInfo]:
+    """Get LayoutInfo from backend name."""
+    return REGISTRY.get(backend_name, None)
 
 
-def register(name: str, info: Optional[LayoutInfo]) -> None:
+def register(backend_name: str, info: Optional[LayoutInfo]) -> None:
+    """Register LayoutInfo with backend name."""
     if info is None:
-        if name in REGISTRY:
-            del REGISTRY[name]
+        if backend_name in REGISTRY:
+            del REGISTRY[backend_name]
     else:
-        assert isinstance(name, str)
+        assert isinstance(backend_name, str)
         assert isinstance(info, dict)
 
-        REGISTRY[name] = info
+        REGISTRY[backend_name] = info
 
 
 def check_layout(layout_map, strides):
@@ -69,6 +68,18 @@ def check_layout(layout_map, strides):
             return False
         stride = strides[dim]
     return True
+
+
+def is_cpu_device(layout: LayoutInfo) -> bool:
+    return layout["device"] == DeviceType.CPU
+
+
+def is_gpu_device(layout: LayoutInfo) -> bool:
+    return layout["device"] in [DeviceType.CUDA, DeviceType.ROCM]
+
+
+def is_cuda_device(layout: LayoutInfo) -> bool:
+    return layout["device"] == DeviceType.CUDA
 
 
 def layout_maker_factory(
@@ -141,7 +152,7 @@ def make_cuda_layout_map(dimensions: Tuple[str, ...]) -> Tuple[Optional[int], ..
 
 NaiveCPULayout: Final[LayoutInfo] = {
     "alignment": 1,
-    "device": StorageDevice.CPU,
+    "device": DeviceType.CPU,
     "layout_map": lambda axes: tuple(i for i in range(len(axes))),
     "is_optimal_layout": lambda *_: True,
 }
@@ -149,7 +160,7 @@ register("naive_cpu", NaiveCPULayout)
 
 CPUIFirstLayout: Final[LayoutInfo] = {
     "alignment": 8,
-    "device": StorageDevice.CPU,
+    "device": DeviceType.CPU,
     "layout_map": make_gtcpu_ifirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_ifirst_layout_map),
 }
@@ -158,7 +169,7 @@ register("cpu_ifirst", CPUIFirstLayout)
 
 CPUKFirstLayout: Final[LayoutInfo] = {
     "alignment": 1,
-    "device": StorageDevice.CPU,
+    "device": DeviceType.CPU,
     "layout_map": make_gtcpu_kfirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_kfirst_layout_map),
 }
@@ -167,7 +178,7 @@ register("cpu_kfirst", CPUKFirstLayout)
 
 CUDALayout: Final[LayoutInfo] = {
     "alignment": 32,
-    "device": StorageDevice.GPU,
+    "device": DeviceType.CUDA,
     "layout_map": make_cuda_layout_map,
     "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
 }
@@ -175,3 +186,19 @@ register("cuda", CUDALayout)
 
 GPULayout: Final[LayoutInfo] = CUDALayout
 register("gpu", GPULayout)
+
+DaceCPULayout: Final[LayoutInfo] = {
+    "alignment": 1,
+    "device": DeviceType.CPU,
+    "layout_map": layout_maker_factory((0, 1, 2)),
+    "is_optimal_layout": layout_checker_factory(layout_maker_factory((0, 1, 2))),
+}
+register("dace:cpu", DaceCPULayout)
+
+DaceGPULayout: Final[LayoutInfo] = {
+    "alignment": 32,
+    "device": DeviceType.CUDA,
+    "layout_map": layout_maker_factory((2, 1, 0)),
+    "is_optimal_layout": layout_checker_factory(layout_maker_factory((2, 1, 0))),
+}
+register("dace:gpu", DaceGPULayout)

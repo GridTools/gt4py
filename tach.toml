@@ -16,6 +16,7 @@ depends_on = [
 [[modules]]
 path = "gt4py.cartesian"
 depends_on = [
+    { path = "gt4py._core" }, # romanc: to be removed again (unless absolutely necessary)
     { path = "gt4py.eve" },
     { path = "gt4py.storage" },
 ]
