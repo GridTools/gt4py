@@ -141,7 +141,9 @@ def can_deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.ScalarType:
 
 
 @_register_builtin_type_synthesizer
-def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
+def if_(
+    pred: ts.ScalarType | ts.DeferredType, true_branch: ts.DataType, false_branch: ts.DataType
+) -> ts.DataType:
     if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
         return tree_map(
             collection_type=ts.TupleType,
@@ -149,7 +151,9 @@ def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType
         )(functools.partial(if_, pred))(true_branch, false_branch)
 
     assert not isinstance(true_branch, ts.TupleType) and not isinstance(false_branch, ts.TupleType)
-    assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
+    assert isinstance(pred, ts.DeferredType) or (
+        isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
+    )
     # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
     #  iterators defined on different positions this fails. For the GTFN backend we also don't
     #  want this, but for roundtrip it is totally fine.
@@ -381,25 +385,30 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
         assert isinstance(it, it_ts.IteratorType)
         if it.position_dims == "unknown":  # nothing to do here
             return it
-        new_position_dims = [*it.position_dims]
-        assert len(offset_literals) % 2 == 0
-        for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
-            assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
-                offset_axis.value, common.Dimension
-            )
-            type_ = offset_provider_type[offset_axis.value.value]
-            if isinstance(type_, common.Dimension):
-                pass
-            elif isinstance(type_, common.NeighborConnectivityType):
-                found = False
-                for i, dim in enumerate(new_position_dims):
-                    if dim.value == type_.source_dim.value:
-                        assert not found
-                        new_position_dims[i] = type_.codomain
-                        found = True
-                assert found
-            else:
-                raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
+        new_position_dims: list[common.Dimension] | str
+        if offset_provider_type:
+            new_position_dims = [*it.position_dims]
+            assert len(offset_literals) % 2 == 0
+            for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
+                assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
+                    offset_axis.value, common.Dimension
+                )
+                type_ = offset_provider_type[offset_axis.value.value]
+                if isinstance(type_, common.Dimension):
+                    pass
+                elif isinstance(type_, common.NeighborConnectivityType):
+                    found = False
+                    for i, dim in enumerate(new_position_dims):
+                        if dim.value == type_.source_dim.value:
+                            assert not found
+                            new_position_dims[i] = type_.codomain
+                            found = True
+                    assert found
+                else:
+                    raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
+        else:
+            # during re-inference we don't have an offset provider type
+            new_position_dims = "unknown"
         return it_ts.IteratorType(
             position_dims=new_position_dims,
             defined_dims=it.defined_dims,

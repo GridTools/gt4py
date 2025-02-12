@@ -38,7 +38,6 @@ def gt_create_local_double_buffering(
     it is not needed that the whole data is stored, but only the working set
     of a single thread.
     """
-
     processed_maps = 0
     for nsdfg in sdfg.all_sdfgs_recursive():
         processed_maps += _create_local_double_buffering_non_recursive(nsdfg)
@@ -60,6 +59,7 @@ def _create_local_double_buffering_non_recursive(
 
     processed_maps = 0
     for state in sdfg.states():
+        assert isinstance(state, dace.SDFGState)
         scope_dict = state.scope_dict()
         for node in state.nodes():
             if not isinstance(node, dace_nodes.MapEntry):
