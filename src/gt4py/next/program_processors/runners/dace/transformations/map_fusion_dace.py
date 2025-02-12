@@ -246,8 +246,8 @@ class MapFusion(transformation.SingleStateTransformation):
                 sdfg=sdfg,
             )
 
-        else:
-            raise NotImplementedError(f"Encountered unknown expression index {expr_index}")
+        # Non of the cases applied
+        return False
 
     def apply(
         self,
