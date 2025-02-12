@@ -118,13 +118,13 @@ class ConstantFolding(
         return None
 
     def transform_canonicalize_minus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        # `a - b` -> `a + (-b)`, prerequisite for FOLD_MIN_MAX_PLUS
+        # `a - b` -> `a + (-b)`
         if cpm.is_call_to(node, "minus"):
             return im.plus(node.args[0], self.fp_transform(im.call("neg")(node.args[1])))
         return None
 
     def transform_canonicalize_min_max(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
-        # `maximum(a, maximum(...))` -> `maximum(maximum(...), a)`, prerequisite for FOLD_MIN_MAX
+        # `maximum(a, maximum(...))` -> `maximum(maximum(...), a)`
         if cpm.is_call_to(node, ("maximum", "minimum")):
             op = node.fun.id  # type: ignore[attr-defined] # assured by if above
             if cpm.is_call_to(node.args[1], op) and not cpm.is_call_to(node.args[0], op):
