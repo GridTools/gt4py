@@ -69,6 +69,11 @@ class MapFusion(dace_map_fusion.MapFusion):
         only_if_common_ancestor: In parallel map fusion mode, only fuse if both maps
             have a common direct ancestor.
         apply_fusion_callback: The callback function that is used.
+
+    Todo:
+        Investigate ways of how to remove this intermediate layer. The main reason
+        why we need it is the callback functionality, but it is not needed often
+        and in these cases it might be solved differently.
     """
 
     _apply_fusion_callback: Optional[FusionTestCallback]
