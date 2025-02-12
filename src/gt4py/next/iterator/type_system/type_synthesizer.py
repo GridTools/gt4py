@@ -332,20 +332,29 @@ def as_fieldop(
                 stencil.node, num_args=len(fields)
             )  # TODO: access node differently?
 
-            def resolve_shift(input_dim, shift_tuple):
+            def resolve_shift(
+                input_dim: common.Dimension, shift_tuple: tuple[itir.OffsetLiteral, ...]
+            ) -> common.Dimension | None:
+                """
+                Resolves the final dimension by applying shifts from the given shift tuple.
+
+                Iterates through the shift tuple, updating `input_dim` based on matching offsets.
+
+                Parameters:
+                - input_dim (common.Dimension): The initial dimension to resolve.
+                - shift_tuple (tuple[itir.OffsetLiteral, ...]): A tuple of offset literals defining the shift.
+
+                Returns:
+                - common.Dimension | None: The resolved dimension or `None` if no shift is applied.
+                """
                 if not shift_tuple:
                     return None
 
-                final_target = None
+                final_target: common.Dimension | None = None
                 for off_literal in shift_tuple[::2]:
-                    off = off_literal.value
-                    offset_type = offset_provider_type[off]
-
+                    offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
                     if isinstance(offset_type, common.Dimension):
-                        if input_dim != offset_type:
-                            pass
                         final_target = offset_type
-
                     elif isinstance(
                         offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)
                     ):
@@ -359,20 +368,24 @@ def as_fieldop(
                             if isinstance(offset_type, fbuiltins.FieldOffset)
                             else offset_type.domain
                         )
-
-                        if input_dim == off_source:
+                        if input_dim == off_source:  # check if input fits to offset
                             for target in off_targets:
-                                if target.value != off:
-                                    input_dim = final_target = target
+                                if (
+                                    target.value != off_literal.value
+                                ):  # off_targets also contains a dimension with value off_literal.value which is excluded here
+                                    input_dim = final_target = (
+                                        target  # setting new input_dim for next iteration
+                                    )
 
                 return final_target
 
-            if any(shift_tuple for shift_list in shifts_results for shift_tuple in shift_list):
+            if any(shifts_results):
                 for input_dim in input_dims:
                     for shifts_list in shifts_results:
                         for shift_tuple in shifts_list:
-                            final_dim = resolve_shift(input_dim, shift_tuple)
-                            if final_dim and final_dim not in seen:
+                            if (
+                                final_dim := resolve_shift(input_dim, shift_tuple)
+                            ) and final_dim not in seen:
                                 seen.add(final_dim)
                                 output_dims.append(final_dim)
                             elif input_dim not in seen:
@@ -380,7 +393,6 @@ def as_fieldop(
                                 output_dims.append(input_dim)
             else:
                 output_dims.extend(input_dims)
-
         else:
             output_dims = domain.dims
 
