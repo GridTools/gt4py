@@ -59,7 +59,9 @@ float_vertex_k_field = ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
 float_edge_k_field = ts.FieldType(dims=[Edge, KDim], dtype=float64_type)
 float_edge_field = ts.FieldType(dims=[Edge], dtype=float64_type)
 float_vertex_field = ts.FieldType(dims=[Vertex], dtype=float64_type)
+float_vertex_v2e_k_field = ts.FieldType(dims=[Vertex, KDim, V2EDim], dtype=float64_type)
 float_vertex_v2e_field = ts.FieldType(dims=[Vertex, V2EDim], dtype=float64_type)
+
 
 it_on_v_of_e_type = it_ts.IteratorType(
     position_dims=[Vertex, KDim], defined_dims=[Edge, KDim], element_type=int_type
@@ -180,10 +182,11 @@ def expression_test_cases():
             im.as_fieldop(
                 im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
                 im.call("cartesian_domain")(
-                    im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                    im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1),
+                    im.call("named_range")(itir.AxisLiteral(value="JDim"), 0, 1)
                 ),
-            )(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field)),
-            ts.TupleType(types=[float_i_field, float_i_field]),
+            )(im.ref("inp1", float_i_field), im.ref("inp2", float_j_field)),
+            ts.TupleType(types=[float_ij_field, float_ij_field]),
         ),
         (
             im.as_fieldop(im.lambda_("x")(im.deref("x")))(
@@ -393,7 +396,7 @@ def test_fencil_with_nb_field_input():
     testee = itir.Program(
         id="f",
         function_definitions=[],
-        params=[im.sym("inp", float_vertex_v2e_field), im.sym("out", float_vertex_k_field)],
+        params=[im.sym("inp", float_vertex_v2e_k_field), im.sym("out", float_vertex_k_field)],
         declarations=[],
         body=[
             itir.SetAt(
@@ -408,7 +411,12 @@ def test_fencil_with_nb_field_input():
     )
 
     result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
-
+    assert result.body[0].expr.type == ts.FieldType(dims=[Vertex, KDim, V2EDim], dtype=float64_type)
+    assert result.body[0].expr.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=float_vertex_k_field.dims,
+        defined_dims=float_vertex_k_field.dims,
+        element_type=ts.ListType(element_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    )
     stencil = result.body[0].expr.fun.args[0]
     assert stencil.expr.args[0].type == float64_list_type
     assert stencil.type.returns == float64_type
@@ -519,7 +527,7 @@ def test_as_fieldop_without_domain_different_three_datatypes():
 
     testee = im.as_fieldop(stencil)(
         im.ref("inp1", float_edge_field),
-        im.ref("inp2", float_k_field),
+        im.ref("inp2", float_vertex_k_field),
         im.ref("inp3", float_i_field),
     )
     result = itir_type_inference.infer(
@@ -527,14 +535,14 @@ def test_as_fieldop_without_domain_different_three_datatypes():
         offset_provider_type={"V2E": V2E, "E2V": E2V, "KOff": KDim, "IOff": IDim},
         allow_undeclared_symbols=True,
     )
-    assert result.type == ts.FieldType(dims=[Edge, IDim, KDim], dtype=float64_type)
+    assert result.type == ts.FieldType(dims=[Edge, IDim, Vertex, KDim], dtype=float64_type)
     assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
         position_dims="unknown",
         defined_dims=float_edge_field.dims,
         element_type=float_edge_field.dtype,
     )
     assert result.fun.args[0].type.pos_only_args[1] == it_ts.IteratorType(
-        position_dims="unknown", defined_dims=float_k_field.dims, element_type=float_k_field.dtype
+        position_dims="unknown", defined_dims=float_vertex_k_field.dims, element_type=float_vertex_k_field.dtype
     )
     assert result.fun.args[0].type.pos_only_args[2] == it_ts.IteratorType(
         position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype

@@ -307,9 +307,10 @@ def as_fieldop(
     # have, but not the dimensions of a field.
     # Note that it might appear as if using the TraceShift pass would allow us to deduce the return
     # type of `as_fieldop` without a domain, but this is not the case, since we don't have
-    # information on the ordering of dimensions. In this example #Todo: update comment
+    # information on the ordering of dimensions. In this example
     #   `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
     # it is unclear if the result has dimension I, J or J, I.
+    # Todo: update comment
     if domain is None:
         domain = it_ts.DomainType(dims="unknown")
 
@@ -405,9 +406,6 @@ def as_fieldop(
         return type_info.apply_to_primitive_constituents(
             lambda el_type: ts.FieldType(dims=common.promote_dims(output_dims), dtype=el_type),
             stencil_return,)
-        ts.FieldType(
-            dims=common.promote_dims(output_dims), dtype=stencil_return
-        )  # TODO: not yet working for Tuples
 
     return applied_as_fieldop
 
