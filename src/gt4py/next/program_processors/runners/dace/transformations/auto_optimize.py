@@ -335,7 +335,7 @@ def gt_auto_fuse_top_level_maps(
         # TODO(phimuell): Switch to `FullMapFusion` once DaCe has parallel map fusion
         #   and [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
 
-        # First we do scan the entire SDFG to figuring out which data is only
+        # First we do scan the entire SDFG to figure out which data is only
         #  used once and can be deleted. MapFusion could do this on its own but
         #  it is more efficient to do it once and then reuse it.
         find_single_use_data = dace_analysis.FindSingleUseData()

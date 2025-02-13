@@ -26,7 +26,7 @@ FusionTestCallback: TypeAlias = Callable[
 ]
 """Callback for the map fusion transformation to check if a fusion should be performed.
 
-The call back should return `True` if the fusion should be performed and `False` if it
+The callback returns `True` if the fusion should be performed and `False` if it
 should be rejected. See also the description of GT4Py's MapFusion transformation for
 more information.
 
@@ -51,24 +51,24 @@ class MapFusion(dace_map_fusion.MapFusion):
     present in the DaCe version of this transformation.
     There are two important differences when compared with DaCe's MapFusion:
     - In DaCe strict data flow is enabled by default, in GT4Py it is disabled by default.
-    - GT4Py accepts, as an additional argument `apply_fusion_callback`. This is a
+    - GT4Py accepts an additional argument `apply_fusion_callback`. This is a
         function that is called by the transformation, at the _beginning_ of
         `self.can_be_applied()`, i.e. before the transformation does any check if
         the maps can be fused. If this function returns `False`, `self.can_be_applied()`
-        end and returns `False`. In case the callback returns `True` the transformation
+        ends and returns `False`. In case the callback returns `True` the transformation
         will perform the usual steps to check if the transformation can apply or not.
         For the signature see `FusionTestCallback`.
 
     Args:
         only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
         only_toplevel_maps: Only consider Maps that are at the top.
-        strict_dataflow: Which dataflow mode should be used, it is disabled by default.
+        strict_dataflow: Strict dataflow mode should be used, it is disabled by default.
         assume_always_shared: Assume that all intermediates are shared.
         allow_serial_map_fusion: Allow serial map fusion, by default `True`.
         allow_parallel_fusion: Allow to merge parallel maps, by default `False`.
-        only_if_common_ancestor: In parallel map fusion mode, only fuse if both map
+        only_if_common_ancestor: In parallel map fusion mode, only fuse if both maps
             have a common direct ancestor.
-        apply_fusion_callback: The call back function that is used.
+        apply_fusion_callback: The callback function that is used.
     """
 
     _apply_fusion_callback: Optional[FusionTestCallback]
