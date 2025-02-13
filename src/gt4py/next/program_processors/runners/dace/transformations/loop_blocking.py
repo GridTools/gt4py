@@ -204,9 +204,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         inner_label = f"inner_{outer_map.label}"
         inner_range = {
             self.blocking_parameter: dace_subsets.Range.from_string(
-                f"({rng_start} + {coarse_block_var} * {self.blocking_size})"
+                f"(({rng_start}) + ({coarse_block_var}) * ({self.blocking_size}))"
                 + ":"
-                + f"min({rng_start} + ({coarse_block_var} + 1) * {self.blocking_size}, {rng_stop} + 1)"
+                + f"min(({rng_start}) + ({coarse_block_var} + 1) * ({self.blocking_size}), ({rng_stop}) + 1)"
             )
         }
         inner_entry, inner_exit = state.add_map(
