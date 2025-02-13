@@ -690,9 +690,9 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
             self._promote_map(graph, replace_trivail_map_parameter=False)
             if not gtx_transformations.MapFusionSerial.can_be_applied_to(
                 sdfg=sdfg,
-                map_exit_1=trivial_map_exit,
-                intermediate_access_node=self.access_node,
-                map_entry_2=self.second_map_entry,
+                first_map_exit=trivial_map_exit,
+                array=self.access_node,
+                second_map_entry=self.second_map_entry,
             ):
                 return False
         finally:
