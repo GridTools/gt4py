@@ -405,7 +405,8 @@ def as_fieldop(
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
             lambda el_type: ts.FieldType(dims=common.promote_dims(output_dims), dtype=el_type),
-            stencil_return,)
+            stencil_return,
+        )
 
     return applied_as_fieldop
 

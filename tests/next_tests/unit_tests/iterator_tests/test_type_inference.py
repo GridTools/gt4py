@@ -183,7 +183,7 @@ def expression_test_cases():
                 im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
                 im.call("cartesian_domain")(
                     im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1),
-                    im.call("named_range")(itir.AxisLiteral(value="JDim"), 0, 1)
+                    im.call("named_range")(itir.AxisLiteral(value="JDim"), 0, 1),
                 ),
             )(im.ref("inp1", float_i_field), im.ref("inp2", float_j_field)),
             ts.TupleType(types=[float_ij_field, float_ij_field]),
@@ -415,7 +415,7 @@ def test_fencil_with_nb_field_input():
     assert result.body[0].expr.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
         position_dims=float_vertex_k_field.dims,
         defined_dims=float_vertex_k_field.dims,
-        element_type=ts.ListType(element_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+        element_type=ts.ListType(element_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
     )
     stencil = result.body[0].expr.fun.args[0]
     assert stencil.expr.args[0].type == float64_list_type
@@ -542,7 +542,9 @@ def test_as_fieldop_without_domain_different_three_datatypes():
         element_type=float_edge_field.dtype,
     )
     assert result.fun.args[0].type.pos_only_args[1] == it_ts.IteratorType(
-        position_dims="unknown", defined_dims=float_vertex_k_field.dims, element_type=float_vertex_k_field.dtype
+        position_dims="unknown",
+        defined_dims=float_vertex_k_field.dims,
+        element_type=float_vertex_k_field.dtype,
     )
     assert result.fun.args[0].type.pos_only_args[2] == it_ts.IteratorType(
         position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype
