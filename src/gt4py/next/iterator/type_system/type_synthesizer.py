@@ -402,7 +402,10 @@ def as_fieldop(
         )
 
         assert isinstance(stencil_return, ts.DataType)
-        return ts.FieldType(
+        return type_info.apply_to_primitive_constituents(
+            lambda el_type: ts.FieldType(dims=common.promote_dims(output_dims), dtype=el_type),
+            stencil_return,)
+        ts.FieldType(
             dims=common.promote_dims(output_dims), dtype=stencil_return
         )  # TODO: not yet working for Tuples
 
