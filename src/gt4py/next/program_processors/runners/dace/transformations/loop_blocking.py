@@ -219,7 +219,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         # Now we modify the properties of the outer map.
         coarse_block_range = dace_subsets.Range.from_string(
-            f"0:int_ceil(({rng_stop} + 1) - {rng_start}, {self.blocking_size})"
+            f"0:int_ceil((({rng_stop}) + 1) - ({rng_start}), ({self.blocking_size}))"
         ).ranges[0]
         outer_map.params[blocking_parameter_dim] = coarse_block_var
         outer_map.range[blocking_parameter_dim] = coarse_block_range
