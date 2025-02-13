@@ -352,31 +352,32 @@ def as_fieldop(
                     return None
 
                 final_target: common.Dimension | None = None
-                for off_literal in shift_tuple[::2]:
-                    offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
-                    if isinstance(offset_type, common.Dimension):
-                        final_target = offset_type
-                    elif isinstance(
-                        offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)
-                    ):
-                        off_source = (
-                            offset_type.source
-                            if isinstance(offset_type, fbuiltins.FieldOffset)
-                            else offset_type.codomain
-                        )
-                        off_targets = (
-                            offset_type.target
-                            if isinstance(offset_type, fbuiltins.FieldOffset)
-                            else offset_type.domain
-                        )
-                        if input_dim == off_source:  # check if input fits to offset
-                            for target in off_targets:
-                                if (
-                                    target.value != off_literal.value
-                                ):  # off_targets also contains a dimension with value off_literal.value which is excluded here
-                                    input_dim = final_target = (
-                                        target  # setting new input_dim for next iteration
-                                    )
+                if offset_provider_type:
+                    for off_literal in shift_tuple[::2]:
+                        offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
+                        if isinstance(offset_type, common.Dimension):
+                            final_target = offset_type
+                        elif isinstance(
+                            offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)
+                        ):
+                            off_source = (
+                                offset_type.source
+                                if isinstance(offset_type, fbuiltins.FieldOffset)
+                                else offset_type.codomain
+                            )
+                            off_targets = (
+                                offset_type.target
+                                if isinstance(offset_type, fbuiltins.FieldOffset)
+                                else offset_type.domain
+                            )
+                            if input_dim == off_source:  # check if input fits to offset
+                                for target in off_targets:
+                                    if (
+                                        target.value != off_literal.value
+                                    ):  # off_targets also contains a dimension with value off_literal.value which is excluded here
+                                        input_dim = final_target = (
+                                            target  # setting new input_dim for next iteration
+                                        )
 
                 return final_target
 
@@ -404,7 +405,10 @@ def as_fieldop(
 
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
-            lambda el_type: ts.FieldType(dims=common.promote_dims(output_dims), dtype=el_type),
+            lambda el_type: ts.FieldType(
+                dims=common.promote_dims(output_dims) if output_dims != "unknown" else [],
+                dtype=el_type,
+            ),
             stencil_return,
         )
 

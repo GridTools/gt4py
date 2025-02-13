@@ -1142,7 +1142,11 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
 
     kind_order = {DimensionKind.HORIZONTAL: 1, DimensionKind.VERTICAL: 2, DimensionKind.LOCAL: 3}
 
-    return sorted(unique_dims, key=lambda dim: (kind_order[dim.kind], dim.value))
+    return (
+        sorted(unique_dims, key=lambda dim: (kind_order[dim.kind], dim.value))
+        if unique_dims
+        else []
+    )
 
 
 class FieldBuiltinFuncRegistry:
