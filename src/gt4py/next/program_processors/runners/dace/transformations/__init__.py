@@ -21,8 +21,7 @@ from .gpu_utils import (
 )
 from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
-from .map_fusion_parallel import MapFusionParallel
-from .map_fusion_serial import MapFusionSerial
+from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
 from .simplify import (
@@ -52,6 +51,7 @@ __all__ = [
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
     "LoopBlocking",
+    "MapFusion",
     "MapFusionParallel",
     "MapFusionSerial",
     "MapIterationOrder",
