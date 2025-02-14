@@ -10,26 +10,21 @@ import hypothesis as hyp
 import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
-
+from gt4py.storage.cartesian import layout
+import gt4py
+from gt4py.cartesian import gtscript
+from gt4py.storage.cartesian.utils import allocate_cpu, allocate_gpu, normalize_storage_spec
 
 try:
     import cupy as cp
 except ImportError:
     cp = None
 
-import gt4py
-from gt4py.cartesian import gtscript
-from gt4py.storage.cartesian.utils import allocate_cpu, allocate_gpu, normalize_storage_spec
+_ALL_LAYOUTS = [name for name, _ in layout.REGISTRY.items()]
 
+_GPU_LAYOUTS = ["cuda", "dace:gpu", "gpu", "gt:gpu"]
+_CPU_LAYOUTS = [name for name in _ALL_LAYOUTS if name not in _GPU_LAYOUTS]
 
-CPU_LAYOUTS = [
-    name for name, info in gt4py.storage.layout.REGISTRY.items() if info["device"] == "cpu"
-]
-GPU_LAYOUTS = [
-    pytest.param(name, marks=pytest.mark.requires_gpu)
-    for name, info in gt4py.storage.layout.REGISTRY.items()
-    if info["device"] == "gpu"
-]
 
 try:
     import dace
@@ -367,28 +362,30 @@ def alloc_fun(request):
     return request.param
 
 
-@pytest.mark.parametrize("backend", CPU_LAYOUTS)
+@pytest.mark.parametrize("backend", _CPU_LAYOUTS)
 def test_cpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, aligned_index=(1, 2, 3), shape=(2, 4, 6), backend=backend)
     assert stor.shape == (2, 4, 6)
     assert isinstance(stor, np.ndarray)
 
 
-@pytest.mark.parametrize("backend", CPU_LAYOUTS)
+@pytest.mark.parametrize("backend", _CPU_LAYOUTS)
 def test_cpu_constructor_0d(alloc_fun, backend):
     stor = alloc_fun(shape=(), dtype=np.float64, backend=backend, aligned_index=())
     assert stor.shape == ()
     assert isinstance(stor, np.ndarray)
 
 
-@pytest.mark.parametrize("backend", GPU_LAYOUTS)
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize("backend", _GPU_LAYOUTS)
 def test_gpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, aligned_index=(1, 2, 3), shape=(2, 4, 6), backend=backend)
     assert stor.shape == (2, 4, 6)
     assert isinstance(stor, cp.ndarray)
 
 
-@pytest.mark.parametrize("backend", GPU_LAYOUTS)
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize("backend", _GPU_LAYOUTS)
 def test_gpu_constructor_0d(alloc_fun, backend):
     stor = alloc_fun(shape=(), dtype=np.float64, backend=backend, aligned_index=())
     assert stor.shape == ()

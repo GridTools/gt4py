@@ -26,12 +26,11 @@ from gt4py.cartesian.stencil_object import ArgsInfo, FrozenStencil, StencilObjec
 from gt4py.cartesian.utils import shash
 
 
-def _extract_array_infos(field_args, device) -> Dict[str, Optional[ArgsInfo]]:
+def _extract_array_infos(field_args) -> Dict[str, Optional[ArgsInfo]]:
     return {
         name: ArgsInfo(
             array=arg,
             dimensions=getattr(arg, "__gt_dims__", None),
-            device=device,
             origin=getattr(arg, "__gt_origin__", None),
         )
         for name, arg in field_args.items()
@@ -186,9 +185,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         args_as_kwargs = {
             name: (kwargs[name] if name in kwargs else next(args_iter)) for name in arg_names
         }
-        arg_infos = _extract_array_infos(
-            field_args=args_as_kwargs, device=backend_cls.storage_info["device"]
-        )
+        arg_infos = _extract_array_infos(field_args=args_as_kwargs)
 
         origin = DaCeStencilObject._normalize_origins(arg_infos, field_info, origin)
 

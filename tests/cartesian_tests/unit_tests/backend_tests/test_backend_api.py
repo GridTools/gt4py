@@ -10,15 +10,10 @@ import re
 
 import pytest
 
-from gt4py import cartesian as gt4pyc
+from gt4py.cartesian.backend.base import from_name
 from gt4py.cartesian.gtscript import PARALLEL, Field, computation, interval
 from gt4py.cartesian.stencil_builder import StencilBuilder
-
-
-@pytest.fixture(params=[name for name in gt4pyc.backend.REGISTRY.keys()])
-def backend(request):
-    """Parametrize by backend name."""
-    yield gt4pyc.backend.from_name(request.param)
+from cartesian_tests.definitions import ALL_BACKENDS
 
 
 # mypy gets confused by gtscript
@@ -28,10 +23,12 @@ def init_1(input_field: Field[float]):  # type: ignore
         input_field = 1  # noqa  # unused var is in/out field
 
 
-def test_generate_computation(backend, tmp_path):
+@pytest.mark.parametrize("backend_name", ALL_BACKENDS)
+def test_generate_computation(backend_name, tmp_path):
     """Test if the :py:meth:`gt4pyc.backend.CLIBackendMixin.generate_computation` generates code."""
     # note: if a backend is added that doesn't use CliBackendMixin it will
     # have to be special cased in the backend fixture
+    backend = from_name(backend_name)
     builder = StencilBuilder(init_1, backend=backend).with_caching(
         "nocaching", output_path=tmp_path / __name__ / "generate_computation"
     )
@@ -61,8 +58,10 @@ def test_generate_computation(backend, tmp_path):
     assert py_result or py_standalone_result or gt_result or gtc_result
 
 
-def test_generate_bindings(backend, tmp_path):
+@pytest.mark.parametrize("backend_name", ALL_BACKENDS)
+def test_generate_bindings(backend_name, tmp_path):
     """Test :py:meth:`gt4pyc.backend.CLIBackendMixin.generate_bindings`."""
+    backend = from_name(backend_name)
     builder = StencilBuilder(init_1, backend=backend).with_caching(
         "nocaching", output_path=tmp_path / __name__ / "generate_bindings"
     )

@@ -12,7 +12,7 @@ import collections.abc
 import functools
 import math
 import numbers
-from typing import Final, Literal, Optional, Sequence, Tuple, Union, cast
+from typing import Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -22,19 +22,14 @@ from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
 from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
 from gt4py.storage import allocators
+from gt4py.storage.cartesian.cupy_device import CUPY_DEVICE
+from gt4py.storage.cartesian.layout import LayoutInfo, is_cpu_device, is_gpu_device
 
 
 try:
     import cupy as cp
 except ImportError:
     cp = None
-
-
-CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]] = (
-    None
-    if not cp
-    else (core_defs.DeviceType.ROCM if cp.cuda.get_hipcc_path() else core_defs.DeviceType.CUDA)
-)
 
 
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
@@ -182,21 +177,19 @@ def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]) -> np.ndarray:
         return np.array(array)
 
 
-def asarray(
-    array: FieldLike, *, device: Literal["cpu", "gpu", None] = None
-) -> np.ndarray | cp.ndarray:
+def asarray(array: FieldLike, *, layout_info: LayoutInfo | None = None) -> np.ndarray | cp.ndarray:
     if hasattr(array, "ndarray"):
         # extract the buffer from a gt4py.next.Field
         # TODO(havogt): probably `Field` should provide the array interface methods when applicable
         array = array.ndarray
 
     xp = None
-    if device == "cpu":
+    if layout_info is not None and is_cpu_device(layout_info):
         xp = np
-    elif device == "gpu":
+    elif layout_info is not None and is_gpu_device(layout_info):
         assert cp is not None
         xp = cp
-    elif not device:
+    elif layout_info is None:
         if hasattr(array, "__dlpack_device__"):
             kind, _ = array.__dlpack_device__()
             if kind in [core_defs.DeviceType.CPU, core_defs.DeviceType.CPU_PINNED]:
@@ -218,8 +211,8 @@ def asarray(
     if xp:
         return xp.asarray(array)
 
-    if device is not None:
-        raise ValueError(f"Invalid device: {device!s}")
+    if layout_info is not None:
+        raise ValueError(f"Invalid device: {layout_info['device']!s}")
 
     raise TypeError(f"Cannot convert {type(array)} to ndarray")
 

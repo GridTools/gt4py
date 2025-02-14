@@ -45,9 +45,9 @@ if TYPE_CHECKING:
 REGISTRY = gt_utils.Registry()
 
 
-def from_name(name: str) -> Optional[Type[Backend]]:
+def from_name(name: str) -> Type[Backend]:
     backend = REGISTRY.get(name, None)
-    if not backend:
+    if backend is None:
         raise NotImplementedError(
             f"Backend {name} is not implemented, options are: {REGISTRY.names}"
         )
@@ -84,7 +84,7 @@ class Backend(abc.ABC):
     #: Backend-specific storage parametrization:
     #:
     #:  - "alignment": in bytes
-    #:  - "device": "cpu" | "gpu"
+    #:  - "device": core_defs.DeviceType | None
     #:  - "layout_map": callback converting a mask to a layout
     #:  - "is_optimal_layout": callback checking if a storage has compatible layout
     storage_info: ClassVar[gt_storage.layout.LayoutInfo]
@@ -435,21 +435,20 @@ def disabled(message: str, *, enabled_env_var: str) -> Callable[[Type[Backend]],
     enabled = bool(int(os.environ.get(enabled_env_var, "0")))
     if enabled:
         return deprecated(message)
-    else:
 
-        def _decorator(cls: Type[Backend]) -> Type[Backend]:
-            def _no_generate(obj) -> Type[StencilObject]:
-                raise NotImplementedError(
-                    f"Disabled '{cls.name}' backend: 'f{message}'\n",
-                    f"You can still enable the backend by hand using the environment variable '{enabled_env_var}=1'",
-                )
+    def _decorator(cls: Type[Backend]) -> Type[Backend]:
+        def _no_generate(obj) -> Type[StencilObject]:
+            raise NotImplementedError(
+                f"Disabled '{cls.name}' backend: 'f{message}'\n",
+                f"You can still enable the backend by hand using the environment variable '{enabled_env_var}=1'",
+            )
 
-            # Replace generate method with raise
-            if not hasattr(cls, "generate"):
-                raise ValueError(f"Coding error. Expected a generate method on {cls}")
-            # Flag that it got disabled for register lookup
-            cls.disabled = True  # type: ignore
-            cls.generate = _no_generate  # type: ignore
-            return cls
+        # Replace generate method with raise
+        if not hasattr(cls, "generate"):
+            raise ValueError(f"Coding error. Expected a generate method on {cls}")
+        # Flag that it got disabled for register lookup
+        cls.disabled = True  # type: ignore
+        cls.generate = _no_generate  # type: ignore
+        return cls
 
-        return _decorator
+    return _decorator

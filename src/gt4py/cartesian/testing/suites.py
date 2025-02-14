@@ -23,6 +23,7 @@ from gt4py.cartesian import gtscript, utils as gt_utils
 from gt4py.cartesian.definitions import AccessKind, FieldInfo
 from gt4py.cartesian.gtc.definitions import Boundary, CartesianSpace, Index, Shape
 from gt4py.cartesian.stencil_object import StencilObject
+from gt4py.cartesian.testing.definitions import GPU_BACKEND_NAMES
 from gt4py.storage.cartesian import utils as storage_utils
 
 from .input_strategies import (
@@ -206,7 +207,7 @@ class SuiteMeta(type):
                 )
 
                 marks = test["marks"].copy()
-                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if test["backend"] in GPU_BACKEND_NAMES:
                     marks.append(pytest.mark.requires_gpu)
                 # Run generation and implementation tests in the same group to ensure
                 # (thread-) safe parallelization of stencil tests.
@@ -240,7 +241,7 @@ class SuiteMeta(type):
                 )
 
                 marks = test["marks"].copy()
-                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if test["backend"] in GPU_BACKEND_NAMES:
                     marks.append(pytest.mark.requires_gpu)
                 # Run generation and implementation tests in the same group to ensure
                 # (thread-) safe parallelization of stencil tests.

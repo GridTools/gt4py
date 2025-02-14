@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from numbers import Number
 from pickle import dumps
-from typing import Any, Callable, ClassVar, Dict, Literal, Optional, Tuple, Union, cast
+from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union, cast
 
 import numpy as np
 
@@ -24,6 +24,7 @@ import gt4py.storage.cartesian.utils as storage_utils
 from gt4py import cartesian as gt4pyc
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gt4py.cartesian.gtc.definitions import Index, Shape
+from gt4py.storage.cartesian.layout import LayoutInfo
 
 
 try:
@@ -51,7 +52,6 @@ def _compute_domain_origin_cache_key(
 
 @dataclass
 class ArgsInfo:
-    device: str
     array: FieldType
     original_object: Optional[Any] = None
     origin: Optional[Tuple[int, ...]] = None
@@ -59,14 +59,14 @@ class ArgsInfo:
 
 
 def _extract_array_infos(
-    field_args: Dict[str, Optional[FieldType]], device: Literal["cpu", "gpu"]
+    field_args: Dict[str, Optional[FieldType]], layout_info: LayoutInfo
 ) -> Dict[str, Optional[ArgsInfo]]:
     array_infos: Dict[str, Optional[ArgsInfo]] = {}
     for name, arg in field_args.items():
         if arg is None:
             array_infos[name] = None
         else:
-            array = storage_utils.asarray(arg, device=device)
+            array = storage_utils.asarray(arg, layout_info=layout_info)
             dimensions = storage_utils.get_dims(arg)
             if dimensions is not None:
                 sorted_dimensions = [d for d in "IJK" if d in dimensions]
@@ -79,7 +79,6 @@ def _extract_array_infos(
                 array=array,
                 original_object=arg,
                 dimensions=dimensions,
-                device=device,
                 origin=storage_utils.get_origin(arg),
             )
     return array_infos
@@ -562,8 +561,7 @@ class StencilObject(abc.ABC):
             exec_info["call_run_start_time"] = time.perf_counter()
         backend_cls = gt4pyc.backend.from_name(self.backend)
         assert backend_cls is not None
-        device = backend_cls.storage_info["device"]
-        array_infos = _extract_array_infos(field_args, device)
+        array_infos = _extract_array_infos(field_args, backend_cls.storage_info)
 
         cache_key = _compute_domain_origin_cache_key(array_infos, parameter_args, domain, origin)
         if cache_key not in self._domain_origin_cache:
