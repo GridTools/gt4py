@@ -372,9 +372,9 @@ class SerialMapPromoter(BaseMapPromoter):
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
                 },
-                map_exit_1=first_map_exit,
-                intermediate_access_node=access_node,
-                map_entry_2=second_map_entry,
+                first_map_exit=first_map_exit,
+                array=access_node,
+                second_map_entry=second_map_entry,
             ):
                 return False
 

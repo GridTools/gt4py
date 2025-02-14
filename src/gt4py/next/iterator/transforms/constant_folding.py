@@ -12,7 +12,11 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_maker
 
 
 class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("domain",)
+    PRESERVED_ANNEX_ATTRS = (
+        "type",
+        "domain",
+    )
+
     @classmethod
     def apply(cls, node: ir.Node) -> ir.Node:
         return cls().visit(node)
