@@ -854,7 +854,6 @@ def test_loop_blocking_no_independent_nodes():
     assert count == 1
 
 
-import dace
 
 
 def _make_only_last_two_elements_sdfg() -> dace.SDFG:
