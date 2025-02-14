@@ -211,9 +211,10 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
 
         # Compute the padding required in the contiguous dimension to get aligned blocks
         dims_layout = [layout_map.index(i) for i in range(len(shape))]
-        padded_shape_lst = list(shape)
+        # Convert shape size to same data type (note that `np.int16` can overflow)
+        padded_shape_lst = [np.int32(x) for x in shape]
         if ndim > 0:
-            padded_shape_lst[dims_layout[-1]] = (
+            padded_shape_lst[dims_layout[-1]] = (  # type: ignore[call-overload]
                 math.ceil(shape[dims_layout[-1]] / items_per_aligned_block)
                 * items_per_aligned_block
             )
