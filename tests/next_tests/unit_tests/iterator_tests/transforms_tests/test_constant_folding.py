@@ -55,9 +55,7 @@ def test_cases():
         # nested plus
         (im.plus(im.plus("a", 1), im.plus(1, 1)), im.plus("a", 3)),
         (
-            im.plus(
-                im.plus("a", im.literal_from_value(-1)), im.plus("a", 3)
-            ),
+            im.plus(im.plus("a", im.literal_from_value(-1)), im.plus("a", 3)),
             im.plus(im.minus("a", 1), im.plus("a", 3)),
         ),
         # maximum & minus
@@ -123,9 +121,7 @@ def test_cases():
                     im.maximum("a", im.plus(1, "a")),
                     im.plus(
                         im.maximum(1, im.maximum(1, "a")),
-                        im.plus(
-                            im.minus("a", 1), im.plus(im.plus(1, im.plus("a", 1)), 1)
-                        ),
+                        im.plus(im.minus("a", 1), im.plus(im.plus(1, im.plus("a", 1)), 1)),
                     ),
                 ),
                 2,
@@ -147,18 +143,14 @@ def test_cases():
             im.plus(
                 im.minimum(im.minus(1, "a"), im.plus(1, "a")),
                 im.plus(
-                    im.maximum(
-                        im.maximum(im.minus(1, "a"), im.plus(1, "a")), im.minus(1, "a")
-                    ),
+                    im.maximum(im.maximum(im.minus(1, "a"), im.plus(1, "a")), im.minus(1, "a")),
                     im.maximum(im.minus(1, "a"), im.minus(1, "a")),
                 ),
             ),
             # minimum(1 - sym, sym + 1) + (maximum(1 - sym, sym + 1) + (1 - sym))
             im.plus(
                 im.minimum(im.minus(1, "a"), im.plus("a", 1)),
-                im.plus(
-                    im.maximum(im.minus(1, "a"), im.plus("a", 1)), im.minus(1, "a")
-                ),
+                im.plus(im.maximum(im.minus(1, "a"), im.plus("a", 1)), im.minus(1, "a")),
             ),
         ),
     )

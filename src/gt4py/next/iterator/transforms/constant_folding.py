@@ -106,15 +106,14 @@ class ConstantFolding(
     ) -> Optional[ir.Node]:
         # `literal, symref` -> `symref, literal`, prerequisite for FOLD_FUNCALL_LITERAL, FOLD_NEUTRAL_OP
         # `literal, funcall` -> `funcall, literal`, prerequisite for FOLD_FUNCALL_LITERAL, FOLD_NEUTRAL_OP
-        # `funcall, op` -> `op, funcall` for s[0] + (s[0] + 1), prerequisite for FOLD_MIN_MAX_PLUS
+        # `funcall, op` -> `op, funcall` for `s[0] + (s[0] + 1)`, prerequisite for FOLD_MIN_MAX_PLUS
         if cpm.is_call_to(node, ("plus", "multiplies", "minimum", "maximum")):
-            if (
-                isinstance(node.args[0], ir.Literal) and not isinstance(node.args[1], ir.Literal)
-            ) or (
-                (not cpm.is_call_to(node.args[0], ("plus", "multiplies", "minimum", "maximum")))
-                and cpm.is_call_to(node.args[1], ("plus", "multiplies", "minimum", "maximum"))
+            a, b = node.args
+            if (isinstance(a, ir.Literal) and not isinstance(b, ir.Literal)) or (
+                (not cpm.is_call_to(a, ("plus", "multiplies", "minimum", "maximum")))
+                and cpm.is_call_to(b, ("plus", "multiplies", "minimum", "maximum"))
             ):
-                return im.call(node.fun)(node.args[1], node.args[0])
+                return im.call(node.fun)(b, a)
         return None
 
     def transform_canonicalize_minus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
@@ -135,14 +134,11 @@ class ConstantFolding(
         # `(a + 1) + 1` -> `a + (1 + 1)`
         if cpm.is_call_to(node, "plus"):
             if cpm.is_call_to(node.args[0], "plus") and isinstance(node.args[1], ir.Literal):
-                fun_call, literal = node.args
-                if isinstance(fun_call.args[0], (ir.SymRef, ir.FunCall)) and isinstance(  # type: ignore[attr-defined] # assured by if above
-                    fun_call.args[1],  # type: ignore[attr-defined] # assured by if above
-                    ir.Literal,
-                ):
+                (expr, lit1), lit2 = node.args[0].args, node.args[1]
+                if isinstance(expr, (ir.SymRef, ir.FunCall)) and isinstance(lit1, ir.Literal):
                     return im.plus(
-                        fun_call.args[0],  # type: ignore[attr-defined] # assured by if above
-                        self.fp_transform(im.plus(fun_call.args[1], literal)),  # type: ignore[attr-defined] # assured by if above
+                        expr,
+                        self.fp_transform(im.plus(lit1, lit2)),
                     )
         return None
 
