@@ -91,11 +91,13 @@ class SymbolicDomain:
             | Literal[trace_shifts.Sentinel.VALUE, trace_shifts.Sentinel.ALL_NEIGHBORS],
             ...,
         ],
-        offset_provider: common.OffsetProvider,
+        offset_provider: common.OffsetProvider | common.OffsetProviderType,
         #: A dictionary mapping axes names to their length. See
         #: func:`gt4py.next.iterator.transforms.infer_domain.infer_expr` for more details.
         symbolic_domain_sizes: Optional[dict[str, str]] = None,
     ) -> SymbolicDomain:
+        offset_provider_type = common.offset_provider_to_type(offset_provider)
+
         dims = list(self.ranges.keys())
         new_ranges = {dim: self.ranges[dim] for dim in dims}
         if len(shift) == 0:
@@ -103,17 +105,18 @@ class SymbolicDomain:
         if len(shift) == 2:
             off, val = shift
             assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
-            nbt_provider = offset_provider[off.value]
-            if isinstance(nbt_provider, common.Dimension):
+            connectivity_type = offset_provider_type[off.value]
+
+            if isinstance(connectivity_type, common.Dimension):
                 if val is trace_shifts.Sentinel.VALUE:
                     raise NotImplementedError("Dynamic offsets not supported.")
                 assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
-                current_dim = nbt_provider
+                current_dim = connectivity_type
                 # cartesian offset
                 new_ranges[current_dim] = SymbolicRange.translate(
                     self.ranges[current_dim], val.value
                 )
-            elif common.is_neighbor_connectivity(nbt_provider):
+            elif isinstance(connectivity_type, common.NeighborConnectivityType):
                 # unstructured shift
                 assert (
                     isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
@@ -126,13 +129,14 @@ class SymbolicDomain:
                     horizontal_sizes = {k: im.ref(v) for k, v in symbolic_domain_sizes.items()}
                 else:
                     # note: ugly but cheap re-computation, but should disappear
+                    assert common.is_offset_provider(offset_provider)
                     horizontal_sizes = {
                         k: im.literal(str(v), builtins.INTEGER_INDEX_BUILTIN)
                         for k, v in _max_domain_sizes_by_location_type(offset_provider).items()
                     }
 
-                old_dim = nbt_provider.__gt_type__().source_dim
-                new_dim = nbt_provider.__gt_type__().codomain
+                old_dim = connectivity_type.source_dim
+                new_dim = connectivity_type.codomain
 
                 assert new_dim not in new_ranges or old_dim == new_dim
 
