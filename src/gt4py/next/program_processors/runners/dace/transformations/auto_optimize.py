@@ -13,6 +13,7 @@ from typing import Any, Optional, Sequence, Union
 import dace
 from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
+from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
@@ -328,22 +329,28 @@ def gt_auto_fuse_top_level_maps(
     #  after the other, thus new opportunities might arise in the next round.
     #  We use the hash of the SDFG to detect if we have reached a fix point.
     for _ in range(max_optimization_rounds):
-        # Use map fusion to reduce their number and to create big kernels
         # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
         # TODO(phimuell): Add parallel fusion transformation. Should it run after
         #                   or with the serial one?
+        # TODO(phimuell): Switch to `FullMapFusion` once DaCe has parallel map fusion
+        #   and [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
+
+        # First we do scan the entire SDFG to figure out which data is only
+        #  used once and can be deleted. MapFusion could do this on its own but
+        #  it is more efficient to do it once and then reuse it.
+        find_single_use_data = dace_analysis.FindSingleUseData()
+        single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+        fusion_transformation = gtx_transformations.MapFusion(
+            only_toplevel_maps=True,
+            allow_parallel_map_fusion=True,
+            allow_serial_map_fusion=True,
+            only_if_common_ancestor=False,
+        )
+        fusion_transformation._single_use_data = single_use_data
+
         sdfg.apply_transformations_repeated(
-            [
-                gtx_transformations.MapFusionSerial(
-                    only_toplevel_maps=True,
-                ),
-                gtx_transformations.MapFusionParallel(
-                    only_toplevel_maps=True,
-                    # This will lead to the creation of big probably unrelated maps.
-                    #  However, it might be good.
-                    only_if_common_ancestor=False,
-                ),
-            ],
+            fusion_transformation,
             validate=validate,
             validate_all=validate_all,
         )
