@@ -126,7 +126,9 @@ class SymbolicDomain:
                 ]
                 horizontal_sizes: dict[str, itir.Expr]
                 if symbolic_domain_sizes is not None:
-                    horizontal_sizes = {k: im.ref(v) for k, v in symbolic_domain_sizes.items()}
+                    horizontal_sizes = {
+                        k: im.ensure_expr(v) for k, v in symbolic_domain_sizes.items()
+                    }
                 else:
                     # note: ugly but cheap re-computation, but should disappear
                     assert common.is_offset_provider(offset_provider)
