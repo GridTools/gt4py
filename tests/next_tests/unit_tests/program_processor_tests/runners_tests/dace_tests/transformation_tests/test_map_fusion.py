@@ -591,3 +591,18 @@ def test_parallel_2():
     assert nb_applies == 1
     assert util.count_nodes(state, dace_nodes.AccessNode) == 3
     assert util.count_nodes(state, dace_nodes.MapEntry) == 1
+
+
+def test_parallel_3():
+    """Test that the parallel map fusion does not apply for serial maps."""
+    sdfg = _make_serial_sdfg_1(20)
+    assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 3
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+
+    # Because the maps are fully serial, parallel map fusion should never apply.
+    nb_applies = sdfg.apply_transformations_repeated(
+        [gtx_transformations.MapFusionParallel(only_if_common_ancestor=False)]
+    )
+    assert nb_applies == 0
+    assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 3
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
