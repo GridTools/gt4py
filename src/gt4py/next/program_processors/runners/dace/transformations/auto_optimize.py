@@ -343,6 +343,8 @@ def gt_auto_fuse_top_level_maps(
 
         fusion_transformation = gtx_transformations.MapFusion(
             only_toplevel_maps=True,
+            allow_parallel_map_fusion=True,
+            allow_serial_map_fusion=True,
             only_if_common_ancestor=False,
         )
         fusion_transformation._single_use_data = single_use_data
