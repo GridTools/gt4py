@@ -9,8 +9,6 @@
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
-one = im.literal_from_value(1)
-
 import pytest
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
@@ -39,43 +37,43 @@ def test_cases():
         (im.maximum(im.maximum(1, "a"), im.maximum("a", 1)), im.maximum("a", 1)),
         (im.maximum(im.minimum("a", 1), "a"), im.maximum(im.minimum("a", 1), "a")),
         # maximum & plus
-        (im.maximum(im.plus("a", one), im.plus("a", im.literal_from_value(0))), im.plus("a", one)),
+        (im.maximum(im.plus("a", 1), im.plus("a", 0)), im.plus("a", 1)),
         (
-            im.maximum(im.plus("a", one), im.plus(im.plus("a", one), im.literal_from_value(0))),
-            im.plus("a", one),
+            im.maximum(im.plus("a", 1), im.plus(im.plus("a", 1), 0)),
+            im.plus("a", 1),
         ),
-        (im.maximum("a", im.plus("a", one)), im.plus("a", one)),
+        (im.maximum("a", im.plus("a", 1)), im.plus("a", 1)),
         (im.maximum("a", im.plus("a", im.literal_from_value(-1))), im.ref("a")),
         (
-            im.plus("a", im.maximum(im.literal_from_value(0), im.literal_from_value(-1))),
+            im.plus("a", im.maximum(0, im.literal_from_value(-1))),
             im.ref("a"),
         ),
         # plus & minus
-        (im.minus(im.plus("sym", one), im.plus(one, one)), im.minus("sym", one)),
-        (im.plus(im.minus("sym", one), im.literal_from_value(2)), im.plus("sym", one)),
-        (im.plus(im.minus(one, "sym"), one), im.minus(im.literal_from_value(2), "sym")),
+        (im.minus(im.plus("a", 1), im.plus(1, 1)), im.minus("a", 1)),
+        (im.plus(im.minus("a", 1), 2), im.plus("a", 1)),
+        (im.plus(im.minus(1, "a"), 1), im.minus(2, "a")),
         # nested plus
-        (im.plus(im.plus("sym", one), im.plus(one, one)), im.plus("sym", im.literal_from_value(3))),
+        (im.plus(im.plus("a", 1), im.plus(1, 1)), im.plus("a", 3)),
         (
             im.plus(
-                im.plus("sym", im.literal_from_value(-1)), im.plus("sym", im.literal_from_value(3))
+                im.plus("a", im.literal_from_value(-1)), im.plus("a", 3)
             ),
-            im.plus(im.minus("sym", one), im.plus("sym", im.literal_from_value(3))),
+            im.plus(im.minus("a", 1), im.plus("a", 3)),
         ),
         # maximum & minus
-        (im.maximum(im.minus("sym", one), "sym"), im.ref("sym")),
-        (im.maximum("sym", im.minus("sym", im.literal_from_value(-1))), im.plus("sym", one)),
+        (im.maximum(im.minus("a", 1), "a"), im.ref("a")),
+        (im.maximum("a", im.minus("a", im.literal_from_value(-1))), im.plus("a", 1)),
         (
-            im.maximum(im.plus("sym", im.literal_from_value(-1)), one),
-            im.maximum(im.minus("sym", one), one),
+            im.maximum(im.plus("a", im.literal_from_value(-1)), 1),
+            im.maximum(im.minus("a", 1), 1),
         ),
         # minimum & plus & minus
-        (im.minimum(im.plus("sym", one), "sym"), im.ref("sym")),
-        (im.minimum("sym", im.plus("sym", im.literal_from_value(-1))), im.minus("sym", one)),
-        (im.minimum(im.minus("sym", one), "sym"), im.minus("sym", one)),
-        (im.minimum("sym", im.minus("sym", im.literal_from_value(-1))), im.ref("sym")),
+        (im.minimum(im.plus("a", 1), "a"), im.ref("a")),
+        (im.minimum("a", im.plus("a", im.literal_from_value(-1))), im.minus("a", 1)),
+        (im.minimum(im.minus("a", 1), "a"), im.minus("a", 1)),
+        (im.minimum("a", im.minus("a", im.literal_from_value(-1))), im.ref("a")),
         # nested maximum
-        (im.maximum("sym1", im.maximum("sym2", "sym1")), im.maximum("sym2", "sym1")),
+        (im.maximum("a", im.maximum("b", "a")), im.maximum("b", "a")),
         # maximum & plus on complicated expr (tuple_get)
         (
             im.maximum(
@@ -86,35 +84,35 @@ def test_cases():
         ),
         # nested maximum & plus
         (
-            im.maximum(im.maximum(im.plus(1, "sym"), 1), im.plus(1, "sym")),
-            im.maximum(im.plus("sym", 1), 1),
+            im.maximum(im.maximum(im.plus(1, "a"), 1), im.plus(1, "a")),
+            im.maximum(im.plus("a", 1), 1),
         ),
         # sanity check that no strange things happen
         # complex tests
         (
             # 1 - max(max(1, max(1, sym), min(1, sym), sym), 1 + (min(-1, 2) + max(-1, 1 - sym)))
             im.minus(
-                one,
+                1,
                 im.maximum(
                     im.maximum(
-                        im.maximum(one, im.maximum(one, "sym")),
-                        im.maximum(im.maximum(one, "sym"), "sym"),
+                        im.maximum(1, im.maximum(1, "a")),
+                        im.maximum(im.maximum(1, "a"), "a"),
                     ),
                     im.plus(
-                        one,
+                        1,
                         im.plus(
                             im.minimum(im.literal_from_value(-1), 2),
-                            im.maximum(im.literal_from_value(-1), im.minus(one, "sym")),
+                            im.maximum(im.literal_from_value(-1), im.minus(1, "a")),
                         ),
                     ),
                 ),
             ),
             # 1 - maximum(maximum(sym, 1), maximum(1 - sym, -1))
             im.minus(
-                one,
+                1,
                 im.maximum(
-                    im.maximum("sym", one),
-                    im.maximum(im.minus(one, "sym"), im.literal_from_value(-1)),
+                    im.maximum("a", 1),
+                    im.maximum(im.minus(1, "a"), im.literal_from_value(-1)),
                 ),
             ),
         ),
@@ -122,44 +120,44 @@ def test_cases():
             # maximum(sym, 1 + sym) + (maximum(1, maximum(1, sym)) + (sym - 1 + (1 + (sym + 1) + 1))) - 2
             im.minus(
                 im.plus(
-                    im.maximum("sym", im.plus(one, "sym")),
+                    im.maximum("a", im.plus(1, "a")),
                     im.plus(
-                        im.maximum(one, im.maximum(one, "sym")),
+                        im.maximum(1, im.maximum(1, "a")),
                         im.plus(
-                            im.minus("sym", one), im.plus(im.plus(one, im.plus("sym", one)), one)
+                            im.minus("a", 1), im.plus(im.plus(1, im.plus("a", 1)), 1)
                         ),
                     ),
                 ),
-                im.literal_from_value(2),
+                2,
             ),
             # sym + 1 + (maximum(sym, 1) + (sym - 1 + (sym + 3))) - 2
             im.minus(
                 im.plus(
-                    im.plus("sym", 1),
+                    im.plus("a", 1),
                     im.plus(
-                        im.maximum("sym", one),
-                        im.plus(im.minus("sym", one), im.plus("sym", im.literal_from_value(3))),
+                        im.maximum("a", 1),
+                        im.plus(im.minus("a", 1), im.plus("a", 3)),
                     ),
                 ),
-                im.literal_from_value(2),
+                2,
             ),
         ),
         (
             # minimum(1 - sym, 1 + sym) + (maximum(maximum(1 - sym, 1 + sym), 1 - sym) + maximum(1 - sym, 1 - sym))
             im.plus(
-                im.minimum(im.minus(one, "sym"), im.plus(one, "sym")),
+                im.minimum(im.minus(1, "a"), im.plus(1, "a")),
                 im.plus(
                     im.maximum(
-                        im.maximum(im.minus(one, "sym"), im.plus(one, "sym")), im.minus(one, "sym")
+                        im.maximum(im.minus(1, "a"), im.plus(1, "a")), im.minus(1, "a")
                     ),
-                    im.maximum(im.minus(one, "sym"), im.minus(one, "sym")),
+                    im.maximum(im.minus(1, "a"), im.minus(1, "a")),
                 ),
             ),
             # minimum(1 - sym, sym + 1) + (maximum(1 - sym, sym + 1) + (1 - sym))
             im.plus(
-                im.minimum(im.minus(one, "sym"), im.plus("sym", one)),
+                im.minimum(im.minus(1, "a"), im.plus("a", 1)),
                 im.plus(
-                    im.maximum(im.minus(one, "sym"), im.plus("sym", one)), im.minus(one, "sym")
+                    im.maximum(im.minus(1, "a"), im.plus("a", 1)), im.minus(1, "a")
                 ),
             ),
         ),
