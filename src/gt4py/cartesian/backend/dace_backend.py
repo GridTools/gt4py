@@ -47,6 +47,7 @@ from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
 from gt4py.eve import codegen
 from gt4py.eve.codegen import MakoTemplate as as_mako
+from gt4py.storage.cartesian.layout import is_gpu_device
 
 
 if TYPE_CHECKING:
@@ -421,7 +422,7 @@ class DaCeExtGenerator(BackendCodegen):
             stencil_ir, sdfg, module_name=self.module_name, backend=self.backend
         )
 
-        bindings_ext = "cu" if self.backend.name.endswith(":gpu") else "cpp"
+        bindings_ext = "cu" if is_gpu_device(self.backend.storage_info) else "cpp"
         sources = {
             "computation": {"computation.hpp": implementation},
             "bindings": {f"bindings.{bindings_ext}": bindings},
@@ -674,7 +675,9 @@ class DaCeBindingsCodegen:
                 assert isinstance(data, dace.data.Array)
                 res[name] = (
                     "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
-                        pybind_type=("object" if self.backend.name.endswith(":gpu") else "buffer"),
+                        pybind_type=(
+                            "object" if is_gpu_device(self.backend.storage_info) else "buffer"
+                        ),
                         name=name,
                         ndim=len(data.shape),
                     )

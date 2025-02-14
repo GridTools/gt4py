@@ -184,12 +184,7 @@ def asarray(array: FieldLike, *, layout_info: LayoutInfo | None = None) -> np.nd
         array = array.ndarray
 
     xp = None
-    if layout_info is not None and is_cpu_device(layout_info):
-        xp = np
-    elif layout_info is not None and is_gpu_device(layout_info):
-        assert cp is not None
-        xp = cp
-    elif layout_info is None:
+    if layout_info is None:
         if hasattr(array, "__dlpack_device__"):
             kind, _ = array.__dlpack_device__()
             if kind in [core_defs.DeviceType.CPU, core_defs.DeviceType.CPU_PINNED]:
@@ -207,6 +202,11 @@ def asarray(array: FieldLike, *, layout_info: LayoutInfo | None = None) -> np.nd
             xp = cp
         elif hasattr(array, "__array_interface__") or hasattr(array, "__array__"):
             xp = np
+    elif is_cpu_device(layout_info):
+        xp = np
+    elif is_gpu_device(layout_info):
+        assert cp is not None
+        xp = cp
 
     if xp:
         return xp.asarray(array)

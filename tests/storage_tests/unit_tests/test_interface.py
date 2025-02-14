@@ -22,7 +22,7 @@ except ImportError:
 
 _ALL_LAYOUTS = [name for name, _ in layout.REGISTRY.items()]
 
-_GPU_LAYOUTS = ["cuda", "dace:gpu", "gpu", "gt:gpu"]
+_GPU_LAYOUTS = ["cuda", "dace:gpu", "gt:gpu"]
 _CPU_LAYOUTS = [name for name in _ALL_LAYOUTS if name not in _GPU_LAYOUTS]
 
 

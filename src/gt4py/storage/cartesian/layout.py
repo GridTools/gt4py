@@ -51,7 +51,7 @@ def from_name(backend_name: str) -> Optional[LayoutInfo]:
     return REGISTRY.get(backend_name, None)
 
 
-def register(backend_name: str, info: Optional[LayoutInfo]) -> None:
+def _register(backend_name: str, info: Optional[LayoutInfo]) -> None:
     """ "Register LayoutInfo under the given backend name. Clears an existing registry entry if None is given as info."""
     if info is None:
         if backend_name in REGISTRY:
@@ -163,7 +163,7 @@ NaiveCPULayout: Final[LayoutInfo] = {
     "layout_map": lambda axes: tuple(i for i in range(len(axes))),
     "is_optimal_layout": lambda *_: True,
 }
-register("naive_cpu", NaiveCPULayout)
+_register("numpy", NaiveCPULayout)
 
 CPUIFirstLayout: Final[LayoutInfo] = {
     "alignment": 8,
@@ -171,7 +171,7 @@ CPUIFirstLayout: Final[LayoutInfo] = {
     "layout_map": make_gtcpu_ifirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_ifirst_layout_map),
 }
-register("cpu_ifirst", CPUIFirstLayout)
+_register("gt:cpu_ifirst", CPUIFirstLayout)
 
 
 CPUKFirstLayout: Final[LayoutInfo] = {
@@ -180,7 +180,7 @@ CPUKFirstLayout: Final[LayoutInfo] = {
     "layout_map": make_gtcpu_kfirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_kfirst_layout_map),
 }
-register("cpu_kfirst", CPUKFirstLayout)
+_register("gt:cpu_kfirst", CPUKFirstLayout)
 
 
 CUDALayout: Final[LayoutInfo] = {
@@ -189,10 +189,10 @@ CUDALayout: Final[LayoutInfo] = {
     "layout_map": make_cuda_layout_map,
     "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
 }
-register("cuda", CUDALayout)
+_register("cuda", CUDALayout)
 
 GPULayout: Final[LayoutInfo] = CUDALayout
-register("gpu", GPULayout)
+_register("gt:gpu", GPULayout)
 
 DaceCPULayout: Final[LayoutInfo] = {
     "alignment": 1,
@@ -200,7 +200,7 @@ DaceCPULayout: Final[LayoutInfo] = {
     "layout_map": layout_maker_factory((0, 1, 2)),
     "is_optimal_layout": layout_checker_factory(layout_maker_factory((0, 1, 2))),
 }
-register("dace:cpu", DaceCPULayout)
+_register("dace:cpu", DaceCPULayout)
 
 DaceGPULayout: Final[LayoutInfo] = {
     "alignment": 32,
@@ -208,4 +208,4 @@ DaceGPULayout: Final[LayoutInfo] = {
     "layout_map": layout_maker_factory((2, 1, 0)),
     "is_optimal_layout": layout_checker_factory(layout_maker_factory((2, 1, 0))),
 }
-register("dace:gpu", DaceGPULayout)
+_register("dace:gpu", DaceGPULayout)

@@ -58,15 +58,13 @@ def register(backend_cls: Type[Backend]) -> Type[Backend]:
     assert issubclass(backend_cls, Backend) and backend_cls.name is not None
 
     if isinstance(backend_cls.name, str):
-        gt_storage.register(backend_cls.name, backend_cls.storage_info)
         return REGISTRY.register(backend_cls.name, backend_cls)
 
-    else:
-        raise ValueError(
-            "Invalid 'name' attribute ('{name}') in backend class '{cls}'".format(
-                name=backend_cls.name, cls=backend_cls
-            )
+    raise ValueError(
+        "Invalid 'name' attribute ('{name}') in backend class '{cls}'".format(
+            name=backend_cls.name, cls=backend_cls
         )
+    )
 
 
 class Backend(abc.ABC):
