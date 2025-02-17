@@ -174,6 +174,6 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 lifetime=dace.AllocationLifetime.Persistent,
                 debuginfo=get_dace_debuginfo(decl),
             )
-        self.generic_visit(node, ctx=ctx)
+        self.visit(node.vertical_loops, ctx=ctx)
         ctx.sdfg.validate()
         return ctx.sdfg
