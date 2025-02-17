@@ -66,11 +66,11 @@ MATH_BUILTINS_MAPPING = {
     "less_equal": "({} <= {})",
     "greater": "({} > {})",
     "greater_equal": "({} >= {})",
-    "and_": "({} & {})",
-    "or_": "({} | {})",
-    "xor_": "({} ^ {})",
+    "and_": "({} and {})",
+    "or_": "({} or {})",
+    "xor_": "({} != {})",
     "mod": "({} % {})",
-    "not_": "(not {})",  # ~ is not bitwise in numpy
+    "not_": "(not {})",
 }
 
 
