@@ -718,9 +718,9 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         if not self.do_not_fuse:
             gtx_transformations.MapFusionSerial.apply_to(
                 sdfg=sdfg,
-                map_exit_1=trivial_map_exit,
-                intermediate_access_node=access_node,
-                map_entry_2=second_map_entry,
+                first_map_exit=trivial_map_exit,
+                array=access_node,
+                second_map_entry=second_map_entry,
                 verify=True,
             )
 
