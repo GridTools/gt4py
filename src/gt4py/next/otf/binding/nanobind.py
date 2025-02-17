@@ -66,7 +66,6 @@ class BindingFunction(eve.Node):
     exported_name: str
     wrapper_name: str
     doc: str
-    n_args: int
 
 
 class BindingModule(eve.Node):
@@ -139,9 +138,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         """
     )
 
-    BindingFunction = as_jinja(
-        """module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}", {{','.join(['nanobind::arg().noconvert()']*_this_node.n_args)}});"""
-    )
+    BindingFunction = as_jinja("""module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}");""")
 
     def visit_FunctionCall(self, call: FunctionCall) -> str:
         args = [self.visit(arg) for arg in call.args]
@@ -236,10 +233,7 @@ def create_bindings(
             doc="",
             functions=[
                 BindingFunction(
-                    exported_name=program_source.entry_point.name,
-                    wrapper_name=wrapper_name,
-                    doc="",
-                    n_args=len(program_source.entry_point.parameters),
+                    exported_name=program_source.entry_point.name, wrapper_name=wrapper_name, doc=""
                 )
             ],
         ),
