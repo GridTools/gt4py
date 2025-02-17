@@ -18,6 +18,7 @@ import dace.subsets
 import sympy
 
 from gt4py.cartesian.gtc.dace import daceir as dcir
+from gt4py.cartesian.gtc.dace.constants import CONNECTOR_PREFIX_IN, CONNECTOR_PREFIX_OUT
 from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gt4py.cartesian.gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
 
@@ -77,11 +78,11 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         """
         # change connector names
         for in_edge in parent_state.in_edges(node):
-            assert in_edge.dst_conn.startswith("__in_")
-            in_edge.dst_conn = in_edge.dst_conn[len("__in_") :]
+            assert in_edge.dst_conn.startswith(CONNECTOR_PREFIX_IN)
+            in_edge.dst_conn = in_edge.dst_conn.removeprefix(CONNECTOR_PREFIX_IN)
         for out_edge in parent_state.out_edges(node):
-            assert out_edge.src_conn.startswith("__out_")
-            out_edge.src_conn = out_edge.src_conn[len("__out_") :]
+            assert out_edge.src_conn.startswith(CONNECTOR_PREFIX_OUT)
+            out_edge.src_conn = out_edge.src_conn.removeprefix(CONNECTOR_PREFIX_OUT)
 
         # union input and output subsets
         subsets = {}
@@ -125,9 +126,13 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
     ) -> Dict[str, dace.data.Data]:
         parent_arrays: Dict[str, dace.data.Data] = {}
         for edge in (e for e in parent_state.in_edges(node) if e.dst_conn is not None):
-            parent_arrays[edge.dst_conn[len("__in_") :]] = parent_sdfg.arrays[edge.data.data]
+            parent_arrays[edge.dst_conn.removeprefix(CONNECTOR_PREFIX_IN)] = parent_sdfg.arrays[
+                edge.data.data
+            ]
         for edge in (e for e in parent_state.out_edges(node) if e.src_conn is not None):
-            parent_arrays[edge.src_conn[len("__out_") :]] = parent_sdfg.arrays[edge.data.data]
+            parent_arrays[edge.src_conn.removeprefix(CONNECTOR_PREFIX_OUT)] = parent_sdfg.arrays[
+                edge.data.data
+            ]
         return parent_arrays
 
     @staticmethod
