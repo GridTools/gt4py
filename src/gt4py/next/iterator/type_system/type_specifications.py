@@ -17,7 +17,7 @@ class NamedRangeType(ts.TypeSpec):
 
 
 class DomainType(ts.DataType):
-    dims: list[common.Dimension] | Literal["unknown"]
+    dims: list[common.Dimension] | Literal["unknown"]  # TODO: remove unknown
 
 
 class OffsetLiteralType(ts.TypeSpec):
@@ -25,7 +25,7 @@ class OffsetLiteralType(ts.TypeSpec):
 
 
 class IteratorType(ts.DataType, ts.CallableType):
-    position_dims: list[common.Dimension] | Literal["unknown"]
+    position_dims: list[common.Dimension] | Literal["unknown"]  # TODO: remove unknown: 80%?
     defined_dims: list[common.Dimension]
     element_type: ts.DataType
 
