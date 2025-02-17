@@ -7,8 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
+
 import numpy as np
 import pytest
+
 import gt4py.next as gtx
 from gt4py.next import (
     astype,
@@ -21,9 +23,9 @@ from gt4py.next import (
     int64,
     minimum,
     neighbor_sum,
+    utils as gt_utils,
 )
 from gt4py.next.ffront.experimental import as_offset
-from gt4py.next import utils as gt_utils
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -31,6 +33,7 @@ from next_tests.integration_tests.cases import (
     E2V,
     V2E,
     E2VDim,
+    Edge,
     IDim,
     Ioff,
     JDim,
@@ -38,7 +41,6 @@ from next_tests.integration_tests.cases import (
     Koff,
     V2EDim,
     Vertex,
-    Edge,
     cartesian_case,
     unstructured_case,
     unstructured_case_3d,
@@ -194,6 +196,21 @@ def test_scalar_arg(unstructured_case):
         ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], a + 1, dtype=int32),
         comparison=lambda a, b: np.all(a == b),
     )
+
+
+def test_np_bool_scalar_arg(unstructured_case):
+    """Test scalar argument being turned into 0-dim field."""
+
+    @gtx.field_operator
+    def testee(a: gtx.bool) -> cases.VBoolField:
+        return broadcast(not a, (Vertex,))
+
+    a = np.bool_(True)  # explicitly using a np.bool
+
+    ref = np.full([unstructured_case.default_sizes[Vertex]], not a, dtype=np.bool_)
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    cases.verify(unstructured_case, testee, a, out=out, ref=ref)
 
 
 def test_nested_scalar_arg(unstructured_case):
