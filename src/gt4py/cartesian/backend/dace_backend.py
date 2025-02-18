@@ -47,6 +47,7 @@ from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
 from gt4py.eve import codegen
 from gt4py.eve.codegen import MakoTemplate as as_mako
+from gt4py.storage.cartesian.layout import is_gpu_device
 
 
 if TYPE_CHECKING:
@@ -417,7 +418,7 @@ class DaCeExtGenerator(BackendCodegen):
             stencil_ir, sdfg, module_name=self.module_name, backend=self.backend
         )
 
-        bindings_ext = "cu" if self.backend.storage_info["device"] == "gpu" else "cpp"
+        bindings_ext = "cu" if is_gpu_device(self.backend.storage_info) else "cpp"
         sources = {
             "computation": {"computation.hpp": implementation},
             "bindings": {f"bindings.{bindings_ext}": bindings},
@@ -671,7 +672,7 @@ class DaCeBindingsCodegen:
                 res[name] = (
                     "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
                         pybind_type=(
-                            "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
+                            "object" if is_gpu_device(self.backend.storage_info) else "buffer"
                         ),
                         name=name,
                         ndim=len(data.shape),
@@ -773,14 +774,7 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 class DaceCPUBackend(BaseDaceBackend):
     name = "dace:cpu"
     languages = {"computation": "c++", "bindings": ["python"]}
-    storage_info = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": gt_storage.layout.layout_maker_factory((0, 1, 2)),
-        "is_optimal_layout": gt_storage.layout.layout_checker_factory(
-            gt_storage.layout.layout_maker_factory((0, 1, 2))
-        ),
-    }
+    storage_info = gt_storage.layout.DaceCPULayout
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
     options = BaseGTBackend.GT_BACKEND_OPTS
@@ -795,14 +789,7 @@ class DaceGPUBackend(BaseDaceBackend):
 
     name = "dace:gpu"
     languages = {"computation": "cuda", "bindings": ["python"]}
-    storage_info = {
-        "alignment": 32,
-        "device": "gpu",
-        "layout_map": gt_storage.layout.layout_maker_factory((2, 1, 0)),
-        "is_optimal_layout": gt_storage.layout.layout_checker_factory(
-            gt_storage.layout.layout_maker_factory((2, 1, 0))
-        ),
-    }
+    storage_info = gt_storage.layout.DaceGPULayout
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
     options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
 

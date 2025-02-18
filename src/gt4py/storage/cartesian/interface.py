@@ -81,10 +81,15 @@ def empty(
     _error_on_invalid_preset(backend)
     storage_info = layout.from_name(backend)
     assert storage_info is not None
-    if storage_info["device"] == "gpu":
+
+    if storage_info["device"] is None:
+        raise ValueError("device is None")
+    elif layout.is_gpu_device(storage_info):
         allocate_f = storage_utils.allocate_gpu
-    else:
+    elif layout.is_cpu_device(storage_info):
         allocate_f = storage_utils.allocate_cpu
+    else:
+        raise ValueError("Unknown device")
 
     aligned_index, shape, dtype, dimensions = storage_utils.normalize_storage_spec(
         aligned_index, shape, dtype, dimensions
@@ -322,6 +327,6 @@ def from_array(
 
     layout_info = layout.from_name(backend)
     assert layout_info is not None
-    storage[...] = storage_utils.asarray(data, device=layout_info["device"])
+    storage[...] = storage_utils.asarray(data, layout_info=layout_info)
 
     return storage
