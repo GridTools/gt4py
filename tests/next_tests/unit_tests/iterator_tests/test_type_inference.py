@@ -31,6 +31,7 @@ from next_tests.integration_tests.cases import (
     V2E,
     E2VDim,
     Edge,
+    Cell,
     IDim,
     Ioff,
     JDim,
@@ -518,7 +519,7 @@ def test_as_fieldop_without_domain_different_three_datatypes():
     stencil = im.lambda_("it1", "it2", "it3")(
         im.plus(
             im.plus(
-                im.deref(im.shift("E2V", 1)(im.shift("V2E", 1)("it1"))),
+                im.deref(im.shift("C2E", 1)(im.shift("E2V", 1)("it1"))),
                 im.deref(im.shift("KOff", 1)("it2")),
             ),
             im.deref(im.shift("IOff", 1)("it3")),
@@ -526,28 +527,52 @@ def test_as_fieldop_without_domain_different_three_datatypes():
     )
 
     testee = im.as_fieldop(stencil)(
-        im.ref("inp1", float_edge_field),
-        im.ref("inp2", float_vertex_k_field),
+        im.ref("inp1", float_vertex_field),
+        im.ref("inp2", float_edge_k_field),
         im.ref("inp3", float_i_field),
     )
     result = itir_type_inference.infer(
         testee,
-        offset_provider_type={"V2E": V2E, "E2V": E2V, "KOff": KDim, "IOff": IDim},
+        offset_provider_type={"C2E": C2E, "E2V": E2V, "KOff": KDim, "IOff": IDim},
         allow_undeclared_symbols=True,
     )
-    assert result.type == ts.FieldType(dims=[Edge, IDim, Vertex, KDim], dtype=float64_type)
+    assert result.type == ts.FieldType(dims=[Cell, Edge, IDim, KDim], dtype=float64_type)
     assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
         position_dims="unknown",
-        defined_dims=float_edge_field.dims,
-        element_type=float_edge_field.dtype,
+        defined_dims=float_vertex_field.dims,
+        element_type=float_vertex_field.dtype,
     )
     assert result.fun.args[0].type.pos_only_args[1] == it_ts.IteratorType(
         position_dims="unknown",
-        defined_dims=float_vertex_k_field.dims,
-        element_type=float_vertex_k_field.dtype,
+        defined_dims=float_edge_k_field.dims,
+        element_type=float_edge_k_field.dtype,
     )
     assert result.fun.args[0].type.pos_only_args[2] == it_ts.IteratorType(
         position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype
+    )
+
+
+def test_as_fieldop_without_domain_new():
+    stencil = im.lambda_("it1", "it2")(
+        im.plus(im.deref("it1"), im.deref(im.shift("KOff", 1)(im.shift("V2E", 0)("it2"))))
+    )
+
+    testee = im.as_fieldop(stencil)(
+        im.ref("inp2", float_vertex_field), im.ref("inp1", float_edge_k_field)
+    )
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={"V2E": V2E, "KOff": KDim}, allow_undeclared_symbols=True
+    )
+    assert result.type == ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims="unknown",
+        defined_dims=float_vertex_field.dims,
+        element_type=float_vertex_field.dtype,
+    )
+    assert result.fun.args[0].type.pos_only_args[1] == it_ts.IteratorType(
+        position_dims="unknown",
+        defined_dims=float_edge_k_field.dims,
+        element_type=float_edge_k_field.dtype,
     )
 
 
@@ -591,17 +616,17 @@ def test_as_fieldop_without_domain_only_one_shift():
 
 
 def test_as_fieldop_without_domain_new_nested_shifts():
-    stencil = im.lambda_("it")(im.deref(im.shift("E2V", 0)(im.shift("V2E", 0)("it"))))
+    stencil = im.lambda_("it")(im.deref(im.shift("C2E", 0)(im.shift("E2V", 0)("it"))))
 
-    testee = im.as_fieldop(stencil)(im.ref("inp", float_edge_field))
+    testee = im.as_fieldop(stencil)(im.ref("inp", float_vertex_field))
     result = itir_type_inference.infer(
-        testee, offset_provider_type={"E2V": E2V, "V2E": V2E}, allow_undeclared_symbols=True
+        testee, offset_provider_type={"C2E": C2E, "E2V": E2V}, allow_undeclared_symbols=True
     )
-    assert result.type == ts.FieldType(dims=[Edge], dtype=float64_type)
+    assert result.type == ts.FieldType(dims=[Cell], dtype=float64_type)
     assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
         position_dims="unknown",
-        defined_dims=float_edge_field.dims,
-        element_type=float_edge_field.dtype,
+        defined_dims=float_vertex_field.dims,
+        element_type=float_vertex_field.dtype,
     )
 
 
