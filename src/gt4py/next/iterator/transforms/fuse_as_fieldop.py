@@ -21,6 +21,7 @@ from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
     domain_utils,
     ir_makers as im,
+    misc as ir_misc,
 )
 from gt4py.next.iterator.transforms import (
     fixed_point_transformation,
@@ -46,26 +47,6 @@ def _merge_arguments(
     return new_args
 
 
-def _canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
-    """
-    Canonicalize applied `as_fieldop`s.
-
-    In case the stencil argument is a `deref` wrap it into a lambda such that we have a unified
-    format to work with (e.g. each parameter has a name without the need to special case).
-    """
-    assert cpm.is_applied_as_fieldop(expr)
-
-    stencil = expr.fun.args[0]  # type: ignore[attr-defined]
-    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None  # type: ignore[attr-defined]
-    if cpm.is_ref_to(stencil, "deref"):
-        stencil = im.lambda_("arg")(im.deref("arg"))
-        new_expr = im.as_fieldop(stencil, domain)(*expr.args)
-
-        return new_expr
-
-    return expr
-
-
 def _is_tuple_expr_of_literals(expr: itir.Expr):
     if cpm.is_call_to(expr, "make_tuple"):
         return all(_is_tuple_expr_of_literals(arg) for arg in expr.args)
@@ -78,7 +59,7 @@ def _inline_as_fieldop_arg(
     arg: itir.Expr, *, uids: eve_utils.UIDGenerator
 ) -> tuple[itir.Expr, dict[str, itir.Expr]]:
     assert cpm.is_applied_as_fieldop(arg)
-    arg = _canonicalize_as_fieldop(arg)
+    arg = ir_misc.canonicalize_as_fieldop(arg)
 
     stencil, *_ = arg.fun.args  # type: ignore[attr-defined]  # ensured by `is_applied_as_fieldop`
     inner_args: list[itir.Expr] = arg.args
@@ -411,7 +392,7 @@ class FuseAsFieldOp(
 
     def transform_fuse_as_fieldop(self, node: itir.Node, **kwargs):
         if cpm.is_applied_as_fieldop(node):
-            node = _canonicalize_as_fieldop(node)
+            node = ir_misc.canonicalize_as_fieldop(node)
             stencil = node.fun.args[0]  # type: ignore[attr-defined]  # ensure cpm.is_applied_as_fieldop
             assert isinstance(stencil, itir.Lambda) or cpm.is_call_to(stencil, "scan")
             args: list[itir.Expr] = node.args

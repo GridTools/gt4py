@@ -12,7 +12,7 @@ from collections import ChainMap
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 
 
 @dataclasses.dataclass(frozen=True)
@@ -71,3 +71,23 @@ def is_equal(a: itir.Expr, b: itir.Expr):
     return a == b or (
         CannonicalizeBoundSymbolNames.apply(a) == CannonicalizeBoundSymbolNames.apply(b)
     )
+
+
+def canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
+    """
+    Canonicalize applied `as_fieldop`s.
+
+    In case the stencil argument is a `deref` wrap it into a lambda such that we have a unified
+    format to work with (e.g. each parameter has a name without the need to special case).
+    """
+    assert cpm.is_applied_as_fieldop(expr)
+
+    stencil = expr.fun.args[0]  # type: ignore[attr-defined]
+    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None  # type: ignore[attr-defined]
+    if cpm.is_ref_to(stencil, "deref"):
+        stencil = im.lambda_("arg")(im.deref("arg"))
+        new_expr = im.as_fieldop(stencil, domain)(*expr.args)
+
+        return new_expr
+
+    return expr
