@@ -104,7 +104,7 @@ def unwrap_scan(stencil: itir.Lambda | itir.FunCall):
     >>> scan = im.call("scan")(
     ...     im.lambda_("state", "arg")(im.plus("state", im.deref("arg"))), True, 0.0
     ... )
-    >>> stencil, back_trafo = _unwrap_scan(scan)
+    >>> stencil, back_trafo = unwrap_scan(scan)
     >>> str(stencil)
     'λ(arg) → state + ·arg'
     >>> str(back_trafo(stencil))
@@ -113,7 +113,7 @@ def unwrap_scan(stencil: itir.Lambda | itir.FunCall):
     In case a regular stencil is given it is returned as-is:
 
     >>> deref_stencil = im.lambda_("it")(im.deref("it"))
-    >>> stencil, back_trafo = _unwrap_scan(deref_stencil)
+    >>> stencil, back_trafo = unwrap_scan(deref_stencil)
     >>> assert stencil == deref_stencil
     """
     if cpm.is_call_to(stencil, "scan"):
