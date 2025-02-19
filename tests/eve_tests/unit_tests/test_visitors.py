@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-import copy
-
 from gt4py import eve
 
 
