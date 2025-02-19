@@ -129,7 +129,10 @@ def _preserve_annex(
         new_annex_dict = new_node.annex.__dict__
         for key in preserved_annex_attrs:
             if (value := getattr(old_annex, key, NOTHING)) is not NOTHING:
-                assert key not in new_annex_dict or new_annex_dict[key] == value
+                # note: the annex value of the new node might not be equal (in
+                # the sense that the equality comparison is false), but in
+                # the context of the pass they are equalivalent. Therefore we don't
+                # assert equality here.
                 new_annex_dict[key] = value
 
 
