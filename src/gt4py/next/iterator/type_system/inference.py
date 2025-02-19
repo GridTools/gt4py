@@ -32,11 +32,66 @@ def _is_representable_as_int(s: int | str) -> bool:
         return False
 
 
+def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
+    """
+    Predicate to determine if two types are compatible.
+
+    This function gracefully handles:
+     - iterators with unknown positions which are considered compatible to any other positions
+       of another iterator.
+     - iterators which are defined everywhere, i.e. empty defined dimensions
+    Beside that this function simply checks for equality of types.
+
+    >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    >>> IDim = common.Dimension(value="IDim")
+    >>> type_on_i_of_i_it = it_ts.IteratorType(
+    ...     position_dims=[IDim], defined_dims=[IDim], element_type=bool_type
+    ... )
+    >>> type_on_undefined_of_i_it = it_ts.IteratorType(
+    ...     position_dims="unknown", defined_dims=[IDim], element_type=bool_type
+    ... )
+    >>> _is_compatible_type(type_on_i_of_i_it, type_on_undefined_of_i_it)
+    True
+
+    >>> JDim = common.Dimension(value="JDim")
+    >>> type_on_j_of_j_it = it_ts.IteratorType(
+    ...     position_dims=[JDim], defined_dims=[JDim], element_type=bool_type
+    ... )
+    >>> _is_compatible_type(type_on_i_of_i_it, type_on_j_of_j_it)
+    False
+    """
+    is_compatible = True
+
+    if isinstance(type_a, it_ts.IteratorType) and isinstance(type_b, it_ts.IteratorType):
+        if not any(el_type.position_dims == "unknown" for el_type in [type_a, type_b]):
+            is_compatible &= type_a.position_dims == type_b.position_dims
+        if type_a.defined_dims and type_b.defined_dims:
+            is_compatible &= type_a.defined_dims == type_b.defined_dims
+        is_compatible &= type_a.element_type == type_b.element_type
+    elif isinstance(type_a, ts.TupleType) and isinstance(type_b, ts.TupleType):
+        for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
+            is_compatible &= _is_compatible_type(el_type_a, el_type_b)
+    elif isinstance(type_a, ts.FunctionType) and isinstance(type_b, ts.FunctionType):
+        for arg_a, arg_b in zip(type_a.pos_only_args, type_b.pos_only_args, strict=True):
+            is_compatible &= _is_compatible_type(arg_a, arg_b)
+        for arg_a, arg_b in zip(
+            type_a.pos_or_kw_args.values(), type_b.pos_or_kw_args.values(), strict=True
+        ):
+            is_compatible &= _is_compatible_type(arg_a, arg_b)
+        for arg_a, arg_b in zip(
+            type_a.kw_only_args.values(), type_b.kw_only_args.values(), strict=True
+        ):
+            is_compatible &= _is_compatible_type(arg_a, arg_b)
+        is_compatible &= _is_compatible_type(type_a.returns, type_b.returns)
+    else:
+        is_compatible &= type_info.is_concretizable(type_a, type_b)
+
+    return is_compatible
+
+
 def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
     if node.type:
-        assert type_info.is_compatible_type(
-            node.type, type_
-        ), "Node already has a type which differs."
+        assert _is_compatible_type(node.type, type_), "Node already has a type which differs."
     node.type = type_
 
 
@@ -420,7 +475,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         if isinstance(node, itir.Node):
             if isinstance(result, ts.TypeSpec):
                 if node.type and not isinstance(node.type, ts.DeferredType):
-                    assert type_info.is_compatible_type(node.type, result)
+                    assert _is_compatible_type(node.type, result)
                 node.type = result
             elif isinstance(result, ObservableTypeSynthesizer) or result is None:
                 pass

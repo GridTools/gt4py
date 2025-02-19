@@ -60,9 +60,8 @@ def func_to_foast(inp: DSL_FOP) -> FOP:
         >>> print(foast_definition.foast_node.id)
         dsl_operator
 
-        >>> foast_closure_vars = {k: str(v) for k, v in foast_definition.closure_vars.items()}
-        >>> print(foast_closure_vars)
-        {'const': '2.0'}
+        >>> print(foast_definition.closure_vars)
+        {'const': 2.0}
     """
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)

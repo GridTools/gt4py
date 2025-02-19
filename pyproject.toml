@@ -24,7 +24,7 @@ dev = [
 docs = [
   'esbonio>=0.16.0',
   'jupytext>=1.14',
-  'matplotlib>=3.8.4',
+  'matplotlib>=3.3',
   'myst-parser>=4.0.0',
   'pygments>=2.7.3',
   'sphinx>=7.3.7',
@@ -132,8 +132,7 @@ all = ['gt4py[dace,formatting,jax,performance,testing]']
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
 # features
-dace = ['dace>=1.0.1,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
-dace-next = ['dace']  # pull dace latest version from the git repository
+dace = ['dace>=1.0.0,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
 formatting = ['clang-format>=9.0']
 jax = ['jax>=0.4.26']
 jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
@@ -310,6 +309,7 @@ markers = [
   'uses_reduction_with_only_sparse_fields: tests that require backend support for with sparse fields',
   'uses_scalar_in_domain_and_fo',
   'uses_scan: tests that uses scan',
+  'uses_scan_1d_field: that that uses scan on 1D vertical field',
   'uses_scan_in_field_operator: tests that require backend support for scan in field operator',
   'uses_scan_in_stencil: tests that require backend support for scan in stencil',
   'uses_scan_without_field_args: tests that require calls to scan that do not have any fields as arguments',
@@ -438,14 +438,6 @@ conflicts = [
     {extra = 'jax-cuda12'},
     {extra = 'rocm4_3'},
     {extra = 'rocm5_0'}
-  ],
-  [
-    {extra = 'dace'},
-    {extra = 'dace-next'}
-  ],
-  [
-    {extra = 'all'},
-    {extra = 'dace-next'}
   ]
 ]
 
@@ -456,4 +448,3 @@ url = 'https://test.pypi.org/simple/'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/spcl/dace", branch = "main", extra = "dace-next"}

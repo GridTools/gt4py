@@ -436,7 +436,7 @@ def domain(
     )
 
 
-def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Callable:
+def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> call:
     """
     Create an `as_fieldop` call.
 
@@ -445,9 +445,7 @@ def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Cal
     >>> str(as_fieldop(lambda_("it1", "it2")(plus(deref("it1"), deref("it2"))))("field1", "field2"))
     '(⇑(λ(it1, it2) → ·it1 + ·it2))(field1, field2)'
     """
-    from gt4py.next.iterator.ir_utils import domain_utils
-
-    result = call(
+    return call(
         call("as_fieldop")(
             *(
                 (
@@ -459,14 +457,6 @@ def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Cal
             )
         )
     )
-
-    def _populate_domain_annex_wrapper(*args, **kwargs):
-        node = result(*args, **kwargs)
-        if domain:
-            node.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)
-        return node
-
-    return _populate_domain_annex_wrapper
 
 
 def op_as_fieldop(

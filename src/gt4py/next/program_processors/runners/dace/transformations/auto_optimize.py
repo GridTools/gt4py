@@ -280,7 +280,6 @@ def gt_auto_optimize(
                 #   For compatibility with DaCe (and until we found out why) the GT4Py
                 #   auto optimizer will emulate this behaviour.
                 for state in sdfg.states():
-                    assert isinstance(state, dace.SDFGState)
                     for edge in state.edges():
                         edge.data.wcr_nonatomic = False
 

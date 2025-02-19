@@ -5,7 +5,6 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-from typing import ClassVar
 
 import gt4py.eve as eve
 from gt4py.next.iterator import ir as itir
@@ -26,8 +25,6 @@ class MergeLet(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     This can significantly reduce the depth of the tree and its readability.
     """
-
-    PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("domain",)
 
     def visit_FunCall(self, node: itir.FunCall):
         node = self.generic_visit(node)

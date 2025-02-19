@@ -16,6 +16,7 @@ import dataclasses
 import itertools
 import math
 import operator
+import sys
 import warnings
 
 import numpy as np
@@ -676,7 +677,7 @@ class Undefined:
         return np.nan
 
     def __int__(self):
-        return np.iinfo(np.int32).max
+        return sys.maxsize
 
     def __repr__(self):
         return "_UNDEFINED"

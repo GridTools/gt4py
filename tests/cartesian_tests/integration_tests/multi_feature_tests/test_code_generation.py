@@ -59,7 +59,7 @@ def test_generation(name, backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_lazy_stencil(backend):
     @gtscript.lazy_stencil(backend=backend)
-    def definition(field_a: gtscript.Field[np.float64], field_b: gtscript.Field[np.float64]):
+    def definition(field_a: gtscript.Field[np.float_], field_b: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             field_a = field_b
 
@@ -67,7 +67,7 @@ def test_lazy_stencil(backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_temporary_field_declared_in_if(backend):
     @gtscript.stencil(backend=backend)
-    def definition(field_a: gtscript.Field[np.float64]):
+    def definition(field_a: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             if field_a < 0:
                 field_b = -field_a
@@ -79,7 +79,7 @@ def test_temporary_field_declared_in_if(backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_stage_without_effect(backend):
     @gtscript.stencil(backend=backend)
-    def definition(field_a: gtscript.Field[np.float64]):
+    def definition(field_a: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             field_c = 0.0
 
@@ -87,11 +87,11 @@ def test_stage_without_effect(backend):
 def test_ignore_np_errstate():
     def setup_and_run(backend, **kwargs):
         field_a = gt_storage.zeros(
-            dtype=np.float64, backend=backend, shape=(3, 3, 1), aligned_index=(0, 0, 0)
+            dtype=np.float_, backend=backend, shape=(3, 3, 1), aligned_index=(0, 0, 0)
         )
 
         @gtscript.stencil(backend=backend, **kwargs)
-        def divide_by_zero(field_a: gtscript.Field[np.float64]):
+        def divide_by_zero(field_a: gtscript.Field[np.float_]):
             with computation(PARALLEL), interval(...):
                 field_a = 1.0 / field_a
 
@@ -106,11 +106,11 @@ def test_ignore_np_errstate():
 
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_stencil_without_effect(backend):
-    def definition1(field_in: gtscript.Field[np.float64]):
+    def definition1(field_in: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             tmp = 0.0
 
-    def definition2(f_in: gtscript.Field[np.float64]):
+    def definition2(f_in: gtscript.Field[np.float_]):
         from __externals__ import flag
 
         with computation(PARALLEL), interval(...):
@@ -121,7 +121,7 @@ def test_stencil_without_effect(backend):
     stencil2 = gtscript.stencil(backend, definition2, externals={"flag": False})
 
     field_in = gt_storage.ones(
-        dtype=np.float64, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
+        dtype=np.float_, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
     )
 
     # test with explicit domain specified
@@ -135,14 +135,14 @@ def test_stencil_without_effect(backend):
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_stage_merger_induced_interval_block_reordering(backend):
     field_in = gt_storage.ones(
-        dtype=np.float64, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
+        dtype=np.float_, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
     )
     field_out = gt_storage.zeros(
-        dtype=np.float64, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
+        dtype=np.float_, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
     )
 
     @gtscript.stencil(backend=backend)
-    def stencil(field_in: gtscript.Field[np.float64], field_out: gtscript.Field[np.float64]):
+    def stencil(field_in: gtscript.Field[np.float_], field_out: gtscript.Field[np.float_]):
         with computation(BACKWARD):
             with interval(-2, -1):  # block 1
                 field_out = field_in
@@ -164,9 +164,9 @@ def test_stage_merger_induced_interval_block_reordering(backend):
 def test_lower_dimensional_inputs(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
-        field_3d: gtscript.Field[gtscript.IJK, np.float64],
-        field_2d: gtscript.Field[gtscript.IJ, np.float64],
-        field_1d: gtscript.Field[gtscript.K, np.float64],
+        field_3d: gtscript.Field[gtscript.IJK, np.float_],
+        field_2d: gtscript.Field[gtscript.IJ, np.float_],
+        field_1d: gtscript.Field[gtscript.K, np.float_],
     ):
         with computation(PARALLEL):
             with interval(0, -1):
@@ -219,9 +219,9 @@ def test_lower_dimensional_inputs(backend):
 def test_lower_dimensional_masked(backend):
     @gtscript.stencil(backend=backend)
     def copy_2to3(
-        cond: gtscript.Field[gtscript.IJK, np.float64],
-        inp: gtscript.Field[gtscript.IJ, np.float64],
-        outp: gtscript.Field[gtscript.IJK, np.float64],
+        cond: gtscript.Field[gtscript.IJK, np.float_],
+        inp: gtscript.Field[gtscript.IJ, np.float_],
+        outp: gtscript.Field[gtscript.IJK, np.float_],
     ):
         with computation(PARALLEL), interval(...):
             if cond > 0.0:
@@ -250,9 +250,9 @@ def test_lower_dimensional_masked(backend):
 def test_lower_dimensional_masked_2dcond(backend):
     @gtscript.stencil(backend=backend)
     def copy_2to3(
-        cond: gtscript.Field[gtscript.IJK, np.float64],
-        inp: gtscript.Field[gtscript.IJ, np.float64],
-        outp: gtscript.Field[gtscript.IJK, np.float64],
+        cond: gtscript.Field[gtscript.IJK, np.float_],
+        inp: gtscript.Field[gtscript.IJ, np.float_],
+        outp: gtscript.Field[gtscript.IJK, np.float_],
     ):
         with computation(FORWARD), interval(...):
             if cond > 0.0:
@@ -281,8 +281,8 @@ def test_lower_dimensional_masked_2dcond(backend):
 def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
     @gtscript.stencil(backend=backend)
     def copy_2to3(
-        inp: gtscript.Field[gtscript.IJ, np.float64],
-        outp: gtscript.Field[gtscript.IJK, np.float64],
+        inp: gtscript.Field[gtscript.IJ, np.float_],
+        outp: gtscript.Field[gtscript.IJK, np.float_],
     ):
         with computation(FORWARD), interval(...):
             outp[0, 0, 0] = inp
@@ -368,8 +368,8 @@ def test_input_order(backend):
 def test_variable_offsets(backend):
     @gtscript.stencil(backend=backend)
     def stencil_ij(
-        in_field: gtscript.Field[np.float64],
-        out_field: gtscript.Field[np.float64],
+        in_field: gtscript.Field[np.float_],
+        out_field: gtscript.Field[np.float_],
         index_field: gtscript.Field[gtscript.IJ, int],
     ):
         with computation(FORWARD), interval(...):
@@ -378,8 +378,8 @@ def test_variable_offsets(backend):
 
     @gtscript.stencil(backend=backend)
     def stencil_ijk(
-        in_field: gtscript.Field[np.float64],
-        out_field: gtscript.Field[np.float64],
+        in_field: gtscript.Field[np.float_],
+        out_field: gtscript.Field[np.float_],
         index_field: gtscript.Field[int],
     ):
         with computation(PARALLEL), interval(...):
@@ -390,10 +390,10 @@ def test_variable_offsets(backend):
 def test_variable_offsets_and_while_loop(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
-        pe1: gtscript.Field[np.float64],
-        pe2: gtscript.Field[np.float64],
-        qin: gtscript.Field[np.float64],
-        qout: gtscript.Field[np.float64],
+        pe1: gtscript.Field[np.float_],
+        pe2: gtscript.Field[np.float_],
+        qin: gtscript.Field[np.float_],
+        qout: gtscript.Field[np.float_],
         lev: gtscript.Field[gtscript.IJ, np.int_],
     ):
         with computation(FORWARD), interval(0, -1):
@@ -410,7 +410,7 @@ def test_variable_offsets_and_while_loop(backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_nested_while_loop(backend):
     @gtscript.stencil(backend=backend)
-    def stencil(field_a: gtscript.Field[np.float64], field_b: gtscript.Field[np.int_]):
+    def stencil(field_a: gtscript.Field[np.float_], field_b: gtscript.Field[np.int_]):
         with computation(PARALLEL), interval(...):
             while field_a < 1:
                 add = 0
@@ -422,7 +422,7 @@ def test_nested_while_loop(backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_mask_with_offset_written_in_conditional(backend):
     @gtscript.stencil(backend)
-    def stencil(outp: gtscript.Field[np.float64]):
+    def stencil(outp: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             cond = True
             if cond[0, -1, 0] or cond[0, 0, 0]:

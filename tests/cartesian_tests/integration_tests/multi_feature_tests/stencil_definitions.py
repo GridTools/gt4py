@@ -61,7 +61,7 @@ def register(func=None, *, externals=None, name=None):
     return _register_decorator(func) if func else _register_decorator
 
 
-Field3D = gtscript.Field[np.float64]
+Field3D = gtscript.Field[np.float_]
 Field3DBool = gtscript.Field[np.bool_]
 
 

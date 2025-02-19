@@ -192,8 +192,6 @@ def gt_propagate_strides_from_access_node(
         processed_nsdfgs: Set of NestedSDFG that were already processed and will be ignored.
             Only specify when you know what your are doing.
     """
-    assert isinstance(state, dace.SDFGState)
-
     if processed_nsdfgs is None:
         # For preventing the case that nested SDFGs are handled multiple time.
         processed_nsdfgs = set()
@@ -633,7 +631,6 @@ def _gt_find_toplevel_data_accesses(
     not_top_level_data: set[str] = set()
 
     for state in sdfg.states():
-        assert isinstance(state, dace.SDFGState)
         scope_dict = state.scope_dict()
         for dnode in state.data_nodes():
             data: str = dnode.data

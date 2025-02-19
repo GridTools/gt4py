@@ -147,7 +147,7 @@ class CollapseTuple(
     ignore_tuple_size: bool
     enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
-    PRESERVED_ANNEX_ATTRS = ("type", "domain")
+    PRESERVED_ANNEX_ATTRS = ("type",)
 
     @classmethod
     def apply(
@@ -236,7 +236,6 @@ class CollapseTuple(
                     # tuple argument differs, just continue with the rest of the tree
                     return None
 
-            itir_type_inference.reinfer(first_expr)  # type is needed so reinfer on-demand
             assert self.ignore_tuple_size or isinstance(
                 first_expr.type, (ts.TupleType, ts.DeferredType)
             )
@@ -256,7 +255,7 @@ class CollapseTuple(
             and cpm.is_call_to(node.args[1], "make_tuple")
         ):
             # `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
-            assert not node.args[0].type or type_info.is_integer(node.args[0].type)
+            assert type_info.is_integer(node.args[0].type)
             make_tuple_call = node.args[1]
             idx = int(node.args[0].value)
             assert idx < len(

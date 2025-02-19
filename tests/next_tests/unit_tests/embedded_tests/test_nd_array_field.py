@@ -364,11 +364,10 @@ def test_reshuffling_premap():
 
     ij_field = common._field(
         np.asarray([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]]),
-        domain=common.Domain(dims=(I, J), ranges=(UnitRange(1, 4), UnitRange(2, 5))),
+        domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 3), UnitRange(0, 3))),
     )
-
     max_ij_conn = common._connectivity(
-        np.asarray([[1, 2, 3], [2, 2, 3], [3, 3, 3]], dtype=int),
+        np.fromfunction(lambda i, j: np.maximum(i, j), (3, 3), dtype=int),
         domain=common.Domain(
             dims=ij_field.domain.dims,
             ranges=ij_field.domain.ranges,
@@ -379,7 +378,7 @@ def test_reshuffling_premap():
     result = ij_field.premap(max_ij_conn)
     expected = common._field(
         np.asarray([[0.0, 4.0, 8.0], [3.0, 4.0, 8.0], [6.0, 7.0, 8.0]]),
-        domain=common.Domain(dims=(I, J), ranges=(UnitRange(1, 4), UnitRange(2, 5))),
+        domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 3), UnitRange(0, 3))),
     )
 
     assert result.domain == expected.domain

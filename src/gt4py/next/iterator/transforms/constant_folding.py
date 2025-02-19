@@ -12,11 +12,6 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = (
-        "type",
-        "domain",
-    )
-
     @classmethod
     def apply(cls, node: ir.Node) -> ir.Node:
         return cls().visit(node)

@@ -312,10 +312,6 @@ def _lower_lambda_to_nested_sdfg(
     # the lambda expression, i.e. body of the scan, will be created inside a nested SDFG.
     nsdfg = dace.SDFG(sdfg_builder.unique_nsdfg_name(sdfg, "scan"))
     nsdfg.debuginfo = gtir_sdfg_utils.debug_info(lambda_node, default=sdfg.debuginfo)
-    # We set `using_explicit_control_flow=True` because the vertical scan is lowered to a `LoopRegion`.
-    # This property is used by pattern matching in SDFG transformation framework
-    # to skip those transformations that do not yet support control flow blocks.
-    nsdfg.using_explicit_control_flow = True
     lambda_translator = sdfg_builder.setup_nested_context(lambda_node, nsdfg, lambda_symbols)
 
     # use the vertical dimension in the domain as scan dimension
@@ -414,7 +410,12 @@ def _lower_lambda_to_nested_sdfg(
     # stil inside the 'compute' state, generate the dataflow representing the stencil
     # to be applied on the horizontal domain
     lambda_input_edges, lambda_result = gtir_dataflow.translate_lambda_to_dataflow(
-        nsdfg, compute_state, lambda_translator, lambda_node, stencil_args
+        nsdfg,
+        compute_state,
+        lambda_translator,
+        lambda_node,
+        stencil_args,
+        scan_carry_symbol=scan_carry_symbol,
     )
     # connect the dataflow input directly to the source data nodes, without passing through a map node;
     # the reason is that the map for horizontal domain is outside the scan loop region
