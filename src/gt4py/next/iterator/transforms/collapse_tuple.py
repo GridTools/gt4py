@@ -12,6 +12,7 @@ import dataclasses
 import enum
 import functools
 import operator
+import re
 from typing import Optional
 
 from gt4py import eve
@@ -89,6 +90,19 @@ def _is_trivial_or_tuple_thereof_expr(node: itir.Node) -> bool:
             _is_trivial_or_tuple_thereof_expr(arg) for arg in node.args
         )
     return False
+
+
+def _flattened_as_fieldop_param_el_name(param: str, idx: int) -> str:
+    prefix = "__ct_flat_el_"
+
+    # keep the original param name, but skip prefix from previous flattenings
+    if param.startswith(prefix):
+        parent_idx, suffix = re.split(r"_(?!\d)", param[len(prefix) :], maxsplit=1)
+        prefix = f"{prefix}{parent_idx}_"
+    else:
+        suffix = param
+
+    return f"{prefix}{idx}_{suffix}"
 
 
 # TODO(tehrengruber): Conceptually the structure of this pass makes sense: Visit depth first,
@@ -508,7 +522,10 @@ class CollapseTuple(
             return None
 
         node = ir_misc.canonicalize_as_fieldop(node)
-        stencil = node.fun.args[0]  # type: ignore[attr-defined] # ensured by cpm.is_applied_as_fieldop
+        stencil, restore_scan = ir_misc.unwrap_scan(
+            node.fun.args[0]  # type: ignore[attr-defined] # ensured by cpm.is_applied_as_fieldop
+        )
+
         new_body = stencil.expr
         domain = node.fun.args[1] if len(node.fun.args) > 1 else None  # type: ignore[attr-defined] # ensured by cpm.is_applied_as_fieldop
         orig_args_map: dict[itir.Sym, itir.Expr] = {}
@@ -522,7 +539,7 @@ class CollapseTuple(
                 for i, type_ in enumerate(param.type.element_type.types):
                     new_params_inner.append(
                         im.sym(
-                            f"__ct_flat_el{i}_{param.id}",
+                            _flattened_as_fieldop_param_el_name(param.id, i),
                             _with_altered_iterator_element_type(param.type, type_),
                         )
                     )
@@ -548,7 +565,6 @@ class CollapseTuple(
             flags=inline_lifts.InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
         ).visit(new_body)
         new_body = self.visit(new_body, **kwargs)
+        new_stencil = restore_scan(im.lambda_(*new_params)(new_body))
 
-        return im.let(*orig_args_map.items())(
-            im.as_fieldop(im.lambda_(*new_params)(new_body), domain)(*new_args)
-        )
+        return im.let(*orig_args_map.items())(im.as_fieldop(new_stencil, domain)(*new_args))

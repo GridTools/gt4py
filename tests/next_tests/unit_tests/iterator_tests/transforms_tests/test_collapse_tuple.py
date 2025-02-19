@@ -11,7 +11,6 @@ from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 
-bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
 
@@ -321,13 +320,70 @@ def test_flatten_as_fieldop_args():
     it_type = it_ts.IteratorType(
         position_dims=[Vertex],
         defined_dims=[Vertex],
-        element_type=ts.TupleType(types=[bool_type, int_type]),
+        element_type=ts.TupleType(types=[int_type, int_type]),
     )
     testee = im.as_fieldop(im.lambda_(im.sym("it", it_type))(im.tuple_get(1, im.deref("it"))))(
         im.make_tuple(1, 2)
     )
     expected = im.as_fieldop(
-        im.lambda_("__ct_flat_el0_it", "__ct_flat_el1_it")(im.deref("__ct_flat_el1_it"))
+        im.lambda_("__ct_flat_el_0_it", "__ct_flat_el_1_it")(im.deref("__ct_flat_el_1_it"))
+    )(1, 2)
+    actual = CollapseTuple.apply(
+        testee,
+        enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert actual == expected
+
+
+def test_flatten_as_fieldop_args_nested():
+    it_type = it_ts.IteratorType(
+        position_dims=[Vertex],
+        defined_dims=[Vertex],
+        element_type=ts.TupleType(
+            types=[
+                int_type,
+                ts.TupleType(types=[int_type, int_type]),
+            ]
+        ),
+    )
+    testee = im.as_fieldop(
+        im.lambda_(im.sym("it", it_type))(im.tuple_get(1, im.tuple_get(1, im.deref("it"))))
+    )(im.make_tuple(1, im.make_tuple(2, 3)))
+    expected = im.as_fieldop(
+        im.lambda_("__ct_flat_el_0_it", "__ct_flat_el_1_0_it", "__ct_flat_el_1_1_it")(
+            im.deref("__ct_flat_el_1_1_it")
+        )
+    )(1, 2, 3)
+    actual = CollapseTuple.apply(
+        testee,
+        enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert actual == expected
+
+
+def test_flatten_as_fieldop_args_scan():
+    it_type = it_ts.IteratorType(
+        position_dims=[Vertex],
+        defined_dims=[Vertex],
+        element_type=ts.TupleType(types=[int_type, int_type]),
+    )
+    testee = im.as_fieldop(
+        im.scan(
+            im.lambda_("state", im.sym("it", it_type))(im.tuple_get(1, im.deref("it"))), True, 0
+        )
+    )(im.make_tuple(1, 2))
+    expected = im.as_fieldop(
+        im.scan(
+            im.lambda_("state", "__ct_flat_el_0_it", "__ct_flat_el_1_it")(
+                im.deref("__ct_flat_el_1_it")
+            ),
+            True,
+            0,
+        )
     )(1, 2)
     actual = CollapseTuple.apply(
         testee,

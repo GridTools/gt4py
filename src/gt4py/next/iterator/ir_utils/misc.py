@@ -91,3 +91,47 @@ def canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
         return new_expr
 
     return expr
+
+
+def unwrap_scan(stencil: itir.Lambda | itir.FunCall):
+    """
+    If given a scan, extract stencil part of its scan pass and a back-transformation into a scan.
+
+    If a regular stencil is given the stencil is left as-is and the back-transformation is the
+    identity function. This function allows treating a scan stencil like a regular stencil during
+    a transformation avoiding the complexity introduced by the different IR format.
+
+    >>> scan = im.call("scan")(
+    ...     im.lambda_("state", "arg")(im.plus("state", im.deref("arg"))), True, 0.0
+    ... )
+    >>> stencil, back_trafo = _unwrap_scan(scan)
+    >>> str(stencil)
+    'λ(arg) → state + ·arg'
+    >>> str(back_trafo(stencil))
+    'scan(λ(state, arg) → (λ(arg) → state + ·arg)(arg), True, 0.0)'
+
+    In case a regular stencil is given it is returned as-is:
+
+    >>> deref_stencil = im.lambda_("it")(im.deref("it"))
+    >>> stencil, back_trafo = _unwrap_scan(deref_stencil)
+    >>> assert stencil == deref_stencil
+    """
+    if cpm.is_call_to(stencil, "scan"):
+        scan_pass, direction, init = stencil.args
+        assert isinstance(scan_pass, itir.Lambda)
+        # remove scan pass state to be used by caller
+        state_param = scan_pass.params[0]
+        stencil_like = im.lambda_(*scan_pass.params[1:])(scan_pass.expr)
+
+        def restore_scan(transformed_stencil_like: itir.Lambda):
+            new_scan_pass = im.lambda_(state_param, *transformed_stencil_like.params)(
+                im.call(transformed_stencil_like)(
+                    *(param.id for param in transformed_stencil_like.params)
+                )
+            )
+            return im.call("scan")(new_scan_pass, direction, init)
+
+        return stencil_like, restore_scan
+
+    assert isinstance(stencil, itir.Lambda)
+    return stencil, lambda s: s
