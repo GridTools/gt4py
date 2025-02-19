@@ -23,6 +23,15 @@ from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
+def get_dace_debuginfo(node: common.LocNode) -> dace.dtypes.DebugInfo:
+    if node.loc is None:
+        return dace.dtypes.DebugInfo(0)
+
+    return dace.dtypes.DebugInfo(
+        node.loc.line, node.loc.column, node.loc.line, node.loc.column, node.loc.filename
+    )
+
+
 def array_dimensions(array: dace.data.Array):
     dims = [
         any(
