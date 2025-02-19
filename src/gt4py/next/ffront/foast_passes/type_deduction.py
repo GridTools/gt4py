@@ -999,7 +999,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"Field arguments must be of same dtype, got '{t_dtype}' != '{f_dtype}'."
             )
 
-        return_type = type_info.promote(mask_type, true_branch_type, false_branch_type)
+        return_dims = promote_dims(
+            mask_type.dims,
+            type_info.promote(true_branch_type, false_branch_type).dims
+        )
+        return_type = ts.FieldType(
+            dims=return_dims,
+            dtype=type_info.promote(t_dtype, f_dtype)
+        )
 
         return foast.Call(
             func=node.func,
