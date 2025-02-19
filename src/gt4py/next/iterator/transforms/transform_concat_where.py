@@ -31,8 +31,6 @@ class DerefCond(PreserveLocationVisitor, NodeTranslator):
 
 
 class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("domain",)
-
     @classmethod
     def apply(cls, node: ir.Node):
         return cls().visit(node)
@@ -44,12 +42,12 @@ class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
             cond = domain_utils.SymbolicDomain.from_expr(cond_expr).ranges.keys()
             dims = [im.call("index")(ir.AxisLiteral(value=k.value, kind=k.kind)) for k in cond]
             refs = symbol_ref_utils.collect_symbol_refs(cond_expr)
+            # TODO: this deref pass is not correct
             cond_expr = DerefCond.apply(cond_expr, refs)
             return im.as_fieldop(
                 im.lambda_("_tcw_pos", "_tcw_arg0", "_tcw_arg1", *refs)(
                     im.if_(im.call("in")(im.deref("_tcw_pos"), cond_expr), im.deref("_tcw_arg0"), im.deref("_tcw_arg1"))
                 ),
-                node.annex.domain.as_expr(),
             )(im.make_tuple(*dims), field_a, field_b, *refs)
 
         return self.generic_visit(node)
