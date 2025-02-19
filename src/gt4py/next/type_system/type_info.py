@@ -235,6 +235,8 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
+    if not isinstance(symbol_type, (ts.ScalarType, ts.FieldType)):
+        return False
     return isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType) and dtype.kind in [
         ts.ScalarKind.FLOAT32,
         ts.ScalarKind.FLOAT64,
@@ -278,6 +280,8 @@ def is_integral(symbol_type: ts.TypeSpec) -> bool:
     >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
     True
     """
+    if not isinstance(symbol_type, (ts.ScalarType, ts.FieldType)):
+        return False
     return is_integer(extract_dtype(symbol_type))
 
 
