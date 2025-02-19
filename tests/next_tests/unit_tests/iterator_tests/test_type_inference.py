@@ -246,6 +246,7 @@ def test_aliased_function():
     assert result.args[0].type == ts.FunctionType(
         pos_only_args=[int_type], pos_or_kw_args={}, kw_only_args={}, returns=int_type
     )
+    assert result.args[0].params[0].type == int_type
     assert result.type == int_type
 
 
