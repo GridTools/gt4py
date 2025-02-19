@@ -293,11 +293,18 @@ class MapFusion(transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
     ) -> bool:
         """Check if the matched Maps can be fused in parallel."""
-        assert self.expr_index == 1
 
         # NOTE: The after this point it is not legal to access the matched nodes
         first_map_entry: nodes.MapEntry = self.first_parallel_map_entry
         second_map_entry: nodes.MapEntry = self.second_parallel_map_entry
+
+        assert self.expr_index == 1
+        assert isinstance(first_map_entry, nodes.MapEntry)
+        assert isinstance(second_map_entry, nodes.MapEntry)
+
+        # We will now check if the two maps are parallel.
+        if not self.is_parallel(graph=graph, node1=first_map_entry, node2=second_map_entry):
+            return False
 
         # Check the structural properties of the Maps. The function will return
         #  the `dict` that describes how the parameters must be renamed (for caching)
@@ -333,12 +340,15 @@ class MapFusion(transformation.SingleStateTransformation):
         * Tests if there are read write dependencies.
         * Tests if the decomposition exists.
         """
-        assert self.expr_index == 0
-
         # NOTE: The after this point it is not legal to access the matched nodes
         first_map_entry: nodes.MapEntry = graph.entry_node(self.first_map_exit)
         first_map_exit: nodes.MapExit = self.first_map_exit
         second_map_entry: nodes.MapEntry = self.second_map_entry
+
+        assert self.expr_index == 0
+        assert isinstance(first_map_exit, nodes.MapExit)
+        assert isinstance(second_map_entry, nodes.MapEntry)
+        assert isinstance(self.array, nodes.AccessNode)
 
         # Check the structural properties of the Maps. The function will return
         #  the `dict` that describes how the parameters must be renamed (for caching)

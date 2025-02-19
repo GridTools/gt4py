@@ -49,8 +49,10 @@ class MapFusion(dace_map_fusion.MapFusion):
 
     It is a wrapper that adds some functionality to the transformation that is not
     present in the DaCe version of this transformation.
-    There are two important differences when compared with DaCe's MapFusion:
+    There are three important differences when compared with DaCe's MapFusion:
     - In DaCe strict data flow is enabled by default, in GT4Py it is disabled by default.
+    - In DaCe `MapFusion` only performs the fusion of serial maps by default. In GT4Py
+        `MapFusion` will also perform parallel map fusion by default.
     - GT4Py accepts an additional argument `apply_fusion_callback`. This is a
         function that is called by the transformation, at the _beginning_ of
         `self.can_be_applied()`, i.e. before the transformation does any check if
@@ -65,7 +67,7 @@ class MapFusion(dace_map_fusion.MapFusion):
         strict_dataflow: Strict dataflow mode should be used, it is disabled by default.
         assume_always_shared: Assume that all intermediates are shared.
         allow_serial_map_fusion: Allow serial map fusion, by default `True`.
-        allow_parallel_fusion: Allow to merge parallel maps, by default `False`.
+        allow_parallel_fusion: Allow to merge parallel maps, by default `True`.
         only_if_common_ancestor: In parallel map fusion mode, only fuse if both maps
             have a common direct ancestor.
         apply_fusion_callback: The callback function that is used.
@@ -81,11 +83,18 @@ class MapFusion(dace_map_fusion.MapFusion):
     def __init__(
         self,
         strict_dataflow: bool = False,
+        allow_serial_map_fusion: bool = True,
+        allow_parallel_map_fusion: bool = True,
         apply_fusion_callback: Optional[FusionTestCallback] = None,
         **kwargs: Any,
     ) -> None:
         self._apply_fusion_callback = None
-        super().__init__(strict_dataflow=strict_dataflow, **kwargs)
+        super().__init__(
+            strict_dataflow=strict_dataflow,
+            allow_serial_map_fusion=allow_serial_map_fusion,
+            allow_parallel_map_fusion=allow_parallel_map_fusion,
+            **kwargs,
+        )
         if apply_fusion_callback is not None:
             self._apply_fusion_callback = apply_fusion_callback
 

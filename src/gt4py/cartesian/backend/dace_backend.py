@@ -151,10 +151,6 @@ def _pre_expand_transformations(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, la
         sdfg.add_state(gtir_pipeline.gtir.name)
         return sdfg
 
-    for array in sdfg.arrays.values():
-        if array.transient:
-            array.lifetime = dace.AllocationLifetime.Persistent
-
     sdfg.simplify(validate=False)
 
     _set_expansion_orders(sdfg)
