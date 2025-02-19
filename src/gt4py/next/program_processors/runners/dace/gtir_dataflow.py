@@ -1248,8 +1248,8 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         The reduction is implemented as a nested SDFG containing 2 states. In first
         state, the result (a scalar data node passed as argumet) is initialized.
-        In second state, a mapped tasklet uses a write-conflict resolution (wcr)
-        memlet to update the result.
+        In second state, a loop region computes the result by applying the reduction
+        function over the list of values.
         We use the offset provider as a mask to identify skip values: the value
         that is written to the result node is either the input value, when the
         corresponding neighbor index in the connectivity table is valid, or the
@@ -1280,7 +1280,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         local_dim_index = local_dim_indices[0]
         assert desc.shape[local_dim_index] == offset_provider_type.max_neighbors
 
-        # we lower the reduction map with WCR out memlet in a nested SDFG
+        # we lower the reduction loop in a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name("reduce_with_skip_values"))
         nsdfg.add_array(
             "values",
@@ -1308,25 +1308,52 @@ class LambdaToDataflow(eve.NodeVisitor):
             None,
             dace.Memlet(data="acc", subset="0"),
         )
-        st_reduce = nsdfg.add_state_after(st_init, f"{nsdfg.label}_reduce")
+        reduce_loop = dace.sdfg.state.LoopRegion(
+            label="list_loop",
+            condition_expr=f"i < {offset_provider_type.max_neighbors}",
+            loop_var="i",
+            initialize_expr="i = 0",
+            update_expr="i = i + 1",
+            inverted=False,
+        )
+        nsdfg.add_node(reduce_loop)
+        nsdfg.add_edge(st_init, reduce_loop, dace.InterstateEdge())
+        st_reduce = reduce_loop.add_state("reduce")
         # Fill skip values in local dimension with the reduce identity value
         skip_value = f"{reduce_identity.dc_dtype}({reduce_identity.value})"
-        # Since this map operates on a pure local dimension, we explicitly set sequential
-        # schedule and we set the flag 'wcr_nonatomic=True' on the write memlet.
-        # TODO(phimuell): decide if auto-optimizer should reset `wcr_nonatomic` properties, as DaCe does.
-        st_reduce.add_mapped_tasklet(
+        reduce_tasklet = st_reduce.add_tasklet(
             name="reduce_with_skip_values",
-            map_ranges={"i": f"0:{offset_provider_type.max_neighbors}"},
-            inputs={
-                "__val": dace.Memlet(data="values", subset="i"),
-                "__neighbor_idx": dace.Memlet(data="neighbor_indices", subset="i"),
-            },
-            code=f"__out = __val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}",
-            outputs={
-                "__out": dace.Memlet(data="acc", subset="0", wcr=reduce_wcr, wcr_nonatomic=True),
-            },
-            external_edges=True,
-            schedule=dace.dtypes.ScheduleType.Sequential,
+            inputs={"__inp", "__val", "__neighbor_idx"},
+            code=f"__out = __inp + (__val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value})",
+            outputs={"__out"},
+        )
+        st_reduce.add_edge(
+            st_reduce.add_access("acc"),
+            None,
+            reduce_tasklet,
+            "__inp",
+            dace.Memlet(data="acc", subset="0"),
+        )
+        st_reduce.add_edge(
+            st_reduce.add_access("values"),
+            None,
+            reduce_tasklet,
+            "__val",
+            dace.Memlet(data="values", subset="i"),
+        )
+        st_reduce.add_edge(
+            st_reduce.add_access("neighbor_indices"),
+            None,
+            reduce_tasklet,
+            "__neighbor_idx",
+            dace.Memlet(data="neighbor_indices", subset="i"),
+        )
+        st_reduce.add_edge(
+            reduce_tasklet,
+            "__out",
+            st_reduce.add_access("acc"),
+            None,
+            dace.Memlet(data="acc", subset="0"),
         )
 
         nsdfg_node = self.state.add_nested_sdfg(
