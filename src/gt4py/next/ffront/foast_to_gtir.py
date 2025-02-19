@@ -224,7 +224,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_Symbol(self, node: foast.Symbol, **kwargs: Any) -> itir.Sym:
         return im.sym(node.id)
 
-    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef:
+    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef | itir.AxisLiteral:
+        if isinstance(node.type, ts.DimensionType):
+            return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
         return im.ref(node.id)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
@@ -249,7 +251,28 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             raise NotImplementedError(f"Unary operator '{node.op}' is not supported.")
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> itir.FunCall:
-        return self._lower_and_map(node.op.value, node.left, node.right)
+        if (
+            node.op == dialect_ast_enums.BinaryOperator.BIT_AND
+            and isinstance(node.left.type, ts.DomainType)
+            and isinstance(node.right.type, ts.DomainType)
+        ):
+            return im.and_(self.visit(node.left), self.visit(node.right))
+        if (
+            node.op == dialect_ast_enums.BinaryOperator.BIT_OR
+            and isinstance(node.left.type, ts.DomainType)
+            and isinstance(node.right.type, ts.DomainType)
+        ):
+            return im.or_(self.visit(node.left), self.visit(node.right))
+        if (
+            node.op == dialect_ast_enums.BinaryOperator.BIT_XOR
+            and isinstance(node.left.type, ts.DomainType)
+            and isinstance(node.right.type, ts.DomainType)
+        ):
+            raise NotImplementedError(
+                f"Binary operator '{node.op}' is not supported for '{node.right.type}' and '{node.right.type}'."
+            )
+        else:
+            return self._lower_and_map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> itir.FunCall:
         assert (
@@ -261,6 +284,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def visit_Compare(self, node: foast.Compare, **kwargs: Any) -> itir.FunCall:
+        # TODO: double-check if we need the changes in the original PR
         return self._lower_and_map(node.op.value, node.left, node.right)
 
     def _visit_shift(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
@@ -394,7 +418,13 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
         return im.let(cond_symref_name, cond_)(result)
 
-    _visit_concat_where = _visit_where  # TODO(havogt): upgrade concat_where
+    def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
+            return im.call("concat_where")(*self.visit(node.args))
+        else:
+            raise NotImplementedError()
+
+    # TODO: tuple case
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         expr = self.visit(node.args[0], **kwargs)
@@ -476,8 +506,9 @@ def _map(
     """
     Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_`ing lists.
     """
+    # TODO double-check that this code is consistent with the changes in the original PR
     if all(
-        isinstance(t, ts.ScalarType)
+        isinstance(t, (ts.ScalarType, ts.DimensionType))
         for arg_type in original_arg_types
         for t in type_info.primitive_constituents(arg_type)
     ):

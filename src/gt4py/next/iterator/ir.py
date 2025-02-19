@@ -63,6 +63,14 @@ class NoneLiteral(Expr):
     _none_literal: int = 0
 
 
+class InfinityLiteral(Expr):
+    pass
+
+
+class NegInfinityLiteral(Expr):
+    pass
+
+
 class OffsetLiteral(Expr):
     value: Union[int, str]
 
@@ -142,3 +150,5 @@ FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Program.__hash__ = Node.__hash__  # type: ignore[method-assign]
 SetAt.__hash__ = Node.__hash__  # type: ignore[method-assign]
 IfStmt.__hash__ = Node.__hash__  # type: ignore[method-assign]
+InfinityLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
+NegInfinityLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]

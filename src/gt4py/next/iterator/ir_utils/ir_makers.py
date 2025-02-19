@@ -234,6 +234,11 @@ def if_(cond, true_val, false_val):
     return call("if_")(cond, true_val, false_val)
 
 
+def concat_where(cond, true_field, false_field):
+    """Create a concat_where FunCall, shorthand for ``call("concat_where")(expr)``."""
+    return call("concat_where")(cond, true_field, false_field)
+
+
 def lift(expr):
     """Create a lift FunCall, shorthand for ``call(call("lift")(expr))``."""
     return call(call("lift")(expr))
