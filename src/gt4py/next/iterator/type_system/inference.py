@@ -37,6 +37,10 @@ def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
         assert type_info.is_compatible_type(
             node.type, type_
         ), "Node already has a type which differs."
+    if isinstance(node, itir.Lambda):
+        assert isinstance(type_, ts.FunctionType)
+        for param, param_type in zip(node.params, type_.pos_only_args):
+            _set_node_type(param, param_type)
     node.type = type_
 
 
