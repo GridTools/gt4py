@@ -41,20 +41,21 @@ class KBoundaryVisitor(eve.NodeVisitor):
         node: gtir.FieldAccess,
         vloop: gtir.VerticalLoop,
         field_boundaries: Dict[str, Tuple[Union[float, int], Union[float, int]]],
-        include_center_interval: bool,
-        **kwargs: Any,
+        **_: Any,
     ):
         boundary = field_boundaries[node.name]
         interval = vloop.interval
         if not isinstance(node.offset, gtir.VariableKOffset):
-            if interval.start.level == LevelMarker.START and (
-                include_center_interval or interval.end.level == LevelMarker.START
-            ):
-                boundary = (max(-interval.start.offset - node.offset.k, boundary[0]), boundary[1])
-            if (
-                include_center_interval or interval.start.level == LevelMarker.END
-            ) and interval.end.level == LevelMarker.END:
-                boundary = (boundary[0], max(interval.end.offset + node.offset.k, boundary[1]))
+            if interval.start.level == LevelMarker.START:
+                boundary = (
+                    max(-interval.start.offset - node.offset.k, boundary[0]),
+                    boundary[1],
+                )
+            if interval.end.level == LevelMarker.END:
+                boundary = (
+                    boundary[0],
+                    max(interval.end.offset + node.offset.k, boundary[1]),
+                )
         if node.name in [decl.name for decl in vloop.temporaries] and (
             boundary[0] > 0 or boundary[1] > 0
         ):
@@ -63,24 +64,35 @@ class KBoundaryVisitor(eve.NodeVisitor):
         field_boundaries[node.name] = boundary
 
 
-def compute_k_boundary(
-    node: gtir.Stencil, include_center_interval=True
-) -> Dict[str, Tuple[int, int]]:
+def compute_k_boundary(node: gtir.Stencil) -> Dict[str, Tuple[int, int]]:
     # loop from START to END is not considered as it might be empty. additional check possible in the future
-    return KBoundaryVisitor().visit(node, include_center_interval=include_center_interval)
+    return KBoundaryVisitor().visit(node)
 
 
-def compute_min_k_size(node: gtir.Stencil, include_center_interval=True) -> int:
+def compute_min_k_size(node: gtir.Stencil) -> int:
     """Compute the required number of k levels to run a stencil."""
+
     min_size_start = 0
     min_size_end = 0
+    biggest_offset = 0
     for vloop in node.vertical_loops:
-        if vloop.interval.start.level == LevelMarker.START and (
-            include_center_interval or vloop.interval.end.level == LevelMarker.START
+        if (
+            vloop.interval.start.level == LevelMarker.START
+            and vloop.interval.end.level == LevelMarker.END
+        ):
+            if not (vloop.interval.start.offset == 0 and vloop.interval.end.offset == 0):
+                biggest_offset = max(
+                    biggest_offset,
+                    vloop.interval.start.offset - vloop.interval.end.offset + 1,
+                )
+        elif (
+            vloop.interval.start.level == LevelMarker.START
+            and vloop.interval.end.level == LevelMarker.START
         ):
             min_size_start = max(min_size_start, vloop.interval.end.offset)
-        elif (
-            include_center_interval or vloop.interval.start.level == LevelMarker.END
-        ) and vloop.interval.end.level == LevelMarker.END:
+            biggest_offset = max(biggest_offset, vloop.interval.end.offset)
+        else:
             min_size_end = max(min_size_end, -vloop.interval.start.offset)
-    return min_size_start + min_size_end
+            biggest_offset = max(biggest_offset, -vloop.interval.start.offset)
+    minimal_size = max(min_size_start + min_size_end, biggest_offset)
+    return minimal_size
