@@ -234,12 +234,8 @@ class DataflowOutputEdge:
     ) -> None:
         # retrieve the node which writes the result
         last_node = self.state.in_edges(self.result.dc_node)[0].src
-        if isinstance(last_node, dace.nodes.Tasklet):
+        if isinstance(last_node, (dace.nodes.Tasklet, dace.nodes.NestedSDFG)):
             # the last transient node can be deleted
-            # Note that it could also be applied when `last_node` is a NestedSDFG,
-            # but an exception would be when the inner write to global data is a
-            # WCR memlet, because that prevents fusion of the outer map. This case
-            # happens for the reduce with skip values, which uses a map with WCR.
             last_node_connector = self.state.in_edges(self.result.dc_node)[0].src_conn
             self.state.remove_node(self.result.dc_node)
         else:
@@ -1244,7 +1240,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_provider_type: gtx_common.NeighborConnectivityType,
         reduce_init: SymbolExpr,
         reduce_identity: SymbolExpr,
-        reduce_wcr: str,
+        reduce_builtin_func: str,
         result_node: dace.nodes.AccessNode,
     ) -> None:
         """
@@ -1252,8 +1248,8 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         The reduction is implemented as a nested SDFG containing 2 states. In first
         state, the result (a scalar data node passed as argumet) is initialized.
-        In second state, a mapped tasklet uses a write-conflict resolution (wcr)
-        memlet to update the result.
+        In second state, a loop region computes the result by applying the reduction
+        function over the list of values.
         We use the offset provider as a mask to identify skip values: the value
         that is written to the result node is either the input value, when the
         corresponding neighbor index in the connectivity table is valid, or the
@@ -1284,7 +1280,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         local_dim_index = local_dim_indices[0]
         assert desc.shape[local_dim_index] == offset_provider_type.max_neighbors
 
-        # we lower the reduction map with WCR out memlet in a nested SDFG
+        # we lower the reduction loop in a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name("reduce_with_skip_values"))
         nsdfg.add_array(
             "values",
@@ -1312,25 +1308,54 @@ class LambdaToDataflow(eve.NodeVisitor):
             None,
             dace.Memlet(data="acc", subset="0"),
         )
-        st_reduce = nsdfg.add_state_after(st_init, f"{nsdfg.label}_reduce")
+        reduce_loop = dace.sdfg.state.LoopRegion(
+            label="list_loop",
+            condition_expr=f"i < {offset_provider_type.max_neighbors}",
+            loop_var="i",
+            initialize_expr="i = 0",
+            update_expr="i = i + 1",
+            inverted=False,
+        )
+        nsdfg.add_node(reduce_loop)
+        nsdfg.add_edge(st_init, reduce_loop, dace.InterstateEdge())
+        st_reduce = reduce_loop.add_state("reduce")
         # Fill skip values in local dimension with the reduce identity value
-        skip_value = f"{reduce_identity.dc_dtype}({reduce_identity.value})"
-        # Since this map operates on a pure local dimension, we explicitly set sequential
-        # schedule and we set the flag 'wcr_nonatomic=True' on the write memlet.
-        # TODO(phimuell): decide if auto-optimizer should reset `wcr_nonatomic` properties, as DaCe does.
-        st_reduce.add_mapped_tasklet(
+        list_value_arg = f"(__val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {reduce_identity.dc_dtype}({reduce_identity.value}))"
+        reduce_tasklet = st_reduce.add_tasklet(
             name="reduce_with_skip_values",
-            map_ranges={"i": f"0:{offset_provider_type.max_neighbors}"},
-            inputs={
-                "__val": dace.Memlet(data="values", subset="i"),
-                "__neighbor_idx": dace.Memlet(data="neighbor_indices", subset="i"),
-            },
-            code=f"__out = __val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}",
-            outputs={
-                "__out": dace.Memlet(data="acc", subset="0", wcr=reduce_wcr, wcr_nonatomic=True),
-            },
-            external_edges=True,
-            schedule=dace.dtypes.ScheduleType.Sequential,
+            inputs={"__inp", "__val", "__neighbor_idx"},
+            code="__out = {}".format(
+                gtir_python_codegen.format_builtin(reduce_builtin_func, "__inp", list_value_arg)
+            ),
+            outputs={"__out"},
+        )
+        st_reduce.add_edge(
+            st_reduce.add_access("acc"),
+            None,
+            reduce_tasklet,
+            "__inp",
+            dace.Memlet(data="acc", subset="0"),
+        )
+        st_reduce.add_edge(
+            st_reduce.add_access("values"),
+            None,
+            reduce_tasklet,
+            "__val",
+            dace.Memlet(data="values", subset="i"),
+        )
+        st_reduce.add_edge(
+            st_reduce.add_access("neighbor_indices"),
+            None,
+            reduce_tasklet,
+            "__neighbor_idx",
+            dace.Memlet(data="neighbor_indices", subset="i"),
+        )
+        st_reduce.add_edge(
+            reduce_tasklet,
+            "__out",
+            st_reduce.add_access("acc"),
+            None,
+            dace.Memlet(data="acc", subset="0"),
         )
 
         nsdfg_node = self.state.add_nested_sdfg(
@@ -1365,8 +1390,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, ts.ScalarType)
-        op_name, reduce_init, reduce_identity = get_reduce_params(node)
-        reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
+        reduce_builtin_func, reduce_init, reduce_identity = get_reduce_params(node)
 
         result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, reduce_identity.dc_dtype)
         result_node = self.state.add_access(result)
@@ -1387,11 +1411,14 @@ class LambdaToDataflow(eve.NodeVisitor):
                 offset_provider_type,
                 reduce_init,
                 reduce_identity,
-                reduce_wcr,
+                reduce_builtin_func,
                 result_node,
             )
 
         else:
+            reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(
+                reduce_builtin_func, "x", "y"
+            )
             reduce_node = self.state.add_reduce(reduce_wcr, axes=None, identity=reduce_init.value)
             if isinstance(input_expr, MemletExpr):
                 self._add_input_data_edge(input_expr.dc_node, input_expr.subset, reduce_node)
