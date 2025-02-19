@@ -20,7 +20,7 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_maker
 from gt4py.next.iterator.transforms import fixed_point_transformation
 
 
-def value_from_literal(literal: ir.Literal):
+def _value_from_literal(literal: ir.Literal):
     return getattr(embedded, str(literal.type))(literal.value)
 
 
@@ -37,13 +37,16 @@ class UndoCanonicalizeMinus(eve.NodeTranslator):
             a, b = node.args
             if cpm.is_call_to(b, "neg"):
                 return im.minus(a, b.args[0])
-            if isinstance(b, ir.Literal) and value_from_literal(b) < 0:
-                return im.minus(a, -value_from_literal(b))
+            if isinstance(b, ir.Literal) and _value_from_literal(b) < 0:
+                return im.minus(a, -_value_from_literal(b))
             if cpm.is_call_to(a, "neg"):
                 return im.minus(b, a.args[0])
-            if isinstance(a, ir.Literal) and value_from_literal(a) < 0:
-                return im.minus(b, -value_from_literal(a))
+            if isinstance(a, ir.Literal) and _value_from_literal(a) < 0:
+                return im.minus(b, -_value_from_literal(a))
         return node
+
+
+_COMMUTATIVE_OPS = ("plus", "multiplies", "minimum", "maximum")
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -56,9 +59,9 @@ class ConstantFolding(
     )
 
     class Transformation(enum.Flag):
-        # `literal, symref` -> `symref, literal`, prerequisite for FOLD_FUNCALL_LITERAL, FOLD_NEUTRAL_OP
-        # `literal, funcall` -> `funcall, literal`, prerequisite for FOLD_FUNCALL_LITERAL, FOLD_NEUTRAL_OP
-        # `funcall, op` -> `op, funcall` for s[0] + (s[0] + 1), prerequisite for FOLD_MIN_MAX_PLUS
+        # `1 + a` -> `a + 1`, prerequisite for FOLD_FUNCALL_LITERAL, FOLD_NEUTRAL_OP
+        # `1 + f(...)` -> `f(...) + 1`, prerequisite for FOLD_FUNCALL_LITERAL, FOLD_NEUTRAL_OP
+        # `f(...) + (expr1 + expr2)` -> `(expr1 + expr2) + f(...)`, for `s[0] + (s[0] + 1)`, prerequisite for FOLD_MIN_MAX_PLUS
         CANONICALIZE_OP_FUNCALL_SYMREF_LITERAL = enum.auto()
 
         # `a - b` -> `a + (-b)`, prerequisite for FOLD_MIN_MAX_PLUS
@@ -74,8 +77,8 @@ class ConstantFolding(
         # `maximum(maximum(a, 1), 1)` -> `maximum(a, 1)`
         FOLD_MIN_MAX = enum.auto()
 
-        # `maximum(plus(a, 1), a)` -> `plus(a, 1)`
-        # `maximum(plus(a, 1), plus(a, -1))` -> `plus(a, maximum(1, -1))`
+        # `maximum(a + 1), a)` -> `a + 1`
+        # `maximum(a + 1, a + (-1))` -> `a + maximum(1, -1)`
         FOLD_MIN_MAX_PLUS = enum.auto()
 
         # `a + 0` -> `a`, `a * 1` -> `a`
@@ -104,14 +107,12 @@ class ConstantFolding(
     def transform_canonicalize_op_funcall_symref_literal(
         self, node: ir.FunCall, **kwargs
     ) -> Optional[ir.Node]:
-        # `literal, symref` -> `symref, literal`, prerequisite for FOLD_FUNCALL_LITERAL, FOLD_NEUTRAL_OP
-        # `literal, funcall` -> `funcall, literal`, prerequisite for FOLD_FUNCALL_LITERAL, FOLD_NEUTRAL_OP
-        # `funcall, op` -> `op, funcall` for `s[0] + (s[0] + 1)`, prerequisite for FOLD_MIN_MAX_PLUS
-        if cpm.is_call_to(node, ("plus", "multiplies", "minimum", "maximum")):
+        # `op(literal, symref|funcall)` -> `op(symref|funcall, literal)`
+        # `op1(funcall, op2(...))` -> `op1(op2(...), funcall)` for `s[0] + (s[0] + 1)`
+        if cpm.is_call_to(node, _COMMUTATIVE_OPS):
             a, b = node.args
             if (isinstance(a, ir.Literal) and not isinstance(b, ir.Literal)) or (
-                (not cpm.is_call_to(a, ("plus", "multiplies", "minimum", "maximum")))
-                and cpm.is_call_to(b, ("plus", "multiplies", "minimum", "maximum"))
+                not cpm.is_call_to(a, _COMMUTATIVE_OPS) and cpm.is_call_to(b, _COMMUTATIVE_OPS)
             ):
                 return im.call(node.fun)(b, a)
         return None
@@ -160,13 +161,13 @@ class ConstantFolding(
             and cpm.is_call_to(node, ("minimum", "maximum"))
         ):
             arg0, arg1 = node.args
-            # `maximum(plus(a, 1), a)` -> `plus(a, 1)`
+            # `maximum(a + 1, a)` -> `a + 1`
             if cpm.is_call_to(arg0, "plus"):
                 if arg0.args[0] == arg1:
                     return im.plus(
                         arg0.args[0], self.fp_transform(im.call(node.fun.id)(arg0.args[1], 0))
                     )
-            # `maximum(plus(a, 1), plus(a, -1))` -> `plus(a, maximum(1, -1))`
+            # `maximum(a + 1, a + (-1))` -> `a + maximum(1, -1)`
             if cpm.is_call_to(arg0, "plus") and cpm.is_call_to(arg1, "plus"):
                 if arg0.args[0] == arg1.args[0]:
                     return im.plus(
@@ -205,7 +206,7 @@ class ConstantFolding(
                 if node.fun.id in builtins.ARITHMETIC_BUILTINS:
                     fun = getattr(embedded, str(node.fun.id))
                     arg_values = [
-                        value_from_literal(arg)  # type: ignore[arg-type] # arg type already established in if condition
+                        _value_from_literal(arg)  # type: ignore[arg-type] # arg type already established in if condition
                         for arg in node.args
                     ]
                     return im.literal_from_value(fun(*arg_values))
