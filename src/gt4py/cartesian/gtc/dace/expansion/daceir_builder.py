@@ -368,7 +368,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         self,
         node: oir.FieldAccess,
         *,
-        is_target: bool,
+        is_target: bool,  # true if we write to this FieldAccess
         targets: Set[eve.SymbolRef],
         var_offset_fields: Set[eve.SymbolRef],
         K_write_with_offset: Set[eve.SymbolRef],
@@ -407,6 +407,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             )
         else:
             is_target = is_target or (
+                # read after write (within a code block)
                 node.name in targets and node.offset == common.CartesianOffset.zero()
             )
             name = get_tasklet_symbol(node.name, offset=node.offset, is_target=is_target)
@@ -438,7 +439,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         is_target: bool,
         global_ctx: DaCeIRBuilder.GlobalContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
-        **kwargs: Any,
+        **_: Any,
     ) -> dcir.ScalarAccess:
         if node.name in global_ctx.library_node.declarations:
             # Handle function parameters differently because they are always available
@@ -473,13 +474,21 @@ class DaCeIRBuilder(eve.NodeTranslator):
         prefix = "if" if isinstance(node, oir.MaskStmt) else "while"
         tmp_name = f"{prefix}_expression_{id(node)}"
 
+        # Reset the set of targets (used for detecting read after write inside a tasklet)
+        targets: Set[eve.SymbolRef] = set()
+        kwargs.pop("targets", "dummy")
+
         statement = dcir.AssignStmt(
             # Visiting order matters because targets must not contain the target symbols from the left visit
             right=self.visit(
                 condition_expression,
                 is_target=False,
+                targets=targets,
                 global_ctx=global_ctx,
                 symbol_collector=symbol_collector,
+                horizontal_extent=horizontal_extent,
+                k_interval=k_interval,
+                iteration_ctx=iteration_ctx,
                 **kwargs,
             ),
             left=dcir.ScalarAccess(
@@ -492,7 +501,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
             loc=node.loc,
         )
 
-        # TODO: find memlets for this tasklet (as we do in code blocks)
         read_memlets: List[dcir.Memlet] = _get_tasklet_inout_memlets(
             node,
             AccessType.READ,
@@ -508,16 +516,18 @@ class DaCeIRBuilder(eve.NodeTranslator):
             read_memlets=read_memlets,
             write_memlets=[],
         )
+        # See notes inside the function
+        # NOTE We should clean this up with the node_access matching above
         self._fix_memlet_array_access(
-            # See notes inside the function
-            # NOTE We should clean this up with the node_access matching above
             tasklet=tasklet,
             memlets=read_memlets,
             global_context=global_ctx,
             symbol_collector=symbol_collector,
             **kwargs,
         )
-        tasklet = self._fix_scalar_access_read_after_write(tasklet)
+        # NOTE
+        # We can't have read after write issues with ScalarAccess in condition
+        # Tasklets because we don't write and read in these Tasklets.
         return tasklet
 
     def visit_MaskStmt(
@@ -784,7 +794,8 @@ class DaCeIRBuilder(eve.NodeTranslator):
         k_interval,
         **kwargs: Any,
     ):
-        targets: Set[str] = set()
+        # Reset the set of targets (used for detecting read after write inside a tasklet)
+        targets: Set[eve.SymbolRef] = set()
         kwargs.pop("targets", "dummy")
         statements = [
             self.visit(
@@ -800,10 +811,9 @@ class DaCeIRBuilder(eve.NodeTranslator):
             for statement in node.body
         ]
 
-        # gather all statements that aren't control flow (e.g. Condition or WhileLoop)
-        # put them in a tasklet
-        # and call "to_state" on it
-        # then, return new list with types that are either ComputationState, Condition, or WhileLoop
+        # Gather all statements that aren't control flow (e.g. everything except Condition and WhileLoop),
+        # put them in a tasklet, and call "to_state" on it.
+        # Then, return new list with types that are either ComputationState, Condition, or WhileLoop
         dace_nodes: List[Union[dcir.ComputationState, dcir.Condition, dcir.WhileLoop]] = []
         current_block: List[dcir.Stmt] = []
         for index, statement in enumerate(statements):
@@ -831,25 +841,15 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     grid_subset=iteration_ctx.grid_subset,
                     dcir_statements=current_block,
                 )
-
-                # generate our own read/write memlets here
-                # - adapt _get_tasklet_inout_memlets()
-                #   and gtc/dace/utils.py / compute_tasklet_access_infos()
-                # - or use the passed-along TaskletAccessInfoCollector directly
-                # - generate memlets for each FieldAccess
-                # - pass the memlets to the dcir.Tasklet
-                # - leave `_fix_memlet_array_access` (for now)
-                #  - or make it go away by fixing visit_FieldAccess
-
                 tasklet = dcir.Tasklet(
                     decls=[],
                     stmts=current_block,
                     read_memlets=read_memlets,
                     write_memlets=write_memlets,
                 )
+                # See notes inside the function
+                # NOTE We should clean this up with the node_access matching above
                 self._fix_memlet_array_access(
-                    # See notes inside the function
-                    # NOTE We should clean this up with the node_access matching above
                     tasklet=tasklet,
                     memlets=[*read_memlets, *write_memlets],
                     global_context=global_ctx,
@@ -895,17 +895,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         assert iteration_ctx.grid_subset == dcir.GridSubset.single_gridpoint()
 
         code_block = oir.CodeBlock(body=node.body, loc=node.loc, label=f"he_{id(node)}")
-
-        # - duplicate gtc/dace/utils.py / AccessInfoCollector
-        #   - note: AccessInfoCollector (and compute_dcir_access_infos()) are used in
-        #           other places. It's probably safer not to mess with them (for starters).
-        #   - call it e.g. TaskletAccessInfoCollector
-        #   - what is done in visit_HorizontalExecution should move to __init__
-        #   - delete everything except for visit_FieldAccess()
-        #   - re-evaluate which params you need (e.g. is_conditional can go)
-        # - setup TaskletAccessInfoCollector here (with the HE info) ...
-        # - ... and pass it along with the code_block visitor
-
         dcir_nodes = self.visit(
             code_block,
             global_ctx=global_ctx,
