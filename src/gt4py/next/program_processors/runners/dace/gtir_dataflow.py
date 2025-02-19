@@ -1240,7 +1240,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_provider_type: gtx_common.NeighborConnectivityType,
         reduce_init: SymbolExpr,
         reduce_identity: SymbolExpr,
-        reduce_wcr: str,
+        reduce_builtin_func: str,
         result_node: dace.nodes.AccessNode,
     ) -> None:
         """
@@ -1320,11 +1320,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         nsdfg.add_edge(st_init, reduce_loop, dace.InterstateEdge())
         st_reduce = reduce_loop.add_state("reduce")
         # Fill skip values in local dimension with the reduce identity value
-        skip_value = f"{reduce_identity.dc_dtype}({reduce_identity.value})"
+        list_value_arg = f"(__val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {reduce_identity.dc_dtype}({reduce_identity.value}))"
         reduce_tasklet = st_reduce.add_tasklet(
             name="reduce_with_skip_values",
             inputs={"__inp", "__val", "__neighbor_idx"},
-            code=f"__out = __inp + (__val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value})",
+            code="__out = {}".format(
+                gtir_python_codegen.format_builtin(reduce_builtin_func, "__inp", list_value_arg)
+            ),
             outputs={"__out"},
         )
         st_reduce.add_edge(
@@ -1388,8 +1390,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, ts.ScalarType)
-        op_name, reduce_init, reduce_identity = get_reduce_params(node)
-        reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
+        reduce_builtin_func, reduce_init, reduce_identity = get_reduce_params(node)
 
         result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, reduce_identity.dc_dtype)
         result_node = self.state.add_access(result)
@@ -1410,11 +1411,14 @@ class LambdaToDataflow(eve.NodeVisitor):
                 offset_provider_type,
                 reduce_init,
                 reduce_identity,
-                reduce_wcr,
+                reduce_builtin_func,
                 result_node,
             )
 
         else:
+            reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(
+                reduce_builtin_func, "x", "y"
+            )
             reduce_node = self.state.add_reduce(reduce_wcr, axes=None, identity=reduce_init.value)
             if isinstance(input_expr, MemletExpr):
                 self._add_input_data_edge(input_expr.dc_node, input_expr.subset, reduce_node)
