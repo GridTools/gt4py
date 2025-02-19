@@ -17,7 +17,7 @@ import copy
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import dace
-from dace import data, dtypes, properties, subsets, symbolic, transformation
+from dace import data, properties, subsets, symbolic, transformation
 from dace.sdfg import SDFG, SDFGState, graph, nodes
 
 from . import map_fusion_helper as mfh
@@ -125,8 +125,8 @@ class MapFusionSerial(mfh.MapFusionHelper):
         output_partition = self.partition_first_outputs(
             state=graph,
             sdfg=sdfg,
-            map_exit_1=map_exit_1,
-            map_entry_2=map_entry_2,
+            first_map_exit=map_exit_1,
+            second_map_entry=map_entry_2,
         )
         if output_partition is None:
             return False
@@ -375,8 +375,8 @@ class MapFusionSerial(mfh.MapFusionHelper):
         self,
         state: SDFGState,
         sdfg: SDFG,
-        map_exit_1: nodes.MapExit,
-        map_entry_2: nodes.MapEntry,
+        first_map_exit: nodes.MapExit,
+        second_map_entry: nodes.MapEntry,
     ) -> Union[
         Tuple[
             Set[graph.MultiConnectorEdge[dace.Memlet]],
@@ -385,19 +385,19 @@ class MapFusionSerial(mfh.MapFusionHelper):
         ],
         None,
     ]:
-        """Partition the output edges of `map_exit_1` for serial map fusion.
+        """Partition the output edges of `first_map_exit` for serial map fusion.
 
         The output edges of the first map are partitioned into three distinct sets,
         defined as follows:
-        - Pure Output Set `\mathbb{P}`:
+        * Pure Output Set `\mathbb{P}`:
             These edges exits the first map and does not enter the second map. These
             outputs will be simply be moved to the output of the second map.
-        - Exclusive Intermediate Set `\mathbb{E}`:
+        * Exclusive Intermediate Set `\mathbb{E}`:
             Edges in this set leaves the first map exit, enters an access node, from
             where a Memlet then leads immediately to the second map. The memory
             referenced by this access node is not used anywhere else, thus it can
             be removed.
-        - Shared Intermediate Set `\mathbb{S}`:
+        * Shared Intermediate Set `\mathbb{S}`:
             These edges are very similar to the one in `\mathbb{E}` except that they
             are used somewhere else, thus they can not be removed and have to be
             recreated as output of the second map.
@@ -406,17 +406,14 @@ class MapFusionSerial(mfh.MapFusionHelper):
         output can be added to either intermediate set and might fail to compute
         the partition, even if it would exist.
 
-        Returns:
-            If such a decomposition exists the function will return the three sets
-            mentioned above in the same order.
-            In case the decomposition does not exist, i.e. the maps can not be fused
-            the function returns `None`.
+        :return: If such a decomposition exists the function will return the three sets
+            mentioned above in the same order. In case the decomposition does not exist,
+            i.e. the maps can not be fused the function returns `None`.
 
-        Args:
-            state: The in which the two maps are located.
-            sdfg: The full SDFG in whcih we operate.
-            map_exit_1: The exit node of the first map.
-            map_entry_2: The entry node of the second map.
+        :param state: The in which the two maps are located.
+        :param sdfg: The full SDFG in whcih we operate.
+        :param first_map_exit: The exit node of the first map.
+        :param second_map_entry: The entry node of the second map.
         """
         # The three outputs set.
         pure_outputs: Set[graph.MultiConnectorEdge[dace.Memlet]] = set()
@@ -425,28 +422,17 @@ class MapFusionSerial(mfh.MapFusionHelper):
 
         # Compute the renaming that for translating the parameter of the _second_
         #  map to the ones used by the first map.
-        repl_dict: Dict[str, str] = self.find_parameter_remapping(  # type: ignore[assignment]
-            first_map=map_exit_1.map,
-            second_map=map_entry_2.map,
+        param_repl: Dict[str, str] = self.find_parameter_remapping(  # type: ignore[assignment]
+            first_map=first_map_exit.map,
+            second_map=second_map_entry.map,
         )
-        assert repl_dict is not None
+        assert param_repl is not None
 
         # Set of intermediate nodes that we have already processed.
         processed_inter_nodes: Set[nodes.Node] = set()
 
-        # These are the data that is written to multiple times in _this_ state.
-        #  If a data is written to multiple time in a state, it could be
-        #  classified as shared. However, it might happen that the node has zero
-        #  degree. This is not a problem as the maps also induced a before-after
-        #  relationship. But some DaCe transformations do not catch this.
-        #  Thus we will never modify such intermediate nodes and fail instead.
-        if self.strict_dataflow:
-            multi_write_data: Set[str] = self._compute_multi_write_data(state, sdfg)
-        else:
-            multi_write_data = set()
-
         # Now scan all output edges of the first exit and classify them
-        for out_edge in state.out_edges(map_exit_1):
+        for out_edge in state.out_edges(first_map_exit):
             intermediate_node: nodes.Node = out_edge.dst
 
             # We already processed the node, this should indicate that we should
@@ -469,7 +455,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
             if not self.is_node_reachable_from(
                 graph=state,
                 begin=intermediate_node,
-                end=map_entry_2,
+                end=second_map_entry,
             ):
                 pure_outputs.add(out_edge)
                 continue
@@ -478,6 +464,12 @@ class MapFusionSerial(mfh.MapFusionHelper):
             #  output node, because this allows us to handle more exotic pure node
             #  cases, as handling them is essentially rerouting an edge, whereas
             #  handling intermediate nodes is much more complicated.
+
+            # Empty Memlets are only allowed if they are in `\mathbb{P}`, which
+            #  is also the only place they really make sense (for a map exit).
+            #  Thus if we now found an empty Memlet we reject it.
+            if out_edge.data.is_empty():
+                return None
 
             # For us an intermediate node must always be an access node, because
             #  everything else we do not know how to handle. It is important that
@@ -488,22 +480,6 @@ class MapFusionSerial(mfh.MapFusionHelper):
             if self.is_view(intermediate_node, sdfg):
                 return None
 
-            # Checks if the intermediate node refers to data that is accessed by
-            #  _other_ access nodes in _this_ state. If this is the case then never
-            #  touch this intermediate node.
-            #  TODO(phimuell): Technically it would be enough to turn the node into
-            #   a shared output node, because this will still fulfil the dependencies.
-            #   However, some DaCe transformation can not handle this properly, so we
-            #   are _forced_ to reject this node.
-            if intermediate_node.data in multi_write_data:
-                return None
-
-            # Empty Memlets are only allowed if they are in `\mathbb{P}`, which
-            #  is also the only place they really make sense (for a map exit).
-            #  Thus if we now found an empty Memlet we reject it.
-            if out_edge.data.is_empty():
-                return None
-
             # It can happen that multiple edges converges at the `IN_` connector
             #  of the first map exit, but there is only one edge leaving the exit.
             #  It is complicate to handle this, so for now we ignore it.
@@ -511,7 +487,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
             #   To handle this we need to associate a consumer edge (the outgoing edges
             #   of the second map) with exactly one producer.
             producer_edges: List[graph.MultiConnectorEdge[dace.Memlet]] = list(
-                state.in_edges_by_connector(map_exit_1, "IN_" + out_edge.src_conn[4:])
+                state.in_edges_by_connector(first_map_exit, "IN_" + out_edge.src_conn[4:])
             )
             if len(producer_edges) > 1:
                 return None
@@ -520,7 +496,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
             #   - The source of the producer can not be a view (we do not handle this)
             #   - The edge shall also not be a reduction edge.
             #   - Defined location to where they write.
-            #   - No dynamic Memlets.
+            #   - No dynamic Melets.
             #  Furthermore, we will also extract the subsets, i.e. the location they
             #  modify inside the intermediate array.
             #  Since we do not allow for WCR, we do not check if the producer subsets intersects.
@@ -531,6 +507,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
                 ):
                     return None
                 if producer_edge.data.dynamic:
+                    # TODO(phimuell): Find out if this restriction could be lifted, but it is unlikely.
                     return None
                 if producer_edge.data.wcr is not None:
                     return None
@@ -562,9 +539,9 @@ class MapFusionSerial(mfh.MapFusionHelper):
             for intermediate_node_out_edge in state.out_edges(intermediate_node):
                 # If the second map entry is not immediately reachable from the intermediate
                 #  node, then ensure that there is not path that goes to it.
-                if intermediate_node_out_edge.dst is not map_entry_2:
+                if intermediate_node_out_edge.dst is not second_map_entry:
                     if self.is_node_reachable_from(
-                        graph=state, begin=intermediate_node_out_edge.dst, end=map_entry_2
+                        graph=state, begin=intermediate_node_out_edge.dst, end=second_map_entry
                     ):
                         return None
                     continue
@@ -583,14 +560,15 @@ class MapFusionSerial(mfh.MapFusionHelper):
                 # Now we look at all edges that leave the second map entry, i.e. the
                 #  edges that feeds the consumer and define what is read inside the map.
                 #  We do not check them, but collect them and inspect them.
-                #  NOTE: The subset still uses the old iteration variables.
+                # NOTE1: The subset still uses the old iteration variables.
+                # NOTE2: In case of consumer Memlet we explicitly allow dynamic Memlets.
+                #   This is different compared to the producer Memlet. The reason is
+                #   because in a consumer the data is conditionally read, so the data
+                #   has to exists anyway.
                 for inner_consumer_edge in state.out_edges_by_connector(
-                    map_entry_2, "OUT_" + intermediate_node_out_edge.dst_conn[3:]
+                    second_map_entry, "OUT_" + intermediate_node_out_edge.dst_conn[3:]
                 ):
                     if inner_consumer_edge.data.src_subset is None:
-                        return None
-                    if inner_consumer_edge.data.dynamic:
-                        # TODO(phimuell): Is this restriction necessary, I am not sure.
                         return None
                     consumer_subsets.append(inner_consumer_edge.data.src_subset)
             assert (
@@ -599,11 +577,11 @@ class MapFusionSerial(mfh.MapFusionHelper):
             assert len(consumer_subsets) != 0
 
             # The consumer still uses the original symbols of the second map, so we must rename them.
-            if repl_dict:
+            if param_repl:
                 consumer_subsets = copy.deepcopy(consumer_subsets)
                 for consumer_subset in consumer_subsets:
                     symbolic.safe_replace(
-                        mapping=repl_dict, replace_callback=consumer_subset.replace
+                        mapping=param_repl, replace_callback=consumer_subset.replace
                     )
 
             # Now we are checking if a single iteration of the first (top) map
@@ -621,8 +599,23 @@ class MapFusionSerial(mfh.MapFusionHelper):
             #  node can be removed (`\mathbb{E}`) or has to be restored (`\mathbb{S}`).
             #  Note that "removed" here means that it is reconstructed by a new
             #  output of the second map.
-            if self.is_shared_data(intermediate_node, sdfg):
+            if self.is_shared_data(data=intermediate_node, state=state, sdfg=sdfg):
                 # The intermediate data is used somewhere else, either in this or another state.
+                # NOTE: If the intermediate is shared, then we will turn it into a
+                #   sink node attached to the combined map exit. Technically this
+                #   should be enough, even if the same data appears again in the
+                #   dataflow down streams. However, some DaCe transformations,
+                #   I am looking at you `auto_optimizer()` do not like that. Thus
+                #   if the intermediate is used further down in the same datadflow,
+                #   then we consider that the maps can not be fused. But we only
+                #   do this in the strict data flow mode.
+                if self.strict_dataflow:
+                    if self._is_data_accessed_downstream(
+                        data=intermediate_node.data,
+                        graph=state,
+                        begin=intermediate_node,  # is ignored itself.
+                    ):
+                        return None
                 shared_outputs.add(out_edge)
             else:
                 # The intermediate can be removed, as it is not used anywhere else.
@@ -669,8 +662,8 @@ class MapFusionSerial(mfh.MapFusionHelper):
         output_partition = self.partition_first_outputs(
             state=graph,
             sdfg=sdfg,
-            map_exit_1=map_exit_1,
-            map_entry_2=map_entry_2,
+            first_map_exit=map_exit_1,
+            second_map_entry=map_entry_2,
         )
         assert output_partition is not None  # Make MyPy happy.
         pure_outputs, exclusive_outputs, shared_outputs = output_partition
@@ -752,8 +745,10 @@ class MapFusionSerial(mfh.MapFusionHelper):
             Before the transformation the `state` does not have to be valid and
             after this function has run the state is (most likely) invalid.
         """
-
-        map_params = map_exit_1.map.params.copy()
+        first_map_exit = map_exit_1
+        second_map_entry = map_entry_2
+        second_map_exit = map_exit_2
+        map_params = first_map_exit.map.params.copy()
 
         # Now we will iterate over all intermediate edges and process them.
         #  If not stated otherwise the comments assume that we run in exclusive mode.
@@ -763,42 +758,28 @@ class MapFusionSerial(mfh.MapFusionHelper):
             inter_node: nodes.AccessNode = out_edge.dst
             inter_name = inter_node.data
             inter_desc = inter_node.desc(sdfg)
-            inter_shape = inter_desc.shape
 
             # Now we will determine the shape of the new intermediate. This size of
             #  this temporary is given by the Memlet that goes into the first map exit.
             pre_exit_edges = list(
-                state.in_edges_by_connector(map_exit_1, "IN_" + out_edge.src_conn[4:])
+                state.in_edges_by_connector(first_map_exit, "IN_" + out_edge.src_conn[4:])
             )
             if len(pre_exit_edges) != 1:
                 raise NotImplementedError()
             pre_exit_edge = pre_exit_edges[0]
-            new_inter_shape_raw = symbolic.overapproximate(pre_exit_edge.data.subset.size())
 
-            # Over approximation will leave us with some unneeded size one dimensions.
-            #  If they are removed some dace transformations (especially auto optimization)
-            #  will have problems.
-            if not self.strict_dataflow:
-                squeezed_dims: List[int] = []  # These are the dimensions we removed.
-                new_inter_shape: List[int] = []  # This is the final shape of the new intermediate.
-                for dim, (proposed_dim_size, full_dim_size) in enumerate(
-                    zip(new_inter_shape_raw, inter_shape)
-                ):
-                    if full_dim_size == 1:  # Must be kept!
-                        new_inter_shape.append(proposed_dim_size)
-                    elif proposed_dim_size == 1:  # This dimension was reduced, so we can remove it.
-                        squeezed_dims.append(dim)
-                    else:
-                        new_inter_shape.append(proposed_dim_size)
-            else:
-                squeezed_dims = []
-                new_inter_shape = list(new_inter_shape_raw)
+            (new_inter_shape_raw, new_inter_shape, squeezed_dims) = (
+                self.compute_reduced_intermediate(
+                    producer_subset=pre_exit_edge.data.dst_subset,
+                    inter_desc=inter_desc,
+                )
+            )
 
             # This is the name of the new "intermediate" node that we will create.
             #  It will only have the shape `new_inter_shape` which is basically its
             #  output within one Map iteration.
             #  NOTE: The insertion process might generate a new name.
-            new_inter_name: str = f"__s{sdfg.node_id(state)}_n{state.node_id(out_edge.src)}{out_edge.src_conn}_n{state.node_id(out_edge.dst)}{out_edge.dst_conn}"
+            new_inter_name: str = f"__s{self.state_id}_n{state.node_id(out_edge.src)}{out_edge.src_conn}_n{state.node_id(out_edge.dst)}{out_edge.dst_conn}"
 
             # Now generate the intermediate data container.
             if len(new_inter_shape) == 0:
@@ -808,7 +789,6 @@ class MapFusionSerial(mfh.MapFusionHelper):
                     new_inter_name,
                     dtype=inter_desc.dtype,
                     transient=True,
-                    storage=dtypes.StorageType.Register,
                     find_new_name=True,
                 )
 
@@ -822,32 +802,30 @@ class MapFusionSerial(mfh.MapFusionHelper):
                     shape=new_inter_shape,
                     dtype=inter_desc.dtype,
                     find_new_name=True,
-                    storage=dtypes.StorageType.Register,
                 )
             new_inter_node: nodes.AccessNode = state.add_access(new_inter_name)
 
             # Get the subset that defined into which part of the old intermediate
             #  the old output edge wrote to. We need that to adjust the producer
             #  Memlets, since they now write into the new (smaller) intermediate.
-            assert pre_exit_edge.data.data == inter_name
-            assert pre_exit_edge.data.dst_subset is not None
             producer_offset = self.compute_offset_subset(
                 original_subset=pre_exit_edge.data.dst_subset,
                 intermediate_desc=inter_desc,
                 map_params=map_params,
+                producer_offset=None,
             )
 
-            # Memlets have a lot of additional informations, such as dynamic.
-            #  To ensure that we get all of them, we will now copy them and modify
-            #  the one that was originally there. We also hope that propagate will
-            #  set the rest for us correctly.
+            # Memlets have a lot of additional informations, to ensure that we get
+            #  all of them, we have to do it this way. The main reason for this is
+            #  to handle the case were the "Memlet reverse direction", i.e. `data`
+            #  refers to the other end of the connection than before.
+            assert pre_exit_edge.data.dst_subset is not None
+            new_pre_exit_memlet_src_subset = copy.deepcopy(pre_exit_edge.data.src_subset)
+            new_pre_exit_memlet_dst_subset = subsets.Range.from_array(new_inter_desc)
+
             new_pre_exit_memlet = copy.deepcopy(pre_exit_edge.data)
             new_pre_exit_memlet.data = new_inter_name
-            new_pre_exit_memlet.dst_subset = subsets.Range.from_array(new_inter_desc)
 
-            # New we will reroute the output Memlet, thus it will no longer pass
-            #  through the Map exit but through the newly created intermediate.
-            #  NOTE: We will delete the previous edge later.
             new_pre_exit_edge = state.add_edge(
                 pre_exit_edge.src,
                 pre_exit_edge.src_conn,
@@ -856,6 +834,11 @@ class MapFusionSerial(mfh.MapFusionHelper):
                 new_pre_exit_memlet,
             )
 
+            # We can update `{src, dst}_subset` only after we have inserted the
+            #  edge, this is because the direction of the Memlet might change.
+            new_pre_exit_edge.data.src_subset = new_pre_exit_memlet_src_subset
+            new_pre_exit_edge.data.dst_subset = new_pre_exit_memlet_dst_subset
+
             # We now handle the MemletTree defined by this edge.
             #  The newly created edge, only handled the last collection step.
             for producer_tree in state.memlet_tree(new_pre_exit_edge).traverse_children(
@@ -863,11 +846,15 @@ class MapFusionSerial(mfh.MapFusionHelper):
             ):
                 producer_edge = producer_tree.edge
 
-                # Associate the (already existing) Memlet with the new data.
-                # TODO(phimuell): Improve the code below to remove the check.
-                assert producer_edge.data.data == inter_name
-                producer_edge.data.data = new_inter_name
+                # In order to preserve the intrinsic direction of Memlets we only have to change
+                #  the `.data` attribute of the producer Memlet if it refers to the old intermediate.
+                #  If it refers to something different we keep it. Note that this case can only
+                #  occur if the producer is an AccessNode.
+                if producer_edge.data.data == inter_name:
+                    producer_edge.data.data = new_inter_name
 
+                # Regardless of the intrinsic direction of the Memlet, the subset we care about
+                #  is always `dst_subset`.
                 if is_scalar:
                     producer_edge.data.dst_subset = "0"
                 elif producer_edge.data.dst_subset is not None:
@@ -885,7 +872,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
             # NOTE: Assumes that map (if connected is the direct neighbour).
             conn_names: Set[str] = set()
             for inter_node_out_edge in state.out_edges(inter_node):
-                if inter_node_out_edge.dst == map_entry_2:
+                if inter_node_out_edge.dst == second_map_entry:
                     assert inter_node_out_edge.dst_conn.startswith("IN_")
                     conn_names.add(inter_node_out_edge.dst_conn)
                 else:
@@ -900,9 +887,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
             for in_conn_name in conn_names:
                 out_conn_name = "OUT_" + in_conn_name[3:]
 
-                for inner_edge in state.out_edges_by_connector(map_entry_2, out_conn_name):
-                    assert inner_edge.data.data == inter_name  # DIRECTION!!
-
+                for inner_edge in state.out_edges_by_connector(second_map_entry, out_conn_name):
                     # As for the producer side, we now read from a smaller array,
                     #  So we must offset them, we use the original edge for this.
                     assert inner_edge.data.src_subset is not None
@@ -913,11 +898,17 @@ class MapFusionSerial(mfh.MapFusionHelper):
                         producer_offset=producer_offset,
                     )
 
-                    # Now we create a new connection that instead reads from the new
-                    #  intermediate, instead of the old one. For this we use the
-                    #  old Memlet as template. However it is not fully initialized.
+                    # Now create the memlet for the new consumer. To make sure that we get all attributes
+                    #  of the Memlet we make a deep copy of it. There is a tricky part here, we have to
+                    #  access `src_subset` however, this is only correctly set once it is put inside the
+                    #  SDFG. Furthermore, we have to make sure that the Memlet does not change its direction.
+                    #  i.e. that the association of `subset` and `other_subset` does not change. For this
+                    #  reason we only modify `.data` attribute of the Memlet if its name refers to the old
+                    #  intermediate. Furthermore, to play it safe, we only access the subset, `src_subset`
+                    #  after we have inserted it to the SDFG.
                     new_inner_memlet = copy.deepcopy(inner_edge.data)
-                    new_inner_memlet.data = new_inter_name
+                    if inner_edge.data.data == inter_name:
+                        new_inner_memlet.data = new_inter_name
 
                     # Now we replace the edge from the SDFG.
                     state.remove_edge(inner_edge)
@@ -934,6 +925,7 @@ class MapFusionSerial(mfh.MapFusionHelper):
                     if is_scalar:
                         new_inner_memlet.subset = "0"
                     elif new_inner_memlet.src_subset is not None:
+                        # TODO(phimuell): Figuring out if `src_subset` is None is an error.
                         new_inner_memlet.src_subset.offset(consumer_offset, negative=True)
                         new_inner_memlet.src_subset.pop(squeezed_dims)
 
@@ -941,23 +933,30 @@ class MapFusionSerial(mfh.MapFusionHelper):
                     for consumer_tree in state.memlet_tree(new_inner_edge).traverse_children(
                         include_self=False
                     ):
-                        assert consumer_tree.edge.data.data == inter_name
-
                         consumer_edge = consumer_tree.edge
-                        consumer_edge.data.data = new_inter_name
+
+                        # We only modify the data if the Memlet refers to the old intermediate data.
+                        #  We can not do this unconditionally, because it might change the intrinsic
+                        #  direction of a Memlet and then `src_subset` would at the next `try_initialize`
+                        #  be wrong. Note that this case only occurs if the destination is an AccessNode.
+                        if consumer_edge.data.data == inter_name:
+                            consumer_edge.data.data = new_inter_name
+
+                        # Now we have to adapt the subsets.
                         if is_scalar:
                             consumer_edge.data.src_subset = "0"
                         elif consumer_edge.data.src_subset is not None:
+                            # TODO(phimuell): Figuring out if `src_subset` is None is an error.
                             consumer_edge.data.src_subset.offset(consumer_offset, negative=True)
                             consumer_edge.data.src_subset.pop(squeezed_dims)
 
                 # The edge that leaves the second map entry was already deleted. We now delete
                 #  the edges that connected the intermediate node with the second map entry.
-                for edge in list(state.in_edges_by_connector(map_entry_2, in_conn_name)):
+                for edge in list(state.in_edges_by_connector(second_map_entry, in_conn_name)):
                     assert edge.src == inter_node
                     state.remove_edge(edge)
-                map_entry_2.remove_in_connector(in_conn_name)
-                map_entry_2.remove_out_connector(out_conn_name)
+                second_map_entry.remove_in_connector(in_conn_name)
+                second_map_entry.remove_out_connector(out_conn_name)
 
             if is_exclusive_set:
                 # In exclusive mode the old intermediate node is no longer needed.
@@ -967,41 +966,88 @@ class MapFusionSerial(mfh.MapFusionHelper):
                 state.remove_node(inter_node)
 
                 state.remove_edge(pre_exit_edge)
-                map_exit_1.remove_in_connector(pre_exit_edge.dst_conn)
-                map_exit_1.remove_out_connector(out_edge.src_conn)
+                first_map_exit.remove_in_connector(pre_exit_edge.dst_conn)
+                first_map_exit.remove_out_connector(out_edge.src_conn)
                 del sdfg.arrays[inter_name]
 
             else:
+                # TODO(phimuell): Lift this restriction
+                assert pre_exit_edge.data.data == inter_name
+
                 # This is the shared mode, so we have to recreate the intermediate
                 #  node, but this time it is at the exit of the second map.
                 state.remove_edge(pre_exit_edge)
-                map_exit_1.remove_in_connector(pre_exit_edge.dst_conn)
+                first_map_exit.remove_in_connector(pre_exit_edge.dst_conn)
 
                 # This is the Memlet that goes from the map internal intermediate
                 #  temporary node to the Map output. This will essentially restore
                 #  or preserve the output for the intermediate node. It is important
                 #  that we use the data that `preExitEdge` was used.
                 final_pre_exit_memlet = copy.deepcopy(pre_exit_edge.data)
-                assert pre_exit_edge.data.data == inter_name
                 final_pre_exit_memlet.other_subset = subsets.Range.from_array(new_inter_desc)
 
-                new_pre_exit_conn = map_exit_2.next_connector()
+                new_pre_exit_conn = second_map_exit.next_connector()
                 state.add_edge(
                     new_inter_node,
                     None,
-                    map_exit_2,
+                    second_map_exit,
                     "IN_" + new_pre_exit_conn,
                     final_pre_exit_memlet,
                 )
                 state.add_edge(
-                    map_exit_2,
+                    second_map_exit,
                     "OUT_" + new_pre_exit_conn,
                     inter_node,
                     out_edge.dst_conn,
                     copy.deepcopy(out_edge.data),
                 )
-                map_exit_2.add_in_connector("IN_" + new_pre_exit_conn)
-                map_exit_2.add_out_connector("OUT_" + new_pre_exit_conn)
+                second_map_exit.add_in_connector("IN_" + new_pre_exit_conn)
+                second_map_exit.add_out_connector("OUT_" + new_pre_exit_conn)
 
-                map_exit_1.remove_out_connector(out_edge.src_conn)
+                first_map_exit.remove_out_connector(out_edge.src_conn)
                 state.remove_edge(out_edge)
+
+    def compute_reduced_intermediate(
+        self,
+        producer_subset: subsets.Range,
+        inter_desc: dace.data.Data,
+    ) -> Tuple[Tuple[int, ...], Tuple[int, ...], List[int]]:
+        """Compute the size of the new (reduced) intermediate.
+
+        `MapFusion` does not only fuses map, but, depending on the situation, also
+        eliminates intermediate arrays between the two maps. To transmit data between
+        the two maps a new, but much smaller intermediate is needed.
+
+        :return: The function returns a tuple with three values with the following meaning:
+            * The raw shape of the reduced intermediate.
+            * The cleared shape of the reduced intermediate, essentially the raw shape
+                with all shape 1 dimensions removed.
+            * Which dimensions of the raw shape have been removed to get the cleared shape.
+
+        :param producer_subset: The subset that was used to write into the intermediate.
+        :param inter_desc: The data descriptor for the intermediate.
+        """
+        assert producer_subset is not None
+
+        # Over approximation will leave us with some unneeded size one dimensions.
+        #  If they are removed some dace transformations (especially auto optimization)
+        #  will have problems.
+        new_inter_shape_raw = symbolic.overapproximate(producer_subset.size())
+        inter_shape = inter_desc.shape
+        if not self.strict_dataflow:
+            squeezed_dims: List[int] = []  # These are the dimensions we removed.
+            new_inter_shape: List[int] = []  # This is the final shape of the new intermediate.
+            for dim, (proposed_dim_size, full_dim_size) in enumerate(
+                zip(new_inter_shape_raw, inter_shape, strict=True)
+            ):
+                if full_dim_size == 1:  # Must be kept!
+                    new_inter_shape.append(proposed_dim_size)
+                elif proposed_dim_size == 1:  # This dimension was reduced, so we can remove it.
+                    squeezed_dims.append(dim)
+                else:
+                    new_inter_shape.append(proposed_dim_size)
+        else:
+            squeezed_dims = []
+            new_inter_shape = list(new_inter_shape_raw)
+
+        return (tuple(new_inter_shape_raw), tuple(new_inter_shape), squeezed_dims)

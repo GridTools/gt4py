@@ -752,7 +752,16 @@ def test_solve_triag(cartesian_case):
         matrices[:, :, i[1:], i[:-1]] = a[:, :, 1:]
         matrices[:, :, i, i] = b
         matrices[:, :, i[:-1], i[1:]] = c[:, :, :-1]
-        return np.linalg.solve(matrices, d)
+        # Changed in NumPY version 2.0: In a linear matrix equation ax = b, the b array
+        # is only treated as a shape (M,) column vector if it is exactly 1-dimensional.
+        # In all other instances it is treated as a stack of (M, K) matrices. Therefore
+        # below we add an extra dimension (K) of size 1. Previously b would be treated
+        # as a stack of (M,) vectors if b.ndim was equal to a.ndim - 1.
+        # Refer to https://numpy.org/doc/2.0/reference/generated/numpy.linalg.solve.html
+        d_ext = np.empty(shape=(*shape, 1))
+        d_ext[:, :, :, 0] = d
+        x = np.linalg.solve(matrices, d_ext)
+        return x[:, :, :, 0]
 
     cases.verify_with_default_data(cartesian_case, solve_tridiag, ref=expected)
 
@@ -821,7 +830,6 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
 
 
 @pytest.mark.uses_scan
-@pytest.mark.uses_scan_1d_field
 def test_ternary_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def simple_scan_operator(carry: float, a: float) -> float:
