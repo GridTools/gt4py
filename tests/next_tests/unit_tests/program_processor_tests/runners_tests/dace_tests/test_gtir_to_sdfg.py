@@ -2057,10 +2057,10 @@ def test_gtir_concat_where():
     assert SUBSET_SIZE < N
     domain = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, N)})
     domain_cond_lhs = im.domain(
-        gtx_common.GridType.CARTESIAN, {IDim: (gtir.NegInfinityLiteral(), N - SUBSET_SIZE)}
+        gtx_common.GridType.CARTESIAN, {IDim: (gtir.InfinityLiteral.NEGATIVE, N - SUBSET_SIZE)}
     )
     domain_cond_rhs = im.domain(
-        gtx_common.GridType.CARTESIAN, {IDim: (SUBSET_SIZE, gtir.InfinityLiteral())}
+        gtx_common.GridType.CARTESIAN, {IDim: (SUBSET_SIZE, gtir.InfinityLiteral.POSITIVE)}
     )
     domain_lhs = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, N - SUBSET_SIZE)})
     domain_rhs = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (N - SUBSET_SIZE, N)})
@@ -2109,8 +2109,8 @@ def test_gtir_concat_where():
 def test_gtir_concat_where_two_dimensions():
     M, N = (30, 20)
     domain = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 20)})
-    domain_cond1 = im.domain(gtx_common.GridType.CARTESIAN, {JDim: (10, gtir.InfinityLiteral())})
-    domain_cond2 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (gtir.NegInfinityLiteral(), 20)})
+    domain_cond1 = im.domain(gtx_common.GridType.CARTESIAN, {JDim: (10, gtir.InfinityLiteral.POSITIVE)})
+    domain_cond2 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (gtir.InfinityLiteral.NEGATIVE, 20)})
     domain1 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (10, 20)})
     domain2 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (20, 30), JDim: (10, 20)})
     domain3 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 10)})
