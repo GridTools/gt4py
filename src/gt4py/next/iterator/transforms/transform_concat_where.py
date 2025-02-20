@@ -41,4 +41,4 @@ class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
                 ),
             )(im.make_tuple(*dims), field_a, field_b, *refs)
 
-        return self.generic_visit(node)
+        return node

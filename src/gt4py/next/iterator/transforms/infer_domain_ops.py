@@ -92,7 +92,7 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                     self.visit(im.greater(dim, value), **kwargs),
                 )
             else:
-                raise ValueError(f"{fun} is not a valid comparison operator.")
+                raise AssertionError()
 
         if cpm.is_call_to(node, builtins.BINARY_LOGICAL_BUILTINS) and all(
             isinstance(arg.type, ts.DomainType) for arg in node.args

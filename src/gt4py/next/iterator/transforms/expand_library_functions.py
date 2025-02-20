@@ -23,6 +23,8 @@ class ExpandLibraryFunctions(PreserveLocationVisitor, NodeTranslator):
         return cls().visit(node)
 
     def visit_FunCall(self, node: ir.FunCall) -> ir.FunCall:
+        node = self.generic_visit(node)
+
         if cpm.is_call_to(node, "in_"):
             ret = []
             pos, domain = node.args
@@ -36,4 +38,5 @@ class ExpandLibraryFunctions(PreserveLocationVisitor, NodeTranslator):
                     )
                 )  # TODO: avoid pos duplication
             return reduce(im.and_, ret)
-        return self.generic_visit(node)
+
+        return node
