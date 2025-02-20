@@ -791,3 +791,66 @@ def test_dace_no_cast_in_index(backend):
         """Simple copy stencil with forced cast in index calculation."""
         with computation(PARALLEL), interval(...):
             out_field = in_field[0, 0, i32 - i64]
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_read_after_write_stencil(backend):
+    """Stencil with multiple read after write access patterns."""
+
+    @gtscript.stencil(backend=backend)
+    def lagrangian_contributions(
+        q: Field[np.float64],
+        pe1: Field[np.float64],
+        pe2: Field[np.float64],
+        q4_1: Field[np.float64],
+        q4_2: Field[np.float64],
+        q4_3: Field[np.float64],
+        q4_4: Field[np.float64],
+        dp1: Field[np.float64],
+        lev: gtscript.Field[gtscript.IJ, np.int64],
+    ):
+        """
+        Args:
+            q (out):
+            pe1 (in):
+            pe2 (in):
+            q4_1 (in):
+            q4_2 (in):
+            q4_3 (in):
+            q4_4 (in):
+            dp1 (in):
+            lev (inout):
+        """
+        with computation(FORWARD), interval(...):
+            pl = (pe2 - pe1[0, 0, lev]) / dp1[0, 0, lev]
+            if pe2[0, 0, 1] <= pe1[0, 0, lev + 1]:
+                pr = (pe2[0, 0, 1] - pe1[0, 0, lev]) / dp1[0, 0, lev]
+                q = (
+                    q4_2[0, 0, lev]
+                    + 0.5 * (q4_4[0, 0, lev] + q4_3[0, 0, lev] - q4_2[0, 0, lev]) * (pr + pl)
+                    - q4_4[0, 0, lev] * 1.0 / 3.0 * (pr * (pr + pl) + pl * pl)
+                )
+            else:
+                qsum = (pe1[0, 0, lev + 1] - pe2) * (
+                    q4_2[0, 0, lev]
+                    + 0.5 * (q4_4[0, 0, lev] + q4_3[0, 0, lev] - q4_2[0, 0, lev]) * (1.0 + pl)
+                    - q4_4[0, 0, lev] * 1.0 / 3.0 * (1.0 + pl * (1.0 + pl))
+                )
+                lev = lev + 1
+                while pe1[0, 0, lev + 1] < pe2[0, 0, 1]:
+                    qsum += dp1[0, 0, lev] * q4_1[0, 0, lev]
+                    lev = lev + 1
+                dp = pe2[0, 0, 1] - pe1[0, 0, lev]
+                esl = dp / dp1[0, 0, lev]
+                qsum += dp * (
+                    q4_2[0, 0, lev]
+                    + 0.5
+                    * esl
+                    * (
+                        q4_3[0, 0, lev]
+                        - q4_2[0, 0, lev]
+                        + q4_4[0, 0, lev] * (1.0 - (2.0 / 3.0) * esl)
+                    )
+                )
+                q = qsum / (pe2[0, 0, 1] - pe2)
+            lev = lev - 1
