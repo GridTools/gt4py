@@ -397,10 +397,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.let(cond_symref_name, cond_)(result)
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
-            return im.call("concat_where")(*self.visit(node.args))
-        else:
-            raise NotImplementedError()
+        domain, true_branch, false_branch = self.visit(node.args)
+        return lowering_utils.process_elements(
+            lambda tb, fb: im.call("concat_where")(domain, tb, fb),
+            (true_branch, false_branch),
+            node.type,
+        )
 
     # TODO: tuple case
 

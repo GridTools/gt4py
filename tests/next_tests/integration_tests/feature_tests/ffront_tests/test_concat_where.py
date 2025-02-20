@@ -33,6 +33,7 @@ def test_concat_where_simple(cartesian_case):
     ref = np.where(k[np.newaxis, np.newaxis, :] == 0, ground.asnumpy(), air.asnumpy())
     cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
 
+
 @pytest.mark.uses_frontend_concat_where
 def test_concat_where(cartesian_case):
     @gtx.field_operator
@@ -197,11 +198,8 @@ def test_boundary_single_layer(cartesian_case):
 @pytest.mark.uses_frontend_concat_where
 @pytest.mark.uses_tuple_returns
 def test_with_tuples(cartesian_case):
-    pytest.skip("Not implemented in the frontend.")
-
     @gtx.field_operator
     def testee(
-        k: cases.KField,
         interior0: cases.IJKField,
         boundary0: cases.IJField,
         interior1: cases.IJKField,
@@ -230,7 +228,6 @@ def test_with_tuples(cartesian_case):
     cases.verify(
         cartesian_case,
         testee,
-        k,
         interior0,
         boundary0,
         interior1,
