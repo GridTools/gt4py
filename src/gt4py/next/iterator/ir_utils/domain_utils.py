@@ -220,5 +220,7 @@ def promote_to_same_dimensions(
             lb, ub = domain_small.ranges[dim].start, domain_small.ranges[dim].stop
             dims_dict[dim] = SymbolicRange(lb, ub)
         else:
-            dims_dict[dim] = SymbolicRange(itir.InfinityLiteral.NEGATIVE, itir.InfinityLiteral.POSITIVE)
+            dims_dict[dim] = SymbolicRange(
+                itir.InfinityLiteral.NEGATIVE, itir.InfinityLiteral.POSITIVE
+            )
     return SymbolicDomain(domain_small.grid_type, dims_dict)  # TODO: fix for unstructured

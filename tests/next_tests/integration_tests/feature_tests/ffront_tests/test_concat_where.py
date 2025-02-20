@@ -30,9 +30,7 @@ def test_concat_where(cartesian_case):
     air = cases.allocate(cartesian_case, testee, "air")()
 
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(
-        k[np.newaxis, np.newaxis, :] == 0, ground.asnumpy(), air.asnumpy()
-    )
+    ref = np.where(k[np.newaxis, np.newaxis, :] == 0, ground.asnumpy(), air.asnumpy())
     cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
 
 
@@ -43,7 +41,9 @@ def test_concat_where_non_overlapping(cartesian_case):
         return concat_where(KDim == 0, ground, air)
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-    ground = cases.allocate(cartesian_case, testee, "ground", domain=out.domain.slice_at[:, :, 0:1])()
+    ground = cases.allocate(
+        cartesian_case, testee, "ground", domain=out.domain.slice_at[:, :, 0:1]
+    )()
     air = cases.allocate(cartesian_case, testee, "air", domain=out.domain.slice_at[:, :, 1:])()
 
     ref = np.concatenate((ground.asnumpy(), air.asnumpy()), axis=2)
@@ -54,8 +54,8 @@ def test_concat_where_non_overlapping(cartesian_case):
 def test_concat_where_non_overlapping_different_dims(cartesian_case):
     @gtx.field_operator
     def testee(
-        ground: cases.KField, # note: boundary field is only defined in K
-        air: cases.IJKField
+        ground: cases.KField,  # note: boundary field is only defined in K
+        air: cases.IJKField,
     ) -> cases.IJKField:
         return concat_where(KDim == 0, ground, air)
 
@@ -63,7 +63,15 @@ def test_concat_where_non_overlapping_different_dims(cartesian_case):
     ground = cases.allocate(cartesian_case, testee, "ground", domain=gtx.domain({KDim: (0, 1)}))()
     air = cases.allocate(cartesian_case, testee, "air", domain=out.domain.slice_at[:, :, 1:])()
 
-    ref = np.concatenate((np.tile(ground.asnumpy(),(*air.domain.shape[0:2], len(ground.domain[KDim].unit_range))), air.asnumpy()), axis=2)
+    ref = np.concatenate(
+        (
+            np.tile(
+                ground.asnumpy(), (*air.domain.shape[0:2], len(ground.domain[KDim].unit_range))
+            ),
+            air.asnumpy(),
+        ),
+        axis=2,
+    )
 
     cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
 
@@ -71,9 +79,7 @@ def test_concat_where_non_overlapping_different_dims(cartesian_case):
 @pytest.mark.uses_frontend_concat_where
 def test_dimension_two_nested_conditions(cartesian_case):
     @gtx.field_operator
-    def testee(
-        interior: cases.IJKField, boundary: cases.IJKField
-    ) -> cases.IJKField:
+    def testee(interior: cases.IJKField, boundary: cases.IJKField) -> cases.IJKField:
         return concat_where((KDim < 2), boundary, concat_where((KDim >= 5), boundary, interior))
 
     interior = cases.allocate(cartesian_case, testee, "interior")()
@@ -82,8 +88,7 @@ def test_dimension_two_nested_conditions(cartesian_case):
 
     k = np.arange(0, cartesian_case.default_sizes[KDim])
     ref = np.where(
-        (k[np.newaxis, np.newaxis, :] < 2)
-        | (k[np.newaxis, np.newaxis, :] >= 5),
+        (k[np.newaxis, np.newaxis, :] < 2) | (k[np.newaxis, np.newaxis, :] >= 5),
         boundary.asnumpy(),
         interior.asnumpy(),
     )
@@ -138,9 +143,7 @@ def test_dimension_two_conditions_or(cartesian_case):
 @pytest.mark.uses_frontend_concat_where
 def test_boundary_horizontal_slice(cartesian_case):
     @gtx.field_operator
-    def testee(
-        interior: cases.IJKField, boundary: cases.IJField
-    ) -> cases.IJKField:
+    def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
         return concat_where(KDim == 0, boundary, interior)
 
     interior = cases.allocate(cartesian_case, testee, "interior")()
@@ -160,9 +163,7 @@ def test_boundary_horizontal_slice(cartesian_case):
 @pytest.mark.uses_frontend_concat_where
 def test_boundary_single_layer(cartesian_case):
     @gtx.field_operator
-    def testee(
-        interior: cases.IJKField, boundary: cases.IJKField
-    ) -> cases.IJKField:
+    def testee(interior: cases.IJKField, boundary: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, boundary, interior)
 
     interior = cases.allocate(cartesian_case, testee, "interior")()
@@ -183,6 +184,7 @@ def test_boundary_single_layer(cartesian_case):
 @pytest.mark.uses_tuple_returns
 def test_with_tuples(cartesian_case):
     pytest.skip("Not implemented in the frontend.")
+
     @gtx.field_operator
     def testee(
         k: cases.KField,

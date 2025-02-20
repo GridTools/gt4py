@@ -10,7 +10,12 @@ from typing import Tuple, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.ffront.fbuiltins import BuiltInFunction, FieldOffset, WhereLikeBuiltinFunction, FieldT
+from gt4py.next.ffront.fbuiltins import (
+    BuiltInFunction,
+    FieldOffset,
+    FieldT,
+    WhereLikeBuiltinFunction,
+)
 
 
 @BuiltInFunction
@@ -21,6 +26,7 @@ def as_offset(offset_: FieldOffset, field: common.Field, /) -> common.Connectivi
 _R = TypeVar("_R")
 DomainT = TypeVar("DomainT", bound=common.Field)
 ConcatWhereBuiltinFunction = WhereLikeBuiltinFunction[_R, DomainT, FieldT]
+
 
 @ConcatWhereBuiltinFunction
 def concat_where(

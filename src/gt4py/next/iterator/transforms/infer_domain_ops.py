@@ -15,9 +15,8 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.type_system import type_specifications as ts
-from gt4py.next.iterator.ir_utils.domain_utils import domain_complement
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
+from gt4py.next.type_system import type_specifications as ts
 
 
 class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
@@ -46,7 +45,10 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                     "eq": "eq",
                     "not_eq": "not_eq",
                 }
-                return self.visit(im.call(complementary_op[node.fun.id])(arg2, arg1), **{**kwargs, "recurse":False})
+                return self.visit(
+                    im.call(complementary_op[node.fun.id])(arg2, arg1),
+                    **{**kwargs, "recurse": False},
+                )
 
             assert isinstance(arg1.type, ts.DimensionType)
             dim: common.Dimension = arg1.type.dim
@@ -78,8 +80,8 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                     max_ = im.plus(value, 1)
 
                 domain = domain_utils.SymbolicDomain(
-                    common.GridType.CARTESIAN, # TODO
-                    ranges={dim: domain_utils.SymbolicRange(start=min_, stop=max_)}
+                    common.GridType.CARTESIAN,  # TODO
+                    ranges={dim: domain_utils.SymbolicRange(start=min_, stop=max_)},
                 )
 
                 return domain.as_expr()
@@ -87,7 +89,7 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                 # `IDim != a -> `IDim < a & IDim > a`
                 return im.call("and_")(
                     self.visit(im.less(dim, value), **kwargs),
-                        self.visit(im.greater(dim, value), **kwargs)
+                    self.visit(im.greater(dim, value), **kwargs),
                 )
             else:
                 raise ValueError(f"{fun} is not a valid comparison operator.")

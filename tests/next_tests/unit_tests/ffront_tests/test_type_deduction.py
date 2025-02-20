@@ -76,7 +76,12 @@ def test_adding_bool():
         return a + b
 
     with pytest.raises(
-        errors.DSLError, match=(re.escape("Unsupported operand type(s) for +: 'Field[[TDim], bool]' and 'Field[[TDim], bool]'."))
+        errors.DSLError,
+        match=(
+            re.escape(
+                "Unsupported operand type(s) for +: 'Field[[TDim], bool]' and 'Field[[TDim], bool]'."
+            )
+        ),
     ):
         _ = FieldOperatorParser.apply_to_function(add_bools)
 
@@ -104,7 +109,9 @@ def test_bitop_float():
 
     with pytest.raises(
         errors.DSLError,
-        match=re.escape("Unsupported operand type(s) for &: 'Field[[TDim], float64]' and 'Field[[TDim], float64]'."),
+        match=re.escape(
+            "Unsupported operand type(s) for &: 'Field[[TDim], float64]' and 'Field[[TDim], float64]'."
+        ),
     ):
         _ = FieldOperatorParser.apply_to_function(float_bitop)
 
@@ -142,7 +149,7 @@ def test_concat_where():
 
 def test_domain_comparison_failure():
     def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
-        return concat_where(TDim > 1., a, b)
+        return concat_where(TDim > 1.0, a, b)
 
     with pytest.raises(
         errors.DSLError,
@@ -153,7 +160,7 @@ def test_domain_comparison_failure():
 
 def test_domain_comparison_checkerboard_failure():
     def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
-        return concat_where(TDim % 2., a, b)
+        return concat_where(TDim % 2.0, a, b)
 
     with pytest.raises(
         errors.DSLError,
@@ -164,11 +171,11 @@ def test_domain_comparison_checkerboard_failure():
 
 def test_concat_where_invalid_dtype():
     def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
-        return concat_where(TDim > 0, 1., 2)
+        return concat_where(TDim > 0, 1.0, 2)
 
     with pytest.raises(
-            errors.DSLError,
-            match=re.escape("Field arguments must be of same dtype, got 'float64' != 'int32'."),
+        errors.DSLError,
+        match=re.escape("Field arguments must be of same dtype, got 'float64' != 'int32'."),
     ):
         _ = FieldOperatorParser.apply_to_function(domain_comparison)
 
