@@ -93,7 +93,7 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                 raise ValueError(f"{fun} is not a valid comparison operator.")
 
         if cpm.is_call_to(node, builtins.BINARY_LOGICAL_BUILTINS) and all(
-            isinstance(arg, (ir.Literal, ir.FunCall)) for arg in node.args
+            isinstance(arg.type, ts.DomainType) for arg in node.args
         ):
             if cpm.is_call_to(node, "and_"):
                 # TODO: domain promotion
@@ -102,8 +102,7 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                         *[domain_utils.SymbolicDomain.from_expr(arg) for arg in node.args]
                     ).as_expr()
                 )
-
             else:
-                raise NotImplementedError
+                raise NotImplementedError()
 
         return node
