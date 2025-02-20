@@ -78,20 +78,25 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
             assert isinstance(node.fun, itir.Lambda)  # to make mypy happy
             eligible_params = [False] * len(node.fun.params)
             new_args = []
-            bound_scalars: dict[str, itir.Expr] = {}
+            # values are 0-ary lambda functions that evaluate to the derefed argument. We don't put
+            # the values themselves here as they might be inside of an if to protected from an oob
+            # access
+            evaluators: dict[str, itir.Expr] = {}
 
             for i, (param, arg) in enumerate(zip(node.fun.params, node.args)):
                 if cpm.is_applied_lift(arg) and is_center_derefed_only(param):
                     eligible_params[i] = True
-                    bound_arg_name = self.uids.sequential_id(prefix="_icdlv")
-                    capture_lift = im.promote_to_const_iterator(bound_arg_name)
+                    bound_arg_evaluator = self.uids.sequential_id(prefix="_icdlv")
+                    capture_lift = im.promote_to_const_iterator(im.call(bound_arg_evaluator)())
                     trace_shifts.copy_recorded_shifts(from_=param, to=capture_lift)
                     new_args.append(capture_lift)
                     # since we deref an applied lift here we can (but don't need to) immediately
                     # inline
-                    bound_scalars[bound_arg_name] = InlineLifts(
-                        flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
-                    ).visit(im.deref(arg), recurse=False)
+                    evaluators[bound_arg_evaluator] = im.lambda_()(
+                        InlineLifts(flags=InlineLifts.Flag.INLINE_DEREF_LIFT).visit(
+                            im.deref(arg), recurse=False
+                        )
+                    )
                 else:
                     new_args.append(arg)
 
@@ -100,6 +105,6 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                     im.call(node.fun)(*new_args), eligible_params=eligible_params
                 )
                 # TODO(tehrengruber): propagate let outwards
-                return im.let(*bound_scalars.items())(new_node)
+                return im.let(*evaluators.items())(new_node)
 
         return node
