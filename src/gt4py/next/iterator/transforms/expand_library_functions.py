@@ -18,6 +18,11 @@ from gt4py.next.iterator.ir_utils import (
 
 
 class ExpandLibraryFunctions(PreserveLocationVisitor, NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = (
+        "type",
+        "domain",
+    )
+
     @classmethod
     def apply(cls, node: ir.Node):
         return cls().visit(node)
