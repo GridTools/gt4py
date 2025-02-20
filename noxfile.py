@@ -87,11 +87,11 @@ def test_cartesian(
         groups=["test"],
     )
 
-    num_processes = session.env.get("NUM_PROCESSES", "auto")
+    num_processes = os.environ.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
     session.run(
-        *f"pytest --cache-clear -sv -n {num_processes}".split(),
+        *f"pytest --cache-clear -sv -n {num_processes} --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
@@ -111,7 +111,7 @@ def test_examples(session: nox.Session) -> None:
     session.run(*"jupytext docs/user/next/QuickstartGuide.md --to .ipynb".split())
     session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split())
 
-    num_processes = session.env.get("NUM_PROCESSES", "auto")
+    num_processes = os.environ.get("NUM_PROCESSES", "auto")
     for notebook, extra_args in [
         ("docs/user/next/workshop/slides", None),
         ("docs/user/next/workshop/exercises", ["-k", "solutions"]),
@@ -131,7 +131,7 @@ def test_eve(session: nox.Session) -> None:
 
     _install_session_venv(session, groups=["test"])
 
-    num_processes = session.env.get("NUM_PROCESSES", "auto")
+    num_processes = os.environ.get("NUM_PROCESSES", "auto")
 
     session.run(
         *f"pytest --cache-clear -sv -n {num_processes}".split(),
@@ -180,7 +180,7 @@ def test_next(
         groups=groups,
     )
 
-    num_processes = session.env.get("NUM_PROCESSES", "auto")
+    num_processes = os.environ.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
 
     session.run(
@@ -211,7 +211,7 @@ def test_storage(
         session, extras=["performance", "testing", *device_settings["extras"]], groups=["test"]
     )
 
-    num_processes = session.env.get("NUM_PROCESSES", "auto")
+    num_processes = os.environ.get("NUM_PROCESSES", "auto")
     markers = " and ".join(device_settings["markers"])
 
     session.run(

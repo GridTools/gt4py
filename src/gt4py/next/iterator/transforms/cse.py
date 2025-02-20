@@ -82,27 +82,23 @@ def _is_collectable_expr(node: itir.Node) -> bool:
     if isinstance(node, itir.FunCall):
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
         #  visited, to ensure symbol dependencies are recognized correctly.
-        # do also not collect reduce nodes if they are left in the it at this point, this may lead to
+        # do also not collect reduce nodes if they are left in the IR at this point, this may lead to
         #  conceptual problems (other parts of the tool chain rely on the arguments being present directly
         #  on the reduce FunCall node (connectivity deduction)), as well as problems with the imperative backend
         #  backend (single pass eager depth first visit approach)
+        # do also not collect lifts or applied lifts as they become invisible to the lift inliner
+        #  otherwise
         # do also not collect index nodes because otherwise the right hand side of SetAts becomes a let statement
         #  instead of an as_fieldop
-        if isinstance(node.fun, itir.SymRef) and node.fun.id in [
-            "lift",
-            "shift",
-            "reduce",
-            "map_",
-            "index",
-        ]:
-            return False
-        # do also not collect make_tuple(index) nodes because otherwise the right hand side of SetAts becomes a let statement
-        #  instead of an as_fieldop
-        if cpm.is_call_to(node, "make_tuple") and all(
-            cpm.is_call_to(arg, "index") for arg in node.args
-        ):
+        if cpm.is_call_to(node, ("lift", "shift", "reduce", "map_", "index")) or cpm.is_applied_lift(node):
             return False
         return True
+    # do also not collect make_tuple(index) nodes because otherwise the right hand side of SetAts becomes a let statement
+    #  instead of an as_fieldop
+    if cpm.is_call_to(node, "make_tuple") and all(
+            cpm.is_call_to(arg, "index") for arg in node.args
+    ):
+            return False
     elif isinstance(node, itir.Lambda):
         return True
 

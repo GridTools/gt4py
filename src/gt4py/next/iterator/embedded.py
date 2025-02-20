@@ -16,7 +16,6 @@ import dataclasses
 import itertools
 import math
 import operator
-import sys
 import warnings
 
 import numpy as np
@@ -677,7 +676,7 @@ class Undefined:
         return np.nan
 
     def __int__(self):
-        return sys.maxsize
+        return np.iinfo(np.int32).max
 
     def __repr__(self):
         return "_UNDEFINED"
@@ -1798,6 +1797,14 @@ def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.Unstruct
 @builtins.index.register(EMBEDDED)
 def index(axis: common.Dimension) -> common.Field:
     return IndexField(axis)
+
+@builtins.concat_where.register(EMBEDDED)
+def concat_where(*args):
+    raise NotImplementedError("To be implemented in frontend embedded.")
+
+@builtins.in_.register(EMBEDDED)
+def in_(*args):
+    raise NotImplementedError("To be implemented in frontend embedded.")
 
 
 def closure(

@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+from enum import Enum
 from typing import Callable
 
 import numpy as np
@@ -506,8 +507,14 @@ def test_empty_memlet_3():
     assert scope_dict[task2] is inner_mentry
 
 
+class IndependentPart(Enum):
+    NONE = 0
+    TASKLET = 1
+    NESTED_SDFG = 2
+
+
 def _make_loop_blocking_sdfg_with_inner_map(
-    add_independent_part: bool,
+    add_independent_part: IndependentPart,
 ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]:
     """
     Generate the SDFGs with an inner map.
@@ -533,15 +540,6 @@ def _make_loop_blocking_sdfg_with_inner_map(
         "computation", inputs={"__in1", "__in2"}, outputs={"__out"}, code="__out = __in1 + __in2"
     )
 
-    if add_independent_part:
-        sdfg.add_array("C", shape=(10,), dtype=dace.float64, transient=False)
-        sdfg.add_scalar("tmp", dtype=dace.float64, transient=True)
-        sdfg.add_scalar("tmp2", dtype=dace.float64, transient=True)
-        tmp, tmp2, C = (state.add_access(name) for name in ("tmp", "tmp2", "C"))
-        tskli = state.add_tasklet(
-            "independent_comp", inputs={"__field"}, outputs={"__out"}, code="__out = __field[1, 1]"
-        )
-
     # construct the inner map of the map.
     state.add_edge(A, None, me_out, "IN_A", dace.Memlet("A[0:10, 0:10]"))
     me_out.add_in_connector("IN_A")
@@ -565,14 +563,42 @@ def _make_loop_blocking_sdfg_with_inner_map(
     mx_out.add_out_connector("OUT_B")
 
     # If requested add a part that is independent, i.e. is before the inner loop
-    if add_independent_part:
-        state.add_edge(me_out, "OUT_A", tskli, "__field", dace.Memlet("A[0:10, 0:10]"))
-        state.add_edge(tskli, "__out", tmp, None, dace.Memlet("tmp[0]"))
+    if add_independent_part != IndependentPart.NONE:
+        sdfg.add_array("C", shape=(10,), dtype=dace.float64, transient=False)
+        sdfg.add_scalar("tmp", dtype=dace.float64, transient=True)
+        sdfg.add_scalar("tmp2", dtype=dace.float64, transient=True)
+        tmp, tmp2, C = (state.add_access(name) for name in ("tmp", "tmp2", "C"))
         state.add_edge(tmp, None, tmp2, None, dace.Memlet("tmp2[0]"))
         state.add_edge(tmp2, None, mx_out, "IN_tmp", dace.Memlet("C[__i0]"))
         mx_out.add_in_connector("IN_tmp")
         state.add_edge(mx_out, "OUT_tmp", C, None, dace.Memlet("C[0:10]"))
         mx_out.add_out_connector("OUT_tmp")
+        match add_independent_part:
+            case IndependentPart.TASKLET:
+                tskli = state.add_tasklet(
+                    "independent_comp",
+                    inputs={"__field"},
+                    outputs={"__out"},
+                    code="__out = __field[1, 1]",
+                )
+                state.add_edge(me_out, "OUT_A", tskli, "__field", dace.Memlet("A[0:10, 0:10]"))
+                state.add_edge(tskli, "__out", tmp, None, dace.Memlet("tmp[0]"))
+            case IndependentPart.NESTED_SDFG:
+                nsdfg_sym, nsdfg_inp, nsdfg_out = ("S", "I", "V")
+                nsdfg = _make_conditional_block_sdfg(
+                    "independent_comp", nsdfg_sym, nsdfg_inp, nsdfg_out
+                )
+                nsdfg_node = state.add_nested_sdfg(
+                    nsdfg,
+                    sdfg,
+                    inputs={nsdfg_inp},
+                    outputs={nsdfg_out},
+                    symbol_mapping={nsdfg_sym: 0},
+                )
+                state.add_edge(me_out, "OUT_A", nsdfg_node, nsdfg_inp, dace.Memlet("A[1, 1]"))
+                state.add_edge(nsdfg_node, nsdfg_out, tmp, None, dace.Memlet("tmp[0]"))
+            case _:
+                raise NotImplementedError()
 
     sdfg.validate()
     return sdfg, state, me_out, me_in
@@ -582,7 +608,9 @@ def test_loop_blocking_inner_map():
     """
     Tests with an inner map, without an independent part.
     """
-    sdfg, state, outer_map, inner_map = _make_loop_blocking_sdfg_with_inner_map(False)
+    sdfg, state, outer_map, inner_map = _make_loop_blocking_sdfg_with_inner_map(
+        IndependentPart.NONE
+    )
     assert all(oedge.dst is inner_map for oedge in state.out_edges(outer_map))
 
     count = sdfg.apply_transformations_repeated(
@@ -605,20 +633,23 @@ def test_loop_blocking_inner_map():
     assert all(oedge.dst is inner_map for oedge in state.out_edges(inner_blocking_map))
 
 
-def test_loop_blocking_inner_map_with_independent_part():
+@pytest.mark.parametrize("independent_part", [IndependentPart.TASKLET, IndependentPart.NESTED_SDFG])
+def test_loop_blocking_inner_map_with_independent_part(independent_part):
     """
     Tests with an inner map with an independent part.
     """
-    sdfg, state, outer_map, inner_map = _make_loop_blocking_sdfg_with_inner_map(True)
+    sdfg, state, outer_map, inner_map = _make_loop_blocking_sdfg_with_inner_map(independent_part)
 
     # Find the parts that are independent.
-    itskl: dace_nodes.Tasklet = next(
+    independent_node: dace_nodes.Tasklet | dace_nodes.NestedSDFG = next(
         oedge.dst
         for oedge in state.out_edges(outer_map)
-        if isinstance(oedge.dst, dace_nodes.Tasklet)
+        if isinstance(oedge.dst, (dace_nodes.Tasklet, dace_nodes.NestedSDFG))
     )
-    assert itskl.label == "independent_comp"
-    i_access_node: dace_nodes.AccessNode = next(oedge.dst for oedge in state.out_edges(itskl))
+    assert independent_node.label == "independent_comp"
+    i_access_node: dace_nodes.AccessNode = next(
+        oedge.dst for oedge in state.out_edges(independent_node)
+    )
     assert i_access_node.data == "tmp"
 
     count = sdfg.apply_transformations_repeated(
@@ -634,7 +665,9 @@ def test_loop_blocking_inner_map_with_independent_part():
     )
     assert inner_blocking_map is not inner_map
 
-    assert all(oedge.dst in {inner_blocking_map, itskl} for oedge in state.out_edges(outer_map))
+    assert all(
+        oedge.dst in {inner_blocking_map, independent_node} for oedge in state.out_edges(outer_map)
+    )
     assert state.scope_dict()[i_access_node] is outer_map
     assert all(oedge.dst is inner_blocking_map for oedge in state.out_edges(i_access_node))
 
@@ -745,7 +778,34 @@ def _apply_and_run_mixed_memlet_sdfg(sdfg: dace.SDFG) -> None:
     assert all(np.allclose(ref[name], res[name]) for name in ref)
 
 
-def test_loop_blocking_mixked_memlets_1():
+def _make_conditional_block_sdfg(sdfg_label: str, sym: str, inp: str, out: str):
+    sdfg = dace.SDFG(sdfg_label)
+    for data in [inp, out]:
+        sdfg.add_scalar(data, dtype=dace.float64)
+
+    if_region = dace.sdfg.state.ConditionalBlock("if")
+    sdfg.add_node(if_region)
+    entry_state = sdfg.add_state("entry", is_start_block=True)
+    sdfg.add_edge(entry_state, if_region, dace.InterstateEdge())
+
+    then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=sdfg)
+    tstate = then_body.add_state("true_branch", is_start_block=True)
+    if_region.add_branch(dace.sdfg.state.CodeBlock(f"{sym} % 2 == 0"), then_body)
+    tskli = tstate.add_tasklet("write_0", inputs={"inp"}, outputs={"val"}, code=f"val = inp + 0")
+    tstate.add_edge(tstate.add_access(inp), None, tskli, "inp", dace.Memlet(f"{inp}[0]"))
+    tstate.add_edge(tskli, "val", tstate.add_access(out), None, dace.Memlet(f"{out}[0]"))
+
+    else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=sdfg)
+    fstate = else_body.add_state("false_branch", is_start_block=True)
+    if_region.add_branch(dace.sdfg.state.CodeBlock(f"{sym} % 2 != 0"), else_body)
+    tskli = fstate.add_tasklet("write_1", inputs={"inp"}, outputs={"val"}, code=f"val = inp + 1")
+    fstate.add_edge(fstate.add_access(inp), None, tskli, "inp", dace.Memlet(f"{inp}[0]"))
+    fstate.add_edge(tskli, "val", fstate.add_access(out), None, dace.Memlet(f"{out}[0]"))
+
+    return sdfg
+
+
+def test_loop_blocking_mixed_memlets_1():
     sdfg, state, me, tskl1, tskl2 = _make_mixed_memlet_sdfg(True)
     mx = state.exit_node(me)
 
@@ -782,7 +842,7 @@ def test_loop_blocking_mixked_memlets_1():
             )
 
 
-def test_loop_blocking_mixked_memlets_2():
+def test_loop_blocking_mixed_memlets_2():
     sdfg, state, me, tskl1, tskl2 = _make_mixed_memlet_sdfg(False)
     mx = state.exit_node(me)
 
@@ -810,7 +870,7 @@ def test_loop_blocking_no_independent_nodes():
 
     sdfg = dace.SDFG(util.unique_name("mixed_memlet_sdfg"))
     state = sdfg.add_state(is_start_block=True)
-    names = ["A", "B"]
+    names = ["A", "B", "C"]
     for aname in names:
         sdfg.add_array(
             aname,
@@ -818,13 +878,28 @@ def test_loop_blocking_no_independent_nodes():
             dtype=dace.float64,
             transient=False,
         )
-    state.add_mapped_tasklet(
+    A = state.add_access("A")
+    _, me, mx = state.add_mapped_tasklet(
         "fully_dependent_computation",
         map_ranges={"__i0": "0:10", "__i1": "0:10"},
         inputs={"__in1": dace.Memlet("A[__i0, __i1]")},
         code="__out = __in1 + 10.0",
         outputs={"__out": dace.Memlet("B[__i0, __i1]")},
         external_edges=True,
+        input_nodes={A},
+    )
+    nsdfg_sym, nsdfg_inp, nsdfg_out = ("S", "I", "V")
+    nsdfg = _make_conditional_block_sdfg("dependent_component", nsdfg_sym, nsdfg_inp, nsdfg_out)
+    nsdfg_node = state.add_nested_sdfg(
+        nsdfg, sdfg, inputs={nsdfg_inp}, outputs={nsdfg_out}, symbol_mapping={nsdfg_sym: "__i1"}
+    )
+    state.add_memlet_path(A, me, nsdfg_node, dst_conn=nsdfg_inp, memlet=dace.Memlet("A[1,1]"))
+    state.add_memlet_path(
+        nsdfg_node,
+        mx,
+        state.add_access("C"),
+        src_conn=nsdfg_out,
+        memlet=dace.Memlet("C[__i0, __i1]"),
     )
     sdfg.validate()
 
@@ -852,3 +927,68 @@ def test_loop_blocking_no_independent_nodes():
         validate_all=True,
     )
     assert count == 1
+
+
+def _make_only_last_two_elements_sdfg() -> dace.SDFG:
+    sdfg = dace.SDFG(util.unique_name("simple_block_sdfg"))
+    state = sdfg.add_state("state", is_start_block=True)
+    sdfg.add_symbol("N", dace.int32)
+    sdfg.add_symbol("B", dace.int32)
+    sdfg.add_symbol("M", dace.int32)
+
+    for name in "acb":
+        sdfg.add_array(
+            name,
+            shape=(20, 10),
+            dtype=dace.float64,
+        )
+
+    state.add_mapped_tasklet(
+        "computation",
+        map_ranges={"i": "B:N", "k": "(M-2):M"},
+        inputs={
+            "__in1": dace.Memlet("a[i, k]"),
+            "__in2": dace.Memlet("b[i, k]"),
+        },
+        code="__out = __in1 + __in2",
+        outputs={"__out": dace.Memlet("c[i, k]")},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    return sdfg
+
+
+def test_only_last_two_elements_sdfg():
+    sdfg = _make_only_last_two_elements_sdfg()
+
+    def ref_comp(a, b, c, B, N, M):
+        for i in range(B, N):
+            for k in range(M - 2, M):
+                c[i, k] = a[i, k] + b[i, k]
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=1,
+            blocking_parameter="k",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    ref = {
+        "a": np.array(np.random.rand(20, 10), dtype=np.float64),
+        "b": np.array(np.random.rand(20, 10), dtype=np.float64),
+        "c": np.zeros((20, 10), dtype=np.float64),
+        "B": 0,
+        "N": 20,
+        "M": 6,
+    }
+    res = copy.deepcopy(ref)
+
+    ref_comp(**ref)
+    sdfg(**res)
+
+    assert np.allclose(ref["c"], res["c"])

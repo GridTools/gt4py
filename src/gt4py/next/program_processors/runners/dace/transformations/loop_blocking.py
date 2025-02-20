@@ -204,9 +204,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         inner_label = f"inner_{outer_map.label}"
         inner_range = {
             self.blocking_parameter: dace_subsets.Range.from_string(
-                f"({coarse_block_var} * {self.blocking_size} + {rng_start})"
+                f"(({rng_start}) + ({coarse_block_var}) * ({self.blocking_size}))"
                 + ":"
-                + f"min(({rng_start} + {coarse_block_var} + 1) * {self.blocking_size}, {rng_stop} + 1)"
+                + f"min(({rng_start}) + ({coarse_block_var} + 1) * ({self.blocking_size}), ({rng_stop}) + 1)"
             )
         }
         inner_entry, inner_exit = state.add_map(
@@ -219,7 +219,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         # Now we modify the properties of the outer map.
         coarse_block_range = dace_subsets.Range.from_string(
-            f"0:int_ceil(({rng_stop} + 1) - {rng_start}, {self.blocking_size})"
+            f"0:int_ceil((({rng_stop}) + 1) - ({rng_start}), ({self.blocking_size}))"
         ).ranges[0]
         outer_map.params[blocking_parameter_dim] = coarse_block_var
         outer_map.range[blocking_parameter_dim] = coarse_block_range
@@ -380,6 +380,24 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             ):
                 return False
 
+            # Test if the body of the Tasklet depends on the block variable.
+            if self.blocking_parameter in node_to_classify.free_symbols:
+                return False
+
+        elif isinstance(node_to_classify, dace.nodes.NestedSDFG):
+            # Same check as for Tasklets applies to the outputs of a nested SDFG node
+            if not all(
+                isinstance(out_edge.dst, dace_nodes.AccessNode)
+                for out_edge in state.out_edges(node_to_classify)
+                if not out_edge.data.is_empty()
+            ):
+                return False
+
+            # Additionally, test if the symbol mapping depends on the block variable.
+            for v in node_to_classify.symbol_mapping.values():
+                if self.blocking_parameter in v.free_symbols:
+                    return False
+
         elif isinstance(node_to_classify, dace_nodes.AccessNode):
             # AccessNodes need to have some special properties.
             node_desc: dace.data.Data = node_to_classify.desc(sdfg)
@@ -421,16 +439,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             #  dependent. This is an implementation detail to avoid some hard cases.
             if out_edge.dst is outer_exit:
                 return False
-
-        # Now we have ensured that the partition exists, thus we will now evaluate
-        #  if the node is independent or dependent.
-
-        # Test if the body of the Tasklet depends on the block variable.
-        if (
-            isinstance(node_to_classify, dace_nodes.Tasklet)
-            and self.blocking_parameter in node_to_classify.free_symbols
-        ):
-            return False
 
         # Now we have to look at incoming edges individually.
         #  We will inspect the subset of the Memlet to see if they depend on the

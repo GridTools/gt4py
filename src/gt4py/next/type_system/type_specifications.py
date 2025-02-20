@@ -49,6 +49,9 @@ class VoidType(TypeSpec):
 class DimensionType(TypeSpec):
     dim: common.Dimension
 
+    def __str__(self) -> str:
+        return str(self.dim)
+
 
 class OffsetType(TypeSpec):
     # TODO(havogt): replace by ConnectivityType

@@ -94,15 +94,17 @@ def apply_common_transforms(
     ir = nest_concat_wheres.NestConcatWheres.apply(ir)
     ir = infer_domain_ops.InferDomainOps.apply(ir)
 
+
+    ir = ConstantFolding.apply(ir) # TODO: remove
+    ir = transform_concat_where.TransformConcatWhere.apply(ir)
+    ir = ConstantFolding.apply(ir) # TODO: remove
+    ir = expand_library_functions.ExpandLibraryFunctions.apply(ir)
+
     ir = infer_domain.infer_program(
         ir,
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
-    ir = ConstantFolding.apply(ir) # TODO: remove
-    ir = transform_concat_where.TransformConcatWhere.apply(ir)
-    ir = ConstantFolding.apply(ir) # TODO: remove
-    ir = expand_library_functions.ExpandLibraryFunctions.apply(ir)
 
     for _ in range(10):
         inlined = ir

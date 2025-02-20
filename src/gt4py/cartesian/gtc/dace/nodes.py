@@ -23,11 +23,11 @@ from dace import library
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion.expansion import StencilComputationExpansion
+from gt4py.cartesian.gtc.dace.expansion.utils import HorizontalExecutionSplitter
+from gt4py.cartesian.gtc.dace.expansion_specification import ExpansionItem, make_expansion_order
+from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
-
-from .expansion.utils import HorizontalExecutionSplitter, get_dace_debuginfo
-from .expansion_specification import ExpansionItem, make_expansion_order
 
 
 def _set_expansion_order(

@@ -16,23 +16,8 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 
-class DerefCond(PreserveLocationVisitor, NodeTranslator):
-
-    @classmethod
-    def apply(cls, node: ir.Node, symbol_refs: list):
-        return cls().visit(node, symbol_refs=symbol_refs)
-
-    def visit_SymRef(self, node: ir.FunCall, symbol_refs: list) -> ir.FunCall:
-        node = self.generic_visit(node, symbol_refs=symbol_refs)
-        if node.id in symbol_refs and isinstance(node.type, ts.ScalarType):
-            node.type = None
-            return im.deref(node)
-        return node
-
 
 class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("domain",)
-
     @classmethod
     def apply(cls, node: ir.Node):
         return cls().visit(node)
@@ -44,12 +29,13 @@ class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
             cond = domain_utils.SymbolicDomain.from_expr(cond_expr).ranges.keys()
             dims = [im.call("index")(ir.AxisLiteral(value=k.value, kind=k.kind)) for k in cond]
             refs = symbol_ref_utils.collect_symbol_refs(cond_expr)
-            cond_expr = DerefCond.apply(cond_expr, refs)
+
             return im.as_fieldop(
-                im.lambda_("_tcw_pos", "_tcw_arg0", "_tcw_arg1", *refs)(
-                    im.if_(im.call("in")(im.deref("_tcw_pos"), cond_expr), im.deref("_tcw_arg0"), im.deref("_tcw_arg1"))
+                im.lambda_("__tcw_pos", "__tcw_arg0", "__tcw_arg1", *refs)(
+                    im.let(*zip(refs, map(im.deref, refs), strict=True))(
+                        im.if_(im.call("in_")(im.deref("__tcw_pos"), cond_expr), im.deref("__tcw_arg0"), im.deref("__tcw_arg1"))
+                    )
                 ),
-                node.annex.domain.as_expr(),
             )(im.make_tuple(*dims), field_a, field_b, *refs)
 
         return self.generic_visit(node)

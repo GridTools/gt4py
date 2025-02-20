@@ -64,86 +64,86 @@ def test_constant_folding_literal_maximum():
 
 
 def test_constant_folding_inf_maximum():
-    testee = im.call("maximum")(im.literal_from_value(1), ir.InfinityLiteral())
-    expected = ir.InfinityLiteral()
+    testee = im.call("maximum")(im.literal_from_value(1), ir.InfinityLiteral.POSITIVE)
+    expected = ir.InfinityLiteral.POSITIVE
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("maximum")(ir.InfinityLiteral(), im.literal_from_value(1))
-    expected = ir.InfinityLiteral()
+    testee = im.call("maximum")(ir.InfinityLiteral.POSITIVE, im.literal_from_value(1))
+    expected = ir.InfinityLiteral.POSITIVE
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("maximum")(im.literal_from_value(1), ir.NegInfinityLiteral())
+    testee = im.call("maximum")(im.literal_from_value(1), ir.InfinityLiteral.NEGATIVE)
     expected = im.literal_from_value(1)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("maximum")(ir.NegInfinityLiteral(), im.literal_from_value(1))
+    testee = im.call("maximum")(ir.InfinityLiteral.NEGATIVE, im.literal_from_value(1))
     expected = im.literal_from_value(1)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
 
 def test_constant_folding_inf_minimum():
-    testee = im.call("minimum")(im.literal_from_value(1), ir.InfinityLiteral())
+    testee = im.call("minimum")(im.literal_from_value(1), ir.InfinityLiteral.POSITIVE)
     expected = im.literal_from_value(1)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("minimum")(ir.InfinityLiteral(), im.literal_from_value(1))
+    testee = im.call("minimum")(ir.InfinityLiteral.POSITIVE, im.literal_from_value(1))
     expected = im.literal_from_value(1)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("minimum")(im.literal_from_value(1), ir.NegInfinityLiteral())
-    expected = ir.NegInfinityLiteral()
+    testee = im.call("minimum")(im.literal_from_value(1), ir.InfinityLiteral.NEGATIVE)
+    expected = ir.InfinityLiteral.NEGATIVE
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("minimum")(ir.NegInfinityLiteral(), im.literal_from_value(1))
-    expected = ir.NegInfinityLiteral()
+    testee = im.call("minimum")(ir.InfinityLiteral.NEGATIVE, im.literal_from_value(1))
+    expected = ir.InfinityLiteral.NEGATIVE
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
 
 def test_constant_greater_less():
-    testee = im.call("greater")(im.literal_from_value(1), ir.InfinityLiteral())
+    testee = im.call("greater")(im.literal_from_value(1), ir.InfinityLiteral.POSITIVE)
     expected = im.literal_from_value(False)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("greater")(im.literal_from_value(1), ir.NegInfinityLiteral())
+    testee = im.call("greater")(im.literal_from_value(1), ir.InfinityLiteral.NEGATIVE)
     expected = im.literal_from_value(True)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("less")(im.literal_from_value(1), ir.InfinityLiteral())
+    testee = im.call("less")(im.literal_from_value(1), ir.InfinityLiteral.POSITIVE)
     expected = im.literal_from_value(True)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("less")(im.literal_from_value(1), ir.NegInfinityLiteral())
+    testee = im.call("less")(im.literal_from_value(1), ir.InfinityLiteral.NEGATIVE)
     expected = im.literal_from_value(False)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("greater")(ir.InfinityLiteral(), im.literal_from_value(1))
+    testee = im.call("greater")(ir.InfinityLiteral.POSITIVE, im.literal_from_value(1))
     expected = im.literal_from_value(True)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("greater")(ir.NegInfinityLiteral(), im.literal_from_value(1))
+    testee = im.call("greater")(ir.InfinityLiteral.NEGATIVE, im.literal_from_value(1))
     expected = im.literal_from_value(False)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("less")(ir.InfinityLiteral(), im.literal_from_value(1))
+    testee = im.call("less")(ir.InfinityLiteral.POSITIVE, im.literal_from_value(1))
     expected = im.literal_from_value(False)
     actual = ConstantFolding.apply(testee)
     assert actual == expected
 
-    testee = im.call("less")(ir.NegInfinityLiteral(), im.literal_from_value(1))
+    testee = im.call("less")(ir.InfinityLiteral.NEGATIVE, im.literal_from_value(1))
     expected = im.literal_from_value(True)
     actual = ConstantFolding.apply(testee)
     assert actual == expected

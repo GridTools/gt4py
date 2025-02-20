@@ -15,92 +15,85 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
+from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.iterator.ir_utils.domain_utils import domain_complement
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
 
 class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
     @classmethod
     def apply(cls, node: ir.Node):
-        return cls().visit(node)
+        return cls().visit(node, recurse=True)
 
-    def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
-        node = self.generic_visit(node)
+    def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
+        if kwargs["recurse"]:
+            node = self.generic_visit(node, **kwargs)
+
+        # IDim < a
         if (
             cpm.is_call_to(node, builtins.BINARY_MATH_COMPARISON_BUILTINS)
             and any(isinstance(arg, ir.AxisLiteral) for arg in node.args)
-            and any(isinstance(arg, (ir.Literal, ir.SymRef)) for arg in node.args)
+            and any(isinstance(arg, ir.Expr) for arg in node.args)
         ):  # TODO: add tests
             arg1, arg2 = node.args
-            fun = node.fun
-            if isinstance(arg1, ir.AxisLiteral):
-                dim = common.Dimension(value=arg1.value, kind=arg1.kind)
-                reverse = False
-                if isinstance(arg2, ir.Literal):
-                    value = int(arg2.value)
-                elif isinstance(arg2, ir.SymRef):
-                    value = arg2
-            elif isinstance(arg2, ir.AxisLiteral):
-                dim = common.Dimension(value=arg2.value, kind=arg2.kind)
-                reverse = True
-                if isinstance(arg1, ir.Literal):
-                    value = int(arg1.value)
-                elif isinstance(arg1, ir.SymRef):
-                    value = arg1
+            if isinstance(arg2, ir.AxisLiteral):
+                # take complementary operation if we have e.g. `IDim > 1` use `1 <= IDim`
+                complementary_op = {
+                    "less": "greater_equal",
+                    "less_equal": "greater",
+                    "greater": "less_equal",
+                    "greater_equal": "less",
+                    "eq": "eq",
+                    "not_eq": "not_eq",
+                }
+                return self.visit(im.call(complementary_op[node.fun.id])(arg2, arg1), **{**kwargs, "recurse":False})
+
+            assert isinstance(arg1.type, ts.DimensionType)
+            dim: common.Dimension = arg1.type.dim
+            value: ir.Expr = arg2
+
+            if cpm.is_call_to(node, ("less", "less_equal", "greater", "greater_equal", "eq")):
+                min_: int | ir.InfinityLiteral
+                max_: int | ir.InfinityLiteral
+
+                # IDim < 1
+                if cpm.is_call_to(node, "less"):
+                    min_ = ir.InfinityLiteral.NEGATIVE
+                    max_ = value
+                # IDim <= 1
+                elif cpm.is_call_to(node, "less_equal"):
+                    min_ = ir.InfinityLiteral.NEGATIVE
+                    max_ = im.plus(value, 1)
+                # IDim > 1
+                elif cpm.is_call_to(node, "greater"):
+                    min_ = im.plus(value, 1)
+                    max_ = ir.InfinityLiteral.POSITIVE
+                # IDim >= 1
+                elif cpm.is_call_to(node, "greater_equal"):
+                    min_ = value
+                    max_ = ir.InfinityLiteral.POSITIVE
+                # IDim == 1
+                elif cpm.is_call_to(node, "eq"):
+                    min_ = value
+                    max_ = im.plus(value, 1)
+
+                domain = domain_utils.SymbolicDomain(
+                    common.GridType.CARTESIAN, # TODO
+                    ranges={dim: domain_utils.SymbolicRange(start=min_, stop=max_)}
+                )
+
+                return domain.as_expr()
+            elif cpm.is_call_to(node, "not_eq"):
+                # `IDim != a -> `IDim < a & IDim > a`
+                return im.call("and_")(
+                    self.visit(im.less(dim, value), **kwargs),
+                        self.visit(im.greater(dim, value), **kwargs)
+                )
             else:
-                raise ValueError(f"{node.args} need to be a 'ir.AxisLiteral' and an 'ir.Literal'.")
-            assert isinstance(fun, ir.SymRef)
-            min_: int | ir.NegInfinityLiteral
-            max_: int | ir.InfinityLiteral
-            match fun.id:
-                case ir.SymbolRef("less"):
-                    if reverse:
-                        min_ = im.plus(value, 1)
-                        max_ = ir.InfinityLiteral()
-                    else:
-                        min_ = ir.NegInfinityLiteral()
-                        max_ = im.minus(value, 1)
-                case ir.SymbolRef("less_equal"):
-                    if reverse:
-                        min_ = value
-                        max_ = ir.InfinityLiteral()
-                    else:
-                        min_ = ir.NegInfinityLiteral()
-                        max_ = value
-                case ir.SymbolRef("greater"):
-                    if reverse:
-                        min_ = ir.NegInfinityLiteral()
-                        max_ = im.minus(value, 1)
-                    else:
-                        min_ = im.plus(value, 1)
-                        max_ = ir.InfinityLiteral()
-                case ir.SymbolRef("greater_equal"):
-                    if reverse:
-                        min_ = ir.NegInfinityLiteral()
-                        max_ = value
-                    else:
-                        min_ = value
-                        max_ = ir.InfinityLiteral()
-                case ir.SymbolRef("eq"):
-                    min_ = max_ = value
-                case ir.SymbolRef("not_eq"):
-                    min1 = ir.NegInfinityLiteral()
-                    max1 = im.minus(value, 1)
-                    min2 = im.plus(value, 1)
-                    max2 = ir.InfinityLiteral()
-                    return im.call("and_")(
-                        im.domain(common.GridType.CARTESIAN, {dim: (min1, max1)}),
-                        im.domain(common.GridType.CARTESIAN, {dim: (min2, max2)}),
-                    )
-                case _:
-                    raise NotImplementedError
-            return im.domain(
-                common.GridType.CARTESIAN,
-                {dim: (min_, im.plus(max_, 1))}
-                if not isinstance(max_, ir.InfinityLiteral)
-                else {dim: (min_, max_)},
-            )
+                raise ValueError(f"{fun} is not a valid comparison operator.")
+
         if cpm.is_call_to(node, builtins.BINARY_LOGICAL_BUILTINS) and all(
-            isinstance(arg, (ir.Literal, ir.FunCall)) for arg in node.args
+            isinstance(arg.type, ts.DomainType) for arg in node.args
         ):
             if cpm.is_call_to(node, "and_"):
                 # TODO: domain promotion
@@ -109,8 +102,7 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                         *[domain_utils.SymbolicDomain.from_expr(arg) for arg in node.args]
                     ).as_expr()
                 )
-
             else:
-                raise NotImplementedError
+                raise NotImplementedError()
 
-        return self.generic_visit(node)
+        return node

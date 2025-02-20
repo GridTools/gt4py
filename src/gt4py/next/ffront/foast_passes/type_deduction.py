@@ -567,61 +567,66 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
 
-    def _deduce_compare_type(
+    def _deduce_arithmetic_compare_type(
         self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
-        # check both types compatible
-        left_t, right_t = left.type, right.type
-        integer_kind = getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
-        if (
-            isinstance(left_t, ts.DimensionType)
-            and isinstance(right_t, ts.ScalarType)
-            and right_t.kind == integer_kind
-        ):
-            return ts.DomainType(dims=[left_t.dim])
-        if (
-            isinstance(right_t, ts.DimensionType)
-            and isinstance(left_t, ts.ScalarType)
-            and left_t.kind == integer_kind
-        ):
-            return ts.DomainType(dims=[right_t.dim])
-        if (
-            isinstance(left_t, ts.OffsetType)
-            and left.op == dialect_ast_enums.BinaryOperator.MOD
-            and isinstance(right_t, ts.ScalarType)
-            and right_t.kind == integer_kind
-        ) or (
-            isinstance(right_t, ts.OffsetType)
-            and right.op == dialect_ast_enums.BinaryOperator.MOD
-            and isinstance(left_t, ts.ScalarType)
-            and left_t.kind == integer_kind
-        ):
-            raise errors.DSLError(
-                left.location, "Type 'ts.OffsetType' can not be used in operator 'mod'."
-            )
-
-        # TODO
-        for arg in (left, right):
-            if not type_info.is_arithmetic(arg.type):
-                raise errors.DSLError(
-                    arg.location, f"Type '{arg.type}' can not be used in operator '{node.op}'."
-                )
-
+        # e.g. `1 < 2`
         self._check_operand_dtypes_match(node, left=left, right=right)
 
         try:
             # transform operands to have bool dtype and use regular promotion
             #  mechanism to handle dimension promotion
             return type_info.promote(
-                with_altered_scalar_kind(left_t, ts.ScalarKind.BOOL),
-                with_altered_scalar_kind(right_t, ts.ScalarKind.BOOL),
+                with_altered_scalar_kind(left.type, ts.ScalarKind.BOOL),
+                with_altered_scalar_kind(right.type, ts.ScalarKind.BOOL),
             )
         except ValueError as ex:
             raise errors.DSLError(
                 node.location,
-                f"Could not promote '{left_t}' and '{right_t}' to common type"
+                f"Could not promote '{left.type}' and '{right.type}' to common type"
                 f" in call to '{node.op}'.",
             ) from ex
+
+    def _deduce_dimension_compare_type(
+        self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
+    ) -> Optional[ts.TypeSpec]:
+        # e.g. `IDim > 1`
+        index_type = ts.ScalarType(
+            kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
+
+        if isinstance(left.type, ts.DimensionType):
+            if not right.type == index_type:
+                raise errors.DSLError(
+                    right.location,
+                    f"Expected an {index_type}, but got '{right.type}' instead.",
+                )
+            return ts.DomainType(dims=[left.type.dim])
+        elif isinstance(right.type, ts.DimensionType):
+            if not left.type == index_type:
+                raise errors.DSLError(
+                    left.location,
+                    f"Expected an {index_type}, but got '{right.type}' instead.",
+                )
+            return ts.DomainType(dims=[right.type.dim])
+        else:
+            raise AssertionError()
+
+    def _deduce_compare_type(
+        self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
+    ) -> Optional[ts.TypeSpec]:
+        # e.g. `1 < 1`
+        if all(type_info.is_arithmetic(arg) for arg in (left.type, right.type)):
+            return self._deduce_arithmetic_compare_type(node, left=left, right=right)
+        # e.g. `IDim > 1`
+        if any(isinstance(arg, ts.DimensionType) for arg in (left.type, right.type)):
+            return self._deduce_dimension_compare_type(node, left=left, right=right)
+
+        raise errors.DSLError(
+            left.location, "Comparison operators can only be used between arithmetic types "
+                           "(scalars, fields) or between a dimension and an index type "
+                           "({builtins.INTEGER_INDEX_BUILTIN})."
+        )
+
 
     def _deduce_binop_type(
         self, node: foast.BinOp, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
@@ -644,20 +649,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             dialect_ast_enums.BinaryOperator.BIT_XOR,
         }
 
-        def is_logical_or_domain(arg: ts.TypeSpec) -> bool:
-            return type_info.is_logical(arg) or isinstance(arg, ts.DomainType)
+        err_msg = f"Unsupported operand type(s) for {node.op}: '{left.type}' and '{right.type}'."
 
-        is_compatible = is_logical_or_domain if node.op in logical_ops else type_info.is_arithmetic
-
-        # check both types compatible
-        for arg in (left, right):
-            if not is_compatible(arg.type):
-                raise errors.DSLError(
-                    arg.location, f"Type '{arg.type}' can not be used in operator '{node.op}'."
-                )
         if isinstance(left.type, (ts.ScalarType, ts.FieldType)) and isinstance(
             right.type, (ts.ScalarType, ts.FieldType)
         ):
+            is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
+            for arg in (left, right):
+                if not is_compatible(arg.type):
+                    raise errors.DSLError(arg.location, err_msg)
+
             if node.op == dialect_ast_enums.BinaryOperator.POW:
                 return left.type
 
@@ -678,9 +679,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f" in call to '{node.op}'.",
                 ) from ex
         elif isinstance(left.type, ts.DomainType) and isinstance(right.type, ts.DomainType):
+            if node.op not in logical_ops:
+                raise errors.DSLError(node.location, f"{err_msg} Operator "
+                                                     f"must be one of {', '.join((str(op) for op in logical_ops))}.")
             return ts.DomainType(dims=promote_dims(left.type.dims, right.type.dims))
         else:
-            raise ValueError("TODO")
+            raise errors.DSLError(node.location, err_msg)
 
     def _check_operand_dtypes_match(
         self, node: foast.BinOp | foast.Compare, left: foast.Expr, right: foast.Expr
@@ -983,12 +987,26 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
-        true_branch_type = node.args[1].type
-        false_branch_type = node.args[2].type
-        true_branch_fieldtype = cast(ts.FieldType, true_branch_type)
-        false_branch_fieldtype = cast(ts.FieldType, false_branch_type)
-        promoted_type = type_info.promote(true_branch_fieldtype, false_branch_fieldtype)
-        return_type = promoted_type
+        mask_type, true_branch_type, false_branch_type  = (arg.type for arg in node.args)
+
+        assert isinstance(mask_type, ts.DomainType)
+        assert all(isinstance(arg, (ts.FieldType, ts.ScalarType)) for arg in (true_branch_type, false_branch_type))
+
+        if (t_dtype := type_info.extract_dtype(true_branch_type)) != (
+            f_dtype := type_info.extract_dtype(false_branch_type)):
+            raise errors.DSLError(
+                node.location,
+                f"Field arguments must be of same dtype, got '{t_dtype}' != '{f_dtype}'."
+            )
+
+        return_dims = promote_dims(
+            mask_type.dims,
+            type_info.promote(true_branch_type, false_branch_type).dims
+        )
+        return_type = ts.FieldType(
+            dims=return_dims,
+            dtype=type_info.promote(t_dtype, f_dtype)
+        )
 
         return foast.Call(
             func=node.func,
