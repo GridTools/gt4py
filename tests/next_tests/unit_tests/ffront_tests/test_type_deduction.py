@@ -164,7 +164,7 @@ def test_domain_comparison_checkerboard_failure():
 
     with pytest.raises(
         errors.DSLError,
-        match=re.escape("Unsupported operand type(s) for %."),
+        match=re.escape("Unsupported operand type(s) for %"),
     ):
         _ = FieldOperatorParser.apply_to_function(domain_comparison)
 
