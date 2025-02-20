@@ -20,6 +20,20 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 @pytest.mark.uses_frontend_concat_where
+def test_concat_where_simple(cartesian_case):
+    @gtx.field_operator
+    def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
+        return concat_where(KDim > 0, air, ground)
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    ground = cases.allocate(cartesian_case, testee, "ground")()
+    air = cases.allocate(cartesian_case, testee, "air")()
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    ref = np.where(k[np.newaxis, np.newaxis, :] == 0, ground.asnumpy(), air.asnumpy())
+    cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
+
+@pytest.mark.uses_frontend_concat_where
 def test_concat_where(cartesian_case):
     @gtx.field_operator
     def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
