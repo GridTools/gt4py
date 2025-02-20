@@ -36,16 +36,25 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
     `let(var, (↑stencil)(it))(·var + ·var)`
 
     Directly inlining `var` would increase the size of the tree and duplicate the calculation.
-    Instead, this pass computes the value at the current location once and replaces all previous
-    references to `var` by an applied lift which captures this value.
+    Instead this pass, first takes the iterator `(↑stencil)(it)` and transforms it into a
+    0-ary function that evaluates to the value at the current location.
 
-    `let(_icdlv_1, stencil(it))(·(↑(λ() → _icdlv_1) + ·(↑(λ() → _icdlv_1))`
+    `λ() → (↑stencil)(it)`
+
+    Then all previous occurences of `var` are replaced by this function.
+
+    `let(_icdlv_1, λ() → ·(↑stencil)(it))(·(↑(λ() → _icdlv_1()) + ·(↑(λ() → _icdlv_1()))`
 
     The lift inliner can then later easily transform this into a nice expression:
 
-    `let(_icdlv_1, stencil(it))(_icdlv_1 + _icdlv_1)`
+     `let(_icdlv_1, λ() → stencil(it))(_icdlv_1() + _icdlv_1())`
 
-    Note: This pass uses and preserves the `recorded_shifts` annex.
+    Finally, recomputation is avoided by using the common subexpression elimination and lamba
+    inlining (can be configured opcount preserving). Both is up to the caller to do later.
+
+    `λ(_cs_1) → _cs_1 + _cs_1)(stencil(it))`
+
+    Note: This pass uses and preserves the `domain` and `recorded_shifts` annex.
     """
 
     PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("domain", "recorded_shifts")
