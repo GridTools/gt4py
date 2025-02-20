@@ -146,7 +146,18 @@ def test_domain_comparison_failure():
 
     with pytest.raises(
         errors.DSLError,
-        match=(r"Expected an int32, but got 'float64' instead."),
+        match=re.escape("Expected an int32, but got 'float64' instead."),
+    ):
+        _ = FieldOperatorParser.apply_to_function(domain_comparison)
+
+
+def test_domain_comparison_checkerboard_failure():
+    def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
+        return concat_where(TDim % 2., a, b)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=re.escape("Unsupported operand type(s) for %."),
     ):
         _ = FieldOperatorParser.apply_to_function(domain_comparison)
 

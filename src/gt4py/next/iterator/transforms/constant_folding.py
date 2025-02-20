@@ -31,49 +31,58 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
         ):  # `minimum(a, a)` -> `a`
             return new_node.args[0]
 
+        if cpm.is_call_to(new_node, "plus"):
+            a, b = new_node.args
+            for arg, other_arg in ((a, b), (b, a)):
+                # `a + inf` -> `inf`
+                if arg == ir.InfinityLiteral.POSITIVE:
+                    return ir.InfinityLiteral.POSITIVE
+                # `a + (-inf)` -> `-inf`
+                if arg == ir.InfinityLiteral.NEGATIVE:
+                    return ir.InfinityLiteral.NEGATIVE
+
         if cpm.is_call_to(new_node, "minimum"):
-            # `minimum(neg_inf, neg_inf)` -> `neg_inf`
-            if isinstance(new_node.args[0], ir.NegInfinityLiteral) or isinstance(
-                new_node.args[1], ir.NegInfinityLiteral
-            ):
-                return ir.NegInfinityLiteral()
-            # `minimum(inf, a)` -> `a`
-            elif isinstance(new_node.args[0], ir.InfinityLiteral):
-                return new_node.args[1]
-            # `minimum(a, inf)` -> `a`
-            elif isinstance(new_node.args[1], ir.InfinityLiteral):
-                return new_node.args[0]
+            a, b = new_node.args
+            for arg, other_arg in ((a, b), (b, a)):
+                # `minimum(inf, a)` -> `a`
+                if arg == ir.InfinityLiteral.POSITIVE:
+                    return other_arg
+                # `minimum(-inf, a)` -> `-inf`
+                if arg == ir.InfinityLiteral.NEGATIVE:
+                    return ir.InfinityLiteral.NEGATIVE
 
         if cpm.is_call_to(new_node, "maximum"):
-            # `minimum(inf, inf)` -> `inf`
-            if isinstance(new_node.args[0], ir.InfinityLiteral) or isinstance(
-                new_node.args[1], ir.InfinityLiteral
-            ):
-                return ir.InfinityLiteral()
-            # `minimum(neg_inf, a)` -> `a`
-            elif isinstance(new_node.args[0], ir.NegInfinityLiteral):
-                return new_node.args[1]
-            # `minimum(a, neg_inf)` -> `a`
-            elif isinstance(new_node.args[1], ir.NegInfinityLiteral):
-                return new_node.args[0]
+            a, b = new_node.args
+            for arg, other_arg in ((a, b), (b, a)):
+                # `maximum(inf, a)` -> `inf`
+                if arg == ir.InfinityLiteral.POSITIVE:
+                    return ir.InfinityLiteral.POSITIVE
+                # `maximum(-inf, a)` -> `a`
+                if arg == ir.InfinityLiteral.NEGATIVE:
+                    return other_arg
+
         if cpm.is_call_to(new_node, ("less", "less_equal")):
-            if isinstance(new_node.args[0], ir.NegInfinityLiteral) or isinstance(
-                new_node.args[1], ir.InfinityLiteral
-            ):
+            a, b = new_node.args
+            # `-inf < v` -> `True`
+            # `v < inf` -> `True`
+            if a == ir.InfinityLiteral.NEGATIVE or b == ir.InfinityLiteral.POSITIVE:
                 return im.literal_from_value(True)
-            if isinstance(new_node.args[0], ir.InfinityLiteral) or isinstance(
-                new_node.args[1], ir.NegInfinityLiteral
-            ):
+            # `inf < v` -> `False`
+            # `v < -inf ` -> `False`
+            if a == ir.InfinityLiteral.POSITIVE or b == ir.InfinityLiteral.NEGATIVE:
                 return im.literal_from_value(False)
+
         if cpm.is_call_to(new_node, ("greater", "greater_equal")):
-            if isinstance(new_node.args[0], ir.NegInfinityLiteral) or isinstance(
-                new_node.args[1], ir.InfinityLiteral
-            ):
-                return im.literal_from_value(False)
-            if isinstance(new_node.args[0], ir.InfinityLiteral) or isinstance(
-                new_node.args[1], ir.NegInfinityLiteral
-            ):
+            a, b = new_node.args
+            # `inf > v` -> `True`
+            # `v > -inf ` -> `True`
+            if a == ir.InfinityLiteral.POSITIVE or b == ir.InfinityLiteral.NEGATIVE:
                 return im.literal_from_value(True)
+            # `-inf > v` -> `False`
+            # `v > inf` -> `False`
+            if a == ir.InfinityLiteral.NEGATIVE or b == ir.InfinityLiteral.POSITIVE:
+                return im.literal_from_value(False)
+
         if (
             isinstance(new_node.fun, ir.SymRef)
             and new_node.fun.id == "if_"
@@ -90,15 +99,13 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
             and len(new_node.args) > 0
             and all(isinstance(arg, ir.Literal) for arg in new_node.args)
         ):  # `1 + 1` -> `2`
-            try:
-                if new_node.fun.id in builtins.ARITHMETIC_BUILTINS:
-                    fun = getattr(embedded, str(new_node.fun.id))
-                    arg_values = [
-                        getattr(embedded, str(arg.type))(arg.value)  # type: ignore[attr-defined] # arg type already established in if condition
-                        for arg in new_node.args
-                    ]
-                    new_node = im.literal_from_value(fun(*arg_values))
-            except ValueError:
-                pass  # happens for SymRefs which are not inf or neg_inf
+            if new_node.fun.id in builtins.ARITHMETIC_BUILTINS:
+                fun = getattr(embedded, str(new_node.fun.id))
+                arg_values = [
+                    getattr(embedded, str(arg.type))(arg.value)
+                    # type: ignore[attr-defined] # arg type already established in if condition
+                    for arg in new_node.args
+                ]
+                new_node = im.literal_from_value(fun(*arg_values))
 
         return new_node

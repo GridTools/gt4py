@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import functools
 import inspect
@@ -104,7 +105,7 @@ class DataInitializer(Protocol):
     def field(
         self,
         allocator: next_allocators.FieldBufferAllocatorProtocol,
-        sizes: dict[gtx.Dimension, int],
+        domain: gtx.Domain,
         dtype: np.typing.DTypeLike,
     ) -> FieldValue: ...
 
@@ -137,11 +138,11 @@ class ConstInitializer(DataInitializer):
     def field(
         self,
         allocator: next_allocators.FieldBufferAllocatorProtocol,
-        sizes: dict[gtx.Dimension, int],
+        domain: gtx.Domain,
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         return constructors.full(
-            domain=common.domain(sizes), fill_value=self.value, dtype=dtype, allocator=allocator
+            domain=domain, fill_value=self.value, dtype=dtype, allocator=allocator
         )
 
 
@@ -163,16 +164,15 @@ class IndexInitializer(DataInitializer):
     def field(
         self,
         allocator: next_allocators.FieldBufferAllocatorProtocol,
-        sizes: dict[gtx.Dimension, int],
+        domain: gtx.Domain,
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
-        if len(sizes) > 1:
+        if len(domain.dims) > 1:
             raise ValueError(
-                f"'IndexInitializer' only supports fields with a single 'Dimension', got {sizes}."
+                f"'IndexInitializer' only supports fields with a single 'Dimension', got {domain}."
             )
-        n_data = list(sizes.values())[0]
         return constructors.as_field(
-            domain=common.domain(sizes), data=np.arange(0, n_data, dtype=dtype), allocator=allocator
+            domain=domain, data=np.arange(domain.ranges[0].start, domain.ranges[0].stop, dtype=dtype), allocator=allocator
         )
 
     def from_case(
@@ -204,16 +204,15 @@ class UniqueInitializer(DataInitializer):
     def field(
         self,
         allocator: next_allocators.FieldBufferAllocatorProtocol,
-        sizes: dict[gtx.Dimension, int],
+        domain: common.Domain,
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         start = self.start
-        svals = tuple(sizes.values())
-        n_data = int(np.prod(svals))
-        self.start += n_data
+        assert isinstance(domain.size, int)
+        self.start += domain.size
         return constructors.as_field(
-            common.domain(sizes),
-            np.arange(start, start + n_data, dtype=dtype).reshape(svals),
+            common.domain(domain),
+            np.arange(start, self.start, dtype=dtype).reshape(domain.shape),
             allocator=allocator,
         )
 
@@ -326,6 +325,7 @@ def allocate(
     name: str,
     *,
     sizes: Optional[dict[gtx.Dimension, int]] = None,
+    domain: Optional[dict[gtx.Dimension, tuple[int, int]] | gtx.Domain] = None,
     strategy: Optional[DataInitializer] = None,
     dtype: Optional[np.typing.DTypeLike] = None,
     extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None,
@@ -347,9 +347,18 @@ def allocate(
             Useful for shifted fields, which must start off bigger
             than the output field in the shifted dimension.
     """
-    sizes = extend_sizes(
-        case.default_sizes | (sizes or {}), extend
-    )  # TODO: this should take into account the Domain of the allocated field
+    if sizes:
+        assert not domain and all(dim in case.default_sizes for dim in sizes)
+        domain = {dim: (0, sizes[dim] if dim in sizes else default_size) for dim, default_size in case.default_sizes.items()}
+
+    if not domain:
+        domain = {dim: (0, size) for dim, size in case.default_sizes.items()}
+
+    if not isinstance(domain, gtx.Domain):
+        domain = gtx.domain(domain)
+
+    domain = extend_domain(domain, extend)  # TODO: this should take into account the Domain of the allocated field
+
     arg_type = get_param_types(fieldview_prog)[name]
     if strategy is None:
         if name in ["out", RETURN]:
@@ -359,7 +368,7 @@ def allocate(
     return _allocate_from_type(
         case=case,
         arg_type=arg_type,
-        sizes=sizes,
+        domain=domain,
         dtype=dtype,
         strategy=strategy.from_case(case=case, fieldview_prog=fieldview_prog, arg_name=name),
     )
@@ -524,7 +533,7 @@ def unstructured_case_3d(unstructured_case):
 def _allocate_from_type(
     case: Case,
     arg_type: ts.TypeSpec,
-    sizes: dict[gtx.Dimension, int],
+    domain: gtx.Domain,
     strategy: DataInitializer,
     dtype: Optional[np.typing.DTypeLike] = None,
     tuple_start: Optional[int] = None,
@@ -534,7 +543,7 @@ def _allocate_from_type(
         case ts.FieldType(dims=dims, dtype=arg_dtype):
             return strategy.field(
                 allocator=case.allocator,
-                sizes={dim: sizes[dim] for dim in dims},
+                domain=common.domain(tuple(domain[dim] for dim in dims)),
                 dtype=dtype or arg_dtype.kind.name.lower(),
             )
         case ts.ScalarType(kind=kind):
@@ -543,7 +552,7 @@ def _allocate_from_type(
             return tuple(
                 (
                     _allocate_from_type(
-                        case=case, arg_type=t, sizes=sizes, dtype=dtype, strategy=strategy
+                        case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
                     )
                     for t in types
                 )
@@ -579,15 +588,16 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
             raise TypeError(f"Can not get size for parameter of type '{param_type}'.")
 
 
-def extend_sizes(
-    sizes: dict[gtx.Dimension, int], extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None
+def extend_domain(
+    domain: gtx.Domain, extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None
 ) -> dict[gtx.Dimension, int]:
     """Calculate the sizes per dimension given a set of extensions."""
-    sizes = sizes.copy()
     if extend:
+        domain = copy.deepcopy(domain)
         for dim, (lower, upper) in extend.items():
-            sizes[dim] += upper - lower
-    return sizes
+            domain[dim][0] += -lower
+            domain[dim][1] += upper
+    return domain
 
 
 def get_default_data(

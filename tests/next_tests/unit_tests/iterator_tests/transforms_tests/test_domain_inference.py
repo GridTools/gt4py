@@ -1097,7 +1097,7 @@ def test_never_accessed_domain_tuple(offset_provider):
 
 def test_concat_where(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    domain_cond = im.domain(common.GridType.CARTESIAN, {IDim: (itir.NegInfinityLiteral(), 4)})
+    domain_cond = im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 4)})
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 4)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (4, 11)})
     testee = im.concat_where(
@@ -1120,13 +1120,13 @@ def test_concat_where(offset_provider):
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
 
 
-# Todo: 2 dimensional test with cond  im.domain(common.GridType.CARTESIAN, {IDim: (itir.NegInfinityLiteral(), 4)})
+# Todo: 2 dimensional test with cond  im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 4)})
 # Todo: nested concat wheres
 
 
 def test_concat_where_two_dimensions(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (10, 30)})
-    domain_cond = im.domain(common.GridType.CARTESIAN, {IDim: (itir.NegInfinityLiteral(), 10)})
+    domain_cond = im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 10)})
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (10, 30)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (10, 20), JDim: (10, 30)})
     testee = im.concat_where(
@@ -1151,7 +1151,7 @@ def test_concat_where_two_dimensions(offset_provider):
 
 def test_concat_where_two_dimensions_J(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (10, 30)})
-    domain_cond = im.domain(common.GridType.CARTESIAN, {JDim: (20, "inf")})
+    domain_cond = im.domain(common.GridType.CARTESIAN, {JDim: (20, itir.InfinityLiteral.POSITIVE)})
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (20, 30)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (10, 20)})
     testee = im.concat_where(
@@ -1176,8 +1176,8 @@ def test_concat_where_two_dimensions_J(offset_provider):
 
 def test_nested_concat_where_two_dimensions(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 20)})
-    domain_cond1 = im.domain(common.GridType.CARTESIAN, {JDim: (10, "inf")})
-    domain_cond2 = im.domain(common.GridType.CARTESIAN, {IDim: (itir.NegInfinityLiteral(), 20)})
+    domain_cond1 = im.domain(common.GridType.CARTESIAN, {JDim: (10, itir.InfinityLiteral.POSITIVE)})
+    domain_cond2 = im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 20)})
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (10, 20)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (20, 30), JDim: (10, 20)})
     domain3 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 10)})
