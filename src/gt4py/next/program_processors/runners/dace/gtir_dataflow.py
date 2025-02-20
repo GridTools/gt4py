@@ -237,10 +237,10 @@ class DataflowOutputEdge:
         # check the kind of node which writes the result
         if isinstance(write_edge.src, dace.nodes.Tasklet):
             # The temporary data written by a tasklet can be safely deleted
-            assert write_size.is_constant
+            assert write_size.is_constant()
             remove_last_node = True
         elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
-            if write_size.is_constant:
+            if write_size.is_constant():
                 # Temporary data with compile-time size is allocated on the stack
                 # and therefore is safe to keep. We decide to keep it as a workaround
                 # for a dace issue with memlet propagation in combination with
