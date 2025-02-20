@@ -128,8 +128,11 @@ def test_propagate_tuple_get():
 
 
 def test_letify_make_tuple_elements():
-    # anything that is not trivial, i.e. a SymRef, works here
-    el1, el2 = im.let("foo", "foo")("foo"), im.let("bar", "bar")("bar")
+    fun_type = ts.FunctionType(
+        pos_only_args=[], pos_or_kw_args={}, kw_only_args={}, returns=int_type
+    )
+    # anything that is not trivial, works here
+    el1, el2 = im.call(im.ref("foo", fun_type))(), im.call(im.ref("bar", fun_type))()
     testee = im.make_tuple(el1, el2)
     expected = im.let(("__ct_el_1", el1), ("__ct_el_2", el2))(
         im.make_tuple("__ct_el_1", "__ct_el_2")

@@ -18,7 +18,7 @@ from typing import Optional
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import ir, ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
     ir_makers as im,
@@ -51,10 +51,7 @@ def _is_trivial_make_tuple_call(node: itir.Expr):
     """Return if node is a `make_tuple` call with all elements `SymRef`s, `Literal`s or tuples thereof."""
     if not cpm.is_call_to(node, "make_tuple"):
         return False
-    if not all(
-        isinstance(arg, (itir.SymRef, itir.Literal)) or _is_trivial_make_tuple_call(arg)
-        for arg in node.args
-    ):
+    if not all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args):
         return False
     return True
 
@@ -163,6 +160,8 @@ class CollapseTuple(
         INLINE_TRIVIAL_LET = enum.auto()
         #: `as_fieldop(λ(t) → ·t[0]+·t[1])({a, b})` -> as_fieldop(λ(a, b) → ·a+·b)(a, b)
         FLATTEN_AS_FIELDOP_ARGS = enum.auto()
+        #: `let(a, b[1])(a)` -> `b[1]`
+        INLINE_TRIVIAL_TUPLE_LET_VAR = enum.auto()
 
         @classmethod
         def all(self) -> CollapseTuple.Transformation:
@@ -505,6 +504,12 @@ class CollapseTuple(
             ):
                 return inline_lambda(node, eligible_params=trivial_args)
 
+        return None
+
+    def transform_inline_trivial_tuple_let_var(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
+        if cpm.is_let(node):
+            if any(trivial_args := [_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args]):
+                return inline_lambda(node, eligible_params=trivial_args)
         return None
 
     # TODO(tehrengruber): This is a transformation that should be executed before visiting the children. Then
