@@ -88,13 +88,11 @@ def test_binop_nonmatching_dims():
     def nonmatching(a: Field[[X], float64], b: Field[[Y], float64]):
         return a + b
 
-    with pytest.raises(
-        errors.DSLError,
-        match=(
-            r"Could not promote 'Field\[\[X], float64\]' and 'Field\[\[Y\], float64\]' to common type in call to +."
-        ),
-    ):
-        _ = FieldOperatorParser.apply_to_function(nonmatching)
+    parsed = FieldOperatorParser.apply_to_function(nonmatching)
+
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
+        dims=[X, Y], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
 
 
 def test_bitopping_float():
