@@ -232,11 +232,36 @@ class DataflowOutputEdge:
         dest: dace.nodes.AccessNode,
         subset: dace_subsets.Range,
     ) -> None:
-        # retrieve the node which writes the result
-        last_node = self.state.in_edges(self.result.dc_node)[0].src
-        if isinstance(last_node, (dace.nodes.Tasklet, dace.nodes.NestedSDFG)):
-            # the last transient node can be deleted
-            last_node_connector = self.state.in_edges(self.result.dc_node)[0].src_conn
+        write_edge = self.state.in_edges(self.result.dc_node)[0]
+        write_size = write_edge.data.dst_subset.num_elements()
+        # check the kind of node which writes the result
+        if isinstance(write_edge.src, dace.nodes.Tasklet):
+            # The temporary data written by a tasklet can be safely deleted
+            assert write_size.is_constant
+            remove_last_node = True
+        elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
+            if write_size.is_constant:
+                # Temporary data with compile-time size is allocated on the stack
+                # and therefore is safe to keep. We decide to keep it as a workaround
+                # for a dace issue with memlet propagation in combination with
+                # nested SDFGs containing conditional blocks. The output memlet
+                # of such blocks will be marked as dynamic because dace is not able
+                # to detect the exact size of a conditional branch dataflow, even
+                # in case of if-else expressions with exact same output data.
+                remove_last_node = False
+            else:
+                # In case the output data has runtime size it is necessary to remove
+                # it in order to avoid dynamic memory allocation inside a parallel
+                # map scope. Otherwise, the memory allocation will for sure lead
+                # to performance degradation, and eventually illegal memory issues
+                # when the gpu runs out of local memory.
+                remove_last_node = True
+        else:
+            remove_last_node = False
+
+        if remove_last_node:
+            last_node = write_edge.src
+            last_node_connector = write_edge.src_conn
             self.state.remove_node(self.result.dc_node)
         else:
             last_node = self.result.dc_node
@@ -1240,7 +1265,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_provider_type: gtx_common.NeighborConnectivityType,
         reduce_init: SymbolExpr,
         reduce_identity: SymbolExpr,
-        reduce_builtin_func: str,
+        reduce_wcr: str,
         result_node: dace.nodes.AccessNode,
     ) -> None:
         """
@@ -1248,8 +1273,8 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         The reduction is implemented as a nested SDFG containing 2 states. In first
         state, the result (a scalar data node passed as argumet) is initialized.
-        In second state, a loop region computes the result by applying the reduction
-        function over the list of values.
+        In second state, a mapped tasklet uses a write-conflict resolution (wcr)
+        memlet to update the result.
         We use the offset provider as a mask to identify skip values: the value
         that is written to the result node is either the input value, when the
         corresponding neighbor index in the connectivity table is valid, or the
@@ -1280,7 +1305,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         local_dim_index = local_dim_indices[0]
         assert desc.shape[local_dim_index] == offset_provider_type.max_neighbors
 
-        # we lower the reduction loop in a nested SDFG
+        # we lower the reduction map with WCR out memlet in a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name("reduce_with_skip_values"))
         nsdfg.add_array(
             "values",
@@ -1308,54 +1333,25 @@ class LambdaToDataflow(eve.NodeVisitor):
             None,
             dace.Memlet(data="acc", subset="0"),
         )
-        reduce_loop = dace.sdfg.state.LoopRegion(
-            label="list_loop",
-            condition_expr=f"i < {offset_provider_type.max_neighbors}",
-            loop_var="i",
-            initialize_expr="i = 0",
-            update_expr="i = i + 1",
-            inverted=False,
-        )
-        nsdfg.add_node(reduce_loop)
-        nsdfg.add_edge(st_init, reduce_loop, dace.InterstateEdge())
-        st_reduce = reduce_loop.add_state("reduce")
+        st_reduce = nsdfg.add_state_after(st_init, f"{nsdfg.label}_reduce")
         # Fill skip values in local dimension with the reduce identity value
-        list_value_arg = f"(__val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {reduce_identity.dc_dtype}({reduce_identity.value}))"
-        reduce_tasklet = st_reduce.add_tasklet(
+        skip_value = f"{reduce_identity.dc_dtype}({reduce_identity.value})"
+        # Since this map operates on a pure local dimension, we explicitly set sequential
+        # schedule and we set the flag 'wcr_nonatomic=True' on the write memlet.
+        # TODO(phimuell): decide if auto-optimizer should reset `wcr_nonatomic` properties, as DaCe does.
+        st_reduce.add_mapped_tasklet(
             name="reduce_with_skip_values",
-            inputs={"__inp", "__val", "__neighbor_idx"},
-            code="__out = {}".format(
-                gtir_python_codegen.format_builtin(reduce_builtin_func, "__inp", list_value_arg)
-            ),
-            outputs={"__out"},
-        )
-        st_reduce.add_edge(
-            st_reduce.add_access("acc"),
-            None,
-            reduce_tasklet,
-            "__inp",
-            dace.Memlet(data="acc", subset="0"),
-        )
-        st_reduce.add_edge(
-            st_reduce.add_access("values"),
-            None,
-            reduce_tasklet,
-            "__val",
-            dace.Memlet(data="values", subset="i"),
-        )
-        st_reduce.add_edge(
-            st_reduce.add_access("neighbor_indices"),
-            None,
-            reduce_tasklet,
-            "__neighbor_idx",
-            dace.Memlet(data="neighbor_indices", subset="i"),
-        )
-        st_reduce.add_edge(
-            reduce_tasklet,
-            "__out",
-            st_reduce.add_access("acc"),
-            None,
-            dace.Memlet(data="acc", subset="0"),
+            map_ranges={"i": f"0:{offset_provider_type.max_neighbors}"},
+            inputs={
+                "__val": dace.Memlet(data="values", subset="i"),
+                "__neighbor_idx": dace.Memlet(data="neighbor_indices", subset="i"),
+            },
+            code=f"__out = __val if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}",
+            outputs={
+                "__out": dace.Memlet(data="acc", subset="0", wcr=reduce_wcr, wcr_nonatomic=True),
+            },
+            external_edges=True,
+            schedule=dace.dtypes.ScheduleType.Sequential,
         )
 
         nsdfg_node = self.state.add_nested_sdfg(
@@ -1390,7 +1386,8 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, ts.ScalarType)
-        reduce_builtin_func, reduce_init, reduce_identity = get_reduce_params(node)
+        op_name, reduce_init, reduce_identity = get_reduce_params(node)
+        reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
 
         result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, reduce_identity.dc_dtype)
         result_node = self.state.add_access(result)
@@ -1411,14 +1408,11 @@ class LambdaToDataflow(eve.NodeVisitor):
                 offset_provider_type,
                 reduce_init,
                 reduce_identity,
-                reduce_builtin_func,
+                reduce_wcr,
                 result_node,
             )
 
         else:
-            reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(
-                reduce_builtin_func, "x", "y"
-            )
             reduce_node = self.state.add_reduce(reduce_wcr, axes=None, identity=reduce_init.value)
             if isinstance(input_expr, MemletExpr):
                 self._add_input_data_edge(input_expr.dc_node, input_expr.subset, reduce_node)
