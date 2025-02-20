@@ -533,7 +533,7 @@ def unstructured_case_3d(unstructured_case):
     return dataclasses.replace(
         unstructured_case,
         default_sizes={**unstructured_case.default_sizes, KDim: 10},
-        offset_provider={**unstructured_case.offset_provider, "KOff": KDim},
+        offset_provider={**unstructured_case.offset_provider, "Koff": KDim},
     )
 
 
@@ -602,8 +602,18 @@ def extend_domain(
     if extend:
         domain = copy.deepcopy(domain)
         for dim, (lower, upper) in extend.items():
-            domain[dim][0] += -lower
-            domain[dim][1] += upper
+            domain = domain.replace(
+                dim,
+                common.named_range(
+                    (
+                        dim,
+                        (
+                            domain[dim].unit_range.start - lower,
+                            domain[dim].unit_range.stop + upper,
+                        ),
+                    )
+                ),
+            )
     return domain
 
 
