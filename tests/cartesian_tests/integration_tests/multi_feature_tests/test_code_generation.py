@@ -27,7 +27,13 @@ from gt4py.cartesian.gtscript import (
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
-from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS, get_array_library
+from cartesian_tests.definitions import (
+    ALL_BACKENDS,
+    CPU_BACKENDS,
+    DACE_BACKENDS,
+    NON_DACE_BACKENDS,
+    get_array_library,
+)
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import (
     EXTERNALS_REGISTRY as externals_registry,
     REGISTRY as stencil_definitions,
@@ -762,3 +768,26 @@ def test_function_inline_in_while(backend):
     out_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
     test(in_arr, out_arr)
     assert (out_arr[:, :, :] == 388.0).all()
+
+
+@pytest.mark.parametrize("backend", NON_DACE_BACKENDS)
+def test_cast_in_index(backend):
+    @gtscript.stencil(backend)
+    def cast_in_index(
+        in_field: Field[np.float64], i32: np.int32, i64: np.int64, out_field: Field[np.float64]
+    ):
+        """Simple copy stencil with forced cast in index calculation."""
+        with computation(PARALLEL), interval(...):
+            out_field = in_field[0, 0, i32 - i64]
+
+
+@pytest.mark.parametrize("backend", DACE_BACKENDS)
+@pytest.mark.xfail(raises=ValueError)
+def test_dace_no_cast_in_index(backend):
+    @gtscript.stencil(backend)
+    def cast_in_index(
+        in_field: Field[np.float64], i32: np.int32, i64: np.int64, out_field: Field[np.float64]
+    ):
+        """Simple copy stencil with forced cast in index calculation."""
+        with computation(PARALLEL), interval(...):
+            out_field = in_field[0, 0, i32 - i64]
