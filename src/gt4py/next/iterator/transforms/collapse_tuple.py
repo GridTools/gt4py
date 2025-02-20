@@ -13,7 +13,7 @@ import enum
 import functools
 import operator
 import re
-from typing import Optional
+from typing import Literal, Optional
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
@@ -41,9 +41,21 @@ def _with_altered_arg(node: itir.FunCall, arg_idx: int, new_arg: itir.Expr | str
     )
 
 
-def _with_altered_iterator_element_type(type_: it_ts.IteratorType, new_el_type: ts.DataType):
+def _with_altered_iterator_element_type(
+    type_: it_ts.IteratorType, new_el_type: ts.DataType
+) -> it_ts.IteratorType:
     return it_ts.IteratorType(
         position_dims=type_.position_dims, defined_dims=type_.defined_dims, element_type=new_el_type
+    )
+
+
+def _with_altered_iterator_position_dims(
+    type_: it_ts.IteratorType, new_position_dims: list[common.Dimension] | Literal["unknown"]
+) -> it_ts.IteratorType:
+    return it_ts.IteratorType(
+        position_dims=new_position_dims,
+        defined_dims=type_.defined_dims,
+        element_type=type_.element_type,
     )
 
 
@@ -540,19 +552,24 @@ class CollapseTuple(
             if isinstance(arg.type, ts.TupleType):
                 ref_to_orig_arg = im.ref(f"__ct_flat_orig_arg_{len(orig_args_map)}", arg.type)
                 orig_args_map[im.sym(ref_to_orig_arg.id, arg.type)] = arg
-                new_params_inner, new_args_inner = [], []
+                new_params_inner, lift_params = [], []
                 for i, type_ in enumerate(param.type.element_type.types):
-                    new_params_inner.append(
+                    new_param = im.sym(
+                        _flattened_as_fieldop_param_el_name(param.id, i),
+                        _with_altered_iterator_element_type(param.type, type_),
+                    )
+                    lift_params.append(
                         im.sym(
-                            _flattened_as_fieldop_param_el_name(param.id, i),
-                            _with_altered_iterator_element_type(param.type, type_),
+                            new_param.id,
+                            _with_altered_iterator_position_dims(new_param.type, "unknown"),  # type: ignore[arg-type]  # always in IteratorType
                         )
                     )
-                    new_args_inner.append(im.tuple_get(i, ref_to_orig_arg))
+                    new_params_inner.append(new_param)
+                    new_args.append(im.tuple_get(i, ref_to_orig_arg))
 
                 param_substitute = im.lift(
-                    im.lambda_(*new_params_inner)(
-                        im.make_tuple(*[im.deref(im.ref(p.id, p.type)) for p in new_params_inner])
+                    im.lambda_(*lift_params)(
+                        im.make_tuple(*[im.deref(im.ref(p.id, p.type)) for p in lift_params])
                     )
                 )(*[im.ref(p.id, p.type) for p in new_params_inner])
 
@@ -560,14 +577,14 @@ class CollapseTuple(
                 # note: the lift is trivial so inlining it is not an issue with respect to tree size
                 new_body = inline_lambda(new_body, force_inline_lift_args=True)
                 new_params.extend(new_params_inner)
-                new_args.extend(new_args_inner)
             else:
                 new_params.append(param)
                 new_args.append(arg)
 
         # remove lifts again
         new_body = inline_lifts.InlineLifts(
-            flags=inline_lifts.InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
+            flags=inline_lifts.InlineLifts.Flag.INLINE_DEREF_LIFT
+            | inline_lifts.InlineLifts.Flag.PROPAGATE_SHIFT
         ).visit(new_body)
         new_body = self.visit(new_body, **kwargs)
         new_stencil = restore_scan(im.lambda_(*new_params)(new_body))
