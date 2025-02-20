@@ -46,7 +46,7 @@ class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
             cond_expr = DerefCond.apply(cond_expr, refs)
             return im.as_fieldop(
                 im.lambda_("_tcw_pos", "_tcw_arg0", "_tcw_arg1", *refs)(
-                    im.if_(im.call("in")(im.deref("_tcw_pos"), cond_expr), im.deref("_tcw_arg0"), im.deref("_tcw_arg1"))
+                    im.if_(im.call("in_")(im.deref("_tcw_pos"), cond_expr), im.deref("_tcw_arg0"), im.deref("_tcw_arg1"))
                 ),
             )(im.make_tuple(*dims), field_a, field_b, *refs)
 

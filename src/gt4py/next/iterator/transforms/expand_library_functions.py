@@ -23,7 +23,7 @@ class ExpandLibraryFunctions(PreserveLocationVisitor, NodeTranslator):
         return cls().visit(node)
 
     def visit_FunCall(self, node: ir.FunCall) -> ir.FunCall:
-        if cpm.is_call_to(node, "in"):
+        if cpm.is_call_to(node, "in_"):
             ret = []
             pos, domain = node.args
             for i, (_, v) in enumerate(
