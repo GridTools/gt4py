@@ -561,7 +561,7 @@ class CollapseTuple(
                     lift_params.append(
                         im.sym(
                             new_param.id,
-                            _with_altered_iterator_position_dims(new_param.type, "unknown"),
+                            _with_altered_iterator_position_dims(new_param.type, "unknown"),  # type: ignore[arg-type]  # always in IteratorType
                         )
                     )
                     new_params_inner.append(new_param)
