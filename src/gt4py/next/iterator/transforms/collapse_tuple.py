@@ -13,12 +13,12 @@ import enum
 import functools
 import operator
 import re
-from typing import Optional
+from typing import Literal, Optional
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import ir, ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
     ir_makers as im,
@@ -41,9 +41,21 @@ def _with_altered_arg(node: itir.FunCall, arg_idx: int, new_arg: itir.Expr | str
     )
 
 
-def _with_altered_iterator_element_type(type_: it_ts.IteratorType, new_el_type: ts.DataType):
+def _with_altered_iterator_element_type(
+    type_: it_ts.IteratorType, new_el_type: ts.DataType
+) -> it_ts.IteratorType:
     return it_ts.IteratorType(
         position_dims=type_.position_dims, defined_dims=type_.defined_dims, element_type=new_el_type
+    )
+
+
+def _with_altered_iterator_position_dims(
+    type_: it_ts.IteratorType, new_position_dims: list[common.Dimension] | Literal["unknown"]
+) -> it_ts.IteratorType:
+    return it_ts.IteratorType(
+        position_dims=new_position_dims,
+        defined_dims=type_.defined_dims,
+        element_type=type_.element_type,
     )
 
 
@@ -51,10 +63,7 @@ def _is_trivial_make_tuple_call(node: itir.Expr):
     """Return if node is a `make_tuple` call with all elements `SymRef`s, `Literal`s or tuples thereof."""
     if not cpm.is_call_to(node, "make_tuple"):
         return False
-    if not all(
-        isinstance(arg, (itir.SymRef, itir.Literal)) or _is_trivial_make_tuple_call(arg)
-        for arg in node.args
-    ):
+    if not all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args):
         return False
     return True
 
@@ -161,8 +170,10 @@ class CollapseTuple(
         PROPAGATE_NESTED_LET = enum.auto()
         #: `let(a, 1)(a)` -> `1` or `let(a, b)(f(a))` -> `f(a)`
         INLINE_TRIVIAL_LET = enum.auto()
-        #: `as_fieldop(λ(t) → ·t[0]+·t[1])({a, b})` -> as_fieldop(λ(a, b) → ·a+·b)(a, b)
+        #: `as_fieldop(λ(t) → ·t[0]+·t[1])({a, b})` -> `as_fieldop(λ(a, b) → ·a+·b)(a, b)`
         FLATTEN_AS_FIELDOP_ARGS = enum.auto()
+        #: `let(a, b[1])(a)` -> `b[1]`
+        INLINE_TRIVIAL_TUPLE_LET_VAR = enum.auto()
 
         @classmethod
         def all(self) -> CollapseTuple.Transformation:
@@ -507,11 +518,18 @@ class CollapseTuple(
 
         return None
 
+    def transform_inline_trivial_tuple_let_var(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
+        if cpm.is_let(node):
+            if any(trivial_args := [_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args]):
+                return inline_lambda(node, eligible_params=trivial_args)
+        return None
+
     # TODO(tehrengruber): This is a transformation that should be executed before visiting the children. Then
     #  revisiting the body would not be needed.
     def transform_flatten_as_fieldop_args(
         self, node: itir.FunCall, **kwargs
     ) -> Optional[itir.Node]:
+        # `as_fieldop(λ(t) → ·t[0]+·t[1])({a, b})` -> `as_fieldop(λ(a, b) → ·a+·b)(a, b)`
         if not cpm.is_applied_as_fieldop(node):
             return None
 
@@ -528,43 +546,53 @@ class CollapseTuple(
 
         new_body = stencil.expr
         domain = node.fun.args[1] if len(node.fun.args) > 1 else None  # type: ignore[attr-defined] # ensured by cpm.is_applied_as_fieldop
-        orig_args_map: dict[itir.Sym, itir.Expr] = {}
+        remapped_args: dict[
+            itir.Sym, itir.Expr
+        ] = {}  # contains the arguments that are remapped, e.g. `{a, b}`
         new_params: list[itir.Sym] = []
         new_args: list[itir.Expr] = []
         for param, arg in zip(stencil.params, node.args, strict=True):
             if isinstance(arg.type, ts.TupleType):
-                ref_to_orig_arg = im.ref(f"__ct_flat_orig_arg_{len(orig_args_map)}", arg.type)
-                orig_args_map[im.sym(ref_to_orig_arg.id, arg.type)] = arg
-                new_params_inner, new_args_inner = [], []
+                ref_to_remapped_arg = im.ref(f"__ct_flat_remapped_{len(remapped_args)}", arg.type)
+                remapped_args[im.sym(ref_to_remapped_arg.id, arg.type)] = arg
+                new_params_inner, lift_params = [], []
                 for i, type_ in enumerate(param.type.element_type.types):
-                    new_params_inner.append(
+                    new_param = im.sym(
+                        _flattened_as_fieldop_param_el_name(param.id, i),
+                        _with_altered_iterator_element_type(param.type, type_),
+                    )
+                    lift_params.append(
                         im.sym(
-                            _flattened_as_fieldop_param_el_name(param.id, i),
-                            _with_altered_iterator_element_type(param.type, type_),
+                            new_param.id,
+                            _with_altered_iterator_position_dims(new_param.type, "unknown"),  # type: ignore[arg-type]  # always in IteratorType
                         )
                     )
-                    new_args_inner.append(im.tuple_get(i, ref_to_orig_arg))
+                    new_params_inner.append(new_param)
+                    new_args.append(im.tuple_get(i, ref_to_remapped_arg))
 
+                # an iterator that substitutes the original (tuple) iterator, e.g. `t`. Built
+                # from the new parameters which are the elements of `t`.
                 param_substitute = im.lift(
-                    im.lambda_(*new_params_inner)(
-                        im.make_tuple(*[im.deref(im.ref(p.id, p.type)) for p in new_params_inner])
+                    im.lambda_(*lift_params)(
+                        im.make_tuple(*[im.deref(im.ref(p.id, p.type)) for p in lift_params])
                     )
                 )(*[im.ref(p.id, p.type) for p in new_params_inner])
 
                 new_body = im.let(param.id, param_substitute)(new_body)
                 # note: the lift is trivial so inlining it is not an issue with respect to tree size
                 new_body = inline_lambda(new_body, force_inline_lift_args=True)
+
                 new_params.extend(new_params_inner)
-                new_args.extend(new_args_inner)
             else:
                 new_params.append(param)
                 new_args.append(arg)
 
         # remove lifts again
         new_body = inline_lifts.InlineLifts(
-            flags=inline_lifts.InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
+            flags=inline_lifts.InlineLifts.Flag.INLINE_DEREF_LIFT
+            | inline_lifts.InlineLifts.Flag.PROPAGATE_SHIFT
         ).visit(new_body)
         new_body = self.visit(new_body, **kwargs)
         new_stencil = restore_scan(im.lambda_(*new_params)(new_body))
 
-        return im.let(*orig_args_map.items())(im.as_fieldop(new_stencil, domain)(*new_args))
+        return im.let(*remapped_args.items())(im.as_fieldop(new_stencil, domain)(*new_args))

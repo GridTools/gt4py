@@ -18,6 +18,7 @@ class NestConcatWheres(PreserveLocationVisitor, NodeTranslator):
 
     def visit_FunCall(self, node: ir.FunCall) -> ir.FunCall:
         node = self.generic_visit(node)
+
         if cpm.is_call_to(node, "concat_where"):
             cond_expr, field_a, field_b = node.args
             if cpm.is_call_to(cond_expr, ("and_")):
@@ -35,4 +36,4 @@ class NestConcatWheres(PreserveLocationVisitor, NodeTranslator):
                 cond2 = im.greater(cond_expr.args[0], cond_expr.args[1])
                 return im.concat_where(cond1, field_b, im.concat_where(cond2, field_b, field_a))
 
-        return self.generic_visit(node)
+        return node

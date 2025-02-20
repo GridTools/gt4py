@@ -93,6 +93,16 @@ def canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
     return expr
 
 
+def _remove_let_alias(let_expr: itir.FunCall):
+    assert cpm.is_let(let_expr)
+    is_aliased_let = True
+    for param, arg in zip(let_expr.fun.params, let_expr.args, strict=True):  # type: ignore[attr-defined]  # ensured by cpm.is_let
+        is_aliased_let &= cpm.is_ref_to(arg, param.id)
+    if is_aliased_let:
+        return let_expr.fun.expr  # type: ignore[attr-defined]  # ensured by cpm.is_let
+    return let_expr
+
+
 def unwrap_scan(stencil: itir.Lambda | itir.FunCall):
     """
     If given a scan, extract stencil part of its scan pass and a back-transformation into a scan.
@@ -108,7 +118,7 @@ def unwrap_scan(stencil: itir.Lambda | itir.FunCall):
     >>> str(stencil)
     'λ(arg) → state + ·arg'
     >>> str(back_trafo(stencil))
-    'scan(λ(state, arg) → (λ(arg) → state + ·arg)(arg), True, 0.0)'
+    'scan(λ(state, arg) → state + ·arg, True, 0.0)'
 
     In case a regular stencil is given it is returned as-is:
 
@@ -125,8 +135,10 @@ def unwrap_scan(stencil: itir.Lambda | itir.FunCall):
 
         def restore_scan(transformed_stencil_like: itir.Lambda):
             new_scan_pass = im.lambda_(state_param, *transformed_stencil_like.params)(
-                im.call(transformed_stencil_like)(
-                    *(param.id for param in transformed_stencil_like.params)
+                _remove_let_alias(
+                    im.call(transformed_stencil_like)(
+                        *(param.id for param in transformed_stencil_like.params)
+                    )
                 )
             )
             return im.call("scan")(new_scan_pass, direction, init)

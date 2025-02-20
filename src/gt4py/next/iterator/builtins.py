@@ -406,6 +406,7 @@ def bool(*args):  # noqa: A001 [builtin-variable-shadowing]
 def concat_where(*args):
     raise BackendNotSelectedError()
 
+
 @builtin_dispatch
 def in_(*args):
     raise BackendNotSelectedError()

@@ -172,7 +172,9 @@ class IndexInitializer(DataInitializer):
                 f"'IndexInitializer' only supports fields with a single 'Dimension', got {domain}."
             )
         return constructors.as_field(
-            domain=domain, data=np.arange(domain.ranges[0].start, domain.ranges[0].stop, dtype=dtype), allocator=allocator
+            domain=domain,
+            data=np.arange(domain.ranges[0].start, domain.ranges[0].stop, dtype=dtype),
+            allocator=allocator,
         )
 
     def from_case(
@@ -349,7 +351,10 @@ def allocate(
     """
     if sizes:
         assert not domain and all(dim in case.default_sizes for dim in sizes)
-        domain = {dim: (0, sizes[dim] if dim in sizes else default_size) for dim, default_size in case.default_sizes.items()}
+        domain = {
+            dim: (0, sizes[dim] if dim in sizes else default_size)
+            for dim, default_size in case.default_sizes.items()
+        }
 
     if not domain:
         domain = {dim: (0, size) for dim, size in case.default_sizes.items()}
@@ -357,7 +362,9 @@ def allocate(
     if not isinstance(domain, gtx.Domain):
         domain = gtx.domain(domain)
 
-    domain = extend_domain(domain, extend)  # TODO: this should take into account the Domain of the allocated field
+    domain = extend_domain(
+        domain, extend
+    )  # TODO: this should take into account the Domain of the allocated field
 
     arg_type = get_param_types(fieldview_prog)[name]
     if strategy is None:
@@ -526,7 +533,7 @@ def unstructured_case_3d(unstructured_case):
     return dataclasses.replace(
         unstructured_case,
         default_sizes={**unstructured_case.default_sizes, KDim: 10},
-        offset_provider={**unstructured_case.offset_provider, "KOff": KDim},
+        offset_provider={**unstructured_case.offset_provider, "Koff": KDim},
     )
 
 
@@ -595,8 +602,18 @@ def extend_domain(
     if extend:
         domain = copy.deepcopy(domain)
         for dim, (lower, upper) in extend.items():
-            domain[dim][0] += -lower
-            domain[dim][1] += upper
+            domain = domain.replace(
+                dim,
+                common.named_range(
+                    (
+                        dim,
+                        (
+                            domain[dim].unit_range.start - lower,
+                            domain[dim].unit_range.stop + upper,
+                        ),
+                    )
+                ),
+            )
     return domain
 
 
