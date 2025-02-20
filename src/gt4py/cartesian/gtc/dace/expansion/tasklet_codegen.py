@@ -116,7 +116,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
                     )
                 )
         else:
-            # Grid-point access, I & J are unitary, K can be offseted with variable
+            # Grid-point access, I & J are unitary, K can be offsetted with variable
             # Resolve K offset (also resolves I & J)
             if node.offset is not None:
                 index_strs.append(
