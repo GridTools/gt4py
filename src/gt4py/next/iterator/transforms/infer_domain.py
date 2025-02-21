@@ -21,7 +21,7 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.transforms import trace_shifts
+from gt4py.next.iterator.transforms import constant_folding, trace_shifts
 from gt4py.next.utils import flatten_nested_tuple, tree_map
 
 
@@ -436,8 +436,12 @@ def _infer_stmt(
     **kwargs: Unpack[InferenceOptions],
 ):
     if isinstance(stmt, itir.SetAt):
+        # constant fold once otherwise constant folding after domain inference might create (syntactic) differences
+        # between the domain stored in IR and in the annex
+        domain = constant_folding.ConstantFolding.apply(stmt.domain)
+
         transformed_call, _ = infer_expr(
-            stmt.expr, domain_utils.SymbolicDomain.from_expr(stmt.domain), **kwargs
+            stmt.expr, domain_utils.SymbolicDomain.from_expr(domain), **kwargs
         )
 
         return itir.SetAt(
