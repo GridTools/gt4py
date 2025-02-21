@@ -229,6 +229,11 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
         return im.ref(node.id)
 
+    def visit_Attribute(self, node: foast.Attribute, **kwargs):
+        if isinstance(node.type, ts.DimensionType):
+            return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
+        raise AssertionError()
+
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         return im.tuple_get(node.index, self.visit(node.value, **kwargs))
 
@@ -397,10 +402,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.let(cond_symref_name, cond_)(result)
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
-            return im.call("concat_where")(*self.visit(node.args))
-        else:
-            raise NotImplementedError()
+        domain, true_branch, false_branch = self.visit(node.args)
+        return lowering_utils.process_elements(
+            lambda tb, fb: im.call("concat_where")(domain, tb, fb),
+            (true_branch, false_branch),
+            node.type,
+        )
 
     # TODO: tuple case
 

@@ -17,6 +17,11 @@ from gt4py.next.iterator.transforms import symbol_ref_utils
 
 
 class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = (
+        "type",
+        "domain",
+    )
+
     @classmethod
     def apply(cls, node: ir.Node):
         return cls().visit(node)
@@ -39,6 +44,7 @@ class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
                         )
                     )
                 ),
+                node.annex.domain.as_expr(),
             )(im.make_tuple(*dims), field_a, field_b, *refs)
 
         return node

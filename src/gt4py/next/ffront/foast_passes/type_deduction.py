@@ -10,7 +10,7 @@ from typing import Any, Optional, TypeAlias, TypeVar, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
-from gt4py.next import errors
+from gt4py.next import errors, utils
 from gt4py.next.common import DimensionKind, promote_dims
 from gt4py.next.ffront import (  # noqa
     dialect_ast_enums,
@@ -997,22 +997,26 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         assert isinstance(mask_type, ts.DomainType)
         assert all(
-            isinstance(arg, (ts.FieldType, ts.ScalarType))
+            isinstance(el, (ts.FieldType, ts.ScalarType))
             for arg in (true_branch_type, false_branch_type)
+            for el in type_info.primitive_constituents(arg)
         )
 
-        if (t_dtype := type_info.extract_dtype(true_branch_type)) != (
-            f_dtype := type_info.extract_dtype(false_branch_type)
-        ):
-            raise errors.DSLError(
-                node.location,
-                f"Field arguments must be of same dtype, got '{t_dtype}' != '{f_dtype}'.",
-            )
-
-        return_dims = promote_dims(
-            mask_type.dims, type_info.promote(true_branch_type, false_branch_type).dims
+        @utils.tree_map(
+            collection_type=ts.TupleType,
+            result_collection_constructor=lambda el: ts.TupleType(types=list(el)),
         )
-        return_type = ts.FieldType(dims=return_dims, dtype=type_info.promote(t_dtype, f_dtype))
+        def deduce_return_type(tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType):
+            if (t_dtype := type_info.extract_dtype(tb)) != (f_dtype := type_info.extract_dtype(fb)):
+                raise errors.DSLError(
+                    node.location,
+                    f"Field arguments must be of same dtype, got '{t_dtype}' != '{f_dtype}'.",
+                )
+            return_dims = promote_dims(mask_type.dims, type_info.promote(tb, fb).dims)
+            return_type = ts.FieldType(dims=return_dims, dtype=type_info.promote(t_dtype, f_dtype))
+            return return_type
+
+        return_type = deduce_return_type(true_branch_type, false_branch_type)
 
         return foast.Call(
             func=node.func,

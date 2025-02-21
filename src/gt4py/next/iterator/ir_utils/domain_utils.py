@@ -189,6 +189,8 @@ def domain_intersection(*domains: SymbolicDomain) -> SymbolicDomain:
             lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
             [domain.ranges[dim].stop for domain in domains],
         )
+        # constant fold expression to keep the tree small
+        start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.Expr
         new_domain_ranges[dim] = SymbolicRange(start, stop)
 
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)

@@ -18,6 +18,11 @@ from gt4py.next.iterator.ir_utils import (
 
 
 class ExpandLibraryFunctions(PreserveLocationVisitor, NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = (
+        "type",
+        "domain",
+    )
+
     @classmethod
     def apply(cls, node: ir.Node):
         return cls().visit(node)
@@ -25,6 +30,8 @@ class ExpandLibraryFunctions(PreserveLocationVisitor, NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall) -> ir.FunCall:
         node = self.generic_visit(node)
 
+        # `in_({i, j, k}, u⟨ Iₕ: [i0, i1[, Iₕ: [j0, j1[, Iₕ: [k0, k1[ ⟩`
+        # -> `i0 < i < i1 & j0 < j < j1 & k0 < k < k1`
         if cpm.is_call_to(node, "in_"):
             ret = []
             pos, domain = node.args

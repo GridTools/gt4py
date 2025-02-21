@@ -5,7 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
+import dataclasses
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next import common
@@ -16,13 +16,18 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
+from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import _get_gridtype
 from gt4py.next.type_system import type_specifications as ts
 
 
+@dataclasses.dataclass
 class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
+    grid_type: common.GridType
+
     @classmethod
-    def apply(cls, node: ir.Node):
-        return cls().visit(node, recurse=True)
+    def apply(cls, program: ir.Program):
+        # TODO: move _get_gridtype
+        return cls(grid_type=_get_gridtype(program.body)).visit(program, recurse=True)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
         if kwargs["recurse"]:
@@ -80,7 +85,7 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                     max_ = im.plus(value, 1)
 
                 domain = domain_utils.SymbolicDomain(
-                    common.GridType.CARTESIAN,  # TODO
+                    self.grid_type,
                     ranges={dim: domain_utils.SymbolicRange(start=min_, stop=max_)},
                 )
 

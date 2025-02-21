@@ -21,6 +21,7 @@ class NestConcatWheres(PreserveLocationVisitor, NodeTranslator):
 
         if cpm.is_call_to(node, "concat_where"):
             cond_expr, field_a, field_b = node.args
+            # TODO: don't duplicate exprs here
             if cpm.is_call_to(cond_expr, ("and_")):
                 conds = cond_expr.args
                 return im.concat_where(
