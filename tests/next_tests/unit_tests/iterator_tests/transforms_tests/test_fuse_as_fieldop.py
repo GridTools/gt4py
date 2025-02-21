@@ -145,8 +145,8 @@ def test_staged_inlining():
     )
     expected = im.as_fieldop(
         im.lambda_("a", "b")(
-            im.let("_icdlv_1", im.plus(im.deref("a"), im.deref("b")))(
-                im.plus(im.plus("_icdlv_1", 1), im.plus("_icdlv_1", 2))
+            im.let("_icdlv_1", im.lambda_()(im.plus(im.deref("a"), im.deref("b"))))(
+                im.plus(im.plus(im.call("_icdlv_1")(), 1), im.plus(im.call("_icdlv_1")(), 2))
             )
         ),
         d,
@@ -328,8 +328,8 @@ def test_chained_fusion():
     )
     expected = im.as_fieldop(
         im.lambda_("inp1", "inp2")(
-            im.let("_icdlv_1", im.plus(im.deref("inp1"), im.deref("inp2")))(
-                im.plus("_icdlv_1", "_icdlv_1")
+            im.let("_icdlv_1", im.lambda_()(im.plus(im.deref("inp1"), im.deref("inp2"))))(
+                im.plus(im.call("_icdlv_1")(), im.call("_icdlv_1")())
             )
         ),
         d,
