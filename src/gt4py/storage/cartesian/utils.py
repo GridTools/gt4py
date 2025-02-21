@@ -199,7 +199,7 @@ def asarray(
     elif not device:
         if hasattr(array, "__dlpack_device__"):
             kind, _ = array.__dlpack_device__()
-            if kind in [core_defs.DeviceType.CPU, core_defs.DeviceType.CPU_PINNED]:
+            if kind in [core_defs.DeviceType.CPU]:
                 xp = np
             elif kind in [
                 core_defs.DeviceType.CUDA,
