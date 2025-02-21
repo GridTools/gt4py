@@ -2109,8 +2109,12 @@ def test_gtir_concat_where():
 def test_gtir_concat_where_two_dimensions():
     M, N = (30, 20)
     domain = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 20)})
-    domain_cond1 = im.domain(gtx_common.GridType.CARTESIAN, {JDim: (10, gtir.InfinityLiteral.POSITIVE)})
-    domain_cond2 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (gtir.InfinityLiteral.NEGATIVE, 20)})
+    domain_cond1 = im.domain(
+        gtx_common.GridType.CARTESIAN, {JDim: (10, gtir.InfinityLiteral.POSITIVE)}
+    )
+    domain_cond2 = im.domain(
+        gtx_common.GridType.CARTESIAN, {IDim: (gtir.InfinityLiteral.NEGATIVE, 20)}
+    )
     domain1 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 20), JDim: (10, 20)})
     domain2 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (20, 30), JDim: (10, 20)})
     domain3 = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 10)})

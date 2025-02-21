@@ -147,12 +147,7 @@ class PythonCodegen(codegen.TemplatedGenerator):
     def visit_InfinityLiteral(
         self, node: gtir.InfinityLiteral, args_map: dict[str, gtir.Node]
     ) -> str:
-        return str(sympy.oo)
-
-    def visit_NegInfinityLiteral(
-        self, node: gtir.NegInfinityLiteral, args_map: dict[str, gtir.Node]
-    ) -> str:
-        return str(-sympy.oo)
+        return str(sympy.oo) if node == gtir.InfinityLiteral.POSITIVE else str(-sympy.oo)
 
     def visit_SymRef(self, node: gtir.SymRef, args_map: dict[str, gtir.Node]) -> str:
         symbol = str(node.id)
