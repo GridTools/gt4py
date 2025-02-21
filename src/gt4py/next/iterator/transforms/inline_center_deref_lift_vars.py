@@ -39,7 +39,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
     Instead this pass, first takes the iterator `(↑stencil)(it)` and transforms it into a
     0-ary function that evaluates to the value at the current location.
 
-    `λ() → (↑stencil)(it)`
+    `λ() → ·(↑stencil)(it)`
 
     Then all previous occurences of `var` are replaced by this function.
 
