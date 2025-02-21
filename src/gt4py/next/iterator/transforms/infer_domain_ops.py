@@ -79,7 +79,7 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                 elif cpm.is_call_to(node, "greater_equal"):
                     min_ = value
                     max_ = ir.InfinityLiteral.POSITIVE
-                # IDim == 1
+                # IDim == 1  # TODO: isn't this removed before and rewritten as two concat_where?
                 elif cpm.is_call_to(node, "eq"):
                     min_ = value
                     max_ = im.plus(value, 1)
