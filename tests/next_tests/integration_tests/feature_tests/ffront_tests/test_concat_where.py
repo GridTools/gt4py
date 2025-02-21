@@ -69,7 +69,7 @@ def test_concat_where_non_overlapping(cartesian_case):
 def test_concat_where_non_overlapping_different_dims(cartesian_case):
     @gtx.field_operator
     def testee(
-        ground: cases.KField,  # note: boundary field is only defined in K
+        ground: cases.IJField,  # note: boundary field is only defined in K
         air: cases.IJKField,
     ) -> cases.IJKField:
         return concat_where(KDim == 0, ground, air)
