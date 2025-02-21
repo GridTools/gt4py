@@ -44,7 +44,7 @@ class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
                         )
                     )
                 ),
-                node.annex.domain.as_expr()
+                node.annex.domain.as_expr(),
             )(im.make_tuple(*dims), field_a, field_b, *refs)
 
         return node

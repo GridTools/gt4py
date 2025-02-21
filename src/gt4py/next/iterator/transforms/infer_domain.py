@@ -199,7 +199,7 @@ def _infer_as_fieldop(
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]],
     allow_uninferred: bool,
-    keep_existing_domains: bool
+    keep_existing_domains: bool,
 ) -> tuple[itir.FunCall, AccessedDomains]:
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
@@ -248,7 +248,7 @@ def _infer_as_fieldop(
             offset_provider=offset_provider,
             symbolic_domain_sizes=symbolic_domain_sizes,
             allow_uninferred=allow_uninferred,
-            keep_existing_domains=keep_existing_domains
+            keep_existing_domains=keep_existing_domains,
         )
         transformed_inputs.append(transformed_input)
 
@@ -439,7 +439,7 @@ def infer_expr(
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     allow_uninferred: bool = False,
-    keep_existing_domains: bool = False
+    keep_existing_domains: bool = False,
 ) -> tuple[itir.Expr, AccessedDomains]:
     """
     Infer the domain of all field subexpressions of `expr`.
@@ -512,7 +512,7 @@ def infer_program(
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     allow_uninferred: bool = False,
     # TODO: add test
-    keep_existing_domains: bool = False
+    keep_existing_domains: bool = False,
 ) -> itir.Program:
     """
     Infer the domain of all field subexpressions inside a program.
@@ -534,7 +534,7 @@ def infer_program(
                 offset_provider=offset_provider,
                 symbolic_domain_sizes=symbolic_domain_sizes,
                 allow_uninferred=allow_uninferred,
-                keep_existing_domains=keep_existing_domains
+                keep_existing_domains=keep_existing_domains,
             )
             for stmt in program.body
         ],
