@@ -12,15 +12,18 @@ from typing import (
     Callable,
     Dict,
     Final,
-    Literal,
     Optional,
     Sequence,
     Tuple,
+    TypeAlias,
     TypedDict,
     Union,
 )
 
 import numpy as np
+
+import gt4py._core.definitions as core_defs
+from gt4py.storage.cartesian.cupy_device import CUPY_DEVICE
 
 
 if TYPE_CHECKING:
@@ -29,30 +32,50 @@ if TYPE_CHECKING:
     except ImportError:
         cp = None
 
+LayoutMap: TypeAlias = Callable[[Tuple[str, ...]], Tuple[Optional[int], ...]]
+
 
 class LayoutInfo(TypedDict):
     alignment: int  # measured in bytes
-    device: Literal["cpu", "gpu"]
-    layout_map: Callable[[Tuple[str, ...]], Tuple[Optional[int], ...]]
+    device: core_defs.DeviceType | None
+    layout_map: LayoutMap
     is_optimal_layout: Callable[[Any, Tuple[str, ...]], bool]
 
 
+# Registry of LayoutInfos per backend
 REGISTRY: Dict[str, LayoutInfo] = {}
 
 
-def from_name(name: str) -> Optional[LayoutInfo]:
-    return REGISTRY.get(name, None)
+def from_name(backend_name: str) -> Optional[LayoutInfo]:
+    """Fetch LayoutInfo from the registry for a given backend name."""
+    return REGISTRY.get(backend_name, None)
 
 
-def register(name: str, info: Optional[LayoutInfo]) -> None:
+def _register(backend_name: str, info: Optional[LayoutInfo]) -> None:
+    """ "Register LayoutInfo under the given backend name. Clears an existing registry entry if None is given as info."""
     if info is None:
-        if name in REGISTRY:
-            del REGISTRY[name]
-    else:
-        assert isinstance(name, str)
-        assert isinstance(info, dict)
+        if backend_name in REGISTRY:
+            del REGISTRY[backend_name]
+        return
 
-        REGISTRY[name] = info
+    assert isinstance(backend_name, str)
+    assert isinstance(info, dict)
+
+    REGISTRY[backend_name] = info
+
+
+def is_cpu_device(layout_info: LayoutInfo) -> bool:
+    device = layout_info["device"]
+    if device is None:
+        raise ValueError("Can't determine if device is CPU because layout_info['device'] is None.")
+    return device == core_defs.DeviceType.CPU
+
+
+def is_gpu_device(layout_info: LayoutInfo) -> bool:
+    device = layout_info["device"]
+    if device is None:
+        raise ValueError("Can't determine if device is GPU because layout_info['device'] is None.")
+    return device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]
 
 
 def check_layout(layout_map, strides):
@@ -136,37 +159,53 @@ def make_cuda_layout_map(dimensions: Tuple[str, ...]) -> Tuple[Optional[int], ..
 
 NaiveCPULayout: Final[LayoutInfo] = {
     "alignment": 1,
-    "device": "cpu",
+    "device": core_defs.DeviceType.CPU,
     "layout_map": lambda axes: tuple(i for i in range(len(axes))),
     "is_optimal_layout": lambda *_: True,
 }
-register("naive_cpu", NaiveCPULayout)
+_register("numpy", NaiveCPULayout)
 
 CPUIFirstLayout: Final[LayoutInfo] = {
     "alignment": 8,
-    "device": "cpu",
+    "device": core_defs.DeviceType.CPU,
     "layout_map": make_gtcpu_ifirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_ifirst_layout_map),
 }
-register("cpu_ifirst", CPUIFirstLayout)
+_register("gt:cpu_ifirst", CPUIFirstLayout)
 
 
 CPUKFirstLayout: Final[LayoutInfo] = {
     "alignment": 1,
-    "device": "cpu",
+    "device": core_defs.DeviceType.CPU,
     "layout_map": make_gtcpu_kfirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_kfirst_layout_map),
 }
-register("cpu_kfirst", CPUKFirstLayout)
+_register("gt:cpu_kfirst", CPUKFirstLayout)
 
 
 CUDALayout: Final[LayoutInfo] = {
     "alignment": 32,
-    "device": "gpu",
+    "device": CUPY_DEVICE,
     "layout_map": make_cuda_layout_map,
     "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
 }
-register("cuda", CUDALayout)
+_register("cuda", CUDALayout)
 
 GPULayout: Final[LayoutInfo] = CUDALayout
-register("gpu", GPULayout)
+_register("gt:gpu", GPULayout)
+
+DaceCPULayout: Final[LayoutInfo] = {
+    "alignment": 1,
+    "device": core_defs.DeviceType.CPU,
+    "layout_map": layout_maker_factory((0, 1, 2)),
+    "is_optimal_layout": layout_checker_factory(layout_maker_factory((0, 1, 2))),
+}
+_register("dace:cpu", DaceCPULayout)
+
+DaceGPULayout: Final[LayoutInfo] = {
+    "alignment": 32,
+    "device": CUPY_DEVICE,
+    "layout_map": layout_maker_factory((2, 1, 0)),
+    "is_optimal_layout": layout_checker_factory(layout_maker_factory((2, 1, 0))),
+}
+_register("dace:gpu", DaceGPULayout)
