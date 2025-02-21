@@ -128,6 +128,7 @@ requires-python = '>=3.10, <3.12'
 [project.optional-dependencies]
 # bundles
 all = ['gt4py[dace,formatting,jax,performance,testing]']
+all-next = ['gt4py[dace-next,formatting,jax,performance,testing]']
 # device-specific extras
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
@@ -445,7 +446,15 @@ conflicts = [
   ],
   [
     {extra = 'all'},
+    {extra = 'all-next'}
+  ],
+  [
+    {extra = 'all'},
     {extra = 'dace-next'}
+  ],
+  [
+    {extra = 'all-next'},
+    {extra = 'dace'}
   ]
 ]
 
