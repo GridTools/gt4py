@@ -224,8 +224,15 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_Symbol(self, node: foast.Symbol, **kwargs: Any) -> itir.Sym:
         return im.sym(node.id)
 
-    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef:
+    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef | itir.AxisLiteral:
+        if isinstance(node.type, ts.DimensionType):
+            return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
         return im.ref(node.id)
+
+    def visit_Attribute(self, node: foast.Attribute, **kwargs):
+        if isinstance(node.type, ts.DimensionType):
+            return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
+        raise AssertionError()
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         return im.tuple_get(node.index, self.visit(node.value, **kwargs))
@@ -394,7 +401,15 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
         return im.let(cond_symref_name, cond_)(result)
 
-    _visit_concat_where = _visit_where  # TODO(havogt): upgrade concat_where
+    def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        domain, true_branch, false_branch = self.visit(node.args)
+        return lowering_utils.process_elements(
+            lambda tb, fb: im.call("concat_where")(domain, tb, fb),
+            (true_branch, false_branch),
+            node.type,
+        )
+
+    # TODO: tuple case
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         expr = self.visit(node.args[0], **kwargs)
@@ -477,7 +492,7 @@ def _map(
     Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_`ing lists.
     """
     if all(
-        isinstance(t, ts.ScalarType)
+        isinstance(t, (ts.ScalarType, ts.DimensionType, ts.DomainType))
         for arg_type in original_arg_types
         for t in type_info.primitive_constituents(arg_type)
     ):

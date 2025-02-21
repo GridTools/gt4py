@@ -5,8 +5,9 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+from __future__ import annotations
 
-from typing import ClassVar, List, Optional, Union
+from typing import TYPE_CHECKING, ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef
@@ -61,6 +62,23 @@ class Literal(Expr):
 
 class NoneLiteral(Expr):
     _none_literal: int = 0
+
+
+class InfinityLiteral(Expr):
+    if TYPE_CHECKING:
+        POSITIVE: ClassVar[
+            InfinityLiteral
+        ]  # TODO(tehrengruber): should be `ClassVar[InfinityLiteral]`, but self-referential not supported in eve
+        NEGATIVE: ClassVar[InfinityLiteral]
+
+    name: typing.Literal["POSITIVE", "NEGATIVE"]
+
+    def __str__(self):
+        return f"{type(self).__name__}.{self.name}"
+
+
+InfinityLiteral.NEGATIVE = InfinityLiteral(name="NEGATIVE")
+InfinityLiteral.POSITIVE = InfinityLiteral(name="POSITIVE")
 
 
 class OffsetLiteral(Expr):
@@ -142,3 +160,4 @@ FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Program.__hash__ = Node.__hash__  # type: ignore[method-assign]
 SetAt.__hash__ = Node.__hash__  # type: ignore[method-assign]
 IfStmt.__hash__ = Node.__hash__  # type: ignore[method-assign]
+InfinityLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
