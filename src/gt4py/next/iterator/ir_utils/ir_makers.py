@@ -468,7 +468,8 @@ def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Cal
     def _populate_domain_annex_wrapper(*args, **kwargs):
         node = result(*args, **kwargs)
         # note: if the domain is not a direct construction, e.g. because it is only a reference
-        # to a domain defined in a let, don't populate the annex
+        # to a domain defined in a let, don't populate the annex, since we can not create a
+        # symbolic domain for it.
         if domain and cpm.is_call_to(domain, ("cartesian_domain", "unstructured_domain")):
             node.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)
         return node
