@@ -49,7 +49,10 @@ global_metric_container: dict[str, RuntimeMetric] = defaultdict(RuntimeMetric)
 
 
 def summary():
+    max_len = max(len(k) for k in global_metric_container.keys())
+    print()
+    print(f"{'program':{max_len + 1}} {'cpp':<9} {'std':<9} {'total':<9} {'std':<9}")
     for k, v in global_metric_container.items():
-        print(k)
-        print(f"  cpp_time:   {v.cpp_time}")
-        print(f"  total_time: {v.total_time}")
+        print(
+            f"{k:{max_len + 1}} {v.cpp_time.mean_skip_first:.3e} {v.cpp_time.std_skip_first:.3e} {v.total_time.mean_skip_first:.3e} {v.total_time.std_skip_first:.3e}"
+        )
