@@ -157,6 +157,8 @@ def _collect_offset_definitions(
     offset_definitions = {}
 
     for offset_name, dim_or_connectivity_type in offset_provider_type.items():
+        if offset_name == "exec_info":
+            continue
         if isinstance(dim_or_connectivity_type, common.Dimension):
             dim: common.Dimension = dim_or_connectivity_type
             if grid_type == common.GridType.CARTESIAN:

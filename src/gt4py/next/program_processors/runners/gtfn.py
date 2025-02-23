@@ -18,7 +18,7 @@ from flufl import lock
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
-from gt4py.next import backend, common, config, field_utils
+from gt4py.next import backend, common, config, field_utils, metrics
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
@@ -59,11 +59,21 @@ def convert_args(
         converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
-        return inp(
+        local_exec_info = {} if "exec_info" in offset_provider else None
+        res = inp(
             *converted_args,
             *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
             *conn_args,
+            local_exec_info,
         )
+        if local_exec_info is not None:
+            exec_info: metrics.RuntimeMetric = (
+                offset_provider["exec_info"] if "exec_info" in offset_provider else None
+            )
+            start = local_exec_info["run_cpp_start_time"]
+            end = local_exec_info["run_cpp_end_time"]
+            exec_info.cpp_time.append(end - start)
+        return res
 
     return decorated_program
 
@@ -80,7 +90,7 @@ def extract_connectivity_args(
             assert field_utils.verify_device_field_type(conn, device)
             args.append((ndarray, (0, 0)))
             continue
-        assert isinstance(conn, common.Dimension)
+        assert isinstance(conn, (common.Dimension, metrics.RuntimeMetric))
     return args
 
 
