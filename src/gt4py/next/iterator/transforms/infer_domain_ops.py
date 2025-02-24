@@ -63,23 +63,23 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                 min_: int | ir.InfinityLiteral
                 max_: int | ir.InfinityLiteral
 
-                # IDim < 1
+                # `IDim < 1`
                 if cpm.is_call_to(node, "less"):
                     min_ = ir.InfinityLiteral.NEGATIVE
                     max_ = value
-                # IDim <= 1
+                # `IDim <= 1`
                 elif cpm.is_call_to(node, "less_equal"):
                     min_ = ir.InfinityLiteral.NEGATIVE
                     max_ = im.plus(value, 1)
-                # IDim > 1
+                # `IDim > 1`
                 elif cpm.is_call_to(node, "greater"):
                     min_ = im.plus(value, 1)
                     max_ = ir.InfinityLiteral.POSITIVE
-                # IDim >= 1
+                # `IDim >= 1`
                 elif cpm.is_call_to(node, "greater_equal"):
                     min_ = value
                     max_ = ir.InfinityLiteral.POSITIVE
-                # IDim == 1  # TODO: isn't this removed before and rewritten as two concat_where?
+                # `IDim == 1`  # TODO: isn't this removed before and rewritten as two concat_where?
                 elif cpm.is_call_to(node, "eq"):
                     min_ = value
                     max_ = im.plus(value, 1)

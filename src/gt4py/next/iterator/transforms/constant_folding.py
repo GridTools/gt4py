@@ -32,8 +32,7 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
             return new_node.args[0]
 
         if cpm.is_call_to(new_node, "plus"):
-            a, b = new_node.args
-            for arg, other_arg in ((a, b), (b, a)):
+            for arg in new_node.args:
                 # `a + inf` -> `inf`
                 if arg == ir.InfinityLiteral.POSITIVE:
                     return ir.InfinityLiteral.POSITIVE
