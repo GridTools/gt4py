@@ -66,7 +66,6 @@ def test_concat_where_non_overlapping(cartesian_case):
 
 
 @pytest.mark.uses_frontend_concat_where
-@pytest.mark.uses_frontend_concat_where_broadcast
 def test_concat_where_single_level_broadcast(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:
@@ -89,7 +88,6 @@ def test_concat_where_single_level_broadcast(cartesian_case):
 
 
 @pytest.mark.uses_frontend_concat_where
-@pytest.mark.uses_frontend_concat_where_broadcast
 def test_concat_where_single_level_restricted_domain_broadcast(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:

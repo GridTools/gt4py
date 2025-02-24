@@ -126,7 +126,6 @@ USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 USES_FRONTEND_CONCAT_WHERE = "uses_frontend_concat_where"
 USES_GTIR_CONCAT_WHERE = "uses_gtir_concat_where"
-USES_GTIR_CONCAT_WHERE_BROADCAST = "uses_frontend_concat_where_broadcast"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -158,7 +157,6 @@ DACE_SKIP_TEST_LIST = (
         (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_TUPLE_ITERATOR, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_GTIR_CONCAT_WHERE_BROADCAST, XFAIL, UNSUPPORTED_MESSAGE),
     ]
 )
 EMBEDDED_SKIP_LIST = [
