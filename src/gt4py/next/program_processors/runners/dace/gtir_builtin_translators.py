@@ -594,8 +594,9 @@ def _construct_concat_view_node(
         [*f.origin[:concat_dim_index], concat_dim_origin, *f.origin[concat_dim_index:]]
     )
     view_shape = tuple([*fdesc.shape[:concat_dim_index], 1, *fdesc.shape[concat_dim_index:]])
+    view_strides = tuple([*fdesc.strides[:concat_dim_index], 1, *fdesc.strides[concat_dim_index:]])
     view, view_desc = sdfg.add_view(
-        f"view_{f.dc_node.data}", view_shape, fdesc.dtype, find_new_name=True
+        f"view_{f.dc_node.data}", view_shape, fdesc.dtype, strides=view_strides, find_new_name=True
     )
     view_node = state.add_access(view)
     state.add_nedge(
