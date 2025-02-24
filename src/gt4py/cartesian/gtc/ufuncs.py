@@ -39,6 +39,7 @@ minimum: np.ufunc = np.minimum
 maximum: np.ufunc = np.maximum
 max: np.ufunc = np.maximum  # noqa: A001
 min: np.ufunc = np.minimum  # noqa: A001
+mod: np.ufunc = np.mod
 remainder: np.ufunc = np.remainder
 sin: np.ufunc = np.sin
 cos: np.ufunc = np.cos
