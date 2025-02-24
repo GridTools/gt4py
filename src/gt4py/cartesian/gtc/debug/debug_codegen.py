@@ -1,5 +1,13 @@
 # GT4Py - GridTools Framework
 #
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# GT4Py - GridTools Framework
+#
 # Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
@@ -11,6 +19,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+from collections.abc import Generator
+from contextlib import contextmanager
 
 from gt4py import eve
 from gt4py.cartesian import utils
