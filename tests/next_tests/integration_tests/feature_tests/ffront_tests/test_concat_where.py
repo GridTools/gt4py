@@ -66,29 +66,81 @@ def test_concat_where_non_overlapping(cartesian_case):
 
 
 @pytest.mark.uses_frontend_concat_where
-def test_concat_where_non_overlapping_different_dims(cartesian_case):
+def test_concat_where_single_level_broadcast(cartesian_case):
     @gtx.field_operator
-    def testee(
-        ground: cases.IJField,  # note: boundary field is only defined in K
-        air: cases.IJKField,
-    ) -> cases.IJKField:
-        return concat_where(KDim == 0, ground, air)
+    def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:
+        return concat_where(KDim == 0, a, b)
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-    ground = cases.allocate(cartesian_case, testee, "ground", domain=gtx.domain({KDim: (0, 1)}))()
-    air = cases.allocate(cartesian_case, testee, "air", domain=out.domain.slice_at[:, :, 1:])()
+    a = cases.allocate(
+        cartesian_case, testee, "a", domain=gtx.domain({KDim: out.domain.shape[2]})
+    )()
+    b = cases.allocate(cartesian_case, testee, "b", domain=out.domain.slice_at[:, :, 1:])()
 
     ref = np.concatenate(
         (
-            np.tile(
-                ground.asnumpy(), (*air.domain.shape[0:2], len(ground.domain[KDim].unit_range))
-            ),
-            air.asnumpy(),
+            np.tile(a.asnumpy()[0], (*b.domain.shape[0:2], 1)),
+            b.asnumpy(),
         ),
         axis=2,
     )
+    cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
-    cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
+
+@pytest.mark.uses_frontend_concat_where
+def test_concat_where_single_level_broadcast(cartesian_case):
+    @gtx.field_operator
+    def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:
+        return concat_where(KDim == 0, a, b)
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    # note: this field is only defined on K: 0, 1, i.e., contains only a single value
+    a = cases.allocate(cartesian_case, testee, "a", domain=gtx.domain({KDim: (0, 1)}))()
+    b = cases.allocate(cartesian_case, testee, "b", domain=out.domain.slice_at[:, :, 1:])()
+
+    ref = np.concatenate(
+        (
+            np.tile(a.asnumpy()[0], (*b.domain.shape[0:2], 1)),
+            b.asnumpy(),
+        ),
+        axis=2,
+    )
+    cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
+
+
+@pytest.mark.uses_frontend_concat_where
+def test_lap_like(cartesian_case):
+    pytest.xfail("Requires #1847.")
+
+    @gtx.field_operator
+    def testee(
+        input: cases.IJKField, boundary: float, shape: tuple[np.int64, np.int64, np.int64]
+    ) -> cases.IJKField:
+        return concat_where(
+            (IDim == 0)
+            | (JDim == 0)
+            | (KDim == 0)
+            | (IDim == shape[0] - 1)
+            | (JDim == shape[1] - 1)
+            | (KDim == shape[2] - 1),
+            boundary,
+            input,
+        )
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    input = cases.allocate(
+        cartesian_case, testee, "input", domain=out.domain.slice_at[1:-1, 1:-1, 1:-1]
+    )()
+    boundary = 2.0
+
+    ref = np.full(out.domain.shape, np.nan)
+    ref[0, :, :] = boundary
+    ref[:, 0, :] = boundary
+    ref[:, :, 0] = boundary
+    ref[-1, :, :] = boundary
+    ref[:, -1, :] = boundary
+    ref[:, :, -1] = boundary
+    cases.verify(cartesian_case, testee, input, boundary, out.domain.shape, out=out, ref=ref)
 
 
 @pytest.mark.uses_frontend_concat_where
@@ -152,26 +204,6 @@ def test_dimension_two_conditions_or(cartesian_case):
 
     k = np.arange(0, cartesian_case.default_sizes[KDim])
     ref = np.where((k < 2) | (k >= 5), boundary.asnumpy(), interior.asnumpy())
-    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
-
-
-@pytest.mark.uses_frontend_concat_where
-def test_boundary_horizontal_slice(cartesian_case):
-    @gtx.field_operator
-    def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
-        return concat_where(KDim == 0, boundary, interior)
-
-    interior = cases.allocate(cartesian_case, testee, "interior")()
-    boundary = cases.allocate(cartesian_case, testee, "boundary")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
-    k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(
-        k[np.newaxis, np.newaxis, :] == 0,
-        boundary.asnumpy()[:, :, np.newaxis],
-        interior.asnumpy(),
-    )
-
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 

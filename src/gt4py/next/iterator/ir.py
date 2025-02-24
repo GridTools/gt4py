@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
+import typing
 from typing import TYPE_CHECKING, ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
@@ -65,10 +66,9 @@ class NoneLiteral(Expr):
 
 
 class InfinityLiteral(Expr):
+    # TODO(tehrengruber): self referential `ClassVar` not supported in eve.
     if TYPE_CHECKING:
-        POSITIVE: ClassVar[
-            InfinityLiteral
-        ]  # TODO(tehrengruber): should be `ClassVar[InfinityLiteral]`, but self-referential not supported in eve
+        POSITIVE: ClassVar[InfinityLiteral]
         NEGATIVE: ClassVar[InfinityLiteral]
 
     name: typing.Literal["POSITIVE", "NEGATIVE"]
