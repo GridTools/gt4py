@@ -667,10 +667,12 @@ def translate_concat_where(
 
         if lhs.gt_type.dims != rhs.gt_type.dims:
             raise NotImplementedError(
-                "concat_where on fields with different order of domain dimensions is not supported."
+                "concat_where on fields with different domain is not supported."
             )
 
-        lhs_start = dace.symbolic.pystr_to_symbolic(f"min({lhs.origin[concat_dim_index]}, {concat_cut_level})")
+        lhs_start = dace.symbolic.pystr_to_symbolic(
+            f"min({lhs.origin[concat_dim_index]}, {concat_cut_level})"
+        )
         lhs_stop = concat_cut_level
         rhs_start = concat_cut_level
         rhs_stop = dace.symbolic.pystr_to_symbolic(
@@ -678,9 +680,7 @@ def translate_concat_where(
         )
 
         output_shape = tuple(
-            rhs_stop - lhs_start
-            if dim_index == concat_dim_index
-            else size
+            rhs_stop - lhs_start if dim_index == concat_dim_index else size
             for dim_index, size in enumerate(lhs_desc.shape)
         )
         output, output_desc = sdfg_builder.add_temp_array(sdfg, output_shape, lhs_desc.dtype)
@@ -690,9 +690,7 @@ def translate_concat_where(
         lhs_size = dace.symbolic.pystr_to_symbolic(f"max(0, {lhs_stop - lhs_start})")
         lhs_subset = dace_subsets.Range(
             [
-                (0, lhs_size - 1, 1)
-                if dim_index == concat_dim_index
-                else (0, size - 1, 1)
+                (0, lhs_size - 1, 1) if dim_index == concat_dim_index else (0, size - 1, 1)
                 for dim_index, size in enumerate(output_desc.shape)
             ]
         )
