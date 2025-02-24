@@ -317,8 +317,17 @@ class CartesianOffset(eve.Node):
     def to_dict(self) -> Dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.k}
 
-    def to_str(self) -> str:
-        return f"i + {self.i}, j + {self.j}, k + {self.k}"
+    def to_str(self, dimensions: tuple[bool, bool, bool]) -> str:
+        dimension_strings = []
+
+        if dimensions[0]:
+            dimension_strings.append(f"i + {self.i}")
+        if dimensions[1]:
+            dimension_strings.append(f"j + {self.j}")
+        if dimensions[2]:
+            dimension_strings.append(f"k + {self.k}")
+
+        return ",".join(dimension_strings)
 
 
 class VariableKOffset(eve.GenericNode, Generic[ExprT]):
