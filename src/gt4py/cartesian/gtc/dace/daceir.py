@@ -886,6 +886,56 @@ class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
         if len(v) < 1:
             raise ValueError("Tasklet must contain at least one statement.")
 
+    @datamodels.validator("stmts")
+    def read_after_write(self, attribute: datamodels.Attribute, statements: List[Stmt]) -> None:
+        def _remove_prefix(name: eve.SymbolRef) -> str:
+            return name.removeprefix("gtOUT__").removeprefix("gtIN__")
+
+        class ReadAfterWriteChecker(eve.NodeVisitor):
+            def visit_IndexAccess(self, node: IndexAccess, writes: Set[str]) -> None:
+                if node.is_target:
+                    # Keep track of writes
+                    writes.add(_remove_prefix(node.name))
+                    return
+
+                # Check reads
+                if node.name.startswith("gtOUT__") and _remove_prefix(node.name) not in writes:
+                    raise ValueError(f"Reading undefined '{node.name}'. DaCe IR error.")
+
+                if _remove_prefix(node.name) in writes and not node.name.startswith("gtOUT__"):
+                    raise ValueError(
+                        f"Read after write of '{node.name}' not connected to out connector. DaCe IR error."
+                    )
+
+            def visit_ScalarAccess(self, node: ScalarAccess, writes: Set[str]) -> None:
+                # Handle function parameters differently because they are always available
+                if not node.name.startswith("gtIN__") and not node.name.startswith("gtOUT__"):
+                    return
+
+                # Keep track of writes
+                if node.is_target:
+                    writes.add(_remove_prefix(node.name))
+                    return
+
+                # Make sure we don't read uninitialized memory
+                if node.name.startswith("gtOUT__") and _remove_prefix(node.name) not in writes:
+                    raise ValueError(f"Reading undefined '{node.name}'. DaCe IR error.")
+
+                if _remove_prefix(node.name) in writes and not node.name.startswith("gtOUT__"):
+                    raise ValueError(
+                        f"Read after write of '{node.name}' not connected to out connector. DaCe IR error."
+                    )
+
+            def visit_AssignStmt(self, node: AssignStmt, writes: Set[eve.SymbolRef]) -> None:
+                # Visiting order matters because `writes` must not contain the symbols from the left visit
+                self.visit(node.right, writes=writes)
+                self.visit(node.left, writes=writes)
+
+        writes: Set[str] = set()
+        checker = ReadAfterWriteChecker()
+        for statement in statements:
+            checker.visit(statement, writes=writes)
+
 
 class DomainMap(ComputationNode, IterationNode):
     index_ranges: List[Range]
