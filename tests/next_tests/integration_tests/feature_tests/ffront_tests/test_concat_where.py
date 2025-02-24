@@ -88,7 +88,7 @@ def test_concat_where_single_level_broadcast(cartesian_case):
 
 
 @pytest.mark.uses_frontend_concat_where
-def test_concat_where_single_level_broadcast(cartesian_case):
+def test_concat_where_single_level_restricted_domain_broadcast(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, a, b)
