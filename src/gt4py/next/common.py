@@ -1131,7 +1131,7 @@ def check_dims(dims: list[Dimension]) -> None:
         raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
 
     if dims != sorted(dims, key=lambda dim: (dims_kind_order[dim.kind], dim.value)):
-        raise ValueError("Dimensions are not correctly ordered.")
+        raise ValueError(f"Dimensions {dims} are not correctly ordered.")
 
 
 def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
@@ -1154,8 +1154,8 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         >>> promote_dims([K, J], [I, K])
         Traceback (most recent call last):
         ...
-            raise ValueError("Dimensions are not correctly ordered.")
-        ValueError: Dimensions are not correctly ordered.
+           raise ValueError(f"Dimensions {dims} are not correctly ordered.")
+        ValueError: Dimensions [Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)] are not correctly ordered.
         >>> promote_dims([I, K], [J, E2V]) == [I, J, K, E2V]
         True
         >>> promote_dims([I, E2C], [K, E2V])

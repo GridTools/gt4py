@@ -10,6 +10,7 @@ import operator
 from typing import Optional, Pattern
 
 import pytest
+import re
 
 from gt4py import next as gtx
 import gt4py.next.common as common
@@ -580,9 +581,17 @@ def dimension_promotion_cases() -> (
         ([[I, J], [I]], [I, J], None),
         ([[J], [I, J]], [I, J], None),
         ([[J, K], [I, J]], [I, J, K], None),
-        ([[I, J], [J, I]], None, "Dimensions are not correctly ordered."),
+        (
+            [[I, J], [J, I]],
+            None,
+            "Dimensions [Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)] are not correctly ordered.",
+        ),
         ([[J, K], [I, K]], [I, J, K], None),
-        ([[K, J], [I, K]], None, "Dimensions are not correctly ordered."),
+        (
+            [[K, J], [I, K]],
+            None,
+            "Dimensions [Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)] are not correctly ordered.",
+        ),
         (
             [[J, V2E], [I, K, E2C2V]],
             None,
@@ -608,7 +617,7 @@ def test_dimension_promotion(
         with pytest.raises(Exception) as exc_info:
             promote_dims(*dim_list)
 
-        assert exc_info.match(expected_error_msg)
+        assert exc_info.match(re.escape(expected_error_msg))
 
 
 class TestCartesianConnectivity:
