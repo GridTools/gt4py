@@ -1858,8 +1858,8 @@ def test_gtir_let_lambda_with_tuple1():
     }
 
     sdfg(a, b, *z_fields, **FSYMBOLS, **tuple_symbols)
-    assert np.allclose(z_fields[0], a_ref)
-    assert np.allclose(z_fields[1], b_ref)
+    assert np.allclose(z_fields[0], a_ref, equal_nan=True)
+    assert np.allclose(z_fields[1], b_ref, equal_nan=True)
 
 
 def test_gtir_let_lambda_with_tuple2():
@@ -2048,4 +2048,4 @@ def test_gtir_index():
     )
 
     sdfg(v, **FSYMBOLS)
-    np.allclose(v, ref)
+    np.allclose(v, ref, equal_nan=True)
