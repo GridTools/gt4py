@@ -37,7 +37,6 @@ __all__ = [
     "GTCpuIfirstBackend",
     "GTCpuKfirstBackend",
     "GTGpuBackend",
-    "GTGpuBackend",
     "NumpyBackend",
     "PurePythonBackendCLIMixin",
     "from_name",
