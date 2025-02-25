@@ -60,7 +60,6 @@ float_vertex_k_field = ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
 float_edge_k_field = ts.FieldType(dims=[Edge, KDim], dtype=float64_type)
 float_edge_field = ts.FieldType(dims=[Edge], dtype=float64_type)
 float_vertex_field = ts.FieldType(dims=[Vertex], dtype=float64_type)
-float_vertex_v2e_k_field = ts.FieldType(dims=[Vertex, KDim, V2EDim], dtype=float64_type)
 float_vertex_v2e_field = ts.FieldType(dims=[Vertex, V2EDim], dtype=float64_type)
 
 
@@ -396,7 +395,7 @@ def test_fencil_with_nb_field_input():
     testee = itir.Program(
         id="f",
         function_definitions=[],
-        params=[im.sym("inp", float_vertex_v2e_k_field), im.sym("out", float_vertex_k_field)],
+        params=[im.sym("inp", float_vertex_v2e_field), im.sym("out", float_vertex_k_field)],
         declarations=[],
         body=[
             itir.SetAt(
@@ -411,10 +410,10 @@ def test_fencil_with_nb_field_input():
     )
 
     result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
-    assert result.body[0].expr.type == ts.FieldType(dims=[Vertex, KDim, V2EDim], dtype=float64_type)
+    assert result.body[0].expr.type == ts.FieldType(dims=[Vertex, V2EDim], dtype=float64_type)
     assert result.body[0].expr.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
         position_dims=float_vertex_k_field.dims,
-        defined_dims=float_vertex_k_field.dims,
+        defined_dims=float_vertex_field.dims,
         element_type=ts.ListType(element_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
     )
     stencil = result.body[0].expr.fun.args[0]

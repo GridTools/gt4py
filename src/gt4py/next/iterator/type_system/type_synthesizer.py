@@ -401,7 +401,7 @@ def as_fieldop(
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
             lambda el_type: ts.FieldType(
-                dims=common.promote_dims(output_dims) if output_dims != "unknown" else [],
+                dims=sorted({dim for dim in output_dims}, key=lambda dim: (common.dims_kind_order[dim.kind], dim.value)) if output_dims != "unknown" else [],
                 dtype=el_type,
             ),
             stencil_return,
