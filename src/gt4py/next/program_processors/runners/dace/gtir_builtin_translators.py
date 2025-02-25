@@ -579,11 +579,11 @@ def translate_as_fieldop(
     )
 
 
-def _construct_concat_view_node(
+def _slice_concat_view_node(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     f: FieldopData,
-    fdesc: dace.data.Array,
+    f_desc: dace.data.Array,
     concat_dim: gtx_common.Dimension,
     concat_dim_index: int,
     concat_dim_origin: dace.symbolic.SymbolicType,
@@ -593,10 +593,12 @@ def _construct_concat_view_node(
     view_origin = tuple(
         [*f.origin[:concat_dim_index], concat_dim_origin, *f.origin[concat_dim_index:]]
     )
-    view_shape = tuple([*fdesc.shape[:concat_dim_index], 1, *fdesc.shape[concat_dim_index:]])
-    view_strides = tuple([*fdesc.strides[:concat_dim_index], 1, *fdesc.strides[concat_dim_index:]])
+    view_shape = tuple([*f_desc.shape[:concat_dim_index], 1, *f_desc.shape[concat_dim_index:]])
+    view_strides = tuple(
+        [*f_desc.strides[:concat_dim_index], 0, *f_desc.strides[concat_dim_index:]]
+    )
     view, view_desc = sdfg.add_view(
-        f"view_{f.dc_node.data}", view_shape, fdesc.dtype, strides=view_strides, find_new_name=True
+        f"view_{f.dc_node.data}", view_shape, f_desc.dtype, strides=view_strides, find_new_name=True
     )
     view_node = state.add_access(view)
     state.add_nedge(
@@ -604,11 +606,46 @@ def _construct_concat_view_node(
         view_node,
         dace.Memlet(
             data=f.dc_node.data,
-            subset=dace_subsets.Range.from_array(fdesc),
+            subset=dace_subsets.Range.from_array(f_desc),
             other_subset=dace_subsets.Range.from_array(view_desc),
         ),
     )
     fview = FieldopData(view_node, ts.FieldType(dims=view_dims, dtype=f.gt_type.dtype), view_origin)
+    return fview, view_desc
+
+
+def _broadcast_concat_view_node(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    f: FieldopData,
+    f_desc: dace.data.Array,
+    fother: FieldopData,
+    fother_desc: dace.data.Array,
+    concat_dim_index: int,
+) -> tuple[FieldopData, dace.data.Array]:
+    assert isinstance(f.gt_type, ts.FieldType)
+    assert isinstance(fother.gt_type, ts.FieldType)
+    assert len(f.gt_type.dims) == 1
+    view_origin = list(fother.origin)
+    view_origin[concat_dim_index] = f.origin[0]
+    view_shape = list(fother_desc.shape)
+    view_shape[concat_dim_index] = f_desc.shape[0]
+    view_strides = [0] * len(fother.gt_type.dims)
+    view_strides[concat_dim_index] = f_desc.strides[0]
+    view, view_desc = sdfg.add_view(
+        f"view_{f.dc_node.data}", view_shape, f_desc.dtype, strides=view_strides, find_new_name=True
+    )
+    view_node = state.add_access(view)
+    state.add_nedge(
+        f.dc_node,
+        view_node,
+        dace.Memlet(
+            data=f.dc_node.data,
+            subset=dace_subsets.Range.from_array(f_desc),
+            other_subset=dace_subsets.Range.from_array(view_desc),
+        ),
+    )
+    fview = FieldopData(view_node, fother.gt_type, tuple(view_origin))
     return fview, view_desc
 
 
@@ -652,21 +689,36 @@ def translate_concat_where(
         assert isinstance(lhs.gt_type, ts.FieldType)
         assert isinstance(rhs.gt_type, ts.FieldType)
         if concat_dim not in lhs.gt_type.dims:
-            assert len(lhs.gt_type.dims) + 1 == len(rhs.gt_type.dims)
             concat_dim_index = rhs.gt_type.dims.index(concat_dim)
-            lhs, lhs_desc = _construct_concat_view_node(
+            assert lhs.gt_type.dims == [
+                *rhs.gt_type.dims[0:concat_dim_index],
+                *rhs.gt_type.dims[concat_dim_index + 1 :],
+            ]
+            lhs, lhs_desc = _slice_concat_view_node(
                 sdfg, state, lhs, lhs_desc, concat_dim, concat_dim_index, concat_cut_level - 1
             )
         elif concat_dim not in rhs.gt_type.dims:
-            assert len(rhs.gt_type.dims) + 1 == len(lhs.gt_type.dims)
             concat_dim_index = lhs.gt_type.dims.index(concat_dim)
-            rhs, rhs_desc = _construct_concat_view_node(
+            assert rhs.gt_type.dims == [
+                *lhs.gt_type.dims[0:concat_dim_index],
+                *lhs.gt_type.dims[concat_dim_index + 1 :],
+            ]
+            rhs, rhs_desc = _slice_concat_view_node(
                 sdfg, state, rhs, rhs_desc, concat_dim, concat_dim_index, concat_cut_level
             )
-        else:
+        elif len(lhs.gt_type.dims) == 1:
+            concat_dim_index = rhs.gt_type.dims.index(concat_dim)
+            lhs, lhs_desc = _broadcast_concat_view_node(
+                sdfg, state, lhs, lhs_desc, rhs, rhs_desc, concat_dim_index
+            )
+        elif len(rhs.gt_type.dims) == 1:
             concat_dim_index = lhs.gt_type.dims.index(concat_dim)
-
-        if lhs.gt_type.dims != rhs.gt_type.dims:
+            rhs, rhs_desc = _broadcast_concat_view_node(
+                sdfg, state, rhs, rhs_desc, lhs, lhs_desc, concat_dim_index
+            )
+        elif lhs.gt_type.dims == rhs.gt_type.dims:
+            concat_dim_index = lhs.gt_type.dims.index(concat_dim)
+        else:
             raise NotImplementedError(
                 "concat_where on fields with different domain is not supported."
             )
