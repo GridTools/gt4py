@@ -347,32 +347,33 @@ def as_fieldop(
                     final_target: common.Dimension = input_dim
 
                     for off_literal in shift_tuple[::2]:
-                        offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
-                        if (
-                            isinstance(offset_type, common.Dimension) and input_dim == offset_type
-                        ):  # no shift applied
-                            return offset_type
-                        if isinstance(
-                            offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)
-                        ):
-                            off_source = (
-                                offset_type.source
-                                if isinstance(offset_type, fbuiltins.FieldOffset)
-                                else (offset_type.codomain)
-                            )
-                            off_targets = (
-                                offset_type.target
-                                if isinstance(offset_type, fbuiltins.FieldOffset)
-                                else (offset_type.domain)
-                            )
+                        if offset_provider_type:
+                            offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
+                            if (
+                                isinstance(offset_type, common.Dimension) and input_dim == offset_type
+                            ):  # no shift applied
+                                return offset_type
+                            if isinstance(
+                                offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)
+                            ):
+                                off_source = (
+                                    offset_type.source
+                                    if isinstance(offset_type, fbuiltins.FieldOffset)
+                                    else (offset_type.codomain)
+                                )
+                                off_targets = (
+                                    offset_type.target
+                                    if isinstance(offset_type, fbuiltins.FieldOffset)
+                                    else (offset_type.domain)
+                                )
 
-                            if input_dim == off_source:  # Check if input fits to offset
-                                for target in off_targets:
-                                    if (
-                                        target.value != off_literal.value
-                                    ):  # Exclude target matching off_literal.value
-                                        final_target = target
-                                        input_dim = target  # Update input_dim for next iteration
+                                if input_dim == off_source:  # Check if input fits to offset
+                                    for target in off_targets:
+                                        if (
+                                            target.value != off_literal.value
+                                        ):  # Exclude target matching off_literal.value
+                                            final_target = target
+                                            input_dim = target  # Update input_dim for next iteration
                     return final_target
 
                 for shift_tuple in shifts_results[
