@@ -877,7 +877,7 @@ class Condition(eve.Node):
 
 
 class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
-    decls: List[LocalScalarDecl]
+    label: str
     stmts: List[Stmt]
     grid_subset: GridSubset = GridSubset.single_gridpoint()
 

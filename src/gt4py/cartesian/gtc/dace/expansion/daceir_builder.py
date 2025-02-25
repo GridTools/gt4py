@@ -529,7 +529,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         )
 
         tasklet = dcir.Tasklet(
-            decls=[],
+            label=f"eval_{prefix}_{id(node)}",
             stmts=[statement],
             read_memlets=read_memlets,
             write_memlets=[],
@@ -821,7 +821,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     dcir_statements=current_block,
                 )
                 tasklet = dcir.Tasklet(
-                    decls=[],
+                    label=node.label,
                     stmts=current_block,
                     read_memlets=read_memlets,
                     write_memlets=write_memlets,

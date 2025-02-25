@@ -442,7 +442,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         outputs = set(memlet.connector for memlet in node.write_memlets).union(tasklet_outputs)
 
         tasklet = sdfg_ctx.state.add_tasklet(
-            name=f"{sdfg_ctx.sdfg.label}_Tasklet",
+            name=node.label,
             code=code,
             inputs=inputs,
             outputs=outputs,

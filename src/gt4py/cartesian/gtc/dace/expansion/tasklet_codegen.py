@@ -40,9 +40,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             else:
                 int_sizes.append(None)
         sym_offsets = [
-            dace.symbolic.pystr_to_symbolic(
-                self.visit(off, access_info=access_info, decl=decl, **kwargs)
-            )
+            dace.symbolic.pystr_to_symbolic(self.visit(off, access_info=access_info, **kwargs))
             for off in (node.to_dict()["i"], node.to_dict()["j"], node.k)
         ]
         for axis in access_info.variable_offset_axes:
@@ -240,10 +238,8 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
 
     Param = as_fmt("{name}")
 
-    LocalScalarDecl = as_fmt("{name}: {dtype}")
-
     def visit_Tasklet(self, node: dcir.Tasklet, **kwargs: Any) -> str:
-        return "\n".join(self.visit(node.decls, **kwargs) + self.visit(node.stmts, **kwargs))
+        return "\n".join(self.visit(node.stmts, **kwargs))
 
     def _visit_conditional(
         self,
