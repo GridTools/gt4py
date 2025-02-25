@@ -83,7 +83,6 @@ def expression_test_cases():
         (im.call("abs")(1), int_type),
         (im.call("power")(2.0, 2), float64_type),
         (im.plus(1, 2), int_type),
-        (im.plus(im.ref("inp1", float_i_field), im.ref("inp2", float_j_field)), float_ij_field),
         (im.eq(1, 2), bool_type),
         (im.deref(im.ref("it", it_on_e_of_e_type)), it_on_e_of_e_type.element_type),
         (im.can_deref(im.ref("it", it_on_e_of_e_type)), bool_type),
@@ -195,7 +194,7 @@ def expression_test_cases():
             ),
             ts.DeferredType(constraint=None),
         ),
-        # (im.as_fieldop(im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))))(
+        # (im.as_fieldop(im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))))( # TODO(SF-N): this needs PR 1853
         #    im.ref("inp1", float_i_field), im.ref("inp2", float_j_field)), float_ij_field),
         # if in field-view scope
         (

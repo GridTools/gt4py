@@ -568,7 +568,7 @@ def promote(
     True
 
     >>> promoted: ts.FieldType = promote(
-    ...     ts.FieldType(dims=[J, I], dtype=dtype), ts.FieldType(dims=[K], dtype=dtype)
+    ...     ts.FieldType(dims=[I, J], dtype=dtype), ts.FieldType(dims=[K], dtype=dtype)
     ... )
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
@@ -641,7 +641,10 @@ def return_type_field(
             new_dims.append(d)
         else:
             new_dims.extend(target_dims)
-    return ts.FieldType(dims=new_dims, dtype=field_type.dtype)
+    return ts.FieldType(
+        dims=sorted(new_dims, key=lambda dim: (common.dims_kind_order[dim.kind], dim.value)),
+        dtype=field_type.dtype,
+    )
 
 
 UNDEFINED_ARG = types.new_class("UNDEFINED_ARG")

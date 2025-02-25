@@ -69,6 +69,9 @@ class DimensionKind(StrEnum):
         return self.value
 
 
+dims_kind_order = {DimensionKind.HORIZONTAL: 1, DimensionKind.VERTICAL: 2, DimensionKind.LOCAL: 3}
+
+
 def dimension_to_implicit_offset(dim: str) -> str:
     """
     Return name of offset implicitly defined by a dimension.
@@ -1123,12 +1126,20 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
+def check_dims(dims: list[Dimension]) -> None:
+    if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
+        raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
+
+    if dims != sorted(dims, key=lambda dim: (dims_kind_order[dim.kind], dim.value)):
+        raise ValueError(f"Dimensions {dims} are not correctly ordered.")
+
+
 def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     """
-    Find a sorted ordering of multiple lists of dimensions.
+    Find an ordering of multiple lists of dimensions.
 
     The resulting list contains all unique dimensions from the input lists,
-    sorted first by `Dimension.kind` (`HORIZONTAL` < `VERTICAL` < `LOCAL`) and then
+    sorted first by dims_kind_order, i.e., `Dimension.kind` (`HORIZONTAL` < `VERTICAL` < `LOCAL`) and then
     lexicographically by `Dimension.value`.
 
     Examples:
@@ -1138,21 +1149,30 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         >>> K = Dimension("K", DimensionKind.VERTICAL)
         >>> E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
         >>> E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
-        >>> promote_dims([K, J], [I, K]) == [I, J, K]
+        >>> promote_dims([J, K], [I, K]) == [I, J, K]
         True
-        >>> promote_dims([K, I], [E2C, E2V]) == [I, K, E2C, E2V]
+        >>> promote_dims([K, J], [I, K])
+        Traceback (most recent call last):
+        ...
+           raise ValueError(f"Dimensions {dims} are not correctly ordered.")
+        ValueError: Dimensions [Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)] are not correctly ordered.
+        >>> promote_dims([I, K], [J, E2V]) == [I, J, K, E2V]
         True
+        >>> promote_dims([I, E2C], [K, E2V])
+        Traceback (most recent call last):
+        ...
+            raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
+        ValueError: There are more than one dimension with DimensionKind 'LOCAL'.
     """
 
+    for dims in dims_list:
+        check_dims(list(dims))
     unique_dims = {dim for dims in dims_list for dim in dims}
 
-    kind_order = {DimensionKind.HORIZONTAL: 1, DimensionKind.VERTICAL: 2, DimensionKind.LOCAL: 3}
 
-    return (
-        sorted(unique_dims, key=lambda dim: (kind_order[dim.kind], dim.value))
-        if unique_dims
-        else []
-    )
+    promoted_dims = sorted(unique_dims, key=lambda dim: (dims_kind_order[dim.kind], dim.value))
+    check_dims(promoted_dims)
+    return promoted_dims if unique_dims else []
 
 
 class FieldBuiltinFuncRegistry:

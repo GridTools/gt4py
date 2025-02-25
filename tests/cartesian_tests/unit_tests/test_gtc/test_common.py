@@ -41,6 +41,24 @@ A_LOGICAL_UNARY_OPERATOR = UnaryOperator.NOT
 # - For testing non-leave nodes, introduce builders with defaults (for leave nodes as well)
 
 
+def test_data_type_methods():
+    for type in DataType:
+        if type == DataType.BOOL:
+            assert type.isbool()
+        else:
+            assert not type.isbool()
+
+        if type in (DataType.INT8, DataType.INT16, DataType.INT32, DataType.INT64):
+            assert type.isinteger()
+        else:
+            assert not type.isinteger()
+
+        if type in (DataType.FLOAT32, DataType.FLOAT64):
+            assert type.isfloat()
+        else:
+            assert not type.isfloat()
+
+
 class DummyExpr(Expr):
     """Fake expression for cases where a concrete expression is not needed."""
 
