@@ -1846,7 +1846,7 @@ def test_gtir_let_lambda_with_tuple1():
 
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
-    z_fields = (np.empty_like(a), np.empty_like(a))
+    z_fields = (np.zeros_like(a), np.zeros_like(a))
     a_ref = np.concatenate((z_fields[0][:1], a[1 : N - 1], z_fields[0][N - 1 :]))
     b_ref = np.concatenate((z_fields[1][:1], b[1 : N - 1], z_fields[1][N - 1 :]))
 
@@ -1858,8 +1858,8 @@ def test_gtir_let_lambda_with_tuple1():
     }
 
     sdfg(a, b, *z_fields, **FSYMBOLS, **tuple_symbols)
-    assert np.allclose(z_fields[0], a_ref, equal_nan=True)
-    assert np.allclose(z_fields[1], b_ref, equal_nan=True)
+    assert np.allclose(z_fields[0], a_ref)
+    assert np.allclose(z_fields[1], b_ref)
 
 
 def test_gtir_let_lambda_with_tuple2():
@@ -2037,7 +2037,7 @@ def test_gtir_index():
         ],
     )
 
-    v = np.empty(N, dtype=np.int32)
+    v = np.zeros(N, dtype=np.int32)
 
     # we need to run domain inference in order to add the domain annex information to the index node.
     testee = infer_domain.infer_program(testee, offset_provider=CARTESIAN_OFFSETS)
@@ -2048,4 +2048,4 @@ def test_gtir_index():
     )
 
     sdfg(v, **FSYMBOLS)
-    np.allclose(v, ref, equal_nan=True)
+    np.allclose(v, ref)
