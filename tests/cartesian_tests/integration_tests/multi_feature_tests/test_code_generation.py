@@ -30,8 +30,6 @@ from gt4py.storage.cartesian import utils as storage_utils
 from cartesian_tests.definitions import (
     ALL_BACKENDS,
     CPU_BACKENDS,
-    DACE_BACKENDS,
-    NON_DACE_BACKENDS,
     get_array_library,
 )
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import (
@@ -770,20 +768,21 @@ def test_function_inline_in_while(backend):
     assert (out_arr[:, :, :] == 388.0).all()
 
 
-@pytest.mark.parametrize("backend", NON_DACE_BACKENDS)
+def _xfail_dace_backends(param):
+    if param.values[0].startswith("dace:"):
+        marks = param.marks + [
+            pytest.mark.xfail(
+                raises=ValueError,
+                reason="Missing support in DaCe backends, see https://github.com/GridTools/gt4py/issues/1881.",
+            )
+        ]
+        # make a copy because otherwise we are operating in-place
+        return pytest.param(*param.values, marks=marks)
+    return param
+
+
+@pytest.mark.parametrize("backend", map(_xfail_dace_backends, ALL_BACKENDS))
 def test_cast_in_index(backend):
-    @gtscript.stencil(backend)
-    def cast_in_index(
-        in_field: Field[np.float64], i32: np.int32, i64: np.int64, out_field: Field[np.float64]
-    ):
-        """Simple copy stencil with forced cast in index calculation."""
-        with computation(PARALLEL), interval(...):
-            out_field = in_field[0, 0, i32 - i64]
-
-
-@pytest.mark.parametrize("backend", DACE_BACKENDS)
-@pytest.mark.xfail(raises=ValueError)
-def test_dace_no_cast_in_index(backend):
     @gtscript.stencil(backend)
     def cast_in_index(
         in_field: Field[np.float64], i32: np.int32, i64: np.int64, out_field: Field[np.float64]
