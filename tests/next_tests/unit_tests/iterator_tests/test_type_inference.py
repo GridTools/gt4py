@@ -589,6 +589,25 @@ def test_as_fieldop_without_domain_V2E():
     )
 
 
+def test_as_fieldop_without_domain_V2E_new():
+    stencil = im.lambda_("it")(
+        im.deref(im.shift("C2E", 0)(im.shift("E2V", 0)(im.shift("V2E", 0)("it"))))
+    )
+
+    testee = im.as_fieldop(stencil)(im.ref("inp", float_edge_field))
+    result = itir_type_inference.infer(
+        testee,
+        offset_provider_type={"C2E": C2E, "E2V": E2V, "V2E": V2E},
+        allow_undeclared_symbols=True,
+    )
+    assert result.type == ts.FieldType(dims=[Cell], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims="unknown",
+        defined_dims=float_edge_field.dims,
+        element_type=float_edge_field.dtype,
+    )
+
+
 def test_as_fieldop_without_domain_only_one_shift():
     stencil = im.lambda_("it1", "it2")(
         im.plus(im.deref(im.shift("V2E", 1)("it1")), im.deref("it2"))

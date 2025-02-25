@@ -1169,7 +1169,6 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         check_dims(list(dims))
     unique_dims = {dim for dims in dims_list for dim in dims}
 
-
     promoted_dims = sorted(unique_dims, key=lambda dim: (dims_kind_order[dim.kind], dim.value))
     check_dims(promoted_dims)
     return promoted_dims if unique_dims else []

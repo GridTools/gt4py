@@ -330,7 +330,7 @@ def as_fieldop(
 
                 def resolve_shift(
                     input_dim: common.Dimension, shift_tuple: tuple[itir.OffsetLiteral, ...]
-                ) -> common.Dimension | None:
+                ) -> common.Dimension:
                     """
                     Resolves the final dimension by applying shifts from the given shift tuple.
 
@@ -341,12 +341,10 @@ def as_fieldop(
                     - shift_tuple (tuple[itir.OffsetLiteral, ...]): A tuple of offset literals defining the shift.
 
                     Returns:
-                    - common.Dimension | None: The resolved dimension or `None` if no shift is applied.
+                    - common.Dimension: The resolved dimension or `input_dim` if no shift is applied.
                     """
-                    if not shift_tuple or not offset_provider_type:
-                        return None
 
-                    final_target: common.Dimension | None = None
+                    final_target: common.Dimension = input_dim
 
                     for off_literal in shift_tuple[::2]:
                         offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
@@ -377,19 +375,14 @@ def as_fieldop(
                                         input_dim = target  # Update input_dim for next iteration
                     return final_target
 
-                if any(shifts_results[i]):
+                for shift_tuple in shifts_results[
+                    i
+                ]:  # Use shift tuple corresponding to the input field
                     for input_dim in input_dims:
-                        for shift_tuple in shifts_results[
-                            i
-                        ]:  # Use shift tuple corresponding to the input field
-                            final_dim = (
-                                resolve_shift(input_dim, shift_tuple) or input_dim
-                            )  # If ther are no shifts, take input_dim
-                            if final_dim not in seen:
-                                seen.add(final_dim)
-                                output_dims.append(final_dim)
-                else:
-                    output_dims.extend(input_dims)
+                        final_dim = resolve_shift(input_dim, shift_tuple)
+                        if final_dim not in seen:
+                            seen.add(final_dim)
+                            output_dims.append(final_dim)
             else:
                 output_dims = domain.dims
 
@@ -401,7 +394,12 @@ def as_fieldop(
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
             lambda el_type: ts.FieldType(
-                dims=sorted({dim for dim in output_dims}, key=lambda dim: (common.dims_kind_order[dim.kind], dim.value)) if output_dims != "unknown" else [],
+                dims=sorted(
+                    {dim for dim in output_dims},
+                    key=lambda dim: (common.dims_kind_order[dim.kind], dim.value),
+                )
+                if output_dims != "unknown"
+                else [],
                 dtype=el_type,
             ),
             stencil_return,
