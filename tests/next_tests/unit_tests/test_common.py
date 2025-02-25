@@ -333,7 +333,7 @@ def test_domain_intersection_different_dimensions(a_domain, second_domain, expec
 
 
 def test_domain_intersection_reversed_dimensions(a_domain):
-    domain2 = Domain(dims=(JDim, IDim), ranges=(UnitRange(2, 12), UnitRange(7, 17)))
+    domain2 = Domain(dims=(IDim, JDim), ranges=(UnitRange(7, 17), UnitRange(2, 12)))
 
     assert a_domain & domain2 == Domain(
         dims=(IDim, JDim, KDim), ranges=(UnitRange(7, 10), UnitRange(5, 12), UnitRange(20, 30))
@@ -573,45 +573,42 @@ def test_domain_replace(index, named_ranges, domain, expected):
 
 
 def dimension_promotion_cases() -> (
-    list[tuple[list[list[Dimension]], list[Dimension]]]
-):  # TODO: rename and remove promote_dims
+    list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
+):
     raw_list = [
-        # list of list of dimensions, expected result
-        ([[I, J], [I]], [I, J]),
-        ([[J], [I, J]], [I, J]),
-        ([[J, K], [I, J]], [I, J, K]),
+        # list of list of dimensions, expected result, expected error message
+        ([[I, J], [I]], [I, J], None),
+        ([[J], [I, J]], [I, J], None),
+        ([[J, K], [I, J]], [I, J, K], None),
+        ([[I, J], [J, I]], None, "Dimensions are not correctly ordered."),
+        ([[J, K], [I, K]], [I, J, K], None),
+        ([[K, J], [I, K]], None, "Dimensions are not correctly ordered."),
         (
-            [[I, J], [J, I]],
-            [I, J],
+            [[J, V2E], [I, K, E2C2V]],
+            None,
+            "There are more than one dimension with DimensionKind 'LOCAL'.",
         ),
-        (
-            [[K, J], [I, K]],
-            [I, J, K],
-        ),
-        (
-            [[K, J], [I, K]],
-            [I, J, K],
-        ),
-        (
-            [[V2E, C2E, J], [K, I, E2C2V], [E2C, E2V]],
-            [I, J, K, C2E, E2C, E2C2V, E2V, V2E],
-        ),
+        ([[J, V2E], [I, K]], [I, J, K, V2E], None),
     ]
     return [
-        (
-            [[el for el in arg] for arg in args],
-            [el for el in result] if result else result,
-        )
-        for args, result in raw_list
+        ([[el for el in arg] for arg in args], [el for el in result] if result else result, msg)
+        for args, result, msg in raw_list
     ]
 
 
-@pytest.mark.parametrize("dim_list,expected_result", dimension_promotion_cases())
+@pytest.mark.parametrize("dim_list,expected_result,expected_error_msg", dimension_promotion_cases())
 def test_dimension_promotion(
     dim_list: list[list[Dimension]],
     expected_result: Optional[list[Dimension]],
+    expected_error_msg: Optional[str],
 ):
-    assert promote_dims(*dim_list) == expected_result
+    if expected_result:
+        assert promote_dims(*dim_list) == expected_result
+    else:
+        with pytest.raises(Exception) as exc_info:
+            promote_dims(*dim_list)
+
+        assert exc_info.match(expected_error_msg)
 
 
 class TestCartesianConnectivity:
