@@ -14,7 +14,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import as_fieldop, cartesian_domain, deref, named_range
 from gt4py.next.iterator.runtime import fendef, fundef, if_stmt, offset, set_at
 
-from next_tests.unit_tests.conftest import run_processor
+from next_tests.unit_tests.conftest import program_processor_no_transforms, run_processor
 
 
 i = offset("i")
