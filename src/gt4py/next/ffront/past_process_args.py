@@ -93,7 +93,6 @@ def _process_args(
                     el_range == range_ and el_dims == dims
                     for (el_range, el_dims) in ranges_and_dims
                 ):
-                    print(ranges_and_dims)
                     raise ValueError(
                         "Constituents of composite arguments (e.g. the elements of a"
                         " tuple) need to have the same shape and dimensions."
