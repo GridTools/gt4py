@@ -66,7 +66,7 @@ def gt_auto_optimize(
         one with stride one.
     5. If requested the function will now apply loop blocking, on the dimension
         indicated by `leading_dim`.
-    6. The strides of temporaries are set to match the compute order..
+    6. The strides of temporaries are set to match the compute order.
     7. If requested the SDFG will be transformed to GPU. For this the
         `gt_gpu_transformation()` function is used, that might apply several other
         optimizations.
