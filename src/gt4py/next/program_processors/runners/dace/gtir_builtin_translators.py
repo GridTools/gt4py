@@ -346,6 +346,13 @@ def get_field_layout(
             - the domain size in each dimension
     """
     domain_dims, domain_lbs, domain_ubs = zip(*domain)
+    # after introduction of concat_where, the strict order of lower and upper bounds is not guaranteed
+    domain_ubs = tuple(
+        [
+            dace.symbolic.pystr_to_symbolic(f"max({lb}, {ub})")
+            for lb, ub in zip(domain_lbs, domain_ubs, strict=True)
+        ]
+    )
     domain_sizes = [(ub - lb) for lb, ub in zip(domain_lbs, domain_ubs)]
     return list(domain_dims), list(domain_lbs), domain_sizes
 
@@ -723,24 +730,31 @@ def translate_concat_where(
                 "concat_where on fields with different domain is not supported."
             )
 
-        lhs_start = dace.symbolic.pystr_to_symbolic(
-            f"min({lhs.origin[concat_dim_index]}, {concat_cut_level})"
+        lhs_start = lhs.origin[concat_dim_index]
+        lhs_stop = dace.symbolic.pystr_to_symbolic(
+            f"max({lhs_start}, min({concat_cut_level}, {lhs.origin[concat_dim_index] + lhs_desc.shape[concat_dim_index]}))"
         )
-        lhs_stop = concat_cut_level
-        rhs_start = concat_cut_level
-        rhs_stop = dace.symbolic.pystr_to_symbolic(
-            f"max({concat_cut_level}, {rhs.origin[concat_dim_index] + rhs_desc.shape[concat_dim_index]})"
+        lhs_size = lhs_stop - lhs_start
+        rhs_stop = rhs.origin[concat_dim_index] + rhs_desc.shape[concat_dim_index]
+        rhs_start = dace.symbolic.pystr_to_symbolic(
+            f"min({rhs_stop}, max({concat_cut_level}, {rhs.origin[concat_dim_index]}))"
         )
+        rhs_size = rhs_stop - rhs_start
 
         output_shape = tuple(
-            rhs_stop - lhs_start if dim_index == concat_dim_index else size
+            lhs_size + rhs_size if dim_index == concat_dim_index else size
             for dim_index, size in enumerate(lhs_desc.shape)
         )
         output, output_desc = sdfg_builder.add_temp_array(sdfg, output_shape, lhs_desc.dtype)
         output_node = state.add_access(output)
+        output_origin = tuple(
+            [
+                concat_cut_level - lhs_size if dim_index == concat_dim_index else origin
+                for dim_index, origin in enumerate(lhs.origin)
+            ]
+        )
 
         # we write the full shape of the lhs node into the output array starting from the origin
-        lhs_size = dace.symbolic.pystr_to_symbolic(f"max(0, {lhs_stop - lhs_start})")
         lhs_subset = dace_subsets.Range(
             [
                 (0, lhs_size - 1, 1) if dim_index == concat_dim_index else (0, size - 1, 1)
@@ -756,7 +770,6 @@ def translate_concat_where(
                 other_subset=lhs_subset,
             ),
         )
-        rhs_size = dace.symbolic.pystr_to_symbolic(f"max(0, {rhs_stop - rhs_start})")
         rhs_subset = dace_subsets.Range(
             [
                 (
@@ -775,8 +788,8 @@ def translate_concat_where(
         rhs_other_subset = dace_subsets.Range(
             [
                 (
-                    rhs_start - lhs.origin[concat_dim_index],
-                    rhs_start - lhs.origin[concat_dim_index] + rhs_size - 1,
+                    rhs_start - output_origin[concat_dim_index],
+                    rhs_start - output_origin[concat_dim_index] + rhs_size - 1,
                     1,
                 )
                 if dim_index == concat_dim_index
@@ -793,7 +806,7 @@ def translate_concat_where(
                 other_subset=rhs_other_subset,
             ),
         )
-        return FieldopData(output_node, lhs.gt_type, origin=lhs.origin)
+        return FieldopData(output_node, lhs.gt_type, origin=output_origin)
 
     return (
         concatenate_inputs(f1, f2)
