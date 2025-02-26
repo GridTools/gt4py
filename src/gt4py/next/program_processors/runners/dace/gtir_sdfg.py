@@ -794,6 +794,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 datadesc = sdfg.arrays[nsdfg_dataname]
             else:
                 assert nsdfg_dataname in sdfg.symbols
+                datatype = self.get_symbol_type(nsdfg_dataname)
+                assert isinstance(datatype, ts.ScalarType)
                 dataname, datadesc = self.add_temp_scalar(sdfg, nsdfg_datadesc.dtype)
                 src_node = head_state.add_access(dataname)
                 head_state.add_edge(
@@ -806,7 +808,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     dace.Memlet(data=dataname, subset="0"),
                 )
                 lambda_arg_nodes[nsdfg_dataname] = gtir_builtin_translators.FieldopData(
-                    src_node, self.get_symbol_type(nsdfg_dataname), origin=()
+                    src_node, datatype, origin=()
                 )
 
             # ensure that connectivity tables are non-transient arrays in parent SDFG
