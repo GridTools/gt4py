@@ -338,10 +338,6 @@ class PurePythonBackendCLIMixin(CLIBackendMixin):
         source = self.make_module_source(ir=self.builder.gtir)
         return {str(file_name): source}
 
-    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
-        """Pure python backends typically will not support bindings."""
-        return super().generate_bindings(language_name)
-
 
 class BasePyExtBackend(BaseBackend):
     @property
