@@ -10,7 +10,9 @@ import operator
 from typing import Optional, Pattern
 
 import pytest
+import re
 
+from gt4py import next as gtx
 import gt4py.next.common as common
 from gt4py.next.common import (
     Dimension,
@@ -25,7 +27,14 @@ from gt4py.next.common import (
     unit_range,
 )
 
-
+I = gtx.Dimension("I")
+J = gtx.Dimension("J")
+K = gtx.Dimension("K", kind=DimensionKind.VERTICAL)
+C2E = Dimension("C2E", kind=DimensionKind.LOCAL)
+V2E = Dimension("V2E", kind=DimensionKind.LOCAL)
+E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
+E2C2V = Dimension("E2C2V", kind=DimensionKind.LOCAL)
 ECDim = Dimension("ECDim")
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
@@ -325,13 +334,11 @@ def test_domain_intersection_different_dimensions(a_domain, second_domain, expec
 
 
 def test_domain_intersection_reversed_dimensions(a_domain):
-    domain2 = Domain(dims=(JDim, IDim), ranges=(UnitRange(2, 12), UnitRange(7, 17)))
+    domain2 = Domain(dims=(IDim, JDim), ranges=(UnitRange(7, 17), UnitRange(2, 12)))
 
-    with pytest.raises(
-        ValueError,
-        match="Dimensions can not be promoted. The following dimensions appear in contradicting order: IDim, JDim.",
-    ):
-        a_domain & domain2
+    assert a_domain & domain2 == Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(7, 10), UnitRange(5, 12), UnitRange(20, 30))
+    )
 
 
 @pytest.mark.parametrize(
@@ -571,27 +578,29 @@ def dimension_promotion_cases() -> (
 ):
     raw_list = [
         # list of list of dimensions, expected result, expected error message
-        ([["I", "J"], ["I"]], ["I", "J"], None),
-        ([["I", "J"], ["J"]], ["I", "J"], None),
-        ([["I", "J"], ["J", "K"]], ["I", "J", "K"], None),
+        ([[I, J], [I]], [I, J], None),
+        ([[J], [I, J]], [I, J], None),
+        ([[J, K], [I, J]], [I, J, K], None),
         (
-            [["I", "J"], ["J", "I"]],
+            [[I, J], [J, I]],
             None,
-            r"The following dimensions appear in contradicting order: I, J.",
+            "Dimensions [Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)] are not correctly ordered.",
+        ),
+        ([[J, K], [I, K]], [I, J, K], None),
+        (
+            [[K, J], [I, K]],
+            None,
+            "Dimensions [Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)] are not correctly ordered.",
         ),
         (
-            [["I", "K"], ["J", "K"]],
+            [[J, V2E], [I, K, E2C2V]],
             None,
-            r"Could not determine order of the following dimensions: I, J",
+            "There are more than one dimension with DimensionKind 'LOCAL'.",
         ),
+        ([[J, V2E], [I, K]], [I, J, K, V2E], None),
     ]
-    # transform dimension names into Dimension objects
     return [
-        (
-            [[Dimension(el) for el in arg] for arg in args],
-            [Dimension(el) for el in result] if result else result,
-            msg,
-        )
+        ([[el for el in arg] for arg in args], [el for el in result] if result else result, msg)
         for args, result, msg in raw_list
     ]
 
@@ -608,7 +617,7 @@ def test_dimension_promotion(
         with pytest.raises(Exception) as exc_info:
             promote_dims(*dim_list)
 
-        assert exc_info.match(expected_error_msg)
+        assert exc_info.match(re.escape(expected_error_msg))
 
 
 class TestCartesianConnectivity:

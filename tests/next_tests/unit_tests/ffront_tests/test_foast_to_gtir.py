@@ -901,7 +901,7 @@ def test_builtin_bool_constructors():
 
 def test_broadcast():
     def foo(inp: gtx.Field[[TDim], float64]):
-        return broadcast(inp, (UDim, TDim))
+        return broadcast(inp, (TDim, UDim))
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
@@ -912,7 +912,7 @@ def test_broadcast():
 
 def test_scalar_broadcast():
     def foo():
-        return broadcast(1, (UDim, TDim))
+        return broadcast(1, (TDim, UDim))
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)

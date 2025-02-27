@@ -69,6 +69,9 @@ class DimensionKind(StrEnum):
         return self.value
 
 
+dims_kind_order = {DimensionKind.HORIZONTAL: 1, DimensionKind.VERTICAL: 2, DimensionKind.LOCAL: 3}
+
+
 def dimension_to_implicit_offset(dim: str) -> str:
     """
     Return name of offset implicitly defined by a dimension.
@@ -1123,84 +1126,52 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
+def check_dims(dims: list[Dimension]) -> None:
+    if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
+        raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
+
+    if dims != sorted(dims, key=lambda dim: (dims_kind_order[dim.kind], dim.value)):
+        raise ValueError(f"Dimensions {dims} are not correctly ordered.")
+
+
 def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     """
-    Find a unique ordering of multiple (individually ordered) lists of dimensions.
+    Find an ordering of multiple lists of dimensions.
 
-    The resulting list of dimensions contains all dimensions of the arguments
-    in the order they originally appear. If no unique order exists or a
-    contradicting order is found an exception is raised.
-
-    A modified version (ensuring uniqueness of the order) of
-    `Kahn's algorithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
-    is used to topologically sort the arguments.
+    The resulting list contains all unique dimensions from the input lists,
+    sorted first by dims_kind_order, i.e., `Dimension.kind` (`HORIZONTAL` < `VERTICAL` < `LOCAL`) and then
+    lexicographically by `Dimension.value`.
 
     Examples:
         >>> from gt4py.next.common import Dimension
-        >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
-        >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
+        >>> I = Dimension("I", DimensionKind.HORIZONTAL)
+        >>> J = Dimension("J", DimensionKind.HORIZONTAL)
+        >>> K = Dimension("K", DimensionKind.VERTICAL)
+        >>> E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+        >>> E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
+        >>> promote_dims([J, K], [I, K]) == [I, J, K]
         True
-
-        >>> promote_dims([I, J], [K])  # doctest: +ELLIPSIS
+        >>> promote_dims([K, J], [I, K])
         Traceback (most recent call last):
         ...
-        ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
-
-        >>> promote_dims([I, J], [J, I])  # doctest: +ELLIPSIS
+           raise ValueError(f"Dimensions {dims} are not correctly ordered.")
+        ValueError: Dimensions [Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)] are not correctly ordered.
+        >>> promote_dims([I, K], [J, E2V]) == [I, J, K, E2V]
+        True
+        >>> promote_dims([I, E2C], [K, E2V])
         Traceback (most recent call last):
         ...
-        ValueError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
+            raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
+        ValueError: There are more than one dimension with DimensionKind 'LOCAL'.
     """
-    # build a graph with the vertices being dimensions and edges representing
-    #  the order between two dimensions. The graph is encoded as a dictionary
-    #  mapping dimensions to their predecessors, i.e. a dictionary containing
-    #  adjacency lists. Since graphlib.TopologicalSorter uses predecessors
-    #  (contrary to successors) we also use this directionality here.
-    graph: dict[Dimension, set[Dimension]] = {}
+
     for dims in dims_list:
-        if len(dims) == 0:
-            continue
-        # create a vertex for each dimension
-        for dim in dims:
-            graph.setdefault(dim, set())
-        # add edges
-        predecessor = dims[0]
-        for dim in dims[1:]:
-            graph[dim].add(predecessor)
-            predecessor = dim
+        check_dims(list(dims))
+    unique_dims = {dim for dims in dims_list for dim in dims}
 
-    # modified version of Kahn's algorithm
-    topologically_sorted_list: list[Dimension] = []
-
-    # compute in-degree for each vertex
-    in_degree = {v: 0 for v in graph.keys()}
-    for v1 in graph:
-        for v2 in graph[v1]:
-            in_degree[v2] += 1
-
-    # process vertices with in-degree == 0
-    # TODO(tehrengruber): avoid recomputation of zero_in_degree_vertex_list
-    while zero_in_degree_vertex_list := [v for v, d in in_degree.items() if d == 0]:
-        if len(zero_in_degree_vertex_list) != 1:
-            raise ValueError(
-                f"Dimensions can not be promoted. Could not determine "
-                f"order of the following dimensions: "
-                f"{', '.join((dim.value for dim in zero_in_degree_vertex_list))}."
-            )
-        v = zero_in_degree_vertex_list[0]
-        del in_degree[v]
-        topologically_sorted_list.insert(0, v)
-        # update in-degree
-        for predecessor in graph[v]:
-            in_degree[predecessor] -= 1
-
-    if len(in_degree.items()) > 0:
-        raise ValueError(
-            f"Dimensions can not be promoted. The following dimensions "
-            f"appear in contradicting order: {', '.join((dim.value for dim in in_degree.keys()))}."
-        )
-
-    return topologically_sorted_list
+    promoted_dims = sorted(unique_dims, key=lambda dim: (dims_kind_order[dim.kind], dim.value))
+    check_dims(promoted_dims)
+    return promoted_dims
 
 
 class FieldBuiltinFuncRegistry:
