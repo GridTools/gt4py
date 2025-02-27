@@ -666,14 +666,18 @@ def translate_concat_where(
     assert cpm.is_call_to(node, "concat_where")
     assert len(node.args) == 3
 
-    # First argument should be the domain expression to infer the domain of next
-    # two arguments: the range extent is used by the domain inference pass and
-    # just ignored here; we only extract the dimension along which we need to
-    # concatenate the field arguments.
-    concat_domain = extract_domain(node.args[0])
-    if len(concat_domain) != 1:
+    # First argument is a domain expression that defines the mask of first argument:
+    # we extract the dimension along which we need to concatenate the field arguments,
+    # and determine whether the first argument should be on the lower or upper range
+    # with respect to the boundary value.
+    mask_domain = extract_domain(node.args[0])
+    if len(mask_domain) != 1:
         raise NotImplementedError("Expected `concat_where` along single axis.")
-    concat_dim, concat_lower_bound, concat_upper_bound = concat_domain[0]
+    concat_dim, mask_lower_bound, mask_upper_bound = mask_domain[0]
+
+    # We also use the concat domain, stored in the annes, as the domain of output field.
+    output_domain = extract_domain(node.annex.domain)
+    output_dims, output_origin, output_shape = get_field_layout(output_domain)
 
     # we visit the field arguments
     f1, f2 = (sdfg_builder.visit(node.args[i], sdfg=sdfg, head_state=state) for i in [1, 2])
@@ -683,15 +687,15 @@ def translate_concat_where(
         assert inp1_desc.dtype == inp2_desc.dtype
 
         # expect unbound range in the concat domain expression on left- or right-hand side
-        if concat_lower_bound == gtir_sdfg_utils.get_symbolic(gtir.InfinityLiteral.NEGATIVE):
+        if mask_lower_bound == gtir_sdfg_utils.get_symbolic(gtir.InfinityLiteral.NEGATIVE):
             lhs, lhs_desc = inp1, inp1_desc
             rhs, rhs_desc = inp2, inp2_desc
-            concat_cut_level = concat_upper_bound
+            concat_dim_bound = mask_upper_bound
         else:
-            assert concat_upper_bound == gtir_sdfg_utils.get_symbolic(gtir.InfinityLiteral.POSITIVE)
+            assert mask_upper_bound == gtir_sdfg_utils.get_symbolic(gtir.InfinityLiteral.POSITIVE)
             lhs, lhs_desc = inp2, inp2_desc
             rhs, rhs_desc = inp1, inp1_desc
-            concat_cut_level = concat_lower_bound
+            concat_dim_bound = mask_lower_bound
 
         assert isinstance(lhs.gt_type, ts.FieldType)
         assert isinstance(rhs.gt_type, ts.FieldType)
@@ -701,18 +705,24 @@ def translate_concat_where(
                 *rhs.gt_type.dims[0:concat_dim_index],
                 *rhs.gt_type.dims[concat_dim_index + 1 :],
             ]
+            slice_origin = concat_dim_bound - 1
             lhs, lhs_desc = _slice_concat_view_node(
-                sdfg, state, lhs, lhs_desc, concat_dim, concat_dim_index, concat_cut_level - 1
+                sdfg, state, lhs, lhs_desc, concat_dim, concat_dim_index, slice_origin
             )
+            # the line below does domain forward propagation to make dace validate the memlet subset
+            output_origin[concat_dim_index] = slice_origin
         elif concat_dim not in rhs.gt_type.dims:
             concat_dim_index = lhs.gt_type.dims.index(concat_dim)
             assert rhs.gt_type.dims == [
                 *lhs.gt_type.dims[0:concat_dim_index],
                 *lhs.gt_type.dims[concat_dim_index + 1 :],
             ]
+            slice_origin = concat_dim_bound
             rhs, rhs_desc = _slice_concat_view_node(
-                sdfg, state, rhs, rhs_desc, concat_dim, concat_dim_index, concat_cut_level
+                sdfg, state, rhs, rhs_desc, concat_dim, concat_dim_index, slice_origin
             )
+            # the line below does domain forward propagation to make dace validate the memlet subset
+            output_shape[concat_dim_index] = slice_origin + 1 - output_origin[concat_dim_index]
         elif len(lhs.gt_type.dims) == 1:
             concat_dim_index = rhs.gt_type.dims.index(concat_dim)
             lhs, lhs_desc = _broadcast_concat_view_node(
@@ -730,32 +740,33 @@ def translate_concat_where(
                 "concat_where on fields with different domain is not supported."
             )
 
-        lhs_start = lhs.origin[concat_dim_index]
-        lhs_stop = dace.symbolic.pystr_to_symbolic(
-            f"max({lhs_start}, min({concat_cut_level}, {lhs.origin[concat_dim_index] + lhs_desc.shape[concat_dim_index]}))"
-        )
+        # ensure that the arguments have the same domain as the concat result
+        assert all(ftype.dims == output_dims for ftype in (lhs.gt_type, rhs.gt_type))
+
+        lhs_start = output_origin[concat_dim_index]
+        lhs_stop = concat_dim_bound
         lhs_size = lhs_stop - lhs_start
-        rhs_stop = rhs.origin[concat_dim_index] + rhs_desc.shape[concat_dim_index]
-        rhs_start = dace.symbolic.pystr_to_symbolic(
-            f"min({rhs_stop}, max({concat_cut_level}, {rhs.origin[concat_dim_index]}))"
-        )
+        rhs_start = concat_dim_bound
+        rhs_stop = output_origin[concat_dim_index] + output_shape[concat_dim_index]
         rhs_size = rhs_stop - rhs_start
 
-        output_shape = tuple(
-            lhs_size + rhs_size if dim_index == concat_dim_index else size
-            for dim_index, size in enumerate(lhs_desc.shape)
-        )
         output, output_desc = sdfg_builder.add_temp_array(sdfg, output_shape, lhs_desc.dtype)
         output_node = state.add_access(output)
-        output_origin = tuple(
+
+        lhs_subset = dace_subsets.Range(
             [
-                concat_cut_level - lhs_size if dim_index == concat_dim_index else origin
-                for dim_index, origin in enumerate(lhs.origin)
+                (
+                    lhs_start - lhs.origin[concat_dim_index],
+                    lhs_start - lhs.origin[concat_dim_index] + lhs_size - 1,
+                    1,
+                )
+                if dim_index == concat_dim_index
+                else (0, size - 1, 1)
+                for dim_index, size in enumerate(output_desc.shape)
             ]
         )
-
         # we write the full shape of the lhs node into the output array starting from the origin
-        lhs_subset = dace_subsets.Range(
+        lhs_output_subset = dace_subsets.Range(
             [
                 (0, lhs_size - 1, 1) if dim_index == concat_dim_index else (0, size - 1, 1)
                 for dim_index, size in enumerate(output_desc.shape)
@@ -767,7 +778,7 @@ def translate_concat_where(
             dace.Memlet(
                 data=lhs.dc_node.data,
                 subset=lhs_subset,
-                other_subset=lhs_subset,
+                other_subset=lhs_output_subset,
             ),
         )
         rhs_subset = dace_subsets.Range(
@@ -785,7 +796,7 @@ def translate_concat_where(
         # the full shape of the rhs node is also written, but the start index of
         # the destination subset is not the field origin: we write to the right-hand
         # side of the previous subset in the concat dimension
-        rhs_other_subset = dace_subsets.Range(
+        rhs_output_subset = dace_subsets.Range(
             [
                 (
                     rhs_start - output_origin[concat_dim_index],
@@ -803,10 +814,10 @@ def translate_concat_where(
             dace.Memlet(
                 data=rhs.dc_node.data,
                 subset=rhs_subset,
-                other_subset=rhs_other_subset,
+                other_subset=rhs_output_subset,
             ),
         )
-        return FieldopData(output_node, lhs.gt_type, origin=output_origin)
+        return FieldopData(output_node, lhs.gt_type, origin=tuple(output_origin))
 
     return (
         concatenate_inputs(f1, f2)
