@@ -66,6 +66,7 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
         - Implement the pattern `(G) -> (T) -> (G)` which is handled currently by
             `GT4PyGlobalSelfCopyElimination`, see `_classify_candidate()` and
             `_remove_writes_to_global()` for more.
+        - Make it more efficient such that the SDFG is not scanned multiple times.
     """
 
     def modifies(self) -> dace_ppl.Modifies:
