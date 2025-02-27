@@ -235,7 +235,13 @@ def gt_auto_optimize(
                 validate_all=validate_all,
             )
 
-        # Phase 6: Going to GPU
+        # Phase 6: Setting the strides of transients
+        #   It is important that we set the strides before the GPU transformation.
+        #   Because this transformation will also apply `CopyToMap` for the Memlets
+        #   that the DaCe runtime can not handle.
+        gtx_transformations.gt_change_transient_strides(sdfg, gpu=gpu)
+
+        # Phase 7: Going to GPU
         if gpu:
             # TODO(phimuell): The GPU function might modify the map iteration order.
             #                   This is because how it is implemented (promotion and
