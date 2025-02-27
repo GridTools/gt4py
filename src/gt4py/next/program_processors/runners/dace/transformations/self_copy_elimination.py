@@ -127,9 +127,10 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
 
         candidates: dict[str, set[str]] = dict()
         for gname in global_data:
-            res, possible_ts = self._classify_candidate(sdfg, gname, access_states)
-            if res:
-                candidates[gname] = possible_ts  # type: ignore[assignment]  # Guaranteed to be not `None`.
+            possible_ts = self._classify_candidate(sdfg, gname, access_states)
+            if possible_ts is not None:
+                assert len(possible_ts) > 0
+                candidates[gname] = possible_ts
 
         return candidates
 
@@ -138,17 +139,16 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
         sdfg: dace.SDFG,
         gname: str,
         access_states: dict[str, set[dace.SDFGState]],
-    ) -> tuple[bool, Optional[set[str]]]:
+    ) -> Optional[set[str]]:
         """The function tests if the global data `gname` can be handled.
 
         It essentially checks if all conditions above, which is that the only
         writes to it are through transients that are fully defined by the data
         itself.
 
-        The function returns a `tuple`. In case `gname` is a valid `G`, according
-        to the definition above, it will return `True` followed by a list of all
-        data descriptors that are used as `T`. In case `gname` does not apply,
-        the function will return `(True, None)`.
+        The function returns `None` if `gname` can not be handled by the function.
+        If `gname` can be handled the function returns a set of all data descriptors
+        that acts as distributed buffers.
         """
         # The set of access nodes that reads from the global, i.e. `gname`, essentially
         #  the set of candidates of `T` defined through the way it is defined.
@@ -174,15 +174,15 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
                     #  will only collect which nodes writes to `G`, if these are
                     #  valid `T`s will be checked later, after we cllected all of them.
                     if not isinstance(possible_t, dace_nodes.AccessNode):
-                        return False, None
+                        return None
 
                     possible_t_desc = possible_t.desc(sdfg)
                     if not possible_t_desc.transient:
-                        return False, None  # we must write into a transient.
+                        return None  # we must write into a transient.
                     if isinstance(possible_t_desc, dace_data.View):
-                        return False, None  # The global data must be written to from an array
+                        return None  # The global data must be written to from an array
                     if not isinstance(possible_t_desc, dace_data.Array):
-                        return False, None
+                        return None
                     writes_to_g.add(possible_t.data)
 
                 # Let's look who reads from `g` this will contribute to the `reads_from_g` set.
@@ -216,13 +216,13 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
                         for tnode_oedge in state.out_edges(possible_t)
                         if isinstance(tnode_oedge.dst, dace_nodes.AccessNode)
                     ):
-                        return False, None
+                        return None
 
                     # Now add the data to the list of data that reads from `G`.
                     reads_from_g.add(possible_t.data)
 
         if len(writes_to_g) == 0:
-            return False, None
+            return None
 
         # Now every write to `G` must come from an access node that was created by
         #  direct a read from `G`. We can do this by ensuring that `writes_to_g` is a
@@ -230,8 +230,8 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
         #  Note that all `T`, which might not be unique, which happens in case
         #  of different subsets, are contained in `
         if writes_to_g.issubset(reads_from_g):
-            return True, writes_to_g
-        return False, None
+            return writes_to_g
+        return None
 
     def _remove_writes_to_globals(
         self,
