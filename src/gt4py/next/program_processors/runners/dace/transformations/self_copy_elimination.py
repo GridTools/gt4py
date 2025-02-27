@@ -175,16 +175,17 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
         reads_from_g: set[str] = set()
         writes_to_g: set[str] = set()
 
+        # In a first step we will identify the possible `T` only from the angle of
+        #  how they interact with `G`. At a later point we will look at the `T` again,
+        #  because in case of branches there might be multiple definitions of `T`.
         for state in access_states[gname]:
             for dnode in state.data_nodes():
                 if dnode.data != gname:
                     continue
 
-                # Note that we allow that `G` can be written to by multiple data at
+                # Note that we allow that `G` can be written to by multiple `T` at
                 #  once. However, we require that all this data, is fully defined by
-                #  a read to `G` itself. However, we impose some conditions on it.
-                #  Note that this allows that there are multiple `T`s at the same
-                #  time.
+                #  a read to `G` itself.
                 for iedge in state.in_edges(dnode):
                     possible_t = iedge.src
 
@@ -248,9 +249,35 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
         #  subset of `reads_to_g`.
         #  Note that all `T`, which might not be unique, which happens in case
         #  of different subsets, are contained in `
-        if writes_to_g.issubset(reads_from_g):
-            return writes_to_g
-        return None
+        if not writes_to_g.issubset(reads_from_g):
+            return None
+
+        # If we have branches, it might be that an `T` is defined differently depending
+        #  on which branch is selected, i.e. `T = G if cond else foo(A)`. For that
+        #  reason we must now check that `G` is the only data source of `T`, but this
+        #  time we must do the check `T`. Note we only have to remove that particular
+        #  `T`.
+        for tname in list(writes_to_g):
+            for state in access_states[tname]:
+                for dnode in state.data_nodes():
+                    if dnode.data != tname:
+                        continue
+                    if state.in_degree(dnode) == 0:
+                        continue  # We are only interested at definitions.
+
+                    # Now ensures that only `gname` defines `T`.
+                    for iedge in state.in_edges(dnode):
+                        t_def_node = iedge.src
+                        if not isinstance(t_def_node, dace_nodes.AccessNode):
+                            writes_to_g.discard(tname)
+                            break
+                        if t_def_node.data != gname:
+                            writes_to_g.discard(tname)
+                            break
+                if tname not in writes_to_g:
+                    break
+
+        return None if len(writes_to_g) == 0 else writes_to_g
 
     def _remove_writes_to_globals(
         self,

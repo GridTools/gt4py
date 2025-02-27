@@ -348,6 +348,50 @@ def _make_wb_single_state_sdfg() -> dace.SDFG:
     return sdfg
 
 
+def _make_non_eligible_sdfg_with_branches():
+    """Creates an SDFG with two different definitions of `T`."""
+    sdfg = dace.SDFG(util.unique_name("non_eligible_sdfg_with_branches_sdfg"))
+
+    # This is the `G` array, it is also used as output.
+    sdfg.add_array("a", shape=(10,), dtype=dace.float64, transient=False)
+    # This is the (possible) `T` array.
+    sdfg.add_array("t", shape=(10,), dtype=dace.float64, transient=True)
+
+    # This is an additional array that serves as input. In one case it defines `t`.
+    sdfg.add_array("b", shape=(10,), dtype=dace.float64, transient=False)
+    # This is the condition on which we switch.
+    sdfg.add_scalar("cond", dtype=dace.bool, transient=False)
+
+    # This is the init state.
+    state1 = sdfg.add_state(is_start_block=True)
+
+    # This is the state where `T` is not defined in terms of `G`.
+    stateT = sdfg.add_state(is_start_block=False)
+    sdfg.add_edge(state1, stateT, dace.InterstateEdge(condition="cond == True"))
+    stateT.add_nedge(
+        stateT.add_access("b"), stateT.add_access("t"), dace.Memlet("b[0:10] -> [0:10]")
+    )
+
+    # This is the state where `T` is defined in terms of `G`.
+    stateF = sdfg.add_state(is_start_block=False)
+    sdfg.add_edge(state1, stateF, dace.InterstateEdge(condition="cond != True"))
+    stateF.add_nedge(
+        stateF.add_access("a"), stateF.add_access("t"), dace.Memlet("a[0:10] -> [0:10]")
+    )
+
+    # Now the write back state, where `T` is written back into `G`.
+    stateWB = sdfg.add_state(is_start_block=False)
+    stateWB.add_nedge(
+        stateWB.add_access("t"), stateWB.add_access("a"), dace.Memlet("t[0:10] -> [0:10]")
+    )
+
+    sdfg.add_edge(stateF, stateWB, dace.InterstateEdge())
+    sdfg.add_edge(stateT, stateWB, dace.InterstateEdge())
+
+    sdfg.validate()
+    return sdfg
+
+
 def test_not_apply_because_of_write_to_g():
     sdfg = _make_not_apply_because_of_write_to_g_sdfg()
     old_hash = sdfg.hash_sdfg()
@@ -446,6 +490,19 @@ def test_pseudo_temporaries():
 
 def test_single_state():
     sdfg = _make_wb_single_state_sdfg()
+    old_hash = sdfg.hash_sdfg()
+    nb_access_nodes_initially = util.count_nodes(sdfg, dace_nodes.AccessNode)
+
+    res = apply_distributed_self_copy_elimination(sdfg)
+    nb_access_nodes_after = util.count_nodes(sdfg, dace_nodes.AccessNode)
+
+    assert res is None
+    assert nb_access_nodes_initially == nb_access_nodes_after
+    assert old_hash == sdfg.hash_sdfg()
+
+
+def test_branches():
+    sdfg = _make_non_eligible_sdfg_with_branches()
     old_hash = sdfg.hash_sdfg()
     nb_access_nodes_initially = util.count_nodes(sdfg, dace_nodes.AccessNode)
 
