@@ -27,7 +27,11 @@ from gt4py.cartesian.gtscript import (
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
-from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS, get_array_library
+from cartesian_tests.definitions import (
+    ALL_BACKENDS,
+    CPU_BACKENDS,
+    get_array_library,
+)
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import (
     EXTERNALS_REGISTRY as externals_registry,
     REGISTRY as stencil_definitions,
@@ -762,3 +766,90 @@ def test_function_inline_in_while(backend):
     out_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
     test(in_arr, out_arr)
     assert (out_arr[:, :, :] == 388.0).all()
+
+
+def _xfail_dace_backends(param):
+    if param.values[0].startswith("dace:"):
+        marks = param.marks + [
+            pytest.mark.xfail(
+                raises=ValueError,
+                reason="Missing support in DaCe backends, see https://github.com/GridTools/gt4py/issues/1881.",
+            )
+        ]
+        # make a copy because otherwise we are operating in-place
+        return pytest.param(*param.values, marks=marks)
+    return param
+
+
+@pytest.mark.parametrize("backend", map(_xfail_dace_backends, ALL_BACKENDS))
+def test_cast_in_index(backend):
+    @gtscript.stencil(backend)
+    def cast_in_index(
+        in_field: Field[np.float64], i32: np.int32, i64: np.int64, out_field: Field[np.float64]
+    ):
+        """Simple copy stencil with forced cast in index calculation."""
+        with computation(PARALLEL), interval(...):
+            out_field = in_field[0, 0, i32 - i64]
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_read_after_write_stencil(backend):
+    """Stencil with multiple read after write access patterns."""
+
+    @gtscript.stencil(backend=backend)
+    def lagrangian_contributions(
+        q: Field[np.float64],
+        pe1: Field[np.float64],
+        pe2: Field[np.float64],
+        q4_1: Field[np.float64],
+        q4_2: Field[np.float64],
+        q4_3: Field[np.float64],
+        q4_4: Field[np.float64],
+        dp1: Field[np.float64],
+        lev: gtscript.Field[gtscript.IJ, np.int64],
+    ):
+        """
+        Args:
+            q (out):
+            pe1 (in):
+            pe2 (in):
+            q4_1 (in):
+            q4_2 (in):
+            q4_3 (in):
+            q4_4 (in):
+            dp1 (in):
+            lev (inout):
+        """
+        with computation(FORWARD), interval(...):
+            pl = (pe2 - pe1[0, 0, lev]) / dp1[0, 0, lev]
+            if pe2[0, 0, 1] <= pe1[0, 0, lev + 1]:
+                pr = (pe2[0, 0, 1] - pe1[0, 0, lev]) / dp1[0, 0, lev]
+                q = (
+                    q4_2[0, 0, lev]
+                    + 0.5 * (q4_4[0, 0, lev] + q4_3[0, 0, lev] - q4_2[0, 0, lev]) * (pr + pl)
+                    - q4_4[0, 0, lev] * 1.0 / 3.0 * (pr * (pr + pl) + pl * pl)
+                )
+            else:
+                qsum = (pe1[0, 0, lev + 1] - pe2) * (
+                    q4_2[0, 0, lev]
+                    + 0.5 * (q4_4[0, 0, lev] + q4_3[0, 0, lev] - q4_2[0, 0, lev]) * (1.0 + pl)
+                    - q4_4[0, 0, lev] * 1.0 / 3.0 * (1.0 + pl * (1.0 + pl))
+                )
+                lev = lev + 1
+                while pe1[0, 0, lev + 1] < pe2[0, 0, 1]:
+                    qsum += dp1[0, 0, lev] * q4_1[0, 0, lev]
+                    lev = lev + 1
+                dp = pe2[0, 0, 1] - pe1[0, 0, lev]
+                esl = dp / dp1[0, 0, lev]
+                qsum += dp * (
+                    q4_2[0, 0, lev]
+                    + 0.5
+                    * esl
+                    * (
+                        q4_3[0, 0, lev]
+                        - q4_2[0, 0, lev]
+                        + q4_4[0, 0, lev] * (1.0 - (2.0 / 3.0) * esl)
+                    )
+                )
+                q = qsum / (pe2[0, 0, 1] - pe2)
+            lev = lev - 1
