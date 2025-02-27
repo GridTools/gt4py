@@ -24,9 +24,9 @@ from .loop_blocking import LoopBlocking
 from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
+from .self_copy_elimination import GT4PyGlobalSelfCopyElimination
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
-    GT4PyGlobalSelfCopyElimination,
     GT4PyMapBufferElimination,
     GT4PyMoveTaskletIntoMap,
     gt_inline_nested_sdfg,
