@@ -12,12 +12,16 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
+    expand_library_functions,
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
+    infer_domain_ops,
     inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
+    nest_concat_wheres,
+    transform_concat_where,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -87,11 +91,21 @@ def apply_common_transforms(
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir
     )  # domain inference does not support dynamic offsets yet
+    ir = nest_concat_wheres.NestConcatWheres.apply(ir)
+    ir = infer_domain_ops.InferDomainOps.apply(ir)
+
     ir = infer_domain.infer_program(
         ir,
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
+
+    # Note: executing domain inference again afterwards will give wrong domains.
+    # This might be problematic in the temporary extraction, where we do this...
+    ir = ConstantFolding.apply(ir)  # TODO: remove
+    ir = transform_concat_where.TransformConcatWhere.apply(ir)
+    ir = ConstantFolding.apply(ir)  # TODO: remove
+    ir = expand_library_functions.ExpandLibraryFunctions.apply(ir)
 
     for _ in range(10):
         inlined = ir
@@ -186,5 +200,11 @@ def apply_fieldview_transforms(
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir
     )  # domain inference does not support dynamic offsets yet
+
+    # TODO: deduplicate with regular pass manager
+    ir = nest_concat_wheres.NestConcatWheres.apply(ir)
+    ir = infer_domain_ops.InferDomainOps.apply(ir)
+    ir = ConstantFolding.apply(ir)
+
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     return ir
