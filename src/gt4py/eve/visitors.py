@@ -121,6 +121,21 @@ class NodeVisitor:
         return None
 
 
+def _preserve_annex(
+    node: concepts.Node, new_node: concepts.Node, preserved_annex_attrs: tuple[str, ...]
+) -> None:
+    if preserved_annex_attrs and (old_annex := getattr(node, "__node_annex__", None)):
+        # access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter
+        new_annex_dict = new_node.annex.__dict__
+        for key in preserved_annex_attrs:
+            if (value := getattr(old_annex, key, NOTHING)) is not NOTHING:
+                # Note: The annex value of the new node might not be equal
+                # (in the sense that an equality comparison returns false),
+                # but in the context of the pass, they are equivalent.
+                # Therefore, we don't assert equality here.
+                new_annex_dict[key] = value
+
+
 class NodeTranslator(NodeVisitor):
     """Special `NodeVisitor` to translate nodes and trees.
 
@@ -158,13 +173,7 @@ class NodeTranslator(NodeVisitor):
                     if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 }
             )
-            if self.PRESERVED_ANNEX_ATTRS and (old_annex := getattr(node, "__node_annex__", None)):
-                # access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter
-                new_annex_dict = new_node.annex.__dict__
-                for key in self.PRESERVED_ANNEX_ATTRS:
-                    if (value := getattr(old_annex, key, NOTHING)) is not NOTHING:
-                        assert key not in new_annex_dict
-                        new_annex_dict[key] = value
+            _preserve_annex(node, new_node, self.PRESERVED_ANNEX_ATTRS)
 
             return new_node
 
@@ -189,3 +198,11 @@ class NodeTranslator(NodeVisitor):
             )
 
         return copy.deepcopy(node, memo=memo)
+
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        new_node = super().visit(node, **kwargs)
+
+        if isinstance(node, concepts.Node) and isinstance(new_node, concepts.Node):
+            _preserve_annex(node, new_node, self.PRESERVED_ANNEX_ATTRS)
+
+        return new_node
