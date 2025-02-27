@@ -236,7 +236,6 @@ def _make_multiple_temporaries_sdfg_keep_one_1() -> dace.SDFG:
     The generated SDFG is very similar to `_make_multiple_temporaries_sdfg1()` except
     that `t1` can not be removed because it is used to generate `c`.
     """
-
     sdfg = _make_multiple_temporaries_sdfg1()
 
     sdfg.add_array("c", shape=(5,), dtype=dace.float64, transient=False)
@@ -262,7 +261,6 @@ def _make_multiple_temporaries_sdfg_keep_one_2() -> dace.SDFG:
     The generated SDFG is very similar to `_make_multiple_temporaries_sdfg2()` except
     that `t1` can not be removed because it is used to generate `d`.
     """
-
     sdfg = _make_multiple_temporaries_sdfg2()
 
     sdfg.add_array("d", shape=(5,), dtype=dace.float64, transient=False)
@@ -288,7 +286,6 @@ def _make_non_eligible_because_of_pseudo_temporary() -> dace.SDFG:
 
     Note that in this particular case it would be possible, but we do not support it.
     """
-
     sdfg = dace.SDFG(util.unique_name("multiple_temporaries_sequential"))
 
     # This is the `G` array.
@@ -317,6 +314,39 @@ def _make_non_eligible_because_of_pseudo_temporary() -> dace.SDFG:
         code="__out = __in + 1.0",
         outputs={"__out": dace.Memlet("b[__i]")},
         input_nodes={a2},
+        external_edges=True,
+    )
+
+    sdfg.validate()
+    return sdfg
+
+
+def _make_wb_single_state_sdfg() -> dace.SDFG:
+    """Generates an SDFG with the pattern `(G) -> (T) -> (G)` which is not handled.
+
+    This pattern is handled by the `GT4PyGlobalSelfCopyElimination` transformation.
+    """
+    sdfg = dace.SDFG(util.unique_name("single_state_write_back_sdfg"))
+
+    sdfg.add_array("g", shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_array("t", shape=(10,), dtype=dace.float64, transient=True)
+    sdfg.add_array("b", shape=(10,), dtype=dace.float64, transient=False)
+
+    state1 = sdfg.add_state(is_start_block=True)
+    t1 = state1.add_access("t")
+    state1.add_nedge(state1.add_access("g"), t1, dace.Memlet("g[0:10] -> [0:10]"))
+    g1 = state1.add_access("g")
+    state1.add_nedge(t1, g1, dace.Memlet("t[0:10] -> [0:10]"))
+
+    # return sdfg
+
+    state1.add_mapped_tasklet(
+        "comp",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("g[__i]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("b[__i]")},
+        input_nodes={g1},
         external_edges=True,
     )
 
@@ -409,6 +439,19 @@ def test_multiple_temporaries_keep_one_2():
 
 def test_pseudo_temporaries():
     sdfg = _make_non_eligible_because_of_pseudo_temporary()
+    old_hash = sdfg.hash_sdfg()
+    nb_access_nodes_initially = util.count_nodes(sdfg, dace_nodes.AccessNode)
+
+    res = apply_distributed_self_copy_elimination(sdfg)
+    nb_access_nodes_after = util.count_nodes(sdfg, dace_nodes.AccessNode)
+
+    assert res is None
+    assert nb_access_nodes_initially == nb_access_nodes_after
+    assert old_hash == sdfg.hash_sdfg()
+
+
+def test_single_state():
+    sdfg = _make_wb_single_state_sdfg()
     old_hash = sdfg.hash_sdfg()
     nb_access_nodes_initially = util.count_nodes(sdfg, dace_nodes.AccessNode)
 

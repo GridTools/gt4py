@@ -44,7 +44,9 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
     If `G` is not an output then any mutating changes to `G` would be invalid.
 
     Todo:
-        - Fuse this transformation with the `GT4PyGlobalSelfCopyElimination`.
+        - Implement the pattern `(G) -> (T) -> (G)` which is handled currently by
+            `GT4PyGlobalSelfCopyElimination`, see `_classify_candidate()` and
+            `_remove_writes_to_global()` for more.
     """
 
     def modifies(self) -> dace_ppl.Modifies:
@@ -205,6 +207,18 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
                         continue  # We must write into an array and not a view.
                     if not isinstance(possible_t_desc, dace_data.Array):
                         continue
+
+                    # Currently we do not handle the pattern `(T) -> (G) -> (T)`,
+                    #  see `_remove_writes_to_global()` for more, thus we filter
+                    #  these pattern here.
+                    if any(
+                        tnode_oedge.dst.data == gname
+                        for tnode_oedge in state.out_edges(possible_t)
+                        if isinstance(tnode_oedge.dst, dace_nodes.AccessNode)
+                    ):
+                        return False, None
+
+                    # Now add the data to the list of data that reads from `G`.
                     reads_from_g.add(possible_t.data)
 
         if len(writes_to_g) == 0:
@@ -255,11 +269,18 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
         The function is the same as `_remove_writes_to_globals()` but only processes
         one global data descriptor.
         """
+        # Here we delete the `T` node that writes into `G`, this might turn the `G`
+        #  node into an isolated node.
+        #  It is important that this code does not handle the `(G) -> (T) -> (G)`
+        #  pattern, which is difficult to handle. The issue is that by removing `(T)`,
+        #  what this function does, it also removes the definition `(T)`. However,
+        #  it can only do that if it ensures that `T` is not used anywhere else.
+        #  This is currently handle by the `GT4PyGlobalSelfCopyElimination` pass
+        #  and the classifier rejects this pattern.
         for state in access_states[gname]:
             for dnode in list(state.data_nodes()):
                 if dnode.data != gname:
                     continue
-
                 for iedge in list(state.in_edges(dnode)):
                     tnode = iedge.src
                     if not isinstance(tnode, dace_nodes.AccessNode):
