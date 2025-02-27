@@ -373,37 +373,25 @@ class DeviceType(enum.IntEnum):
 
     CPU = 1
     CUDA = 2
-    CPU_PINNED = 3
-    OPENCL = 4
-    VULKAN = 7
-    METAL = 8
-    VPI = 9
+    # CPU_PINNED = 3    # noqa: ERA001
+    # OPENCL = 4        # noqa: ERA001
+    # VULKAN = 7        # noqa: ERA001
+    # METAL = 8         # noqa: ERA001
+    # VPI = 9           # noqa: ERA001
     ROCM = 10
-    CUDA_MANAGED = 13
-    ONE_API = 14
+    # CUDA_MANAGED = 13 # noqa: ERA001
+    # ONE_API = 14      # noqa: ERA001
 
 
 CPUDeviceTyping: TypeAlias = Literal[DeviceType.CPU]
 CUDADeviceTyping: TypeAlias = Literal[DeviceType.CUDA]
-CPUPinnedDeviceTyping: TypeAlias = Literal[DeviceType.CPU_PINNED]
-OpenCLDeviceTyping: TypeAlias = Literal[DeviceType.OPENCL]
-VulkanDeviceTyping: TypeAlias = Literal[DeviceType.VULKAN]
-MetalDeviceTyping: TypeAlias = Literal[DeviceType.METAL]
-VPIDeviceTyping: TypeAlias = Literal[DeviceType.VPI]
 ROCMDeviceTyping: TypeAlias = Literal[DeviceType.ROCM]
-CUDAManagedDeviceTyping: TypeAlias = Literal[DeviceType.CUDA_MANAGED]
-OneApiDeviceTyping: TypeAlias = Literal[DeviceType.ONE_API]
 
 
 DeviceTypeT = TypeVar(
     "DeviceTypeT",
     CPUDeviceTyping,
     CUDADeviceTyping,
-    CPUPinnedDeviceTyping,
-    OpenCLDeviceTyping,
-    VulkanDeviceTyping,
-    MetalDeviceTyping,
-    VPIDeviceTyping,
     ROCMDeviceTyping,
 )
 
