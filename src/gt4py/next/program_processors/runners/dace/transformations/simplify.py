@@ -58,7 +58,11 @@ def gt_simplify(
 
     Further, the function will run the following passes in addition to DaCe simplify:
     - `GT4PyGlobalSelfCopyElimination`: Special copy pattern that in the context
-        of GT4Py based SDFG behaves as a no op.
+        of GT4Py based SDFG behaves as a no op, i.e. `(G) -> (T) -> (G)`.
+    - `DistributedGlobalSelfCopyElimination`: Very similar to
+        `GT4PyGlobalSelfCopyElimination`, with the exception that the definition of
+        `T`, i.e. `(G) -> (T)` and the write back to `G`, i.e. `(T) -> (G)` might be
+        in different states.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -120,8 +124,22 @@ def gt_simplify(
             if self_copy_removal_result > 0:
                 at_least_one_xtrans_run = True
                 result = result or {}
-                result.setdefault("GT4PyGlobalSelfCopyElimination", 0)
+                if "GT4PyGlobalSelfCopyElimination" not in result:
+                    result["GT4PyGlobalSelfCopyElimination"] = 0
                 result["GT4PyGlobalSelfCopyElimination"] += self_copy_removal_result
+
+        if "DistributedGlobalSelfCopyElimination" not in skip:
+            distributed_self_copy_result = (
+                gtx_transformations.gt_apply_distributed_self_copy_elimination(
+                    sdfg, validate=validate_all
+                )
+            )
+            if distributed_self_copy_result is not None:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "DistributedGlobalSelfCopyElimination" not in result:
+                    result["DistributedGlobalSelfCopyElimination"] = set()
+                result["DistributedGlobalSelfCopyElimination"].update(distributed_self_copy_result)
 
     return result
 
