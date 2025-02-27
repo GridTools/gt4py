@@ -66,10 +66,11 @@ def gt_auto_optimize(
         one with stride one.
     5. If requested the function will now apply loop blocking, on the dimension
         indicated by `leading_dim`.
-    6. If requested the SDFG will be transformed to GPU. For this the
+    6. The strides of temporaries are set to match the compute order.
+    7. If requested the SDFG will be transformed to GPU. For this the
         `gt_gpu_transformation()` function is used, that might apply several other
         optimizations.
-    7. Afterwards some general transformations to the SDFG are applied.
+    8. Afterwards some general transformations to the SDFG are applied.
         This includes:
         - Use fast implementation for library nodes.
         - Move small transients to stack.
@@ -257,7 +258,7 @@ def gt_auto_optimize(
                 try_removing_trivial_maps=True,
             )
 
-        # Phase 7: General Optimizations
+        # Phase 8: General Optimizations
         #   The following operations apply regardless if we have a GPU or CPU.
         #   The DaCe auto optimizer also uses them. Note that the reuse transient
         #   is not done by DaCe.
@@ -272,9 +273,6 @@ def gt_auto_optimize(
         dace_aoptimize.set_fast_implementations(sdfg, device)
         # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
         dace_aoptimize.move_small_arrays_to_stack(sdfg)
-
-        # Now we modify the strides.
-        gtx_transformations.gt_change_transient_strides(sdfg, gpu=gpu)
 
         if make_persistent:
             gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)
