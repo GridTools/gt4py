@@ -24,7 +24,10 @@ from .loop_blocking import LoopBlocking
 from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
-from .self_copy_elimination import GT4PyGlobalSelfCopyElimination
+from .self_copy_elimination import (
+    DistributedGlobalSelfCopyElimination,
+    GT4PyGlobalSelfCopyElimination,
+)
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
     GT4PyMapBufferElimination,
@@ -46,6 +49,7 @@ from .utils import gt_find_constant_arguments, gt_make_transients_persistent
 
 __all__ = [
     "GT_SIMPLIFY_DEFAULT_SKIP_SET",
+    "DistributedGlobalSelfCopyElimination",
     "GPUSetBlockSize",
     "GT4PyGlobalSelfCopyElimination",
     "GT4PyMapBufferElimination",
