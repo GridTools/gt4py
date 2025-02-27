@@ -27,6 +27,7 @@ from .map_promoter import SerialMapPromoter
 from .self_copy_elimination import (
     DistributedGlobalSelfCopyElimination,
     GT4PyGlobalSelfCopyElimination,
+    gt_apply_distributed_self_copy_elimination,
 )
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
@@ -61,6 +62,7 @@ __all__ = [
     "MapIterationOrder",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
+    "gt_apply_distributed_self_copy_elimination",
     "gt_auto_optimize",
     "gt_change_transient_strides",
     "gt_create_local_double_buffering",

@@ -26,13 +26,7 @@ import dace
 def apply_distributed_self_copy_elimination(
     sdfg: dace.SDFG,
 ) -> Optional[dict[dace.SDFG, set[str]]]:
-    pipeline = dace_ppl.Pipeline([gtx_transformations.DistributedGlobalSelfCopyElimination()])
-    res = pipeline.apply_pass(sdfg, {})
-    sdfg.validate()
-
-    if "DistributedGlobalSelfCopyElimination" not in res:
-        return None
-    return res["DistributedGlobalSelfCopyElimination"][sdfg]
+    return gtx_transformations.gt_apply_distributed_self_copy_elimination(sdfg=sdfg, validate=True)
 
 
 def _make_not_apply_because_of_write_to_g_sdfg() -> dace.SDFG:

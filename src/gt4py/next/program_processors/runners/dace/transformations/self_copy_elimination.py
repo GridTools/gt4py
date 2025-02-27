@@ -20,6 +20,25 @@ from dace.transformation import pass_pipeline as dace_ppl
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
+def gt_apply_distributed_self_copy_elimination(
+    sdfg: dace.SDFG,
+    validate: bool = False,
+) -> Optional[dict[dace.SDFG, set[str]]]:
+    """Runs `DistributedGlobalSelfCopyElimination` on the SDFG recursively.
+
+    For the return value see `DistributedGlobalSelfCopyElimination.apply_pass()`.
+    """
+    pipeline = dace_ppl.Pipeline([gtx_transformations.DistributedGlobalSelfCopyElimination()])
+    res = pipeline.apply_pass(sdfg, {})
+
+    if validate:
+        sdfg.validate()
+
+    if "DistributedGlobalSelfCopyElimination" not in res:
+        return None
+    return res["DistributedGlobalSelfCopyElimination"][sdfg]
+
+
 @dace_properties.make_properties
 class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
     """Removes self copying across different states.
