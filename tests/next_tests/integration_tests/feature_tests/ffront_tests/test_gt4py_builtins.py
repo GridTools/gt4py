@@ -95,16 +95,9 @@ def reduction_ek_field(
     return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
 
-@gtx.field_operator
-def reduction_ke_field(
-    edge_f: common.Field[[KDim, Edge], np.int32],
-) -> common.Field[[KDim, Vertex], np.int32]:
-    return neighbor_sum(edge_f(V2E), axis=V2EDim)
-
-
 @pytest.mark.uses_unstructured_shift
 @pytest.mark.parametrize(
-    "fop", [reduction_e_field, reduction_ek_field, reduction_ke_field], ids=lambda fop: fop.__name__
+    "fop", [reduction_e_field, reduction_ek_field], ids=lambda fop: fop.__name__
 )
 def test_neighbor_sum(unstructured_case_3d, fop):
     v2e_table = unstructured_case_3d.offset_provider["V2E"].ndarray

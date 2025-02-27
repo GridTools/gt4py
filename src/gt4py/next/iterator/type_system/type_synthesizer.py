@@ -14,7 +14,9 @@ import inspect
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
-from gt4py.next.iterator import builtins
+from gt4py.next.ffront import fbuiltins
+from gt4py.next.iterator import builtins, ir as itir
+from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -302,6 +304,7 @@ def as_fieldop(
     # information on the ordering of dimensions. In this example
     #   `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
     # it is unclear if the result has dimension I, J or J, I.
+    # Todo: update comment
     if domain is None:
         domain = it_ts.DomainType(dims="unknown")
 
@@ -314,15 +317,92 @@ def as_fieldop(
         ):
             return ts.DeferredType(constraint=None)
 
+        output_dims = []
+        for i, field in enumerate(fields):
+            input_dims = common.promote_dims(
+                *[field.dims if isinstance(field, ts.FieldType) else []]
+            )
+            seen = set()
+            if isinstance(stencil.node, itir.Expr):
+                shifts_results = trace_shifts.trace_stencil(
+                    stencil.node, num_args=len(fields)
+                )  # TODO: access node differently?
+
+                def resolve_shift(
+                    input_dim: common.Dimension, shift_tuple: tuple[itir.OffsetLiteral, ...]
+                ) -> common.Dimension:
+                    """
+                    Resolves the final dimension by applying shifts from the given shift tuple.
+
+                    Iterates through the shift tuple, updating `input_dim` based on matching offsets.
+
+                    Parameters:
+                    - input_dim (common.Dimension): The initial dimension to resolve.
+                    - shift_tuple (tuple[itir.OffsetLiteral, ...]): A tuple of offset literals defining the shift.
+
+                    Returns:
+                    - common.Dimension: The resolved dimension or `input_dim` if no shift is applied.
+                    """
+
+                    final_target: common.Dimension = input_dim
+
+                    for off_literal in shift_tuple[::2]:
+                        if offset_provider_type:
+                            offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
+                            if (
+                                isinstance(offset_type, common.Dimension) and input_dim == offset_type
+                            ):  # no shift applied
+                                return offset_type
+                            if isinstance(
+                                offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)
+                            ):
+                                off_source = (
+                                    offset_type.source
+                                    if isinstance(offset_type, fbuiltins.FieldOffset)
+                                    else (offset_type.codomain)
+                                )
+                                off_targets = (
+                                    offset_type.target
+                                    if isinstance(offset_type, fbuiltins.FieldOffset)
+                                    else (offset_type.domain)
+                                )
+
+                                if input_dim == off_source:  # Check if input fits to offset
+                                    for target in off_targets:
+                                        if (
+                                            target.value != off_literal.value
+                                        ):  # Exclude target matching off_literal.value
+                                            final_target = target
+                                            input_dim = target  # Update input_dim for next iteration
+                    return final_target
+
+                for shift_tuple in shifts_results[
+                    i
+                ]:  # Use shift tuple corresponding to the input field
+                    for input_dim in input_dims:
+                        final_dim = resolve_shift(input_dim, shift_tuple)
+                        if final_dim not in seen:
+                            seen.add(final_dim)
+                            output_dims.append(final_dim)
+            else:
+                output_dims = domain.dims
+
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
             offset_provider_type=offset_provider_type,
         )
+
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
-            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
-            if domain.dims != "unknown"
-            else ts.DeferredType(constraint=ts.FieldType),
+            lambda el_type: ts.FieldType(
+                dims=sorted(
+                    {dim for dim in output_dims},
+                    key=lambda dim: (common.dims_kind_order[dim.kind], dim.value),
+                )
+                if output_dims != "unknown"
+                else [],
+                dtype=el_type,
+            ),
             stencil_return,
         )
 
