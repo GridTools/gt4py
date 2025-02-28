@@ -1126,7 +1126,7 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
-def _ordered_dims(dims: list[Dimension]) -> list[Dimension]:
+def _ordered_dims(dims: list[Dimension] | set[Dimension]) -> list[Dimension]:
     return sorted(dims, key=lambda dim: (_DIM_KIND_ORDER[dim.kind], dim.value))
 
 
