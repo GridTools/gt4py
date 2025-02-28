@@ -24,9 +24,13 @@ from .loop_blocking import LoopBlocking
 from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
+from .redundant_array_removers import (
+    DistributedGlobalSelfCopyElimination,
+    GT4PyGlobalSelfCopyElimination,
+    gt_apply_distributed_self_copy_elimination,
+)
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
-    GT4PyGlobalSelfCopyElimination,
     GT4PyMapBufferElimination,
     GT4PyMoveTaskletIntoMap,
     gt_inline_nested_sdfg,
@@ -46,6 +50,7 @@ from .utils import gt_find_constant_arguments, gt_make_transients_persistent
 
 __all__ = [
     "GT_SIMPLIFY_DEFAULT_SKIP_SET",
+    "DistributedGlobalSelfCopyElimination",
     "GPUSetBlockSize",
     "GT4PyGlobalSelfCopyElimination",
     "GT4PyMapBufferElimination",
@@ -57,6 +62,7 @@ __all__ = [
     "MapIterationOrder",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
+    "gt_apply_distributed_self_copy_elimination",
     "gt_auto_optimize",
     "gt_change_transient_strides",
     "gt_create_local_double_buffering",

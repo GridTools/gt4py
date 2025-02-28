@@ -17,8 +17,6 @@ from gt4py.next.program_processors.runners.dace import (
 
 from . import util
 
-import dace
-
 
 def _make_self_copy_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
     """Generates an SDFG that contains the self copying pattern."""
