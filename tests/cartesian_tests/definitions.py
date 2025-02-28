@@ -14,6 +14,7 @@ except (ImportError, RuntimeError):
     cp = None
 
 import datetime
+
 import numpy as np
 import pytest
 
