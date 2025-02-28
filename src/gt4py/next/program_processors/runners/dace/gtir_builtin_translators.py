@@ -586,7 +586,7 @@ def translate_as_fieldop(
     )
 
 
-def _slice_concat_view_node(
+def _make_slice_concat_view_node(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     f: FieldopData,
@@ -621,7 +621,7 @@ def _slice_concat_view_node(
     return fview, view_desc
 
 
-def _broadcast_concat_view_node(
+def _make_broadcast_concat_view_node(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     f: FieldopData,
@@ -681,9 +681,7 @@ def translate_concat_where(
     concat_dim_index = output_dims.index(concat_dim)
 
     # we visit the field arguments for the true and false branch
-    tb, fb = (
-        sdfg_builder.visit(node.args[i], sdfg=sdfg, head_state=state) for i in [1, 2]
-    )
+    tb, fb = (sdfg_builder.visit(node.args[i], sdfg=sdfg, head_state=state) for i in [1, 2])
     tb_domain, fb_domain = (extract_domain(node.args[i].annex.domain) for i in [1, 2])
 
     def concatenate_inputs(tb_field: FieldopData, fb_field: FieldopData) -> FieldopData:
@@ -713,7 +711,7 @@ def translate_concat_where(
                 *upper.gt_type.dims[concat_dim_index + 1 :],
             ]
             is_lower_slice = True
-            lower, lower_desc = _slice_concat_view_node(
+            lower, lower_desc = _make_slice_concat_view_node(
                 sdfg, state, lower, lower_desc, concat_dim, concat_dim_index, concat_dim_bound - 1
             )
         elif concat_dim not in upper.gt_type.dims:
@@ -722,15 +720,15 @@ def translate_concat_where(
                 *lower.gt_type.dims[concat_dim_index + 1 :],
             ]
             is_upper_slice = True
-            upper, upper_desc = _slice_concat_view_node(
+            upper, upper_desc = _make_slice_concat_view_node(
                 sdfg, state, upper, upper_desc, concat_dim, concat_dim_index, concat_dim_bound
             )
         elif len(lower.gt_type.dims) == 1:
-            lower, lower_desc = _broadcast_concat_view_node(
+            lower, lower_desc = _make_broadcast_concat_view_node(
                 sdfg, state, lower, lower_desc, upper, upper_desc, concat_dim_index
             )
         elif len(upper.gt_type.dims) == 1:
-            upper, upper_desc = _broadcast_concat_view_node(
+            upper, upper_desc = _make_broadcast_concat_view_node(
                 sdfg, state, upper, upper_desc, lower, lower_desc, concat_dim_index
             )
         elif lower.gt_type.dims != upper.gt_type.dims:
@@ -741,25 +739,26 @@ def translate_concat_where(
         # ensure that the arguments have the same domain as the concat result
         assert all(ftype.dims == output_dims for ftype in (lower.gt_type, upper.gt_type))
 
-        lower_start = dace.symbolic.pystr_to_symbolic(
+        # the lower/upper range to be copied is defined by the start ('range_0') and stop ('range_1') indices
+        lower_range_0 = dace.symbolic.pystr_to_symbolic(
             f"max({lower_domain[concat_dim_index][1]}, {output_origin[concat_dim_index]})",
             simplify=True,
         )
-        lower_stop = dace.symbolic.pystr_to_symbolic(
-            f"max({lower_start}, min({lower_domain[concat_dim_index][2]}, {output_origin[concat_dim_index] + output_shape[concat_dim_index]}))",
+        lower_range_1 = dace.symbolic.pystr_to_symbolic(
+            f"max({lower_range_0}, min({lower_domain[concat_dim_index][2]}, {output_origin[concat_dim_index] + output_shape[concat_dim_index]}))",
             simplify=True,
         )
-        lower_size = 1 if is_lower_slice else (lower_stop - lower_start)
+        lower_range_size = 1 if is_lower_slice else (lower_range_1 - lower_range_0)
 
-        upper_start = dace.symbolic.pystr_to_symbolic(
+        upper_range_0 = dace.symbolic.pystr_to_symbolic(
             f"max({upper_domain[concat_dim_index][1]}, {output_origin[concat_dim_index]})",
             simplify=True,
         )
-        upper_stop = dace.symbolic.pystr_to_symbolic(
-            f"max({upper_start}, min({upper_domain[concat_dim_index][2]}, {output_origin[concat_dim_index] + output_shape[concat_dim_index]}))",
+        upper_range_1 = dace.symbolic.pystr_to_symbolic(
+            f"max({upper_range_0}, min({upper_domain[concat_dim_index][2]}, {output_origin[concat_dim_index] + output_shape[concat_dim_index]}))",
             simplify=True,
         )
-        upper_size = 1 if is_upper_slice else (upper_stop - upper_start)
+        upper_range_size = 1 if is_upper_slice else (upper_range_1 - upper_range_0)
 
         output, output_desc = sdfg_builder.add_temp_array(sdfg, output_shape, lower_desc.dtype)
         output_node = state.add_access(output)
@@ -768,8 +767,8 @@ def translate_concat_where(
         lower_subset = dace_subsets.Range(
             [
                 (
-                    lower_start - lower_origin,
-                    lower_start - lower_origin + lower_size - 1,
+                    lower_range_0 - lower_origin,
+                    lower_range_0 - lower_origin + lower_range_size - 1,
                     1,
                 )
                 if dim_index == concat_dim_index
@@ -780,7 +779,7 @@ def translate_concat_where(
         # we write the data of the lower range into the output array starting from the index zero
         lower_output_subset = dace_subsets.Range(
             [
-                (0, lower_size - 1, 1) if dim_index == concat_dim_index else (0, size - 1, 1)
+                (0, lower_range_size - 1, 1) if dim_index == concat_dim_index else (0, size - 1, 1)
                 for dim_index, size in enumerate(output_desc.shape)
             ]
         )
@@ -798,8 +797,8 @@ def translate_concat_where(
         upper_subset = dace_subsets.Range(
             [
                 (
-                    upper_start - upper_origin,
-                    upper_start - upper_origin + upper_size - 1,
+                    upper_range_0 - upper_origin,
+                    upper_range_0 - upper_origin + upper_range_size - 1,
                     1,
                 )
                 if dim_index == concat_dim_index
@@ -812,8 +811,8 @@ def translate_concat_where(
         upper_output_subset = dace_subsets.Range(
             [
                 (
-                    upper_start - output_origin[concat_dim_index],
-                    upper_start - output_origin[concat_dim_index] + upper_size - 1,
+                    upper_range_0 - output_origin[concat_dim_index],
+                    upper_range_0 - output_origin[concat_dim_index] + upper_range_size - 1,
                     1,
                 )
                 if dim_index == concat_dim_index
@@ -830,6 +829,7 @@ def translate_concat_where(
                 other_subset=upper_output_subset,
             ),
         )
+
         return FieldopData(output_node, lower.gt_type, origin=tuple(output_origin))
 
     return (
