@@ -237,14 +237,14 @@ def concat_where(
         result_collection_constructor=lambda el: ts.TupleType(types=list(el)),
     )
     def deduce_return_type(tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType):
-        tb_dtype, fb_type = (type_info.extract_dtype(b) for b in [tb, fb])
+        tb_dtype, fb_dtype = (type_info.extract_dtype(b) for b in [tb, fb])
 
         assert (
-            tb_dtype == fb_type
-        ), f"Field arguments must be of same dtype, got '{tb_dtype}' != '{fb_type}'."
+            tb_dtype == fb_dtype
+        ), f"Field arguments must be of same dtype, got '{tb_dtype}' != '{fb_dtype}'."
 
         return_dims = common.promote_dims(domain.dims, type_info.promote(tb, fb).dims)
-        return_type = ts.FieldType(dims=return_dims, dtype=type_info.promote(t_dtype, f_dtype))
+        return_type = ts.FieldType(dims=return_dims, dtype=type_info.promote(tb_dtype, fb_dtype))
         return return_type
 
     return deduce_return_type(true_field, false_field)
