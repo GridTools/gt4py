@@ -188,8 +188,6 @@ def expression_test_cases():
             ),
             ts.DeferredType(constraint=None),
         ),
-        # (im.as_fieldop(im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))))( # TODO(SF-N): this needs PR 1853
-        #    im.ref("inp1", float_i_field), im.ref("inp2", float_j_field)), float_ij_field),
         # if in field-view scope
         (
             im.if_(

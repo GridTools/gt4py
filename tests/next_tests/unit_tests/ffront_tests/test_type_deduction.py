@@ -81,7 +81,7 @@ def test_adding_bool():
 
 
 def test_binop_nonmatching_dims():
-    """Binary operations can only work when both fields have the same dimensions."""
+    """Dimension promotion is applied before Binary operations, i.e., they can also work on two fields that don't have the same dimensions."""
     X = Dimension("X")
     Y = Dimension("Y")
 
