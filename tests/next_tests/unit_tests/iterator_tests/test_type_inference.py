@@ -410,11 +410,13 @@ def test_fencil_with_nb_field_input():
     )
 
     result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
-    assert result.body[0].expr.type == ts.FieldType(dims=[Vertex, V2EDim], dtype=float64_type)
+    assert result.body[0].expr.type == ts.FieldType(
+        dims=[Vertex], dtype=float64_type
+    )  # TODO: is float64_type correct here?
     assert result.body[0].expr.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
         position_dims=float_vertex_k_field.dims,
         defined_dims=float_vertex_field.dims,
-        element_type=ts.ListType(element_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+        element_type=float64_list_type,
     )
     stencil = result.body[0].expr.fun.args[0]
     assert stencil.expr.args[0].type == float64_list_type
@@ -556,7 +558,7 @@ def test_as_fieldop_without_domain_new():
     )
 
     testee = im.as_fieldop(stencil)(
-        im.ref("inp2", float_vertex_field), im.ref("inp1", float_edge_k_field)
+        im.ref("inp1", float_vertex_field), im.ref("inp2", float_edge_k_field)
     )
     result = itir_type_inference.infer(
         testee, offset_provider_type={"V2E": V2E, "KOff": KDim}, allow_undeclared_symbols=True
@@ -571,6 +573,21 @@ def test_as_fieldop_without_domain_new():
         position_dims="unknown",
         defined_dims=float_edge_k_field.dims,
         element_type=float_edge_k_field.dtype,
+    )
+
+
+def test_as_fieldop_without_domain_vertex_v2e():
+    stencil = im.lambda_("it1")(im.deref("it1"))
+
+    testee = im.as_fieldop(stencil)(im.ref("inp1", float_vertex_v2e_field))
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={"V2E": V2E}, allow_undeclared_symbols=True
+    )
+    assert result.type == ts.FieldType(dims=[Vertex], dtype=float64_list_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims="unknown",
+        defined_dims=float_vertex_field.dims,
+        element_type=float64_list_type,
     )
 
 

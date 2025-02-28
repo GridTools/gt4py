@@ -249,10 +249,10 @@ def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
     return apply_lift
 
 
-def _convert_as_fieldop_input_to_iterator(
-    domain: it_ts.DomainType, input_: ts.TypeSpec
-) -> it_ts.IteratorType:
-    # get the dimensions of all non-zero-dimensional field inputs and check they agree
+def _collect_and_check_dimensions(input_: ts.TypeSpec) -> list[common.Dimension]:
+    """
+    Extracts dimensions from non-zero-dimensional field inputs and ensures they match.
+    """
     all_input_dims = (
         type_info.primitive_constituents(input_)
         .if_isinstance(ts.FieldType)
@@ -260,31 +260,43 @@ def _convert_as_fieldop_input_to_iterator(
         .filter(lambda dims: len(dims) > 0)
         .to_list()
     )
-    input_dims: list[common.Dimension]
-    if all_input_dims:
-        assert all(cur_input_dims == all_input_dims[0] for cur_input_dims in all_input_dims)
-        input_dims = all_input_dims[0]
+    if not all_input_dims:
+        return []
     else:
-        input_dims = []
+        assert all(cur_input_dims == all_input_dims[0] for cur_input_dims in all_input_dims)
+        return all_input_dims[0]
 
-    element_type: ts.DataType
-    element_type = type_info.apply_to_primitive_constituents(type_info.extract_dtype, input_)
 
-    # handle neighbor / sparse input fields
-    defined_dims = []
-    is_nb_field = False
-    for dim in input_dims:
-        if dim.kind == common.DimensionKind.LOCAL:
-            assert not is_nb_field
-            is_nb_field = True
-        else:
-            defined_dims.append(dim)
-    if is_nb_field:
-        element_type = ts.ListType(element_type=element_type)
+def _convert_as_fieldop_input_to_iterator(
+    domain: it_ts.DomainType, input_: ts.TypeSpec
+) -> it_ts.IteratorType:
+    """
+    Converts a field operation input into an iterator type, preserving its dimensions and data type.
+    """
+    input_dims = _collect_and_check_dimensions(input_)
+    element_type: ts.DataType = type_info.apply_to_primitive_constituents(
+        type_info.extract_dtype, input_
+    )
 
     return it_ts.IteratorType(
-        position_dims=domain.dims, defined_dims=defined_dims, element_type=element_type
+        position_dims=domain.dims, defined_dims=input_dims, element_type=element_type
     )
+
+
+def _handle_sparse_fields(input_: ts.FieldType) -> ts.FieldType:
+    """
+    Processes sparse field inputs by removing LOCAL dimensions and converting the data type to ListType.
+    """
+    input_dims = _collect_and_check_dimensions(input_)
+    element_type: ts.DataType = type_info.apply_to_primitive_constituents(
+        type_info.extract_dtype, input_
+    )
+
+    defined_dims = [dim for dim in input_dims if dim.kind != common.DimensionKind.LOCAL]
+    if any(dim.kind == common.DimensionKind.LOCAL for dim in input_dims):
+        element_type = ts.ListType(element_type=element_type)
+
+    return ts.FieldType(dims=defined_dims, dtype=element_type)
 
 
 @_register_builtin_type_synthesizer
@@ -317,11 +329,15 @@ def as_fieldop(
         ):
             return ts.DeferredType(constraint=None)
 
+        new_fields = []
         output_dims = []
         for i, field in enumerate(fields):
+            new_field = _handle_sparse_fields(field)
+            new_fields.append(new_field)
             input_dims = common.promote_dims(
-                *[field.dims if isinstance(field, ts.FieldType) else []]
+                *[new_field.dims if isinstance(new_field, ts.FieldType) else []]
             )
+
             seen = set()
             if isinstance(stencil.node, itir.Expr):
                 shifts_results = trace_shifts.trace_stencil(
@@ -350,11 +366,13 @@ def as_fieldop(
                         if offset_provider_type:
                             offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
                             if (
-                                isinstance(offset_type, common.Dimension) and input_dim == offset_type
+                                isinstance(offset_type, common.Dimension)
+                                and input_dim == offset_type
                             ):  # no shift applied
                                 return offset_type
                             if isinstance(
-                                offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)
+                                offset_type,
+                                (fbuiltins.FieldOffset, common.NeighborConnectivityType),
                             ):
                                 off_source = (
                                     offset_type.source
@@ -373,7 +391,9 @@ def as_fieldop(
                                             target.value != off_literal.value
                                         ):  # Exclude target matching off_literal.value
                                             final_target = target
-                                            input_dim = target  # Update input_dim for next iteration
+                                            input_dim = (
+                                                target  # Update input_dim for next iteration
+                                            )
                     return final_target
 
                 for shift_tuple in shifts_results[
@@ -388,7 +408,7 @@ def as_fieldop(
                 output_dims = domain.dims
 
         stencil_return = stencil(
-            *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
+            *(_convert_as_fieldop_input_to_iterator(domain, field) for field in new_fields),
             offset_provider_type=offset_provider_type,
         )
 
