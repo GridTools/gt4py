@@ -13,7 +13,7 @@ import functools
 import inspect
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import builtins
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -128,6 +128,7 @@ def _(lhs, rhs) -> ts.ScalarType | ts.TupleType | ts.DomainType:
 @_register_builtin_type_synthesizer(fun_names=builtins.BINARY_LOGICAL_BUILTINS)
 def _(lhs, rhs) -> ts.ScalarType | ts.TupleType | ts.DomainType:
     if isinstance(lhs, ts.DomainType) and isinstance(rhs, ts.DomainType):
+        assert lhs.dims != "unknown" and rhs.dims != "unknown"
         return ts.DomainType(dims=common.promote_dims(lhs.dims, rhs.dims))
     else:
         return synthesize_binary_math_comparison_builtins(lhs, rhs)
@@ -230,7 +231,23 @@ def concat_where(
 ) -> ts.FieldType | ts.TupleType | ts.DeferredType:
     if isinstance(true_field, ts.DeferredType) or isinstance(false_field, ts.DeferredType):
         return ts.DeferredType(constraint=None)
-    return type_info.promote(true_field, false_field)
+
+    @utils.tree_map(
+        collection_type=ts.TupleType,
+        result_collection_constructor=lambda el: ts.TupleType(types=list(el)),
+    )
+    def deduce_return_type(tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType):
+        tb_dtype, fb_type = (type_info.extract_dtype(b) for b in [tb, fb])
+
+        assert (
+            tb_dtype == fb_type
+        ), f"Field arguments must be of same dtype, got '{tb_dtype}' != '{fb_type}'."
+
+        return_dims = common.promote_dims(domain.dims, type_info.promote(tb, fb).dims)
+        return_type = ts.FieldType(dims=return_dims, dtype=type_info.promote(t_dtype, f_dtype))
+        return return_type
+
+    return deduce_return_type(true_field, false_field)
 
 
 @_register_builtin_type_synthesizer
