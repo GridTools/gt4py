@@ -99,7 +99,7 @@ def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
 
     class ReplaceSymbols(eve.PreserveLocationVisitor, eve.NodeTranslator):
         PRESERVED_ANNEX_ATTRS = ("domain",)
-    
+
         T = TypeVar("T", gtir.Sym, gtir.SymRef)
 
         def _replace_sym(self, node: T, symtable: Dict[str, str]) -> T:
