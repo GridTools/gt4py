@@ -602,7 +602,7 @@ def _slice_concat_view_node(
     )
     view_shape = tuple([*f_desc.shape[:concat_dim_index], 1, *f_desc.shape[concat_dim_index:]])
     view_strides = tuple(
-        [*f_desc.strides[:concat_dim_index], 0, *f_desc.strides[concat_dim_index:]]
+        [*f_desc.strides[:concat_dim_index], 1, *f_desc.strides[concat_dim_index:]]
     )
     view, view_desc = sdfg.add_view(
         f"view_{f.dc_node.data}", view_shape, f_desc.dtype, strides=view_strides, find_new_name=True
