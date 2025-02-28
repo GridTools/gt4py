@@ -52,6 +52,7 @@ float64_list_type = ts.ListType(element_type=float64_type)
 int_list_type = ts.ListType(element_type=int_type)
 
 float_i_field = ts.FieldType(dims=[IDim], dtype=float64_type)
+float_ij_field = ts.FieldType(dims=[IDim, JDim], dtype=float64_type)
 float_vertex_k_field = ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
 float_edge_k_field = ts.FieldType(dims=[Edge, KDim], dtype=float64_type)
 float_vertex_v2e_field = ts.FieldType(dims=[Vertex, V2EDim], dtype=float64_type)
@@ -72,7 +73,6 @@ it_ijk_type = it_ts.IteratorType(
 def expression_test_cases():
     return (
         # itir expr, type
-        # TODO: write test for IDim < 10, concat_where
         (im.call("abs")(1), int_type),
         (im.call("power")(2.0, 2), float64_type),
         (im.plus(1, 2), int_type),
@@ -212,6 +212,23 @@ def expression_test_cases():
                 im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
             ),
             ts.TupleType(types=[float_i_field, float_i_field]),
+        ),
+        # concat_where
+        (
+            im.concat_where(
+                im.domain(common.GridType.CARTESIAN, {IDim: (0, 1)}),
+                im.ref("a", float_i_field),
+                im.ref("b", float_ij_field),
+            ),
+            float_ij_field,
+        ),
+        (
+            im.concat_where(
+                im.domain(common.GridType.CARTESIAN, {IDim: (0, 1)}),
+                im.ref("a", ts.TupleType(types=[float_i_field] * 2)),
+                im.ref("b", ts.TupleType(types=[float_i_field] * 2)),
+            ),
+            ts.TupleType(types=[float_i_field] * 2),
         ),
     )
 

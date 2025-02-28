@@ -403,13 +403,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         domain, true_branch, false_branch = self.visit(node.args)
-        return lowering_utils.process_elements(
-            lambda tb, fb: im.call("concat_where")(domain, tb, fb),
-            (true_branch, false_branch),
-            node.type,
-        )
-
-    # TODO: tuple case
+        return im.concat_where(domain, true_branch, false_branch)
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         expr = self.visit(node.args[0], **kwargs)
