@@ -60,7 +60,7 @@ def gt_simplify(
     - `GT4PyGlobalSelfCopyElimination`: Special copy pattern that in the context
         of GT4Py based SDFG behaves as a no op, i.e. `(G) -> (T) -> (G)`.
     - `DistributedGlobalSelfCopyElimination`: Very similar to
-        `GT4PyGlobalSelfCopyElimination`, with the exception that the definition of
+        `GT4PyGlobalSelfCopyElimination`, with the exception that the write to
         `T`, i.e. `(G) -> (T)` and the write back to `G`, i.e. `(T) -> (G)` might be
         in different states.
 

@@ -59,7 +59,7 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
 
     Note that this transformation does not consider the subsets of the writes from
     `T` to `G` because ADR-18 guarantees to us, that _if_ `G` is a genuine input
-    and output, then an index can only depend on itself, which means not change.
+    and output, then the `G` read and write subsets have the exact same range.
     If `G` is not an output then any mutating changes to `G` would be invalid.
 
     Todo:
@@ -162,13 +162,14 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
     ) -> Optional[set[str]]:
         """The function tests if the global data `gname` can be handled.
 
-        It essentially checks if all conditions above, which is that the only
+        It essentially checks all conditions above, which is that the global is
+        only written through transients that are fully defined by the data itself.
         writes to it are through transients that are fully defined by the data
         itself.
 
         The function returns `None` if `gname` can not be handled by the function.
         If `gname` can be handled the function returns a set of all data descriptors
-        that acts as distributed buffers.
+        that act as distributed buffers.
         """
         # The set of access nodes that reads from the global, i.e. `gname`, essentially
         #  the set of candidates of `T` defined through the way it is defined.
@@ -231,7 +232,7 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
 
                     # Currently we do not handle the pattern `(T) -> (G) -> (T)`,
                     #  see `_remove_writes_to_global()` for more, thus we filter
-                    #  these pattern here.
+                    #  this pattern here.
                     if any(
                         tnode_oedge.dst.data == gname
                         for tnode_oedge in state.out_edges(possible_t)
@@ -246,17 +247,19 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
             return None
 
         # Now every write to `G` must come from an access node that was created by
-        #  direct a read from `G`. We can do this by ensuring that `writes_to_g` is a
+        # a direct read from `G`. We ensure this by checking that `writes_to_g` is a
         #  subset of `reads_to_g`.
-        #  Note that all `T`, which might not be unique, which happens in case
+        # Note that the `T` nodes might not be unique, which happens in case
+        # of separate memlets for different subsets.
         #  of different subsets, are contained in `
         if not writes_to_g.issubset(reads_from_g):
             return None
 
-        # If we have branches, it might be that an `T` is defined differently depending
+        # If we have branches, it might be that different data is written to `T` depending
         #  on which branch is selected, i.e. `T = G if cond else foo(A)`. For that
         #  reason we must now check that `G` is the only data source of `T`, but this
-        #  time we must do the check `T`. Note we only have to remove that particular
+        #  time we must do the check on `T`. Note we only have to remove the particular access node
+        #  to `T` where `G` is the only data source, while we keep the other access nodes.
         #  `T`.
         for tname in list(writes_to_g):
             for state in access_states[tname]:
