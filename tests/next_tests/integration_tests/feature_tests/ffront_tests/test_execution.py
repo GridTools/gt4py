@@ -262,9 +262,7 @@ def test_mixed_field_scalar_tuple_arg(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
-@pytest.mark.xfail(
-    reason="Not implemented in frontend (implicit size arg handling needs to be adopted) and GTIR embedded backend."
-)
+@pytest.mark.uses_tuple_args_with_different_but_promotable_dims
 def test_tuple_arg_with_different_but_promotable_dims(cartesian_case):
     @gtx.field_operator
     def testee(a: tuple[cases.IField, cases.IJField]) -> cases.IJField:
