@@ -87,7 +87,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         self, stencil: Stencil, field_extents: dict[str, Extent]
     ) -> dict[str, FieldDecl]:
         self.body.append("# ===== Domain Description ===== #")
-        self.body.append("i_0, j_0, k_0 = 0,0,0")
+        self.body.append("i_0, j_0, k_0 = 0, 0, 0")
         self.body.append("i_size, j_size, k_size = _domain_")
         self.body.empty_line()
         self.body.append("# ===== Temporary Declaration ===== #")
