@@ -36,7 +36,7 @@ def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
     if node.type:
         assert type_info.is_compatible_type(
             node.type, type_
-        ), "Node already has a type which differs."
+        ), f"Node already has a type {node.type} which differs from {type_}."
     node.type = type_
 
 

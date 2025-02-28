@@ -283,20 +283,27 @@ def _convert_as_fieldop_input_to_iterator(
     )
 
 
-def _handle_sparse_fields(input_: ts.FieldType) -> ts.FieldType:
+def _handle_sparse_fields(input_: ts.FieldType | ts.TupleType | tuple[ts.FieldType, ts.TupleType]):
     """
     Processes sparse field inputs by removing LOCAL dimensions and converting the data type to ListType.
     """
-    input_dims = _collect_and_check_dimensions(input_)
-    element_type: ts.DataType = type_info.apply_to_primitive_constituents(
-        type_info.extract_dtype, input_
-    )
+    if isinstance(input_, (tuple, ts.TupleType)):
+        return ts.TupleType(types=[_handle_sparse_fields(field) for field in input_])
+    elif isinstance(input_, ts.FieldType):
+        input_dims = _collect_and_check_dimensions(input_)
+        element_type: ts.DataType = type_info.apply_to_primitive_constituents(
+            type_info.extract_dtype, input_
+        )
 
-    defined_dims = [dim for dim in input_dims if dim.kind != common.DimensionKind.LOCAL]
-    if any(dim.kind == common.DimensionKind.LOCAL for dim in input_dims):
-        element_type = ts.ListType(element_type=element_type)
+        defined_dims = [dim for dim in input_dims if dim.kind != common.DimensionKind.LOCAL]
+        if any(dim.kind == common.DimensionKind.LOCAL for dim in input_dims):
+            element_type = ts.ListType(element_type=element_type)
 
-    return ts.FieldType(dims=defined_dims, dtype=element_type)
+        return ts.FieldType(dims=defined_dims, dtype=element_type)
+    elif isinstance(input_, ts.ScalarType):
+        return input_
+    else:
+        raise TypeError(f"Unexpected field type: {type(input_)}")
 
 
 @_register_builtin_type_synthesizer
@@ -375,7 +382,8 @@ def as_fieldop(
         ):
             return ts.DeferredType(constraint=None)
 
-        new_fields = [_handle_sparse_fields(field) for field in fields]
+        new_fields = _handle_sparse_fields(fields)
+
         output_dims = set()
 
         for i, field in enumerate(new_fields):
@@ -394,7 +402,7 @@ def as_fieldop(
                     for input_dim in input_dims:
                         output_dims.add(_resolve_shift(input_dim, shift_tuple))
             else:
-                output_dims.update(domain.dims)
+                output_dims.update([domain.dims] if domain.dims == "unknown" else domain.dims)
 
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in new_fields),
@@ -408,7 +416,7 @@ def as_fieldop(
                     {dim for dim in output_dims},
                     key=lambda dim: (common.dims_kind_order[dim.kind], dim.value),
                 )
-                if output_dims != "unknown"
+                if output_dims != set(["unknown"])
                 else [],
                 dtype=el_type,
             ),
