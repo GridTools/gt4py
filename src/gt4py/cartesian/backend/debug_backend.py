@@ -27,16 +27,6 @@ if TYPE_CHECKING:
     from gt4py.cartesian.stencil_object import StencilObject
 
 
-def recursive_write(root_path: Path, tree: dict[str, Union[str, dict]]):
-    root_path.mkdir(parents=True, exist_ok=True)
-    for key, value in tree.items():
-        if isinstance(value, dict):
-            recursive_write(root_path / key, value)
-        else:
-            src_path = root_path / key
-            src_path.write_text(value)
-
-
 @register
 class DebugBackend(BaseBackend, CLIBackendMixin):
     """Debug backend using plain python loops."""
@@ -44,7 +34,6 @@ class DebugBackend(BaseBackend, CLIBackendMixin):
     name = "debug"
     options: ClassVar[dict[str, Any]] = {
         "oir_pipeline": {"versioning": True, "type": OirPipeline},
-        # TODO: Implement this option in source code
         "ignore_np_errstate": {"versioning": True, "type": bool},
     }
     storage_info = storage.layout.NaiveCPULayout
@@ -77,5 +66,5 @@ class DebugBackend(BaseBackend, CLIBackendMixin):
         src_dir = self.builder.module_path.parent
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             src_dir.mkdir(parents=True, exist_ok=True)
-            recursive_write(src_dir, self.generate_computation())
+            self.recursive_write(src_dir, self.generate_computation())
         return self.make_module()

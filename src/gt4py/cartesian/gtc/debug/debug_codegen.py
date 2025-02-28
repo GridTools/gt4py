@@ -62,7 +62,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         self.body = utils.text.TextBlock()
         self.symbol_table: dict[str, FieldDecl] = {}
 
-    def visit_Stencil(self, stencil: Stencil, **_):
+    def visit_Stencil(self, stencil: Stencil, **_) -> str:
         self.generate_imports()
 
         self.generate_run_function(stencil)
@@ -73,7 +73,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
         return self.body.text
 
-    def generate_imports(self):
+    def generate_imports(self) -> None:
         self.body.append("import numpy as np")
         self.body.append("from gt4py.cartesian.gtc import ufuncs")
         self.body.append("from gt4py.cartesian.utils import Field")
@@ -118,7 +118,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 symbol_table[str(declaration.name)] = declaration
         return symbol_table
 
-    def generate_run_function(self, stencil: Stencil):
+    def generate_run_function(self, stencil: Stencil) -> None:
         function_signature = "def run(*"
         args = []
         for param in stencil.params:
@@ -132,7 +132,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         self,
         stencil: Stencil,
         block_extents: dict[int, Extent],
-    ):
+    ) -> None:
         for loop in stencil.vertical_loops:
             for section in loop.sections:
                 with self.create_k_loop_code(section, loop):
@@ -143,8 +143,8 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     @contextmanager
     def create_k_loop_code(self, section: VerticalLoopSection, loop: VerticalLoop) -> Generator:
         loop_bounds: str = self.visit(section.interval, var="k", direction=loop.loop_order)
-        iterator = "1" if loop.loop_order != LoopOrder.BACKWARD else "-1"
-        loop_code = "for k in range(" + loop_bounds + "," + iterator + "):"
+        increment = "-1" if loop.loop_order == LoopOrder.BACKWARD else "1"
+        loop_code = f"for k in range( {loop_bounds} , {increment}):"
         self.body.append(loop_code)
         self.body.indent()
         yield
@@ -177,13 +177,13 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_FieldDecl(self, field_decl: FieldDecl, **_) -> str:
         return str(field_decl.name)
 
-    def visit_AxisBound(self, axis_bound: AxisBound, **kwargs):
+    def visit_AxisBound(self, axis_bound: AxisBound, **kwargs) -> str:
         if axis_bound.level == LevelMarker.START:
             return f"{kwargs['var']}_0 + {axis_bound.offset}"
         if axis_bound.level == LevelMarker.END:
             return f"{kwargs['var']}_size + {axis_bound.offset}"
 
-    def visit_Interval(self, interval: Interval, **kwargs):
+    def visit_Interval(self, interval: Interval, **kwargs) -> str:
         if kwargs["direction"] == LoopOrder.BACKWARD:
             return ",".join(
                 [
@@ -191,10 +191,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                     self.visit(interval.start, **kwargs) + "- 1",
                 ]
             )
-        else:
-            return ",".join(
-                [self.visit(interval.start, **kwargs), self.visit(interval.end, **kwargs)]
-            )
+        return ",".join([self.visit(interval.start, **kwargs), self.visit(interval.end, **kwargs)])
 
     def visit_Temporary(self, temporary_declaration: Temporary, **kwargs) -> str:
         field_extents = kwargs["field_extents"]
@@ -213,17 +210,25 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return f"{temporary_declaration.name} = Field.empty(({shape_decl}), {dtype}, ({', '.join(offset)}))"
 
     def visit_DataType(self, data_type: DataType, **_) -> str:
-        if data_type not in {DataType.BOOL}:
-            return f"np.{data_type.name.lower()}"
-        else:
+        if data_type in {DataType.BOOL}:
             return data_type.name.lower()
+        return f"np.{data_type.name.lower()}"
 
     def visit_VariableKOffset(self, variable_k_offset: VariableKOffset, **_) -> str:
         return f"i,j,k+int({self.visit(variable_k_offset.k)})"
 
     def visit_CartesianOffset(self, cartesian_offset: CartesianOffset, **kwargs) -> str:
-        dimensions = kwargs["dimensions"]
-        return cartesian_offset.to_str(dimensions)
+        if "dimensions" in kwargs.keys():
+            dimensions = kwargs["dimensions"]
+            dimension_strings = []
+            if dimensions[0]:
+                dimension_strings.append(f"i + {cartesian_offset.i}")
+            if dimensions[1]:
+                dimension_strings.append(f"j + {cartesian_offset.j}")
+            if dimensions[2]:
+                dimension_strings.append(f"k + {cartesian_offset.k}")
+            return ",".join(dimension_strings)
+        return f"i + {cartesian_offset.i}, j + {cartesian_offset.j}, k + {cartesian_offset.k}"
 
     def visit_SymbolRef(self, symbol_ref: SymbolRef) -> str:
         return symbol_ref
@@ -231,26 +236,22 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_FieldAccess(self, field_access: FieldAccess, **_) -> str:
         if str(field_access.name) in self.symbol_table:
             dimensions = self.symbol_table[str(field_access.name)].dimensions
+            offset_str = self.visit(field_access.offset, dimensions=dimensions)
         else:
-            dimensions = (True, True, True)
-
-        offset_str = self.visit(field_access.offset, dimensions=dimensions)
+            offset_str = self.visit(field_access.offset)
 
         if field_access.data_index:
             data_index_access = ",".join(
                 [self.visit(data_index) for data_index in field_access.data_index]
             )
             if offset_str == "":
-                full_string = field_access.name + f"[{data_index_access}]"
-            else:
-                full_string = field_access.name + "[" + offset_str + "," + data_index_access + "]"
-        else:
-            full_string = field_access.name + "[" + offset_str + "]"
-        return full_string
+                return field_access.name + f"[{data_index_access}]"
+            return field_access.name + "[" + offset_str + "," + data_index_access + "]"
+        return field_access.name + "[" + offset_str + "]"
 
-    def visit_AssignStmt(self, assignment_statement: AssignStmt, **_):
+    def visit_AssignStmt(self, assignment_statement: AssignStmt, **_) -> None:
         self.body.append(
-            self.visit(assignment_statement.left) + "=" + self.visit(assignment_statement.right)
+            f"{self.visit(assignment_statement.left)} = {self.visit(assignment_statement.right)}"
         )
 
     def visit_BinaryOp(self, binary: BinaryOp, **_) -> str:
@@ -258,27 +259,23 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_Literal(self, literal: Literal, **_) -> str:
         if literal.dtype == DataType.BOOL:
-            if literal.value == BuiltInLiteral.TRUE:
-                literal_value = "True"
-            else:
-                literal_value = "False"
+            literal_value = "True" if literal.value == BuiltInLiteral.TRUE else "False"
         else:
             literal_value = str(literal.value)
 
         if literal.dtype.bit_count() != 4:
-            literal_code = f"{self.visit(literal.dtype)}({literal_value})"
-        else:
-            literal_code = literal_value
-        return literal_code
+            return f"{self.visit(literal.dtype)}({literal_value})"
+
+        return literal_value
 
     def visit_Cast(self, cast: Cast, **_) -> str:
         return f"{self.visit(cast.dtype)}({self.visit(cast.expr)})"
 
-    def visit_HorizontalExecution(self, horizontal_execution: HorizontalExecution, **_):
-        for stmt in horizontal_execution.body:
-            self.visit(stmt)
+    def visit_HorizontalExecution(self, horizontal_execution: HorizontalExecution, **_) -> None:
+        for statement in horizontal_execution.body:
+            self.visit(statement)
 
-    def visit_HorizontalMask(self, horizontal_mask: HorizontalMask, **_):
+    def visit_HorizontalMask(self, horizontal_mask: HorizontalMask, **_) -> None:
         i_min, i_max = self.visit(horizontal_mask.i, var="i")
         j_min, j_max = self.visit(horizontal_mask.j, var="j")
         conditions = []
@@ -294,23 +291,27 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         if_code = f"if( {' and '.join(conditions)} ):"
         self.body.append(if_code)
 
-    def visit_HorizontalInterval(self, horizontal_interval: HorizontalInterval, **kwargs):
+    def visit_HorizontalInterval(
+        self, horizontal_interval: HorizontalInterval, **kwargs
+    ) -> tuple[str | None, str | None]:
         return self.visit(
             horizontal_interval.start, **kwargs
         ) if horizontal_interval.start else None, self.visit(
             horizontal_interval.end, **kwargs
         ) if horizontal_interval.end else None
 
-    def visit_HorizontalRestriction(self, horizontal_restriction: HorizontalRestriction, **_):
+    def visit_HorizontalRestriction(
+        self, horizontal_restriction: HorizontalRestriction, **_
+    ) -> None:
         self.visit(horizontal_restriction.mask)
         self.body.indent()
         self.visit(horizontal_restriction.body)
         self.body.dedent()
 
-    def visit_VerticalLoop(self):
+    def visit_VerticalLoop(self) -> None:
         pass
 
-    def visit_ScalarAccess(self, scalar_access: ScalarAccess, **_):
+    def visit_ScalarAccess(self, scalar_access: ScalarAccess, **_) -> str:
         return scalar_access.name
 
     def visit_ScalarDecl(self, scalar_declaration: ScalarDecl, **_) -> str:
@@ -327,7 +328,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_TernaryOp(self, ternary_operator: TernaryOp, **_) -> str:
         return f"{self.visit(ternary_operator.true_expr)} if {self.visit(ternary_operator.cond)} else {self.visit(ternary_operator.false_expr)}"
 
-    def visit_MaskStmt(self, mask_statement: MaskStmt, **_):
+    def visit_MaskStmt(self, mask_statement: MaskStmt, **_) -> None:
         self.body.append(f"if {self.visit(mask_statement.mask)}:")
         with self.body.indented():
             for statement in mask_statement.body:
@@ -347,7 +348,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_KCache(self, k_cache: KCache, **_):
         raise NotImplementedError("Caches should never be visited in the debug backend")
 
-    def visit_VerticalLoopSection(self, vertical_loop_section: VerticalLoopSection, **_):
+    def visit_VerticalLoopSection(self, vertical_loop_section: VerticalLoopSection, **_) -> None:
         raise NotImplementedError("Vertical Loop section is not in the right place.")
 
     def visit_UnboundedInterval(self, unbounded_interval: UnboundedInterval, **_) -> None:
