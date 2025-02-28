@@ -323,7 +323,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return f"ufuncs.{native_function_call.func.value}({arguments})"
 
     def visit_UnaryOp(self, unary_operator: UnaryOp, **_) -> str:
-        return unary_operator.op.value + " " + self.visit(unary_operator.expr)
+        return f"{unary_operator.op.value} {self.visit(unary_operator.expr)}"
 
     def visit_TernaryOp(self, ternary_operator: TernaryOp, **_) -> str:
         return f"{self.visit(ternary_operator.true_expr)} if {self.visit(ternary_operator.cond)} else {self.visit(ternary_operator.false_expr)}"
@@ -339,13 +339,13 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             "This state should not be reached because LocalTemporariesToScalars should not have been called."
         )
 
-    def visit_CacheDesc(self, cache_descriptor: CacheDesc, **_):
+    def visit_CacheDesc(self, cache_descriptor: CacheDesc, **_) -> None:
         raise NotImplementedError("CacheDescriptors should never be visited in the debug backends")
 
-    def visit_IJCache(self, ij_cache: IJCache, **_):
+    def visit_IJCache(self, ij_cache: IJCache, **_) -> None:
         raise NotImplementedError("IJCaches should never be visited in the debug backend.")
 
-    def visit_KCache(self, k_cache: KCache, **_):
+    def visit_KCache(self, k_cache: KCache, **_) -> None:
         raise NotImplementedError("KCaches should never be visited in the debug backend.")
 
     def visit_VerticalLoopSection(self, vertical_loop_section: VerticalLoopSection, **_) -> None:
