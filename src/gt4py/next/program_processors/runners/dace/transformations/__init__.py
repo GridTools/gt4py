@@ -25,9 +25,9 @@ from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
 from .redundant_array_removers import (
-    DistributedGlobalSelfCopyElimination,
-    GT4PyGlobalSelfCopyElimination,
-    gt_apply_distributed_self_copy_elimination,
+    MultiStateGlobalSelfCopyElimination,
+    SingleStateGlobalSelfCopyElimination,
+    gt_multi_state_global_self_copy_elimination,
 )
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
@@ -50,9 +50,7 @@ from .utils import gt_find_constant_arguments, gt_make_transients_persistent
 
 __all__ = [
     "GT_SIMPLIFY_DEFAULT_SKIP_SET",
-    "DistributedGlobalSelfCopyElimination",
     "GPUSetBlockSize",
-    "GT4PyGlobalSelfCopyElimination",
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
     "LoopBlocking",
@@ -60,9 +58,10 @@ __all__ = [
     "MapFusionParallel",
     "MapFusionSerial",
     "MapIterationOrder",
+    "MultiStateGlobalSelfCopyElimination",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
-    "gt_apply_distributed_self_copy_elimination",
+    "SingleStateGlobalSelfCopyElimination",
     "gt_auto_optimize",
     "gt_change_transient_strides",
     "gt_create_local_double_buffering",
@@ -73,6 +72,7 @@ __all__ = [
     "gt_make_transients_persistent",
     "gt_map_strides_to_dst_nested_sdfg",
     "gt_map_strides_to_src_nested_sdfg",
+    "gt_multi_state_global_self_copy_elimination",
     "gt_propagate_strides_from_access_node",
     "gt_propagate_strides_of",
     "gt_reduce_distributed_buffering",

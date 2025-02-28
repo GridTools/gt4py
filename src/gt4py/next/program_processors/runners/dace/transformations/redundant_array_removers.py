@@ -20,30 +20,30 @@ from dace.transformation import pass_pipeline as dace_ppl
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
-def gt_apply_distributed_self_copy_elimination(
+def gt_multi_state_global_self_copy_elimination(
     sdfg: dace.SDFG,
     validate: bool = False,
 ) -> Optional[dict[dace.SDFG, set[str]]]:
-    """Runs `DistributedGlobalSelfCopyElimination` on the SDFG recursively.
+    """Runs `MultiStateGlobalSelfCopyElimination` on the SDFG recursively.
 
-    For the return value see `DistributedGlobalSelfCopyElimination.apply_pass()`.
+    For the return value see `MultiStateGlobalSelfCopyElimination.apply_pass()`.
     """
-    pipeline = dace_ppl.Pipeline([gtx_transformations.DistributedGlobalSelfCopyElimination()])
+    pipeline = dace_ppl.Pipeline([gtx_transformations.MultiStateGlobalSelfCopyElimination()])
     res = pipeline.apply_pass(sdfg, {})
 
     if validate:
         sdfg.validate()
 
-    if "DistributedGlobalSelfCopyElimination" not in res:
+    if "MultiStateGlobalSelfCopyElimination" not in res:
         return None
-    return res["DistributedGlobalSelfCopyElimination"][sdfg]
+    return res["MultiStateGlobalSelfCopyElimination"][sdfg]
 
 
 @dace_properties.make_properties
-class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
+class MultiStateGlobalSelfCopyElimination(dace_transformation.Pass):
     """Removes self copying across different states.
 
-    This transformation is very similar to `GT4PyGlobalSelfCopyElimination`, but
+    This transformation is very similar to `SingleStateGlobalSelfCopyElimination`, but
     addresses a slightly different case. Assume we have the pattern `(G) -> (T)`
     in one state, i.e. the global data `G` is copied into a transient. In another
     state, we have the pattern `(T) -> (G)`, i.e. the data is written back.
@@ -59,12 +59,12 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
 
     Note that this transformation does not consider the subsets of the writes from
     `T` to `G` because ADR-18 guarantees to us, that _if_ `G` is a genuine input
-    and output, then an index can only depend on itself, which means not change.
+    and output, then the `G` read and write subsets have the exact same range.
     If `G` is not an output then any mutating changes to `G` would be invalid.
 
     Todo:
         - Implement the pattern `(G) -> (T) -> (G)` which is handled currently by
-            `GT4PyGlobalSelfCopyElimination`, see `_classify_candidate()` and
+            `SingleStateGlobalSelfCopyElimination`, see `_classify_candidate()` and
             `_remove_writes_to_global()` for more.
         - Make it more efficient such that the SDFG is not scanned multiple times.
     """
@@ -147,10 +147,10 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
 
         candidates: dict[str, set[str]] = dict()
         for gname in global_data:
-            possible_ts = self._classify_candidate(sdfg, gname, access_states)
-            if possible_ts is not None:
-                assert len(possible_ts) > 0
-                candidates[gname] = possible_ts
+            candidate_tnames = self._classify_candidate(sdfg, gname, access_states)
+            if candidate_tnames is not None:
+                assert len(candidate_tnames) > 0
+                candidates[gname] = candidate_tnames
 
         return candidates
 
@@ -162,13 +162,14 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
     ) -> Optional[set[str]]:
         """The function tests if the global data `gname` can be handled.
 
-        It essentially checks if all conditions above, which is that the only
+        It essentially checks all conditions above, which is that the global is
+        only written through transients that are fully defined by the data itself.
         writes to it are through transients that are fully defined by the data
         itself.
 
         The function returns `None` if `gname` can not be handled by the function.
         If `gname` can be handled the function returns a set of all data descriptors
-        that acts as distributed buffers.
+        that act as distributed buffers.
         """
         # The set of access nodes that reads from the global, i.e. `gname`, essentially
         #  the set of candidates of `T` defined through the way it is defined.
@@ -231,7 +232,7 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
 
                     # Currently we do not handle the pattern `(T) -> (G) -> (T)`,
                     #  see `_remove_writes_to_global()` for more, thus we filter
-                    #  these pattern here.
+                    #  this pattern here.
                     if any(
                         tnode_oedge.dst.data == gname
                         for tnode_oedge in state.out_edges(possible_t)
@@ -245,18 +246,20 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
         if len(writes_to_g) == 0:
             return None
 
-        # Now every write to `G` must come from an access node that was created by
-        #  direct a read from `G`. We can do this by ensuring that `writes_to_g` is a
-        #  subset of `reads_to_g`.
-        #  Note that all `T`, which might not be unique, which happens in case
+        # Now every write to `G` necessarily comes from an access node that was created
+        #  by a direct read from `G`. We ensure this by checking that `writes_to_g` is
+        #  a subset of `reads_to_g`.
+        # Note that the `T` nodes might not be unique, which happens in case
+        # of separate memlets for different subsets.
         #  of different subsets, are contained in `
         if not writes_to_g.issubset(reads_from_g):
             return None
 
-        # If we have branches, it might be that an `T` is defined differently depending
+        # If we have branches, it might be that different data is written to `T` depending
         #  on which branch is selected, i.e. `T = G if cond else foo(A)`. For that
         #  reason we must now check that `G` is the only data source of `T`, but this
-        #  time we must do the check `T`. Note we only have to remove that particular
+        #  time we must do the check on `T`. Note we only have to remove the particular access node
+        #  to `T` where `G` is the only data source, while we keep the other access nodes.
         #  `T`.
         for tname in list(writes_to_g):
             for state in access_states[tname]:
@@ -322,7 +325,7 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
         #  pattern, which is difficult to handle. The issue is that by removing `(T)`,
         #  what this function does, it also removes the definition `(T)`. However,
         #  it can only do that if it ensures that `T` is not used anywhere else.
-        #  This is currently handle by the `GT4PyGlobalSelfCopyElimination` pass
+        #  This is currently handle by the `SingleStateGlobalSelfCopyElimination` pass
         #  and the classifier rejects this pattern.
         for state in access_states[gname]:
             for dnode in list(state.data_nodes()):
@@ -376,8 +379,7 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
         tnames: set[str],
         access_states: dict[str, set[dace.SDFGState]],
     ) -> set[str]:
-        removed_t: set[str] = set()
-        neigbourhood: set[tuple[dace.SDFGState, dace_nodes.Node]] = set()
+        obsolete_ts: set[str] = set()
         for tname in tnames:
             # We can remove the (defining) write to `T` only if it is not read
             #  anywhere else.
@@ -386,28 +388,31 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
             # Now we look for all writes to `tname` and remove them, since there
             #  are no reads.
             for state in access_states[tname]:
+                neighbourhood: set[dace_nodes.Node] = set()
                 for dnode in list(state.data_nodes()):
                     if dnode.data == tname:
                         # We have to store potential sources nodes, which is `G`.
                         #  This is because the local `G` node could become isolated.
                         #  We do not need to consider the outgoing edges, because
                         #  they are reads which we have handled above.
-                        neigbourhood.update((state, iedge.src) for iedge in state.in_edges(dnode))
+                        for iedge in state.in_edges(dnode):
+                            assert (
+                                isinstance(iedge.src, dace_nodes.AccessNode)
+                                and iedge.src.data == gname
+                            )
+                            neighbourhood.add(iedge.src)
                         state.remove_node(dnode)
-                        removed_t.add(dnode.data)
+                        obsolete_ts.add(dnode.data)
 
-        # Check if an isolated node was created.
-        removed_isolated_nodes: set[dace_nodes.Node] = set()
-        for state, nh_node in neigbourhood:
-            assert isinstance(nh_node, dace_nodes.AccessNode) and nh_node.data == gname
-            if (nh_node not in removed_isolated_nodes) and (state.degree(nh_node) == 0):
-                removed_isolated_nodes.add(nh_node)
-                state.remove_node(nh_node)
+                # We now have to check if an node has become isolated.
+                for nh_node in neighbourhood:
+                    if state.degree(nh_node) == 0:
+                        state.remove_node(nh_node)
 
-        for tname in removed_t:
+        for tname in obsolete_ts:
             sdfg.remove_data(tname, validate=False)
 
-        return removed_t
+        return obsolete_ts
 
     def _has_read_access_for(
         self,
@@ -426,7 +431,7 @@ class DistributedGlobalSelfCopyElimination(dace_transformation.Pass):
 
 
 @dace_properties.make_properties
-class GT4PyGlobalSelfCopyElimination(dace_transformation.SingleStateTransformation):
+class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransformation):
     """Remove global self copy.
 
     This transformation matches the following case `(G) -> (T) -> (G)`, i.e. `G`

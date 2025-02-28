@@ -26,7 +26,7 @@ import dace
 def apply_distributed_self_copy_elimination(
     sdfg: dace.SDFG,
 ) -> Optional[dict[dace.SDFG, set[str]]]:
-    return gtx_transformations.gt_apply_distributed_self_copy_elimination(sdfg=sdfg, validate=True)
+    return gtx_transformations.gt_multi_state_global_self_copy_elimination(sdfg=sdfg, validate=True)
 
 
 def _make_not_apply_because_of_write_to_g_sdfg() -> dace.SDFG:
@@ -318,7 +318,7 @@ def _make_non_eligible_because_of_pseudo_temporary() -> dace.SDFG:
 def _make_wb_single_state_sdfg() -> dace.SDFG:
     """Generates an SDFG with the pattern `(G) -> (T) -> (G)` which is not handled.
 
-    This pattern is handled by the `GT4PyGlobalSelfCopyElimination` transformation.
+    This pattern is handled by the `SingleStateGlobalSelfCopyElimination` transformation.
     """
     sdfg = dace.SDFG(util.unique_name("single_state_write_back_sdfg"))
 

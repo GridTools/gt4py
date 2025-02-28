@@ -49,7 +49,7 @@ def test_global_self_copy_elimination_only_pattern():
     assert state.number_of_edges() == 2
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyGlobalSelfCopyElimination, validate=True, validate_all=True
+        gtx_transformations.SingleStateGlobalSelfCopyElimination, validate=True, validate_all=True
     )
     assert count != 0
 
@@ -88,7 +88,7 @@ def test_global_self_copy_elimination_g_downstream():
     assert state2.number_of_nodes() == 5
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyGlobalSelfCopyElimination, validate=True, validate_all=True
+        gtx_transformations.SingleStateGlobalSelfCopyElimination, validate=True, validate_all=True
     )
     assert count != 0
 
@@ -130,7 +130,7 @@ def test_global_self_copy_elimination_tmp_downstream():
     assert state2.number_of_nodes() == 5
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyGlobalSelfCopyElimination, validate=True, validate_all=True
+        gtx_transformations.SingleStateGlobalSelfCopyElimination, validate=True, validate_all=True
     )
     assert count != 0
 

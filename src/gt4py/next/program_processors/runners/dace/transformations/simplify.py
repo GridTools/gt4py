@@ -57,10 +57,10 @@ def gt_simplify(
     - `InlineSDFGs`: Instead `gt_inline_nested_sdfg()` will be called.
 
     Further, the function will run the following passes in addition to DaCe simplify:
-    - `GT4PyGlobalSelfCopyElimination`: Special copy pattern that in the context
+    - `SingleStateGlobalSelfCopyElimination`: Special copy pattern that in the context
         of GT4Py based SDFG behaves as a no op, i.e. `(G) -> (T) -> (G)`.
-    - `DistributedGlobalSelfCopyElimination`: Very similar to
-        `GT4PyGlobalSelfCopyElimination`, with the exception that the definition of
+    - `MultiStateGlobalSelfCopyElimination`: Very similar to
+        `SingleStateGlobalSelfCopyElimination`, with the exception that the write to
         `T`, i.e. `(G) -> (T)` and the write back to `G`, i.e. `(T) -> (G)` might be
         in different states.
 
@@ -115,31 +115,31 @@ def gt_simplify(
             result = result or {}
             result.update(simplify_res)
 
-        if "GT4PyGlobalSelfCopyElimination" not in skip:
+        if "SingleStateGlobalSelfCopyElimination" not in skip:
             self_copy_removal_result = sdfg.apply_transformations_repeated(
-                gtx_transformations.GT4PyGlobalSelfCopyElimination(),
+                gtx_transformations.SingleStateGlobalSelfCopyElimination(),
                 validate=validate,
                 validate_all=validate_all,
             )
             if self_copy_removal_result > 0:
                 at_least_one_xtrans_run = True
                 result = result or {}
-                if "GT4PyGlobalSelfCopyElimination" not in result:
-                    result["GT4PyGlobalSelfCopyElimination"] = 0
-                result["GT4PyGlobalSelfCopyElimination"] += self_copy_removal_result
+                if "SingleStateGlobalSelfCopyElimination" not in result:
+                    result["SingleStateGlobalSelfCopyElimination"] = 0
+                result["SingleStateGlobalSelfCopyElimination"] += self_copy_removal_result
 
-        if "DistributedGlobalSelfCopyElimination" not in skip:
+        if "MultiStateGlobalSelfCopyElimination" not in skip:
             distributed_self_copy_result = (
-                gtx_transformations.gt_apply_distributed_self_copy_elimination(
+                gtx_transformations.gt_multi_state_global_self_copy_elimination(
                     sdfg, validate=validate_all
                 )
             )
             if distributed_self_copy_result is not None:
                 at_least_one_xtrans_run = True
                 result = result or {}
-                if "DistributedGlobalSelfCopyElimination" not in result:
-                    result["DistributedGlobalSelfCopyElimination"] = set()
-                result["DistributedGlobalSelfCopyElimination"].update(distributed_self_copy_result)
+                if "MultiStateGlobalSelfCopyElimination" not in result:
+                    result["MultiStateGlobalSelfCopyElimination"] = set()
+                result["MultiStateGlobalSelfCopyElimination"].update(distributed_self_copy_result)
 
     return result
 
