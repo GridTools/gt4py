@@ -56,8 +56,8 @@ def test_generation(name, backend):
             )
         else:
             args[k] = v(1.5)
-    # vertical domain size >= 16 required for test_large_k_interval
-    stencil(**args, origin=(10, 10, 5), domain=(3, 3, 16))
+    # vertical domain size > 16 required for test_large_k_interval
+    stencil(**args, origin=(10, 10, 5), domain=(3, 3, 17))
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
