@@ -14,7 +14,6 @@ except (ImportError, RuntimeError):
     cp = None
 
 import datetime
-
 import numpy as np
 import pytest
 
@@ -22,7 +21,7 @@ from gt4py import cartesian as gt4pyc
 from gt4py.cartesian import utils as gt_utils
 
 
-def _backend_name_as_param(name):
+def _backend_name_as_param(name: str):
     marks = []
     if gt4pyc.backend.from_name(name).storage_info["device"] == "gpu":
         marks.append(pytest.mark.requires_gpu)
@@ -48,16 +47,12 @@ CPU_BACKENDS = _get_backends_with_storage_info("cpu")
 GPU_BACKENDS = _get_backends_with_storage_info("gpu")
 ALL_BACKENDS = CPU_BACKENDS + GPU_BACKENDS
 
-_PERFORMANCE_BACKEND_NAMES = [
-    name for name in _ALL_BACKEND_NAMES if name not in ("numpy", "cuda", "debug")
-]
-PERFORMANCE_BACKENDS = [_backend_name_as_param(name) for name in _PERFORMANCE_BACKEND_NAMES]
 
-DACE_BACKENDS = [
+PERFORMANCE_BACKENDS = [
     _backend_name_as_param(name)
-    for name in filter(lambda name: name.startswith("dace:"), _ALL_BACKEND_NAMES)
+    for name in _ALL_BACKEND_NAMES
+    if name not in ("numpy", "cuda", "debug")
 ]
-NON_DACE_BACKENDS = [backend for backend in ALL_BACKENDS if backend not in DACE_BACKENDS]
 
 
 @pytest.fixture()
