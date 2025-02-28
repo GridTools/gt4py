@@ -24,7 +24,7 @@ from .loop_blocking import LoopBlocking
 from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
-from .self_copy_elimination import (
+from .redundant_array_removers import (
     DistributedGlobalSelfCopyElimination,
     GT4PyGlobalSelfCopyElimination,
     gt_apply_distributed_self_copy_elimination,
