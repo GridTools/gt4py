@@ -339,13 +339,13 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_CacheDesc(self, cache_descriptor: CacheDesc, **_):
-        raise NotImplementedError("Caches should never be visited in the debug backend")
+        raise NotImplementedError("CacheDescriptors should never be visited in the debug backends")
 
     def visit_IJCache(self, ij_cache: IJCache, **_):
-        raise NotImplementedError("Caches should never be visited in the debug backend")
+        raise NotImplementedError("IJCaches should never be visited in the debug backend.")
 
     def visit_KCache(self, k_cache: KCache, **_):
-        raise NotImplementedError("Caches should never be visited in the debug backend")
+        raise NotImplementedError("KCaches should never be visited in the debug backend.")
 
     def visit_VerticalLoopSection(self, vertical_loop_section: VerticalLoopSection, **_):
         raise NotImplementedError("Vertical Loop section is not in the right place.")
