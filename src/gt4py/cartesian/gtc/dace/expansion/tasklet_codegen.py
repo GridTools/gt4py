@@ -44,7 +44,9 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             else:
                 int_sizes.append(None)
         sym_offsets = [
-            dace.symbolic.pystr_to_symbolic(self.visit(off, **kwargs))
+            dace.symbolic.pystr_to_symbolic(
+                self.visit(off, access_info=access_info, decl=decl, **kwargs)
+            )
             for off in (node.to_dict()["i"], node.to_dict()["j"], node.k)
         ]
         for axis in access_info.variable_offset_axes:
