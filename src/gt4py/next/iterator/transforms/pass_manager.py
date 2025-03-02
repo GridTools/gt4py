@@ -43,6 +43,8 @@ class GTIRTransform(Protocol):
 def apply_common_transforms(
     ir: itir.Program,
     *,
+    # TODO(havogt): should be replaced by `common.OffsetProviderType`, but global_tmps currently
+    #  relies on runtime info or `symbolic_domain_sizes`.
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
     extract_temporaries=False,
     unroll_reduce=False,
