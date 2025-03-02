@@ -173,7 +173,7 @@ class NodeTranslator(NodeVisitor):
                     if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 }
             )
-            if self.PRESERVED_ANNEX_ATTRS and (old_annex := getattr(node, "__node_annex__", None)):
+            if self.PRESERVED_ANNEX_ATTRS and getattr(node, "__node_annex__", None):
                 _preserve_annex(node, new_node, self.PRESERVED_ANNEX_ATTRS)
 
             return new_node
@@ -207,7 +207,7 @@ class NodeTranslator(NodeVisitor):
             isinstance(node, concepts.Node)
             and isinstance(new_node, concepts.Node)
             and self.PRESERVED_ANNEX_ATTRS
-            and (old_annex := getattr(node, "__node_annex__", None))
+            and getattr(node, "__node_annex__", None)
         ):
             _preserve_annex(node, new_node, self.PRESERVED_ANNEX_ATTRS)
 
