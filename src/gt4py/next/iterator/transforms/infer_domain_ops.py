@@ -41,12 +41,12 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
         ):  # TODO: add tests
             arg1, arg2 = node.args
             if isinstance(arg2, ir.AxisLiteral):
-                # take complementary operation if we have e.g. `IDim > 1` use `1 <= IDim`
+                # take complementary operation if we have e.g. `0 < IDim` use `IDim > 0`
                 complementary_op = {
-                    "less": "greater_equal",
-                    "less_equal": "greater",
-                    "greater": "less_equal",
-                    "greater_equal": "less",
+                    "less": "greater",
+                    "less_equal": "greater_equal",
+                    "greater": "greater_equal",
+                    "greater_equal": "less_equal",
                     "eq": "eq",
                     "not_eq": "not_eq",
                 }

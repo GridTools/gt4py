@@ -170,16 +170,17 @@ def test_dimension_two_nested_conditions(cartesian_case):
 @pytest.mark.uses_frontend_concat_where
 def test_dimension_two_conditions_and(cartesian_case):
     @gtx.field_operator
-    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
-        return concat_where(((KDim > 2) & (KDim <= 5)), interior, boundary)
+    def testee(interior: cases.KField, boundary: cases.KField, nlev: np.int32) -> cases.KField:
+        return concat_where(0 < KDim < (nlev-1), interior, boundary)
 
     interior = cases.allocate(cartesian_case, testee, "interior")()
     boundary = cases.allocate(cartesian_case, testee, "boundary")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where((k > 2) & (k <= 5), interior.asnumpy(), boundary.asnumpy())
-    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
+    nlev = cartesian_case.default_sizes[KDim]
+    k = np.arange(0, nlev)
+    ref = np.where((0 < k) & (k < (nlev-1)), interior.asnumpy(), boundary.asnumpy())
+    cases.verify(cartesian_case, testee, interior, boundary, nlev, out=out, ref=ref)
 
 
 @pytest.mark.uses_frontend_concat_where
