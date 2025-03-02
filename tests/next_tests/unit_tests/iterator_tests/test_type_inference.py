@@ -246,7 +246,16 @@ def test_binary_lambda():
         testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
 
-    assert result.type == ts.TupleType(types=[bool_type, int_type])
+    expected_type = ts.TupleType(types=[bool_type, int_type])
+    assert result.type == expected_type
+    assert result.fun.params[0].type == bool_type
+    assert result.fun.params[1].type == int_type
+    assert result.fun.type == ts.FunctionType(
+        pos_only_args=[bool_type, int_type],
+        pos_or_kw_args={},
+        kw_only_args={},
+        returns=expected_type,
+    )
 
 
 def test_aliased_function():
