@@ -574,6 +574,12 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
 
         return Domain(dims=dims, ranges=ranges)
 
+    def __getstate__(self) -> dict[str, Any]:
+        state = self.__dict__.copy()
+        # remove cached property
+        state.pop("slice_at", None)
+        return state
+
 
 FiniteDomain: TypeAlias = Domain[FiniteUnitRange]
 

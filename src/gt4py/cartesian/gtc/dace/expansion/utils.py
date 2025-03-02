@@ -10,11 +10,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, List
 
-import dace
-import dace.data
-import dace.library
-import dace.subsets
-
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.dace import daceir as dcir
@@ -23,15 +18,6 @@ from gt4py.cartesian.gtc.definitions import Extent
 
 if TYPE_CHECKING:
     from gt4py.cartesian.gtc.dace.nodes import StencilComputation
-
-
-def get_dace_debuginfo(node: common.LocNode):
-    if node.loc is not None:
-        return dace.dtypes.DebugInfo(
-            node.loc.line, node.loc.column, node.loc.line, node.loc.column, node.loc.filename
-        )
-    else:
-        return dace.dtypes.DebugInfo(0)
 
 
 class HorizontalIntervalRemover(eve.NodeTranslator):

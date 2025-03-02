@@ -171,7 +171,7 @@ def gt_gpu_transform_non_standard_memlet(
     # This function allows to restrict any fusion operation to the maps
     #  that we have just created.
     def restrict_fusion_to_newly_created_maps(
-        self: gtx_transformations.map_fusion_helper.MapFusionHelper,
+        self: gtx_transformations.MapFusion,
         map_entry_1: dace_nodes.MapEntry,
         map_entry_2: dace_nodes.MapEntry,
         graph: Union[dace.SDFGState, dace.SDFG],
@@ -690,9 +690,9 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
             self._promote_map(graph, replace_trivail_map_parameter=False)
             if not gtx_transformations.MapFusionSerial.can_be_applied_to(
                 sdfg=sdfg,
-                map_exit_1=trivial_map_exit,
-                intermediate_access_node=self.access_node,
-                map_entry_2=self.second_map_entry,
+                first_map_exit=trivial_map_exit,
+                array=self.access_node,
+                second_map_entry=self.second_map_entry,
             ):
                 return False
         finally:
@@ -718,9 +718,9 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         if not self.do_not_fuse:
             gtx_transformations.MapFusionSerial.apply_to(
                 sdfg=sdfg,
-                map_exit_1=trivial_map_exit,
-                intermediate_access_node=access_node,
-                map_entry_2=second_map_entry,
+                first_map_exit=trivial_map_exit,
+                array=access_node,
+                second_map_entry=second_map_entry,
                 verify=True,
             )
 
