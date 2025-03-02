@@ -238,6 +238,17 @@ def test_adhoc_polymorphism():
     assert result.type == ts.TupleType(types=[bool_type, int_type])
 
 
+def test_binary_lambda():
+    func = im.lambda_("a", "b")(im.make_tuple("a", "b"))
+    testee = im.call(func)(im.ref("a_", bool_type), im.ref("b_", int_type))
+
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+
+    assert result.type == ts.TupleType(types=[bool_type, int_type])
+
+
 def test_aliased_function():
     testee = im.let("f", im.lambda_("x")("x"))(im.call("f")(1))
     result = itir_type_inference.infer(testee, offset_provider_type={})
