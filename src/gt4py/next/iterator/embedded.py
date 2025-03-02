@@ -1683,6 +1683,11 @@ def set_at(expr: common.Field, domain: common.DomainLike, target: common.Mutable
     operators._tuple_assign_field(target, expr, common.domain(domain))
 
 
+@runtime.get_domain.register(EMBEDDED)
+def get_domain(field: common.Field, dim: common.Dimension) -> tuple[int, int]:
+    return (field.domain[dim].unit_range.start, field.domain[dim].unit_range.stop)
+
+
 @runtime.if_stmt.register(EMBEDDED)
 def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[[], None]) -> None:
     """

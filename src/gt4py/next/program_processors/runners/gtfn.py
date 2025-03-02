@@ -22,7 +22,7 @@ from gt4py.next import backend, common, config
 from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
-from gt4py.next.otf.compilation.build_systems import compiledb
+from gt4py.next.otf.compilation.build_systems import cmake
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 
 
@@ -141,7 +141,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
             lambda: config.CMAKE_BUILD_TYPE
         )
         builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(
-            lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
+            lambda o: cmake.CMakeFactory(cmake_build_type=o.cmake_build_type)
         )
 
         cached_translation = factory.Trait(

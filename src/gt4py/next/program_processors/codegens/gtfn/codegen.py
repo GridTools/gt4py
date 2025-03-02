@@ -110,6 +110,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
                 return self.asfloat(node.value)
             case "bool":
                 return node.value.lower()
+            case "axis_literal":
+                return node.value + "_t"
             case _:
                 # TODO(tehrengruber): we should probably shouldn't just allow anything here. Revisit.
                 return node.value
@@ -271,6 +273,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <gridtools/fn/${grid_type_str}.hpp>
     #include <gridtools/fn/sid_neighbor_table.hpp>
     #include <gridtools/stencil/global_parameter.hpp>
+    
+    namespace gridtools::fn {
+        // TODO(tehrengruber): `typename gridtools::sid::lower_bounds_type<S>, typename gridtools::sid::upper_bounds_type<S>`
+        // fails as type used for index calculations in gtfn differs
+        template <class S, class D>
+        GT_FUNCTION gridtools::tuple<int, int> get_domain(S &&sid, D) {
+            return {gridtools::host_device::at_key<D>(gridtools::sid::get_lower_bounds(sid)),
+                gridtools::host_device::at_key<D>(gridtools::sid::get_upper_bounds(sid))};
+        }
+    }
     
     namespace generated{
 
