@@ -43,7 +43,7 @@ from next_tests.integration_tests.cases import (
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import simple_mesh
-
+from next_tests.integration_tests.cases import IField, JField
 
 bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
@@ -52,9 +52,11 @@ float64_list_type = ts.ListType(element_type=float64_type)
 int_list_type = ts.ListType(element_type=int_type)
 
 float_i_field = ts.FieldType(dims=[IDim], dtype=float64_type)
+float_j_field = ts.FieldType(dims=[JDim], dtype=float64_type)
 float_ij_field = ts.FieldType(dims=[IDim, JDim], dtype=float64_type)
 float_vertex_k_field = ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
 float_edge_k_field = ts.FieldType(dims=[Edge, KDim], dtype=float64_type)
+float_edge_field = ts.FieldType(dims=[Edge], dtype=float64_type)
 float_vertex_v2e_field = ts.FieldType(dims=[Vertex, V2EDim], dtype=float64_type)
 
 it_on_v_of_e_type = it_ts.IteratorType(
@@ -254,6 +256,26 @@ def test_adhoc_polymorphism():
     )
 
     assert result.type == ts.TupleType(types=[bool_type, int_type])
+
+
+def test_binary_lambda():
+    func = im.lambda_("a", "b")(im.make_tuple("a", "b"))
+    testee = im.call(func)(im.ref("a_", bool_type), im.ref("b_", int_type))
+
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+
+    expected_type = ts.TupleType(types=[bool_type, int_type])
+    assert result.type == expected_type
+    assert result.fun.params[0].type == bool_type
+    assert result.fun.params[1].type == int_type
+    assert result.fun.type == ts.FunctionType(
+        pos_only_args=[bool_type, int_type],
+        pos_or_kw_args={},
+        kw_only_args={},
+        returns=expected_type,
+    )
 
 
 def test_aliased_function():

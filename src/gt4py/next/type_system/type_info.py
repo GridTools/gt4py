@@ -572,12 +572,11 @@ def promote(
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
 
-    >>> promote(
+    >>> promoted: ts.FieldType = promote(
     ...     ts.FieldType(dims=[I, J], dtype=dtype), ts.FieldType(dims=[K], dtype=dtype)
-    ... )  # doctest: +ELLIPSIS
-    Traceback (most recent call last):
-     ...
-    ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
+    ... )
+    >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
+    True
     """
     if not always_field and all(isinstance(type_, ts.ScalarType) for type_ in types):
         if not all(type_ == types[0] for type_ in types):
@@ -647,6 +646,7 @@ def return_type_field(
             new_dims.append(d)
         else:
             new_dims.extend(target_dims)
+    new_dims = common._ordered_dims(new_dims)  # e.g. `Vertex, V2E, K` -> `Vertex, K, V2E`
     return ts.FieldType(dims=new_dims, dtype=field_type.dtype)
 
 
