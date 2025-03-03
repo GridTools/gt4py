@@ -31,7 +31,7 @@ class ExpandLibraryFunctions(PreserveLocationVisitor, NodeTranslator):
         node = self.generic_visit(node)
 
         # `in_({i, j, k}, u⟨ Iₕ: [i0, i1[, Iₕ: [j0, j1[, Iₕ: [k0, k1[ ⟩`
-        # -> `i0 < i < i1 & j0 < j < j1 & k0 < k < k1`
+        # -> `i0 <= i < i1 & j0 <= j < j1 & k0 <= k < k1`
         if cpm.is_call_to(node, "in_"):
             ret = []
             pos, domain = node.args
@@ -43,7 +43,7 @@ class ExpandLibraryFunctions(PreserveLocationVisitor, NodeTranslator):
                         im.less_equal(v.start, im.tuple_get(i, pos)),
                         im.less(im.tuple_get(i, pos), v.stop),
                     )
-                )  # TODO: avoid pos duplication
+                )  # TODO(tehrengruber): Avoid position expr duplication.
             return reduce(im.and_, ret)
 
         return node
