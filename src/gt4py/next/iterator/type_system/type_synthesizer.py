@@ -313,23 +313,9 @@ def as_fieldop(
     *,
     offset_provider_type: common.OffsetProviderType,
 ) -> TypeSynthesizer:
-    # In case we don't have a domain argument to `as_fieldop` we can not infer the exact result
-    # type. In order to still allow some passes which don't need this information to run before the
-    # domain inference, we continue with a dummy domain. One example is the CollapseTuple pass
-    # which only needs information about the structure, e.g. how many tuple elements does this node
-    # have, but not the dimensions of a field.
-    # Note that it might appear as if using the TraceShift pass would allow us to deduce the return
-    # type of `as_fieldop` without a domain, but this is not the case, since we don't have
-    # information on the ordering of dimensions. In this example
-    #   `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
-    # it is unclear if the result has dimension I, J or J, I.
-    # Todo: update comment
-    if domain is None:
-        domain = it_ts.DomainType(dims="unknown")
-
     def _resolve_shift(
         input_dim: common.Dimension, shift_tuple: tuple[itir.OffsetLiteral, ...]
-    ) -> common.Dimension:
+    ) -> common.Dimension | ts.DeferredType:
         """
         Resolves the final dimension by applying shifts from the given shift tuple.
 
@@ -345,32 +331,29 @@ def as_fieldop(
 
         final_target: common.Dimension = input_dim
 
-        for off_literal in shift_tuple[::2]:
-            if offset_provider_type:
-                offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
-                if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
-                    return offset_type  # No shift applied
-                if isinstance(
-                    offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)
-                ):
-                    off_source = (
-                        offset_type.source
-                        if isinstance(offset_type, fbuiltins.FieldOffset)
-                        else (offset_type.codomain)
-                    )
-                    off_targets = (
-                        offset_type.target
-                        if isinstance(offset_type, fbuiltins.FieldOffset)
-                        else (offset_type.domain)
-                    )
+        for off_literal in reversed(shift_tuple[::2]):
+            offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
+            if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
+                return offset_type  # No shift applied
+            if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
+                off_source = (
+                    offset_type.source
+                    if isinstance(offset_type, fbuiltins.FieldOffset)
+                    else (offset_type.codomain)
+                )
+                off_targets = (
+                    offset_type.target
+                    if isinstance(offset_type, fbuiltins.FieldOffset)
+                    else (offset_type.domain)
+                )
 
-                    if input_dim == off_source:  # Check if input fits to offset
-                        for target in off_targets:
-                            if (
-                                target.value != off_literal.value
-                            ):  # Exclude target matching off_literal.value
-                                final_target = target
-                                input_dim = target  # Update input_dim for next iteration
+                if input_dim == off_source:  # Check if input fits to offset
+                    for target in off_targets:
+                        if (
+                            target.value != off_literal.value
+                        ):  # Exclude target matching off_literal.value
+                            final_target = target
+                            input_dim = target  # Update input_dim for next iteration
         return final_target
 
     @TypeSynthesizer
@@ -381,28 +364,49 @@ def as_fieldop(
             for el in type_info.primitive_constituents(f)
         ):
             return ts.DeferredType(constraint=None)
+        nonlocal domain
 
         new_fields = _handle_sparse_fields(fields)
 
         output_dims = set()
+        output_dims_sorted = set()
+        if offset_provider_type is not None:
+            for i, field in enumerate(new_fields):
+                input_dims = common.promote_dims(
+                    *[field.dims if isinstance(field, ts.FieldType) else []]
+                )
+                node = None
+                if isinstance(stencil.node, itir.Expr):
+                    node = stencil.node
+                elif isinstance(stencil.aliases[0], itir.Expr):
+                    node = stencil.aliases[0]
+                if node is not None:
+                    shifts_results = trace_shifts.trace_stencil(
+                        node, num_args=len(fields)
+                    )  # TODO: access node differently?
 
-        for i, field in enumerate(new_fields):
-            input_dims = common.promote_dims(
-                *[field.dims if isinstance(field, ts.FieldType) else []]
+                    for shift_tuple in shifts_results[
+                        i
+                    ]:  # Use shift tuple corresponding to the input field
+                        for input_dim in input_dims:
+                            output_dims.add(_resolve_shift(input_dim, shift_tuple))
+                else:
+                    output_dims.update(domain.dims)
+
+            output_dims_sorted = sorted(
+                {dim for dim in output_dims},
+                key=lambda dim: (common.dims_kind_order[dim.kind], dim.value),
             )
-
-            if isinstance(stencil.node, itir.Expr):
-                shifts_results = trace_shifts.trace_stencil(
-                    stencil.node, num_args=len(fields)
-                )  # TODO: access node differently?
-
-                for shift_tuple in shifts_results[
-                    i
-                ]:  # Use shift tuple corresponding to the input field
-                    for input_dim in input_dims:
-                        output_dims.add(_resolve_shift(input_dim, shift_tuple))
+            if domain is not None:
+                # assert list(output_dims_) == domain.dims TODO: add some check to compare with domain
+                pass
             else:
-                output_dims.update([domain.dims] if domain.dims == "unknown" else domain.dims)
+                domain = it_ts.DomainType(dims=list(output_dims_sorted))
+        else:
+            if domain is None:
+                return ts.DeferredType(constraint=None)
+            else:
+                output_dims_sorted = domain.dims  # Already sorted
 
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in new_fields),
@@ -410,14 +414,10 @@ def as_fieldop(
         )
 
         assert isinstance(stencil_return, ts.DataType)
+
         return type_info.apply_to_primitive_constituents(
             lambda el_type: ts.FieldType(
-                dims=sorted(
-                    {dim for dim in output_dims},
-                    key=lambda dim: (common.dims_kind_order[dim.kind], dim.value),
-                )
-                if output_dims != set(["unknown"])
-                else [],
+                dims=list(output_dims_sorted),
                 dtype=el_type,
             ),
             stencil_return,
