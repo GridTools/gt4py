@@ -595,6 +595,11 @@ def _make_slice_concat_view_node(
     concat_dim_index: int,
     concat_dim_origin: dace.symbolic.SymbolicType,
 ) -> tuple[FieldopData, dace.data.Array]:
+    """
+    Helper function called by `translate_concat_where` to create a view over an
+    array 'f', that adds one dimension with a single level. This allows to treat
+    'f' as a slice and concatanate it to the other argument field.
+    """
     assert isinstance(f.gt_type, ts.FieldType)
     view_dims = [*f.gt_type.dims[:concat_dim_index], concat_dim, *f.gt_type.dims[concat_dim_index:]]
     view_origin = tuple(
@@ -630,6 +635,13 @@ def _make_broadcast_concat_view_node(
     fother_desc: dace.data.Array,
     concat_dim_index: int,
 ) -> tuple[FieldopData, dace.data.Array]:
+    """
+    Helper function called by `translate_concat_where` to create a view over a 1D
+    array 'f', that allows accessing one value in the concat dimension and broadcast
+    it on all other dimensions of the other argument field 'fother'.
+    The returned view uses zero stride in all dimensions that are not present in
+    the 1D field.
+    """
     assert isinstance(f.gt_type, ts.FieldType)
     assert isinstance(fother.gt_type, ts.FieldType)
     assert len(f.gt_type.dims) == 1
@@ -662,7 +674,10 @@ def translate_concat_where(
     state: dace.SDFGState,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> FieldopResult:
-    """Lowers a `concat_where` expression to a dataflow where two memlets write disjoint subsets on one data access node."""
+    """
+    Lowers a `concat_where` expression to a dataflow where two memlets write
+    disjoint subsets on one data access node.
+    """
     assert cpm.is_call_to(node, "concat_where")
     assert len(node.args) == 3
 
