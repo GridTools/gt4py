@@ -69,7 +69,7 @@ class DimensionKind(StrEnum):
         return self.value
 
 
-dims_kind_order = {DimensionKind.HORIZONTAL: 1, DimensionKind.VERTICAL: 2, DimensionKind.LOCAL: 3}
+_DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 1, DimensionKind.VERTICAL: 2, DimensionKind.LOCAL: 3}
 
 
 def dimension_to_implicit_offset(dim: str) -> str:
@@ -1126,12 +1126,18 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
+def _ordered_dims(dims: list[Dimension] | set[Dimension]) -> list[Dimension]:
+    return sorted(dims, key=lambda dim: (_DIM_KIND_ORDER[dim.kind], dim.value))
+
+
 def check_dims(dims: list[Dimension]) -> None:
     if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
         raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
 
-    if dims != sorted(dims, key=lambda dim: (dims_kind_order[dim.kind], dim.value)):
-        raise ValueError(f"Dimensions {dims} are not correctly ordered.")
+    if dims != _ordered_dims(dims):
+        raise ValueError(
+            f"Dimensions '{', '.join(map(str, dims))}' are not ordered correctly, expected '{', '.join(map(str, _ordered_dims(dims)))}'."
+        )
 
 
 def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
@@ -1154,14 +1160,12 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         >>> promote_dims([K, J], [I, K])
         Traceback (most recent call last):
         ...
-           raise ValueError(f"Dimensions {dims} are not correctly ordered.")
-        ValueError: Dimensions [Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)] are not correctly ordered.
+        ValueError: Dimensions 'K[vertical], J[horizontal]' are not ordered correctly, expected 'J[horizontal], K[vertical]'.
         >>> promote_dims([I, K], [J, E2V]) == [I, J, K, E2V]
         True
         >>> promote_dims([I, E2C], [K, E2V])
         Traceback (most recent call last):
         ...
-            raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
         ValueError: There are more than one dimension with DimensionKind 'LOCAL'.
     """
 
@@ -1169,7 +1173,7 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         check_dims(list(dims))
     unique_dims = {dim for dims in dims_list for dim in dims}
 
-    promoted_dims = sorted(unique_dims, key=lambda dim: (dims_kind_order[dim.kind], dim.value))
+    promoted_dims = _ordered_dims(unique_dims)
     check_dims(promoted_dims)
     return promoted_dims if unique_dims else []
 

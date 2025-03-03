@@ -194,8 +194,6 @@ def expression_test_cases():
             ),
             ts.DeferredType(constraint=None),
         ),
-        # (im.as_fieldop(im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))))( # TODO(SF-N): this needs PR 1853
-        #    im.ref("inp1", float_i_field), im.ref("inp2", float_j_field)), float_ij_field),
         # if in field-view scope
         (
             im.if_(
@@ -249,6 +247,26 @@ def test_adhoc_polymorphism():
     assert result.type == ts.TupleType(types=[bool_type, int_type])
 
 
+def test_binary_lambda():
+    func = im.lambda_("a", "b")(im.make_tuple("a", "b"))
+    testee = im.call(func)(im.ref("a_", bool_type), im.ref("b_", int_type))
+
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+
+    expected_type = ts.TupleType(types=[bool_type, int_type])
+    assert result.type == expected_type
+    assert result.fun.params[0].type == bool_type
+    assert result.fun.params[1].type == int_type
+    assert result.fun.type == ts.FunctionType(
+        pos_only_args=[bool_type, int_type],
+        pos_or_kw_args={},
+        kw_only_args={},
+        returns=expected_type,
+    )
+
+
 def test_aliased_function():
     testee = im.let("f", im.lambda_("x")("x"))(im.call("f")(1))
     result = itir_type_inference.infer(testee, offset_provider_type={})
@@ -256,6 +274,7 @@ def test_aliased_function():
     assert result.args[0].type == ts.FunctionType(
         pos_only_args=[int_type], pos_or_kw_args={}, kw_only_args={}, returns=int_type
     )
+    assert result.args[0].params[0].type == int_type
     assert result.type == int_type
 
 

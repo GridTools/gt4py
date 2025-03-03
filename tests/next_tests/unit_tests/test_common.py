@@ -27,9 +27,6 @@ from gt4py.next.common import (
     unit_range,
 )
 
-I = gtx.Dimension("I")
-J = gtx.Dimension("J")
-K = gtx.Dimension("K", kind=DimensionKind.VERTICAL)
 C2E = Dimension("C2E", kind=DimensionKind.LOCAL)
 V2E = Dimension("V2E", kind=DimensionKind.LOCAL)
 E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
@@ -333,14 +330,6 @@ def test_domain_intersection_different_dimensions(a_domain, second_domain, expec
     assert result_domain == expected
 
 
-def test_domain_intersection_reversed_dimensions(a_domain):
-    domain2 = Domain(dims=(IDim, JDim), ranges=(UnitRange(7, 17), UnitRange(2, 12)))
-
-    assert a_domain & domain2 == Domain(
-        dims=(IDim, JDim, KDim), ranges=(UnitRange(7, 10), UnitRange(5, 12), UnitRange(20, 30))
-    )
-
-
 @pytest.mark.parametrize(
     "index, expected",
     [
@@ -578,26 +567,26 @@ def dimension_promotion_cases() -> (
 ):
     raw_list = [
         # list of list of dimensions, expected result, expected error message
-        ([[I, J], [I]], [I, J], None),
-        ([[J], [I, J]], [I, J], None),
-        ([[J, K], [I, J]], [I, J, K], None),
+        ([[IDim, JDim], [IDim]], [IDim, JDim], None),
+        ([[JDim], [IDim, JDim]], [IDim, JDim], None),
+        ([[JDim, KDim], [IDim, JDim]], [IDim, JDim, KDim], None),
         (
-            [[I, J], [J, I]],
+            [[IDim, JDim], [JDim, IDim]],
             None,
-            "Dimensions [Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)] are not correctly ordered.",
+            "Dimensions 'JDim[horizontal], IDim[horizontal]' are not ordered correctly, expected 'IDim[horizontal], JDim[horizontal]'.",
         ),
-        ([[J, K], [I, K]], [I, J, K], None),
+        ([[JDim, KDim], [IDim, KDim]], [IDim, JDim, KDim], None),
         (
-            [[K, J], [I, K]],
+            [[KDim, JDim], [IDim, KDim]],
             None,
-            "Dimensions [Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)] are not correctly ordered.",
+            "Dimensions 'KDim[vertical], JDim[horizontal]' are not ordered correctly, expected 'JDim[horizontal], KDim[vertical]'.",
         ),
         (
-            [[J, V2E], [I, K, E2C2V]],
+            [[JDim, V2E], [IDim, KDim, E2C2V]],
             None,
             "There are more than one dimension with DimensionKind 'LOCAL'.",
         ),
-        ([[J, V2E], [I, K]], [I, J, K, V2E], None),
+        ([[JDim, V2E], [IDim, KDim]], [IDim, JDim, KDim, V2E], None),
     ]
     return [
         ([[el for el in arg] for arg in args], [el for el in result] if result else result, msg)

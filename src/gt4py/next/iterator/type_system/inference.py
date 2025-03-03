@@ -37,6 +37,14 @@ def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
         assert type_info.is_compatible_type(
             node.type, type_
         ), f"Node {node!s} already has a type {node.type} which differs from {type_}."
+    # Also populate the type of the parameters of a lambda. That way the one can access the type
+    # of a parameter by a lookup in the symbol table. As long as `_set_node_type` is used
+    # exclusively, the information stays consistent with the types stored in the `FunctionType`
+    # of the lambda itself.
+    if isinstance(node, itir.Lambda):
+        assert isinstance(type_, ts.FunctionType)
+        for param, param_type in zip(node.params, type_.pos_only_args):
+            _set_node_type(param, param_type)
     node.type = type_
 
 
