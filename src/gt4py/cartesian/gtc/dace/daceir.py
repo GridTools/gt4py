@@ -51,11 +51,11 @@ class Axis(eve.StrEnum):
         return eve.SymbolRef("__tile_" + self.lower())
 
     @staticmethod
-    def dims_3d() -> Generator["Axis", None, None]:
+    def dims_3d() -> Generator[Axis, None, None]:
         yield from [Axis.I, Axis.J, Axis.K]
 
     @staticmethod
-    def dims_horizontal() -> Generator["Axis", None, None]:
+    def dims_horizontal() -> Generator[Axis, None, None]:
         yield from [Axis.I, Axis.J]
 
     def to_idx(self) -> int:
