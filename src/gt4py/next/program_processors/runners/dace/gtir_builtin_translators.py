@@ -715,8 +715,22 @@ def translate_concat_where(
         else:
             raise ValueError(f"Unexpected concat mask {node.args[0]}.")
 
-        assert isinstance(lower.gt_type, ts.FieldType)
-        assert isinstance(upper.gt_type, ts.FieldType)
+        # in case one of the arguments is a scalar value, we convert it to a single-element
+        # 1D field with the dimension of the concat expression
+        if isinstance(lower.gt_type, ts.ScalarType):
+            assert isinstance(upper.gt_type, ts.FieldType)
+            lower = FieldopData(
+                lower.dc_node,
+                ts.FieldType(dims=[concat_dim], dtype=lower.gt_type),
+                origin=(upper_domain[concat_dim_index][1] - 1,),
+            )
+        elif isinstance(upper.gt_type, ts.ScalarType):
+            assert isinstance(lower.gt_type, ts.FieldType)
+            upper = FieldopData(
+                upper.dc_node,
+                ts.FieldType(dims=[concat_dim], dtype=upper.gt_type),
+                origin=(lower_domain[concat_dim_index][2],),
+            )
 
         is_lower_slice = False
         is_upper_slice = False
