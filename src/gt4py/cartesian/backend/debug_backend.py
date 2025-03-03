@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Type, Union
 
 from gt4py import storage

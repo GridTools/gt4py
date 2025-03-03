@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import pathlib
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
 from gt4py import storage as gt_storage
