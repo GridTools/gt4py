@@ -237,6 +237,9 @@ def concat_where(
         result_collection_constructor=lambda el: ts.TupleType(types=list(el)),
     )
     def deduce_return_type(tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType):
+        if any(isinstance(b, ts.DeferredType) for b in [tb, fb]):
+            return ts.DeferredType(constraint=ts.FieldType)
+
         tb_dtype, fb_dtype = (type_info.extract_dtype(b) for b in [tb, fb])
 
         assert (
