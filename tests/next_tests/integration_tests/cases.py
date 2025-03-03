@@ -61,6 +61,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 # mypy does not accept [IDim, ...] as a type
 
 IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
+JField: TypeAlias = gtx.Field[[JDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
 IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
 JField: TypeAlias = gtx.Field[[JDim], np.int32]  # type: ignore [valid-type]
