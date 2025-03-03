@@ -41,11 +41,10 @@ class DebugBackend(BaseBackend, CLIBackendMixin):
 
     def generate_computation(self) -> dict[str, Union[str, dict]]:
         computation_name = (
-            self.builder.caching.module_prefix
-            + "computation"
-            + self.builder.caching.module_postfix
-            + ".py"
+            f"{self.builder.caching.module_prefix}"
+            + f"computation{self.builder.caching.module_postfix}.py"
         )
+
         oir = GTIRToOIR().visit(self.builder.gtir)
         oir = HorizontalExecutionMerging().visit(oir)
         oir = LocalTemporariesToScalars().visit(oir)

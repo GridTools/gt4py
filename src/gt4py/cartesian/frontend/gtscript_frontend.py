@@ -1014,20 +1014,11 @@ class IRMaker(ast.NodeVisitor):
                 loc=nodes.Location.from_ast_node(node),
             )
         elif isinstance(value, numbers.Number):
-            if self.dtypes and type(value) in self.dtypes.keys():
-                value_type = self.dtypes[type(value)]
-            else:
-                if build_settings["literal_floating_point_precision"] is not None:
-                    if isinstance(value, int):
-                        value_type = np.dtype(
-                            f"i{int(int(build_settings['literal_floating_point_precision'])/8)}"
-                        )
-                    else:
-                        value_type = np.dtype(
-                            f"f{int(int(build_settings['literal_floating_point_precision'])/8)}"
-                        )
-                else:
-                    value_type = np.dtype(type(value))
+            value_type = (
+                self.dtypes[type(value)]
+                if self.dtypes and type(value) in self.dtypes.keys()
+                else np.dtype(type(value))
+            )
             data_type = nodes.DataType.from_dtype(value_type)
             return nodes.ScalarLiteral(value=value, data_type=data_type)
         else:
