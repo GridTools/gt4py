@@ -1126,7 +1126,7 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
-def _ordered_dims(dims: list[Dimension] | set[Dimension]) -> list[Dimension]:
+def ordered_dims(dims: list[Dimension] | set[Dimension]) -> list[Dimension]:
     return sorted(dims, key=lambda dim: (_DIM_KIND_ORDER[dim.kind], dim.value))
 
 
@@ -1134,9 +1134,9 @@ def check_dims(dims: list[Dimension]) -> None:
     if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
         raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
 
-    if dims != _ordered_dims(dims):
+    if dims != ordered_dims(dims):
         raise ValueError(
-            f"Dimensions '{', '.join(map(str, dims))}' are not ordered correctly, expected '{', '.join(map(str, _ordered_dims(dims)))}'."
+            f"Dimensions '{', '.join(map(str, dims))}' are not ordered correctly, expected '{', '.join(map(str, ordered_dims(dims)))}'."
         )
 
 
@@ -1173,7 +1173,7 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         check_dims(list(dims))
     unique_dims = {dim for dims in dims_list for dim in dims}
 
-    promoted_dims = _ordered_dims(unique_dims)
+    promoted_dims = ordered_dims(unique_dims)
     check_dims(promoted_dims)
     return promoted_dims if unique_dims else []
 

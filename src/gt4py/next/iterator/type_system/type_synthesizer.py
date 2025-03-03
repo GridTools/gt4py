@@ -393,10 +393,8 @@ def as_fieldop(
                 else:
                     output_dims.update(domain.dims)
 
-            output_dims_sorted = sorted(
-                {dim for dim in output_dims},
-                key=lambda dim: (common.dims_kind_order[dim.kind], dim.value),
-            )
+            output_dims_sorted = common.ordered_dims(output_dims)
+
             if domain is not None:
                 # assert list(output_dims_) == domain.dims TODO: add some check to compare with domain
                 pass
