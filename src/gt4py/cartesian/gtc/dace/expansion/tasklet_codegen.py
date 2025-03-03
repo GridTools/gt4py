@@ -27,7 +27,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
 
     def _visit_offset(
         self,
-        node: Union[common.VariableKOffset, common.CartesianOffset],
+        node: Union[dcir.VariableKOffset, common.CartesianOffset],
         *,
         access_info: dcir.FieldAccessInfo,
         **kwargs: Any,
@@ -62,17 +62,17 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         # If called from the explicit pass we need to be add manually the relative indexing
         if explicit:
             return f"__k+{self.visit(node.k, **kwargs)}"
-        else:
-            return self._visit_offset(node, **kwargs)
+
+        return self._visit_offset(node, **kwargs)
 
     def visit_VariableKOffset(
-        self, node: common.VariableKOffset, explicit=False, **kwargs: Any
+        self, node: dcir.VariableKOffset, explicit=False, **kwargs: Any
     ) -> str:
         # If called from the explicit pass we need to be add manually the relative indexing
         if explicit:
             return f"__k+{self.visit(node.k, **kwargs)}"
-        else:
-            return self._visit_offset(node, **kwargs)
+
+        return self._visit_offset(node, **kwargs)
 
     def visit_IndexAccess(
         self,
