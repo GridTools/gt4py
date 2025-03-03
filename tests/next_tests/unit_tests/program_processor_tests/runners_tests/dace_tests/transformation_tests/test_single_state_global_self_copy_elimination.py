@@ -17,8 +17,6 @@ from gt4py.next.program_processors.runners.dace import (
 
 from . import util
 
-import dace
-
 
 def _make_self_copy_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
     """Generates an SDFG that contains the self copying pattern."""
@@ -51,7 +49,7 @@ def test_global_self_copy_elimination_only_pattern():
     assert state.number_of_edges() == 2
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyGlobalSelfCopyElimination, validate=True, validate_all=True
+        gtx_transformations.SingleStateGlobalSelfCopyElimination, validate=True, validate_all=True
     )
     assert count != 0
 
@@ -90,7 +88,7 @@ def test_global_self_copy_elimination_g_downstream():
     assert state2.number_of_nodes() == 5
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyGlobalSelfCopyElimination, validate=True, validate_all=True
+        gtx_transformations.SingleStateGlobalSelfCopyElimination, validate=True, validate_all=True
     )
     assert count != 0
 
@@ -132,7 +130,7 @@ def test_global_self_copy_elimination_tmp_downstream():
     assert state2.number_of_nodes() == 5
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyGlobalSelfCopyElimination, validate=True, validate_all=True
+        gtx_transformations.SingleStateGlobalSelfCopyElimination, validate=True, validate_all=True
     )
     assert count != 0
 
