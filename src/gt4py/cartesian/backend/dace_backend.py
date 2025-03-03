@@ -172,7 +172,7 @@ def _post_expand_transformations(sdfg: dace.SDFG):
         if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
             node.schedule = dace.ScheduleType.Sequential
 
-    # TODO: fix
+    # To be re-evaluated with https://github.com/GridTools/gt4py/issues/1896
     # sdfg.apply_transformations_repeated(InlineThreadLocalTransients, validate=False) # noqa: ERA001
     sdfg.simplify(validate=False)
     nest_sequential_map_scopes(sdfg)
