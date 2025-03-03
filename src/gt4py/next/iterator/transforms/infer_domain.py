@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import functools
 import itertools
 import typing
 
@@ -377,21 +378,23 @@ def _infer_concat_where(
     **kwargs: Unpack[InferenceOptions],
 ) -> tuple[itir.Expr, AccessedDomains]:
     assert cpm.is_call_to(expr, "concat_where")
-    assert isinstance(domain, domain_utils.SymbolicDomain)
+    # assert isinstance(domain, domain_utils.SymbolicDomain)  # todo: per el assert
     infered_args_expr = []
     actual_domains: AccessedDomains = {}
     cond, true_field, false_field = expr.args
     symbolic_cond = domain_utils.SymbolicDomain.from_expr(cond)
     for arg in [true_field, false_field]:
         if arg == true_field:
-            extended_cond = domain_utils.promote_to_same_dimensions(symbolic_cond, domain)
-            domain_ = domain_utils.domain_intersection(domain, extended_cond)
+            extended_cond = tree_map(
+                functools.partial(domain_utils.promote_to_same_dimensions, symbolic_cond)
+            )(domain)
+            domain_ = tree_map(domain_utils.domain_intersection)(domain, extended_cond)
         elif arg == false_field:
             cond_complement = domain_utils.domain_complement(symbolic_cond)
-            extended_cond_complement = domain_utils.promote_to_same_dimensions(
-                cond_complement, domain
-            )
-            domain_ = domain_utils.domain_intersection(domain, extended_cond_complement)
+            extended_cond_complement = tree_map(
+                functools.partial(domain_utils.promote_to_same_dimensions, cond_complement)
+            )(domain)
+            domain_ = tree_map(domain_utils.domain_intersection)(domain, extended_cond_complement)
 
         infered_arg_expr, actual_domains_arg = infer_expr(arg, domain_, **kwargs)
         infered_args_expr.append(infered_arg_expr)

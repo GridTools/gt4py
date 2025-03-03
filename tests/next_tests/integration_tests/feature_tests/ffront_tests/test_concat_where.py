@@ -171,7 +171,7 @@ def test_dimension_two_nested_conditions(cartesian_case):
 def test_dimension_two_conditions_and(cartesian_case):
     @gtx.field_operator
     def testee(interior: cases.KField, boundary: cases.KField, nlev: np.int32) -> cases.KField:
-        return concat_where(0 < KDim < (nlev-1), interior, boundary)
+        return concat_where(0 < KDim < (nlev - 1), interior, boundary)
 
     interior = cases.allocate(cartesian_case, testee, "interior")()
     boundary = cases.allocate(cartesian_case, testee, "boundary")()
@@ -179,7 +179,7 @@ def test_dimension_two_conditions_and(cartesian_case):
 
     nlev = cartesian_case.default_sizes[KDim]
     k = np.arange(0, nlev)
-    ref = np.where((0 < k) & (k < (nlev-1)), interior.asnumpy(), boundary.asnumpy())
+    ref = np.where((0 < k) & (k < (nlev - 1)), interior.asnumpy(), boundary.asnumpy())
     cases.verify(cartesian_case, testee, interior, boundary, nlev, out=out, ref=ref)
 
 

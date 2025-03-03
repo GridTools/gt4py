@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
+from gt4py.next import utils
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -34,6 +35,11 @@ class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
             dims = [im.call("index")(ir.AxisLiteral(value=k.value, kind=k.kind)) for k in cond]
             refs = symbol_ref_utils.collect_symbol_refs(cond_expr)
 
+            # TODO: cleanup
+            domains = utils.flatten_nested_tuple(node.annex.domain)
+            assert all(domain == domains[0] for domain in domains)
+            domain_expr = domains[0].as_expr()
+
             return im.as_fieldop(
                 im.lambda_("__tcw_pos", "__tcw_arg0", "__tcw_arg1", *refs)(
                     im.let(*zip(refs, map(im.deref, refs), strict=True))(
@@ -44,7 +50,7 @@ class TransformConcatWhere(PreserveLocationVisitor, NodeTranslator):
                         )
                     )
                 ),
-                node.annex.domain.as_expr(),
+                domain_expr,
             )(im.make_tuple(*dims), field_a, field_b, *refs)
 
         return node
