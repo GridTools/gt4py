@@ -641,7 +641,8 @@ def return_type_field(
             new_dims.append(d)
         else:
             new_dims.extend(target_dims)
-    return ts.FieldType(dims=common._ordered_dims(new_dims), dtype=field_type.dtype)
+    new_dims = common._ordered_dims(new_dims)  # e.g. `Vertex, V2E, K` -> `Vertex, K, V2E`
+    return ts.FieldType(dims=new_dims, dtype=field_type.dtype)
 
 
 UNDEFINED_ARG = types.new_class("UNDEFINED_ARG")
