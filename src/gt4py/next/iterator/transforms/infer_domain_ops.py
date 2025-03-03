@@ -99,17 +99,17 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
             else:
                 raise AssertionError()
 
-        if cpm.is_call_to(node, builtins.BINARY_LOGICAL_BUILTINS) and all(
-            isinstance(arg.type, ts.DomainType) for arg in node.args
-        ):
-            if cpm.is_call_to(node, "and_"):
-                # TODO: domain promotion
-                return ConstantFolding.apply(
-                    domain_utils.domain_intersection(
-                        *[domain_utils.SymbolicDomain.from_expr(arg) for arg in node.args]
-                    ).as_expr()
-                )
-            else:
-                raise NotImplementedError()
+        # if cpm.is_call_to(node, builtins.BINARY_LOGICAL_BUILTINS) and all(
+        #     isinstance(arg.type, ts.DomainType) for arg in node.args
+        # ):
+        #     if cpm.is_call_to(node, "and_"):
+        #         # TODO: domain promotion
+        #         return ConstantFolding.apply(
+        #             domain_utils.domain_intersection(
+        #                 *[domain_utils.SymbolicDomain.from_expr(arg) for arg in node.args]
+        #             ).as_expr()
+        #         )
+        #     else:
+        #         raise NotImplementedError()
 
         return node
