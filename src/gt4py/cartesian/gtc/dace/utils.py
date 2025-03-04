@@ -351,8 +351,8 @@ def compute_dcir_access_infos(
 class TaskletAccessInfoCollector(eve.NodeVisitor):
     @dataclass
     class Context:
-        axes: Dict[str, List[dcir.Axis]]
-        access_infos: Dict[str, dcir.FieldAccessInfo] = field(default_factory=dict)
+        axes: dict[str, list[dcir.Axis]]
+        access_infos: dict[str, dcir.FieldAccessInfo] = field(default_factory=dict)
 
     def __init__(
         self, collect_read: bool, collect_write: bool, *, horizontal_extent, k_interval, grid_subset
@@ -387,11 +387,9 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
     def _global_grid_subset(
         region: Optional[common.HorizontalMask],
         he_grid: dcir.GridSubset,
-        offset: List[Optional[int]],
+        offset: list[Optional[int]],
     ):
-        res: Dict[
-            dcir.Axis, Union[dcir.DomainInterval, dcir.TileInterval, dcir.IndexWithExtent]
-        ] = {}
+        res: dict[dcir.Axis, dcir.DomainInterval | dcir.IndexWithExtent | dcir.TileInterval] = {}
         if region is not None:
             for axis, oir_interval in zip(dcir.Axis.dims_horizontal(), region.intervals):
                 he_grid_interval = he_grid.intervals[axis]
@@ -420,13 +418,13 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
 
     def _make_access_info(
         self,
-        offset_node: Union[CartesianOffset, oir.VariableKOffset],
+        offset_node: CartesianOffset | VariableKOffset,
         axes,
         region: Optional[common.HorizontalMask],
     ) -> dcir.FieldAccessInfo:
         # Check we have expression offsets in K
         offset = [offset_node.to_dict()[k] for k in "ijk"]
-        variable_offset_axes = [dcir.Axis.K] if isinstance(offset_node, oir.VariableKOffset) else []
+        variable_offset_axes = [dcir.Axis.K] if isinstance(offset_node, VariableKOffset) else []
 
         global_subset = self._global_grid_subset(region, self.he_grid, offset)
         intervals = {}
@@ -475,11 +473,11 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
 
 
 def compute_tasklet_access_infos(
-    node: Union[oir.CodeBlock, oir.MaskStmt, oir.While],
+    node: oir.CodeBlock | oir.MaskStmt | oir.While,
     *,
     collect_read: bool = True,
     collect_write: bool = True,
-    declarations: Dict[str, oir.Decl],
+    declarations: dict[str, oir.Decl],
     horizontal_extent,
     k_interval,
     grid_subset,
@@ -503,6 +501,8 @@ def compute_tasklet_access_infos(
         collector.visit(node.mask, ctx=ctx, is_write=False)
     elif isinstance(node, oir.While):
         collector.visit(node.cond, ctx=ctx, is_write=False)
+    else:
+        raise ValueError("Unexpected node type.")
 
     return ctx.access_infos
 
