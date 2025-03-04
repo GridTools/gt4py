@@ -63,6 +63,8 @@ def gt_simplify(
         `SingleStateGlobalSelfCopyElimination`, with the exception that the write to
         `T`, i.e. `(G) -> (T)` and the write back to `G`, i.e. `(T) -> (G)` might be
         in different states.
+    - `CopyChainRemover`: Which removes some chains that are introduced by the
+        `concat_where` build in.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -90,6 +92,21 @@ def gt_simplify(
     while at_least_one_xtrans_run:
         at_least_one_xtrans_run = False
 
+        # To mitigate DaCe issue 1959, we run the chain removal transformation here.
+        # TODO(phimuell): Remove as soon as we have a true solution.
+        if "CopyChainRemover" not in skip:
+            copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
+                sdfg=sdfg,
+                validate=validate,
+                validate_all=validate_all,
+            )
+            if copy_chain_remover_result is not None:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "CopyChainRemover" not in result:
+                    result["CopyChainRemover"] = 0
+                result["CopyChainRemover"] += copy_chain_remover_result
+
         if "InlineSDFGs" not in skip:
             inline_res = gt_inline_nested_sdfg(
                 sdfg=sdfg,
@@ -114,6 +131,20 @@ def gt_simplify(
             at_least_one_xtrans_run = True
             result = result or {}
             result.update(simplify_res)
+
+        # This is the place were we actually want to apply the chain removal.
+        if "CopyChainRemover" not in skip:
+            copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
+                sdfg=sdfg,
+                validate=validate,
+                validate_all=validate_all,
+            )
+            if copy_chain_remover_result is not None:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "CopyChainRemover" not in result:
+                    result["CopyChainRemover"] = 0
+                result["CopyChainRemover"] += copy_chain_remover_result
 
         if "SingleStateGlobalSelfCopyElimination" not in skip:
             self_copy_removal_result = sdfg.apply_transformations_repeated(
