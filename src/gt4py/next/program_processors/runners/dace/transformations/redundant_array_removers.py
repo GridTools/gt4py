@@ -768,6 +768,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             if (producer, producer_conn) not in reconfigured_producer:
                 self._reconfigure_producer_node(
                     producer_edge=producer_edge,
+                    sdfg=sdfg,
                     state=graph,
                     a2_offsets=a2_offsets,
                     a1=a1,
@@ -847,6 +848,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         producer_edge: dace_graph.MultiConnectorEdge,
         a2_offsets: Sequence[dace_sym.SymExpr],
         state: dace.SDFGState,
+        sdfg: dace.SDFG,
         a1: dace_nodes.AccessNode,
         a2: dace_nodes.AccessNode,
     ) -> None:
@@ -866,6 +868,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             a2_offsets: Offset that describes how much to shift writes, that were
                 previously going into `a1` but should no go into `a2`.
             state: The state in which we operate.
+            sdfg: The SDFG on which we operate.
             a1: The `a1` node.
             a2: The `a2` node.
         """
@@ -900,6 +903,17 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             # A very obscure case, but I think it might happen, but as in the AccessNode
             #  case there is nothing to do here.
             pass
+
+        elif isinstance(producer_node, dace_nodes.NestedSDFG):
+            # Because we now write into a different memory region we have to modify
+            #  the strides on the inside.
+            # TODO(phimuell): Look into the implication that we not necessarily pass
+            #  the full array, but essentially slice a bit.
+            gtx_transformations.gt_propagate_strides_from_access_node(
+                sdfg=sdfg,
+                state=state,
+                outer_node=producer_node,
+            )
 
         else:
             # As we encounter them we should handle them case by case.
