@@ -22,6 +22,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import trace_shifts
+from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.utils import flatten_nested_tuple, tree_map
 
 
@@ -230,6 +231,21 @@ def _infer_as_fieldop(
     inputs_accessed_domains: dict[str, NonTupleDomainAccess] = _extract_accessed_domains(
         stencil, input_ids, target_domain, offset_provider, symbolic_domain_sizes
     )
+
+    assert input_ids == list(
+        inputs_accessed_domains.keys()
+    )  # Sanity check: ordering must be maintained
+    for (in_field_id, in_field_domain), arg in zip(
+        inputs_accessed_domains.items(), applied_fieldop.args
+    ):
+        if not isinstance(arg.type, ts.FieldType):
+            continue
+        cleaned_dims = {}
+        for dim, range_ in in_field_domain.ranges.items():
+            if isinstance(arg.type, ts.FieldType):
+                if dim in arg.type.dims:
+                    cleaned_dims[dim] = range_
+        inputs_accessed_domains[in_field_id].ranges = cleaned_dims
 
     # Recursively infer domain of inputs and update domain arg of nested `as_fieldop`s
     accessed_domains: AccessedDomains = {}
