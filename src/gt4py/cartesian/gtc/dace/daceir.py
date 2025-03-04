@@ -741,18 +741,12 @@ class VariableKOffset(common.VariableKOffset[Expr]):
 
 
 class IndexAccess(common.FieldAccess, Expr):
-    offset: Optional[
-        Union[
-            common.CartesianOffset,
-            VariableKOffset,
-            Literal,
-            ScalarAccess,  # For field index
-        ]
-    ]
+    # ScalarAccess used for field index
+    offset: Optional[common.CartesianOffset | Literal | ScalarAccess | VariableKOffset]
     is_target: bool
 
     # Use to access as a full field with explicit indices
-    explicit_indices: Optional[List[Union[VariableKOffset, Literal, ScalarAccess]]] = None
+    explicit_indices: Optional[list[Literal | ScalarAccess | VariableKOffset]] = None
 
 
 class AssignStmt(common.AssignStmt[Union[IndexAccess, ScalarAccess], Expr], Stmt):
@@ -852,14 +846,10 @@ class IterationNode(eve.Node):
 
 class Condition(eve.Node):
     condition: Tasklet
-    true_state: List[Union[ComputationState, Condition, WhileLoop]]
+    true_state: list[ComputationState | Condition | WhileLoop]
 
-    # false_state is unused for now due to how conditions are
-    # parsed at the oir-level
-    # NOTE We should clean this up in the future
-    false_state: List[Union[ComputationState, Condition, WhileLoop]] = eve.field(
-        default_factory=list
-    )
+    # Currently unused due to how conditions are parsed higher up in the pipeline
+    false_state: list[ComputationState | Condition | WhileLoop] = eve.field(default_factory=list)
 
     @datamodels.validator("condition")
     def condition_has_boolean_expression(self, attribute: datamodels.Attribute, v: Tasklet) -> None:
@@ -878,17 +868,17 @@ class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
     grid_subset: GridSubset = GridSubset.single_gridpoint()
 
     @datamodels.validator("stmts")
-    def non_empty_list(self, attribute: datamodels.Attribute, v: List[Stmt]) -> None:
+    def non_empty_list(self, attribute: datamodels.Attribute, v: list[Stmt]) -> None:
         if len(v) < 1:
             raise ValueError("Tasklet must contain at least one statement.")
 
     @datamodels.validator("stmts")
-    def read_after_write(self, attribute: datamodels.Attribute, statements: List[Stmt]) -> None:
+    def read_after_write(self, attribute: datamodels.Attribute, statements: list[Stmt]) -> None:
         def _remove_prefix(name: eve.SymbolRef) -> str:
             return name.removeprefix("gtOUT__").removeprefix("gtIN__")
 
         class ReadAfterWriteChecker(eve.NodeVisitor):
-            def visit_IndexAccess(self, node: IndexAccess, writes: Set[str]) -> None:
+            def visit_IndexAccess(self, node: IndexAccess, writes: set[str]) -> None:
                 if node.is_target:
                     # Keep track of writes
                     writes.add(_remove_prefix(node.name))
@@ -903,7 +893,7 @@ class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
                         f"Read after write of '{node.name}' not connected to out connector. DaCe IR error."
                     )
 
-            def visit_ScalarAccess(self, node: ScalarAccess, writes: Set[str]) -> None:
+            def visit_ScalarAccess(self, node: ScalarAccess, writes: set[str]) -> None:
                 # Handle function parameters differently because they are always available
                 if not node.name.startswith("gtIN__") and not node.name.startswith("gtOUT__"):
                     return
@@ -927,7 +917,7 @@ class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
                 self.visit(node.right, writes=writes)
                 self.visit(node.left, writes=writes)
 
-        writes: Set[str] = set()
+        writes: set[str] = set()
         checker = ReadAfterWriteChecker()
         for statement in statements:
             checker.visit(statement, writes=writes)
@@ -946,12 +936,12 @@ class ComputationState(IterationNode):
 class DomainLoop(ComputationNode, IterationNode):
     axis: Axis
     index_range: Range
-    loop_states: List[Union[ComputationState, Condition, DomainLoop, WhileLoop]]
+    loop_states: list[ComputationState | Condition | DomainLoop | WhileLoop]
 
 
 class WhileLoop(eve.Node):
     condition: Tasklet
-    body: List[Union[ComputationState, Condition, WhileLoop]]
+    body: list[ComputationState | Condition | WhileLoop]
 
     @datamodels.validator("condition")
     def condition_has_boolean_expression(self, attribute: datamodels.Attribute, v: Tasklet) -> None:
@@ -968,7 +958,7 @@ class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
     label: eve.Coerced[eve.SymbolRef]
     field_decls: List[FieldDecl]
     symbol_decls: List[SymbolDecl]
-    states: List[Union[ComputationState, Condition, DomainLoop, WhileLoop]]
+    states: list[ComputationState | Condition | DomainLoop | WhileLoop]
 
 
 # There are circular type references with string placeholders. These statements let datamodels resolve those.
