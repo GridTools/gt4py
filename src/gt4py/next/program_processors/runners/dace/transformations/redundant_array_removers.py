@@ -18,6 +18,7 @@ from dace import (
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
+from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -39,6 +40,35 @@ def gt_multi_state_global_self_copy_elimination(
     if "MultiStateGlobalSelfCopyElimination" not in res:
         return None
     return res["MultiStateGlobalSelfCopyElimination"][sdfg]
+
+
+def gt_remove_copy_chain(
+    sdfg: dace.SDFG,
+    validate: bool = False,
+    validate_all: bool = False,
+    single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+) -> Optional[int]:
+    """Applies the `CopyChainRemover` transformation to the SDFG.
+
+    The transformation returns the number of removed data containers or `None`
+    if nothing was done.
+
+    Args:
+        sdfg: The SDFG to process.
+        validate: Perform validation after the pass has run.
+        validate_all: Perform extensive validation.
+        single_use_data: Which data descriptors are used only once.
+            If not passed the function will run `FindSingleUseData`.
+    """
+    if single_use_data is None:
+        find_single_use_data = dace_analysis.FindSingleUseData()
+        single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+    return sdfg.apply_transformations_repeated(
+        CopyChainRemover(single_use_data=single_use_data),
+        validate=validate,
+        validate_all=validate_all,
+    )
 
 
 @dace_properties.make_properties
@@ -567,7 +597,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
 
 @dace_properties.make_properties
-class RedundantChainCopyRemover(dace_transformation.SingleStateTransformation):
+class CopyChainRemover(dace_transformation.SingleStateTransformation):
     """Removes chain of redundant copies, mostly related to `concat_where`.
 
     `concat_where`, especially when nested, will build "chains" of AccessNodes, this
@@ -595,7 +625,7 @@ class RedundantChainCopyRemover(dace_transformation.SingleStateTransformation):
         - Modify it such that also `A2` can be removed.
     """
 
-    noda_a1 = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    node_a1 = dace_transformation.PatternNode(dace_nodes.AccessNode)
     node_a2 = dace_transformation.PatternNode(dace_nodes.AccessNode)
 
     # Name of all data that is used at only one place. Is computed by the
@@ -616,7 +646,7 @@ class RedundantChainCopyRemover(dace_transformation.SingleStateTransformation):
     def expressions(cls) -> Any:
         return [
             dace.sdfg.utils.node_path_graph(
-                cls.noda_a1,
+                cls.node_a1,
                 cls.node_a2,
             )
         ]
@@ -628,8 +658,8 @@ class RedundantChainCopyRemover(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        a1: dace_nodes.AccessNode = self.noda_a1
-        a2: dace_nodes.AccessNode = self.noda_a2
+        a1: dace_nodes.AccessNode = self.node_a1
+        a2: dace_nodes.AccessNode = self.node_a2
 
         a1_desc = a1.desc(sdfg)
         a2_desc = a2.desc(sdfg)
@@ -637,7 +667,7 @@ class RedundantChainCopyRemover(dace_transformation.SingleStateTransformation):
         # We remove `a1` so it must be a transient and used only once.
         if not a1_desc.transient:
             return False
-        if not self.is_single_use_data(self, a1):
+        if not self.is_single_use_data(sdfg, a1):
             return False
 
         # We only allow that we operate on the top level scope.
@@ -649,18 +679,19 @@ class RedundantChainCopyRemover(dace_transformation.SingleStateTransformation):
         if a1_desc.storage != a2_desc.storage:
             return False
 
-        # There shall only be one connection between the two.
-        if not (graph.in_degree(a2) == 1 and graph.out_degree(a1) == 1):
+        # There shall only be one edge connecting `a1` and `a2`.
+        connecting_edges = [oedge for oedge in graph.out_edges(a1) if oedge.dst is a2]
+        if len(connecting_edges) != 1:
             return False
 
         # The full array `a1` is copied into `a2`. Note that it is allowed, that
         #  `a2` is bigger than `a1`, it is just important that everything that was
         #  written into `a1` is also accessed.
-        copy_edge = next(iter(graph.out_edges(a1)))
-        assert copy_edge.dst is a2
-        copy_memlet = copy_edge.data
+        connecting_edge = connecting_edges[0]
+        assert connecting_edge.dst is a2
+        connecting_memlet = connecting_edge.data
 
-        src_subset: dace_sbs.Subset = copy_memlet.get_src_subset(copy_edge, graph)
+        src_subset: dace_sbs.Subset = connecting_memlet.get_src_subset(connecting_edge, graph)
         if src_subset is None:
             src_subset = dace_sbs.Range.from_array(a1_desc)
         a1_range = dace_sbs.Range.from_array(a1_desc)
@@ -670,7 +701,15 @@ class RedundantChainCopyRemover(dace_transformation.SingleStateTransformation):
         if not src_subset.covers(a1_range):
             return False
 
-        assert False, "PROTECT AGANST CYCLES "
+        # We have to ensure that no cycle is created through the removal of `a1`.
+        #  For this we have to ensure that there is no connection, beside the direct
+        #  one between `a1` and `a2`.
+        if gtx_transformations.utils.is_reachable(
+            start=[oedge.dst for oedge in graph.out_edges(a1) if oedge.dst is not a2],
+            target=a2,
+            state=graph,
+        ):
+            return False
 
         return True
 
@@ -690,8 +729,8 @@ class RedundantChainCopyRemover(dace_transformation.SingleStateTransformation):
         graph: dace.SDFGState | dace.SDFG,
         sdfg: dace.SDFG,
     ) -> None:
-        a1: dace_nodes.AccessNode = self.noda_a1
-        a2: dace_nodes.AccessNode = self.noda_a2
+        a1: dace_nodes.AccessNode = self.node_a1
+        a2: dace_nodes.AccessNode = self.node_a2
         a1_to_a2_edge: dace_graph.MultiConnectorEdge = next(iter(graph.out_edges(a1)))
         a1_to_a2_memlet: dace.Memlet = a1_to_a2_edge.data
         a1_to_a2_dst_subset: dace_sbs.Range = a1_to_a2_memlet.get_dst_subset(a1_to_a2_edge, graph)
@@ -699,7 +738,7 @@ class RedundantChainCopyRemover(dace_transformation.SingleStateTransformation):
         # Note that it is possible that `a1` is connected to the same source multiple
         #  times, although through different edges. We have to modify the data
         #  flow of the sources/producer, since the offsets and that dat has changed,
-        #  however, we must only do it once. Note that only matching the node is not
+        #  but we must do that only once. Note that only matching the node is not
         #  enough, a counter example would be a Map with different connector names.
         reconfigured_producer: set[tuple[dace_nodes.Node, Optional[str]]] = set()
 
@@ -726,7 +765,7 @@ class RedundantChainCopyRemover(dace_transformation.SingleStateTransformation):
                 a1=a1,
                 a2=a2,
             )
-            if (producer, producer_conn) in reconfigured_producer:
+            if (producer, producer_conn) not in reconfigured_producer:
                 self._reconfigure_producer_node(
                     producer_edge=producer_edge,
                     state=graph,
