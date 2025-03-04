@@ -17,7 +17,6 @@ import dace.subsets
 import gt4py.cartesian.gtc.common as common
 from gt4py import eve
 from gt4py.cartesian.gtc.dace import daceir as dcir
-from gt4py.cartesian.gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
 from gt4py.cartesian.gtc.dace.symbol_utils import get_axis_bound_str
 from gt4py.cartesian.gtc.dace.utils import make_dace_subset
 from gt4py.eve.codegen import FormatTemplate as as_fmt
@@ -80,7 +79,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         node: dcir.IndexAccess,
         *,
         is_target: bool,
-        sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
+        sdfg: dace.SDFG,
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs: Any,
     ) -> str:
@@ -103,7 +102,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             # Full array access with every dimensions accessed in full
             # everything was packed in `explicit_indices` in `DaCeIRBuilder.visit_HorizontalExecution`
             # along the `reshape_memlet=True` code path
-            assert len(node.explicit_indices) == len(sdfg_ctx.sdfg.arrays[memlet.field].shape)
+            assert len(node.explicit_indices) == len(sdfg.arrays[memlet.field].shape)
             for idx in node.explicit_indices:
                 index_strs.append(
                     self.visit(

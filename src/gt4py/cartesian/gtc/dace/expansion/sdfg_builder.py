@@ -368,7 +368,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             read_memlets=node.read_memlets,
             write_memlets=node.write_memlets,
             symtable=symtable,
-            sdfg_ctx=sdfg_ctx,
+            sdfg=sdfg_ctx.sdfg,
         )
 
         # general idea:
