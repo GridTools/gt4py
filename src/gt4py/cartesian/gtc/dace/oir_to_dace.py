@@ -41,6 +41,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
         decls: Dict[str, oir.Decl]
         block_extents: Dict[int, Extent]
         access_infos: Dict[str, dcir.FieldAccessInfo]
+        loop_counter: int = 0
 
         def __init__(self, stencil: oir.Stencil):
             self.sdfg = dace.SDFG(stencil.name)
@@ -98,6 +99,13 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 global_access_info, local_access_info, self.decls[field].data_dims
             )
 
+    def _vloop_name(self, node: oir.VerticalLoop, ctx: OirSDFGBuilder.SDFGContext) -> str:
+        sdfg_name = ctx.sdfg.name
+        counter = ctx.loop_counter
+        ctx.loop_counter += 1
+
+        return f"{sdfg_name}_vloop_{counter}_{node.loop_order}_{id(node)}"
+
     def visit_VerticalLoop(self, node: oir.VerticalLoop, *, ctx: OirSDFGBuilder.SDFGContext):
         declarations = {
             acc.name: ctx.decls[acc.name]
@@ -105,7 +113,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
             if acc.name in ctx.decls
         }
         library_node = StencilComputation(
-            name=f"{ctx.sdfg.name}_computation_{id(node)}",
+            name=self._vloop_name(node, ctx),
             extents=ctx.block_extents,
             declarations=declarations,
             oir_node=node,
@@ -174,6 +182,6 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 lifetime=dace.AllocationLifetime.Persistent,
                 debuginfo=get_dace_debuginfo(decl),
             )
-        self.generic_visit(node, ctx=ctx)
+        self.visit(node.vertical_loops, ctx=ctx)
         ctx.sdfg.validate()
         return ctx.sdfg
