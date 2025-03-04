@@ -525,10 +525,6 @@ class FieldAccessInfo(eve.Node):
     dynamic_access: bool = False
     variable_offset_axes: List[Axis] = eve.field(default_factory=list)
 
-    @property
-    def is_dynamic(self) -> bool:
-        return self.dynamic_access
-
     def axes(self):
         yield from self.grid_subset.axes()
 
@@ -713,7 +709,7 @@ class FieldDecl(Decl):
 
     @property
     def is_dynamic(self) -> bool:
-        return self.access_info.is_dynamic
+        return self.access_info.dynamic_access
 
     def with_set_access_info(self, access_info: FieldAccessInfo) -> FieldDecl:
         return FieldDecl(
