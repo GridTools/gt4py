@@ -11,7 +11,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Union, cast
 
 import dace
 import dace.data
@@ -368,18 +368,15 @@ class DaCeIRBuilder(eve.NodeTranslator):
         node: oir.FieldAccess,
         *,
         is_target: bool,  # true if we write to this FieldAccess
-        targets: List[oir.FieldAccess | oir.ScalarAccess],
-        var_offset_fields: Set[eve.SymbolRef],
-        K_write_with_offset: Set[eve.SymbolRef],
+        targets: list[oir.FieldAccess | oir.ScalarAccess],
+        var_offset_fields: set[eve.SymbolRef],
+        K_write_with_offset: set[eve.SymbolRef],
         **kwargs: Any,
-    ) -> Union[dcir.IndexAccess, dcir.ScalarAccess]:
-        """Generate the relevant accessor to match the memlet that was previously setup.
+    ) -> dcir.IndexAccess | dcir.ScalarAccess:
+        """Generate the relevant accessor to match the memlet that was previously setup."""
 
-        When a Field is written in K, we force the usage of the OUT memlet throughout the stencil
-        to make sure all side effects are being properly resolved. Frontend checks ensure that no
-        parallel code issues sips here.
-        """
-
+        # Distinguish between writing to a variable and reading a previously written variable.
+        # In the latter case (read after write), we need to read from the "gtOUT__" symbol.
         is_write = is_target
         is_target = is_target or (
             # read after write (within a code block)
@@ -390,7 +387,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         )
         name = get_tasklet_symbol(node.name, offset=node.offset, is_target=is_target)
 
-        access_node: Union[dcir.IndexAccess, dcir.ScalarAccess]
+        access_node: dcir.IndexAccess | dcir.ScalarAccess
         if node.name in var_offset_fields.union(K_write_with_offset):
             access_node = dcir.IndexAccess(
                 name=name,
@@ -444,16 +441,18 @@ class DaCeIRBuilder(eve.NodeTranslator):
         node: oir.ScalarAccess,
         *,
         is_target: bool,
-        targets: List[oir.FieldAccess | oir.ScalarAccess],
+        targets: list[oir.FieldAccess | oir.ScalarAccess],
         global_ctx: DaCeIRBuilder.GlobalContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         **_: Any,
     ) -> dcir.ScalarAccess:
         if node.name in global_ctx.library_node.declarations:
-            # Handle function parameters differently because they are always available
+            # Handle stencil parameters differently because they are always available
             symbol_collector.add_symbol(node.name, dtype=node.dtype)
             return dcir.ScalarAccess(name=node.name, dtype=node.dtype, is_target=is_target)
 
+        # Distinguish between writing to a variable and reading a previously written variable.
+        # In the latter case (read after write), we need to read from the "gtOUT__" symbol.
         is_write = is_target
         is_target = is_target or (
             # read after write (within a code block)
@@ -480,14 +479,14 @@ class DaCeIRBuilder(eve.NodeTranslator):
 
     def _condition_tasklet(
         self,
-        node: Union[oir.MaskStmt, oir.While],
+        node: oir.MaskStmt | oir.While,
         *,
         global_ctx: DaCeIRBuilder.GlobalContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         horizontal_extent,
         k_interval,
         iteration_ctx: DaCeIRBuilder.IterationContext,
-        targets: List[oir.FieldAccess | oir.ScalarAccess],
+        targets: list[oir.FieldAccess | oir.ScalarAccess],
         **kwargs: Any,
     ) -> dcir.Tasklet:
         condition_expression = node.mask if isinstance(node, oir.MaskStmt) else node.cond
@@ -519,7 +518,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             loc=node.loc,
         )
 
-        read_memlets: List[dcir.Memlet] = _get_tasklet_inout_memlets(
+        read_memlets: list[dcir.Memlet] = _get_tasklet_inout_memlets(
             node,
             AccessType.READ,
             global_ctx=global_ctx,
@@ -535,7 +534,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
             write_memlets=[],
         )
         # See notes inside the function
-        # NOTE We should clean this up with the node_access matching above
         self._fix_memlet_array_access(
             tasklet=tasklet,
             memlets=read_memlets,
@@ -544,9 +542,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             targets=targets,
             **kwargs,
         )
-        # NOTE
-        # We can't have read after write issues with ScalarAccess in condition
-        # Tasklets because we don't write and read in these Tasklets.
+
         return tasklet
 
     def visit_MaskStmt(
@@ -557,10 +553,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         horizontal_extent,
         k_interval,
-        targets: List[oir.FieldAccess | oir.ScalarAccess],
+        targets: list[oir.FieldAccess | oir.ScalarAccess],
         inside_horizontal_region: bool = False,
         **kwargs: Any,
-    ) -> Union[dcir.MaskStmt, dcir.Condition]:
+    ) -> dcir.MaskStmt | dcir.Condition:
         if inside_horizontal_region:
             # inside horizontal regions, we use old-style mask statements that
             # might translate to if statements inside the tasklet
@@ -621,10 +617,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         horizontal_extent,
         k_interval,
-        targets: List[oir.FieldAccess | oir.ScalarAccess],
+        targets: list[oir.FieldAccess | oir.ScalarAccess],
         inside_horizontal_region: bool = False,
         **kwargs: Any,
-    ) -> Union[dcir.While, dcir.WhileLoop]:
+    ) -> dcir.While | dcir.WhileLoop:
         if inside_horizontal_region:
             # inside horizontal regions, we use old-style while statements that
             # might translate to while statements inside the tasklet
@@ -697,7 +693,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         self,
         *,
         tasklet: dcir.Tasklet,
-        memlets: List[dcir.Memlet],
+        memlets: list[dcir.Memlet],
         global_context: DaCeIRBuilder.GlobalContext,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         **kwargs: Any,
@@ -771,7 +767,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         symbol_collector: DaCeIRBuilder.SymbolCollector,
         horizontal_extent,
         k_interval,
-        targets: List[oir.FieldAccess | oir.ScalarAccess],
+        targets: list[oir.FieldAccess | oir.ScalarAccess],
         **kwargs: Any,
     ):
         # Reset the set of targets (used for detecting read after write inside a tasklet)
@@ -792,9 +788,9 @@ class DaCeIRBuilder(eve.NodeTranslator):
 
         # Gather all statements that aren't control flow (e.g. everything except Condition and WhileLoop),
         # put them in a tasklet, and call "to_state" on it.
-        # Then, return new list with types that are either ComputationState, Condition, or WhileLoop
-        dace_nodes: List[Union[dcir.ComputationState, dcir.Condition, dcir.WhileLoop]] = []
-        current_block: List[dcir.Stmt] = []
+        # Then, return a new list with types that are either ComputationState, Condition, or WhileLoop.
+        dace_nodes: list[dcir.ComputationState | dcir.Condition | dcir.WhileLoop] = []
+        current_block: list[dcir.Stmt] = []
         for index, statement in enumerate(statements):
             is_control_flow = isinstance(statement, (dcir.Condition, dcir.WhileLoop))
             if not is_control_flow:
@@ -802,7 +798,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
 
             last_statement = index == len(statements) - 1
             if (is_control_flow or last_statement) and len(current_block) > 0:
-                read_memlets: List[dcir.Memlet] = _get_tasklet_inout_memlets(
+                read_memlets: list[dcir.Memlet] = _get_tasklet_inout_memlets(
                     node,
                     AccessType.READ,
                     global_ctx=global_ctx,
@@ -811,7 +807,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     grid_subset=iteration_ctx.grid_subset,
                     dcir_statements=current_block,
                 )
-                write_memlets: List[dcir.Memlet] = _get_tasklet_inout_memlets(
+                write_memlets: list[dcir.Memlet] = _get_tasklet_inout_memlets(
                     node,
                     AccessType.WRITE,
                     global_ctx=global_ctx,
@@ -827,7 +823,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     write_memlets=write_memlets,
                 )
                 # See notes inside the function
-                # NOTE We should clean this up with the node_access matching above
                 self._fix_memlet_array_access(
                     tasklet=tasklet,
                     memlets=[*read_memlets, *write_memlets],
@@ -874,7 +869,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         assert iteration_ctx.grid_subset == dcir.GridSubset.single_gridpoint()
 
         code_block = oir.CodeBlock(body=node.body, loc=node.loc, label=f"he_{id(node)}")
-        targets: List[oir.FieldAccess | oir.ScalarAccess] = list()
+        targets: list[oir.FieldAccess | oir.ScalarAccess] = list()
         dcir_nodes = self.visit(
             code_block,
             global_ctx=global_ctx,
