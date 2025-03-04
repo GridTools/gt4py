@@ -46,17 +46,15 @@ class AccessType(Enum):
 
 
 def _field_access_iterator(
-    code_block: Union[oir.CodeBlock, oir.MaskStmt, oir.While], access_type: AccessType
+    code_block: oir.CodeBlock | oir.MaskStmt | oir.While, access_type: AccessType
 ):
-    # write access is straight forward
-    # read access is slightly more complicated (see below)
     if access_type == AccessType.WRITE:
         return filter(
             lambda node: isinstance(node, oir.FieldAccess),
             code_block.walk_values().if_isinstance(oir.AssignStmt).getattr("left"),
         )
 
-    def _iterator():
+    def read_access_iterator():
         for node in code_block.walk_values():
             if isinstance(node, oir.AssignStmt):
                 yield from node.right.walk_values().if_isinstance(oir.FieldAccess)
@@ -65,11 +63,11 @@ def _field_access_iterator(
             elif isinstance(node, oir.MaskStmt):
                 yield from node.mask.walk_values().if_isinstance(oir.FieldAccess)
 
-    return _iterator()
+    return read_access_iterator()
 
 
 def _mapped_access_iterator(
-    node: Union[oir.CodeBlock, oir.MaskStmt, oir.While], access_type: AccessType
+    node: oir.CodeBlock | oir.MaskStmt | oir.While, access_type: AccessType
 ):
     iterator = _field_access_iterator(node, access_type)
     write_access = access_type == AccessType.WRITE
@@ -86,15 +84,15 @@ def _mapped_access_iterator(
 
 
 def _get_tasklet_inout_memlets(
-    node: Union[oir.CodeBlock, oir.MaskStmt, oir.While],
+    node: oir.CodeBlock | oir.MaskStmt | oir.While,
     access_type: AccessType,
     *,
     global_ctx: DaCeIRBuilder.GlobalContext,
     horizontal_extent,
     k_interval,
-    grid_subset,
-    dcir_statements: Optional[List[dcir.Stmt]] = None,
-) -> List[dcir.Memlet]:
+    grid_subset: dcir.GridSubset,
+    dcir_statements: Optional[list[dcir.Stmt]] = None,
+) -> list[dcir.Memlet]:
     access_infos = compute_tasklet_access_infos(
         node,
         collect_read=access_type == AccessType.READ,
@@ -105,28 +103,30 @@ def _get_tasklet_inout_memlets(
         grid_subset=grid_subset,
     )
 
-    memlets: List[dcir.Memlet] = []
+    memlets: list[dcir.Memlet] = []
     for name, offset, tasklet_symbol in _mapped_access_iterator(node, access_type):
         if name not in access_infos:
             continue
 
-        # avoid adding extra inputs/outputs to the tasklet
         if dcir_statements is not None:
-            # find `tasklet_symbol` in dcir_statements because we can't know (from the oir statements)
+            # Find `tasklet_symbol` in dcir_statements because we can't know (from the oir statements)
             # where the tasklet boundaries will be. Consider
+            #
             # with computation(PARALLEL), interval(...):
             #   statement1
             #   if condition:
             #     statement2
             #   statement3
-            # -> even if we ignore the `if` statement, statements 1 & 3 will end up in the same block
-            #    but aren't in the same tasklet.
+            #
+            # statements 1 and 3 will end up in the same block but aren't in the same tasklet.
             names = []
             for statement in dcir_statements:
                 for access in statement.walk_values().if_isinstance(
                     dcir.ScalarAccess, dcir.IndexAccess
                 ):
                     names.append(access.name)
+
+            # Avoid adding extra inputs/outputs to the tasklet
             if tasklet_symbol not in names:
                 continue
 
