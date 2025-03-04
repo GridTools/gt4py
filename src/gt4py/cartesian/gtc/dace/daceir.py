@@ -17,6 +17,7 @@ import gt4py.cartesian.gtc.definitions
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.common import LocNode
+from gt4py.cartesian.gtc.dace.constants import TASKLET_PREFIX_IN, TASKLET_PREFIX_OUT
 from gt4py.cartesian.gtc.dace.symbol_utils import (
     get_axis_bound_dace_symbol,
     get_axis_bound_diff_str,
@@ -875,7 +876,7 @@ class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
     @datamodels.validator("stmts")
     def read_after_write(self, attribute: datamodels.Attribute, statements: list[Stmt]) -> None:
         def _remove_prefix(name: eve.SymbolRef) -> str:
-            return name.removeprefix("gtOUT__").removeprefix("gtIN__")
+            return name.removeprefix(TASKLET_PREFIX_OUT).removeprefix(TASKLET_PREFIX_IN)
 
         class ReadAfterWriteChecker(eve.NodeVisitor):
             def visit_IndexAccess(self, node: IndexAccess, writes: set[str]) -> None:
@@ -885,17 +886,24 @@ class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
                     return
 
                 # Check reads
-                if node.name.startswith("gtOUT__") and _remove_prefix(node.name) not in writes:
+                if (
+                    node.name.startswith(TASKLET_PREFIX_OUT)
+                    and _remove_prefix(node.name) not in writes
+                ):
                     raise ValueError(f"Reading undefined '{node.name}'. DaCe IR error.")
 
-                if _remove_prefix(node.name) in writes and not node.name.startswith("gtOUT__"):
+                if _remove_prefix(node.name) in writes and not node.name.startswith(
+                    TASKLET_PREFIX_OUT
+                ):
                     raise ValueError(
                         f"Read after write of '{node.name}' not connected to out connector. DaCe IR error."
                     )
 
             def visit_ScalarAccess(self, node: ScalarAccess, writes: set[str]) -> None:
-                # Handle function parameters differently because they are always available
-                if not node.name.startswith("gtIN__") and not node.name.startswith("gtOUT__"):
+                # Handle stencil parameters differently because they are always available
+                if not node.name.startswith(TASKLET_PREFIX_IN) and not node.name.startswith(
+                    TASKLET_PREFIX_OUT
+                ):
                     return
 
                 # Keep track of writes
@@ -904,10 +912,15 @@ class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
                     return
 
                 # Make sure we don't read uninitialized memory
-                if node.name.startswith("gtOUT__") and _remove_prefix(node.name) not in writes:
+                if (
+                    node.name.startswith(TASKLET_PREFIX_OUT)
+                    and _remove_prefix(node.name) not in writes
+                ):
                     raise ValueError(f"Reading undefined '{node.name}'. DaCe IR error.")
 
-                if _remove_prefix(node.name) in writes and not node.name.startswith("gtOUT__"):
+                if _remove_prefix(node.name) in writes and not node.name.startswith(
+                    TASKLET_PREFIX_OUT
+                ):
                     raise ValueError(
                         f"Read after write of '{node.name}' not connected to out connector. DaCe IR error."
                     )

@@ -19,13 +19,14 @@ import dace.subsets
 
 from gt4py import eve
 from gt4py.cartesian.gtc.dace import daceir as dcir
+from gt4py.cartesian.gtc.dace.constants import TASKLET_PREFIX_IN, TASKLET_PREFIX_OUT
 from gt4py.cartesian.gtc.dace.expansion.tasklet_codegen import TaskletCodegen
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo, make_dace_subset
 
 
 def exported_scalar_name(*, local_name: Union[eve.SymbolName, eve.SymbolRef]) -> str:
-    return local_name.removeprefix("gtOUT__").removeprefix("gtIN__")
+    return local_name.removeprefix(TASKLET_PREFIX_OUT).removeprefix(TASKLET_PREFIX_IN)
 
 
 class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
@@ -433,7 +434,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                 not field_access
                 and not defined_symbol
                 and not access_node.is_target
-                and read_name.startswith("gtIN__")
+                and read_name.startswith(TASKLET_PREFIX_IN)
                 and read_name not in tasklet_inputs
             ):
                 tasklet_inputs.add(read_name)
