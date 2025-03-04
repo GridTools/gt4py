@@ -64,11 +64,12 @@ def gt_remove_copy_chain(
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
-    return sdfg.apply_transformations_repeated(
+    result: int = sdfg.apply_transformations_repeated(
         CopyChainRemover(single_use_data=single_use_data),
         validate=validate,
         validate_all=validate_all,
     )
+    return result if result != 0 else None
 
 
 @dace_properties.make_properties
