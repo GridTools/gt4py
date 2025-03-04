@@ -385,7 +385,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
 
             assert isinstance(access_node.left, dcir.ScalarAccess)
             assert (
-                access_node.left.original_name is None
+                access_node.left.original_name is not None
             ), "Original name not found for '{access_nodes.left.name}'. DaCeIR error."
 
             original_name = access_node.left.original_name
