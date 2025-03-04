@@ -122,12 +122,10 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
         for edge in parent_state.in_edges(node):
             if edge.dst_conn not in nsdfg.in_connectors:
-                print(
-                    f"No connector '{edge.dst_conn}' found in expansion of library node '{node.name}'. Dropping connection."
-                )
+                # Drop connection if connector is not found in the expansion of the library node
                 parent_state.remove_edge(edge)
                 if parent_state.in_degree(edge.src) + parent_state.out_degree(edge.src) == 0:
-                    print(f"Removing node {edge.src} because it is now isolated.")
+                    # Remove node if it is now isolated
                     parent_state.remove_node(edge.src)
 
     @staticmethod
