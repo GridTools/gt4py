@@ -70,7 +70,7 @@ def replace_strides(arrays: List[dace.data.Array], get_layout_map) -> Dict[str, 
 def get_tasklet_symbol(
     name: str,
     *,
-    offset: Optional[Union[CartesianOffset, VariableKOffset]] = None,
+    offset: Optional[CartesianOffset | VariableKOffset] = None,
     is_target: bool,
 ):
     access_name = f"{TASKLET_PREFIX_OUT}{name}" if is_target else f"{TASKLET_PREFIX_IN}{name}"
