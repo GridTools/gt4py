@@ -623,6 +623,8 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             Will be stored internally and not updated.
 
     Todo:
+        - Extend such that not the full array must be read.
+        - Try to allow more than one connection between `A1` and `A2`.
         - Modify it such that also `A2` can be removed.
     """
 
@@ -711,6 +713,10 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         ):
             return False
 
+        # NOTE: In case `a2` is a non transient we do not have to check if it is read
+        #   or written to somewhere else in this state. The reason is that ADR18
+        #   guarantees us that everything is point wise, therefore `a1` is never
+        #   used as double buffer.
         return True
 
     def is_single_use_data(
