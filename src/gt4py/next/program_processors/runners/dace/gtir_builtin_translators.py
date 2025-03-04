@@ -801,16 +801,19 @@ def translate_concat_where(
         output, output_desc = sdfg_builder.add_temp_array(sdfg, output_shape, lower_desc.dtype)
         output_node = state.add_access(output)
 
-        lower_origin = lower.origin[concat_dim_index]
         lower_subset = dace_subsets.Range(
             [
                 (
-                    lower_range_0 - lower_origin,
-                    lower_range_0 - lower_origin + lower_range_size - 1,
+                    lower_range_0 - lower.origin[dim_index],
+                    lower_range_0 - lower.origin[dim_index] + lower_range_size - 1,
                     1,
                 )
                 if dim_index == concat_dim_index
-                else (0, size - 1, 1)
+                else (
+                    lower_domain[dim_index][1] - lower.origin[dim_index],
+                    lower_domain[dim_index][1] - lower.origin[dim_index] + size - 1,
+                    1,
+                )
                 for dim_index, size in enumerate(output_desc.shape)
             ]
         )
@@ -831,16 +834,19 @@ def translate_concat_where(
             ),
         )
 
-        upper_origin = upper.origin[concat_dim_index]
         upper_subset = dace_subsets.Range(
             [
                 (
-                    upper_range_0 - upper_origin,
-                    upper_range_0 - upper_origin + upper_range_size - 1,
+                    upper_range_0 - upper.origin[dim_index],
+                    upper_range_0 - upper.origin[dim_index] + upper_range_size - 1,
                     1,
                 )
                 if dim_index == concat_dim_index
-                else (0, size - 1, 1)
+                else (
+                    upper_domain[dim_index][1] - upper.origin[dim_index],
+                    upper_domain[dim_index][1] - upper.origin[dim_index] + size - 1,
+                    1,
+                )
                 for dim_index, size in enumerate(output_desc.shape)
             ]
         )
@@ -849,8 +855,8 @@ def translate_concat_where(
         upper_output_subset = dace_subsets.Range(
             [
                 (
-                    upper_range_0 - output_origin[concat_dim_index],
-                    upper_range_0 - output_origin[concat_dim_index] + upper_range_size - 1,
+                    upper_range_0 - output_origin[dim_index],
+                    upper_range_0 - output_origin[dim_index] + upper_range_size - 1,
                     1,
                 )
                 if dim_index == concat_dim_index
