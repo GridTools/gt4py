@@ -853,13 +853,19 @@ class Condition(eve.Node):
     false_state: list[ComputationState | Condition | WhileLoop] = eve.field(default_factory=list)
 
     @datamodels.validator("condition")
-    def condition_has_boolean_expression(self, attribute: datamodels.Attribute, v: Tasklet) -> None:
-        assert isinstance(v, Tasklet)
-        assert len(v.stmts) == 1
-        assert isinstance(v.stmts[0], AssignStmt)
-        assert isinstance(v.stmts[0].left, ScalarAccess)
-        assert isinstance(v.stmts[0].right, Expr)
-        if v.stmts[0].right.dtype != common.DataType.BOOL:
+    def condition_has_boolean_expression(
+        self, attribute: datamodels.Attribute, tasklet: Tasklet
+    ) -> None:
+        assert isinstance(tasklet, Tasklet)
+        assert len(tasklet.stmts) == 1
+        assert isinstance(tasklet.stmts[0], AssignStmt)
+        assert isinstance(tasklet.stmts[0].left, ScalarAccess)
+        if tasklet.stmts[0].left.original_name is None:
+            raise ValueError(
+                f"Original node name not found for {tasklet.stmts[0].left.name}. DaCe IR error."
+            )
+        assert isinstance(tasklet.stmts[0].right, Expr)
+        if tasklet.stmts[0].right.dtype != common.DataType.BOOL:
             raise ValueError("Condition must be a boolean expression.")
 
 
@@ -957,13 +963,19 @@ class WhileLoop(eve.Node):
     body: list[ComputationState | Condition | WhileLoop]
 
     @datamodels.validator("condition")
-    def condition_has_boolean_expression(self, attribute: datamodels.Attribute, v: Tasklet) -> None:
-        assert isinstance(v, Tasklet)
-        assert len(v.stmts) == 1
-        assert isinstance(v.stmts[0], AssignStmt)
-        assert isinstance(v.stmts[0].left, ScalarAccess)
-        assert isinstance(v.stmts[0].right, Expr)
-        if v.stmts[0].right.dtype != common.DataType.BOOL:
+    def condition_has_boolean_expression(
+        self, attribute: datamodels.Attribute, tasklet: Tasklet
+    ) -> None:
+        assert isinstance(tasklet, Tasklet)
+        assert len(tasklet.stmts) == 1
+        assert isinstance(tasklet.stmts[0], AssignStmt)
+        assert isinstance(tasklet.stmts[0].left, ScalarAccess)
+        if tasklet.stmts[0].left.original_name is None:
+            raise ValueError(
+                f"Original node name not found for {tasklet.stmts[0].left.name}. DaCe IR error."
+            )
+        assert isinstance(tasklet.stmts[0].right, Expr)
+        if tasklet.stmts[0].right.dtype != common.DataType.BOOL:
             raise ValueError("Condition must be a boolean expression.")
 
 

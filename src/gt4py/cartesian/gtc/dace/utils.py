@@ -267,7 +267,6 @@ class AccessInfoCollector(eve.NodeVisitor):
         return dcir.FieldAccessInfo(
             grid_subset=grid_subset,
             global_grid_subset=global_subset,
-            dynamic_access=False,
             variable_offset_axes=variable_offset_axes,
         )
 
