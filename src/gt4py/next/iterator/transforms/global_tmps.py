@@ -12,7 +12,7 @@ import functools
 from typing import Callable, Optional
 
 from gt4py.eve import utils as eve_utils
-from gt4py.next import common, utils as next_utils
+from gt4py.next import common, utils, utils as next_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -93,13 +93,18 @@ def _transform_by_pattern(
             domain_expr = domain.as_expr()
 
             assert isinstance(tmp_expr.type, ts.TypeSpec)
-            tmp_names: str | tuple[str | tuple, ...] = type_info.type_tree_map(
-                result_collection_constructor=lambda elements: tuple(elements)
-            )(lambda x: uids.sequential_id())(tmp_expr.type)
-
-            tmp_dtypes: ts.ScalarType | tuple[ts.ScalarType | tuple, ...] = type_info.type_tree_map(
-                result_collection_constructor=lambda elements: tuple(elements)
-            )(type_info.extract_dtype)(tmp_expr.type)
+            tmp_names: str | tuple[str | tuple, ...] = utils.tree_map(
+                lambda x: uids.sequential_id(),
+                tmp_expr.type,
+                result_collection_constructor=lambda elements: tuple(elements),
+            )
+            tmp_dtypes: (
+                ts.ScalarType | ts.ListType | tuple[ts.ScalarType | ts.ListType | tuple, ...]
+            ) = utils.tree_map(
+                type_info.extract_dtype,
+                tmp_expr.type,
+                result_collection_constructor=lambda elements: tuple(elements),
+            )
 
             # allocate temporary for all tuple elements
             def allocate_temporary(tmp_name: str, dtype: ts.ScalarType):

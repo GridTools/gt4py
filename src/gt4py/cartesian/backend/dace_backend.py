@@ -12,7 +12,6 @@ import copy
 import os
 import pathlib
 import re
-import textwrap
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 
 import dace
@@ -151,10 +150,6 @@ def _pre_expand_transformations(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, la
         sdfg = dace.SDFG(gtir_pipeline.gtir.name)
         sdfg.add_state(gtir_pipeline.gtir.name)
         return sdfg
-
-    for array in sdfg.arrays.values():
-        if array.transient:
-            array.lifetime = dace.AllocationLifetime.Persistent
 
     sdfg.simplify(validate=False)
 
@@ -432,20 +427,20 @@ class DaCeExtGenerator(BackendCodegen):
 
 class DaCeComputationCodegen:
     template = as_mako(
-        """
-        auto ${name}(const std::array<gt::uint_t, 3>& domain) {
-            return [domain](${",".join(functor_args)}) {
-                const int __I = domain[0];
-                const int __J = domain[1];
-                const int __K = domain[2];
-                ${name}${state_suffix} dace_handle;
-                ${backend_specifics}
-                auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
-                ${"\\n".join(tmp_allocs)}
-                __program_${name}(${",".join(["&dace_handle", *dace_args])});
-            };
-        }
-        """
+        """\
+auto ${name}(const std::array<gt::uint_t, 3>& domain) {
+    return [domain](${",".join(functor_args)}) {
+        const int __I = domain[0];
+        const int __J = domain[1];
+        const int __K = domain[2];
+        ${name}${state_suffix} dace_handle;
+        ${backend_specifics}
+        auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
+        ${"\\n".join(tmp_allocs)}
+        __program_${name}(${",".join(["&dace_handle", *dace_args])});
+    };
+}
+"""
     )
 
     def generate_tmp_allocs(self, sdfg):
@@ -511,7 +506,7 @@ class DaCeComputationCodegen:
                     lines = lines[0:i] + cuda_code.split("\n") + lines[i + 1 :]
                     break
 
-        def keep_line(line):
+        def keep_line(line: str) -> bool:
             line = line.strip()
             if line == '#include "../../include/hash.h"':
                 return False
@@ -521,11 +516,7 @@ class DaCeComputationCodegen:
                 return False
             return True
 
-        lines = filter(keep_line, lines)
-        generated_code = "\n".join(lines)
-        if builder.options.format_source:
-            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return generated_code
+        return "\n".join(filter(keep_line, lines))
 
     @classmethod
     def apply(cls, stencil_ir: gtir.Stencil, builder: StencilBuilder, sdfg: dace.SDFG):
@@ -563,17 +554,18 @@ class DaCeComputationCodegen:
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
             state_suffix=dace.Config.get("compiler.codegen_state_struct_suffix"),
         )
-        generated_code = textwrap.dedent(
-            f"""#include <gridtools/sid/sid_shift_origin.hpp>
-                             #include <gridtools/sid/allocator.hpp>
-                             #include <gridtools/stencil/cartesian.hpp>
-                             {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else omp_header}
-                             namespace gt = gridtools;
-                             {computations}
+        generated_code = f"""\
+#include <gridtools/sid/sid_shift_origin.hpp>
+#include <gridtools/sid/allocator.hpp>
+#include <gridtools/stencil/cartesian.hpp>
+{"#include <gridtools/common/cuda_util.hpp>" if is_gpu else omp_header}
+namespace gt = gridtools;
 
-                             {interface}
-                             """
-        )
+{computations}
+
+{interface}
+"""
+
         if builder.options.format_source:
             generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
 
@@ -760,7 +752,7 @@ class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, CUDAPyExtModuleGene
 
 class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
     GT_BACKEND_T = "dace"
-    PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
+    PYEXT_GENERATOR_CLASS = DaCeExtGenerator
 
     def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)
@@ -794,7 +786,7 @@ class DaceCPUBackend(BaseDaceBackend):
     options = BaseGTBackend.GT_BACKEND_OPTS
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=False)
+        return self.make_extension(uses_cuda=False)
 
 
 @register
@@ -815,4 +807,4 @@ class DaceGPUBackend(BaseDaceBackend):
     options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)
+        return self.make_extension(uses_cuda=True)

@@ -262,9 +262,7 @@ def test_mixed_field_scalar_tuple_arg(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
-@pytest.mark.xfail(
-    reason="Not implemented in frontend (implicit size arg handling needs to be adopted) and GTIR embedded backend."
-)
+@pytest.mark.uses_tuple_args_with_different_but_promotable_dims
 def test_tuple_arg_with_different_but_promotable_dims(cartesian_case):
     @gtx.field_operator
     def testee(a: tuple[cases.IField, cases.IJField]) -> cases.IJField:
@@ -318,7 +316,9 @@ def test_double_use_scalar(cartesian_case):
         # not inlined
         return tmp2 * tmp2 * c
 
-    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b, c: a * b * a * b * c)
+    cases.verify_with_default_data(
+        cartesian_case, testee, ref=lambda a, b, c: a * b * a * b * a * b * a * b * c
+    )
 
 
 @pytest.mark.uses_scalar_in_domain_and_fo
@@ -360,6 +360,7 @@ def test_scalar_scan(cartesian_case):
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_iterator
 def test_tuple_scalar_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(
@@ -749,7 +750,16 @@ def test_solve_triag(cartesian_case):
         matrices[:, :, i[1:], i[:-1]] = a[:, :, 1:]
         matrices[:, :, i, i] = b
         matrices[:, :, i[:-1], i[1:]] = c[:, :, :-1]
-        return np.linalg.solve(matrices, d)
+        # Changed in NumPY version 2.0: In a linear matrix equation ax = b, the b array
+        # is only treated as a shape (M,) column vector if it is exactly 1-dimensional.
+        # In all other instances it is treated as a stack of (M, K) matrices. Therefore
+        # below we add an extra dimension (K) of size 1. Previously b would be treated
+        # as a stack of (M,) vectors if b.ndim was equal to a.ndim - 1.
+        # Refer to https://numpy.org/doc/2.0/reference/generated/numpy.linalg.solve.html
+        d_ext = np.empty(shape=(*shape, 1))
+        d_ext[:, :, :, 0] = d
+        x = np.linalg.solve(matrices, d_ext)
+        return x[:, :, :, 0]
 
     cases.verify_with_default_data(cartesian_case, solve_tridiag, ref=expected)
 
@@ -867,8 +877,9 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
     )
 
 
-@pytest.mark.uses_tuple_args
 @pytest.mark.uses_scan
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_iterator
 def test_scan_nested_tuple_input(cartesian_case):
     init = 1.0
     k_size = cartesian_case.default_sizes[KDim]
@@ -897,6 +908,7 @@ def test_scan_nested_tuple_input(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_tuple_iterator
 def test_scan_different_domain_in_tuple(cartesian_case):
     init = 1.0
     i_size = cartesian_case.default_sizes[IDim]
@@ -936,6 +948,7 @@ def test_scan_different_domain_in_tuple(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_tuple_iterator
 def test_scan_tuple_field_scalar_mixed(cartesian_case):
     init = 1.0
     i_size = cartesian_case.default_sizes[IDim]
@@ -994,7 +1007,7 @@ def test_domain(cartesian_case):
     a = cases.allocate(cartesian_case, program_domain, "a")()
     out = cases.allocate(cartesian_case, program_domain, "out")()
 
-    ref = out.asnumpy().copy()  # ensure we are not overwriting out outside of the domain
+    ref = out.asnumpy().copy()  # ensure we are not writing to out outside the domain
     ref[1:9] = a.asnumpy()[1:9] * 2
 
     cases.verify(cartesian_case, program_domain, a, out, inout=out, ref=ref)
@@ -1121,7 +1134,7 @@ def test_zero_dims_fields(cartesian_case):
     inp = cases.allocate(cartesian_case, implicit_broadcast_scalar, "inp")()
     out = cases.allocate(cartesian_case, implicit_broadcast_scalar, "inp")()
 
-    cases.verify(cartesian_case, implicit_broadcast_scalar, inp, out=out, ref=np.array(0))
+    cases.verify(cartesian_case, implicit_broadcast_scalar, inp, out=out, ref=np.array(1))
 
 
 def test_implicit_broadcast_mixed_dim(cartesian_case):

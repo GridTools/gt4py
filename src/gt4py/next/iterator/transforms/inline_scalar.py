@@ -16,10 +16,18 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 class InlineScalar(eve.NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = ("domain",)
+
     @classmethod
     def apply(cls, program: itir.Program, offset_provider_type: common.OffsetProviderType):
         program = itir_inference.infer(program, offset_provider_type=offset_provider_type)
         return cls().visit(program)
+
+    def generic_visit(self, node, **kwargs):
+        if cpm.is_call_to(node, "as_fieldop"):
+            return node
+
+        return super().generic_visit(node, **kwargs)
 
     def visit_Expr(self, node: itir.Expr):
         node = self.generic_visit(node)

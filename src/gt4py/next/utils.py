@@ -80,12 +80,22 @@ def tree_map(
 def tree_map(
     *,
     collection_type: type | tuple[type, ...],
-    result_collection_constructor: Optional[type] = None,
-) -> Callable[[Callable[_P, _R]], Callable[..., _R | tuple[_R | tuple, ...]]]: ...
+    result_collection_constructor: Optional[type | Callable] = None,
+) -> Callable[[Callable[_P, _R], ], Callable[..., _R | tuple[_R | tuple, ...]]]: ...
+
+
+@overload
+def tree_map(
+    fun: Callable[_P, _R],
+    *collections: Any,
+    collection_type: type | tuple[type, ...] = tuple,
+    result_collection_constructor: Optional[type | Callable] = None,
+) -> _R | tuple[_R | tuple, ...]: ...
 
 
 def tree_map(
-    *args: Callable[_P, _R],
+    fun: Optional[Callable[_P, _R]] = None,
+    *collections: Any,
     collection_type: type | tuple[type, ...] = tuple,
     result_collection_constructor: Optional[type | Callable] = None,
 ) -> (
@@ -134,40 +144,32 @@ def tree_map(
             )
         result_collection_constructor = collection_type
 
-    if len(args) == 0:
+    if fun is None:
         return functools.partial(
             tree_map,
             collection_type=collection_type,
             result_collection_constructor=result_collection_constructor,
         )
 
-    if callable(args[0]):
-        fun = args[0]
-        colls = args[1:]
+    if len(collections) == 0:
+        return functools.partial(
+            tree_map,
+            fun,
+            collection_type=collection_type,
+            result_collection_constructor=result_collection_constructor,
+        )
 
-        if len(colls) == 0:
-            return functools.partial(
-                tree_map,
-                fun,
-                collection_type=collection_type,
-                result_collection_constructor=result_collection_constructor,
+    @functools.wraps(fun)
+    def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
+        if isinstance(args[0], collection_type):
+            assert all(
+                isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
             )
+            assert result_collection_constructor is not None
+            return result_collection_constructor(impl(*arg) for arg in zip(*args))
 
-        @functools.wraps(fun)
-        def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
-            if isinstance(args[0], collection_type):
-                assert all(
-                    isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
-                )
-                assert result_collection_constructor is not None
-                return result_collection_constructor(impl(*arg) for arg in zip(*args))
+        return fun(  # type: ignore[call-arg, misc] # mypy not smart enough
+            *cast(_P.args, args)
+        )  # mypy doesn't understand that `args` at this point is of type `_P.args`
 
-            return fun(  # type: ignore[call-arg] # mypy not smart enough
-                *cast(_P.args, args)
-            )  # mypy doesn't understand that `args` at this point is of type `_P.args`
-
-        return impl(*colls)
-
-    raise TypeError(
-        "tree_map() can be used as decorator with optional kwarg `collection_type` and `result_collection_constructor`, or with a function and collection."
-    )
+    return impl(*collections)

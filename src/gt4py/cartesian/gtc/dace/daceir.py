@@ -734,7 +734,13 @@ class ScalarAccess(common.ScalarAccess, Expr):
 
 
 class VariableKOffset(common.VariableKOffset[Expr]):
-    pass
+    @datamodels.validator("k")
+    def no_casts_in_offset_expression(self, _: datamodels.Attribute, expression: Expr) -> None:
+        for part in expression.walk_values():
+            if isinstance(part, Cast):
+                raise ValueError(
+                    "DaCe backends are currently missing support for casts in variable k offsets. See issue https://github.com/GridTools/gt4py/issues/1881."
+                )
 
 
 class IndexAccess(common.FieldAccess, Expr):
@@ -771,7 +777,7 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
 
 
-class Cast(common.Cast[Expr], Expr):  # type: ignore
+class Cast(common.Cast[Expr], Expr):
     pass
 
 

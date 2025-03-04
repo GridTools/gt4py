@@ -126,10 +126,10 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 
 class GTBaseBackend(BaseGTBackend, CLIBackendMixin):
     options = BaseGTBackend.GT_BACKEND_OPTS
-    PYEXT_GENERATOR_CLASS = GTExtGenerator  # type: ignore
+    PYEXT_GENERATOR_CLASS = GTExtGenerator
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
-        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=uses_cuda)
+        return self.make_extension(uses_cuda=uses_cuda)
 
     def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)

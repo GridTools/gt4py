@@ -13,16 +13,15 @@ from typing import Any, Final, Iterable, Literal, Optional
 
 from gt4py import eve
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
+from gt4py.next.iterator import builtins, ir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 
 
 class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
     """Ensure every applied lift and its arguments have the `recorded_shifts` annex populated."""
 
     def visit_FunCall(self, node: ir.FunCall):
-        if is_applied_lift(node):
+        if cpm.is_applied_lift(node):
             assert hasattr(node.annex, "recorded_shifts")
 
             if len(node.annex.recorded_shifts) == 0:
@@ -278,9 +277,9 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     def visit_SymRef(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
         if node.id in ctx:
             return ctx[node.id]
-        elif node.id in ir.TYPEBUILTINS:
+        elif node.id in builtins.TYPE_BUILTINS:
             return Sentinel.TYPE
-        elif node.id in (ir.ARITHMETIC_BUILTINS | {"list_get", "make_const_list", "cast_"}):
+        elif node.id in (builtins.ARITHMETIC_BUILTINS | {"list_get", "make_const_list", "cast_"}):
             return _combine
         raise ValueError(f"Undefined symbol {node.id}")
 
@@ -329,13 +328,16 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     @classmethod
     def trace_stencil(
         cls, stencil: ir.Expr, *, num_args: Optional[int] = None, save_to_annex: bool = False
-    ):
+    ) -> list[set[tuple[ir.OffsetLiteral, ...]]]:
         # If we get a lambda we can deduce the number of arguments.
         if isinstance(stencil, ir.Lambda):
             assert num_args is None or num_args == len(stencil.params)
             num_args = len(stencil.params)
+        elif cpm.is_call_to(stencil, "scan"):
+            assert isinstance(stencil.args[0], ir.Lambda)
+            num_args = len(stencil.args[0].params) - 1
         if not isinstance(num_args, int):
-            raise ValueError("Stencil must be an 'itir.Lambda' or `num_args` is given.")
+            raise ValueError("Stencil must be an 'itir.Lambda', scan, or `num_args` is given.")
         assert isinstance(num_args, int)
 
         args = [im.ref(f"__arg{i}") for i in range(num_args)]

@@ -13,6 +13,8 @@ from gt4py.cartesian.gtscript import (
     __INLINED,
     BACKWARD,
     FORWARD,
+    I,
+    J,
     PARALLEL,
     acos,
     acosh,
@@ -28,6 +30,7 @@ from gt4py.cartesian.gtscript import (
     exp,
     floor,
     gamma,
+    horizontal,
     interval,
     isfinite,
     isinf,
@@ -35,6 +38,7 @@ from gt4py.cartesian.gtscript import (
     log,
     log10,
     mod,
+    region,
     sin,
     sinh,
     sqrt,
@@ -57,7 +61,7 @@ def register(func=None, *, externals=None, name=None):
     return _register_decorator(func) if func else _register_decorator
 
 
-Field3D = gtscript.Field[np.float_]
+Field3D = gtscript.Field[np.float64]
 Field3DBool = gtscript.Field[np.bool_]
 
 
@@ -291,7 +295,8 @@ def large_k_interval(in_field: Field3D, out_field: Field3D):
     with computation(PARALLEL):
         with interval(0, 6):
             out_field = in_field
-        with interval(6, -10):  # this stage will only run if field has more than 16 elements
+        # this stenicl is only legal to call with fields that have more than 16 elements
+        with interval(6, -10):
             out_field = in_field + 1
         with interval(-10, None):
             out_field = in_field
@@ -402,3 +407,23 @@ def two_optional_fields(
             out_a = out_a + dt * phys_tend_a
         if __INLINED(PHYS_TEND_B):
             out_b = out_b + dt * phys_tend_b
+
+
+@register
+def horizontal_regions(field_in: Field3D, field_out: Field3D):
+    with computation(PARALLEL), interval(...):
+        with horizontal(region[I[0] : I[2], J[0] : J[2]], region[I[-3] : I[-1], J[-3] : J[-1]]):
+            field_out = field_in + 1.0
+
+        with horizontal(region[I[0] : I[2], J[-3] : J[-1]], region[I[-3] : I[-1], J[0] : J[2]]):
+            field_out = field_in - 1.0
+
+
+@register
+def horizontal_region_with_conditional(field_in: Field3D, field_out: Field3D):
+    with computation(PARALLEL), interval(...):
+        with horizontal(region[I[0] : I[2], J[0] : J[2]], region[I[-3] : I[-1], J[-3] : J[-1]]):
+            if field_in > 0:
+                field_out = field_in + 1.0
+            else:
+                field_out = 0

@@ -17,7 +17,7 @@ from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next import errors
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
 
@@ -58,8 +58,30 @@ def test_copy_lowering(copy_program_def, gtir_identity_fundef):
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="0", type=ts.ScalarType(kind=ts.ScalarKind.INT32)),
-                        P(itir.SymRef, id=eve.SymbolRef("__out_size_0")),
+                        P(
+                            itir.FunCall,
+                            fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
+                            args=[
+                                P(
+                                    itir.Literal,
+                                    value="0",
+                                    type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+                                ),
+                                P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
+                            ],
+                        ),
+                        P(
+                            itir.FunCall,
+                            fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
+                            args=[
+                                P(
+                                    itir.Literal,
+                                    value="1",
+                                    type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+                                ),
+                                P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
+                            ],
+                        ),
                     ],
                 )
             ],
@@ -77,8 +99,8 @@ def test_copy_lowering(copy_program_def, gtir_identity_fundef):
         params=[
             P(itir.Sym, id=eve.SymbolName("in_field")),
             P(itir.Sym, id=eve.SymbolName("out")),
-            P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
-            P(itir.Sym, id=eve.SymbolName("__out_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__in_field_0_range")),
+            P(itir.Sym, id=eve.SymbolName("__out_0_range")),
         ],
         body=[set_at_pattern],
     )
@@ -105,18 +127,58 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
                         P(
-                            itir.Literal,
-                            value="1",
-                            type=ts.ScalarType(
-                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
-                            ),
+                            itir.FunCall,
+                            fun=P(itir.SymRef, id=eve.SymbolRef("plus")),
+                            args=[
+                                P(
+                                    itir.FunCall,
+                                    fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
+                                    args=[
+                                        P(
+                                            itir.Literal,
+                                            value="0",
+                                            type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+                                        ),
+                                        P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
+                                    ],
+                                ),
+                                P(
+                                    itir.Literal,
+                                    value="1",
+                                    type=ts.ScalarType(
+                                        kind=getattr(
+                                            ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()
+                                        )
+                                    ),
+                                ),
+                            ],
                         ),
                         P(
-                            itir.Literal,
-                            value="2",
-                            type=ts.ScalarType(
-                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
-                            ),
+                            itir.FunCall,
+                            fun=P(itir.SymRef, id=eve.SymbolRef("plus")),
+                            args=[
+                                P(
+                                    itir.FunCall,
+                                    fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
+                                    args=[
+                                        P(
+                                            itir.Literal,
+                                            value="0",
+                                            type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+                                        ),
+                                        P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
+                                    ],
+                                ),
+                                P(
+                                    itir.Literal,
+                                    value="2",
+                                    type=ts.ScalarType(
+                                        kind=getattr(
+                                            ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()
+                                        )
+                                    ),
+                                ),
+                            ],
                         ),
                     ],
                 )
@@ -129,8 +191,8 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
         params=[
             P(itir.Sym, id=eve.SymbolName("in_field")),
             P(itir.Sym, id=eve.SymbolName("out")),
-            P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
-            P(itir.Sym, id=eve.SymbolName("__out_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__in_field_0_range")),
+            P(itir.Sym, id=eve.SymbolName("__out_0_range")),
         ],
         body=[set_at_pattern],
     )

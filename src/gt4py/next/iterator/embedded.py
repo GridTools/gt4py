@@ -15,7 +15,7 @@ import copy
 import dataclasses
 import itertools
 import math
-import sys
+import operator
 import warnings
 
 import numpy as np
@@ -54,7 +54,6 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
-from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -86,7 +85,19 @@ FieldAxis: TypeAlias = common.Dimension
 TupleAxis: TypeAlias = type[None]
 Axis: TypeAlias = Union[FieldAxis, TupleAxis]
 Scalar: TypeAlias = (
-    SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64 | np.bool_
+    SupportsInt
+    | SupportsFloat
+    | np.int8
+    | np.uint8
+    | np.int16
+    | np.uint16
+    | np.int32
+    | np.uint32
+    | np.int64
+    | np.uint64
+    | np.float32
+    | np.float64
+    | np.bool_
 )
 
 
@@ -380,6 +391,13 @@ def not_(a):
     return not a
 
 
+@builtins.neg.register(EMBEDDED)
+def neg(a):
+    if isinstance(a, Column):
+        return np.negative(a)
+    return np.negative(a)
+
+
 @builtins.gamma.register(EMBEDDED)
 def gamma(a):
     gamma_ = np.vectorize(math.gamma)
@@ -388,27 +406,6 @@ def gamma(a):
     res = gamma_(a)
     assert res.ndim == 0
     return res.item()
-
-
-@builtins.and_.register(EMBEDDED)
-def and_(a, b):
-    if isinstance(a, Column):
-        return np.logical_and(a, b)
-    return a and b
-
-
-@builtins.or_.register(EMBEDDED)
-def or_(a, b):
-    if isinstance(a, Column):
-        return np.logical_or(a, b)
-    return a or b
-
-
-@builtins.xor_.register(EMBEDDED)
-def xor_(a, b):
-    if isinstance(a, Column):
-        return np.logical_xor(a, b)
-    return a ^ b
 
 
 @builtins.tuple_get.register(EMBEDDED)
@@ -498,66 +495,6 @@ def named_range(tag: Tag | common.Dimension, start: int, end: int) -> NamedRange
     return (tag, range(start, end))
 
 
-@builtins.minus.register(EMBEDDED)
-def minus(first, second):
-    return first - second
-
-
-@builtins.plus.register(EMBEDDED)
-def plus(first, second):
-    return first + second
-
-
-@builtins.multiplies.register(EMBEDDED)
-def multiplies(first, second):
-    return first * second
-
-
-@builtins.divides.register(EMBEDDED)
-def divides(first, second):
-    return first / second
-
-
-@builtins.floordiv.register(EMBEDDED)
-def floordiv(first, second):
-    return first // second
-
-
-@builtins.mod.register(EMBEDDED)
-def mod(first, second):
-    return first % second
-
-
-@builtins.eq.register(EMBEDDED)
-def eq(first, second):
-    return first == second
-
-
-@builtins.greater.register(EMBEDDED)
-def greater(first, second):
-    return first > second
-
-
-@builtins.less.register(EMBEDDED)
-def less(first, second):
-    return first < second
-
-
-@builtins.less_equal.register(EMBEDDED)
-def less_equal(first, second):
-    return first <= second
-
-
-@builtins.greater_equal.register(EMBEDDED)
-def greater_equal(first, second):
-    return first >= second
-
-
-@builtins.not_eq.register(EMBEDDED)
-def not_eq(first, second):
-    return first != second
-
-
 CompositeOfScalarOrField: TypeAlias = Scalar | common.Field | tuple["CompositeOfScalarOrField", ...]
 
 
@@ -586,11 +523,32 @@ def promote_scalars(val: CompositeOfScalarOrField):
         )
 
 
-for math_builtin_name in builtins.MATH_BUILTINS:
-    python_builtins = {"int": int, "float": float, "bool": bool, "str": str}
+for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
+    python_builtins: dict[str, Callable] = {
+        "int": int,
+        "float": float,
+        "bool": bool,
+        "str": str,
+        "plus": operator.add,
+        "minus": operator.sub,
+        "multiplies": operator.mul,
+        "divides": operator.truediv,
+        "mod": operator.mod,
+        "floordiv": operator.floordiv,
+        "eq": operator.eq,
+        "less": operator.lt,
+        "greater": operator.gt,
+        "greater_equal": operator.ge,
+        "less_equal": operator.le,
+        "not_eq": operator.ne,
+        "and_": operator.and_,
+        "or_": operator.or_,
+        "xor_": operator.xor,
+        "neg": operator.neg,
+    }
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     impl: Callable
-    if math_builtin_name == "gamma":
+    if math_builtin_name in ["gamma", "not_"]:
         continue  # treated explicitly
     elif math_builtin_name in python_builtins:
         # TODO: Should potentially use numpy fixed size types to be consistent
@@ -718,7 +676,7 @@ class Undefined:
         return np.nan
 
     def __int__(self):
-        return sys.maxsize
+        return np.iinfo(np.int32).max
 
     def __repr__(self):
         return "_UNDEFINED"
@@ -1460,7 +1418,7 @@ class _List(Generic[DT]):
     def __getitem__(self, i: int):
         return self.values[i]
 
-    def __gt_type__(self) -> itir_ts.ListType:
+    def __gt_type__(self) -> ts.ListType:
         offset_tag = self.offset.value
         assert isinstance(offset_tag, str)
         element_type = type_translation.from_value(self.values[0])
@@ -1470,7 +1428,7 @@ class _List(Generic[DT]):
         connectivity = offset_provider[offset_tag]
         assert common.is_neighbor_connectivity(connectivity)
         local_dim = connectivity.__gt_type__().neighbor_dim
-        return itir_ts.ListType(element_type=element_type, offset_type=local_dim)
+        return ts.ListType(element_type=element_type, offset_type=local_dim)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1480,10 +1438,10 @@ class _ConstList(Generic[DT]):
     def __getitem__(self, _):
         return self.value
 
-    def __gt_type__(self) -> itir_ts.ListType:
+    def __gt_type__(self) -> ts.ListType:
         element_type = type_translation.from_value(self.value)
         assert isinstance(element_type, ts.DataType)
-        return itir_ts.ListType(
+        return ts.ListType(
             element_type=element_type,
             offset_type=_CONST_DIM,
         )
@@ -1801,7 +1759,7 @@ def _fieldspec_list_to_value(
     domain: common.Domain, type_: ts.TypeSpec
 ) -> tuple[common.Domain, ts.TypeSpec]:
     """Translate the list element type into the domain."""
-    if isinstance(type_, itir_ts.ListType):
+    if isinstance(type_, ts.ListType):
         if type_.offset_type == _CONST_DIM:
             return domain.insert(
                 len(domain), common.named_range((_CONST_DIM, 1))

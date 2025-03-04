@@ -6,20 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-# GT4Py - GridTools Framework
-#
-# Copyright (c) 2014-2023, ETH Zurich
-# All rights reserved.
-#
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
-
 from __future__ import annotations
 
 import dataclasses
@@ -122,7 +108,7 @@ def find_first_field(tuple_arg: tuple[Any, ...]) -> Optional[common.Field]:
     return None
 
 
-def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
+def iter_size_args(args: tuple[Any, ...]) -> Iterator[tuple[int, int]]:
     """
     Yield the size of each field argument in each dimension.
 
@@ -136,7 +122,9 @@ def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
                 if first_field:
                     yield from iter_size_args((first_field,))
             case common.Field():
-                yield from arg.ndarray.shape
+                for range_ in arg.domain.ranges:
+                    assert isinstance(range_, common.UnitRange)
+                    yield (range_.start, range_.stop)
             case _:
                 pass
 
@@ -156,6 +144,7 @@ def iter_size_compile_args(
         )
         if field_constituents:
             # we only need the first field, because all fields in a tuple must have the same dims and sizes
+            index_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
             yield from [
-                ts.ScalarType(kind=ts.ScalarKind.INT32) for dim in field_constituents[0].dims
+                ts.TupleType(types=[index_type, index_type]) for dim in field_constituents[0].dims
             ]

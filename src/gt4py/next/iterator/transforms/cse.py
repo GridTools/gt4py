@@ -82,11 +82,13 @@ def _is_collectable_expr(node: itir.Node) -> bool:
     if isinstance(node, itir.FunCall):
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
         #  visited, to ensure symbol dependencies are recognized correctly.
-        # do also not collect reduce nodes if they are left in the it at this point, this may lead to
+        # do also not collect reduce nodes if they are left in the IR at this point, this may lead to
         #  conceptual problems (other parts of the tool chain rely on the arguments being present directly
         #  on the reduce FunCall node (connectivity deduction)), as well as problems with the imperative backend
         #  backend (single pass eager depth first visit approach)
-        if isinstance(node.fun, itir.SymRef) and node.fun.id in ["lift", "shift", "reduce"]:
+        # do also not collect lifts or applied lifts as they become invisible to the lift inliner
+        #  otherwise
+        if cpm.is_call_to(node, ("lift", "shift", "reduce", "map_")) or cpm.is_applied_lift(node):
             return False
         return True
     elif isinstance(node, itir.Lambda):
@@ -429,9 +431,9 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         return cls().visit(node, within_stencil=within_stencil)
 
     def generic_visit(self, node, **kwargs):
-        if cpm.is_call_to("as_fieldop", node):
+        if cpm.is_call_to(node, "as_fieldop"):
             assert not kwargs.get("within_stencil")
-        within_stencil = cpm.is_call_to("as_fieldop", node) or kwargs.get("within_stencil")
+        within_stencil = cpm.is_call_to(node, "as_fieldop") or kwargs.get("within_stencil")
 
         return super().generic_visit(node, **(kwargs | {"within_stencil": within_stencil}))
 
@@ -443,10 +445,14 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
 
         def predicate(subexpr: itir.Expr, num_occurences: int):
             # note: be careful here with the syntatic context: the expression might be in local
-            #  view, even though the syntactic context `node` is in field view.
+            #  view, even though the syntactic context of `node` is in field view.
             # note: what is extracted is sketched in the docstring above. keep it updated.
             if num_occurences > 1:
                 if within_stencil:
+                    # TODO(tehrengruber): Lists must not be extracted to avoid errors in partial
+                    #  shift detection of UnrollReduce pass. Solve there. See #1795.
+                    if isinstance(subexpr.type, ts.ListType):
+                        return False
                     return True
                 # condition is only necessary since typing on lambdas is not preserved during
                 #  the transformation

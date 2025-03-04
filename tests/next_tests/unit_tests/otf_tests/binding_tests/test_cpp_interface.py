@@ -33,10 +33,10 @@ def test_render_function_declaration_scalar(function_scalar_example):
     expected = format_source(
         "cpp",
         """\
-    decltype(auto) example(double a, std::int64_t b) {
+decltype(auto) example(double a, std::int64_t b) {
         return;
     }\
-    """,
+""",
         style="LLVM",
     )
     assert rendered == expected
@@ -60,14 +60,14 @@ def function_buffer_example():
             interface.Parameter(
                 name="a_buf",
                 type_=ts.FieldType(
-                    dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
+                    dims=[gtx.Dimension("bar"), gtx.Dimension("foo")],
                     dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                 ),
             ),
             interface.Parameter(
                 name="b_buf",
                 type_=ts.FieldType(
-                    dims=[gtx.Dimension("foo")], dtype=ts.ScalarType(ts.ScalarKind.INT64)
+                    dims=[gtx.Dimension("bar")], dtype=ts.ScalarType(ts.ScalarKind.INT64)
                 ),
             ),
         ],
@@ -81,11 +81,11 @@ def test_render_function_declaration_buffer(function_buffer_example):
     expected = format_source(
         "cpp",
         """\
-    template <class ArgT0, class ArgT1>
-    decltype(auto) example(ArgT0 &&a_buf, ArgT1 &&b_buf) {
+template <class ArgT0, class ArgT1>
+        decltype(auto) example(ArgT0&& a_buf, ArgT1&& b_buf) {
         return;
     }\
-    """,
+""",
         style="LLVM",
     )
     assert rendered == expected
@@ -111,11 +111,11 @@ def function_tuple_example():
                 type_=ts.TupleType(
                     types=[
                         ts.FieldType(
-                            dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
+                            dims=[gtx.Dimension("bar"), gtx.Dimension("foo")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                         ),
                         ts.FieldType(
-                            dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
+                            dims=[gtx.Dimension("bar"), gtx.Dimension("foo")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                         ),
                     ]
@@ -132,11 +132,11 @@ def test_render_function_declaration_tuple(function_tuple_example):
     expected = format_source(
         "cpp",
         """\
-    template <class ArgT0>
-    decltype(auto) example(ArgT0 &&a_buf) {
+template <class ArgT0>
+        decltype(auto) example(ArgT0&& a_buf) {
         return;
     }\
-    """,
+""",
         style="LLVM",
     )
     assert rendered == expected

@@ -1,17 +1,18 @@
 name: "Fallback: Test Storage (CPU)"
 
 on:
+  push:
+    branches:
+    - main
   pull_request:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
     paths-ignore:  # Inverse of corresponding workflow
     - "src/gt4py/storage/**"
     - "src/gt4py/cartesian/backend/**"   # For DaCe storages
     - "tests/storage_tests/**"
-    - "workflows/**"
-    - "*.cfg"
-    - "*.ini"
+    - ".github/workflows/**"
+    - "*.lock"
     - "*.toml"
     - "*.yml"
 
@@ -19,9 +20,8 @@ jobs:
   test-storage:
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
-        tox-factor: [internal, dace]
         os: ["ubuntu-latest"]
+        python-version: ["3.10", "3.11"]
 
     runs-on: ${{ matrix.os }}
     steps:

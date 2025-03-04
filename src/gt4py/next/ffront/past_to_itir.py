@@ -24,7 +24,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.stages import AOT_PRG
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -138,8 +138,8 @@ def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]
     return iter(scanops_per_axis.keys()).__next__()
 
 
-def _size_arg_from_field(field_name: str, dim: int) -> str:
-    return f"__{field_name}_size_{dim}"
+def _range_arg_from_field(field_name: str, dim: int) -> str:
+    return f"__{field_name}_{dim}_range"
 
 
 def _flatten_tuple_expr(node: past.Expr) -> list[past.Name | past.Subscript]:
@@ -217,13 +217,14 @@ class ProgramLowering(
             )
             if len(fields_dims) > 0:  # otherwise `param` has no constituent which is of `FieldType`
                 assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
+                index_type = ts.ScalarType(
+                    kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
+                )
                 for dim_idx in range(len(fields_dims[0])):
                     size_params.append(
                         itir.Sym(
-                            id=_size_arg_from_field(param.id, dim_idx),
-                            type=ts.ScalarType(
-                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
-                            ),
+                            id=_range_arg_from_field(param.id, dim_idx),
+                            type=ts.TupleType(types=[index_type, index_type]),
                         )
                     )
 
@@ -286,7 +287,8 @@ class ProgramLowering(
         self,
         slice_bound: Optional[past.Constant],
         default_value: itir.Expr,
-        dim_size: itir.Expr,
+        start_idx: itir.Expr,
+        stop_idx: itir.Expr,
         **kwargs: Any,
     ) -> itir.Expr:
         if slice_bound is None:
@@ -296,11 +298,9 @@ class ProgramLowering(
                 slice_bound.type
             )
             if slice_bound.value < 0:
-                lowered_bound = itir.FunCall(
-                    fun=itir.SymRef(id="plus"), args=[dim_size, self.visit(slice_bound, **kwargs)]
-                )
+                lowered_bound = im.plus(stop_idx, self.visit(slice_bound, **kwargs))
             else:
-                lowered_bound = self.visit(slice_bound, **kwargs)
+                lowered_bound = im.plus(start_idx, self.visit(slice_bound, **kwargs))
         else:
             raise AssertionError("Expected 'None' or 'past.Constant'.")
         if slice_bound:
@@ -348,8 +348,9 @@ class ProgramLowering(
         domain_args = []
         domain_args_kind = []
         for dim_i, dim in enumerate(out_dims):
-            # an expression for the size of a dimension
-            dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
+            # an expression for the range of a dimension
+            dim_range = itir.SymRef(id=_range_arg_from_field(out_field.id, dim_i))
+            dim_start, dim_stop = im.tuple_get(0, dim_range), im.tuple_get(1, dim_range)
             # bounds
             lower: itir.Expr
             upper: itir.Expr
@@ -359,11 +360,15 @@ class ProgramLowering(
             else:
                 lower = self._visit_slice_bound(
                     slices[dim_i].lower if slices else None,
-                    im.literal("0", itir.INTEGER_INDEX_BUILTIN),
-                    dim_size,
+                    dim_start,
+                    dim_start,
+                    dim_stop,
                 )
                 upper = self._visit_slice_bound(
-                    slices[dim_i].upper if slices else None, dim_size, dim_size
+                    slices[dim_i].upper if slices else None,
+                    dim_stop,
+                    dim_start,
+                    dim_stop,
                 )
 
             if dim.kind == common.DimensionKind.LOCAL:

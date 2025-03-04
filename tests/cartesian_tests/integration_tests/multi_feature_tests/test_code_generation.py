@@ -27,7 +27,11 @@ from gt4py.cartesian.gtscript import (
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
-from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS, get_array_library
+from cartesian_tests.definitions import (
+    ALL_BACKENDS,
+    CPU_BACKENDS,
+    get_array_library,
+)
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import (
     EXTERNALS_REGISTRY as externals_registry,
     REGISTRY as stencil_definitions,
@@ -52,14 +56,14 @@ def test_generation(name, backend):
             )
         else:
             args[k] = v(1.5)
-    # vertical domain size >= 16 required for test_large_k_interval
-    stencil(**args, origin=(10, 10, 5), domain=(3, 3, 16))
+    # vertical domain size > 16 required for test_large_k_interval
+    stencil(**args, origin=(10, 10, 5), domain=(3, 3, 17))
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_lazy_stencil(backend):
     @gtscript.lazy_stencil(backend=backend)
-    def definition(field_a: gtscript.Field[np.float_], field_b: gtscript.Field[np.float_]):
+    def definition(field_a: gtscript.Field[np.float64], field_b: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             field_a = field_b
 
@@ -67,7 +71,7 @@ def test_lazy_stencil(backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_temporary_field_declared_in_if(backend):
     @gtscript.stencil(backend=backend)
-    def definition(field_a: gtscript.Field[np.float_]):
+    def definition(field_a: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             if field_a < 0:
                 field_b = -field_a
@@ -79,7 +83,7 @@ def test_temporary_field_declared_in_if(backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_stage_without_effect(backend):
     @gtscript.stencil(backend=backend)
-    def definition(field_a: gtscript.Field[np.float_]):
+    def definition(field_a: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             field_c = 0.0
 
@@ -87,11 +91,11 @@ def test_stage_without_effect(backend):
 def test_ignore_np_errstate():
     def setup_and_run(backend, **kwargs):
         field_a = gt_storage.zeros(
-            dtype=np.float_, backend=backend, shape=(3, 3, 1), aligned_index=(0, 0, 0)
+            dtype=np.float64, backend=backend, shape=(3, 3, 1), aligned_index=(0, 0, 0)
         )
 
         @gtscript.stencil(backend=backend, **kwargs)
-        def divide_by_zero(field_a: gtscript.Field[np.float_]):
+        def divide_by_zero(field_a: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 field_a = 1.0 / field_a
 
@@ -106,11 +110,11 @@ def test_ignore_np_errstate():
 
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_stencil_without_effect(backend):
-    def definition1(field_in: gtscript.Field[np.float_]):
+    def definition1(field_in: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             tmp = 0.0
 
-    def definition2(f_in: gtscript.Field[np.float_]):
+    def definition2(f_in: gtscript.Field[np.float64]):
         from __externals__ import flag
 
         with computation(PARALLEL), interval(...):
@@ -121,7 +125,7 @@ def test_stencil_without_effect(backend):
     stencil2 = gtscript.stencil(backend, definition2, externals={"flag": False})
 
     field_in = gt_storage.ones(
-        dtype=np.float_, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
+        dtype=np.float64, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
     )
 
     # test with explicit domain specified
@@ -135,14 +139,14 @@ def test_stencil_without_effect(backend):
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_stage_merger_induced_interval_block_reordering(backend):
     field_in = gt_storage.ones(
-        dtype=np.float_, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
+        dtype=np.float64, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
     )
     field_out = gt_storage.zeros(
-        dtype=np.float_, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
+        dtype=np.float64, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
     )
 
     @gtscript.stencil(backend=backend)
-    def stencil(field_in: gtscript.Field[np.float_], field_out: gtscript.Field[np.float_]):
+    def stencil(field_in: gtscript.Field[np.float64], field_out: gtscript.Field[np.float64]):
         with computation(BACKWARD):
             with interval(-2, -1):  # block 1
                 field_out = field_in
@@ -164,9 +168,9 @@ def test_stage_merger_induced_interval_block_reordering(backend):
 def test_lower_dimensional_inputs(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
-        field_3d: gtscript.Field[gtscript.IJK, np.float_],
-        field_2d: gtscript.Field[gtscript.IJ, np.float_],
-        field_1d: gtscript.Field[gtscript.K, np.float_],
+        field_3d: gtscript.Field[gtscript.IJK, np.float64],
+        field_2d: gtscript.Field[gtscript.IJ, np.float64],
+        field_1d: gtscript.Field[gtscript.K, np.float64],
     ):
         with computation(PARALLEL):
             with interval(0, -1):
@@ -219,9 +223,9 @@ def test_lower_dimensional_inputs(backend):
 def test_lower_dimensional_masked(backend):
     @gtscript.stencil(backend=backend)
     def copy_2to3(
-        cond: gtscript.Field[gtscript.IJK, np.float_],
-        inp: gtscript.Field[gtscript.IJ, np.float_],
-        outp: gtscript.Field[gtscript.IJK, np.float_],
+        cond: gtscript.Field[gtscript.IJK, np.float64],
+        inp: gtscript.Field[gtscript.IJ, np.float64],
+        outp: gtscript.Field[gtscript.IJK, np.float64],
     ):
         with computation(PARALLEL), interval(...):
             if cond > 0.0:
@@ -250,9 +254,9 @@ def test_lower_dimensional_masked(backend):
 def test_lower_dimensional_masked_2dcond(backend):
     @gtscript.stencil(backend=backend)
     def copy_2to3(
-        cond: gtscript.Field[gtscript.IJK, np.float_],
-        inp: gtscript.Field[gtscript.IJ, np.float_],
-        outp: gtscript.Field[gtscript.IJK, np.float_],
+        cond: gtscript.Field[gtscript.IJK, np.float64],
+        inp: gtscript.Field[gtscript.IJ, np.float64],
+        outp: gtscript.Field[gtscript.IJK, np.float64],
     ):
         with computation(FORWARD), interval(...):
             if cond > 0.0:
@@ -281,8 +285,8 @@ def test_lower_dimensional_masked_2dcond(backend):
 def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
     @gtscript.stencil(backend=backend)
     def copy_2to3(
-        inp: gtscript.Field[gtscript.IJ, np.float_],
-        outp: gtscript.Field[gtscript.IJK, np.float_],
+        inp: gtscript.Field[gtscript.IJ, np.float64],
+        outp: gtscript.Field[gtscript.IJK, np.float64],
     ):
         with computation(FORWARD), interval(...):
             outp[0, 0, 0] = inp
@@ -368,8 +372,8 @@ def test_input_order(backend):
 def test_variable_offsets(backend):
     @gtscript.stencil(backend=backend)
     def stencil_ij(
-        in_field: gtscript.Field[np.float_],
-        out_field: gtscript.Field[np.float_],
+        in_field: gtscript.Field[np.float64],
+        out_field: gtscript.Field[np.float64],
         index_field: gtscript.Field[gtscript.IJ, int],
     ):
         with computation(FORWARD), interval(...):
@@ -378,8 +382,8 @@ def test_variable_offsets(backend):
 
     @gtscript.stencil(backend=backend)
     def stencil_ijk(
-        in_field: gtscript.Field[np.float_],
-        out_field: gtscript.Field[np.float_],
+        in_field: gtscript.Field[np.float64],
+        out_field: gtscript.Field[np.float64],
         index_field: gtscript.Field[int],
     ):
         with computation(PARALLEL), interval(...):
@@ -390,10 +394,10 @@ def test_variable_offsets(backend):
 def test_variable_offsets_and_while_loop(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
-        pe1: gtscript.Field[np.float_],
-        pe2: gtscript.Field[np.float_],
-        qin: gtscript.Field[np.float_],
-        qout: gtscript.Field[np.float_],
+        pe1: gtscript.Field[np.float64],
+        pe2: gtscript.Field[np.float64],
+        qin: gtscript.Field[np.float64],
+        qout: gtscript.Field[np.float64],
         lev: gtscript.Field[gtscript.IJ, np.int_],
     ):
         with computation(FORWARD), interval(0, -1):
@@ -410,7 +414,7 @@ def test_variable_offsets_and_while_loop(backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_nested_while_loop(backend):
     @gtscript.stencil(backend=backend)
-    def stencil(field_a: gtscript.Field[np.float_], field_b: gtscript.Field[np.int_]):
+    def stencil(field_a: gtscript.Field[np.float64], field_b: gtscript.Field[np.int_]):
         with computation(PARALLEL), interval(...):
             while field_a < 1:
                 add = 0
@@ -422,7 +426,7 @@ def test_nested_while_loop(backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_mask_with_offset_written_in_conditional(backend):
     @gtscript.stencil(backend)
-    def stencil(outp: gtscript.Field[np.float_]):
+    def stencil(outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             cond = True
             if cond[0, -1, 0] or cond[0, 0, 0]:
@@ -582,16 +586,10 @@ def test_K_offset_write(backend):
     # Cuda generates bad code for the K offset
     if backend == "cuda":
         pytest.skip("cuda K-offset write generates bad code")
-    if backend in ["dace:gpu"]:
-        import cupy as cp
 
-        if cp.cuda.runtime.runtimeGetVersion() < 12000:
-            pytest.skip(
-                f"{backend} backend with CUDA 11 and/or GCC 10.3 is not capable of K offset write, update CUDA/GCC if possible"
-            )
-    if backend in ["gt:gpu"]:
+    if backend in ["gt:gpu", "dace:gpu"]:
         pytest.skip(
-            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1754"
+            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1684"
         )
 
     arraylib = get_array_library(backend)
@@ -664,17 +662,6 @@ def test_K_offset_write(backend):
 def test_K_offset_write_conditional(backend):
     if backend == "cuda":
         pytest.skip("Cuda backend is not capable of K offset write")
-    if backend in ["dace:gpu"]:
-        import cupy as cp
-
-        if cp.cuda.runtime.runtimeGetVersion() < 12000:
-            pytest.skip(
-                f"{backend} backend with CUDA 11 and/or GCC 10.3 is not capable of K offset write, update CUDA/GCC if possible"
-            )
-    if backend in ["gt:gpu"]:
-        pytest.skip(
-            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1754"
-        )
 
     arraylib = get_array_library(backend)
     array_shape = (1, 1, 4)
@@ -682,7 +669,7 @@ def test_K_offset_write_conditional(backend):
 
     @gtscript.stencil(backend=backend)
     def column_physics_conditional(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
-        with computation(BACKWARD), interval(1, None):
+        with computation(BACKWARD), interval(1, -1):
             if A > 0 and B > 0:
                 A[0, 0, -1] = scalar
                 B[0, 0, 1] = A
@@ -700,6 +687,42 @@ def test_K_offset_write_conditional(backend):
         backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
     column_physics_conditional(A, B, 2.0)
+    # Manual unroll of the above
+    # Starts with
+    # - A[...] = [40, 41, 42, 43]
+    # - B[...] = [1, 1, 1, 1]
+    # Now in-stencil
+    # ITERATION k = 2 of [2:1]
+    # if condition
+    # - A[2] == 42 && B[2] == 1 => True
+    # - A[1] = 2.0
+    # - B[3] = A[2] = 42
+    # while
+    # - lev = 1
+    # - A[2] == 42 && B[2] == 1 => True
+    # - A[3] = -1
+    # - B[2] = -1
+    # - lev = 2
+    # - A[2] == 42 && B[2] == -1 => False
+    # End of iteration state
+    # - A[...] = A[40, 2.0, 2.0, -1]
+    # - B[...] = A[1, 1, -1, 42]
+    # ITERATION k = 1 of [2:1]
+    # if condition
+    # - A[1] == 2.0 && B[1] == 1 => True
+    # - A[0] = 2.0
+    # - B[2] = A[1] = 2.0
+    # while
+    # - lev = 1
+    # - A[1] == 2.0 && B[1] == 1 => True
+    # - A[2] = -1
+    # - B[1] = -1
+    # - lev = 2
+    # - A[1] == 2.0 && B[2] == -1 => False
+    # End of stencil state
+    # - A[...] = A[2.0, 2.0, -1, -1]
+    # - B[...] = A[1, -1, 2.0, 42]
+
     assert (A[0, 0, :] == arraylib.array([2, 2, -1, -1])).all()
     assert (B[0, 0, :] == arraylib.array([1, -1, 2, 42])).all()
 
@@ -743,3 +766,90 @@ def test_function_inline_in_while(backend):
     out_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
     test(in_arr, out_arr)
     assert (out_arr[:, :, :] == 388.0).all()
+
+
+def _xfail_dace_backends(param):
+    if param.values[0].startswith("dace:"):
+        marks = param.marks + [
+            pytest.mark.xfail(
+                raises=ValueError,
+                reason="Missing support in DaCe backends, see https://github.com/GridTools/gt4py/issues/1881.",
+            )
+        ]
+        # make a copy because otherwise we are operating in-place
+        return pytest.param(*param.values, marks=marks)
+    return param
+
+
+@pytest.mark.parametrize("backend", map(_xfail_dace_backends, ALL_BACKENDS))
+def test_cast_in_index(backend):
+    @gtscript.stencil(backend)
+    def cast_in_index(
+        in_field: Field[np.float64], i32: np.int32, i64: np.int64, out_field: Field[np.float64]
+    ):
+        """Simple copy stencil with forced cast in index calculation."""
+        with computation(PARALLEL), interval(...):
+            out_field = in_field[0, 0, i32 - i64]
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_read_after_write_stencil(backend):
+    """Stencil with multiple read after write access patterns."""
+
+    @gtscript.stencil(backend=backend)
+    def lagrangian_contributions(
+        q: Field[np.float64],
+        pe1: Field[np.float64],
+        pe2: Field[np.float64],
+        q4_1: Field[np.float64],
+        q4_2: Field[np.float64],
+        q4_3: Field[np.float64],
+        q4_4: Field[np.float64],
+        dp1: Field[np.float64],
+        lev: gtscript.Field[gtscript.IJ, np.int64],
+    ):
+        """
+        Args:
+            q (out):
+            pe1 (in):
+            pe2 (in):
+            q4_1 (in):
+            q4_2 (in):
+            q4_3 (in):
+            q4_4 (in):
+            dp1 (in):
+            lev (inout):
+        """
+        with computation(FORWARD), interval(...):
+            pl = (pe2 - pe1[0, 0, lev]) / dp1[0, 0, lev]
+            if pe2[0, 0, 1] <= pe1[0, 0, lev + 1]:
+                pr = (pe2[0, 0, 1] - pe1[0, 0, lev]) / dp1[0, 0, lev]
+                q = (
+                    q4_2[0, 0, lev]
+                    + 0.5 * (q4_4[0, 0, lev] + q4_3[0, 0, lev] - q4_2[0, 0, lev]) * (pr + pl)
+                    - q4_4[0, 0, lev] * 1.0 / 3.0 * (pr * (pr + pl) + pl * pl)
+                )
+            else:
+                qsum = (pe1[0, 0, lev + 1] - pe2) * (
+                    q4_2[0, 0, lev]
+                    + 0.5 * (q4_4[0, 0, lev] + q4_3[0, 0, lev] - q4_2[0, 0, lev]) * (1.0 + pl)
+                    - q4_4[0, 0, lev] * 1.0 / 3.0 * (1.0 + pl * (1.0 + pl))
+                )
+                lev = lev + 1
+                while pe1[0, 0, lev + 1] < pe2[0, 0, 1]:
+                    qsum += dp1[0, 0, lev] * q4_1[0, 0, lev]
+                    lev = lev + 1
+                dp = pe2[0, 0, 1] - pe1[0, 0, lev]
+                esl = dp / dp1[0, 0, lev]
+                qsum += dp * (
+                    q4_2[0, 0, lev]
+                    + 0.5
+                    * esl
+                    * (
+                        q4_3[0, 0, lev]
+                        - q4_2[0, 0, lev]
+                        + q4_4[0, 0, lev] * (1.0 - (2.0 / 3.0) * esl)
+                    )
+                )
+                q = qsum / (pe2[0, 0, 1] - pe2)
+            lev = lev - 1

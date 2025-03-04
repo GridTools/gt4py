@@ -11,6 +11,7 @@
 import dataclasses
 import enum
 import importlib
+from typing import Final
 
 import pytest
 
@@ -53,11 +54,17 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 
 @dataclasses.dataclass(frozen=True)
 class EmbeddedDummyBackend:
+    name: str
     allocator: next_allocators.FieldBufferAllocatorProtocol
+    executor: Final = None
 
 
-numpy_execution = EmbeddedDummyBackend(next_allocators.StandardCPUFieldBufferAllocator())
-cupy_execution = EmbeddedDummyBackend(next_allocators.StandardGPUFieldBufferAllocator())
+numpy_execution = EmbeddedDummyBackend(
+    "EmbeddedNumPy", next_allocators.StandardCPUFieldBufferAllocator()
+)
+cupy_execution = EmbeddedDummyBackend(
+    "EmbeddedCuPy", next_allocators.StandardGPUFieldBufferAllocator()
+)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
@@ -86,14 +93,18 @@ class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
 ALL = "all"
 REQUIRES_ATLAS = "requires_atlas"
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
+USES_CAN_DEREF = "uses_can_deref"
+USES_COMPOSITE_SHIFTS = "uses_composite_shifts"
 USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
 USES_FLOORDIV = "uses_floordiv"
 USES_IF_STMTS = "uses_if_stmts"
 USES_IR_IF_STMTS = "uses_ir_if_stmts"
 USES_INDEX_FIELDS = "uses_index_fields"
+USES_LIFT = "uses_lift"
 USES_NEGATIVE_MODULO = "uses_negative_modulo"
 USES_ORIGIN = "uses_origin"
+USES_REDUCE_WITH_LAMBDA = "uses_reduce_with_lambda"
 USES_SCAN = "uses_scan"
 USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
 USES_SCAN_IN_STENCIL = "uses_scan_in_stencil"
@@ -105,6 +116,10 @@ USES_SPARSE_FIELDS_AS_OUTPUT = "uses_sparse_fields_as_output"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
 USES_STRIDED_NEIGHBOR_OFFSET = "uses_strided_neighbor_offset"
 USES_TUPLE_ARGS = "uses_tuple_args"
+USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS = (
+    "uses_tuple_args_with_different_but_promotable_dims"
+)
+USES_TUPLE_ITERATOR = "uses_tuple_iterator"
 USES_TUPLE_RETURNS = "uses_tuple_returns"
 USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
@@ -127,16 +142,25 @@ COMMON_SKIP_TEST_LIST = [
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 # Markers to skip because of missing features in the domain inference
 DOMAIN_INFERENCE_SKIP_LIST = [
     (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, UNSUPPORTED_MESSAGE),
 ]
-DACE_SKIP_TEST_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
-    (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_SCAN, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
-]
+DACE_SKIP_TEST_LIST = (
+    COMMON_SKIP_TEST_LIST
+    + DOMAIN_INFERENCE_SKIP_LIST
+    + [
+        (USES_CAN_DEREF, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_COMPOSITE_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_LIFT, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_REDUCE_WITH_LAMBDA, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+        (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_TUPLE_ITERATOR, XFAIL, UNSUPPORTED_MESSAGE),
+    ]
+)
 EMBEDDED_SKIP_LIST = [
     (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
     (CHECKS_SPECIFIC_ERROR, XFAIL, UNSUPPORTED_MESSAGE),
@@ -148,6 +172,7 @@ EMBEDDED_SKIP_LIST = [
 ]
 ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 GTFN_SKIP_TEST_LIST = (
     COMMON_SKIP_TEST_LIST

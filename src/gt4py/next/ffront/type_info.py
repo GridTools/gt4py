@@ -31,7 +31,7 @@ def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
             return ts.FieldType(dims=[], dtype=type_el)
         return type_el
 
-    return type_info.type_tree_map(promote_el)(type_)
+    return type_info.type_tree_map(promote_el, type_)
 
 
 def promote_zero_dims(
@@ -169,9 +169,11 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
     --------
     >>> _scan_param_promotion(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
-    ...     ts.FieldType(dims=[common.Dimension("I")], dtype=ts.ScalarKind.FLOAT64),
+    ...     ts.FieldType(
+    ...         dims=[common.Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    ...     ),
     ... )
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 64>, shape=None))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
     """
 
     def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:
@@ -252,8 +254,8 @@ def function_signature_incompatibilities_scanop(
     # build a function type to leverage the already existing signature checking capabilities
     function_type = ts.FunctionType(
         pos_only_args=[],
-        pos_or_kw_args=promoted_params,  # type: ignore[arg-type] # dict is invariant, but we don't care here.
-        kw_only_args=promoted_kwparams,  # type: ignore[arg-type] # same as above
+        pos_or_kw_args=promoted_params,
+        kw_only_args=promoted_kwparams,
         returns=ts.DeferredType(constraint=None),
     )
 
@@ -308,5 +310,5 @@ def return_type_scanop(
     )
 
     return type_info.type_tree_map(
-        lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg))
-    )(carry_dtype)
+        lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)), carry_dtype
+    )
