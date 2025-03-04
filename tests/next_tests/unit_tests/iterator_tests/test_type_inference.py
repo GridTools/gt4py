@@ -431,7 +431,7 @@ def test_fencil_with_nb_field_input():
 
     result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
     assert result.body[0].expr.type == ts.FieldType(
-        dims=[Vertex], dtype=float64_type
+        dims=[Vertex, KDim], dtype=float64_type
     )  # TODO: is float64_type correct here?
     assert result.body[0].expr.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
         position_dims=float_vertex_k_field.dims,
