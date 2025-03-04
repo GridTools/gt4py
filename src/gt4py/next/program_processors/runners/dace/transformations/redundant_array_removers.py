@@ -674,8 +674,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         if graph.scope_dict()[a1] is not None:
             return False
 
-        # The data must have the same storage. The only case why this might be
-        #  important are device to host copies.
+        # TODO(phimuell): Relax this to only prevent host-device copies.
         if a1_desc.storage != a2_desc.storage:
             return False
 

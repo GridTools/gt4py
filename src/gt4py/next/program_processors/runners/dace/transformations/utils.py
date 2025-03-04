@@ -256,7 +256,7 @@ def is_reachable(
         if node in targets:
             return True
         seen.add(node)
-        to_visit.append(oedge.dst for oedge in state.out_edges(node) if oedge.dst not in seen)
+        to_visit.extend(oedge.dst for oedge in state.out_edges(node) if oedge.dst not in seen)
 
     return False
 
