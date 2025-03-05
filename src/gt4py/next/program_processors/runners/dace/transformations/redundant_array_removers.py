@@ -718,10 +718,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         #  For this we have to ensure that there is no connection, beside the direct
         #  one between `a1` and `a2`.
         if gtx_transformations.utils.is_reachable(
-            start=(
-                [oedge.dst for oedge in graph.out_edges(a1) if oedge.dst is not a2]
-                + [iedge.src for iedge in graph.in_edges(a1)]
-            ),
+            start=[oedge.dst for oedge in graph.out_edges(a1) if oedge.dst is not a2],
             target=a2,
             state=graph,
         ):
