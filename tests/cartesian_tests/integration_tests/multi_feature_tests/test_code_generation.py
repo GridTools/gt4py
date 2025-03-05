@@ -581,12 +581,13 @@ def test_tmp_stencil(backend):
     stencil(field_in, field_out, origin=(1, 1, 0), domain=(4, 4, 6))
 
     # the inside of the domain is 4
-    np.testing.assert_allclose(field_out.view(np.ndarray)[1:-1, 1:-1, :], 4)
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[1:-1, 1:-1, :], 4)
     # the rest is 0
-    np.testing.assert_allclose(field_out.view(np.ndarray)[0:1, :, :], 0)
-    np.testing.assert_allclose(field_out.view(np.ndarray)[-1:, :, :], 0)
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, 0:1, :], 0)
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, -1:, :], 0)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[0:1, :, :], 0)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[-1:, :, :], 0)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, 0:1, :], 0)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, -1:, :], 0)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -610,10 +611,11 @@ def test_backward_stencil(backend):
 
     stencil(field_in, field_out)
 
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 0], 5)
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 1], 4)
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 2], 3)
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 3], 2)
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, 0], 5)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, 1], 4)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, 2], 3)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, 3], 2)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -636,7 +638,8 @@ def test_while_stencil(backend):
     stencil(field_in, field_out)
 
     # the inside of the domain is 10
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], 10)
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, :], 10)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -662,7 +665,8 @@ def test_higher_dim_literal_stencil(backend):
     stencil(field_in, field_out)
 
     # the inside of the domain is 5
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], 5)
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, :], 5)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -689,7 +693,8 @@ def test_higher_dim_scalar_stencil(backend):
     stencil(field_in, field_out, 2)
 
     # the inside of the domain is 5
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], 5)
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, :], 5)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -710,8 +715,8 @@ def test_native_function_call_stencil(backend):
             out_field[0, 0, 0] = in_field[0, 0, 0] + sin(0.848062)
 
     test_stencil(field_in, field_out)
-
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], 1.75)
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, :], 1.75)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -732,8 +737,8 @@ def test_unary_operator_stencil(backend):
             out_field[0, 0, 0] = -in_field[0, 0, 0]
 
     test_stencil(field_in, field_out)
-
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, :], -1)
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, :], -1)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -756,8 +761,9 @@ def test_ternary_operator_stencil(backend):
 
     test_stencil(field_in, field_out)
 
-    np.testing.assert_allclose(field_out.view(np.ndarray)[0, 0, 1], 20)
-    np.testing.assert_allclose(field_out.view(np.ndarray)[1:, 1:, 1], 2)
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[0, 0, 1], 20)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[1:, 1:, 1], 2)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -783,7 +789,8 @@ def test_mask_stencil(backend):
 
     test_stencil(field_in, field_out)
 
-    assert np.all(field_out.view(np.ndarray) > 0)
+    cpu_output = storage_utils.cpu_copy(field_out)
+    assert np.all(cpu_output.view(np.ndarray) > 0)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -808,7 +815,8 @@ def test_k_offset_stencil(backend):
 
     test_stencil(field_in, field_out, offset)
 
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 1], 10)
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, 1], 10)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -834,7 +842,8 @@ def test_k_offset_field_stencil(backend):
 
     test_stencil(field_in, field_out, field_idx)
 
-    np.testing.assert_allclose(field_out.view(np.ndarray)[:, :, 1], 10)
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, 1], 10)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -858,7 +867,8 @@ def test_k_only_access_stencil(backend):
 
     test_stencil(field_in, field_out)
 
-    np.testing.assert_allclose(field_out.view(np.ndarray)[1, 1, :], [3, 2, 3, 4])
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[1, 1, :], [3, 2, 3, 4])
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -882,7 +892,8 @@ def test_table_access_stencil(backend):
 
     test_stencil(table_view, field_out)
 
-    np.testing.assert_allclose(field_out.view(np.ndarray)[1, 1, :], [3, 4, 4, 4])
+    cpu_output = storage_utils.cpu_copy(field_out)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[1, 1, :], [3, 4, 4, 4])
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
