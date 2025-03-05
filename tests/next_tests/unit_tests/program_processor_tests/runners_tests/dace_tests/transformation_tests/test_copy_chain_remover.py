@@ -259,6 +259,38 @@ def _make_possible_cyclic_sdfg() -> dace.SDFG:
     return sdfg
 
 
+def _make_a1_has_output_sdfg() -> dace.SDFG:
+    """Here `a1` has an output degree of 2, one to `a2` and one to another output."""
+    sdfg = dace.SDFG(util.unique_name("a1_has_an_additional_output_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # All other arrays have a size of 10.
+    anames = ["i1", "i2", "i3", "a1", "a2", "o1", "o2"]
+    def_array_size = 10
+    asizes = {"a1": 20, "a2": 30, "o2": 30}
+    for name in anames:
+        sdfg.add_array(
+            name=name,
+            shape=(asizes.get(name, def_array_size),),
+            dtype=dace.float64,
+            transient=name[0] == "a",
+        )
+    a1, a2 = (state.add_access("a1"), state.add_access("a2"))
+
+    state.add_nedge(state.add_access("i1"), a1, dace.Memlet("i1[0:10] -> [0:10]"))
+    state.add_nedge(state.add_access("i2"), a1, dace.Memlet("i2[0:10] -> [10:20]"))
+
+    state.add_nedge(a1, state.add_access("o1"), dace.Memlet("a1[5:15] -> [0:10]"))
+
+    state.add_nedge(state.add_access("i3"), a2, dace.Memlet("i3[0:10] -> [0:10]"))
+    state.add_nedge(a1, a2, dace.Memlet("a1[0:20] -> [10:30]"))
+
+    state.add_nedge(a2, state.add_access("o2"), dace.Memlet("a2[0:30] -> [0:30]"))
+
+    sdfg.validate()
+    return sdfg
+
+
 def test_simple_linear_chain():
     sdfg = _make_simple_linear_chain_sdfg()
 
@@ -362,3 +394,39 @@ def test_possible_cyclic_sdfg():
     assert len(acnodes) == 3
     assert nb_applies == 1
     assert "o1" not in acnodes
+
+
+def test_a1_additional_output():
+    sdfg = _make_a1_has_output_sdfg()
+
+    # Make the input
+    ref = {
+        "i1": np.array(np.random.rand(10), dtype=np.float64, copy=True),
+        "i2": np.array(np.random.rand(10), dtype=np.float64, copy=True),
+        "i3": np.array(np.random.rand(10), dtype=np.float64, copy=True),
+        "o1": np.zeros(10, dtype=np.float64),
+        "o2": np.zeros(30, dtype=np.float64),
+    }
+    res = copy.deepcopy(ref)
+
+    csdfg_ref = sdfg.compile()
+    csdfg_ref(**ref)
+
+    # Apply the transformation.
+    #  The transformation removes `a1` and `a2`.
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+
+    # Perform the tests.
+    acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
+        sdfg, dace_nodes.AccessNode, return_nodes=True
+    )
+    assert len(acnodes) == 5
+    assert nb_applies == 2
+    assert not any(acnode.data.startswith("a") for acnode in acnodes)
+
+    # Now run the SDFG, which is essentially to check if the subsets were handled
+    #  correctly. This is especially important for `o1` which is composed of both
+    #  `i1` and `i2`.
+    csdfg_res = sdfg.compile()
+    csdfg_res(**res)
+    assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
