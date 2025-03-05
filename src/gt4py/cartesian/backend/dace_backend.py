@@ -31,6 +31,7 @@ from gt4py.cartesian.backend.gtc_common import (
 )
 from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
 from gt4py.cartesian.gtc import common, gtir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.oir_to_dace import OirSDFGBuilder
 from gt4py.cartesian.gtc.dace.transformations import (
@@ -119,8 +120,6 @@ def _set_expansion_orders(sdfg: dace.SDFG):
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
-    import gt4py.cartesian.gtc.dace.daceir as dcir  # avoid circular import
-
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
     ):
