@@ -717,6 +717,8 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         # We have to ensure that no cycle is created through the removal of `a1`.
         #  For this we have to ensure that there is no connection, beside the direct
         #  one between `a1` and `a2`.
+        # NOTE: We only check the outgoing edges of `a1`, it is not needed to also
+        #   check the incoming edges, because this will not create a cycle.
         if gtx_transformations.utils.is_reachable(
             start=[oedge.dst for oedge in graph.out_edges(a1) if oedge.dst is not a2],
             target=a2,
