@@ -900,7 +900,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         #  in both cases the offset is the same.
         if new_memlet.data == a1.data:
             new_memlet.data = a2.data
-            new_memlet.subset = current_subset.offset_new(a2_offsets, negative=True)
+            new_memlet.subset = current_subset.offset_new(a2_offsets, negative=False)
         else:
             new_memlet.other_subset = current_subset.offset_new(a2_offsets, negative=False)
 
