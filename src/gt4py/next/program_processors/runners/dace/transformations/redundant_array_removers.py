@@ -785,6 +785,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                 current_edge=producer_edge,
                 a2_offsets=a2_offsets,
                 state=graph,
+                sdfg=sdfg,
                 a1=a1,
                 a2=a2,
             )
@@ -813,6 +814,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                 current_edge=consumer_edge,
                 a2_offsets=a2_offsets,
                 state=graph,
+                sdfg=sdfg,
                 a1=a1,
                 a2=a2,
             )
@@ -849,6 +851,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         current_edge: dace_graph.MultiConnectorEdge,
         a2_offsets: Sequence[dace_sym.SymExpr],
         state: dace.SDFGState,
+        sdfg: dace.SDFG,
         a1: dace_nodes.AccessNode,
         a2: dace_nodes.AccessNode,
     ) -> dace_graph.MultiConnectorEdge:
@@ -879,6 +882,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             a2_offsets: Offset that describes how much to shift writes and reads,
                 that were previously associated with `a1`.
             state: The state in which we operate.
+            sdfg: The SDFG on which we operate on.
             a1: The `a1` node.
             a2: The `a2` node.
 
@@ -898,7 +902,14 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             new_dst = current_edge.dst
             new_dst_conn = current_edge.dst_conn
             assert current_edge.src_conn is None
-        assert current_subset is not None
+
+        # If the subset we care about, which is always on the `a1` side, was not
+        #  specified we assume that the whole `a1` has been written.
+        # TODO(edopao): Fix lowering that this does not happens, it happens for example
+        #  in `tests/next_tests/integration_tests/feature_tests/ffront_tests/
+        #  test_execution.py::test_docstring`.
+        if current_subset is None:
+            current_subset = dace_sbs.Range.from_array(a1.desc(sdfg))
 
         # This is the new Memlet, that we will use. We copy it from the original
         #  Memlet and modify it later.
@@ -909,9 +920,11 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         #  in both cases the offset is the same.
         if new_memlet.data == a1.data:
             new_memlet.data = a2.data
-            new_memlet.subset = current_subset.offset_new(a2_offsets, negative=False)
+            new_subset = current_subset.offset_new(a2_offsets, negative=False)
+            new_memlet.subset = new_subset
         else:
-            new_memlet.other_subset = current_subset.offset_new(a2_offsets, negative=False)
+            new_subset = current_subset.offset_new(a2_offsets, negative=False)
+            new_memlet.other_subset = new_subset
 
         new_edge = state.add_edge(
             new_src,
@@ -919,6 +932,11 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             new_dst,
             new_dst_conn,
             new_memlet,
+        )
+        assert (  # Ensure that the edge has the right direction.
+            new_subset is new_edge.data.dst_subset
+            if is_producer_edge
+            else new_subset is new_edge.data.src_subset
         )
         return new_edge
 
