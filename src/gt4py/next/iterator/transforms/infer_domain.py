@@ -14,7 +14,7 @@ import typing
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Callable, Optional, TypeAlias, Unpack
-from gt4py.next import common
+from gt4py.next import common, utils as gtx_utils
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -22,6 +22,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import trace_shifts
+from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.utils import flatten_nested_tuple, tree_map
 
@@ -125,10 +126,10 @@ def _canonicalize_domain_structure(
     ... )
     True
     """
-    if d1 is DomainAccessDescriptor.NEVER and isinstance(d2, tuple):
-        return _canonicalize_domain_structure((DomainAccessDescriptor.NEVER,) * len(d2), d2)
-    if d2 is DomainAccessDescriptor.NEVER and isinstance(d1, tuple):
-        return _canonicalize_domain_structure(d1, (DomainAccessDescriptor.NEVER,) * len(d1))
+    if not isinstance(d1, tuple) and isinstance(d2, tuple):
+        return _canonicalize_domain_structure((d1,) * len(d2), d2)
+    if not isinstance(d2, tuple) and isinstance(d1, tuple):
+        return _canonicalize_domain_structure(d1, (d2,) * len(d1))
     if isinstance(d1, tuple) and isinstance(d2, tuple):
         return tuple(
             zip(
@@ -436,9 +437,18 @@ def infer_expr(
       domain they are accessed at.
     """
 
-    domain = _restrict_domain(
-        domain, expr.type.dims if not isinstance(expr.type, ts.ScalarType) else []
+    itir_type_inference.reinfer(
+        expr, offset_provider_type=common.offset_provider_to_type(offset_provider)
     )
+    domain, el_types = _canonicalize_domain_structure(
+        domain,
+        gtx_utils.tree_map(collection_type=ts.TupleType, result_collection_constructor=tuple)(
+            lambda x: x
+        )(expr.type),
+    )
+    domain = gtx_utils.tree_map(
+        lambda d, t: _restrict_domain(d, t.dims if not isinstance(t, ts.ScalarType) else [])
+    )(domain, el_types)
 
     expr, accessed_domains = _infer_expr(
         expr,

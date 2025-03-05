@@ -394,7 +394,9 @@ class ITIRTypeInference(eve.NodeTranslator):
         return node
 
     @classmethod
-    def apply_reinfer(cls, node: T) -> T:
+    def apply_reinfer(
+        cls, node: T, *, offset_provider_type: Optional[common.OffsetProviderType] = None
+    ) -> T:
         """
         Given a partially typed node infer the type of ``node`` and its sub-nodes.
 
@@ -406,12 +408,16 @@ class ITIRTypeInference(eve.NodeTranslator):
 
         Arguments:
             node: The :class:`itir.Node` to infer the types of.
+            offset_provider_type: Offset provider dictionary.
         """
         if node.type:  # already inferred
             return node
 
         instance = cls(
-            offset_provider_type=None, dimensions=None, allow_undeclared_symbols=True, reinfer=True
+            offset_provider_type=offset_provider_type,
+            dimensions=None,
+            allow_undeclared_symbols=True,
+            reinfer=True,
         )
         instance.visit(node, ctx=_INITIAL_CONTEXT)
         return node
