@@ -780,7 +780,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         for producer_edge in list(graph.in_edges(a1)):
             producer: dace_nodes.Node = producer_edge.src
             producer_conn = producer_edge.src_conn
-            self._reroute_edge(
+            new_producer_edge = self._reroute_edge(
                 is_producer_edge=True,
                 current_edge=producer_edge,
                 a2_offsets=a2_offsets,
@@ -791,7 +791,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             if (producer, producer_conn) not in reconfigured_neighbour:
                 self._reconfigure_dataflow(
                     is_producer_edge=True,
-                    new_edge=producer_edge,
+                    new_edge=new_producer_edge,
                     sdfg=sdfg,
                     state=graph,
                     a2_offsets=a2_offsets,
@@ -808,7 +808,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             if consumer is a2:
                 assert consumer_edge is a1_to_a2_edge
                 continue
-            self._reroute_edge(
+            new_consumer_edge = self._reroute_edge(
                 is_producer_edge=False,
                 current_edge=consumer_edge,
                 a2_offsets=a2_offsets,
@@ -819,7 +819,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             if (consumer, consumer_conn) not in reconfigured_neighbour:
                 self._reconfigure_dataflow(
                     is_producer_edge=False,
-                    new_edge=consumer_edge,
+                    new_edge=new_consumer_edge,
                     sdfg=sdfg,
                     state=graph,
                     a2_offsets=a2_offsets,
@@ -832,6 +832,16 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         #  this will also remove all the old edges.
         graph.remove_node(a1)
         sdfg.remove_data(a1.data, validate=False)
+
+        # We will now propagate the strides starting from the access nodes `a2`.
+        #  Essentially, this will replace the strides from `a1` with the ones of
+        #  `a2`. We do it outside to make sure that we do not forget a case and
+        #  that we propagate the change into every NestedSDFG only once.
+        gtx_transformations.gt_propagate_strides_from_access_node(
+            sdfg=sdfg,
+            state=graph,
+            outer_node=a2,
+        )
 
     def _reroute_edge(
         self,
@@ -938,6 +948,9 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         It is important that it is the caller's responsibility to ensure that this
         function is not called multiple times on the same producer target.
 
+        It is important that this function will not propagate the new strides. This
+        must be done from the outside.
+
         Args:
             is_producer_edge: If `True` then the source of `new_edge` is processed,
                 if `False` then the destination part of `new_edge` is processed.
@@ -967,9 +980,11 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             #  modify the subsets, depending on the direction of the new edge either
             #  the source or destination subset.
             # NOTE: Because we assume that `a1` is read fully into `a2` we do not
-            #  have to adjust the ranges of the Map. If we would drop this assumption
-            #  then we would have to modify the ranges such that only the ranges we
-            #  need are computed.
+            #   have to adjust the ranges of the Map. If we would drop this assumption
+            #   then we would have to modify the ranges such that only the ranges we
+            #   need are computed.
+            # NOTE: Also for this case we have to propagate the strides, for the case
+            #   that a NestedSDFG is inside the map, but this is done externally.
             assert (
                 isinstance(other_node, dace_nodes.MapExit)
                 if is_producer_edge
@@ -989,27 +1004,11 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                 subset_to_adjust.offset(a2_offsets, negative=False)
 
         elif isinstance(other_node, dace_nodes.NestedSDFG):
-            # This is very similar than the AccessNode case, however, we must modify
-            #  the strides on the inside of the NestedSDFG, because they have to be
-            #  aligned with the ones on the outside. Because we now write into a
-            #  different memory region, with potentially different strides, we have to
-            #  modify the strides on the inside.
+            # We have obviously to adjust the strides, however, this is done outside
+            #  this function.
             # TODO(phimuell): Look into the implication that we not necessarily pass
             #  the full array, but essentially slice a bit.
-            if is_producer_edge:
-                gtx_transformations.gt_map_strides_to_src_nested_sdfg(
-                    sdfg=sdfg,
-                    state=state,
-                    edge=new_edge,
-                    outer_node=a2,
-                )
-            else:
-                gtx_transformations.gt_map_strides_to_dst_nested_sdfg(
-                    sdfg=sdfg,
-                    state=state,
-                    edge=new_edge,
-                    outer_node=a2,
-                )
+            pass
 
         else:
             # As we encounter them we should handle them case by case.
