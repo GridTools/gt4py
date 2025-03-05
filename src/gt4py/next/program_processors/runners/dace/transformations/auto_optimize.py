@@ -125,6 +125,8 @@ def gt_auto_optimize(
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
 
+    # TODO(phimuell): Should we propagate all the strides just to be sure?
+
     with dace.config.temporary_config():
         dace.Config.set("optimizer", "match_exception", value=True)
         dace.Config.set("store_history", value=False)
