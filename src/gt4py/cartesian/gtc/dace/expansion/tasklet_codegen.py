@@ -56,21 +56,25 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         res = dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])
         return str(res)
 
+    def _explicit_indexing(
+        self, node: common.CartesianOffset | dcir.VariableKOffset, **kwargs: Any
+    ) -> str:
+        """If called from the explicit pass we need to be add manually the relative indexing"""
+        return f"__k+{self.visit(node.k, **kwargs)}"
+
     def visit_CartesianOffset(
         self, node: common.CartesianOffset, explicit=False, **kwargs: Any
     ) -> str:
-        # If called from the explicit pass we need to be add manually the relative indexing
         if explicit:
-            return f"__k+{self.visit(node.k, **kwargs)}"
+            return self._explicit_indexing(node, **kwargs)
 
         return self._visit_offset(node, **kwargs)
 
     def visit_VariableKOffset(
         self, node: dcir.VariableKOffset, explicit=False, **kwargs: Any
     ) -> str:
-        # If called from the explicit pass we need to be add manually the relative indexing
         if explicit:
-            return f"__k+{self.visit(node.k, **kwargs)}"
+            return self._explicit_indexing(node, **kwargs)
 
         return self._visit_offset(node, **kwargs)
 
