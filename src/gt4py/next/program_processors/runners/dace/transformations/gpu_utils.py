@@ -271,10 +271,14 @@ def _gt_expand_non_standard_memlets_sdfg(
                 None, sdfg, state, e, a, b
             )
             dims = len(copy_shape)
+            ignore_strides = False
+
             if dims == 1:
                 continue
             elif dims == 2:
-                if src_strides[-1] != 1 or dst_strides[-1] != 1:
+                if src_strides[0] != copy_shape[1] or dst_strides[0] != copy_shape[1]:
+                    ignore_strides = True
+                elif src_strides[-1] != 1 or dst_strides[-1] != 1:
                     try:
                         is_src_cont = src_strides[0] / src_strides[1] == copy_shape[1]
                         is_dst_cont = dst_strides[0] / dst_strides[1] == copy_shape[1]
@@ -286,7 +290,11 @@ def _gt_expand_non_standard_memlets_sdfg(
                 else:
                     continue
             elif dims > 2:
-                if not (src_strides[-1] != 1 or dst_strides[-1] != 1):
+                if any(src_strides[i] != copy_shape[i + 1] for i in range(dims - 1)) or any(
+                    dst_strides[i] != copy_shape[i + 1] for i in range(dims - 1)
+                ):
+                    ignore_strides = True
+                elif not (src_strides[-1] != 1 or dst_strides[-1] != 1):
                     continue
 
             # For identifying the new map, we first store all neighbors of `a`.
@@ -297,7 +305,12 @@ def _gt_expand_non_standard_memlets_sdfg(
             # Turn unsupported copy to a map
             try:
                 dace_transformation.dataflow.CopyToMap.apply_to(
-                    sdfg, save=False, annotate=False, a=a, b=b
+                    sdfg,
+                    save=False,
+                    annotate=False,
+                    a=a,
+                    b=b,
+                    options={"ignore_strides": ignore_strides},
                 )
             except ValueError:  # If transformation doesn't match, continue normally
                 continue
