@@ -110,9 +110,10 @@ class SymbolicDomain:
                 assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
                 current_dim = nbt_provider
                 # cartesian offset
-                new_ranges[current_dim] = SymbolicRange.translate(
-                    self.ranges[current_dim], val.value
-                )
+                if current_dim in new_ranges.keys(): # TODO: temporary solution
+                    new_ranges[current_dim] = SymbolicRange.translate(
+                        self.ranges[current_dim], val.value
+                    )
             elif common.is_neighbor_connectivity(nbt_provider):
                 # unstructured shift
                 assert (

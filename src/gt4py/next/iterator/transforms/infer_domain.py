@@ -164,12 +164,13 @@ def _extract_accessed_domains(
     target_domain: NonTupleDomainAccess,
     offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str]],
+    input_types: list[ts.TypeSpec],
 ) -> dict[str, NonTupleDomainAccess]:
     accessed_domains: dict[str, NonTupleDomainAccess] = {}
 
     shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(input_ids))
 
-    for in_field_id, shifts_list in zip(input_ids, shifts_results, strict=True):
+    for in_field_id, shifts_list in zip(input_ids, input_types, shifts_results, strict=True):
         # TODO(tehrengruber): Dynamic shifts are not supported by `SymbolicDomain.translate`. Use
         #  special `UNKNOWN` marker for them until we have implemented a proper solution.
         if any(s == trace_shifts.Sentinel.VALUE for shift in shifts_list for s in shift):
@@ -189,6 +190,18 @@ def _extract_accessed_domains(
         )
 
     return accessed_domains
+
+
+def _restrict_domain(
+    in_field_domain: NonTupleDomainAccess, dims: list[common.Dimension]
+) -> NonTupleDomainAccess:
+    if isinstance(in_field_domain, domain_utils.SymbolicDomain):
+        cleaned_dims = {}
+        for dim, range_ in in_field_domain.ranges.items():
+            if dim in dims:
+                cleaned_dims[dim] = range_
+        return domain_utils.SymbolicDomain(grid_type=in_field_domain.grid_type, ranges=cleaned_dims)
+    return in_field_domain
 
 
 def _infer_as_fieldop(
@@ -215,6 +228,7 @@ def _infer_as_fieldop(
     assert not isinstance(stencil, itir.Lambda) or len(stencil.params) == len(applied_fieldop.args)
 
     input_ids: list[str] = []
+    input_types: list[ts.TypeSpec] = []
 
     # Assign ids for all inputs to `as_fieldop`. `SymRef`s stay as is, nested `as_fieldop` get a
     # temporary id.
@@ -227,30 +241,16 @@ def _infer_as_fieldop(
         else:
             raise ValueError(f"Unsupported expression of type '{type(in_field)}'.")
         input_ids.append(id_)
+        input_types.append(in_field.type)
 
     inputs_accessed_domains: dict[str, NonTupleDomainAccess] = _extract_accessed_domains(
-        stencil, input_ids, target_domain, offset_provider, symbolic_domain_sizes
+        stencil, input_ids, target_domain, offset_provider, symbolic_domain_sizes, input_types
     )
-
-    assert input_ids == list(
-        inputs_accessed_domains.keys()
-    )  # Sanity check: ordering must be maintained
-    for (in_field_id, in_field_domain), arg in zip(
-        inputs_accessed_domains.items(), applied_fieldop.args
-    ):
-        if not isinstance(arg.type, ts.FieldType):
-            continue
-        cleaned_dims = {}
-        for dim, range_ in in_field_domain.ranges.items():
-            if isinstance(arg.type, ts.FieldType):
-                if dim in arg.type.dims:
-                    cleaned_dims[dim] = range_
-        inputs_accessed_domains[in_field_id].ranges = cleaned_dims
 
     # Recursively infer domain of inputs and update domain arg of nested `as_fieldop`s
     accessed_domains: AccessedDomains = {}
     transformed_inputs: list[itir.Expr] = []
-    for in_field_id, in_field in zip(input_ids, inputs):
+    for in_field_id, in_field in zip(input_ids, inputs, strict=True):
         transformed_input, accessed_domains_tmp = infer_expr(
             in_field,
             inputs_accessed_domains[in_field_id],
@@ -435,6 +435,11 @@ def infer_expr(
       having a domain argument now, and a dictionary mapping symbol names referenced in `expr` to
       domain they are accessed at.
     """
+
+    domain = _restrict_domain(
+        domain, expr.type.dims if not isinstance(expr.type, ts.ScalarType) else []
+    )
+
     expr, accessed_domains = _infer_expr(
         expr,
         domain,

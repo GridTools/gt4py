@@ -369,20 +369,19 @@ def as_fieldop(
                     assert domain is not None
                 else:
                     output_dims = set()
+                    shifts_results = trace_shifts.trace_stencil(
+                        node, num_args=len(fields)
+                    )  # TODO: access node differently?
                     for i, field in enumerate(new_fields):
-                        input_dims = common.promote_dims(
-                            *[field.dims if isinstance(field, ts.FieldType) else []]
-                        )
-                        shifts_results = trace_shifts.trace_stencil(
-                            node, num_args=len(fields)
-                        )  # TODO: access node differently?
+                        for el in type_info.primitive_constituents(field):
+                            input_dims = el.dims if isinstance(el, ts.FieldType) else []
+                            for shift_tuple in shifts_results[
+                                i
+                            ]:  # Use shift tuple corresponding to the input field
+                                for input_dim in input_dims:
+                                    output_dims.add(_resolve_shift(input_dim, shift_tuple))
 
-                        for shift_tuple in shifts_results[
-                            i
-                        ]:  # Use shift tuple corresponding to the input field
-                            for input_dim in input_dims:
-                                output_dims.add(_resolve_shift(input_dim, shift_tuple))
-                    output_dims_sorted = common.ordered_dims(output_dims)
+                    output_dims_sorted = common.ordered_dims(output_dims)  # TODO: use promote_dims
                     deduced_domain = it_ts.DomainType(dims=list(output_dims_sorted))
 
         if deduced_domain:
