@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
 import dace
@@ -290,9 +291,10 @@ def _gt_expand_non_standard_memlets_sdfg(
                 else:
                     continue
             elif dims > 2:
-                if any(src_strides[i] != copy_shape[i + 1] for i in range(dims - 1)) or any(
-                    dst_strides[i] != copy_shape[i + 1] for i in range(dims - 1)
-                ):
+                copy_size = [
+                    functools.reduce(lambda x, y: x * y, copy_shape[i:], 1) for i in range(1, dims)
+                ]
+                if src_strides[: dims - 1] != copy_size or dst_strides[: dims - 1] != copy_shape:
                     ignore_strides = True
                 elif not (src_strides[-1] != 1 or dst_strides[-1] != 1):
                     continue
