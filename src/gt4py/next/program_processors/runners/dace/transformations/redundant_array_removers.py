@@ -673,10 +673,6 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         if not self.is_single_use_data(sdfg, a1):
             return False
 
-        # TODO(phimuell): Lift this.
-        if graph.out_degree(a1) != 1:
-            return False
-
         # We only allow that we operate on the top level scope.
         if graph.scope_dict()[a1] is not None:
             return False
@@ -686,7 +682,13 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             return False
 
         # There shall only be one edge connecting `a1` and `a2`.
-        connecting_edges = [oedge for oedge in graph.out_edges(a1) if oedge.dst is a2]
+        #  We even strengthen this requirement by not checking for the node `a2`,
+        #  but for the data.
+        connecting_edges = [
+            oedge
+            for oedge in graph.out_edges(a1)
+            if isinstance(oedge.dst, dace_nodes.AccessNode) and (oedge.dst.data == a2.data)
+        ]
         if len(connecting_edges) != 1:
             return False
 
@@ -716,7 +718,10 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         #  For this we have to ensure that there is no connection, beside the direct
         #  one between `a1` and `a2`.
         if gtx_transformations.utils.is_reachable(
-            start=[oedge.dst for oedge in graph.out_edges(a1) if oedge.dst is not a2],
+            start=(
+                [oedge.dst for oedge in graph.out_edges(a1) if oedge.dst is not a2]
+                + [iedge.src for iedge in graph.in_edges(a1)]
+            ),
             target=a2,
             state=graph,
         ):
@@ -746,16 +751,18 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
     ) -> None:
         a1: dace_nodes.AccessNode = self.node_a1
         a2: dace_nodes.AccessNode = self.node_a2
-        a1_to_a2_edge: dace_graph.MultiConnectorEdge = next(iter(graph.out_edges(a1)))
+        a1_to_a2_edge: dace_graph.MultiConnectorEdge = next(
+            oedge for oedge in graph.out_edges(a1) if oedge.dst is a2
+        )
         a1_to_a2_memlet: dace.Memlet = a1_to_a2_edge.data
         a1_to_a2_dst_subset: dace_sbs.Range = a1_to_a2_memlet.get_dst_subset(a1_to_a2_edge, graph)
 
-        # Note that it is possible that `a1` is connected to the same source multiple
+        # Note that it is possible that `a1` is connected to the same node multiple
         #  times, although through different edges. We have to modify the data
-        #  flow of the sources/producer, since the offsets and that dat has changed,
-        #  but we must do that only once. Note that only matching the node is not
-        #  enough, a counter example would be a Map with different connector names.
-        reconfigured_producer: set[tuple[dace_nodes.Node, Optional[str]]] = set()
+        #  flow there, since the offsets and that dat has changed. However, we must
+        #  do this only once. Note that only matching the node is not enough, a
+        #  counter example would be a Map with different connector names.
+        reconfigured_neighbour: set[tuple[dace_nodes.Node, Optional[str]]] = set()
 
         # Now we compose the new subset.
         #  We build on the fact that we have ensured that the whole array `a1` is
@@ -770,168 +777,243 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         #   to modify this computation slightly.
         a2_offsets: Sequence[dace_sym.SymExpr] = a1_to_a2_dst_subset.min_element()
 
+        # Handle the producer side of things.
         for producer_edge in list(graph.in_edges(a1)):
             producer: dace_nodes.Node = producer_edge.src
-            producer_conn: Optional[str] = producer_edge.src_conn
-            self._rerout_producer_edge(
-                producer_edge=producer_edge,
+            producer_conn = producer_edge.src_conn
+            self._reroute_edge(
+                is_producer_edge=True,
+                current_edge=producer_edge,
                 a2_offsets=a2_offsets,
                 state=graph,
                 a1=a1,
                 a2=a2,
             )
-            if (producer, producer_conn) not in reconfigured_producer:
-                self._reconfigure_producer_node(
-                    producer_edge=producer_edge,
+            if (producer, producer_conn) not in reconfigured_neighbour:
+                self._reconfigure_dataflow(
+                    is_producer_edge=True,
+                    new_edge=producer_edge,
                     sdfg=sdfg,
                     state=graph,
                     a2_offsets=a2_offsets,
                     a1=a1,
                     a2=a2,
                 )
-            reconfigured_producer.add((producer, producer_conn))
+                reconfigured_neighbour.add((producer, producer_conn))
 
-        # After everything has been rerouted we can remove `a1`, with it all the old
-        #  edges are vanishing too.
+        # Handle the consumer side of things, as they now have to read from `a2`.
+        #  It is important that the offset is still the same.
+        for consumer_edge in list(graph.out_edges(a1)):
+            consumer: dace_nodes.Node = consumer_edge.dst
+            consumer_conn = consumer_edge.dst_conn
+            if consumer is a2:
+                assert consumer_edge is a1_to_a2_edge
+                continue
+            self._reroute_edge(
+                is_producer_edge=False,
+                current_edge=consumer_edge,
+                a2_offsets=a2_offsets,
+                state=graph,
+                a1=a1,
+                a2=a2,
+            )
+            if (consumer, consumer_conn) not in reconfigured_neighbour:
+                self._reconfigure_dataflow(
+                    is_producer_edge=False,
+                    new_edge=consumer_edge,
+                    sdfg=sdfg,
+                    state=graph,
+                    a2_offsets=a2_offsets,
+                    a1=a1,
+                    a2=a2,
+                )
+                reconfigured_neighbour.add((consumer, consumer_conn))
+
+        # After the rerouting we have to delete the `a1` data node and descriptor,
+        #  this will also remove all the old edges.
         graph.remove_node(a1)
         sdfg.remove_data(a1.data, validate=False)
 
-    def _rerout_producer_edge(
+    def _reroute_edge(
         self,
-        producer_edge: dace_graph.MultiConnectorEdge,
+        is_producer_edge: bool,
+        current_edge: dace_graph.MultiConnectorEdge,
         a2_offsets: Sequence[dace_sym.SymExpr],
         state: dace.SDFGState,
         a1: dace_nodes.AccessNode,
         a2: dace_nodes.AccessNode,
     ) -> dace_graph.MultiConnectorEdge:
-        """Performs the rerouting of the producer edge.
+        """Performs the rerouting of the edge.
 
-        Essentially the function will create a new edge between `producer_edge.src`,
-        (which is assumed to end in `a1`) and `a2`. It will compute the `dst_subset`
-        of the new edge, such that the data is written to the same location as it
-        would have been if it had first written into `a1` and then copied into `a2`.
+        Essentially the function creates new edges that account for the fact that
+        `a1` will be replaced with `a2`. Depending on the value of `is_producer_edge`
+        the behaviour is slightly different.
+
+        If `is_producer_edge` is `True` then the function assumes that `current_edge`
+        ends at `a1`. It will then create a new edge that has the same start and a
+        similar Memlet but ends at `a2`.
+        If `is_producer_edge` is `False` then the function assumes that `current_edge`
+        starts at `a1`. It will then create a new edge that starts at `a2` but has the
+        same destination and a similar Memlet.
+        In both cases the Memlet and the corresponding subset, will be modified such
+        that they account that `a1` was replaced with `a2`.
 
         It is important that the function will **not** do the following things:
         - Remove the old edge, i.e. `producer_edge`.
-        - Modify the data flow in the producer region, i.e. `producer_edge.src`.
+        - Modify the data flow at the other side of the edge.
 
-        The function returns the new producer edge.
+        The function returns the new edge.
 
         Args:
-            producer_edge: The current edge that ends in `a1` and should be replaced.
-            a2_offsets: Offset that describes how much to shift writes, that were
-                previously going into `a1` but should no go into `a2`.
+            is_producer_edge: Indicates how to interpret `current_edge`.
+            current_edge: The current edge that should be replaced.
+            a2_offsets: Offset that describes how much to shift writes and reads,
+                that were previously associated with `a1`.
             state: The state in which we operate.
             a1: The `a1` node.
             a2: The `a2` node.
 
-        TODO:
-            - Handle the case where multiple `old_edge` lead to the new node.
         """
-
-        producer_memlet: dace.Memlet = producer_edge.data
-        # This is the subset in which the producer write into `a2`.
-        producer_dst_subset: dace_sbs.Range = producer_memlet.get_dst_subset(producer_edge, state)
-        assert producer_dst_subset is not None
-
-        # This is the new Memlet, that connects the source with `a2`.
-        #  We copy it from the original Memlet and modify it later.
-        new_producer_memlet: dace.Memlet = dace.Memlet.from_memlet(producer_memlet)
-
-        if new_producer_memlet.data == a1.data:
-            new_producer_memlet.data = a2.data
-            new_producer_memlet.subset = producer_dst_subset.offset_new(a2_offsets, negative=False)
+        current_memlet: dace.Memlet = current_edge.data
+        if is_producer_edge:
+            current_subset: dace_sbs.Range = current_memlet.get_dst_subset(current_edge, state)
+            new_src = current_edge.src
+            new_src_conn = current_edge._src_conn
+            new_dst = a2
+            new_dst_conn = None
+            assert current_edge.dst_conn is None
         else:
-            new_producer_memlet.other_subset = producer_dst_subset.offset_new(
-                a2_offsets, negative=False
-            )
+            current_subset = current_memlet.get_src_subset(current_edge, state)
+            new_src = a2
+            new_src_conn = None
+            new_dst = current_edge.dst
+            new_dst_conn = current_edge.dst_conn
+            assert current_edge.src_conn is None
+        assert current_subset is not None
 
-        # Add a new edge between the producer and `a2`. It is important that we do
-        #  not remove the old producer edge, nor do we modify the producer data flow.
-        new_producer_edge = state.add_edge(
-            producer_edge.src,
-            producer_edge.src_conn,
-            a2,
-            producer_edge.dst_conn,
-            new_producer_memlet,
+        # This is the new Memlet, that we will use. We copy it from the original
+        #  Memlet and modify it later.
+        new_memlet: dace.Memlet = dace.Memlet.from_memlet(current_memlet)
+
+        # Because we operate on the `subset` and `other_subset` properties directly
+        #  we do not need to distinguish between the different directions. Also
+        #  in both cases the offset is the same.
+        if new_memlet.data == a1.data:
+            new_memlet.data = a2.data
+            new_memlet.subset = current_subset.offset_new(a2_offsets, negative=True)
+        else:
+            new_memlet.other_subset = current_subset.offset_new(a2_offsets, negative=False)
+
+        new_edge = state.add_edge(
+            new_src,
+            new_src_conn,
+            new_dst,
+            new_dst_conn,
+            new_memlet,
         )
-        assert new_producer_memlet.src_subset is new_producer_memlet.src_subset
-        return new_producer_edge
+        return new_edge
 
-    def _reconfigure_producer_node(
+    def _reconfigure_dataflow(
         self,
-        producer_edge: dace_graph.MultiConnectorEdge,
+        is_producer_edge: bool,
+        new_edge: dace_graph.MultiConnectorEdge,
         a2_offsets: Sequence[dace_sym.SymExpr],
         state: dace.SDFGState,
         sdfg: dace.SDFG,
         a1: dace_nodes.AccessNode,
         a2: dace_nodes.AccessNode,
     ) -> None:
-        """Modify the producer node, i.e. `producer_edge.src`.
+        """Modify modify the data flow associated to `new_edge`.
 
-        Depending on the type of the producer the action differ. What it does exactly
-        depends on the type of the node, but what it essentially does it replaces
-        references to the old data, i.e. `a1`, with the new data, i.e. `a2` and
-        modifies the subsets.
+        The `_reroute_edge()` function creates a new edge, but it does not modify
+        the data flow at the other side, of the connection, this is done by this
+        function.
+
+        Depending on the value of `is_producer_edge` the function will either modify
+        the source of `new_edge` (`True`) or it will modify the data flow associated
+        to the destination pf `new_edge` (`False`).
+        Furthermore, the specific actions depends on what kind of node is on the other
+        side. However, essentially the function will modify it to account for the
+        change from `a1` to `a2`.
 
         It is important that it is the caller's responsibility to ensure that this
         function is not called multiple times on the same producer target.
 
         Args:
-            producer_edge: The newly created producer edge, essentially the return
-                value of `self._rerout_producer_edge()`.
-            a2_offsets: Offset that describes how much to shift writes, that were
-                previously going into `a1` but should no go into `a2`.
+            is_producer_edge: If `True` then the source of `new_edge` is processed,
+                if `False` then the destination part of `new_edge` is processed.
+            new_edge: The newly created edge, essentially the return value of
+                `self._reroute__edge()`.
+            a2_offsets: Offset that describes how much to shift subsets associated
+                to `a1` to account that they are now associated to `a2`.
             state: The state in which we operate.
             sdfg: The SDFG on which we operate.
             a1: The `a1` node.
             a2: The `a2` node.
         """
-        producer_node: dace_nodes.AccessNode = producer_edge.src
+        other_node = new_edge.src if is_producer_edge else new_edge.dst
 
-        if isinstance(producer_node, dace_nodes.AccessNode):
-            # There is nothing to do in this case, because the name `a1` could not
-            #  have been propagated through the producer node.
+        if isinstance(other_node, dace_nodes.AccessNode):
+            # There is nothing here to do.
             pass
 
-        elif isinstance(producer_node, dace_nodes.MapExit):
-            # In this case we have to traverse the tree and replace the references
-            #  to `a1` with the ones to `a2` and modify the `dst_subset`s. The
-            #  process is very similar to the one in MapFusion.
-            # NOTE: Because we assume that `a1` is read fully into `a2` we do not
-            #  have to adjust the ranges of the Map. If we would drop this assumption
-            #  then we would have to modify the ranges such that only the ranges we
-            #  need are computed.
-            for producer_tree in state.memlet_tree(producer_edge).traverse_children(
-                include_self=False
-            ):
-                edge_to_adjust = producer_tree.edge
-                memlet_to_adjust = edge_to_adjust.data
-                if memlet_to_adjust.data == a1.data:
-                    memlet_to_adjust.data = a2.data
-
-                dst_subset_to_adjust = memlet_to_adjust.get_dst_subset(edge_to_adjust, state)
-                assert dst_subset_to_adjust is not None
-                dst_subset_to_adjust.offset(a2_offsets, negative=False)
-
-        elif isinstance(producer_node, dace_nodes.Tasklet):
+        elif isinstance(other_node, dace_nodes.Tasklet):
             # A very obscure case, but I think it might happen, but as in the AccessNode
             #  case there is nothing to do here.
             pass
 
-        elif isinstance(producer_node, dace_nodes.NestedSDFG):
-            # Because we now write into a different memory region we have to modify
-            #  the strides on the inside.
+        elif isinstance(other_node, (dace_nodes.MapExit | dace_nodes.MapEntry)):
+            # Essentially, we have to propagate the change that everything that
+            #  refers to `a1` should now refer to `a2`, In addition we also have to
+            #  modify the subsets, depending on the direction of the new edge either
+            #  the source or destination subset.
+            # NOTE: Because we assume that `a1` is read fully into `a2` we do not
+            #  have to adjust the ranges of the Map. If we would drop this assumption
+            #  then we would have to modify the ranges such that only the ranges we
+            #  need are computed.
+            assert (
+                isinstance(other_node, dace_nodes.MapExit)
+                if is_producer_edge
+                else isinstance(other_node, dace_nodes.MapEntry)
+            )
+            for memlet_tree in state.memlet_tree(new_edge).traverse_children(include_self=False):
+                edge_to_adjust = memlet_tree.edge
+                memlet_to_adjust = edge_to_adjust.data
+                if memlet_to_adjust.data == a1.data:
+                    memlet_to_adjust.data = a2.data
+
+                if is_producer_edge:
+                    subset_to_adjust = memlet_to_adjust.get_dst_subset(edge_to_adjust, state)
+                else:
+                    subset_to_adjust = memlet_to_adjust.get_src_subset(edge_to_adjust, state)
+                assert subset_to_adjust is not None
+                subset_to_adjust.offset(a2_offsets, negative=False)
+
+        elif isinstance(other_node, dace_nodes.NestedSDFG):
+            # This is very similar than the AccessNode case, however, we must modify
+            #  the strides on the inside of the NestedSDFG, because they have to be
+            #  aligned with the ones on the outside. Because we now write into a
+            #  different memory region, with potentially different strides, we have to
+            #  modify the strides on the inside.
             # TODO(phimuell): Look into the implication that we not necessarily pass
             #  the full array, but essentially slice a bit.
-            gtx_transformations.gt_propagate_strides_from_access_node(
-                sdfg=sdfg,
-                state=state,
-                outer_node=producer_node,
-            )
+            if is_producer_edge:
+                gtx_transformations.gt_map_strides_to_src_nested_sdfg(
+                    sdfg=sdfg,
+                    state=state,
+                    edge=new_edge,
+                    outer_node=a2,
+                )
+            else:
+                gtx_transformations.gt_map_strides_to_dst_nested_sdfg(
+                    sdfg=sdfg,
+                    state=state,
+                    edge=new_edge,
+                    outer_node=a2,
+                )
 
         else:
             # As we encounter them we should handle them case by case.
             raise NotImplementedError(
-                f"The case for '{type(producer_node).__name__}' has not been implemented."
+                f"The case for '{type(other_node).__name__}' has not been implemented."
             )
