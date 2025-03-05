@@ -697,13 +697,18 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         assert connecting_edge.dst is a2
         connecting_memlet = connecting_edge.data
 
-        src_subset: dace_sbs.Subset = connecting_memlet.get_src_subset(connecting_edge, graph)
+        # If the destination or the source subset of the connection is not fully
+        #  specified, we do not apply.
+        src_subset = connecting_memlet.get_src_subset(connecting_edge, graph)
         if src_subset is None:
-            src_subset = dace_sbs.Range.from_array(a1_desc)
-        a1_range = dace_sbs.Range.from_array(a1_desc)
+            return False
+        dst_subset = connecting_memlet.get_dst_subset(connecting_edge, graph)
+        if dst_subset is None:
+            return False
 
         # NOTE: The main benefit of requiring that the whole array is read is
         #  that we do not have to adjust maps.
+        a1_range = dace_sbs.Range.from_array(a1_desc)
         if not src_subset.covers(a1_range):
             return False
 
