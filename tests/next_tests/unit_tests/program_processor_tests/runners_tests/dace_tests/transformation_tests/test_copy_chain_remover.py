@@ -259,6 +259,71 @@ def _make_possible_cyclic_sdfg() -> dace.SDFG:
     return sdfg
 
 
+def _make_linear_chain_with_nested_sdfg_sdfg() -> tuple[dace.SDFG, dace.SDFG]:
+    """
+    The structure is very similar than `_make_diff_sizes_linear_chain_sdfg()`, with
+    the main difference that the Map is inside a NestedSDFG.
+    """
+
+    def make_inner_sdfg() -> dace.SDFG:
+        inner_sdfg = dace.SDFG("inner_sdfg")
+        inner_state = inner_sdfg.add_state(is_start_block=True)
+        for name in ["i0", "o0"]:
+            inner_sdfg.add_array(name=name, shape=(10, 10), dtype=dace.float64, transient=False)
+        inner_state.add_mapped_tasklet(
+            "inner_comp",
+            map_ranges={
+                "__i0": "0:10",
+                "__i1": "0:10",
+            },
+            inputs={"__in": dace.Memlet("i0[__i0, __i1]")},
+            code="__out = __in + 10.",
+            outputs={"__out": dace.Memlet("o0[__i0, __i1]")},
+            external_edges=True,
+        )
+        inner_sdfg.validate()
+        return inner_sdfg
+
+    inner_sdfg = make_inner_sdfg()
+
+    sdfg = dace.SDFG(util.unique_name("linear_chain_with_nested_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+
+    array_size_increment = 10
+    array_size = 10
+    for name in ["a", "b", "c", "d", "e"]:
+        sdfg.add_array(
+            name,
+            shape=(array_size, array_size),
+            dtype=dace.float64,
+            transient=True,
+        )
+        if name != "a":
+            array_size += array_size_increment
+    assert sdfg.arrays["a"].shape == sdfg.arrays["b"].shape
+    assert sdfg.arrays["e"].shape == (40, 40)
+    sdfg.arrays["a"].transient = False
+    sdfg.arrays["e"].transient = False
+    a, b, c, d, e = (state.add_access(name) for name in "abcde")
+
+    nsdfg = state.add_nested_sdfg(
+        inner_sdfg,
+        parent=sdfg,
+        inputs={"i0"},
+        outputs={"o0"},
+        symbol_mapping={},
+    )
+
+    state.add_edge(a, None, nsdfg, "i0", sdfg.make_array_memlet("a"))
+    state.add_edge(nsdfg, "o0", b, None, sdfg.make_array_memlet("b"))
+
+    state.add_nedge(b, c, dace.Memlet("b[0:10, 0:10] -> [5:15, 3:13]"))
+    state.add_nedge(c, d, dace.Memlet("c[0:20, 0:20] -> [2:22, 6:26]"))
+    state.add_nedge(d, e, dace.Memlet("d[0:30, 0:30] -> [1:31, 8:38]"))
+    sdfg.validate()
+    return sdfg, inner_sdfg
+
+
 def _make_a1_has_output_sdfg() -> dace.SDFG:
     """Here `a1` has an output degree of 2, one to `a2` and one to another output."""
     sdfg = dace.SDFG(util.unique_name("a1_has_an_additional_output_sdfg"))
@@ -427,6 +492,62 @@ def test_a1_additional_output():
     # Now run the SDFG, which is essentially to check if the subsets were handled
     #  correctly. This is especially important for `o1` which is composed of both
     #  `i1` and `i2`.
+    csdfg_res = sdfg.compile()
+    csdfg_res(**res)
+    assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
+
+
+def test_linear_chain_with_nested_sdfg():
+    sdfg, inner_sdfg = _make_linear_chain_with_nested_sdfg_sdfg()
+
+    # Ensure that the SDFG was constructed in the correct way.
+    assert inner_sdfg.arrays["i0"].strides == sdfg.arrays["a"].strides
+    assert inner_sdfg.arrays["o0"].strides == sdfg.arrays["b"].strides
+    assert inner_sdfg.arrays["i0"].shape == inner_sdfg.arrays["o0"].shape
+    assert inner_sdfg.arrays["i0"].shape == sdfg.arrays["a"].shape
+
+    def ref_comp(a, e):
+        def inner_ref(i0, o0):
+            for i in range(10):
+                for j in range(10):
+                    o0[i, j] = i0[i, j] + 10
+
+        b, c, d = np.zeros_like(a), np.zeros((20, 20)), np.zeros((30, 30))
+        inner_ref(i0=a, o0=b)
+        c[5:15, 3:13] = b
+        d[2:22, 6:26] = c
+        e[1:31, 8:38] = d
+
+    # Make the input
+    ref = {
+        "a": np.array(np.random.rand(10, 10), dtype=np.float64, copy=True),
+        "e": np.zeros((40, 40), dtype=np.float64),
+    }
+    res = copy.deepcopy(ref)
+
+    ref_comp(**ref)
+
+    # Apply the transformation.
+    #  It should remove all non transient arrays.
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+
+    # Perform the tests.
+    acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
+        sdfg, dace_nodes.AccessNode, return_nodes=True
+    )
+    assert {ac.data for ac in acnodes} == {"a", "e"}
+    assert util.count_nodes(sdfg, dace_nodes.NestedSDFG) == 1
+
+    # The shapes should be the same as before.
+    assert inner_sdfg.arrays["i0"].shape == inner_sdfg.arrays["o0"].shape
+    assert inner_sdfg.arrays["i0"].shape == sdfg.arrays["a"].shape
+
+    # The strides of `i0` should also be the same as before, but the strides
+    #  of `o0` should now be the same as `e`.
+    assert inner_sdfg.arrays["i0"].strides == sdfg.arrays["a"].strides
+    assert inner_sdfg.arrays["o0"].strides == sdfg.arrays["e"].strides
+
+    # Now run the transformed SDFG to see if the same output is generated.
     csdfg_res = sdfg.compile()
     csdfg_res(**res)
     assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
