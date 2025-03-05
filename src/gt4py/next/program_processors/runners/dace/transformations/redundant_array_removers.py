@@ -673,6 +673,10 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         if not self.is_single_use_data(sdfg, a1):
             return False
 
+        # TODO(phimuell): Lift this.
+        if graph.out_degree(a1) != 1:
+            return False
+
         # We only allow that we operate on the top level scope.
         if graph.scope_dict()[a1] is not None:
             return False
