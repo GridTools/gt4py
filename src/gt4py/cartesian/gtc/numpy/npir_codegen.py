@@ -85,10 +85,16 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
                 self.idx_to_data = tuple(i for i in range(field.ndim))
                 self.offsets = (0,) * field.ndim
             else:
-                self.idx_to_data = tuple(
-                    [i if has_dim else None for i, has_dim in enumerate(dimensions)]
-                    + list(range(sum(dimensions), field.ndim))
-                )
+                idx = 0
+                idx_to_data = []
+                for has_dim in dimensions:
+                    if has_dim:
+                        idx_to_data.append(idx)
+                        idx += 1
+                    else:
+                        idx_to_data.append(None)
+                idx_to_data += list(range(idx, field.ndim))
+                self.idx_to_data = tuple(idx_to_data)
                 self.offsets = offsets
 
             shape = [field.shape[i] if i is not None else 1 for i in self.idx_to_data]
