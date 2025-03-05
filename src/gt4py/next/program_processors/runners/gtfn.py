@@ -36,7 +36,7 @@ def convert_arg(arg: Any) -> Any:
         origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
         return arr, origin
     if isinstance(arg, np.bool_):
-        # nanobind does not support implicit conversion of `np.bool` to `bool`# nanobind does not support implicit conversion of `np.bool` to `bool`
+        # nanobind does not support implicit conversion of `np.bool` to `bool`
         return bool(arg)
     else:
         return arg
