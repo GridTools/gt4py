@@ -92,6 +92,9 @@ def gt_simplify(
     while at_least_one_xtrans_run:
         at_least_one_xtrans_run = False
 
+        # NOTE: See comment in `gt_inline_nested_sdfg()` for more.
+        sdfg.reset_cfg_list()
+
         # To mitigate DaCe issue 1959, we run the chain removal transformation here.
         # TODO(phimuell): Remove as soon as we have a true solution.
         if "CopyChainRemover" not in skip:
