@@ -170,7 +170,7 @@ def _extract_accessed_domains(
 
     shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(input_ids))
 
-    for in_field_id, shifts_list in zip(input_ids, input_types, shifts_results, strict=True):
+    for in_field_id, shifts_list in zip(input_ids, shifts_results, strict=True):
         # TODO(tehrengruber): Dynamic shifts are not supported by `SymbolicDomain.translate`. Use
         #  special `UNKNOWN` marker for them until we have implemented a proper solution.
         if any(s == trace_shifts.Sentinel.VALUE for shift in shifts_list for s in shift):
