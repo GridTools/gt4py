@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import copy
-import functools
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
 import dace
@@ -272,15 +271,10 @@ def _gt_expand_non_standard_memlets_sdfg(
                 None, sdfg, state, e, a, b
             )
             dims = len(copy_shape)
-            ignore_strides = False
-
             if dims == 1:
                 continue
             elif dims == 2:
-                if src_strides[0] != copy_shape[1] or dst_strides[0] != copy_shape[1]:
-                    # not a continuous read/write in dim 0: use 'CopyToMap' with 'ignore_strides'
-                    ignore_strides = True
-                elif src_strides[-1] != 1 or dst_strides[-1] != 1:
+                if src_strides[-1] != 1 or dst_strides[-1] != 1:
                     try:
                         is_src_cont = src_strides[0] / src_strides[1] == copy_shape[1]
                         is_dst_cont = dst_strides[0] / dst_strides[1] == copy_shape[1]
@@ -292,13 +286,7 @@ def _gt_expand_non_standard_memlets_sdfg(
                 else:
                     continue
             elif dims > 2:
-                copy_size = [
-                    functools.reduce(lambda x, y: x * y, copy_shape[i:], 1) for i in range(1, dims)
-                ]
-                if src_strides[: dims - 1] != copy_size or dst_strides[: dims - 1] != copy_shape:
-                    # not a continuous read/write in dim (0, ndims-1): use 'CopyToMap' with 'ignore_strides'
-                    ignore_strides = True
-                elif not (src_strides[-1] != 1 or dst_strides[-1] != 1):
+                if not (src_strides[-1] != 1 or dst_strides[-1] != 1):
                     continue
 
             # For identifying the new map, we first store all neighbors of `a`.
@@ -314,7 +302,9 @@ def _gt_expand_non_standard_memlets_sdfg(
                     annotate=False,
                     a=a,
                     b=b,
-                    options={"ignore_strides": ignore_strides},
+                    options={
+                        "ignore_strides": True
+                    },  # apply 'CopyToMap' even if src/dst strides are different
                 )
             except ValueError:  # If transformation doesn't match, continue normally
                 continue
