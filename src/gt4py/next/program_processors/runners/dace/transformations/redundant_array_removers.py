@@ -673,6 +673,15 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         if not self.is_single_use_data(sdfg, a1):
             return False
 
+        # For simplicity we assume that neither of `a1` nor `a2` are views. There
+        #  are some cases were we might be able to remove some of them, but it would
+        #  be very hard to analyse. Furthermore, the lowering currently uses views
+        #  with special strides for broadcasting.
+        if gtx_transformations.utils.is_view(a1_desc, None):
+            return False
+        if gtx_transformations.utils.is_view(a2_desc, None):
+            return False
+
         # We only allow that we operate on the top level scope.
         if graph.scope_dict()[a1] is not None:
             return False

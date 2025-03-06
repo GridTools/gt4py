@@ -263,10 +263,15 @@ def is_reachable(
 
 def is_view(
     node: Union[dace_nodes.AccessNode, dace_data.Data],
-    sdfg: dace.SDFG,
+    sdfg: Optional[dace.SDFG] = None,
 ) -> bool:
     """Tests if `node` points to a view or not."""
-    node_desc: dace_data.Data = node.desc(sdfg) if isinstance(node, dace_nodes.AccessNode) else node
+    if isinstance(node, dace_nodes.AccessNode):
+        assert sdfg is not None
+        node_desc = node.desc(sdfg)
+    else:
+        assert isinstance(node, dace_data.Data)
+        node_desc = node
     return isinstance(node_desc, dace_data.View)
 
 
