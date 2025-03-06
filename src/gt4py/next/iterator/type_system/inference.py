@@ -322,7 +322,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         defined, as they are the starting point for type propagation.
 
         Design decisions:
-        - Lamba functions are monomorphic
+        - Lambda functions are monomorphic
         Builtin functions like ``plus`` are by design polymorphic and only their argument and return
         types are of importance in transformations. Lambda functions on the contrary also have a
         body on which we would like to run transformations. By choosing them to be monomorphic all
