@@ -154,7 +154,7 @@ class InlineLifts(
             ir.FunCall(
                 fun=self.generic_visit(node.fun, is_scan_pass_context=_is_scan(node), **kwargs),
                 args=self.generic_visit(node.args, **kwargs),
-                type=node.type
+                type=node.type,
             )
             if recurse
             else node
