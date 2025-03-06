@@ -278,6 +278,7 @@ def _gt_expand_non_standard_memlets_sdfg(
                 continue
             elif dims == 2:
                 if src_strides[0] != copy_shape[1] or dst_strides[0] != copy_shape[1]:
+                    # not a continuous read/write in dim 0: use 'CopyToMap' with 'ignore_strides'
                     ignore_strides = True
                 elif src_strides[-1] != 1 or dst_strides[-1] != 1:
                     try:
@@ -295,6 +296,7 @@ def _gt_expand_non_standard_memlets_sdfg(
                     functools.reduce(lambda x, y: x * y, copy_shape[i:], 1) for i in range(1, dims)
                 ]
                 if src_strides[: dims - 1] != copy_size or dst_strides[: dims - 1] != copy_shape:
+                    # not a continuous read/write in dim (0, ndims-1): use 'CopyToMap' with 'ignore_strides'
                     ignore_strides = True
                 elif not (src_strides[-1] != 1 or dst_strides[-1] != 1):
                     continue
