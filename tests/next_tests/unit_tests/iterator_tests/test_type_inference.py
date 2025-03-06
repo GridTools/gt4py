@@ -131,7 +131,10 @@ def expression_test_cases():
             int_list_type,
         ),
         (
-            im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.ref("b", ts.ListType(element_type=int_type, offset_type=V2EDim))),
+            im.map_(im.ref("plus"))(
+                im.ref("a", int_list_type),
+                im.ref("b", ts.ListType(element_type=int_type, offset_type=V2EDim)),
+            ),
             ts.ListType(element_type=int_type, offset_type=V2EDim),
         ),
         # reduce
