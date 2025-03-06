@@ -696,17 +696,16 @@ def translate_concat_where(
 
     def concatenate_inputs(
         node_domain: gtir.Expr,
-        tb_node_domain: gtir.Expr,
-        fb_node_domain: gtir.Expr,
-        tb_field: FieldopData,
-        fb_field: FieldopData,
+        tb_node: gtir.Node,
+        fb_node: gtir.Node,
     ) -> FieldopData:
+        tb_field, fb_field = (
+            sdfg_builder.visit(node, sdfg=sdfg, head_state=state) for node in [tb_node, fb_node]
+        )
         tb_data_desc, fb_data_desc = (inp.dc_node.desc(sdfg) for inp in [tb_field, fb_field])
         assert tb_data_desc.dtype == fb_data_desc.dtype
 
-        tb_domain, fb_domain = (
-            extract_domain(domain) for domain in [tb_node_domain, fb_node_domain]
-        )
+        tb_domain, fb_domain = (extract_domain(node.annex.domain) for node in [tb_node, fb_node])
 
         # expect unbound range in the concat domain expression on lower or upper range
         if mask_lower_bound == gtir_sdfg_utils.get_symbolic(gtir.InfinityLiteral.NEGATIVE):
@@ -794,9 +793,15 @@ def translate_concat_where(
         # prune empty branches
         lower_range_size = lower_range_1 - lower_range_0
         if lower_range_size.is_constant() and lower_range_size == 0:
+            if state.degree(lower.dc_node) == 0:
+                assert not lower_desc.transient
+                state.remove_node(lower.dc_node)
             return upper
         upper_range_size = upper_range_1 - upper_range_0
         if upper_range_size.is_constant() and upper_range_size == 0:
+            if state.degree(upper.dc_node) == 0:
+                assert not upper_desc.transient
+                state.remove_node(upper.dc_node)
             return lower
 
         output, output_desc = sdfg_builder.add_temp_array(sdfg, output_shape, lower_desc.dtype)
@@ -879,17 +884,10 @@ def translate_concat_where(
 
         return FieldopData(output_node, lower.gt_type, origin=tuple(output_origin))
 
-    # we visit the field arguments for the true and false branch
-    tb, fb = (sdfg_builder.visit(node.args[i], sdfg=sdfg, head_state=state) for i in [1, 2])
-
     return (
-        concatenate_inputs(
-            node.annex.domain, node.args[1].annex.domain, node.args[2].annex.domain, tb, fb
-        )
+        concatenate_inputs(node.annex.domain, node.args[1], node.args[2])
         if isinstance(node.type, ts.FieldType)
-        else gtx_utils.tree_map(concatenate_inputs)(
-            node.annex.domain, node.args[1].annex.domain, node.args[2].annex.domain, tb, fb
-        )
+        else gtx_utils.tree_map(concatenate_inputs)(node.annex.domain, node.args[1], node.args[2])
     )
 
 
