@@ -696,16 +696,17 @@ def translate_concat_where(
 
     def concatenate_inputs(
         node_domain: gtir.Expr,
-        tb_node: gtir.Node,
-        fb_node: gtir.Node,
+        tb_node_domain: gtir.Expr,
+        fb_node_domain: gtir.Expr,
+        tb_field: FieldopData,
+        fb_field: FieldopData,
     ) -> FieldopData:
-        tb_field, fb_field = (
-            sdfg_builder.visit(node, sdfg=sdfg, head_state=state) for node in [tb_node, fb_node]
-        )
         tb_data_desc, fb_data_desc = (inp.dc_node.desc(sdfg) for inp in [tb_field, fb_field])
         assert tb_data_desc.dtype == fb_data_desc.dtype
 
-        tb_domain, fb_domain = (extract_domain(node.annex.domain) for node in [tb_node, fb_node])
+        tb_domain, fb_domain = (
+            extract_domain(domain) for domain in [tb_node_domain, fb_node_domain]
+        )
 
         # expect unbound range in the concat domain expression on lower or upper range
         if mask_lower_bound == gtir_sdfg_utils.get_symbolic(gtir.InfinityLiteral.NEGATIVE):
@@ -884,10 +885,17 @@ def translate_concat_where(
 
         return FieldopData(output_node, lower.gt_type, origin=tuple(output_origin))
 
+    # we visit the field arguments for the true and false branch
+    tb, fb = (sdfg_builder.visit(node.args[i], sdfg=sdfg, head_state=state) for i in [1, 2])
+
     return (
-        concatenate_inputs(node.annex.domain, node.args[1], node.args[2])
+        concatenate_inputs(
+            node.annex.domain, node.args[1].annex.domain, node.args[2].annex.domain, tb, fb
+        )
         if isinstance(node.type, ts.FieldType)
-        else gtx_utils.tree_map(concatenate_inputs)(node.annex.domain, node.args[1], node.args[2])
+        else gtx_utils.tree_map(concatenate_inputs)(
+            node.annex.domain, node.args[1].annex.domain, node.args[2].annex.domain, tb, fb
+        )
     )
 
 
