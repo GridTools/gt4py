@@ -274,15 +274,15 @@ def _convert_as_fieldop_input_to_iterator(
 
     # handle neighbor / sparse input fields
     defined_dims = []
-    is_nb_field = False
+    neighbor_dim = None
     for dim in input_dims:
         if dim.kind == common.DimensionKind.LOCAL:
-            assert not is_nb_field
-            is_nb_field = True
+            assert neighbor_dim is None
+            neighbor_dim = dim
         else:
             defined_dims.append(dim)
-    if is_nb_field:
-        element_type = ts.ListType(element_type=element_type)
+    if neighbor_dim:
+        element_type = ts.ListType(element_type=element_type, offset_type=neighbor_dim)
 
     return it_ts.IteratorType(
         position_dims=domain.dims, defined_dims=defined_dims, element_type=element_type
@@ -361,7 +361,10 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
         arg_el_types = [arg.element_type for arg in args]
         el_type = op(*arg_el_types, offset_provider_type=offset_provider_type)
         assert isinstance(el_type, ts.DataType)
-        return ts.ListType(element_type=el_type)
+        offset_types = [arg.offset_type for arg in args if arg.offset_type]
+        offset_type = offset_types[0] if offset_types else None
+        assert all(offset_type == arg for arg in offset_types)
+        return ts.ListType(element_type=el_type, offset_type=offset_type)
 
     return applied_map
 

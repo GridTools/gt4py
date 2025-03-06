@@ -92,7 +92,8 @@ class ListType(DataType):
     """
 
     element_type: DataType
-    offset_type: common.Dimension
+    # TODO(tehrengruber): make `offset_type` mandatory
+    offset_type: Optional[common.Dimension] = None
 
 
 class FieldType(DataType, CallableType):
