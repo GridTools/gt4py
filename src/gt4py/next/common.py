@@ -1015,7 +1015,21 @@ OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
 
 
-def offset_provider_to_type(offset_provider: OffsetProvider) -> OffsetProviderType:
+def is_offset_provider(obj: Any) -> TypeGuard[OffsetProvider]:
+    if not isinstance(obj, Mapping):
+        return False
+    return all(isinstance(el, OffsetProviderElem) for el in obj.values())
+
+
+def is_offset_provider_type(obj: Any) -> TypeGuard[OffsetProviderType]:
+    if not isinstance(obj, Mapping):
+        return False
+    return all(isinstance(el, OffsetProviderTypeElem) for el in obj.values())
+
+
+def offset_provider_to_type(
+    offset_provider: OffsetProvider | OffsetProviderType,
+) -> OffsetProviderType:
     return {
         k: v.__gt_type__() if isinstance(v, Connectivity) else v for k, v in offset_provider.items()
     }
