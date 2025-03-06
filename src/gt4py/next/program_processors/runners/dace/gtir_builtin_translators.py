@@ -730,14 +730,14 @@ def translate_concat_where(
             lower = FieldopData(
                 lower.dc_node,
                 ts.FieldType(dims=[concat_dim], dtype=lower.gt_type),
-                origin=(concat_dim_bound - 1,),
+                origin=(upper_domain[concat_dim_index][1] - 1,),
             )
         elif isinstance(upper.gt_type, ts.ScalarType):
             assert isinstance(lower.gt_type, ts.FieldType)
             upper = FieldopData(
                 upper.dc_node,
                 ts.FieldType(dims=[concat_dim], dtype=upper.gt_type),
-                origin=(concat_dim_bound,),
+                origin=(lower_domain[concat_dim_index][2],),
             )
 
         if concat_dim not in lower.gt_type.dims:
