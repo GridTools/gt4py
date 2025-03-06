@@ -206,14 +206,18 @@ def index(arg: ts.DimensionType) -> ts.FieldType:
 
 
 @_register_builtin_type_synthesizer
-def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> ts.ListType:
-    assert (
-        isinstance(offset_literal, it_ts.OffsetLiteralType)
-        and isinstance(offset_literal.value, common.Dimension)
-        and offset_literal.value.kind == common.DimensionKind.LOCAL
+def neighbors(
+    offset_literal: it_ts.OffsetLiteralType,
+    it: it_ts.IteratorType,
+    offset_provider_type: common.OffsetProviderType,
+) -> ts.ListType:
+    assert isinstance(offset_literal, it_ts.OffsetLiteralType) and isinstance(
+        offset_literal.value, str
     )
     assert isinstance(it, it_ts.IteratorType)
-    return ts.ListType(element_type=it.element_type)
+    conn_type = offset_provider_type[offset_literal.value]
+    assert isinstance(conn_type, common.NeighborConnectivityType)
+    return ts.ListType(element_type=it.element_type, offset_type=conn_type.neighbor_dim)
 
 
 @_register_builtin_type_synthesizer
@@ -391,9 +395,9 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
             assert len(offset_literals) % 2 == 0
             for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
                 assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
-                    offset_axis.value, common.Dimension
+                    offset_axis.value, str
                 )
-                type_ = offset_provider_type[offset_axis.value.value]
+                type_ = offset_provider_type[offset_axis.value]
                 if isinstance(type_, common.Dimension):
                     pass
                 elif isinstance(type_, common.NeighborConnectivityType):

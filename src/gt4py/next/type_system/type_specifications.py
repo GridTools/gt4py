@@ -92,9 +92,7 @@ class ListType(DataType):
     """
 
     element_type: DataType
-    # TODO(havogt): the `offset_type` is not yet used in type_inference,
-    # it is meant to describe the neighborhood (via the local dimension)
-    offset_type: Optional[common.Dimension] = None
+    offset_type: common.Dimension
 
 
 class FieldType(DataType, CallableType):

@@ -119,7 +119,7 @@ def expression_test_cases():
         # neighbors
         (
             im.neighbors("E2V", im.ref("a", it_on_e_of_e_type)),
-            ts.ListType(element_type=it_on_e_of_e_type.element_type),
+            ts.ListType(element_type=it_on_e_of_e_type.element_type, offset_type=E2VDim),
         ),
         # cast
         (im.cast_(1, int_type), int_type),
