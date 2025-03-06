@@ -729,10 +729,7 @@ def translate_concat_where(
         # 1D field with the dimension of the concat expression
         if isinstance(lower.gt_type, ts.ScalarType):
             assert isinstance(upper.gt_type, ts.FieldType)
-            origin = dace.symbolic.pystr_to_symbolic(
-                f"max({lower_domain[concat_dim_index][1]}, {output_origin[concat_dim_index]})",
-                simplify=True,
-            )
+            origin = lower_domain[concat_dim_index][1]
             lower = FieldopData(
                 lower.dc_node,
                 ts.FieldType(dims=[concat_dim], dtype=lower.gt_type),
@@ -741,10 +738,7 @@ def translate_concat_where(
             lower_domain[concat_dim_index] = (concat_dim, origin, origin + 1)
         elif isinstance(upper.gt_type, ts.ScalarType):
             assert isinstance(lower.gt_type, ts.FieldType)
-            origin = dace.symbolic.pystr_to_symbolic(
-                f"max({upper_domain[concat_dim_index][1]}, {output_origin[concat_dim_index]})",
-                simplify=True,
-            )
+            origin = upper_domain[concat_dim_index][1]
             upper = FieldopData(
                 upper.dc_node,
                 ts.FieldType(dims=[concat_dim], dtype=upper.gt_type),
@@ -796,6 +790,14 @@ def translate_concat_where(
             f"max({upper_range_0}, min({upper_domain[concat_dim_index][2]}, {output_origin[concat_dim_index] + output_shape[concat_dim_index]}))",
             simplify=True,
         )
+
+        # prune empty branches
+        lower_range_size = lower_range_1 - lower_range_0
+        if lower_range_size.is_constant() and lower_range_size == 0:
+            return upper
+        upper_range_size = upper_range_1 - upper_range_0
+        if upper_range_size.is_constant() and upper_range_size == 0:
+            return lower
 
         output, output_desc = sdfg_builder.add_temp_array(sdfg, output_shape, lower_desc.dtype)
         output_node = state.add_access(output)
