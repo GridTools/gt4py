@@ -726,18 +726,28 @@ def translate_concat_where(
         # 1D field with the dimension of the concat expression
         if isinstance(lower.gt_type, ts.ScalarType):
             assert isinstance(upper.gt_type, ts.FieldType)
+            origin = dace.symbolic.pystr_to_symbolic(
+                f"max({lower_domain[concat_dim_index][1]}, {output_origin[concat_dim_index]})",
+                simplify=True,
+            )
             lower = FieldopData(
                 lower.dc_node,
                 ts.FieldType(dims=[concat_dim], dtype=lower.gt_type),
-                origin=(upper_domain[concat_dim_index][1] - 1,),
+                origin=(origin,),
             )
+            lower_domain[concat_dim_index] = (concat_dim, origin, origin + 1)
         elif isinstance(upper.gt_type, ts.ScalarType):
             assert isinstance(lower.gt_type, ts.FieldType)
+            origin = dace.symbolic.pystr_to_symbolic(
+                f"max({upper_domain[concat_dim_index][1]}, {output_origin[concat_dim_index]})",
+                simplify=True,
+            )
             upper = FieldopData(
                 upper.dc_node,
                 ts.FieldType(dims=[concat_dim], dtype=upper.gt_type),
-                origin=(lower_domain[concat_dim_index][2],),
+                origin=(origin,),
             )
+            upper_domain[concat_dim_index] = (concat_dim, origin, origin + 1)
 
         if concat_dim not in lower.gt_type.dims:
             assert lower.gt_type.dims == [
@@ -772,19 +782,13 @@ def translate_concat_where(
         assert all(ftype.dims == output_dims for ftype in (lower.gt_type, upper.gt_type))
 
         # the lower/upper range to be copied is defined by the start ('range_0') and stop ('range_1') indices
-        lower_range_0 = dace.symbolic.pystr_to_symbolic(
-            f"max({lower_domain[concat_dim_index][1]}, {output_origin[concat_dim_index]})",
-            simplify=True,
-        )
+        lower_range_0 = lower_domain[concat_dim_index][1]
         lower_range_1 = dace.symbolic.pystr_to_symbolic(
             f"max({lower_range_0}, min({lower_domain[concat_dim_index][2]}, {output_origin[concat_dim_index] + output_shape[concat_dim_index]}))",
             simplify=True,
         )
 
-        upper_range_0 = dace.symbolic.pystr_to_symbolic(
-            f"max({upper_domain[concat_dim_index][1]}, {output_origin[concat_dim_index]})",
-            simplify=True,
-        )
+        upper_range_0 = upper_domain[concat_dim_index][1]
         upper_range_1 = dace.symbolic.pystr_to_symbolic(
             f"max({upper_range_0}, min({upper_domain[concat_dim_index][2]}, {output_origin[concat_dim_index] + output_shape[concat_dim_index]}))",
             simplify=True,
