@@ -636,36 +636,38 @@ def _make_broadcast_concat_view_node(
     concat_dim_index: int,
 ) -> tuple[FieldopData, dace.data.Array]:
     """
-    Helper function called by `translate_concat_where` to create a view over a 1D
-    array 'f', that allows accessing one value in the concat dimension and broadcast
-    it on all other dimensions of the other argument field 'fother'.
-    The returned view uses zero stride in all dimensions that are not present in
-    the 1D field.
+    Helper function called by `translate_concat_where` to create a mapped tasklet
+    that broadcasts values from the 1D-array 'f' on all dimensions of the argument
+    field 'fother'.
     """
     assert isinstance(f.gt_type, ts.FieldType)
     assert isinstance(fother.gt_type, ts.FieldType)
     assert len(f.gt_type.dims) == 1
-    view_origin = list(fother.origin)
-    view_origin[concat_dim_index] = f.origin[0]
-    view_shape = list(fother_desc.shape)
-    view_shape[concat_dim_index] = f_desc.shape[0]
-    view_strides = [0] * len(fother.gt_type.dims)
-    view_strides[concat_dim_index] = f_desc.strides[0]
-    view, view_desc = sdfg.add_view(
-        f"view_{f.dc_node.data}", view_shape, f_desc.dtype, strides=view_strides, find_new_name=True
+    output_origin = list(fother.origin)
+    output_origin[concat_dim_index] = f.origin[0]
+    output_shape = list(fother_desc.shape)
+    output_shape[concat_dim_index] = f_desc.shape[0]
+
+    output, output_desc = sdfg.add_temp_transient(output_shape, f_desc.dtype)
+    output_node = state.add_access(output)
+
+    state.add_mapped_tasklet(
+        "broadcast",
+        map_ranges={f"i{i}": r for i, r in enumerate(dace_subsets.Range.from_array(output_desc))},
+        code="out = inp",
+        inputs={"inp": dace.Memlet(data=f.dc_node.data, subset=f"i{concat_dim_index}")},
+        outputs={
+            "out": dace.Memlet(
+                data=output, subset=",".join(f"i{i}" for i in range(len(output_desc.shape)))
+            )
+        },
+        input_nodes={f.dc_node},
+        output_nodes={output_node},
+        external_edges=True,
     )
-    view_node = state.add_access(view)
-    state.add_nedge(
-        f.dc_node,
-        view_node,
-        dace.Memlet(
-            data=f.dc_node.data,
-            subset=dace_subsets.Range.from_array(f_desc),
-            other_subset=dace_subsets.Range.from_array(view_desc),
-        ),
-    )
-    fview = FieldopData(view_node, fother.gt_type, tuple(view_origin))
-    return fview, view_desc
+
+    output_field = FieldopData(output_node, fother.gt_type, tuple(output_origin))
+    return output_field, output_desc
 
 
 def translate_concat_where(
@@ -728,14 +730,14 @@ def translate_concat_where(
             lower = FieldopData(
                 lower.dc_node,
                 ts.FieldType(dims=[concat_dim], dtype=lower.gt_type),
-                origin=(upper_domain[concat_dim_index][1] - 1,),
+                origin=(concat_dim_bound - 1,),
             )
         elif isinstance(upper.gt_type, ts.ScalarType):
             assert isinstance(lower.gt_type, ts.FieldType)
             upper = FieldopData(
                 upper.dc_node,
                 ts.FieldType(dims=[concat_dim], dtype=upper.gt_type),
-                origin=(lower_domain[concat_dim_index][2],),
+                origin=(concat_dim_bound,),
             )
 
         if concat_dim not in lower.gt_type.dims:
