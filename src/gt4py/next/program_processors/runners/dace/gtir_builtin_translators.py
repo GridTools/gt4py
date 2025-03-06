@@ -654,12 +654,15 @@ def _make_broadcast_concat_view_node(
     map_variables = [gtir_sdfg_utils.get_map_variable(dim) for dim in fother.gt_type.dims]
     state.add_mapped_tasklet(
         "broadcast",
-        map_ranges={index: r for index, r in zip(map_variables, dace_subsets.Range.from_array(output_desc), strict=True)},
+        map_ranges={
+            index: r
+            for index, r in zip(
+                map_variables, dace_subsets.Range.from_array(output_desc), strict=True
+            )
+        },
         code="out = inp",
         inputs={"inp": dace.Memlet(data=f.dc_node.data, subset=map_variables[concat_dim_index])},
-        outputs={
-            "out": dace.Memlet(data=output, subset=",".join(map_variables))
-        },
+        outputs={"out": dace.Memlet(data=output, subset=",".join(map_variables))},
         input_nodes={f.dc_node},
         output_nodes={output_node},
         external_edges=True,
