@@ -290,9 +290,18 @@ def _gt_expand_non_standard_memlets_sdfg(
             ]
 
             # Turn unsupported copy to a map
+            # NOTE: Compared with DaCe we call the `CopyToMap` transformation with
+            #   `ignore_strides=True`. This is a bug in DaCe, without it we would
+            #   get a code generator error of some unsupported 2D copies.
+            #   See https://github.com/spcl/dace/issues/1953 for more.
             try:
                 dace_transformation.dataflow.CopyToMap.apply_to(
-                    sdfg, save=False, annotate=False, a=a, b=b
+                    sdfg,
+                    save=False,
+                    annotate=False,
+                    a=a,
+                    b=b,
+                    options={"ignore_strides": True},
                 )
             except ValueError:  # If transformation doesn't match, continue normally
                 continue
