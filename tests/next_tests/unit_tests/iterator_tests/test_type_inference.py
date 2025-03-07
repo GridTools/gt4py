@@ -31,6 +31,7 @@ from next_tests.integration_tests.cases import (
     V2E,
     E2VDim,
     Edge,
+    Cell,
     IDim,
     Ioff,
     JDim,
@@ -48,16 +49,20 @@ from next_tests.integration_tests.cases import IField, JField
 bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-float64_list_type = ts.ListType(element_type=float64_type)
+float64_list_type = ts.ListType(element_type=float64_type, offset_type=V2EDim)
 int_list_type = ts.ListType(element_type=int_type)
 
 float_i_field = ts.FieldType(dims=[IDim], dtype=float64_type)
 float_j_field = ts.FieldType(dims=[JDim], dtype=float64_type)
+float_k_field = ts.FieldType(dims=[KDim], dtype=float64_type)
 float_ij_field = ts.FieldType(dims=[IDim, JDim], dtype=float64_type)
 float_vertex_k_field = ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
 float_edge_k_field = ts.FieldType(dims=[Edge, KDim], dtype=float64_type)
 float_edge_field = ts.FieldType(dims=[Edge], dtype=float64_type)
+float_vertex_field = ts.FieldType(dims=[Vertex], dtype=float64_type)
+float_cell_k_field = ts.FieldType(dims=[Cell, KDim], dtype=float64_type)
 float_vertex_v2e_field = ts.FieldType(dims=[Vertex, V2EDim], dtype=float64_type)
+
 
 it_on_v_of_e_type = it_ts.IteratorType(
     position_dims=[Vertex, KDim], defined_dims=[Edge, KDim], element_type=int_type
@@ -119,7 +124,7 @@ def expression_test_cases():
         # neighbors
         (
             im.neighbors("E2V", im.ref("a", it_on_e_of_e_type)),
-            ts.ListType(element_type=it_on_e_of_e_type.element_type),
+            ts.ListType(element_type=it_on_e_of_e_type.element_type, offset_type=E2VDim),
         ),
         # cast
         (im.cast_(1, int_type), int_type),
@@ -129,6 +134,13 @@ def expression_test_cases():
         (
             im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.ref("b", int_list_type)),
             int_list_type,
+        ),
+        (
+            im.map_(im.ref("plus"))(
+                im.ref("a", int_list_type),
+                im.ref("b", ts.ListType(element_type=int_type, offset_type=V2EDim)),
+            ),
+            ts.ListType(element_type=int_type, offset_type=V2EDim),
         ),
         # reduce
         (im.reduce("plus", 0)(im.ref("l", int_list_type)), int_type),
@@ -177,10 +189,11 @@ def expression_test_cases():
             im.as_fieldop(
                 im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
                 im.call("cartesian_domain")(
-                    im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                    im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1),
+                    im.call("named_range")(itir.AxisLiteral(value="JDim"), 0, 1),
                 ),
-            )(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field)),
-            ts.TupleType(types=[float_i_field, float_i_field]),
+            )(im.ref("inp1", float_i_field), im.ref("inp2", float_j_field)),
+            ts.TupleType(types=[float_ij_field, float_ij_field]),
         ),
         (
             im.as_fieldop(im.lambda_("x")(im.deref("x")))(
@@ -381,7 +394,9 @@ def test_function_definition():
         body=[
             itir.SetAt(
                 domain=cartesian_domain,
-                expr=im.as_fieldop(im.ref("bar"), cartesian_domain)(im.ref("inp")),
+                expr=im.as_fieldop(im.ref("bar", float_i_field), cartesian_domain)(
+                    im.ref("inp", float_i_field)
+                ),
                 target=im.ref("out"),
             ),
         ],
@@ -424,9 +439,16 @@ def test_fencil_with_nb_field_input():
     )
 
     result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
-
+    assert result.body[0].expr.type == ts.FieldType(
+        dims=[Vertex, KDim], dtype=float64_type
+    )  # TODO: is float64_type correct here?
+    assert result.body[0].expr.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=float_vertex_k_field.dims,
+        defined_dims=float_vertex_field.dims,
+        element_type=float64_list_type,
+    )
     stencil = result.body[0].expr.fun.args[0]
-    assert stencil.expr.args[0].type == float64_list_type
+    assert stencil.expr.args[0].type == ts.ListType(element_type=float64_type, offset_type=V2EDim)
     assert stencil.type.returns == float64_type
 
 
@@ -482,10 +504,7 @@ def test_program_setat_without_domain():
 
     result = itir_type_inference.infer(testee, offset_provider_type={"Ioff": IDim})
 
-    assert (
-        isinstance(result.body[0].expr.type, ts.DeferredType)
-        and result.body[0].expr.type.constraint == ts.FieldType
-    )
+    assert result.body[0].expr.type, ts.FieldType(dims=[IDim], dtype=float64_type)
 
 
 def test_if_stmt():
@@ -512,16 +531,271 @@ def test_if_stmt():
     assert result.true_branch[0].expr.type == float_i_field
 
 
-def test_as_fieldop_without_domain():
+def test_as_fieldop_without_domain_I():
     testee = im.as_fieldop(im.lambda_("it")(im.deref(im.shift("IOff", 1)("it"))))(
         im.ref("inp", float_i_field)
     )
     result = itir_type_inference.infer(
         testee, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True
     )
-    assert result.type == ts.DeferredType(constraint=ts.FieldType)
+    assert result.type == ts.FieldType(dims=[IDim], dtype=float64_type)
     assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
-        position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype
+        position_dims=[IDim], defined_dims=float_i_field.dims, element_type=float_i_field.dtype
+    )
+
+
+def test_as_fieldop_without_domain_different_three_datatypes(
+    mesh_descriptor,
+):  # TODO: get rid of mesh_descriptor
+    stencil = im.lambda_("it1", "it2")(
+        im.plus(
+            im.deref(im.shift("E2V", 1)(im.shift("C2E", 1)("it1"))),
+            im.deref(im.shift("KOff", 1)("it2")),
+        ),
+    )
+
+    testee = im.as_fieldop(stencil)(
+        im.ref("inp1", float_vertex_field),
+        im.ref("inp2", float_cell_k_field),
+    )
+    result = itir_type_inference.infer(
+        testee,
+        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        allow_undeclared_symbols=True,
+    )
+    assert result.type == ts.FieldType(dims=[Cell, KDim], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=[Cell, KDim],
+        defined_dims=float_vertex_field.dims,
+        element_type=float_vertex_field.dtype,
+    )
+    assert result.fun.args[0].type.pos_only_args[1] == it_ts.IteratorType(
+        position_dims=[Cell, KDim],
+        defined_dims=float_cell_k_field.dims,
+        element_type=float_cell_k_field.dtype,
+    )
+
+
+def test_as_fieldop_without_domain_new(mesh_descriptor):  # TODO: get rid of mesh_descriptor
+    stencil = im.lambda_("it1", "it2")(
+        im.plus(im.deref("it1"), im.deref(im.shift("KOff", 1)(im.shift("V2E", 0)("it2"))))
+    )
+
+    testee = im.as_fieldop(stencil)(
+        im.ref("inp1", float_vertex_field), im.ref("inp2", float_edge_k_field)
+    )
+    result = itir_type_inference.infer(
+        testee,
+        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        allow_undeclared_symbols=True,
+    )
+    assert result.type == ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=[Vertex, KDim],
+        defined_dims=float_vertex_field.dims,
+        element_type=float_vertex_field.dtype,
+    )
+    assert result.fun.args[0].type.pos_only_args[1] == it_ts.IteratorType(
+        position_dims=[Vertex, KDim],
+        defined_dims=float_edge_k_field.dims,
+        element_type=float_edge_k_field.dtype,
+    )
+
+
+def test_as_fieldop_without_domain_vertex_v2e():
+    stencil = im.lambda_("it1")(im.deref("it1"))
+
+    testee = im.as_fieldop(stencil)(im.ref("inp1", float_vertex_v2e_field))
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={"V2E": V2E}, allow_undeclared_symbols=True
+    )
+    assert result.type == ts.FieldType(dims=[Vertex], dtype=float64_list_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=[Vertex],
+        defined_dims=float_vertex_field.dims,
+        element_type=float64_list_type,
+    )
+
+
+def test_as_fieldop_without_domain_Vertex_K_1():
+    stencil_inner = im.lambda_("it1")(im.deref(("it1")))
+
+    stencil_outer = im.lambda_("it1", "it2")(im.plus(im.deref(("it1")), im.deref(("it2"))))
+
+    testee = im.as_fieldop(stencil_outer)(
+        im.as_fieldop(
+            stencil_inner
+        )(  # propagating from outside: inner type is currently Vertex, K but should be K only
+            im.ref("inp1", float_k_field)
+        ),
+        im.ref("inp2", float_vertex_k_field),
+    )
+
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+    assert result.type == ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=[Vertex, KDim],
+        defined_dims=float_k_field.dims,
+        element_type=float_k_field.dtype,
+    )
+    assert result.fun.args[0].type.pos_only_args[1] == it_ts.IteratorType(
+        position_dims=[Vertex, KDim],
+        defined_dims=float_vertex_k_field.dims,
+        element_type=float_vertex_k_field.dtype,
+    )
+
+
+def test_as_fieldop_without_domain_Vertex_K_2():
+    stencil_inner = im.lambda_("it1")(im.deref(("it1")))
+
+    stencil_outer = im.lambda_("it1", "it2")(im.plus(im.deref(("it1")), im.deref(("it2"))))
+
+    testee = im.as_fieldop(stencil_outer)(
+        im.as_fieldop(
+            stencil_inner
+        )(  # propagating from outside: inner is currently Vertex, K but should be K only
+            im.ref("inp1", float_k_field)
+        ),
+        im.ref("inp2", float_vertex_field),
+    )
+
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={"V2E": V2E, "KOff": KDim}, allow_undeclared_symbols=True
+    )
+    assert result.type == ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)  # TODO
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=[Vertex, KDim],
+        defined_dims=float_k_field.dims,
+        element_type=float_k_field.dtype,
+    )
+    assert result.fun.args[0].type.pos_only_args[1] == it_ts.IteratorType(
+        position_dims=[Vertex, KDim],
+        defined_dims=float_vertex_field.dims,
+        element_type=float_vertex_field.dtype,
+    )
+
+
+def test_as_fieldop_without_domain_V2E(mesh_descriptor):  # TODO: get rid of mesh_descriptor
+    stencil = im.lambda_("it")(im.deref(im.shift("V2E", 0)("it")))
+
+    testee = im.as_fieldop(stencil)(im.ref("inp", float_edge_field))
+    result = itir_type_inference.infer(
+        testee,
+        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        allow_undeclared_symbols=True,
+    )
+    assert result.type == ts.FieldType(dims=[Vertex], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=[Vertex],
+        defined_dims=float_edge_field.dims,
+        element_type=float_edge_field.dtype,
+    )
+
+
+def test_as_fieldop_without_domain_V2E_new(mesh_descriptor):  # TODO: get rid of mesh_descriptor
+    stencil = im.lambda_("it")(
+        im.deref(im.shift("V2E", 0)(im.shift("E2V", 0)(im.shift("C2E", 0)("it"))))
+    )
+
+    testee = im.as_fieldop(stencil)(im.ref("inp", float_edge_field))
+    result = itir_type_inference.infer(
+        testee,
+        offset_provider_type={**mesh_descriptor.offset_provider_type},
+        allow_undeclared_symbols=True,
+    )
+    assert result.type == ts.FieldType(dims=[Cell], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=[Cell],
+        defined_dims=float_edge_field.dims,
+        element_type=float_edge_field.dtype,
+    )
+
+
+def test_as_fieldop_without_domain_only_one_shift(
+    mesh_descriptor,
+):  # TODO: get rid of mesh_descriptor
+    stencil = im.lambda_("it1", "it2")(
+        im.plus(im.deref(im.shift("V2E", 1)("it1")), im.deref("it2"))
+    )
+
+    testee = im.as_fieldop(stencil)(
+        im.ref("inp1", float_edge_field), im.ref("inp2", float_edge_field)
+    )
+    result = itir_type_inference.infer(
+        testee,
+        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        allow_undeclared_symbols=True,
+    )
+    assert result.type == ts.FieldType(dims=[Edge, Vertex], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=[Edge, Vertex],
+        defined_dims=float_edge_field.dims,
+        element_type=float_edge_field.dtype,
+    )
+    assert result.fun.args[0].type.pos_only_args[1] == it_ts.IteratorType(
+        position_dims=[Edge, Vertex],
+        defined_dims=float_edge_field.dims,
+        element_type=float_edge_field.dtype,
+    )
+
+
+def test_as_fieldop_without_domain_new_nested_shifts(
+    mesh_descriptor,
+):  # TODO: get rid of mesh_descriptor
+    stencil = im.lambda_("it")(im.deref(im.shift("E2V", 0)(im.shift("C2E", 0)("it"))))
+
+    testee = im.as_fieldop(stencil)(im.ref("inp", float_vertex_field))
+    result = itir_type_inference.infer(
+        testee,
+        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        allow_undeclared_symbols=True,
+    )
+    assert result.type == ts.FieldType(dims=[Cell], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=[Cell],
+        defined_dims=float_vertex_field.dims,
+        element_type=float_vertex_field.dtype,
+    )
+
+
+def test_as_fieldop_without_domain_new_no_shift():
+    stencil = im.lambda_("it")(im.deref("it"))
+
+    testee = im.as_fieldop(stencil)(im.ref("inp", float_edge_field))
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+    assert result.type == ts.FieldType(dims=[Edge], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=[Edge],
+        defined_dims=float_edge_field.dims,
+        element_type=float_edge_field.dtype,
+    )
+
+
+def test_as_fieldop_without_domain_plus(mesh_descriptor):  # TODO: get rid of mesh_descriptor
+    stencil = im.lambda_("it1", "it2")(
+        im.plus(im.deref(im.shift("V2E", 1)("it1")), im.deref(im.shift("KOff", 1)("it2")))
+    )
+
+    testee = im.as_fieldop(stencil)(im.ref("inp1", float_edge_field), im.ref("inp2", float_k_field))
+    result = itir_type_inference.infer(
+        testee,
+        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        allow_undeclared_symbols=True,
+    )
+    assert result.type == ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
+    assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
+        position_dims=[Vertex, KDim],
+        defined_dims=float_edge_field.dims,
+        element_type=float_edge_field.dtype,
+    )
+    assert result.fun.args[0].type.pos_only_args[1] == it_ts.IteratorType(
+        position_dims=[Vertex, KDim],
+        defined_dims=float_k_field.dims,
+        element_type=float_k_field.dtype,
     )
 
 
