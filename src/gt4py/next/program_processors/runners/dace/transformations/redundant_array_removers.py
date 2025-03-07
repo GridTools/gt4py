@@ -601,7 +601,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 class CopyChainRemover(dace_transformation.SingleStateTransformation):
     """Removes chain of redundant copies, mostly related to `concat_where`.
 
-    `concat_where`, especially when nested, will build "chains" of AccessNodes, this
+    `concat_where`, especially when nested, will build "chains" of AccessNodes,
     this transformation will remove them. It should be called repeatedly until a
     fix point is reached and should be seen as an addition to the array removal passes
     that ship with DaCe.
@@ -614,12 +614,12 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
 
     Notes:
         - The transformation assumes that the domain inference adjusted the ranges of
-            the maps such that, in case they write into a transient, the transient
+            the maps such that, in case they write into a transient, the full shape of the transient array is written.
             has the same size, i.e. there is not padding, or data that is not written
             to.
 
     Args:
-        single_use_data: List of data that is only used at one place.
+        single_use_data: List of data containers that are used only at one place.
             Will be stored internally and not updated.
 
     Todo:
@@ -767,7 +767,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
 
         # Note that it is possible that `a1` is connected to the same node multiple
         #  times, although through different edges. We have to modify the data
-        #  flow there, since the offsets and that dat has changed. However, we must
+        #  flow there, since the offsets and the data have changed. However, we must
         #  do this only once. Note that only matching the node is not enough, a
         #  counter example would be a Map with different connector names.
         reconfigured_neighbour: set[tuple[dace_nodes.Node, Optional[str]]] = set()
@@ -959,7 +959,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         a1: dace_nodes.AccessNode,
         a2: dace_nodes.AccessNode,
     ) -> None:
-        """Modify modify the data flow associated to `new_edge`.
+        """Modify the data flow associated to `new_edge`.
 
         The `_reroute_edge()` function creates a new edge, but it does not modify
         the data flow at the other side, of the connection, this is done by this
@@ -967,7 +967,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
 
         Depending on the value of `is_producer_edge` the function will either modify
         the source of `new_edge` (`True`) or it will modify the data flow associated
-        to the destination pf `new_edge` (`False`).
+        to the destination of `new_edge` (`False`).
         Furthermore, the specific actions depends on what kind of node is on the other
         side. However, essentially the function will modify it to account for the
         change from `a1` to `a2`.

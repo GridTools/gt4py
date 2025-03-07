@@ -64,7 +64,7 @@ def gt_simplify(
         `T`, i.e. `(G) -> (T)` and the write back to `G`, i.e. `(T) -> (G)` might be
         in different states.
     - `CopyChainRemover`: Which removes some chains that are introduced by the
-        `concat_where` build in.
+        `concat_where` built-in function.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.

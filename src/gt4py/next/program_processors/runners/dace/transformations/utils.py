@@ -240,7 +240,7 @@ def is_reachable(
     """Explores the graph from `start` and checks if `target` is reachable.
 
     The exploration of the graph is done in a way that ignores the connector names.
-    It is possible to pass multiple start nodes and targets.
+    It is possible to pass multiple start nodes and targets. In case of multiple target nodes, the function returns True if any of them is reachable.
 
     Args:
         start: The node from where to start.
