@@ -16,7 +16,6 @@ from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, ir as itir
-from gt4py.next.iterator.transforms import symbol_ref_utils, trace_shifts
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -45,12 +44,17 @@ class TypeSynthesizer:
     def __post_init__(self):
         if "offset_provider_type" not in inspect.signature(self.type_synthesizer).parameters:
             synthesizer = self.type_synthesizer
-            self.type_synthesizer = lambda *args, offset_provider_type: synthesizer(*args)
+            self.type_synthesizer = lambda *args, offset_provider_type, **kwargs: synthesizer(
+                *args, **kwargs
+            )
 
     def __call__(
-        self, *args: TypeOrTypeSynthesizer, offset_provider_type: common.OffsetProviderType
+        self,
+        *args: TypeOrTypeSynthesizer,
+        offset_provider_type: common.OffsetProviderType,
+        **kwargs,
     ) -> TypeOrTypeSynthesizer:
-        return self.type_synthesizer(*args, offset_provider_type=offset_provider_type)
+        return self.type_synthesizer(*args, offset_provider_type=offset_provider_type, **kwargs)
 
 
 TypeOrTypeSynthesizer = Union[ts.TypeSpec, TypeSynthesizer]
@@ -356,7 +360,7 @@ def as_fieldop(
         return final_target
 
     @TypeSynthesizer
-    def applied_as_fieldop(*fields) -> ts.FieldType | ts.DeferredType:
+    def applied_as_fieldop(*fields, shift_results) -> ts.FieldType | ts.DeferredType:
         if any(
             isinstance(el, ts.DeferredType)
             for f in fields
@@ -369,31 +373,21 @@ def as_fieldop(
 
         deduced_domain = None
         if offset_provider_type is not None:
-            node = None
-            if isinstance(stencil.node, itir.Expr):
-                node = stencil.node
-            elif isinstance(stencil.aliases[0], itir.Expr):
-                node = stencil.aliases[0]
-            if node is not None:
-                referenced_fun_names = symbol_ref_utils.collect_symbol_refs(node)
-                if referenced_fun_names:
-                    assert domain is not None
-                else:
-                    output_dims = set()
-                    shifts_results = trace_shifts.trace_stencil(
-                        node, num_args=len(fields)
-                    )  # TODO: access node differently?
-                    for i, field in enumerate(new_fields):
-                        for el in type_info.primitive_constituents(field):
-                            input_dims = el.dims if isinstance(el, ts.FieldType) else []
-                            for shift_tuple in shifts_results[
-                                i
-                            ]:  # Use shift tuple corresponding to the input field
-                                for input_dim in input_dims:
-                                    output_dims.add(_resolve_shift(input_dim, shift_tuple))
+            output_dims = set()
+            for i, field in enumerate(new_fields):
+                for el in type_info.primitive_constituents(field):
+                    input_dims = el.dims if isinstance(el, ts.FieldType) else []
+                    if shift_results:
+                        for shift_tuple in shift_results[
+                            i
+                        ]:  # Use shift tuple corresponding to the input field
+                            for input_dim in input_dims:
+                                output_dims.add(_resolve_shift(input_dim, shift_tuple))
 
-                    output_dims_sorted = common.ordered_dims(output_dims)  # TODO: use promote_dims
-                    deduced_domain = it_ts.DomainType(dims=list(output_dims_sorted))
+                        output_dims_sorted = common.ordered_dims(
+                            output_dims
+                        )  # TODO: use promote_dims
+                        deduced_domain = it_ts.DomainType(dims=list(output_dims_sorted))
 
         if deduced_domain:
             if domain:

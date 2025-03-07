@@ -18,7 +18,8 @@ from gt4py.eve import concepts
 from gt4py.eve.extended_typing import Any, Callable, Optional, TypeVar, Union
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
-from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_as_fieldop, is_call_to
+from gt4py.next.iterator.transforms import symbol_ref_utils, trace_shifts
 from gt4py.next.iterator.type_system import type_specifications as it_ts, type_synthesizer
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.type_system.type_info import primitive_constituents
@@ -182,13 +183,14 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         self,
         *args: type_synthesizer.TypeOrTypeSynthesizer,
         offset_provider_type: common.OffsetProviderType,
+        **kwargs,
     ) -> Union[ts.TypeSpec, ObservableTypeSynthesizer]:
         assert all(
             isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args
         ), "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
 
         return_type_or_synthesizer = self.type_synthesizer(
-            *args, offset_provider_type=offset_provider_type
+            *args, offset_provider_type=offset_provider_type, **kwargs
         )
 
         # return type is a typing rule by itself
@@ -565,11 +567,20 @@ class ITIRTypeInference(eve.NodeTranslator):
                 return ts.DeferredType(constraint=None)
             assert isinstance(tuple_.type, ts.TupleType)
             return tuple_.type.types[index]
+        shifts = {}
+        if is_applied_as_fieldop(node):
+            referenced_fun_names = symbol_ref_utils.collect_symbol_refs(node.fun.args[0])
+            if not referenced_fun_names:
+                shifts_results = trace_shifts.trace_stencil(
+                    node.fun.args[0], num_args=len(node.args)
+                )
+                shifts["shift_results"] = shifts_results
+            else:
+                shifts["shift_results"] = []
 
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)
-
-        result = fun(*args, offset_provider_type=self.offset_provider_type)
+        result = fun(*args, **shifts, offset_provider_type=self.offset_provider_type)
 
         if isinstance(result, ObservableTypeSynthesizer):
             assert not result.node

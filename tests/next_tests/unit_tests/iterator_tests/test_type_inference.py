@@ -394,7 +394,9 @@ def test_function_definition():
         body=[
             itir.SetAt(
                 domain=cartesian_domain,
-                expr=im.as_fieldop(im.ref("bar"), cartesian_domain)(im.ref("inp")),
+                expr=im.as_fieldop(im.ref("bar", float_i_field), cartesian_domain)(
+                    im.ref("inp", float_i_field)
+                ),
                 target=im.ref("out"),
             ),
         ],
