@@ -503,9 +503,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             else:
                 temp, _ = self.add_temp_array_like(sdfg, desc)
                 temp_node = head_state.add_access(temp)
-                head_state.add_nedge(
+                edge = head_state.add_nedge(
                     field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
                 )
+                # use same source and destination array subset
+                edge.data.dst_subset = edge.data.src_subset
                 return gtir_builtin_translators.FieldopData(temp_node, field.gt_type, field.origin)
 
         temp_result = gtx_utils.tree_map(make_temps)(result)
