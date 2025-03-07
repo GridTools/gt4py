@@ -118,7 +118,7 @@ def _get_tasklet_inout_memlets(
             #     statement2
             #   statement3
             #
-            # statements 1 and 3 will end up in the same block but aren't in the same tasklet.
+            # statements 1 and 3 will end up in the same CodeBlock but aren't in the same tasklet.
             names = []
             for statement in dcir_statements:
                 for access in statement.walk_values().if_isinstance(

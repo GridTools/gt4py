@@ -742,12 +742,12 @@ class VariableKOffset(common.VariableKOffset[Expr]):
 
 
 class IndexAccess(common.FieldAccess, Expr):
-    # ScalarAccess used for field index
+    # ScalarAccess used for indirect addressing
     offset: Optional[common.CartesianOffset | Literal | ScalarAccess | VariableKOffset]
     is_target: bool
 
-    # Use to access as a full field with explicit indices
     explicit_indices: Optional[list[Literal | ScalarAccess | VariableKOffset]] = None
+    """Used to access as a full field with explicit indices"""
 
 
 class AssignStmt(common.AssignStmt[Union[IndexAccess, ScalarAccess], Expr], Stmt):
