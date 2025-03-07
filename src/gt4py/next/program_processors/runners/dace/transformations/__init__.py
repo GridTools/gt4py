@@ -25,9 +25,11 @@ from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
 from .redundant_array_removers import (
+    CopyChainRemover,
     MultiStateGlobalSelfCopyElimination,
     SingleStateGlobalSelfCopyElimination,
     gt_multi_state_global_self_copy_elimination,
+    gt_remove_copy_chain,
 )
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
@@ -50,6 +52,7 @@ from .utils import gt_find_constant_arguments, gt_make_transients_persistent
 
 __all__ = [
     "GT_SIMPLIFY_DEFAULT_SKIP_SET",
+    "CopyChainRemover",
     "GPUSetBlockSize",
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
@@ -76,6 +79,7 @@ __all__ = [
     "gt_propagate_strides_from_access_node",
     "gt_propagate_strides_of",
     "gt_reduce_distributed_buffering",
+    "gt_remove_copy_chain",
     "gt_set_gpu_blocksize",
     "gt_set_iteration_order",
     "gt_simplify",
