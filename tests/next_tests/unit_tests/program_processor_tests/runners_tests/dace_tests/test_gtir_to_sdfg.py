@@ -2099,6 +2099,8 @@ def test_gtir_concat_where():
             ],
         )
 
+        # run domain inference in order to add the domain annex information to the concat_where node.
+        testee = infer_domain.infer_program(testee, offset_provider=CARTESIAN_OFFSETS)
         sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
         c = np.empty_like(a)
 
@@ -2173,6 +2175,8 @@ def test_gtir_concat_where_two_dimensions():
         "__z_stride_1": d.strides[1] // d.itemsize,
     }
 
+    # run domain inference in order to add the domain annex information to the concat_where node.
+    testee = infer_domain.infer_program(testee, offset_provider=CARTESIAN_OFFSETS)
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     sdfg(a, b, c, d, **field_symbols)
