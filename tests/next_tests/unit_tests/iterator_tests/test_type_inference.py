@@ -49,7 +49,7 @@ from next_tests.integration_tests.cases import IField, JField
 bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-float64_list_type = ts.ListType(element_type=float64_type)
+float64_list_type = ts.ListType(element_type=float64_type, offset_type=V2EDim)
 int_list_type = ts.ListType(element_type=int_type)
 
 float_i_field = ts.FieldType(dims=[IDim], dtype=float64_type)

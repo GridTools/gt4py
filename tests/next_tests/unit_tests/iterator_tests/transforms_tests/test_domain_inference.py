@@ -73,9 +73,22 @@ def setup_test_as_fieldop(
 
     new_refs = []
     for ref in refs:
-        # if expected_domains[ref] in [infer_domain.DomainAccessDescriptor.NEVER, infer_domain.DomainAccessDescriptor.UNKNOWN]:
-        #     new_refs.append(ref)
-        if isinstance(ref, str) and isinstance(
+        if isinstance(ref, (int, float)):
+            new_refs.append(ref)
+        elif expected_domains[ref] in [
+            infer_domain.DomainAccessDescriptor.NEVER,
+            infer_domain.DomainAccessDescriptor.UNKNOWN,
+        ]:
+            new_refs.append(
+                im.ref(
+                    ref,
+                    ts.FieldType(
+                        dims=[],
+                        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+                    ),
+                )
+            )
+        elif isinstance(ref, str) and isinstance(
             list(expected_domains[ref].keys())[0], common.Dimension
         ):
             new_refs.append(
@@ -281,7 +294,7 @@ def test_shift_x_y_two_inputs_literal(offset_provider):
         stencil,
         domain,
         expected_domains,
-        refs=(im.ref("in_field1"), 2),
+        refs=("in_field1", 2.0),
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -432,9 +445,9 @@ def test_unused_input(offset_provider):
 
 
 def test_let_unused_field(offset_provider):
-    testee = im.let("a", "c")("b")
+    testee = im.let("a", "c")(im.ref("b", float_i_field))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected = im.let("a", "c")("b")
+    expected = im.let("a", "c")(im.ref("b", float_i_field))
     expected_domains = {"b": {IDim: (0, 11)}, "c": infer_domain.DomainAccessDescriptor.NEVER}
 
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
@@ -877,9 +890,19 @@ def test_make_tuple(offset_provider):
 
 
 def test_tuple_get_1_make_tuple(offset_provider):
-    testee = im.tuple_get(1, im.make_tuple(im.ref("a"), im.ref("b"), im.ref("c")))
+    testee = im.tuple_get(
+        1,
+        im.make_tuple(
+            im.ref("a", float_i_field), im.ref("b", float_i_field), im.ref("c", float_i_field)
+        ),
+    )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected = im.tuple_get(1, im.make_tuple(im.ref("a"), im.ref("b"), im.ref("c")))
+    expected = im.tuple_get(
+        1,
+        im.make_tuple(
+            im.ref("a", float_i_field), im.ref("b", float_i_field), im.ref("c", float_i_field)
+        ),
+    )
     expected_domains = {
         "a": infer_domain.DomainAccessDescriptor.NEVER,
         "b": im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)}),
@@ -895,10 +918,22 @@ def test_tuple_get_1_make_tuple(offset_provider):
 
 
 def test_tuple_get_1_nested_make_tuple(offset_provider):
-    testee = im.tuple_get(1, im.make_tuple(im.ref("a"), im.make_tuple(im.ref("b"), im.ref("c"))))
+    testee = im.tuple_get(
+        1,
+        im.make_tuple(
+            im.ref("a", float_i_field),
+            im.make_tuple(im.ref("b", float_i_field), im.ref("c", float_i_field)),
+        ),
+    )
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
-    expected = im.tuple_get(1, im.make_tuple(im.ref("a"), im.make_tuple(im.ref("b"), im.ref("c"))))
+    expected = im.tuple_get(
+        1,
+        im.make_tuple(
+            im.ref("a", float_i_field),
+            im.make_tuple(im.ref("b", float_i_field), im.ref("c", float_i_field)),
+        ),
+    )
     expected_domains = {"a": infer_domain.DomainAccessDescriptor.NEVER, "b": domain1, "c": domain2}
 
     actual, actual_domains = infer_domain.infer_expr(
@@ -915,9 +950,19 @@ def test_tuple_get_1_nested_make_tuple(offset_provider):
 
 
 def test_tuple_get_let_arg_make_tuple(offset_provider):
-    testee = im.tuple_get(1, im.let("a", im.make_tuple(im.ref("b"), im.ref("c")))("d"))
+    testee = im.tuple_get(
+        1,
+        im.let("a", im.make_tuple(im.ref("b", float_i_field), im.ref("c", float_i_field)))(
+            im.ref("d", float_i_field)
+        ),
+    )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected = im.tuple_get(1, im.let("a", im.make_tuple(im.ref("b"), im.ref("c")))("d"))
+    expected = im.tuple_get(
+        1,
+        im.let("a", im.make_tuple(im.ref("b", float_i_field), im.ref("c", float_i_field)))(
+            im.ref("d", float_i_field)
+        ),
+    )
     expected_domains = {
         "b": infer_domain.DomainAccessDescriptor.NEVER,
         "c": infer_domain.DomainAccessDescriptor.NEVER,
@@ -937,9 +982,13 @@ def test_tuple_get_let_arg_make_tuple(offset_provider):
 
 
 def test_tuple_get_let_make_tuple(offset_provider):
-    testee = im.tuple_get(1, im.let("a", "b")(im.make_tuple(im.ref("c"), im.ref("d"))))
+    testee = im.tuple_get(
+        1, im.let("a", "b")(im.make_tuple(im.ref("c", float_i_field), im.ref("d", float_i_field)))
+    )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected = im.tuple_get(1, im.let("a", "b")(im.make_tuple(im.ref("c"), im.ref("d"))))
+    expected = im.tuple_get(
+        1, im.let("a", "b")(im.make_tuple(im.ref("c", float_i_field), im.ref("d", float_i_field)))
+    )
     expected_domains = {
         "c": infer_domain.DomainAccessDescriptor.NEVER,
         "d": domain,
@@ -1158,7 +1207,9 @@ def test_never_accessed_domain(offset_provider):
 
 
 def test_never_accessed_domain_tuple(offset_provider):
-    testee = im.tuple_get(0, im.make_tuple("in_field1", "in_field2"))
+    testee = im.tuple_get(
+        0, im.make_tuple(im.ref("in_field1", float_i_field), im.ref("in_field2", float_i_field))
+    )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10)})
     expected_domains = {
         "in_field1": {IDim: (0, 10)},
