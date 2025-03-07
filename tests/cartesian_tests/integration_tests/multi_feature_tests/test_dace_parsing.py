@@ -7,13 +7,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
+from typing import TYPE_CHECKING
 
-# Avoid test collection errors, which happen even if we decorate test functions because
-# imports happen at collection time and nox doesn't install the dace extra for
-# "internal tests".
-pytest.importorskip("dace")
+if TYPE_CHECKING:
+    import dace
+else:
+    dace = pytest.importorskip("dace")
 
-import dace  # import dace normally (again) because `importorskip()` will erase all type information
 import hypothesis.strategies as hyp_st
 import numpy as np
 import pathlib
@@ -29,7 +29,7 @@ from gt4py.cartesian.backend.dace_lazy_stencil import DaCeLazyStencil
 
 from cartesian_tests.utils import OriginWrapper
 
-# Because "dace test" filter by `requires_dace`, we still need to add the marker.
+# Because "dace tests" filter by `requires_dace`, we still need to add the marker.
 # This global variable add the marker to all test functions in this module.
 pytestmark = [pytest.mark.requires_dace, pytest.mark.usefixtures("dace_env")]
 

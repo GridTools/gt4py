@@ -8,9 +8,6 @@
 
 import pytest
 
-# Avoid test collection errors, which happen even if we decorate test functions because
-# imports happen at collection time and nox doesn't install the dace extra for
-# "internal tests".
 pytest.importorskip("dace")
 
 from typing import Optional
@@ -20,7 +17,7 @@ from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.constants import TASKLET_PREFIX_IN, TASKLET_PREFIX_OUT
 from gt4py.cartesian.gtc.dace.utils import get_tasklet_symbol
 
-# Because "dace test" filter by `requires_dace`, we still need to add the marker.
+# Because "dace tests" filter by `requires_dace`, we still need to add the marker.
 # This global variable add the marker to all test functions in this module.
 pytestmark = pytest.mark.requires_dace
 
