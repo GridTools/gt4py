@@ -6,7 +6,14 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import dace
+import pytest
+
+# Avoid test collection errors, which happen even if we decorate test functions because
+# imports happen at collection time and nox doesn't install the dace extra for
+# "internal tests".
+pytest.importorskip("dace")
+
+import dace  # import dace normally (again) because `importorskip()` will erase all type information
 
 from gt4py.cartesian.gtc import oir
 from gt4py.cartesian.gtc.common import DataType
@@ -20,6 +27,10 @@ from .oir_utils import (
     ScalarAccessFactory,
     StencilFactory,
 )
+
+# Because "dace test" filter by `requires_dace`, we still need to add the marker.
+# This global variable add the marker to all test functions in this module.
+pytestmark = pytest.mark.requires_dace
 
 
 def test_oir_sdfg_builder_copy_stencil() -> None:
