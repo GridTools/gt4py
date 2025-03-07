@@ -556,8 +556,12 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
     ) -> None:
         sdfg_ctx.add_state()
 
-        # Remove node_ctx from **kwargs in case it exists. We are building a new one.
+        # node_ctx is used to keep track of memlets per ComputationState. Conditions and WhileLoops
+        # will (recursively) introduce more than one compute state per vertical loop. We thus drop
+        # any node_ctx that is potentially passed down and instead create a new one for each
+        # ComputationState that we encounter.
         kwargs.pop("node_ctx", None)
+
         read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
         write_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
         for computation in node.computations:
