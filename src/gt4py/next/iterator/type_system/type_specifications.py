@@ -17,7 +17,7 @@ class NamedRangeType(ts.TypeSpec):
 
 
 class DomainType(ts.DataType):
-    dims: list[common.Dimension] | Literal["unknown"]  # TODO: remove unknown
+    dims: list[common.Dimension]
 
 
 class OffsetLiteralType(ts.TypeSpec):

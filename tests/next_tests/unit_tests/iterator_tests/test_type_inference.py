@@ -632,7 +632,7 @@ def test_as_fieldop_without_domain_Vertex_K_1():
     result = itir_type_inference.infer(
         testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
-    assert result.type == ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)  # TODO
+    assert result.type == ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
     assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
         position_dims=[Vertex, KDim],
         defined_dims=float_k_field.dims,
