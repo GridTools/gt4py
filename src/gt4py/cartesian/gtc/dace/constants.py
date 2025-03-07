@@ -13,3 +13,6 @@ from typing import Final
 # StencilComputation in/out connector prefixes
 CONNECTOR_PREFIX_IN: Final = "__in_"
 CONNECTOR_PREFIX_OUT: Final = "__out_"
+
+TASKLET_PREFIX_IN: Final[str] = "gtIN__"
+TASKLET_PREFIX_OUT: Final[str] = "gtOUT__"
