@@ -18,7 +18,6 @@ from gt4py.next.program_processors.runners.dace import (
 )
 
 from . import util
-import dace
 
 
 def _mk_distributed_buffer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
