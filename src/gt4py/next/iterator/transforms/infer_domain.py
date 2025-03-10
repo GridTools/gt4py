@@ -194,12 +194,17 @@ def _extract_accessed_domains(
 
 
 def _restrict_domain(
-    in_field_domain: NonTupleDomainAccess, dims: list[common.Dimension]
+    in_field_domain: NonTupleDomainAccess,
+    dims: list[common.Dimension],
+    keep_dims: Optional[dict[common.Dimension, domain_utils.SymbolicRange]] = None,
 ) -> NonTupleDomainAccess:
     if isinstance(in_field_domain, domain_utils.SymbolicDomain):
         cleaned_dims = {}
         for dim, range_ in in_field_domain.ranges.items():
             if dim in dims:
+                cleaned_dims[dim] = range_
+        if keep_dims:
+            for dim, range_ in keep_dims.items():
                 cleaned_dims[dim] = range_
         return domain_utils.SymbolicDomain(grid_type=in_field_domain.grid_type, ranges=cleaned_dims)
     return in_field_domain
@@ -446,9 +451,16 @@ def infer_expr(
             lambda x: x
         )(expr.type),
     )
+    keep_dims = {}
+    if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):
+        for dim, range_ in domain.ranges.items():
+            if dim.kind == common.DimensionKind.VERTICAL:
+                keep_dims[dim] = range_
     domain = gtx_utils.tree_map(
         lambda d, t: _restrict_domain(
-            d, t.dims if not isinstance(t, (ts.ScalarType, ts.DeferredType)) else []
+            d,
+            t.dims if not isinstance(t, (ts.ScalarType, ts.DeferredType)) else [],
+            keep_dims=keep_dims,
         )
     )(domain, el_types)
 
