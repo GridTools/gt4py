@@ -210,6 +210,17 @@ def _restrict_domain(
     return in_field_domain
 
 
+def _gather_keep_dims(
+    domain: domain_utils.SymbolicDomain | DomainAccessDescriptor,
+) -> dict[common.Dimension, domain_utils.SymbolicRange]:
+    keep_dims = {}
+    if isinstance(domain, domain_utils.SymbolicDomain):
+        for dim, range_ in domain.ranges.items():
+            if dim.kind == common.DimensionKind.VERTICAL:
+                keep_dims[dim] = range_
+    return keep_dims
+
+
 def _infer_as_fieldop(
     applied_fieldop: itir.FunCall,
     target_domain: DomainAccess,
@@ -451,18 +462,19 @@ def infer_expr(
             lambda x: x
         )(expr.type),
     )
-    keep_dims = {}
+
     if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):
-        for dim, range_ in domain.ranges.items():
-            if dim.kind == common.DimensionKind.VERTICAL:
-                keep_dims[dim] = range_
+        keep_dims = gtx_utils.tree_map(lambda d: _gather_keep_dims(d))(domain)
+    else:
+        keep_dims = gtx_utils.tree_map(lambda d: {})(domain)
+
     domain = gtx_utils.tree_map(
-        lambda d, t: _restrict_domain(
+        lambda d, t, k: _restrict_domain(
             d,
             t.dims if not isinstance(t, (ts.ScalarType, ts.DeferredType)) else [],
-            keep_dims=keep_dims,
+            keep_dims=k,
         )
-    )(domain, el_types)
+    )(domain, el_types, keep_dims)
 
     expr, accessed_domains = _infer_expr(
         expr,
