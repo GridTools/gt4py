@@ -8,8 +8,6 @@
 
 import pytest
 
-pytest.importorskip("dace")
-
 from typing import Optional
 
 from gt4py.cartesian.gtc.common import DataType, CartesianOffset

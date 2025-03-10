@@ -7,60 +7,37 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    import dace
-else:
-    dace = pytest.importorskip("dace")
-
-from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc.common import DataType
 from gt4py.cartesian.gtc.dace import daceir as dcir
-from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
-from gt4py.cartesian.gtc.dace.nodes import StencilComputation
-from gt4py.cartesian.gtc.dace.oir_to_dace import OirSDFGBuilder
-from gt4py.cartesian.gtc.dace.expansion.expansion import StencilComputationExpansion
 
+from cartesian_tests.unit_tests.test_gtc.dace import utils
 from cartesian_tests.unit_tests.test_gtc.oir_utils import (
     AssignStmtFactory,
     BinaryOpFactory,
-    FieldAccessFactory,
-    FieldDeclFactory,
     HorizontalExecutionFactory,
     LiteralFactory,
     LocalScalarFactory,
     MaskStmtFactory,
     ScalarAccessFactory,
     StencilFactory,
+    WhileFactory,
 )
+
 
 # Because "dace tests" filter by `requires_dace`, we still need to add the marker.
 # This global variable add the marker to all test functions in this module.
 pytestmark = pytest.mark.requires_dace
 
 
-def _dcir_from_stencil(stencil: StencilFactory) -> list[dcir.NestedSDFG]:
-    sdfg = OirSDFGBuilder().visit(stencil)
-    assert isinstance(sdfg, dace.SDFG)
+def test_dcir_code_structure_condition() -> None:
+    """Tests the following code structure:
 
-    expansions = []
-    for state in sdfg.nodes():
-        for node in state.nodes():
-            if not isinstance(node, StencilComputation):
-                continue
-
-            arrays = StencilComputationExpansion._get_parent_arrays(node, state, sdfg)
-            nested_SDFG = DaCeIRBuilder().visit(
-                node.oir_node,
-                global_ctx=DaCeIRBuilder.GlobalContext(library_node=node, arrays=arrays),
-            )
-            expansions.append(nested_SDFG)
-
-    return expansions
-
-
-def test_dcir_code_structure() -> None:
+    ComputationState
+    Condition
+        true_state: [ComputationState]
+        false_state: []
+    ComputationState
+    """
     stencil = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(
@@ -81,22 +58,52 @@ def test_dcir_code_structure() -> None:
             ),
         ]
     )
-    expansions = _dcir_from_stencil(stencil)
-    # We can assert the following structure
-    # - ComputationState
-    # - Condition
-    #   - true_state: [ComputationState]
-    #   - false_state: []
-    # - ComputationState
-    # from the above example
-
-    # Let's have a similar one for WhileLoops, e.g.
-    # - ComputationState
-    # - WhileLoop
-    #   - body: [ComputationState]
-    # - ComputationState
-
-    # We can't really validate the access nodes.
-    # (the one that Florian was asking for)
-    # Let's do this in a test that is processing the daceir to an actual sdfg
+    expansions = utils.library_node_expansions(stencil)
     assert len(expansions) == 1, "expect one vertical loop to be expanded"
+
+    nested_SDFG = utils.nested_SDFG_inside_triple_loop(expansions[0])
+    assert isinstance(nested_SDFG.states[0], dcir.ComputationState)
+    assert isinstance(nested_SDFG.states[1], dcir.Condition)
+    assert nested_SDFG.states[1].true_state
+    assert isinstance(nested_SDFG.states[1].true_state[0], dcir.ComputationState)
+    assert not nested_SDFG.states[1].false_state
+    assert isinstance(nested_SDFG.states[2], dcir.ComputationState)
+
+
+def test_dcir_code_structure_while() -> None:
+    """Tests the following code structure
+
+    ComputationState
+    WhileLoop
+        body: [ComputationState]
+    ComputationState
+    """
+    stencil = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(
+                        left=ScalarAccessFactory(name="tmp"),
+                        right=BinaryOpFactory(
+                            left=LiteralFactory(value="0"), right=LiteralFactory(value="2")
+                        ),
+                    ),
+                    WhileFactory(),
+                    AssignStmtFactory(
+                        left=ScalarAccessFactory(name="other"),
+                        right=ScalarAccessFactory(name="tmp"),
+                    ),
+                ],
+                declarations=[LocalScalarFactory(name="tmp"), LocalScalarFactory(name="other")],
+            ),
+        ]
+    )
+    expansions = utils.library_node_expansions(stencil)
+    assert len(expansions) == 1, "expect one vertical loop to be expanded"
+
+    nested_SDFG = utils.nested_SDFG_inside_triple_loop(expansions[0])
+    assert isinstance(nested_SDFG.states[0], dcir.ComputationState)
+    assert isinstance(nested_SDFG.states[1], dcir.WhileLoop)
+    assert nested_SDFG.states[1].body
+    assert isinstance(nested_SDFG.states[1].body[0], dcir.ComputationState)
+    assert isinstance(nested_SDFG.states[2], dcir.ComputationState)
