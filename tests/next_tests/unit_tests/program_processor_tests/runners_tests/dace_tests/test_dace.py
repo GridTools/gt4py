@@ -175,7 +175,7 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         offset_provider = unstructured_case.offset_provider
     else:
         assert gtx.allocators.is_field_allocator_for(
-            unstructured_case.backend.allocator, gtx.allocators.CUPY_DEVICE
+            unstructured_case.backend.allocator, core_defs.CUPY_DEVICE
         )
 
         import cupy as cp

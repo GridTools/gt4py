@@ -86,7 +86,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
 
     allocator, backend = unstructured_case.allocator, unstructured_case.backend
 
-    if gtx_allocators.is_field_allocator_for(allocator, gtx_allocators.CUPY_DEVICE):
+    if gtx_allocators.is_field_allocator_for(allocator, core_defs.CUPY_DEVICE):
         import cupy as xp
 
         dace_storage_type = dace.StorageType.GPU_Global

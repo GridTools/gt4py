@@ -39,9 +39,12 @@ from gt4py.eve.extended_typing import (
 )
 
 
-if TYPE_CHECKING:
+try:
     import cupy as cp
+except ImportError:
+    cp = None
 
+if TYPE_CHECKING:
     CuPyNDArray: TypeAlias = cp.ndarray
 
     import jax.numpy as jnp
@@ -393,6 +396,11 @@ DeviceTypeT = TypeVar(
     CPUDeviceTyping,
     CUDADeviceTyping,
     ROCMDeviceTyping,
+)
+
+
+CUPY_DEVICE: Final[Literal[None, DeviceType.CUDA, DeviceType.ROCM]] = (
+    None if not cp else (DeviceType.ROCM if cp.cuda.runtime.is_hip else DeviceType.CUDA)
 )
 
 

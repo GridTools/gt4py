@@ -12,7 +12,7 @@ import collections.abc
 import functools
 import math
 import numbers
-from typing import Final, Literal, Optional, Sequence, Tuple, Union, cast
+from typing import Literal, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -30,13 +30,6 @@ except ImportError:
     cp = None
 
 
-CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]] = (
-    None
-    if not cp
-    else (core_defs.DeviceType.ROCM if cp.cuda.get_hipcc_path() else core_defs.DeviceType.CUDA)
-)
-
-
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
 
 _CPUBufferAllocator = allocators.NDArrayBufferAllocator(
@@ -47,12 +40,12 @@ _GPUBufferAllocator: Optional[allocators.NDArrayBufferAllocator] = None
 if cp:
     assert isinstance(allocators.cupy_array_utils, allocators.ArrayUtils)
 
-    if CUPY_DEVICE == core_defs.DeviceType.CUDA:
+    if core_defs.CUPY_DEVICE == core_defs.DeviceType.CUDA:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
             device_type=core_defs.DeviceType.CUDA,
             array_utils=allocators.cupy_array_utils,
         )
-    elif CUPY_DEVICE == core_defs.DeviceType.ROCM:
+    elif core_defs.CUPY_DEVICE == core_defs.DeviceType.ROCM:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
             device_type=core_defs.DeviceType.ROCM,
             array_utils=allocators.cupy_array_utils,
@@ -286,7 +279,7 @@ def _allocate_gpu(
 
 allocate_gpu = _allocate_gpu
 
-if CUPY_DEVICE == core_defs.DeviceType.ROCM:
+if core_defs.CUPY_DEVICE == core_defs.DeviceType.ROCM:
 
     class CUDAArrayInterfaceNDArray(cp.ndarray):
         def __new__(cls, input_array: "cp.ndarray") -> CUDAArrayInterfaceNDArray:

@@ -18,26 +18,12 @@ from gt4py.eve.extended_typing import (
     Any,
     Callable,
     Final,
-    Literal,
     Optional,
     Protocol,
     Sequence,
     TypeAlias,
     TypeGuard,
     cast,
-)
-
-
-try:
-    import cupy as cp
-except ImportError:
-    cp = None
-
-
-CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]] = (
-    None
-    if not cp
-    else (core_defs.DeviceType.ROCM if cp.cuda.runtime.is_hip else core_defs.DeviceType.CUDA)
 )
 
 
@@ -246,11 +232,11 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
         raise self.exception
 
 
-if CUPY_DEVICE is not None:
+if core_defs.CUPY_DEVICE is not None:
     assert isinstance(core_allocators.cupy_array_utils, core_allocators.ArrayUtils)
     cupy_array_utils = core_allocators.cupy_array_utils
 
-    if CUPY_DEVICE is core_defs.DeviceType.CUDA:
+    if core_defs.CUPY_DEVICE is core_defs.DeviceType.CUDA:
 
         class CUDAFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CUDADeviceTyping]):
             def __init__(self) -> None:
@@ -288,7 +274,9 @@ else:
 
 StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = cast(
     type[FieldBufferAllocatorProtocol],
-    type(device_allocators[CUPY_DEVICE]) if CUPY_DEVICE else InvalidGPUFieldBufferAllocator,
+    type(device_allocators[core_defs.CUPY_DEVICE])
+    if core_defs.CUPY_DEVICE
+    else InvalidGPUFieldBufferAllocator,
 )
 
 

@@ -27,7 +27,7 @@ class DaCeBackendFactory(factory.Factory):
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=next_allocators.CUPY_DEVICE or core_defs.DeviceType.CUDA,
+            device_type=core_defs.CUPY_DEVICE or core_defs.DeviceType.CUDA,
             name_device="gpu",
         )
         cached = factory.Trait(
