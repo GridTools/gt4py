@@ -19,8 +19,7 @@ import numpy as np
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.common import CartesianOffset, VariableKOffset
-from gt4py.cartesian.gtc.dace import daceir as dcir
-from gt4py.cartesian.gtc.dace.constants import TASKLET_PREFIX_IN, TASKLET_PREFIX_OUT
+from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
@@ -73,7 +72,7 @@ def get_tasklet_symbol(
     offset: Optional[CartesianOffset | VariableKOffset] = None,
     is_target: bool,
 ):
-    access_name = f"{TASKLET_PREFIX_OUT}{name}" if is_target else f"{TASKLET_PREFIX_IN}{name}"
+    access_name = f"{prefix.TASKLET_OUT}{name}" if is_target else f"{prefix.TASKLET_IN}{name}"
     if offset is None:
         return access_name
 

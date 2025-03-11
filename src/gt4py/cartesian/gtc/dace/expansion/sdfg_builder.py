@@ -18,15 +18,14 @@ import dace.library
 import dace.subsets
 
 from gt4py import eve
-from gt4py.cartesian.gtc.dace import daceir as dcir
-from gt4py.cartesian.gtc.dace.constants import TASKLET_PREFIX_IN, TASKLET_PREFIX_OUT
+from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
 from gt4py.cartesian.gtc.dace.expansion.tasklet_codegen import TaskletCodegen
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo, make_dace_subset
 
 
 def node_name_from_connector(connector: str) -> str:
-    return connector.removeprefix(TASKLET_PREFIX_OUT).removeprefix(TASKLET_PREFIX_IN)
+    return connector.removeprefix(prefix.TASKLET_OUT).removeprefix(prefix.TASKLET_IN)
 
 
 class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
@@ -422,7 +421,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                 not field_access
                 and not defined_symbol
                 and not access_node.is_target
-                and read_name.startswith(TASKLET_PREFIX_IN)
+                and read_name.startswith(prefix.TASKLET_IN)
                 and read_name not in scalar_inputs
             ):
                 scalar_inputs.add(read_name)
@@ -499,13 +498,13 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             input_node_and_conns: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
             output_node_and_conns: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
             for field in set(memlet.field for memlet in scope_node.read_memlets):
-                map_entry.add_in_connector("IN_" + field)
-                map_entry.add_out_connector("OUT_" + field)
-                input_node_and_conns[field] = (map_entry, "OUT_" + field)
+                map_entry.add_in_connector(f"{prefix.PASSTHROUGH_IN}{field}")
+                map_entry.add_out_connector(f"{prefix.PASSTHROUGH_OUT}{field}")
+                input_node_and_conns[field] = (map_entry, f"{prefix.PASSTHROUGH_OUT}{field}")
             for field in set(memlet.field for memlet in scope_node.write_memlets):
-                map_exit.add_in_connector("IN_" + field)
-                map_exit.add_out_connector("OUT_" + field)
-                output_node_and_conns[field] = (map_exit, "IN_" + field)
+                map_exit.add_in_connector(f"{prefix.PASSTHROUGH_IN}{field}")
+                map_exit.add_out_connector(f"{prefix.PASSTHROUGH_OUT}{field}")
+                output_node_and_conns[field] = (map_exit, f"{prefix.PASSTHROUGH_IN}{field}")
             if not input_node_and_conns:
                 input_node_and_conns[None] = (map_entry, None)
             if not output_node_and_conns:
@@ -521,7 +520,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             scope_node=map_entry,
             sdfg_ctx=sdfg_ctx,
             node_ctx=node_ctx,
-            connector_prefix="IN_",
+            connector_prefix=prefix.PASSTHROUGH_IN,
             **kwargs,
         )
         self.visit(
@@ -529,7 +528,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             scope_node=map_exit,
             sdfg_ctx=sdfg_ctx,
             node_ctx=node_ctx,
-            connector_prefix="OUT_",
+            connector_prefix=prefix.PASSTHROUGH_OUT,
             **kwargs,
         )
         StencilComputationSDFGBuilder._add_empty_edges(

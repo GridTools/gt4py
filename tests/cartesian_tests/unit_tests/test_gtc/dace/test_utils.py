@@ -12,8 +12,8 @@ from typing import Optional
 
 from gt4py.cartesian.gtc.common import DataType, CartesianOffset
 from gt4py.cartesian.gtc.dace import daceir as dcir
-from gt4py.cartesian.gtc.dace.constants import TASKLET_PREFIX_IN, TASKLET_PREFIX_OUT
-from gt4py.cartesian.gtc.dace.utils import get_tasklet_symbol
+from gt4py.cartesian.gtc.dace import prefix
+from gt4py.cartesian.gtc.dace import utils
 
 # Because "dace tests" filter by `requires_dace`, we still need to add the marker.
 # This global variable add the marker to all test functions in this module.
@@ -23,15 +23,15 @@ pytestmark = pytest.mark.requires_dace
 @pytest.mark.parametrize(
     "name, is_target,offset,expected",
     [
-        ("A", False, None, f"{TASKLET_PREFIX_IN}A"),
-        ("A", True, None, f"{TASKLET_PREFIX_OUT}A"),
-        ("A", True, CartesianOffset(i=0, j=0, k=-1), f"{TASKLET_PREFIX_OUT}Akm1"),
-        ("A", False, CartesianOffset(i=1, j=-2, k=3), f"{TASKLET_PREFIX_IN}Aip1_jm2_kp3"),
+        ("A", False, None, f"{prefix.TASKLET_IN}A"),
+        ("A", True, None, f"{prefix.TASKLET_OUT}A"),
+        ("A", True, CartesianOffset(i=0, j=0, k=-1), f"{prefix.TASKLET_OUT}Akm1"),
+        ("A", False, CartesianOffset(i=1, j=-2, k=3), f"{prefix.TASKLET_IN}Aip1_jm2_kp3"),
         (
             "A",
             True,
             dcir.VariableKOffset(k=dcir.Literal(value="3", dtype=DataType.INT32)),
-            f"{TASKLET_PREFIX_OUT}A",
+            f"{prefix.TASKLET_OUT}A",
         ),
     ],
 )
@@ -41,4 +41,4 @@ def test_get_tasklet_symbol(
     offset: Optional[CartesianOffset | dcir.VariableKOffset],
     expected: str,
 ) -> None:
-    assert get_tasklet_symbol(name, is_target=is_target, offset=offset) == expected
+    assert utils.get_tasklet_symbol(name, is_target=is_target, offset=offset) == expected
