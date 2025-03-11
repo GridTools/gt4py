@@ -1030,10 +1030,9 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                 if memlet_to_adjust.data == a1.data:
                     memlet_to_adjust.data = a2.data
 
-                if is_producer_edge:
-                    subset_to_adjust = memlet_to_adjust.get_dst_subset(edge_to_adjust, state)
-                else:
-                    subset_to_adjust = memlet_to_adjust.get_src_subset(edge_to_adjust, state)
+                subset_to_adjust = (
+                    memlet_to_adjust.dst_subset if is_producer_edge else memlet_to_adjust.src_subset
+                )
                 assert subset_to_adjust is not None
                 subset_to_adjust.offset(a2_offsets, negative=False)
 
