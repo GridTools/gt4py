@@ -226,3 +226,19 @@ def promote_to_same_dimensions(
                 itir.InfinityLiteral.NEGATIVE, itir.InfinityLiteral.POSITIVE
             )
     return SymbolicDomain(domain_small.grid_type, dims_dict)  # TODO: fix for unstructured
+
+
+def is_finite(range_or_domain: SymbolicRange | SymbolicDomain) -> bool:
+    """
+    Return whether a range is unbounded in (at least) one direction.
+
+    The expression is required to be constant folded before for the result to be reliable.
+    """
+    if isinstance(range_ := range_or_domain, SymbolicRange):
+        # TODO: assert no infinity literal in here
+        if any(v in [itir.InfinityLiteral.POSITIVE, itir.InfinityLiteral.NEGATIVE] for v in [range_.start, range_.stop]):
+            return False
+        return True
+    elif isinstance(domain := range_or_domain, SymbolicDomain):
+        return all(is_finite(range_) for range_ in domain.ranges.values())
+    raise ValueError("Expected a SymbolicRange or SymbolicDomain.")

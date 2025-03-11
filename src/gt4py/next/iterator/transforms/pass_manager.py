@@ -91,10 +91,6 @@ def apply_common_transforms(
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir
     )  # domain inference does not support dynamic offsets yet
-    # TODO(tehrengruber): fuse into one pass? InferDomainOps might create an `and` again so the
-    #  second call is required. This happens in test_fused_velocity_advection_stencil_15_to_18.
-    # TODO(tehrengruber): also write a test case.
-    ir = nest_concat_wheres.NestConcatWheres.apply(ir)
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = nest_concat_wheres.NestConcatWheres.apply(ir)
 
@@ -206,7 +202,6 @@ def apply_fieldview_transforms(
     )  # domain inference does not support dynamic offsets yet
 
     # TODO: deduplicate with regular pass manager
-    ir = nest_concat_wheres.NestConcatWheres.apply(ir)
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = nest_concat_wheres.NestConcatWheres.apply(ir)
     ir = ConstantFolding.apply(ir)
