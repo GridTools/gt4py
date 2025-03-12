@@ -410,24 +410,23 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 ),
                 dtype=node.dtype,
             )
+        elif node.data_index:
+            access_node = dcir.IndexAccess(
+                name=name,
+                offset=None,
+                is_target=is_target,
+                data_index=self.visit(
+                    node.data_index,
+                    is_target=False,
+                    targets=targets,
+                    var_offset_fields=var_offset_fields,
+                    K_write_with_offset=K_write_with_offset,
+                    **kwargs,
+                ),
+                dtype=node.dtype,
+            )
         else:
-            if node.data_index:
-                access_node = dcir.IndexAccess(
-                    name=name,
-                    offset=None,
-                    is_target=is_target,
-                    data_index=self.visit(
-                        node.data_index,
-                        is_target=False,
-                        targets=targets,
-                        var_offset_fields=var_offset_fields,
-                        K_write_with_offset=K_write_with_offset,
-                        **kwargs,
-                    ),
-                    dtype=node.dtype,
-                )
-            else:
-                access_node = dcir.ScalarAccess(name=name, dtype=node.dtype, is_target=is_write)
+            access_node = dcir.ScalarAccess(name=name, dtype=node.dtype, is_target=is_write)
 
         if is_write and not any(
             isinstance(t, oir.FieldAccess) and t.name == node.name and t.offset == node.offset
