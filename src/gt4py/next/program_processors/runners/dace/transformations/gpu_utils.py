@@ -573,23 +573,22 @@ def gt_remove_trivial_gpu_maps(
 ) -> dace.SDFG:
     """Removes trivial maps that were created by the GPU transformation.
 
-    The main problem is, that in DaCe a Tasklets, outside of a Map, can not write
-    into an _array_ that is on GPU. `sdfg.apply_gpu_transformations()` will wrap
-    such Tasklets in a Map. There `GT4PyMoveTaskletIntoMap` that runs beforer, but
-    only works if the tasklet is adjacent to a map.
+    The main problem is that a Tasklet outside of a Map cannot write into an
+    _array_ that is on GPU. `sdfg.apply_gpu_transformations()` will wrap such
+    Tasklets in a Map. The `GT4PyMoveTaskletIntoMap` pass, that runs before,
+    but only works if the tasklet is adjacent to a map.
 
-    It first tries to promote them such that they can be fused in other maps,
-    it will then also perform fusion on them, to reduce the number of kernel calls.
+    It first tries to promote them such that they can be fused in other non-trivial
+    maps, it will then also perform fusion on them, to reduce the number of kernel
+    calls.
 
     Args:
         sdfg: The SDFG that we process.
-        map_postprocess: Enable post processing of the maps that are created.
-            See the Note section below.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
     """
 
-    # First we try to promote and fuse them other maps.
+    # First we try to promote and fuse them with other non-trivial maps.
     sdfg.apply_transformations_once_everywhere(
         TrivialGPUMapElimination(
             do_not_fuse=False,
