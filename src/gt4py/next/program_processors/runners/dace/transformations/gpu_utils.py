@@ -292,7 +292,14 @@ def _gt_expand_non_standard_memlets_sdfg(
             # Turn unsupported copy to a map
             try:
                 dace_transformation.dataflow.CopyToMap.apply_to(
-                    sdfg, save=False, annotate=False, a=a, b=b
+                    sdfg,
+                    save=False,
+                    annotate=False,
+                    a=a,
+                    b=b,
+                    options={
+                        "ignore_strides": True
+                    },  # apply 'CopyToMap' even if src/dst strides are different
                 )
             except ValueError:  # If transformation doesn't match, continue normally
                 continue
