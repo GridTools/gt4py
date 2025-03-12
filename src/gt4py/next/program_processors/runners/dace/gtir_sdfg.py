@@ -793,6 +793,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 dataname = nsdfg_dataname
                 datadesc = sdfg.arrays[nsdfg_dataname]
             else:
+                # By default, all scalar GTIR symbols are represented as scalar
+                # data containers in the SDFG. Exceptionally, scalar symbols used
+                # in domain expressions need to be represented as SDFG symbols.
+                # However, it can happen that the same symbol is used inside a
+                # nested context as a regular symbol, outside of a domain expression,
+                # in which case the symbol has to be written to a transient node
+                # and connected to in the input connector of the nested SDFG node.
                 assert nsdfg_dataname in sdfg.symbols
                 datatype = self.get_symbol_type(nsdfg_dataname)
                 assert isinstance(datatype, ts.ScalarType)
