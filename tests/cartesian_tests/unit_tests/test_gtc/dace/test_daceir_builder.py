@@ -34,8 +34,8 @@ def test_dcir_code_structure_condition() -> None:
 
     ComputationState
     Condition
-        true_state: [ComputationState]
-        false_state: []
+        true_states: [ComputationState]
+        false_states: []
     ComputationState
     """
     stencil = StencilFactory(
@@ -64,9 +64,9 @@ def test_dcir_code_structure_condition() -> None:
     nested_SDFG = utils.nested_SDFG_inside_triple_loop(expansions[0])
     assert isinstance(nested_SDFG.states[0], dcir.ComputationState)
     assert isinstance(nested_SDFG.states[1], dcir.Condition)
-    assert nested_SDFG.states[1].true_state
-    assert isinstance(nested_SDFG.states[1].true_state[0], dcir.ComputationState)
-    assert not nested_SDFG.states[1].false_state
+    assert nested_SDFG.states[1].true_states
+    assert isinstance(nested_SDFG.states[1].true_states[0], dcir.ComputationState)
+    assert not nested_SDFG.states[1].false_states
     assert isinstance(nested_SDFG.states[2], dcir.ComputationState)
 
 

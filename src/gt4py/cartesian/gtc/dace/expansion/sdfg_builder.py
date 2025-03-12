@@ -327,11 +327,11 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
 
         sdfg_ctx.pop_condition_guard()
         sdfg_ctx.pop_condition_true()
-        for state in node.true_state:
+        for state in node.true_states:
             self.visit(state, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs)
 
         sdfg_ctx.pop_condition_false()
-        for state in node.false_state:
+        for state in node.false_states:
             self.visit(state, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs)
 
         sdfg_ctx.pop_condition_after()

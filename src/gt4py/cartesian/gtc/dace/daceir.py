@@ -847,10 +847,11 @@ class IterationNode(eve.Node):
 
 class Condition(eve.Node):
     condition: Tasklet
-    true_state: list[ComputationState | Condition | WhileLoop]
+    true_states: list[ComputationState | Condition | WhileLoop]
 
-    # Currently unused due to how conditions are parsed higher up in the pipeline
-    false_state: list[ComputationState | Condition | WhileLoop] = eve.field(default_factory=list)
+    # Currently unused due to how `if` statements are parsed in `gtir_to_oir`, see
+    # https://github.com/GridTools/gt4py/issues/1898
+    false_states: list[ComputationState | Condition | WhileLoop] = eve.field(default_factory=list)
 
     @datamodels.validator("condition")
     def condition_has_boolean_expression(

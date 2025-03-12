@@ -19,7 +19,7 @@ import dace.library
 import dace.subsets
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc import common, oir, utils as gtc_utils
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.expansion_specification import Loop, Map, Sections, Stages
 from gt4py.cartesian.gtc.dace.utils import (
@@ -606,7 +606,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             **kwargs,
         )
         targets.clear()
-        return dcir.Condition(condition=tasklet, true_state=code_block)
+        return dcir.Condition(condition=tasklet, true_states=gtc_utils.listify(code_block))
 
     def visit_While(
         self,
