@@ -105,6 +105,12 @@ class FieldType(DataType, CallableType):
         dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
         return f"Field[{dims}, {self.dtype}]"
 
+    @eve_datamodels.validator("dims")
+    def _dims_validator(
+        self, attribute: eve_datamodels.Attribute, dims: list[common.Dimension]
+    ) -> None:
+        common.check_dims(dims)
+
 
 class TupleType(DataType):
     # TODO(tehrengruber): Remove `DeferredType` again. This was erroneously

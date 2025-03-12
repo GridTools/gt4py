@@ -51,11 +51,11 @@ class Axis(eve.StrEnum):
         return eve.SymbolRef("__tile_" + self.lower())
 
     @staticmethod
-    def dims_3d() -> Generator["Axis", None, None]:
+    def dims_3d() -> Generator[Axis, None, None]:
         yield from [Axis.I, Axis.J, Axis.K]
 
     @staticmethod
-    def dims_horizontal() -> Generator["Axis", None, None]:
+    def dims_horizontal() -> Generator[Axis, None, None]:
         yield from [Axis.I, Axis.J]
 
     def to_idx(self) -> int:
@@ -357,7 +357,7 @@ class Range(eve.Node):
 
 
 class GridSubset(eve.Node):
-    intervals: Dict[Axis, Union[DomainInterval, TileInterval, IndexWithExtent]]
+    intervals: Dict[Axis, Union[DomainInterval, IndexWithExtent, TileInterval]]
 
     def __iter__(self):
         for axis in Axis.dims_3d():
@@ -429,10 +429,10 @@ class GridSubset(eve.Node):
     @classmethod
     def from_interval(
         cls,
-        interval: Union[oir.Interval, TileInterval, DomainInterval, IndexWithExtent],
+        interval: Union[DomainInterval, IndexWithExtent, oir.Interval, TileInterval],
         axis: Axis,
     ):
-        res_interval: Union[IndexWithExtent, TileInterval, DomainInterval]
+        res_interval: Union[DomainInterval, IndexWithExtent, TileInterval]
         if isinstance(interval, (DomainInterval, oir.Interval)):
             res_interval = DomainInterval(
                 start=AxisBound(
@@ -441,7 +441,7 @@ class GridSubset(eve.Node):
                 end=AxisBound(level=interval.end.level, offset=interval.end.offset, axis=Axis.K),
             )
         else:
-            assert isinstance(interval, (TileInterval, IndexWithExtent))
+            assert isinstance(interval, (IndexWithExtent, TileInterval))
             res_interval = interval
 
         return cls(intervals={axis: res_interval})
@@ -464,7 +464,7 @@ class GridSubset(eve.Node):
         return GridSubset(intervals=res_subsets)
 
     def tile(self, tile_sizes: Dict[Axis, int]):
-        res_intervals: Dict[Axis, Union[DomainInterval, TileInterval, IndexWithExtent]] = {}
+        res_intervals: Dict[Axis, Union[DomainInterval, IndexWithExtent, TileInterval]] = {}
         for axis, interval in self.intervals.items():
             if isinstance(interval, DomainInterval) and axis in tile_sizes:
                 if axis == Axis.K:
@@ -505,15 +505,15 @@ class GridSubset(eve.Node):
                 intervals[axis] = interval1.union(interval2)
             else:
                 assert (
-                    isinstance(interval2, (TileInterval, DomainInterval))
-                    and isinstance(interval1, (IndexWithExtent, DomainInterval))
+                    isinstance(interval2, (DomainInterval, TileInterval))
+                    and isinstance(interval1, (DomainInterval, IndexWithExtent))
                 ) or (
-                    isinstance(interval1, (TileInterval, DomainInterval))
+                    isinstance(interval1, (DomainInterval, TileInterval))
                     and isinstance(interval2, IndexWithExtent)
                 )
                 intervals[axis] = (
                     interval1
-                    if isinstance(interval1, (TileInterval, DomainInterval))
+                    if isinstance(interval1, (DomainInterval, TileInterval))
                     else interval2
                 )
         return GridSubset(intervals=intervals)
@@ -734,14 +734,20 @@ class ScalarAccess(common.ScalarAccess, Expr):
 
 
 class VariableKOffset(common.VariableKOffset[Expr]):
-    pass
+    @datamodels.validator("k")
+    def no_casts_in_offset_expression(self, _: datamodels.Attribute, expression: Expr) -> None:
+        for part in expression.walk_values():
+            if isinstance(part, Cast):
+                raise ValueError(
+                    "DaCe backends are currently missing support for casts in variable k offsets. See issue https://github.com/GridTools/gt4py/issues/1881."
+                )
 
 
 class IndexAccess(common.FieldAccess, Expr):
     offset: Optional[Union[common.CartesianOffset, VariableKOffset]]
 
 
-class AssignStmt(common.AssignStmt[Union[ScalarAccess, IndexAccess], Expr], Stmt):
+class AssignStmt(common.AssignStmt[Union[IndexAccess, ScalarAccess], Expr], Stmt):
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
@@ -845,14 +851,14 @@ class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
 class DomainMap(ComputationNode, IterationNode):
     index_ranges: List[Range]
     schedule: MapSchedule
-    computations: List[Union[Tasklet, DomainMap, NestedSDFG]]
+    computations: List[Union[DomainMap, NestedSDFG, Tasklet]]
 
 
 class ComputationState(IterationNode):
-    computations: List[Union[Tasklet, DomainMap]]
+    computations: List[Union[DomainMap, Tasklet]]
 
 
-class DomainLoop(IterationNode, ComputationNode):
+class DomainLoop(ComputationNode, IterationNode):
     axis: Axis
     index_range: Range
     loop_states: List[Union[ComputationState, DomainLoop]]
@@ -862,7 +868,7 @@ class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
     label: eve.Coerced[eve.SymbolRef]
     field_decls: List[FieldDecl]
     symbol_decls: List[SymbolDecl]
-    states: List[Union[DomainLoop, ComputationState]]
+    states: List[Union[ComputationState, DomainLoop]]
 
 
 # There are circular type references with string placeholders. These statements let datamodels resolve those.
