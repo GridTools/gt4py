@@ -21,7 +21,7 @@ pytestmark = pytest.mark.requires_dace
 
 
 @pytest.mark.parametrize(
-    "name, is_target,offset,expected",
+    "name,is_target,offset,expected",
     [
         ("A", False, None, f"{prefix.TASKLET_IN}A"),
         ("A", True, None, f"{prefix.TASKLET_OUT}A"),
