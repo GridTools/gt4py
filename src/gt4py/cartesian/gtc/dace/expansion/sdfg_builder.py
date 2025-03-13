@@ -370,11 +370,9 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             field_access = (
                 len(
                     set(
-                        [
-                            memlet.connector
-                            for memlet in [*node.write_memlets]
-                            if memlet.connector == target_name
-                        ]
+                        memlet.connector
+                        for memlet in [*node.write_memlets]
+                        if memlet.connector == target_name
                     )
                 )
                 > 0
@@ -402,11 +400,9 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             field_access = (
                 len(
                     set(
-                        [
-                            memlet.connector
-                            for memlet in [*node.read_memlets, *node.write_memlets]
-                            if memlet.connector == read_name
-                        ]
+                        memlet.connector
+                        for memlet in [*node.read_memlets, *node.write_memlets]
+                        if memlet.connector == read_name
                     )
                 )
                 > 0
