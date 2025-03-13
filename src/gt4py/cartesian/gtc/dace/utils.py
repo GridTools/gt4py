@@ -479,7 +479,11 @@ def compute_tasklet_access_infos(
     horizontal_extent,
     k_interval,
     grid_subset,
-) -> dace.properties.DictProperty:
+):
+    """
+    Compute access information needed to build Memlets for the Tasklet
+    associated with the given `node`.
+    """
     axes = {
         name: axes_list_from_flags(declaration.dimensions)
         for name, declaration in declarations.items()
