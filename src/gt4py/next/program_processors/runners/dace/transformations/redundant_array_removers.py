@@ -60,6 +60,13 @@ def gt_remove_copy_chain(
         single_use_data: Which data descriptors are used only once.
             If not passed the function will run `FindSingleUseData`.
     """
+
+    # To ensures that the `{src,dst}_subset` are properly set, run initialization.
+    #  See [issue 1703](https://github.com/spcl/dace/issues/1703)
+    for state in sdfg.states():
+        for edge in state.edges():
+            edge.data.try_initialize(sdfg, state, edge)
+
     if single_use_data is None:
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
@@ -905,14 +912,17 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         """
         current_memlet: dace.Memlet = current_edge.data
         if is_producer_edge:
-            current_subset: dace_sbs.Range = current_memlet.get_dst_subset(current_edge, state)
+            # NOTE: See the note in `_reconfigure_dataflow()` why it is not save to
+            #  use the `get_{dst, src}_subset()` function, although it would be more
+            #  appropriate.
+            current_subset: dace_sbs.Range = current_memlet.dst_subset
             new_src = current_edge.src
             new_src_conn = current_edge._src_conn
             new_dst = a2
             new_dst_conn = None
             assert current_edge.dst_conn is None
         else:
-            current_subset = current_memlet.get_src_subset(current_edge, state)
+            current_subset = current_memlet.src_subset
             new_src = a2
             new_src_conn = None
             new_dst = current_edge.dst
@@ -1027,13 +1037,19 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             for memlet_tree in state.memlet_tree(new_edge).traverse_children(include_self=False):
                 edge_to_adjust = memlet_tree.edge
                 memlet_to_adjust = edge_to_adjust.data
+
+                # NOTE: Actually we should use the `get_{src, dst}_subset()` functions,
+                #  see https://github.com/spcl/dace/issues/1703. However, we can not
+                #  do that because the SDFG is currently in an invalid state. So
+                #  we have to call the properties and hope that it works.
+                subset_to_adjust = (
+                    memlet_to_adjust.dst_subset if is_producer_edge else memlet_to_adjust.src_subset
+                )
+
+                # If needed modify the association of the Memlet.
                 if memlet_to_adjust.data == a1.data:
                     memlet_to_adjust.data = a2.data
 
-                if is_producer_edge:
-                    subset_to_adjust = memlet_to_adjust.get_dst_subset(edge_to_adjust, state)
-                else:
-                    subset_to_adjust = memlet_to_adjust.get_src_subset(edge_to_adjust, state)
                 assert subset_to_adjust is not None
                 subset_to_adjust.offset(a2_offsets, negative=False)
 
