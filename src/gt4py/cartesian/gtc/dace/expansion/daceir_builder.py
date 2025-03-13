@@ -49,9 +49,11 @@ def _field_access_iterator(
     code_block: oir.CodeBlock | oir.MaskStmt | oir.While, access_type: AccessType
 ):
     if access_type == AccessType.WRITE:
-        return filter(
-            lambda node: isinstance(node, oir.FieldAccess),
-            code_block.walk_values().if_isinstance(oir.AssignStmt).getattr("left"),
+        return (
+            code_block.walk_values()
+            .if_isinstance(oir.AssignStmt)
+            .getattr("left")
+            .if_isinstance(oir.FieldAccess)
         )
 
     def read_access_iterator():
