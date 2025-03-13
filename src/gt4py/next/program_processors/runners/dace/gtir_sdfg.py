@@ -121,6 +121,7 @@ class DataflowBuilder(Protocol):
         src: dace.nodes.AccessNode,
         dst: dace.nodes.AccessNode,
     ) -> dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]:
+        """Wrapper of `dace.SDFGState.add_nedge` that copies the full array between two access nodes."""
         src_desc = src.desc(sdfg)
         array_range = dace.subsets.Range.from_array(src_desc)
         state.add_nedge(
