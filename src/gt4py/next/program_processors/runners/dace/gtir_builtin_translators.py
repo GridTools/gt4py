@@ -655,17 +655,19 @@ def translate_if(
 
         temp_name = temp.dc_node.data
         true_br_output_node = true_state.add_access(temp_name)
-        true_state.add_nedge(
+        sdfg_builder.add_nedge_full_copy(
+            sdfg,
+            true_state,
             true_br_node,
             true_br_output_node,
-            gtir_sdfg_utils.make_array_memlet(sdfg, temp_name),
         )
 
         false_br_output_node = false_state.add_access(temp_name)
-        false_state.add_nedge(
+        sdfg_builder.add_nedge_full_copy(
+            sdfg,
+            false_state,
             false_br_node,
             false_br_output_node,
-            gtir_sdfg_utils.make_array_memlet(sdfg, temp_name),
         )
 
     return result_temps

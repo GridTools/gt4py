@@ -945,7 +945,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     None,
                     nsdfg_node,
                     inner,
-                    gtir_sdfg_utils.make_array_memlet(self.sdfg, input_expr.dc_node.data),
+                    self.sdfg.make_array_memlet(input_expr.dc_node.data),
                 )
 
         return (
@@ -1025,7 +1025,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         output_connector = "__val"
         tasklet_expression = f"{output_connector} = __field[{index_connector}]"
         input_memlets = {
-            "__field": gtir_sdfg_utils.make_array_memlet(self.sdfg, field_slice.dc_node.data),
+            "__field": self.sdfg.make_array_memlet(field_slice.dc_node.data),
             index_connector: dace.Memlet(data=connectivity_slice.dc_node.data, subset=neighbor_idx),
         }
         input_nodes = {
@@ -1101,7 +1101,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 None,
                 tasklet_node,
                 "list",
-                gtir_sdfg_utils.make_array_memlet(self.sdfg, list_arg.dc_node.data),
+                self.sdfg.make_array_memlet(list_arg.dc_node.data),
             )
             self._add_edge(
                 tasklet_node, "value", result_node, None, dace.Memlet(data=result, subset="0")
@@ -1366,7 +1366,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 None,
                 nsdfg_node,
                 "values",
-                gtir_sdfg_utils.make_array_memlet(self.sdfg, input_expr.dc_node.data),
+                self.sdfg.make_array_memlet(input_expr.dc_node.data),
             )
         self._add_input_data_edge(
             connectivity_node,
@@ -1420,7 +1420,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 self.state.add_nedge(
                     input_expr.dc_node,
                     reduce_node,
-                    gtir_sdfg_utils.make_array_memlet(self.sdfg, input_expr.dc_node.data),
+                    self.sdfg.make_array_memlet(input_expr.dc_node.data),
                 )
             self.state.add_nedge(reduce_node, result_node, dace.Memlet(data=result, subset="0"))
 
