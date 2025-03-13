@@ -407,11 +407,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                 )
                 > 0
             )
-            defined_symbol = False
-            for symbol_map in symtable.maps:
-                for symbol in symbol_map.keys():
-                    if symbol == read_name:
-                        defined_symbol = True
+            defined_symbol = any(read_name in symbol_map for symbol_map in symtable.maps)
 
             if (
                 not field_access
