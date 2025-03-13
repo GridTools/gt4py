@@ -874,7 +874,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         assert iteration_ctx.grid_subset == dcir.GridSubset.single_gridpoint()
 
         code_block = oir.CodeBlock(body=node.body, loc=node.loc, label=f"he_{id(node)}")
-        targets: list[oir.FieldAccess | oir.ScalarAccess] = list()
+        targets: list[oir.FieldAccess | oir.ScalarAccess] = []
         dcir_nodes = self.visit(
             code_block,
             global_ctx=global_ctx,
