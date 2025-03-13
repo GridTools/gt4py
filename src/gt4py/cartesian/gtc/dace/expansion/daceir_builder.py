@@ -369,13 +369,17 @@ class DaCeIRBuilder(eve.NodeTranslator):
         self,
         node: oir.FieldAccess,
         *,
-        is_target: bool,  # true if we write to this FieldAccess
+        is_target: bool,
         targets: list[oir.FieldAccess | oir.ScalarAccess],
         var_offset_fields: set[eve.SymbolRef],
         K_write_with_offset: set[eve.SymbolRef],
         **kwargs: Any,
     ) -> dcir.IndexAccess | dcir.ScalarAccess:
-        """Generate the relevant accessor to match the memlet that was previously setup."""
+        """Generate the relevant accessor to match the memlet that was previously setup.
+
+        Args:
+            is_target (bool): true if we write to this FieldAccess
+        """
 
         # Distinguish between writing to a variable and reading a previously written variable.
         # In the latter case (read after write), we need to read from the "gtOUT__" symbol.
