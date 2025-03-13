@@ -210,6 +210,19 @@ def _restrict_domain(
     return in_field_domain
 
 
+def _add_domain(
+    in_field_domain: dict[str, DomainAccess],
+    domain: DomainAccess,
+) -> dict[str, DomainAccess]:
+    new_domains = {}
+    for sym, in_field_ranges in in_field_domain.items():
+        ranges = in_field_ranges
+        for dim, range_ in domain.ranges.items():
+            ranges.ranges[dim] = range_
+        new_domains[sym] = ranges
+    return new_domains
+
+
 def _gather_keep_dims(
     domain: domain_utils.SymbolicDomain | DomainAccessDescriptor,
 ) -> dict[common.Dimension, domain_utils.SymbolicRange]:
@@ -396,6 +409,18 @@ def _infer_if(
     return result_expr, actual_domains
 
 
+def _infer_broadcast(
+    expr: itir.Expr,
+    domain: DomainAccess,
+    **kwargs: Unpack[InferenceOptions],
+) -> tuple[itir.Expr, AccessedDomains]:
+    assert cpm.is_call_to(expr, "broadcast")
+    infered_expr, actual_domains = infer_expr(expr.args[0], domain, **kwargs)
+    result_expr = im.call(expr.fun)(infered_expr, expr.args[1])
+    actual_domains = _add_domain(actual_domains, domain)
+    return result_expr, actual_domains
+
+
 def _infer_expr(
     expr: itir.Expr,
     domain: DomainAccess,
@@ -415,6 +440,8 @@ def _infer_expr(
         return _infer_tuple_get(expr, domain, **kwargs)
     elif cpm.is_call_to(expr, "if_"):
         return _infer_if(expr, domain, **kwargs)
+    elif cpm.is_call_to(expr, "broadcast"):
+        return _infer_broadcast(expr, domain, **kwargs)
     elif (
         cpm.is_call_to(expr, builtins.ARITHMETIC_BUILTINS)
         or cpm.is_call_to(expr, builtins.TYPE_BUILTINS)
