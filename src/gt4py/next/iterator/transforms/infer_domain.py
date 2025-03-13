@@ -210,17 +210,14 @@ def _restrict_domain(
     return in_field_domain
 
 
-def _add_domain(
-    in_field_domain: dict[str, DomainAccess],
-    domain: DomainAccess,
-) -> dict[str, DomainAccess]:
-    new_domains = {}
-    for sym, in_field_ranges in in_field_domain.items():
-        ranges = in_field_ranges
-        for dim, range_ in domain.ranges.items():
-            ranges.ranges[dim] = range_
-        new_domains[sym] = ranges
-    return new_domains
+def _add_domains(
+    in_field_domain: domain_utils.SymbolicDomain,
+    domain: domain_utils.SymbolicDomain,
+) -> domain_utils.SymbolicDomain:
+    ranges = in_field_domain.ranges
+    for dim, range_ in domain.ranges.items():
+        ranges[dim] = range_
+    return domain_utils.SymbolicDomain(grid_type=in_field_domain.grid_type, ranges=ranges)
 
 
 def _gather_keep_dims(
@@ -417,7 +414,8 @@ def _infer_broadcast(
     assert cpm.is_call_to(expr, "broadcast")
     infered_expr, actual_domains = infer_expr(expr.args[0], domain, **kwargs)
     result_expr = im.call(expr.fun)(infered_expr, expr.args[1])
-    actual_domains = _add_domain(actual_domains, domain)
+    for sym, dom in actual_domains.items():
+        actual_domains[sym] = gtx_utils.tree_map(lambda d: _add_domains(d, domain))(dom)
     return result_expr, actual_domains
 
 
