@@ -289,6 +289,7 @@ def test_with_tuples(cartesian_case):
         ref=(ref0, ref1),
     )
 
+
 @pytest.mark.uses_frontend_concat_where
 def test_nested_conditions_with_empty_branches(cartesian_case):
     @gtx.field_operator

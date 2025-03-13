@@ -586,7 +586,7 @@ def translate_as_fieldop(
     )
 
 
-def _make_slice_concat_view_node(
+def _make_concat_field_slice(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     f: FieldopData,
@@ -626,50 +626,46 @@ def _make_slice_concat_view_node(
     return fview, view_desc
 
 
-def _make_broadcast_concat_view_node(
+def _make_concat_scalar_broadcast(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    f: FieldopData,
-    f_desc: dace.data.Array,
-    fother: FieldopData,
-    fother_desc: dace.data.Array,
+    inp: FieldopData,
+    inp_desc: dace.data.Array,
+    domain: FieldopDomain,
     concat_dim_index: int,
 ) -> tuple[FieldopData, dace.data.Array]:
     """
     Helper function called by `translate_concat_where` to create a mapped tasklet
-    that broadcasts values from the 1D-array 'f' on all dimensions of the argument
-    field 'fother'.
+    that broadcasts one scalar value from the 1D-array 'f' on the given domain.
     """
-    assert isinstance(f.gt_type, ts.FieldType)
-    assert isinstance(fother.gt_type, ts.FieldType)
-    assert len(f.gt_type.dims) == 1
-    output_origin = list(fother.origin)
-    output_origin[concat_dim_index] = f.origin[0]
-    output_shape = list(fother_desc.shape)
-    output_shape[concat_dim_index] = f_desc.shape[0]
+    assert isinstance(inp.gt_type, ts.FieldType)
+    assert len(inp.gt_type.dims) == 1
+    out_dims, out_origin, out_shape = get_field_layout(domain)
+    out_type = ts.FieldType(dims=out_dims, dtype=inp.gt_type.dtype)
 
-    output, output_desc = sdfg.add_temp_transient(output_shape, f_desc.dtype)
-    output_node = state.add_access(output)
+    out_name, out_desc = sdfg.add_temp_transient(out_shape, inp_desc.dtype)
+    out_node = state.add_access(out_name)
 
-    map_variables = [gtir_sdfg_utils.get_map_variable(dim) for dim in fother.gt_type.dims]
+    map_variables = [gtir_sdfg_utils.get_map_variable(dim) for dim in out_dims]
+    inp_index = f"({map_variables[concat_dim_index]} + {out_origin[concat_dim_index] - inp.origin[0]})"
     state.add_mapped_tasklet(
         "broadcast",
         map_ranges={
             index: r
             for index, r in zip(
-                map_variables, dace_subsets.Range.from_array(output_desc), strict=True
+                map_variables, dace_subsets.Range.from_array(out_desc), strict=True
             )
         },
         code="out = inp",
-        inputs={"inp": dace.Memlet(data=f.dc_node.data, subset=map_variables[concat_dim_index])},
-        outputs={"out": dace.Memlet(data=output, subset=",".join(map_variables))},
-        input_nodes={f.dc_node},
-        output_nodes={output_node},
+        inputs={"inp": dace.Memlet(data=inp.dc_node.data, subset=inp_index)},
+        outputs={"out": dace.Memlet(data=out_name, subset=",".join(map_variables))},
+        input_nodes={inp.dc_node},
+        output_nodes={out_node},
         external_edges=True,
     )
 
-    output_field = FieldopData(output_node, fother.gt_type, tuple(output_origin))
-    return output_field, output_desc
+    out_field = FieldopData(out_node, out_type, tuple(out_origin))
+    return out_field, out_desc
 
 
 def translate_concat_where(
@@ -735,7 +731,6 @@ def translate_concat_where(
                 ts.FieldType(dims=[concat_dim], dtype=lower.gt_type),
                 origin=(origin,),
             )
-            lower_domain[concat_dim_index] = (concat_dim, origin, origin + 1)
         elif isinstance(upper.gt_type, ts.ScalarType):
             assert isinstance(lower.gt_type, ts.FieldType)
             origin = upper_domain[concat_dim_index][1]
@@ -744,14 +739,13 @@ def translate_concat_where(
                 ts.FieldType(dims=[concat_dim], dtype=upper.gt_type),
                 origin=(origin,),
             )
-            upper_domain[concat_dim_index] = (concat_dim, origin, origin + 1)
 
         if concat_dim not in lower.gt_type.dims:
             assert lower.gt_type.dims == [
                 *upper.gt_type.dims[0:concat_dim_index],
                 *upper.gt_type.dims[concat_dim_index + 1 :],
             ]
-            lower, lower_desc = _make_slice_concat_view_node(
+            lower, lower_desc = _make_concat_field_slice(
                 sdfg, state, lower, lower_desc, concat_dim, concat_dim_index, concat_dim_bound - 1
             )
         elif concat_dim not in upper.gt_type.dims:
@@ -759,16 +753,16 @@ def translate_concat_where(
                 *lower.gt_type.dims[0:concat_dim_index],
                 *lower.gt_type.dims[concat_dim_index + 1 :],
             ]
-            upper, upper_desc = _make_slice_concat_view_node(
+            upper, upper_desc = _make_concat_field_slice(
                 sdfg, state, upper, upper_desc, concat_dim, concat_dim_index, concat_dim_bound
             )
         elif len(lower.gt_type.dims) == 1:
-            lower, lower_desc = _make_broadcast_concat_view_node(
-                sdfg, state, lower, lower_desc, upper, upper_desc, concat_dim_index
+            lower, lower_desc = _make_concat_scalar_broadcast(
+                sdfg, state, lower, lower_desc, lower_domain, concat_dim_index
             )
         elif len(upper.gt_type.dims) == 1:
-            upper, upper_desc = _make_broadcast_concat_view_node(
-                sdfg, state, upper, upper_desc, lower, lower_desc, concat_dim_index
+            upper, upper_desc = _make_concat_scalar_broadcast(
+                sdfg, state, upper, upper_desc, upper_domain, concat_dim_index
             )
         elif lower.gt_type.dims != upper.gt_type.dims:
             raise NotImplementedError(
