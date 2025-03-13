@@ -381,16 +381,15 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         self.visit(node.mask, is_write=False, **kwargs)
         self.visit(node.body, region=node.mask, **kwargs)
 
-    @staticmethod
     def _global_grid_subset(
+        self,
         region: Optional[common.HorizontalMask],
-        he_grid: dcir.GridSubset,
         offset: list[Optional[int]],
     ):
         res: dict[dcir.Axis, dcir.DomainInterval | dcir.IndexWithExtent | dcir.TileInterval] = {}
         if region is not None:
             for axis, oir_interval in zip(dcir.Axis.dims_horizontal(), region.intervals):
-                he_grid_interval = he_grid.intervals[axis]
+                he_grid_interval = self.he_grid.intervals[axis]
                 assert isinstance(he_grid_interval, dcir.DomainInterval)
                 start = (
                     oir_interval.start if oir_interval.start is not None else he_grid_interval.start
@@ -401,13 +400,13 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
                     end=dcir.AxisBound.from_common(axis, end),
                 )
                 res[axis] = dcir.DomainInterval.union(dcir_interval, res.get(axis, dcir_interval))
-        if dcir.Axis.K in he_grid.intervals:
+        if dcir.Axis.K in self.he_grid.intervals:
             off = offset[dcir.Axis.K.to_idx()] or 0
-            he_grid_k_interval = he_grid.intervals[dcir.Axis.K]
+            he_grid_k_interval = self.he_grid.intervals[dcir.Axis.K]
             assert not isinstance(he_grid_k_interval, dcir.TileInterval)
             res[dcir.Axis.K] = he_grid_k_interval.shifted(off)
         for axis in dcir.Axis.dims_horizontal():
-            iteration_interval = he_grid.intervals[axis]
+            iteration_interval = self.he_grid.intervals[axis]
             mask_interval = res.get(axis, iteration_interval)
             res[axis] = dcir.DomainInterval.intersection(
                 axis, iteration_interval, mask_interval
@@ -424,7 +423,7 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         offset = [offset_node.to_dict()[k] for k in "ijk"]
         variable_offset_axes = [dcir.Axis.K] if isinstance(offset_node, VariableKOffset) else []
 
-        global_subset = self._global_grid_subset(region, self.he_grid, offset)
+        global_subset = self._global_grid_subset(region, offset)
         intervals = {}
         for axis in axes:
             if axis in variable_offset_axes:
