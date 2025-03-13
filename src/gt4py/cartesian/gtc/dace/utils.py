@@ -426,16 +426,14 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         global_subset = self._global_grid_subset(region, offset)
         intervals = {}
         for axis in axes:
-            if axis in variable_offset_axes:
-                intervals[axis] = dcir.IndexWithExtent(
-                    axis=axis, value=axis.iteration_symbol(), extent=(0, 0)
-                )
-            else:
-                intervals[axis] = dcir.IndexWithExtent(
-                    axis=axis,
-                    value=axis.iteration_symbol(),
-                    extent=(offset[axis.to_idx()], offset[axis.to_idx()]),
-                )
+            extent = (
+                (0, 0)
+                if axis in variable_offset_axes
+                else (offset[axis.to_idx()], offset[axis.to_idx()])
+            )
+            intervals[axis] = dcir.IndexWithExtent(
+                axis=axis, value=axis.iteration_symbol(), extent=extent
+            )
 
         return dcir.FieldAccessInfo(
             grid_subset=dcir.GridSubset(intervals=intervals),
