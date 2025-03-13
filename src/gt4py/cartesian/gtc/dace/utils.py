@@ -497,8 +497,12 @@ def compute_tasklet_access_infos(
     if isinstance(node, oir.CodeBlock):
         collector.visit(node.body, ctx=ctx)
     elif isinstance(node, oir.MaskStmt):
+        # node.mask is a simple expression.
+        # Pass `is_write` explicitly since we don't automatically set it in `visit_AssignStmt()`
         collector.visit(node.mask, ctx=ctx, is_write=False)
     elif isinstance(node, oir.While):
+        # node.cond is a simple expression.
+        # Pass `is_write` explicitly since we don't automatically set it in `visit_AssignStmt()`
         collector.visit(node.cond, ctx=ctx, is_write=False)
     else:
         raise ValueError("Unexpected node type.")
