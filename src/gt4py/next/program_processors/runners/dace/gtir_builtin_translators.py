@@ -658,14 +658,14 @@ def translate_if(
         true_state.add_nedge(
             true_br_node,
             true_br_output_node,
-            sdfg.make_array_memlet(temp_name),
+            gtir_sdfg_utils.make_array_memlet(sdfg, temp_name),
         )
 
         false_br_output_node = false_state.add_access(temp_name)
         false_state.add_nedge(
             false_br_node,
             false_br_output_node,
-            sdfg.make_array_memlet(temp_name),
+            gtir_sdfg_utils.make_array_memlet(sdfg, temp_name),
         )
 
     return result_temps

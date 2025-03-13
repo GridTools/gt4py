@@ -127,3 +127,23 @@ def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
     # assert that the new symbol names are not used in the IR
     assert ir_sym_ids.isdisjoint(invalid_symbols_mapping.values())
     return ReplaceSymbols().visit(ir, symtable=invalid_symbols_mapping)
+
+
+def make_array_memlet(sdfg: dace.SDFG, dataname: str) -> dace.Memlet:
+    """Convenience method to generate a Memlet that transfers a full array.
+
+    Wraps `dace.SDFG.make_array_memlet()`. The dace method sets 'subset' in the
+    memlet, not 'other_subset', which implicitly means that source and destination
+    array subsets are the same. We want to explicitly set both to ease analyzability
+    in SDFG transformations.
+
+    Args:
+        sdfg: The SDFG where the memlet should be used.
+        dataname: Name of the data container the memlet will read from or write to.
+
+    Returns:
+        A memlet that fully transfers the given array.
+    """
+    memlet = sdfg.make_array_memlet(dataname)
+    memlet.dst_subset = memlet.src_subset
+    return memlet

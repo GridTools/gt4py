@@ -504,7 +504,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 temp, _ = self.add_temp_array_like(sdfg, desc)
                 temp_node = head_state.add_access(temp)
                 head_state.add_nedge(
-                    field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
+                    field.dc_node,
+                    temp_node,
+                    gtir_sdfg_utils.make_array_memlet(sdfg, field.dc_node.data),
                 )
                 return gtir_builtin_translators.FieldopData(temp_node, field.gt_type, field.origin)
 
@@ -797,7 +799,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if dataname in connectivity_arrays:
                 datadesc.transient = False
 
-            input_memlets[nsdfg_dataname] = sdfg.make_array_memlet(dataname)
+            input_memlets[nsdfg_dataname] = gtir_sdfg_utils.make_array_memlet(sdfg, dataname)
 
         # Process lambda outputs
         #
@@ -880,7 +882,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     inner_dataname,
                     outer_data.dc_node,
                     None,
-                    sdfg.make_array_memlet(outer_data.dc_node.data),
+                    gtir_sdfg_utils.make_array_memlet(sdfg, outer_data.dc_node.data),
                 )
             elif inner_dataname in lambda_arg_nodes:
                 # This if branch and the next one handle the non-transient result nodes.

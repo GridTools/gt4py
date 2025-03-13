@@ -369,7 +369,7 @@ def _lower_lambda_to_nested_sdfg(
         init_state.add_nedge(
             init_state.add_access(input_scan_carry_dataname),
             init_state.add_access(scan_carry_dataname),
-            nsdfg.make_array_memlet(input_scan_carry_dataname),
+            gtir_sdfg_utils.make_array_memlet(nsdfg, input_scan_carry_dataname),
         )
 
     if isinstance(scan_carry_input, tuple):
