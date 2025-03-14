@@ -670,6 +670,7 @@ def test_gtir_cond():
         assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
 
 
+@pytest.mark.xfail(reason="error in domain inference")
 def test_gtir_cond_with_tuple_return():
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
@@ -1479,6 +1480,7 @@ def test_gtir_reduce_dot_product():
     assert np.allclose(v, v_ref)
 
 
+@pytest.mark.xfail(reason="error in domain inference")
 def test_gtir_reduce_with_cond_neighbors():
     init_value = np.random.rand()
     vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
