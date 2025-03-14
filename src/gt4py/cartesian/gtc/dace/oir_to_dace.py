@@ -17,8 +17,7 @@ import dace.subsets
 
 import gt4py.cartesian.gtc.oir as oir
 from gt4py import eve
-from gt4py.cartesian.gtc.dace import daceir as dcir
-from gt4py.cartesian.gtc.dace.constants import CONNECTOR_PREFIX_IN, CONNECTOR_PREFIX_OUT
+from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import (
@@ -129,7 +128,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
         for field in access_collection.read_fields():
             access_node = state.add_access(field, debuginfo=get_dace_debuginfo(declarations[field]))
-            connector_name = f"{CONNECTOR_PREFIX_IN}{field}"
+            connector_name = f"{prefix.CONNECTOR_IN}{field}"
             library_node.add_in_connector(connector_name)
             subset = ctx.make_input_dace_subset(node, field)
             state.add_edge(
@@ -138,7 +137,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
         for field in access_collection.write_fields():
             access_node = state.add_access(field, debuginfo=get_dace_debuginfo(declarations[field]))
-            connector_name = f"{CONNECTOR_PREFIX_OUT}{field}"
+            connector_name = f"{prefix.CONNECTOR_OUT}{field}"
             library_node.add_out_connector(connector_name)
             subset = ctx.make_output_dace_subset(node, field)
             state.add_edge(
