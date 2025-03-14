@@ -216,7 +216,10 @@ def _add_domains(
 ) -> domain_utils.SymbolicDomain:
     ranges = in_field_domain.ranges
     for dim, range_ in domain.ranges.items():
-        ranges[dim] = range_
+        if ranges[dim] is not None:
+            assert ranges[dim] == range_
+        else:
+            ranges[dim] = range_
     return domain_utils.SymbolicDomain(grid_type=in_field_domain.grid_type, ranges=ranges)
 
 

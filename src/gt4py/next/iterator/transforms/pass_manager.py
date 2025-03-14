@@ -189,4 +189,5 @@ def apply_fieldview_transforms(
         ir
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    ir = transform_broadcast.TransformBroadcast.apply(ir)
     return ir
