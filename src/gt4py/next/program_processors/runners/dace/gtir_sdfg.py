@@ -122,7 +122,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     def make_field(
         self,
         data_node: dace.nodes.AccessNode,
-        data_type: ts.FieldType | ts.ScalarType,
+        data_type: ts.FieldType,
     ) -> gtir_builtin_translators.FieldopData:
         """Retrieve the field data descriptor including the domain offset information."""
         ...
@@ -248,7 +248,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def make_field(
         self,
         data_node: dace.nodes.AccessNode,
-        data_type: ts.FieldType | ts.ScalarType,
+        data_type: ts.FieldType,
     ) -> gtir_builtin_translators.FieldopData:
         """
         Helper method to build the field data type associated with a data access node.
@@ -271,8 +271,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             The descriptor associated with the SDFG data storage, filled with field origin.
         """
-        if isinstance(data_type, ts.ScalarType):
-            return gtir_builtin_translators.FieldopData(data_node, data_type, origin=())
         local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
         if len(local_dims) == 0:
             # do nothing: the field domain consists of all global dimensions
@@ -503,8 +501,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             else:
                 temp, _ = self.add_temp_array_like(sdfg, desc)
                 temp_node = head_state.add_access(temp)
+                field_range = dace.subsets.Range.from_array(desc)
                 head_state.add_nedge(
-                    field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
+                    field.dc_node,
+                    temp_node,
+                    dace.Memlet(data=temp, subset=field_range, other_subset=field_range),
                 )
                 return gtir_builtin_translators.FieldopData(temp_node, field.gt_type, field.origin)
 
