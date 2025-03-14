@@ -398,7 +398,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         expr = self.visit(node.args[0], **kwargs)
-        return im.as_fieldop(im.ref("deref"))(expr)
+        dims = tuple(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in node.type.dims)
+        return im.call("broadcast")(expr, im.make_tuple(*dims))
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self._lower_and_map(self.visit(node.func, **kwargs), *node.args)
