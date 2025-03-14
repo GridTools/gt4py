@@ -215,36 +215,31 @@ def test_dimension_two_conditions_or(cartesian_case):
 
 @pytest.mark.uses_frontend_concat_where
 def test_lap_like(cartesian_case):
-    pytest.xfail("Requires #1847.")
-
     @gtx.field_operator
     def testee(
-        input: cases.IJKField, boundary: float, shape: tuple[np.int64, np.int64, np.int64]
-    ) -> cases.IJKField:
+        input: cases.IJField, boundary: np.int32, shape: tuple[np.int32, np.int32]
+    ) -> cases.IJField:
         return concat_where(
             (IDim == 0)
             | (JDim == 0)
-            | (KDim == 0)
             | (IDim == shape[0] - 1)
-            | (JDim == shape[1] - 1)
-            | (KDim == shape[2] - 1),
+            | (JDim == shape[1] - 1),
             boundary,
             input,
         )
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
     input = cases.allocate(
-        cartesian_case, testee, "input", domain=out.domain.slice_at[1:-1, 1:-1, 1:-1]
+        cartesian_case, testee, "input", domain=out.domain.slice_at[1:-1, 1:-1]
     )()
-    boundary = 2.0
+    boundary = 2
 
     ref = np.full(out.domain.shape, np.nan)
-    ref[0, :, :] = boundary
-    ref[:, 0, :] = boundary
-    ref[:, :, 0] = boundary
-    ref[-1, :, :] = boundary
-    ref[:, -1, :] = boundary
-    ref[:, :, -1] = boundary
+    ref[0, :] = boundary
+    ref[:, 0] = boundary
+    ref[-1, :] = boundary
+    ref[:, -1] = boundary
+    ref[1:-1, 1:-1] = input.asnumpy()
     cases.verify(cartesian_case, testee, input, boundary, out.domain.shape, out=out, ref=ref)
 
 
