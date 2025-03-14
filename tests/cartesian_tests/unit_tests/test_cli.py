@@ -92,6 +92,7 @@ BACKEND_ROW_PATTERN_BY_NAME = {
     "gt:gpu": r"^\s*gt:gpu\s*cuda\s*python\s*Yes",
     "numpy": r"^\s*numpy\s*python\s*python\s*Yes",
     "nocli": r"^\s*nocli\s*\?\s*\?\s*No",
+    "debug": r"^\s*debug\s*python\s*python\s*Yes",
 }
 
 
