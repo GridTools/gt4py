@@ -366,11 +366,10 @@ def _lower_lambda_to_nested_sdfg(
         input_scan_carry_desc = scan_carry_desc.clone()
         nsdfg.add_datadesc(input_scan_carry_dataname, input_scan_carry_desc)
         scan_carry_desc.transient = True
-        sdfg_builder.add_nedge_full_copy(
-            nsdfg,
-            init_state,
+        init_state.add_nedge(
             init_state.add_access(input_scan_carry_dataname),
             init_state.add_access(scan_carry_dataname),
+            nsdfg.make_array_memlet(input_scan_carry_dataname),
         )
 
     if isinstance(scan_carry_input, tuple):

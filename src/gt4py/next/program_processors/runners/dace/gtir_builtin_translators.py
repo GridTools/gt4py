@@ -618,59 +618,116 @@ def translate_if(
     sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not ({if_stmt})")))
     sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
-    true_br_args = sdfg_builder.visit(
+    true_br_result = sdfg_builder.visit(
         true_expr,
         sdfg=sdfg,
         head_state=true_state,
     )
-    false_br_args = sdfg_builder.visit(
+    false_br_result = sdfg_builder.visit(
         false_expr,
         sdfg=sdfg,
         head_state=false_state,
     )
 
-    def construct_output(inner_data: FieldopData) -> FieldopData:
-        inner_desc = inner_data.dc_node.desc(sdfg)
-        outer, _ = sdfg_builder.add_temp_array_like(sdfg, inner_desc)
-        outer_node = state.add_access(outer)
+    def construct_output(
+        domain: gtir.Expr, sym: gtir.Sym, true_br: FieldopData, false_br: FieldopData
+    ) -> FieldopData:
+        assert true_br.gt_type == false_br.gt_type
+        out_type = true_br.gt_type
 
-        return FieldopData(outer_node, inner_data.gt_type, inner_data.origin)
+        if isinstance(sym.type, ts.ScalarType):
+            assert sym.type == out_type
+            dtype = gtx_dace_utils.as_dace_type(sym.type)
+            out, _ = sdfg_builder.add_temp_scalar(sdfg, dtype)
+            out_node = state.add_access(out)
+            return FieldopData(out_node, sym.type, origin=())
 
-    result_temps = gtx_utils.tree_map(construct_output)(true_br_args)
+        assert isinstance(out_type, ts.FieldType)
+        assert isinstance(sym.type, ts.FieldType)
+        assert sym.type.dims == out_type.dims
+        dims, origin, shape = get_field_layout(extract_domain(domain))
+        assert dims == out_type.dims
 
-    fields: Iterable[tuple[FieldopData, FieldopData, FieldopData]] = zip(
-        gtx_utils.flatten_nested_tuple((true_br_args,)),
-        gtx_utils.flatten_nested_tuple((false_br_args,)),
-        gtx_utils.flatten_nested_tuple((result_temps,)),
-        strict=True,
-    )
-
-    for true_br, false_br, temp in fields:
-        if true_br.gt_type != false_br.gt_type:
-            raise ValueError(
-                f"Different type of result fields on if-branches '{true_br.gt_type}' vs '{false_br.gt_type}'."
+        if isinstance(sym.type.dtype, ts.ScalarType):
+            dtype = gtx_dace_utils.as_dace_type(sym.type.dtype)
+        else:
+            assert isinstance(out_type.dtype, ts.ListType)
+            assert isinstance(out_type.dtype.element_type, ts.ScalarType)
+            dtype = gtx_dace_utils.as_dace_type(out_type.dtype.element_type)
+            assert out_type.dtype.offset_type is not None
+            offset_provider_type = sdfg_builder.get_offset_provider_type(
+                out_type.dtype.offset_type.value
             )
-        true_br_node = true_br.dc_node
-        false_br_node = false_br.dc_node
+            assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+            shape = [*shape, offset_provider_type.max_neighbors]
 
-        temp_name = temp.dc_node.data
-        true_br_output_node = true_state.add_access(temp_name)
-        sdfg_builder.add_nedge_full_copy(
-            sdfg,
-            true_state,
-            true_br_node,
-            true_br_output_node,
+        out, _ = sdfg_builder.add_temp_array(sdfg, shape, dtype)
+        out_node = state.add_access(out)
+
+        return FieldopData(out_node, out_type, tuple(origin))
+
+    def connect_output(state: dace.SDFGState, src: FieldopData, dst: FieldopData) -> None:
+        if src.gt_type != dst.gt_type:
+            raise ValueError(
+                f"Source and destination type mismatch, '{dst.gt_type}' vs '{src.gt_type}'."
+            )
+        dst_node = state.add_access(dst.dc_node.data)
+        dst_shape = dst_node.desc(sdfg).shape
+
+        if isinstance(src.gt_type, ts.ScalarType):
+            state.add_nedge(
+                src.dc_node,
+                dst_node,
+                dace.Memlet(data=src.dc_node.data, subset="0"),
+            )
+        else:
+            if isinstance(src.gt_type.dtype, ts.ListType):
+                src_origin = [*src.origin, 0]
+                dst_origin = [*dst.origin, 0]
+            else:
+                src_origin = [*src.origin]
+                dst_origin = [*dst.origin]
+
+            data_subset = dace_subsets.Range(
+                (
+                    f"{dst_start - src_start}",
+                    f"{dst_start + size - src_start - 1}",
+                    1,
+                )
+                for src_start, dst_start, size in zip(
+                    src_origin, dst_origin, dst_shape, strict=True
+                )
+            )
+
+            state.add_nedge(
+                src.dc_node,
+                dst_node,
+                dace.Memlet(
+                    data=src.dc_node.data,
+                    subset=data_subset,
+                    other_subset=dace_subsets.Range.from_array(dst_node.desc(sdfg)),
+                ),
+            )
+
+    if isinstance(node.type, ts.TupleType):
+        node_type_tree = gtir_sdfg_utils.make_symbol_tree("x", node.type)
+        node_output = gtx_utils.tree_map(construct_output)(
+            node.annex.domain, node_type_tree, true_br_result, false_br_result
         )
-
-        false_br_output_node = false_state.add_access(temp_name)
-        sdfg_builder.add_nedge_full_copy(
-            sdfg,
-            false_state,
-            false_br_node,
-            false_br_output_node,
+        gtx_utils.tree_map(lambda src, dst, state=true_state: connect_output(state, src, dst))(
+            true_br_result, node_output
         )
+        gtx_utils.tree_map(lambda src, dst, state=false_state: connect_output(state, src, dst))(
+            false_br_result, node_output
+        )
+    else:
+        node_output = construct_output(
+            node.annex.domain, im.sym("x", node.type), true_br_result, false_br_result
+        )
+        connect_output(true_state, true_br_result, node_output)
+        connect_output(false_state, false_br_result, node_output)
 
-    return result_temps
+    return node_output
 
 
 def translate_index(
@@ -741,7 +798,7 @@ def _get_data_nodes(
             )
         else:
             data_node = state.add_access(data_name)
-        return sdfg_builder.make_field(data_node, data_type)
+        return FieldopData(data_node, data_type, origin=())
 
     elif isinstance(data_type, ts.TupleType):
         symbol_tree = gtir_sdfg_utils.make_symbol_tree(data_name, data_type)
