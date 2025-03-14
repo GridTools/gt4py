@@ -84,7 +84,7 @@ class DaCeTranslator(
             inp.args.offset_provider,  # TODO(havogt): should be offset_provider_type once the transformation don't require run-time info
             inp.args.column_axis,
             auto_opt=self.auto_optimize,
-            on_gpu=(self.device_type == core_defs.CUPY_DEVICE),
+            on_gpu=(self.device_type == core_defs.CUPY_DEVICE_TYPE),
         )
 
         param_types = tuple(

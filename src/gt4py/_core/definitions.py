@@ -51,6 +51,9 @@ if TYPE_CHECKING:
 
     JaxNDArray: TypeAlias = jnp.ndarray
 
+# The actual assignment happens after the definition of `DeviceType` enum.
+CUPY_DEVICE_TYPE: Literal[None, DeviceType.CUDA, DeviceType.ROCM]
+"""Type of the GPU accelerator device, if present."""
 
 # -- Scalar types supported by GT4Py --
 bool_ = np.bool_
@@ -399,7 +402,7 @@ DeviceTypeT = TypeVar(
 )
 
 
-CUPY_DEVICE: Final[Literal[None, DeviceType.CUDA, DeviceType.ROCM]] = (
+CUPY_DEVICE_TYPE = (
     None if not cp else (DeviceType.ROCM if cp.cuda.runtime.is_hip else DeviceType.CUDA)
 )
 

@@ -232,11 +232,11 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
         raise self.exception
 
 
-if core_defs.CUPY_DEVICE is not None:
+if core_defs.CUPY_DEVICE_TYPE is not None:
     assert isinstance(core_allocators.cupy_array_utils, core_allocators.ArrayUtils)
     cupy_array_utils = core_allocators.cupy_array_utils
 
-    if core_defs.CUPY_DEVICE is core_defs.DeviceType.CUDA:
+    if core_defs.CUPY_DEVICE_TYPE is core_defs.DeviceType.CUDA:
 
         class CUDAFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CUDADeviceTyping]):
             def __init__(self) -> None:
@@ -274,8 +274,8 @@ else:
 
 StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = cast(
     type[FieldBufferAllocatorProtocol],
-    type(device_allocators[core_defs.CUPY_DEVICE])
-    if core_defs.CUPY_DEVICE
+    type(device_allocators[core_defs.CUPY_DEVICE_TYPE])
+    if core_defs.CUPY_DEVICE_TYPE
     else InvalidGPUFieldBufferAllocator,
 )
 

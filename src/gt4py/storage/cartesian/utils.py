@@ -40,12 +40,12 @@ _GPUBufferAllocator: Optional[allocators.NDArrayBufferAllocator] = None
 if cp:
     assert isinstance(allocators.cupy_array_utils, allocators.ArrayUtils)
 
-    if core_defs.CUPY_DEVICE == core_defs.DeviceType.CUDA:
+    if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.CUDA:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
             device_type=core_defs.DeviceType.CUDA,
             array_utils=allocators.cupy_array_utils,
         )
-    elif core_defs.CUPY_DEVICE == core_defs.DeviceType.ROCM:
+    elif core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
             device_type=core_defs.DeviceType.ROCM,
             array_utils=allocators.cupy_array_utils,
@@ -279,7 +279,7 @@ def _allocate_gpu(
 
 allocate_gpu = _allocate_gpu
 
-if core_defs.CUPY_DEVICE == core_defs.DeviceType.ROCM:
+if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
 
     class CUDAArrayInterfaceNDArray(cp.ndarray):
         def __new__(cls, input_array: "cp.ndarray") -> CUDAArrayInterfaceNDArray:
