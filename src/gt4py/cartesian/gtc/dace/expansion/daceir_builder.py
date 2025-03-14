@@ -93,7 +93,7 @@ def _get_tasklet_inout_memlets(
     horizontal_extent,
     k_interval,
     grid_subset: dcir.GridSubset,
-    dcir_statements: Optional[list[dcir.Stmt]] = None,
+    dcir_statements: list[dcir.Stmt],
 ) -> list[dcir.Memlet]:
     access_infos = compute_tasklet_access_infos(
         node,
@@ -105,32 +105,30 @@ def _get_tasklet_inout_memlets(
         grid_subset=grid_subset,
     )
 
+    names = [
+        access.name
+        for statement in dcir_statements
+        for access in statement.walk_values().if_isinstance(dcir.ScalarAccess, dcir.IndexAccess)
+    ]
+
     memlets: list[dcir.Memlet] = []
     for name, offset, tasklet_symbol in _mapped_access_iterator(node, access_type):
+        # Avoid adding extra inputs/outputs to the tasklet
         if name not in access_infos:
             continue
 
-        if dcir_statements is not None:
-            # Find `tasklet_symbol` in dcir_statements because we can't know (from the oir statements)
-            # where the tasklet boundaries will be. Consider
-            #
-            # with computation(PARALLEL), interval(...):
-            #   statement1
-            #   if condition:
-            #     statement2
-            #   statement3
-            #
-            # statements 1 and 3 will end up in the same CodeBlock but aren't in the same tasklet.
-            names = []
-            for statement in dcir_statements:
-                for access in statement.walk_values().if_isinstance(
-                    dcir.ScalarAccess, dcir.IndexAccess
-                ):
-                    names.append(access.name)
-
-            # Avoid adding extra inputs/outputs to the tasklet
-            if tasklet_symbol not in names:
-                continue
+        # Find `tasklet_symbol` in dcir_statements because we can't know (from the oir statements)
+        # where the tasklet boundaries will be. Consider
+        #
+        # with computation(PARALLEL), interval(...):
+        #   statement1
+        #   if condition:
+        #     statement2
+        #   statement3
+        #
+        # statements 1 and 3 will end up in the same CodeBlock but aren't in the same tasklet.
+        if tasklet_symbol not in names:
+            continue
 
         access_info = access_infos[name]
         if not access_info.variable_offset_axes:
@@ -530,6 +528,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             horizontal_extent=horizontal_extent,
             k_interval=k_interval,
             grid_subset=iteration_ctx.grid_subset,
+            dcir_statements=[statement],
         )
 
         tasklet = dcir.Tasklet(
