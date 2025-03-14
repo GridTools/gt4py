@@ -216,7 +216,7 @@ def _add_domains(
 ) -> domain_utils.SymbolicDomain:
     ranges = in_field_domain.ranges
     for dim, range_ in domain.ranges.items():
-        if ranges[dim] is not None:
+        if dim in ranges.keys():
             assert ranges[dim] == range_
         else:
             ranges[dim] = range_
