@@ -711,8 +711,14 @@ def translate_if(
 
     if isinstance(node.type, ts.TupleType):
         node_type_tree = gtir_sdfg_utils.make_symbol_tree("x", node.type)
+        if isinstance(node.annex.domain, tuple):
+            node_domain_tree = node.annex.domain
+        else:
+            # TODO(edopao): this is a workaround for some IR nodes where the inferred
+            #   domain on a tuple of fields is not a tuple
+            node_domain_tree = gtx_utils.tree_map(lambda _: node.annex.domain)(node_type_tree)
         node_output = gtx_utils.tree_map(construct_output)(
-            node.annex.domain, node_type_tree, true_br_result, false_br_result
+            node_domain_tree, node_type_tree, true_br_result, false_br_result
         )
         gtx_utils.tree_map(lambda src, dst, state=true_state: connect_output(state, src, dst))(
             true_br_result, node_output
