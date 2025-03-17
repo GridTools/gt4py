@@ -605,6 +605,112 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
 
 @dace_properties.make_properties
+class SingleStateGlobalDirectSelfCopyElimination(dace_transformation.SingleStateTransformation):
+    """Removes an unbuffered self copy in a state.
+
+    This transformation is extremely similar to `SingleStateGlobalSelfCopyElimination`,
+    however, this transformation does not need a buffer between the two global
+    AccessNodes. Therefore it matches the pattern `(G) -> (G)` where `G` refers to a
+    global data.
+    The transformation will then remove the first or the top AccessNode, no checks on
+    the subsets will be performed, as the operation is guaranteed to be pointwise.
+
+    If the first AccessNodes has any edges, beside the ones that connect it with the
+    second AccessNode, they will be modified such that they now operate on the second
+    AccessNode.
+    However, if the second AccessNode has become isolated it is deleted.
+
+    Todo:
+        - Merge this transformation with `SingleStateGlobalSelfCopyElimination`.
+    """
+
+    node_read_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    node_write_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
+
+    def __init__(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [dace.sdfg.utils.node_path_graph(cls.node_read_g, cls.node_write_g)]
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState | dace.SDFG,
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        read_g = self.node_read_g
+        write_g = self.node_write_g
+        g_desc = read_g.desc(sdfg)
+
+        # NOTE: We do not check if `G` is read downstream.
+        if read_g.data != write_g.data:
+            return False
+        if g_desc.transient:
+            return False
+        if graph.scope_dict()[read_g] is not None:
+            return False
+
+        # Ensure that no cycles are created by the removal
+        for oedge in graph.out_edges(read_g):
+            if oedge.dst is write_g:
+                continue
+            if gtx_transformations.utils.is_reachable(
+                start=oedge.dst,
+                target=write_g,
+                state=graph,
+            ):
+                return False
+        return True
+
+    def apply(
+        self,
+        graph: dace.SDFGState | dace.SDFG,
+        sdfg: dace.SDFG,
+    ) -> None:
+        read_g: dace_nodes.AccessNode = self.node_read_g
+        write_g: dace_nodes.AccessNode = self.node_write_g
+
+        # Reconnect any incoming edges of the read AccessNode, aka. the first one.
+        for iedge in list(graph.in_edges(read_g)):
+            # Since the names are the same, just creating a new edge is enough.
+            graph.add_edge(
+                iedge.src,
+                iedge.src_conn,
+                write_g,
+                iedge.dst_conn,
+                iedge.data,
+            )
+            graph.remove_edge(iedge)
+
+        # Now reconnect all edges that leave the first AccessNodes, with the
+        #  exception of the edges that connecting the two.
+        for oedge in list(graph.out_edges(read_g)):
+            if oedge.dst is not write_g:
+                graph.add_edge(
+                    write_g,
+                    oedge.src_conn,
+                    oedge.dst,
+                    oedge.dst_conn,
+                    oedge.data,
+                )
+            graph.remove_edge(oedge)
+
+        # Now remove the first node to `G` and if the second has become isolated
+        #  then also remove it.
+        graph.remove_node(read_g)
+
+        if graph.degree(write_g) == 0:
+            graph.remove_node(write_g)
+
+
+@dace_properties.make_properties
 class CopyChainRemover(dace_transformation.SingleStateTransformation):
     """Removes chain of redundant copies, mostly related to `concat_where`.
 

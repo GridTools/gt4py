@@ -59,6 +59,8 @@ def gt_simplify(
     Further, the function will run the following passes in addition to DaCe simplify:
     - `SingleStateGlobalSelfCopyElimination`: Special copy pattern that in the context
         of GT4Py based SDFG behaves as a no op, i.e. `(G) -> (T) -> (G)`.
+    - `SingleStateGlobalDirectSelfCopyElimination`: Special copy pattern of the form
+        `(G) -> (G)` which can always be eliminated.
     - `MultiStateGlobalSelfCopyElimination`: Very similar to
         `SingleStateGlobalSelfCopyElimination`, with the exception that the write to
         `T`, i.e. `(G) -> (T)` and the write back to `G`, i.e. `(T) -> (G)` might be
@@ -148,6 +150,21 @@ def gt_simplify(
                 if "CopyChainRemover" not in result:
                     result["CopyChainRemover"] = 0
                 result["CopyChainRemover"] += copy_chain_remover_result
+
+        if "SingleStateGlobalDirectSelfCopyElimination" not in skip:
+            direct_self_copy_removal_result = sdfg.apply_transformations_repeated(
+                gtx_transformations.SingleStateGlobalDirectSelfCopyElimination(),
+                validate=validate,
+                validate_all=validate_all,
+            )
+            if direct_self_copy_removal_result > 0:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "SingleStateGlobalDirectSelfCopyElimination" not in result:
+                    result["SingleStateGlobalDirectSelfCopyElimination"] = 0
+                result["SingleStateGlobalDirectSelfCopyElimination"] += (
+                    direct_self_copy_removal_result
+                )
 
         if "SingleStateGlobalSelfCopyElimination" not in skip:
             self_copy_removal_result = sdfg.apply_transformations_repeated(

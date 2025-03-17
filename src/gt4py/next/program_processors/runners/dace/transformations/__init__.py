@@ -27,6 +27,7 @@ from .map_promoter import SerialMapPromoter
 from .redundant_array_removers import (
     CopyChainRemover,
     MultiStateGlobalSelfCopyElimination,
+    SingleStateGlobalDirectSelfCopyElimination,
     SingleStateGlobalSelfCopyElimination,
     gt_multi_state_global_self_copy_elimination,
     gt_remove_copy_chain,
@@ -64,6 +65,7 @@ __all__ = [
     "MultiStateGlobalSelfCopyElimination",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
+    "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
     "gt_auto_optimize",
     "gt_change_transient_strides",
