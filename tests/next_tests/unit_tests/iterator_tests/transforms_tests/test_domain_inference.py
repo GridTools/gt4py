@@ -36,6 +36,9 @@ Edge = common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL)
 E2VDim = common.Dimension(value="E2V", kind=common.DimensionKind.LOCAL)
 float_i_field = ts.FieldType(dims=[IDim], dtype=float_type)
 float_ij_field = ts.FieldType(dims=[IDim, JDim], dtype=float_type)
+tuple_float_i_field = ts.TupleType(
+    types=[ts.FieldType(dims=[IDim], dtype=float_type), ts.FieldType(dims=[IDim], dtype=float_type)]
+)
 
 
 @pytest.fixture
@@ -745,7 +748,7 @@ def test_nested_let_arg_shadowed2(offset_provider):
         premap_field(
             im.ref("in_field1", float_i_field), "Ioff", 1
         ),  # only here we access `in_field1`
-        im.let(im.ref("in_field1", float_i_field), im.ref("in_field2", float_i_field))(
+        im.let("in_field1", im.ref("in_field2", float_i_field))(
             im.ref("in_field1", float_i_field)
         ),  # here we actually access `in_field2`
     )
@@ -757,9 +760,7 @@ def test_nested_let_arg_shadowed2(offset_provider):
         im.lambda_("it1", "it2")(im.multiplies_(im.deref("it1"), im.deref("it2"))), domain
     )(
         premap_field(im.ref("in_field1", float_i_field), "Ioff", 1, domain),
-        im.let(im.ref("in_field1", float_i_field), im.ref("in_field2", float_i_field))(
-            im.ref("in_field1", float_i_field)
-        ),
+        im.let("in_field1", im.ref("in_field2", float_i_field))(im.ref("in_field1", float_i_field)),
     )
     expected_domains = {"in_field1": domain_p1, "in_field2": domain}
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
@@ -953,14 +954,14 @@ def test_tuple_get_let_arg_make_tuple(offset_provider):
     testee = im.tuple_get(
         1,
         im.let("a", im.make_tuple(im.ref("b", float_i_field), im.ref("c", float_i_field)))(
-            im.ref("d", float_i_field)
+            im.ref("d", tuple_float_i_field)
         ),
     )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.tuple_get(
         1,
         im.let("a", im.make_tuple(im.ref("b", float_i_field), im.ref("c", float_i_field)))(
-            im.ref("d", float_i_field)
+            im.ref("d", tuple_float_i_field)
         ),
     )
     expected_domains = {

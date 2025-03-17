@@ -499,9 +499,11 @@ def infer_expr(
     domain = gtx_utils.tree_map(
         lambda d, t, k: _restrict_domain(
             d,
-            t.dims if not isinstance(t, (ts.ScalarType, ts.DeferredType)) else [],
+            t.dims if not isinstance(t, ts.ScalarType) else [],
             keep_dims=k,
         )
+        if not isinstance(t, ts.DeferredType)
+        else d
     )(domain, el_types, keep_dims)
 
     expr, accessed_domains = _infer_expr(

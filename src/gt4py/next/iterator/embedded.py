@@ -1799,7 +1799,7 @@ def index(axis: common.Dimension) -> common.Field:
     return IndexField(axis)
 
 
-@builtins.index.register(EMBEDDED)
+@builtins.broadcast.register(EMBEDDED)
 def broadcast(
     field: common.Field, dimensions: tuple[common.Dimension,]
 ) -> common.Field:  # TODO: tuple[itir.AxisLiteral,]
