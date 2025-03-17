@@ -1799,14 +1799,6 @@ def index(axis: common.Dimension) -> common.Field:
     return IndexField(axis)
 
 
-@builtins.broadcast.register(EMBEDDED)
-def broadcast(
-    field: common.Field, dimensions: tuple[common.Dimension,]
-) -> common.Field:  # TODO: tuple[itir.AxisLiteral,]
-    raise 123
-    #return common._field(field, domain=common.Domain(dims=dimensions, ranges=field.ranges))  # TODO
-
-
 def closure(
     domain_: runtime.CartesianDomain | runtime.UnstructuredDomain,
     sten: Callable[..., Any],
