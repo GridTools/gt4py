@@ -402,22 +402,14 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
 
 def domain(
     grid_type: Union[common.GridType, str],
-    ranges: dict[Union[common.Dimension, str], tuple[itir.Expr, itir.Expr]],
+    ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]],
 ) -> itir.FunCall:
     """
-    >>> str(
-    ...     domain(
-    ...         common.GridType.CARTESIAN,
-    ...         {
-    ...             common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 10),
-    ...             common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL): (0, 20),
-    ...         },
-    ...     )
-    ... )
+    >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
+    >>> JDim = common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL)
+    >>> str(domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 20)}))
     'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
-    >>> str(domain(common.GridType.CARTESIAN, {"IDim": (0, 10), "JDim": (0, 20)}))
-    'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
-    >>> str(domain(common.GridType.UNSTRUCTURED, {"IDim": (0, 10), "JDim": (0, 20)}))
+    >>> str(domain(common.GridType.UNSTRUCTURED, {IDim: (0, 10), JDim: (0, 20)}))
     'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     """
     if isinstance(grid_type, common.GridType):

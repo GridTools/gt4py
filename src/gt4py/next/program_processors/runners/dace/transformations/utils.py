@@ -8,7 +8,7 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-from typing import Any, Container, Optional, Union
+from typing import Any, Container, Optional, Sequence, Union
 
 import dace
 from dace import data as dace_data
@@ -232,12 +232,46 @@ def is_accessed_downstream(
     return False
 
 
+def is_reachable(
+    start: Union[dace_nodes.Node, Sequence[dace_nodes.Node]],
+    target: Union[dace_nodes.Node, Sequence[dace_nodes.Node]],
+    state: dace.SDFGState,
+) -> bool:
+    """Explores the graph from `start` and checks if `target` is reachable.
+
+    The exploration of the graph is done in a way that ignores the connector names.
+    It is possible to pass multiple start nodes and targets. In case of multiple target nodes, the function returns True if any of them is reachable.
+
+    Args:
+        start: The node from where to start.
+        target: The node to look for.
+        state: The SDFG state on which we operate.
+    """
+    to_visit: list[dace_nodes.Node] = [start] if isinstance(start, dace_nodes.Node) else list(start)
+    targets: set[dace_nodes.Node] = {target} if isinstance(target, dace_nodes.Node) else set(target)
+    seen: set[dace_nodes.Node] = set()
+
+    while to_visit:
+        node = to_visit.pop()
+        if node in targets:
+            return True
+        seen.add(node)
+        to_visit.extend(oedge.dst for oedge in state.out_edges(node) if oedge.dst not in seen)
+
+    return False
+
+
 def is_view(
     node: Union[dace_nodes.AccessNode, dace_data.Data],
-    sdfg: dace.SDFG,
+    sdfg: Optional[dace.SDFG] = None,
 ) -> bool:
     """Tests if `node` points to a view or not."""
-    node_desc: dace_data.Data = node.desc(sdfg) if isinstance(node, dace_nodes.AccessNode) else node
+    if isinstance(node, dace_nodes.AccessNode):
+        assert sdfg is not None
+        node_desc = node.desc(sdfg)
+    else:
+        assert isinstance(node, dace_data.Data)
+        node_desc = node
     return isinstance(node_desc, dace_data.View)
 
 
