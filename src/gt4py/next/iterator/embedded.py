@@ -1803,7 +1803,8 @@ def index(axis: common.Dimension) -> common.Field:
 def broadcast(
     field: common.Field, dimensions: tuple[common.Dimension,]
 ) -> common.Field:  # TODO: tuple[itir.AxisLiteral,]
-    return common._field(field, domain=common.Domain(dims=dimensions, ranges=field.ranges))  # TODO
+    raise 123
+    #return common._field(field, domain=common.Domain(dims=dimensions, ranges=field.ranges))  # TODO
 
 
 def closure(
