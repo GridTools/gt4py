@@ -363,6 +363,17 @@ def _infer_if(
     return result_expr, actual_domains
 
 
+def _infer_broadcast(
+    expr: itir.Expr,
+    domain: DomainAccess,
+    **kwargs: Unpack[InferenceOptions],
+) -> tuple[itir.Expr, AccessedDomains]:
+    assert cpm.is_call_to(expr, "broadcast")
+    infered_expr, actual_domains = infer_expr(expr.args[0], domain, **kwargs)
+    result_expr = im.call(expr.fun)(infered_expr, expr.args[1])
+    return result_expr, actual_domains
+
+
 def _infer_expr(
     expr: itir.Expr,
     domain: DomainAccess,
@@ -382,6 +393,8 @@ def _infer_expr(
         return _infer_tuple_get(expr, domain, **kwargs)
     elif cpm.is_call_to(expr, "if_"):
         return _infer_if(expr, domain, **kwargs)
+    elif cpm.is_call_to(expr, "broadcast"):
+        return _infer_broadcast(expr, domain, **kwargs)
     elif (
         cpm.is_call_to(expr, builtins.ARITHMETIC_BUILTINS)
         or cpm.is_call_to(expr, builtins.TYPE_BUILTINS)
