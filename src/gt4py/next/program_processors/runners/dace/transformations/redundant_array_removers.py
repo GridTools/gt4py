@@ -763,7 +763,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
     - Through the merging of `A1` and `A2` no cycles are created.
     - `A1` can not be used anywhere else.
     - `A1` is a transient and must have the same dimensionality than `A2`.
-    - `A1` is fully read by `A2`; there is an alternative formulation.
+    - `A1` is fully read by `A2`.
 
     In certain cases the last rule can not be verified, an alternative formulation,
     which is a consequence of the lowering and domain interference, will be checked:
@@ -886,6 +886,9 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         a1_range = dace_sbs.Range.from_array(a1_desc)
         if src_subset.covers(a1_range):
             pass
+        elif all(ss.is_constant() for ss in src_subset.size()):
+            # If the subset is fully known then we require that it is covered.
+            return False
         elif (
             (not a2_desc.transient)
             and (graph.out_degree(a1) == 1)
