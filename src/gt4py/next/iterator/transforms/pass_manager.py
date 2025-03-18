@@ -18,7 +18,7 @@ from gt4py.next.iterator.transforms import (
     inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
-    transform_broadcast,
+    prune_broadcast,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
