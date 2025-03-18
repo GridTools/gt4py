@@ -224,8 +224,15 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_Symbol(self, node: foast.Symbol, **kwargs: Any) -> itir.Sym:
         return im.sym(node.id)
 
-    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef:
+    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef | itir.AxisLiteral:
+        if isinstance(node.type, ts.DimensionType):
+            return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
         return im.ref(node.id)
+
+    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> itir.AxisLiteral:
+        if isinstance(node.type, ts.DimensionType):
+            return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
+        raise AssertionError()
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         return im.tuple_get(node.index, self.visit(node.value, **kwargs))
@@ -397,9 +404,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     _visit_concat_where = _visit_where  # TODO(havogt): upgrade concat_where
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        expr = self.visit(node.args[0], **kwargs)
-        dims = tuple(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in node.type.dims)
-        return im.call("broadcast")(expr, im.make_tuple(*dims))
+        return im.call("broadcast")(*self.visit(node.args, **kwargs))
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self._lower_and_map(self.visit(node.func, **kwargs), *node.args)
