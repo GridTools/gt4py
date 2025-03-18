@@ -70,16 +70,22 @@ def _make_direct_self_copy_elimination_used_sdfg() -> dace.SDFG:
 
 
 def _make_self_copy_sdfg_with_multiple_paths() -> (
-    tuple[dace.SDFG, dace_nodes.AccessNode, dace_nodes.AccessNode, dace_nodes.AccessNode]
+    tuple[
+        dace.SDFG,
+        dace.SDFGState,
+        dace_nodes.AccessNode,
+        dace_nodes.AccessNode,
+        dace_nodes.AccessNode,
+    ]
 ):
     """There are multiple paths between the two global nodes.
 
     There are to global nodes and two paths between them. The first one is direct,
     i.e. `(G) -> (G)`. The second one involves an intermediate buffer, i.e. the
     pattern `(G) -> (T) -> (G)`.
-    The `SingleStateGlobalDirectSelfCopyElimination` transformation can not handle it
-    because it would result in a cycle, but the `SingleStateGlobalSelfCopyElimination`
-    can handle it.
+    The merge mode, which is supposed to be the normal mode, of the
+    `SingleStateGlobalDirectSelfCopyElimination` transformation can not handle
+    this case, but its split node can handle it.
     """
     sdfg = dace.SDFG(util.unique_name("self_copy_sdfg_with_multiple_paths"))
     state = sdfg.add_state(is_start_block=True)
@@ -102,7 +108,7 @@ def _make_self_copy_sdfg_with_multiple_paths() -> (
     state.add_nedge(tmp_node, g_write, dace.Memlet("T[5:15] -> [5:15]"))
     sdfg.validate()
 
-    return sdfg, g_read, tmp_node, g_write
+    return sdfg, state, g_read, tmp_node, g_write
 
 
 def test_global_self_copy_elimination_only_pattern():
@@ -274,21 +280,32 @@ def test_direct_global_self_copy_used():
     assert all(np.all(ref[k] == res[k]) for k in ref.keys())
 
 
-def test_direct_self_copy_elimination_cycle():
-    sdfg, *_ = _make_self_copy_sdfg_with_multiple_paths()
+def test_direct_self_copy_elimination_split_mode():
+    sdfg, state, node_read_g, node_tmp, node_write_g = _make_self_copy_sdfg_with_multiple_paths()
+    assert state.number_of_nodes() == 3
+    assert state.number_of_edges() == 3
+    assert state.out_degree(node_read_g) == 2
+    assert state.in_degree(node_write_g) == 2
+    assert state.degree(node_tmp) == 2
 
-    # The transformation can not apply because it would lead to a cycle.
-    #  However the `SingleStateGlobalSelfCopyElimination` can handle this pattern.
+    # The `SingleStateGlobalSelfCopyElimination` transformation will use its "split"
+    #  mode, thus only removing the direct connection between the two g nodes.
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.SingleStateGlobalDirectSelfCopyElimination,
         validate=True,
         validate_all=True,
     )
-    assert count == 0
+
+    assert count == 1
+    assert state.number_of_nodes() == 3
+    assert state.number_of_edges() == 2
+    assert state.out_degree(node_read_g) == 1
+    assert state.in_degree(node_write_g) == 1
+    assert state.degree(node_tmp) == 2
 
 
 def test_global_self_copy_elimination_multi_path():
-    sdfg, node_read_g, node_tmp, node_write_g = _make_self_copy_sdfg_with_multiple_paths()
+    sdfg, _, node_read_g, node_tmp, node_write_g = _make_self_copy_sdfg_with_multiple_paths()
     assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 3
 
     # For some reason calling `sdfg.apply_transformations_repeated()` does not work.

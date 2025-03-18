@@ -645,15 +645,15 @@ class SingleStateGlobalDirectSelfCopyElimination(dace_transformation.SingleState
 
     This transformation is extremely similar to `SingleStateGlobalSelfCopyElimination`,
     however, this transformation does not need a buffer between the two global
-    AccessNodes. Therefore it matches the pattern `(G) -> (G)` where `G` refers to
+    AccessNodes. Therefore it matches the pattern `(G) -> (G)`, where `G` refers to
     global data.
-    The transformation will then remove the first or the top AccessNode, no checks on
-    the subsets will be performed, as the operation is guaranteed to be pointwise.
+    The transformation has two modes in how this is achieved, which one is chosen,
+    depends on if cycles are created or not. The first mode, which is selected if
+    cycles would be created, is to merge the two AccessNodes together. For this
+    the edges of the first AccessNode are reconnected to the second AccessNode.
 
-    If the first AccessNodes has any edges, beside the ones that connect it with the
-    second AccessNode, they will be modified such that they now operate on the second
-    AccessNode.
-    However, if the second AccessNode has become isolated it is deleted.
+    In the second mode, which is selected if cycles would be created, is to simply
+    remove the edges connecting the two AccessNodes.
 
     Todo:
         - Merge this transformation with `SingleStateGlobalSelfCopyElimination`.
@@ -692,16 +692,6 @@ class SingleStateGlobalDirectSelfCopyElimination(dace_transformation.SingleState
         if graph.scope_dict()[read_g] is not None:
             return False
 
-        # Ensure that no cycles are created by the removal
-        for oedge in graph.out_edges(read_g):
-            if oedge.dst is write_g:
-                continue
-            if gtx_transformations.utils.is_reachable(
-                start=oedge.dst,
-                target=write_g,
-                state=graph,
-            ):
-                return False
         return True
 
     def apply(
@@ -712,37 +702,89 @@ class SingleStateGlobalDirectSelfCopyElimination(dace_transformation.SingleState
         read_g: dace_nodes.AccessNode = self.node_read_g
         write_g: dace_nodes.AccessNode = self.node_write_g
 
+        # Select in which mode the transformation should run, depending on
+        #  if this would lead to cycles.
+        merge_g_nodes = True
+        for oedge in graph.out_edges(read_g):
+            if oedge.dst is write_g:
+                continue
+            if gtx_transformations.utils.is_reachable(
+                start=oedge.dst,
+                target=write_g,
+                state=graph,
+            ):
+                merge_g_nodes = False
+                break
+
+        if merge_g_nodes:
+            self._merge_g_nodes(state=graph, sdfg=sdfg)
+        else:
+            self._split_g_nodes(state=graph)
+
+    def _split_g_nodes(
+        self,
+        state: dace.SDFGState,
+    ) -> None:
+        """Second mode of the transformation, i.e. the splitting.
+
+        All edges between the two nodes, will be removed. There is no longer a
+        direct connection between the two nodes.
+        """
+        read_g: dace_nodes.AccessNode = self.node_read_g
+        write_g: dace_nodes.AccessNode = self.node_write_g
+
+        for oedge in list(state.out_edges(read_g)):
+            if oedge.dst is write_g:
+                state.remove_edge(oedge)
+
+        assert state.degree(read_g) != 0
+        assert state.degree(write_g) != 0
+
+    def _merge_g_nodes(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> None:
+        """The first mode of the transformation, i.e. the merging of the nodes.
+
+        All incoming edges of the first node will be reconnected to the second node.
+        The outgoing edges will be reconnected to the second node, if they connect
+        the two nodes, they will be removed.
+        """
+        read_g: dace_nodes.AccessNode = self.node_read_g
+        write_g: dace_nodes.AccessNode = self.node_write_g
+
         # Reconnect any incoming edges of the read AccessNode, aka. the first one.
-        for iedge in list(graph.in_edges(read_g)):
+        for iedge in list(state.in_edges(read_g)):
             # Since the names are the same, just creating a new edge is enough.
-            graph.add_edge(
+            state.add_edge(
                 iedge.src,
                 iedge.src_conn,
                 write_g,
                 iedge.dst_conn,
                 iedge.data,
             )
-            graph.remove_edge(iedge)
+            state.remove_edge(iedge)
 
         # Now reconnect all edges that leave the first AccessNodes, with the
         #  exception of the edges that connecting the two, they are just removed.
-        for oedge in list(graph.out_edges(read_g)):
+        for oedge in list(state.out_edges(read_g)):
             if oedge.dst is not write_g:
-                graph.add_edge(
+                state.add_edge(
                     write_g,
                     oedge.src_conn,
                     oedge.dst,
                     oedge.dst_conn,
                     oedge.data,
                 )
-            graph.remove_edge(oedge)
+            state.remove_edge(oedge)
 
         # Now remove the first node to `G` and if the second has become isolated
         #  then also remove it.
-        graph.remove_node(read_g)
+        state.remove_node(read_g)
 
-        if graph.degree(write_g) == 0:
-            graph.remove_node(write_g)
+        if state.degree(write_g) == 0:
+            state.remove_node(write_g)
 
 
 @dace_properties.make_properties
