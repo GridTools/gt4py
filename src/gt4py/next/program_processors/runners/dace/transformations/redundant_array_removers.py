@@ -762,8 +762,14 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
     requirements before it can be applied:
     - Through the merging of `A1` and `A2` no cycles are created.
     - `A1` can not be used anywhere else.
-    - `A1` is fully read by `A2`.
     - `A1` is a transient and must have the same dimensionality than `A2`.
+    - `A1` is fully read by `A2`; there is an alternative formulation.
+
+    In certain cases the last rule can not be verified, an alternative formulation,
+    which is a consequence of the lowering and domain interference, will be checked:
+    - `A1` is read from the beginning, i.e. all subsets starts at literal `0`.
+    - `A1` has only one going edge.
+    - `A2` is global memory.
 
     Notes:
         - The transformation assumes that the domain inference adjusted the ranges of
@@ -778,7 +784,6 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
     Todo:
         - Extend such that not the full array must be read.
         - Try to allow more than one connection between `A1` and `A2`.
-        - Modify it such that also `A2` can be removed.
     """
 
     node_a1 = dace_transformation.PatternNode(dace_nodes.AccessNode)
@@ -872,10 +877,22 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         if dst_subset is None:
             return False
 
+        # Checking if the whole array is read.
+        #  As described in the description of the class there are two different
+        #  formulation of this rule, either the simple one or one that proves this
+        #  indirectly.
         # NOTE: The main benefit of requiring that the whole array is read is
         #  that we do not have to adjust maps.
         a1_range = dace_sbs.Range.from_array(a1_desc)
-        if not src_subset.covers(a1_range):
+        if src_subset.covers(a1_range):
+            pass
+        elif (
+            (not a2_desc.transient)
+            and (graph.out_degree(a1) == 1)
+            and all(ss_start == 0 for ss_start in src_subset.min_element())
+        ):
+            pass
+        else:
             return False
 
         # We have to ensure that no cycle is created through the removal of `a1`.
