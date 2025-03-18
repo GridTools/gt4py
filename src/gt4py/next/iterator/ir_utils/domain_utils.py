@@ -82,7 +82,7 @@ class SymbolicDomain:
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self) -> itir.FunCall:
-        converted_ranges: dict[common.Dimension | str, tuple[itir.Expr, itir.Expr]] = {
+        converted_ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] = {
             key: (value.start, value.stop) for key, value in self.ranges.items()
         }
         return im.domain(self.grid_type, converted_ranges)
