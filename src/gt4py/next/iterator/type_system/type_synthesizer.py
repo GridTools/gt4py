@@ -231,23 +231,6 @@ def broadcast(
 
 
 @_register_builtin_type_synthesizer
-def broadcast(
-    arg: ts.FieldType | ts.ScalarType, dims: ts.DimensionType | tuple[ts.DimensionType]
-) -> ts.FieldType:  # TODO: tuple[itir.AxisLiteral]?
-    if isinstance(dims, (tuple, ts.TupleType)):
-        dims_ = [dim.dim for dim in dims]
-    elif isinstance(dims, ts.DimensionType):
-        dims_ = [dims.dim]
-    else:
-        raise TypeError("`dims` need to be of DimensionType.")  # TODO
-    if isinstance(arg, ts.FieldType):
-        dtype = arg.dtype
-    elif isinstance(arg, ts.ScalarType):
-        dtype = ts.ScalarType(kind=getattr(ts.ScalarKind, arg.kind.name))
-    return ts.FieldType(dims=dims_, dtype=dtype)
-
-
-@_register_builtin_type_synthesizer
 def neighbors(
     offset_literal: it_ts.OffsetLiteralType,
     it: it_ts.IteratorType,
