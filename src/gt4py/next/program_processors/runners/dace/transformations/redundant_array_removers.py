@@ -645,7 +645,7 @@ class SingleStateGlobalDirectSelfCopyElimination(dace_transformation.SingleState
 
     This transformation is extremely similar to `SingleStateGlobalSelfCopyElimination`,
     however, this transformation does not need a buffer between the two global
-    AccessNodes. Therefore it matches the pattern `(G) -> (G)` where `G` refers to a
+    AccessNodes. Therefore it matches the pattern `(G) -> (G)` where `G` refers to
     global data.
     The transformation will then remove the first or the top AccessNode, no checks on
     the subsets will be performed, as the operation is guaranteed to be pointwise.
@@ -725,7 +725,7 @@ class SingleStateGlobalDirectSelfCopyElimination(dace_transformation.SingleState
             graph.remove_edge(iedge)
 
         # Now reconnect all edges that leave the first AccessNodes, with the
-        #  exception of the edges that connecting the two.
+        #  exception of the edges that connecting the two, they are just removed.
         for oedge in list(graph.out_edges(read_g)):
             if oedge.dst is not write_g:
                 graph.add_edge(
