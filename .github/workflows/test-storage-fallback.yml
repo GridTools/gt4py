@@ -17,11 +17,24 @@ on:
     - "*.yml"
 
 jobs:
+  # First job to read Python versions from .python-versions file
+  get-python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      python-versions: ${{ steps.set-matrix.outputs.python-versions }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-matrix
+        run: |
+          PYTHON_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "python-versions=${PYTHON_VERSIONS}" >> $GITHUB_OUTPUT
+
   test-storage:
+    needs: get-python-versions
     strategy:
       matrix:
         os: ["ubuntu-latest"]
-        python-version: ["3.10", "3.11"]
+        python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
 
     runs-on: ${{ matrix.os }}
     steps:
