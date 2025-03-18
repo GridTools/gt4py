@@ -773,16 +773,14 @@ def translate_concat_where(
         assert all(ftype.dims == output_dims for ftype in (lower.gt_type, upper.gt_type))
 
         # the lower/upper range to be copied is defined by the start ('range_0') and stop ('range_1') indices
-        lower_range_0 = lower_domain[concat_dim_index][1]
-        lower_range_1 = dace.symbolic.pystr_to_symbolic(
-            f"max({lower_range_0}, min({lower_domain[concat_dim_index][2]}, {output_origin[concat_dim_index] + output_shape[concat_dim_index]}))",
-            simplify=True,
+        lower_range_1 = lower_domain[concat_dim_index][2]
+        lower_range_0 = dace.symbolic.pystr_to_symbolic(
+            f"min({lower_domain[concat_dim_index][1]}, {lower_range_1})"
         )
 
-        upper_range_0 = upper_domain[concat_dim_index][1]
-        upper_range_1 = dace.symbolic.pystr_to_symbolic(
-            f"max({upper_range_0}, min({upper_domain[concat_dim_index][2]}, {output_origin[concat_dim_index] + output_shape[concat_dim_index]}))",
-            simplify=True,
+        upper_range_1 = upper_domain[concat_dim_index][2]
+        upper_range_0 = dace.symbolic.pystr_to_symbolic(
+            f"min({upper_domain[concat_dim_index][1]}, {upper_range_1})"
         )
 
         # prune empty branches
@@ -821,7 +819,7 @@ def translate_concat_where(
         # we write the data of the lower range into the output array starting from the index zero
         lower_output_subset = dace_subsets.Range(
             [
-                (0, lower_range_1 - lower_range_0 - 1, 1)
+                (0, lower_range_size - 1, 1)
                 if dim_index == concat_dim_index
                 else (0, size - 1, 1)
                 for dim_index, size in enumerate(output_desc.shape)
@@ -834,6 +832,7 @@ def translate_concat_where(
                 data=lower.dc_node.data,
                 subset=lower_subset,
                 other_subset=lower_output_subset,
+                dynamic=True,
             ),
         )
 
@@ -858,8 +857,8 @@ def translate_concat_where(
         upper_output_subset = dace_subsets.Range(
             [
                 (
-                    upper_range_0 - output_origin[dim_index],
-                    upper_range_1 - output_origin[dim_index] - 1,
+                    lower_range_size,
+                    lower_range_size + upper_range_size - 1,
                     1,
                 )
                 if dim_index == concat_dim_index
@@ -874,6 +873,7 @@ def translate_concat_where(
                 data=upper.dc_node.data,
                 subset=upper_subset,
                 other_subset=upper_output_subset,
+                dynamic=True,
             ),
         )
 
