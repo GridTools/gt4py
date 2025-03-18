@@ -60,14 +60,14 @@ def function_buffer_example():
             interface.Parameter(
                 name="a_buf",
                 type_=ts.FieldType(
-                    dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
+                    dims=[gtx.Dimension("bar"), gtx.Dimension("foo")],
                     dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                 ),
             ),
             interface.Parameter(
                 name="b_buf",
                 type_=ts.FieldType(
-                    dims=[gtx.Dimension("foo")], dtype=ts.ScalarType(ts.ScalarKind.INT64)
+                    dims=[gtx.Dimension("bar")], dtype=ts.ScalarType(ts.ScalarKind.INT64)
                 ),
             ),
         ],
@@ -111,11 +111,11 @@ def function_tuple_example():
                 type_=ts.TupleType(
                     types=[
                         ts.FieldType(
-                            dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
+                            dims=[gtx.Dimension("bar"), gtx.Dimension("foo")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                         ),
                         ts.FieldType(
-                            dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
+                            dims=[gtx.Dimension("bar"), gtx.Dimension("foo")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                         ),
                     ]
