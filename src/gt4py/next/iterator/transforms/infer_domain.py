@@ -20,6 +20,7 @@ from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
     domain_utils,
     ir_makers as im,
+    misc as ir_misc,
 )
 from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.utils import flatten_nested_tuple, tree_map
@@ -369,9 +370,11 @@ def _infer_broadcast(
     **kwargs: Unpack[InferenceOptions],
 ) -> tuple[itir.Expr, AccessedDomains]:
     assert cpm.is_call_to(expr, "broadcast")
+    # We just propagate the domain to the first argument. Restriction of the domain is based
+    # on the type and occurs in a general setting (not yet merged #1853).
     infered_expr, actual_domains = infer_expr(expr.args[0], domain, **kwargs)
-    result_expr = im.call(expr.fun)(infered_expr, expr.args[1])
-    return result_expr, actual_domains
+
+    return ir_misc.with_altered_arg(expr, 0, infered_expr), actual_domains
 
 
 def _infer_expr(
