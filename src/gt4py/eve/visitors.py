@@ -129,9 +129,9 @@ def _preserve_annex(
     old_annex_dict = node.annex.__dict__
     for key in (old_annex_dict.keys() & preserved_annex_attrs) - new_annex_dict.keys():
         # Note: The annex item's value of the new node might not be equal
-        # (in the sense that an equality comparison returns false),
-        # but in the context of the pass, they are equivalent.
-        # Therefore, we don't assert equality here.
+        # (in the sense that an equality comparison returns false), to
+        # the old one, but in the context of the pass, they are
+        # equivalent. Therefore, we don't assert equality here.
         new_annex_dict[key] = old_annex_dict[key]
 
 
