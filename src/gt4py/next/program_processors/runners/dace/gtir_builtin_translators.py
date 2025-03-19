@@ -773,14 +773,14 @@ def translate_concat_where(
         assert all(ftype.dims == output_dims for ftype in (lower.gt_type, upper.gt_type))
 
         # the lower/upper range to be copied is defined by the start ('range_0') and stop ('range_1') indices
-        lower_range_1 = lower_domain[concat_dim_index][2]
-        lower_range_0 = dace.symbolic.pystr_to_symbolic(
-            f"min({lower_domain[concat_dim_index][1]}, {lower_range_1})"
+        lower_range_0 = lower_domain[concat_dim_index][1]
+        lower_range_1 = dace.symbolic.pystr_to_symbolic(
+            f"max({lower_range_0}, {lower_domain[concat_dim_index][2]})"
         )
 
-        upper_range_1 = upper_domain[concat_dim_index][2]
-        upper_range_0 = dace.symbolic.pystr_to_symbolic(
-            f"min({upper_domain[concat_dim_index][1]}, {upper_range_1})"
+        upper_range_0 = upper_domain[concat_dim_index][1]
+        upper_range_1 = dace.symbolic.pystr_to_symbolic(
+            f"max({upper_range_0}, {upper_domain[concat_dim_index][2]})"
         )
 
         # prune empty branches
@@ -832,7 +832,6 @@ def translate_concat_where(
                 data=lower.dc_node.data,
                 subset=lower_subset,
                 other_subset=lower_output_subset,
-                dynamic=True,
             ),
         )
 
@@ -873,7 +872,6 @@ def translate_concat_where(
                 data=upper.dc_node.data,
                 subset=upper_subset,
                 other_subset=upper_output_subset,
-                dynamic=True,
             ),
         )
 
