@@ -93,7 +93,7 @@ def apply_common_transforms(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
-    ir = prune_broadcast.TransformBroadcast.apply(ir)
+    ir = prune_broadcast.PruneBroadcast.apply(ir)
 
     for _ in range(10):
         inlined = ir
@@ -189,5 +189,5 @@ def apply_fieldview_transforms(
         ir
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
-    ir = prune_broadcast.TransformBroadcast.apply(ir)
+    ir = prune_broadcast.PruneBroadcast.apply(ir)
     return ir
