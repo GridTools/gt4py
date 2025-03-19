@@ -17,7 +17,7 @@ from gt4py.next.iterator.ir_utils import (
 
 
 @dataclasses.dataclass
-class TransformBroadcast(PreserveLocationVisitor, NodeTranslator):
+class PruneBroadcast(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
     @classmethod
