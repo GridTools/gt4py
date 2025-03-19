@@ -81,9 +81,13 @@ def test_bc():
     # we also check that the common subexpression is able to extract the inlined value, such
     # that it is only evaluated once
     testee = im.let("var", im.lift("deref")("it2"))(
-        im.if_(im.deref("it1"), im.literal_from_value(0), im.plus(im.deref("var"), im.deref("var")))
+        im.if_(
+            im.deref("it1"), im.literal_from_value(0.0), im.plus(im.deref("var"), im.deref("var"))
+        )
     )
-    expected = "(λ(_icdlv_1) → if ·it1 then 0 else (λ(_cs_1) → _cs_1 + _cs_1)(·(↑(λ() → _icdlv_1()))()))(λ() → ·it2)"
+    expected = """(λ(_icdlv_1) → if ·it1 then 0.0 else (λ(_cs_1) → _cs_1 + _cs_1)(·(↑(λ() → _icdlv_1()))()))(
+  λ() → ·it2
+)"""
 
     actual = InlineCenterDerefLiftVars.apply(
         wrap_in_program(testee, arg_dtypes=[ts.ScalarKind.BOOL, ts.ScalarKind.FLOAT64])
