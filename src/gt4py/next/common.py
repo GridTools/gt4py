@@ -1161,9 +1161,9 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         Traceback (most recent call last):
         ...
         ValueError: Dimensions 'K[vertical], J[horizontal]' are not ordered correctly, expected 'J[horizontal], K[vertical]'.
-        >>> promote_dims([I, K], [J, E2V]) == [I, J, K, E2V]
+        >>> promote_dims([I, K], [J, E2V]) == [I, J, E2V, K]
         True
-        >>> promote_dims([I, E2C], [K, E2V])
+        >>> promote_dims([I, E2C], [E2V, K])
         Traceback (most recent call last):
         ...
         ValueError: There are more than one dimension with DimensionKind 'LOCAL'.

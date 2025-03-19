@@ -586,7 +586,7 @@ def dimension_promotion_cases() -> (
             None,
             "There are more than one dimension with DimensionKind 'LOCAL'.",
         ),
-        ([[JDim, V2E], [IDim, KDim]], [IDim, JDim, V2E, KDim, ], None),
+        ([[JDim, V2E], [IDim, KDim]], [IDim, JDim, V2E, KDim], None),
     ]
     return [
         ([[el for el in arg] for arg in args], [el for el in result] if result else result, msg)
