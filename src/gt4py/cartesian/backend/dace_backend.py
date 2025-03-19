@@ -19,6 +19,7 @@ import dace.data
 from dace.sdfg.utils import inline_sdfgs
 
 from gt4py import storage as gt_storage
+from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
 from gt4py.cartesian.backend.base import CLIBackendMixin, register
 from gt4py.cartesian.backend.gtc_common import (
@@ -523,7 +524,7 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
         with dace.config.temporary_config():
             # To prevent conflict with 3rd party usage of DaCe config always make sure that any
             #  changes be under the temporary_config manager
-            if gt_config.GT4PY_USE_HIP:
+            if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
                 dace.config.Config.set("compiler", "cuda", "backend", value="hip")
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set(

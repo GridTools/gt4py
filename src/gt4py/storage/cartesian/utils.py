@@ -19,7 +19,6 @@ import numpy.typing as npt
 from numpy.typing import DTypeLike
 
 from gt4py._core import definitions as core_defs
-from gt4py.cartesian import config as gt_config
 from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
 from gt4py.storage import allocators
 
@@ -259,9 +258,10 @@ def _allocate_gpu(
 ) -> Tuple["cp.ndarray", "cp.ndarray"]:
     assert cp is not None
     assert _GPUBufferAllocator is not None, "GPU allocation library or device not found"
+    if core_defs.CUPY_DEVICE_TYPE is None:
+        raise ValueError("CUPY_DEVICE_TYPE detection failed.")
     device = core_defs.Device(  # type: ignore[type-var]
-        (core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA),
-        0,
+        core_defs.CUPY_DEVICE_TYPE, 0
     )
     buffer = _GPUBufferAllocator.allocate(
         shape,
