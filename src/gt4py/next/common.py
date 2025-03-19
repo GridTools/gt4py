@@ -69,7 +69,7 @@ class DimensionKind(StrEnum):
         return self.value
 
 
-_DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 1, DimensionKind.VERTICAL: 2, DimensionKind.LOCAL: 3}
+_DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
 
 
 def dimension_to_implicit_offset(dim: str) -> str:
@@ -1145,7 +1145,7 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     Find an ordering of multiple lists of dimensions.
 
     The resulting list contains all unique dimensions from the input lists,
-    sorted first by dims_kind_order, i.e., `Dimension.kind` (`HORIZONTAL` < `VERTICAL` < `LOCAL`) and then
+    sorted first by dims_kind_order, i.e., `Dimension.kind` (`HORIZONTAL` < `LOCAL` < `VERTICAL`) and then
     lexicographically by `Dimension.value`.
 
     Examples:
