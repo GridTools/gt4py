@@ -10,7 +10,6 @@ runs:
   using: "composite"
   steps:
   - uses: actions/checkout@v4
-    if: ${{ github.repository == github.repository }}
   - id: set-versions
     shell: bash
     run: |
