@@ -6,29 +6,31 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import pathlib
-import re
-import typing
+import pytest
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import dace
+else:
+    dace = pytest.importorskip("dace")
 
 import hypothesis.strategies as hyp_st
 import numpy as np
-import pytest
+import pathlib
+import re
+import typing
 
 from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.gtscript import PARALLEL, computation, interval
 from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.storage.cartesian import utils as storage_utils
+from gt4py.cartesian.backend.dace_lazy_stencil import DaCeLazyStencil
 
 from cartesian_tests.utils import OriginWrapper
 
-
-dace = pytest.importorskip("dace")
-from gt4py.cartesian.backend.dace_lazy_stencil import (  # noqa: E402 [import-shadowed-by-loop-var]  'importorskip' is needed
-    DaCeLazyStencil,
-)
-
-
+# Because "dace tests" filter by `requires_dace`, we still need to add the marker.
+# This global variable add the marker to all test functions in this module.
 pytestmark = [pytest.mark.requires_dace, pytest.mark.usefixtures("dace_env")]
 
 
