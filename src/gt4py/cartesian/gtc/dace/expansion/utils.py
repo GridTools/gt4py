@@ -40,8 +40,8 @@ class HorizontalMaskRemover(eve.NodeTranslator):
             else:
                 res_body.append(newstmt)
         return dcir.Tasklet(
+            label=f"he_remover_{id(node)}",
             stmts=res_body,
-            decls=node.decls,
             read_memlets=node.read_memlets,
             write_memlets=node.write_memlets,
         )

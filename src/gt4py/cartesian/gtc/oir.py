@@ -33,6 +33,10 @@ class Stmt(common.Stmt):
     pass
 
 
+class CodeBlock(common.BlockStmt[Stmt], Stmt):
+    label: str
+
+
 class Literal(common.Literal, Expr):
     pass
 
