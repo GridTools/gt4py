@@ -104,11 +104,11 @@ def build_dace_sdfg(
 
 
 def infer_domain_and_build_dace_sdfg(
-    ir: gtir.Program, offset_provider_type: gtx_common.OffsetProviderType
+    ir: gtir.Program, offset_provider: gtx_common.OffsetProvider
 ) -> Callable[..., Any]:
     # run domain inference in order to add the domain annex information to the IR nodes
-    ir = infer_domain.infer_program(ir, offset_provider=offset_provider_type)
-    return build_dace_sdfg(ir, offset_provider_type)
+    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    return build_dace_sdfg(ir, gtx_common.offset_provider_to_type(offset_provider))
 
 
 def test_gtir_broadcast():
@@ -670,7 +670,6 @@ def test_gtir_cond():
         assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
 
 
-@pytest.mark.xfail(reason="error in domain inference")
 def test_gtir_cond_with_tuple_return():
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
@@ -1480,7 +1479,6 @@ def test_gtir_reduce_dot_product():
     assert np.allclose(v, v_ref)
 
 
-@pytest.mark.xfail(reason="error in domain inference")
 def test_gtir_reduce_with_cond_neighbors():
     init_value = np.random.rand()
     vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
@@ -1522,7 +1520,7 @@ def test_gtir_reduce_with_cond_neighbors():
     e = np.random.rand(SKIP_VALUE_MESH.num_edges)
 
     for use_sparse in [False, True]:
-        sdfg = infer_domain_and_build_dace_sdfg(testee, SKIP_VALUE_MESH.offset_provider_type)
+        sdfg = infer_domain_and_build_dace_sdfg(testee, SKIP_VALUE_MESH.offset_provider)
 
         v = np.empty(SKIP_VALUE_MESH.num_vertices, dtype=e.dtype)
         v_ref = [

@@ -601,17 +601,18 @@ def _construct_if_branch_output(
 
     assert isinstance(out_type, ts.FieldType)
     assert isinstance(sym.type, ts.FieldType)
-    assert sym.type.dims == out_type.dims
     dims, origin, shape = get_field_layout(extract_domain(domain))
     assert dims == out_type.dims
 
-    if isinstance(sym.type.dtype, ts.ScalarType):
-        dtype = gtx_dace_utils.as_dace_type(sym.type.dtype)
+    if isinstance(out_type.dtype, ts.ScalarType):
+        assert sym.type.dims == out_type.dims
+        dtype = gtx_dace_utils.as_dace_type(out_type.dtype)
     else:
         assert isinstance(out_type.dtype, ts.ListType)
+        assert out_type.dtype.offset_type is not None
+        assert sym.type.dims == [*out_type.dims, out_type.dtype.offset_type]
         assert isinstance(out_type.dtype.element_type, ts.ScalarType)
         dtype = gtx_dace_utils.as_dace_type(out_type.dtype.element_type)
-        assert out_type.dtype.offset_type is not None
         offset_provider_type = sdfg_builder.get_offset_provider_type(
             out_type.dtype.offset_type.value
         )
@@ -731,19 +732,13 @@ def translate_if(
 
     if isinstance(node.type, ts.TupleType):
         symbol_tree = gtir_sdfg_utils.make_symbol_tree("x", node.type)
-        if isinstance(node.annex.domain, tuple):
-            domain_tree = node.annex.domain
-        else:
-            # TODO(edopao): this is a workaround for some IR nodes where the inferred
-            #   domain on a tuple of fields is not a tuple, see `test_execution.py::test_ternary_operator_tuple()`
-            domain_tree = gtx_utils.tree_map(lambda _: node.annex.domain)(symbol_tree)
         node_output = gtx_utils.tree_map(
-            lambda domain,
-            sym,
+            lambda sym,
             true_br,
             false_br,
             sdfg=sdfg,
             state=state,
+            domain=node.annex.domain,
             sdfg_builder=sdfg_builder: _construct_if_branch_output(
                 sdfg,
                 state,
@@ -754,7 +749,6 @@ def translate_if(
                 false_br,
             )
         )(
-            domain_tree,
             symbol_tree,
             true_br_result,
             false_br_result,
