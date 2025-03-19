@@ -13,13 +13,11 @@ jobs:
   get-python-versions:
     runs-on: ubuntu-latest
     outputs:
-      python-versions: ${{ steps.set-matrix.outputs.python-versions }}
+      python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
       - uses: actions/checkout@v4
-      - id: set-matrix
-        run: |
-          PYTHON_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "python-versions=${PYTHON_VERSIONS}" >> $GITHUB_OUTPUT
+      - id: get-versions
+        uses: ./.github/actions/get-python-versions
 
   test-notebooks:
     needs: get-python-versions
