@@ -910,7 +910,7 @@ def test_broadcast():
     assert lowered.expr == im.call("broadcast")(
         im.ref("inp"),
         im.make_tuple(
-            *tuple(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))
+            *(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))
         ),
     )
 
