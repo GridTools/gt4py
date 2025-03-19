@@ -21,11 +21,9 @@ on some of the previous ones):
   7. visitors
   8. traits
   9. codegen
-
 """
 
-from __future__ import annotations  # isort:skip
-
+from __future__ import annotations
 
 from .concepts import (
     AnnexManager,
@@ -72,7 +70,7 @@ from .type_definitions import NOTHING, ConstrainedStr, Enum, IntEnum, NothingTyp
 from .visitors import NodeTranslator, NodeVisitor
 
 
-__all__ = [
+__all__ = [  # noqa: RUF022 `__all__` is not sorted
     # version
     "__version__",
     "__version_info__",
@@ -89,15 +87,6 @@ __all__ = [
     "SymbolRef",
     "VType",
     "register_annex_user",
-    "# datamodels" "Coerced",
-    "DataModel",
-    "FrozenModel",
-    "GenericDataModel",
-    "Unchecked",
-    "concretize",
-    "datamodel",
-    "field",
-    "frozenmodel",
     # datamodels
     "Coerced",
     "DataModel",
@@ -122,7 +111,7 @@ __all__ = [
     "pre_walk_values",
     "walk_items",
     "walk_values",
-    "# type_definition",
+    # type_definitions
     "NOTHING",
     "ConstrainedStr",
     "Enum",

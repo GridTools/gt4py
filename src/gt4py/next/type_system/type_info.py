@@ -26,6 +26,7 @@ import numpy as np
 
 from gt4py.eve.utils import XIterable, xiter
 from gt4py.next import common
+from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -78,15 +79,15 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     >>> type_class(ts.TupleType(types=[])).__name__
     'TupleType'
     """
-    match symbol_type:
-        case ts.DeferredType(constraint):
-            if constraint is None:
-                raise ValueError(f"No type information available for '{symbol_type}'.")
-            elif isinstance(constraint, tuple):
-                raise ValueError(f"Not sufficient type information available for '{symbol_type}'.")
-            return constraint
-        case ts.TypeSpec() as concrete_type:
-            return concrete_type.__class__
+    if isinstance(symbol_type, ts.DeferredType):
+        constraint = symbol_type.constraint
+        if constraint is None:
+            raise ValueError(f"No type information available for '{symbol_type}'.")
+        elif isinstance(constraint, tuple):
+            raise ValueError(f"Not sufficient type information available for '{symbol_type}'.")
+        return constraint
+    if isinstance(symbol_type, ts.TypeSpec):
+        return symbol_type.__class__
     raise ValueError(
         f"Invalid type for TypeInfo: requires '{ts.TypeSpec}', got '{type(symbol_type)}'."
     )
@@ -173,7 +174,7 @@ def apply_to_primitive_constituents(
     ...     with_path_arg=True,
     ...     tuple_constructor=lambda *elements: dict(elements),
     ... )
-    {(0,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None)}
+    {(0,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None)}
     """
     if isinstance(symbol_types[0], ts.TupleType):
         assert all(isinstance(symbol_type, ts.TupleType) for symbol_type in symbol_types)
@@ -197,7 +198,7 @@ def apply_to_primitive_constituents(
         return fun(*symbol_types)
 
 
-def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType:
+def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType:
     """
     Extract the data type from ``symbol_type`` if it is either `FieldType` or `ScalarType`.
 
@@ -234,7 +235,10 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
+    return isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType) and dtype.kind in [
+        ts.ScalarKind.FLOAT32,
+        ts.ScalarKind.FLOAT64,
+    ]
 
 
 def is_integer(symbol_type: ts.TypeSpec) -> bool:
@@ -251,7 +255,12 @@ def is_integer(symbol_type: ts.TypeSpec) -> bool:
     False
     """
     return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in {
+        ts.ScalarKind.INT8,
+        ts.ScalarKind.UINT8,
+        ts.ScalarKind.INT16,
+        ts.ScalarKind.UINT16,
         ts.ScalarKind.INT32,
+        ts.ScalarKind.UINT32,
         ts.ScalarKind.INT64,
     }
 
@@ -295,7 +304,10 @@ def is_number(symbol_type: ts.TypeSpec) -> bool:
 
 
 def is_logical(symbol_type: ts.TypeSpec) -> bool:
-    return extract_dtype(symbol_type).kind is ts.ScalarKind.BOOL
+    return (
+        isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType)
+        and dtype.kind is ts.ScalarKind.BOOL
+    )
 
 
 def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
@@ -321,8 +333,14 @@ def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.num
     return {  # type: ignore[return-value] # why resolved to `tuple[object, object]`?
         ts.ScalarKind.FLOAT32: (np.finfo(np.float32).min, np.finfo(np.float32).max),
         ts.ScalarKind.FLOAT64: (np.finfo(np.float64).min, np.finfo(np.float64).max),
+        ts.ScalarKind.INT8: (np.iinfo(np.int8).min, np.iinfo(np.int8).max),
+        ts.ScalarKind.UINT8: (np.iinfo(np.uint8).min, np.iinfo(np.uint8).max),
+        ts.ScalarKind.INT16: (np.iinfo(np.int16).min, np.iinfo(np.int16).max),
+        ts.ScalarKind.UINT16: (np.iinfo(np.uint16).min, np.iinfo(np.uint16).max),
         ts.ScalarKind.INT32: (np.iinfo(np.int32).min, np.iinfo(np.int32).max),
+        ts.ScalarKind.UINT32: (np.iinfo(np.uint32).min, np.iinfo(np.uint32).max),
         ts.ScalarKind.INT64: (np.iinfo(np.int64).min, np.iinfo(np.int64).max),
+        ts.ScalarKind.UINT64: (np.iinfo(np.uint64).min, np.iinfo(np.uint64).max),
     }[arithmetic_type.kind]
 
 
@@ -385,11 +403,10 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[common.Dimension]:
     >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     [Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
     """
-    match symbol_type:
-        case ts.ScalarType():
-            return []
-        case ts.FieldType(dims):
-            return dims
+    if isinstance(symbol_type, ts.ScalarType):
+        return []
+    if isinstance(symbol_type, ts.FieldType):
+        return symbol_type.dims
     raise ValueError(f"Can not extract dimensions from '{symbol_type}'.")
 
 
@@ -414,6 +431,69 @@ def contains_local_field(type_: ts.TypeSpec) -> bool:
     return any(
         isinstance(t, ts.FieldType) and is_local_field(t) for t in primitive_constituents(type_)
     )
+
+
+# TODO(tehrengruber): This function has specializations on Iterator types, which are not part of
+#  the general / shared type system. This functionality should be moved to the iterator-only
+#  type system, but we need some sort of multiple dispatch for that.
+# TODO(tehrengruber): Should this have a direction like is_concretizable?
+def is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec) -> bool:
+    """
+    Predicate to determine if two types are compatible.
+
+    This function gracefully handles:
+     - iterators with unknown positions which are considered compatible to any other positions
+       of another iterator.
+     - iterators which are defined everywhere, i.e. empty defined dimensions
+    Beside that this function simply checks for equality of types.
+
+    >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    >>> IDim = common.Dimension(value="IDim")
+    >>> type_on_i_of_i_it = it_ts.IteratorType(
+    ...     position_dims=[IDim], defined_dims=[IDim], element_type=bool_type
+    ... )
+    >>> type_on_undefined_of_i_it = it_ts.IteratorType(
+    ...     position_dims="unknown", defined_dims=[IDim], element_type=bool_type
+    ... )
+    >>> is_compatible_type(type_on_i_of_i_it, type_on_undefined_of_i_it)
+    True
+
+    >>> JDim = common.Dimension(value="JDim")
+    >>> type_on_j_of_j_it = it_ts.IteratorType(
+    ...     position_dims=[JDim], defined_dims=[JDim], element_type=bool_type
+    ... )
+    >>> is_compatible_type(type_on_i_of_i_it, type_on_j_of_j_it)
+    False
+    """
+    is_compatible = True
+
+    if isinstance(type_a, it_ts.IteratorType) and isinstance(type_b, it_ts.IteratorType):
+        if not any(el_type.position_dims == "unknown" for el_type in [type_a, type_b]):
+            is_compatible &= type_a.position_dims == type_b.position_dims
+        if type_a.defined_dims and type_b.defined_dims:
+            is_compatible &= type_a.defined_dims == type_b.defined_dims
+        is_compatible &= type_a.element_type == type_b.element_type
+    elif isinstance(type_a, ts.TupleType) and isinstance(type_b, ts.TupleType):
+        if len(type_a.types) != len(type_b.types):
+            return False
+        for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
+            is_compatible &= is_compatible_type(el_type_a, el_type_b)
+    elif isinstance(type_a, ts.FunctionType) and isinstance(type_b, ts.FunctionType):
+        for arg_a, arg_b in zip(type_a.pos_only_args, type_b.pos_only_args, strict=True):
+            is_compatible &= is_compatible_type(arg_a, arg_b)
+        for arg_a, arg_b in zip(
+            type_a.pos_or_kw_args.values(), type_b.pos_or_kw_args.values(), strict=True
+        ):
+            is_compatible &= is_compatible_type(arg_a, arg_b)
+        for arg_a, arg_b in zip(
+            type_a.kw_only_args.values(), type_b.kw_only_args.values(), strict=True
+        ):
+            is_compatible &= is_compatible_type(arg_a, arg_b)
+        is_compatible &= is_compatible_type(type_a.returns, type_b.returns)
+    else:
+        is_compatible &= is_concretizable(type_a, type_b)
+
+    return is_compatible
 
 
 def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
@@ -459,7 +539,9 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
 
     """
     if isinstance(symbol_type, ts.DeferredType) and (
-        symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
+        symbol_type.constraint is None
+        or (isinstance(to_type, ts.DeferredType) and to_type.constraint is None)
+        or issubclass(type_class(to_type), symbol_type.constraint)
     ):
         return True
     elif is_concrete(symbol_type):
@@ -485,12 +567,11 @@ def promote(
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
 
-    >>> promote(
+    >>> promoted: ts.FieldType = promote(
     ...     ts.FieldType(dims=[I, J], dtype=dtype), ts.FieldType(dims=[K], dtype=dtype)
-    ... )  # doctest: +ELLIPSIS
-    Traceback (most recent call last):
-     ...
-    ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
+    ... )
+    >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
+    True
     """
     if not always_field and all(isinstance(type_, ts.ScalarType) for type_ in types):
         if not all(type_ == types[0] for type_ in types):
@@ -500,7 +581,9 @@ def promote(
         return types[0]
     elif all(isinstance(type_, (ts.ScalarType, ts.FieldType)) for type_ in types):
         dims = common.promote_dims(*(extract_dims(type_) for type_ in types))
-        dtype = cast(ts.ScalarType, promote(*(extract_dtype(type_) for type_ in types)))
+        extracted_dtypes = [extract_dtype(type_) for type_ in types]
+        assert all(isinstance(dtype, ts.ScalarType) for dtype in extracted_dtypes)
+        dtype = cast(ts.ScalarType, promote(*extracted_dtypes))  # type: ignore[arg-type] # checked is `ScalarType`
 
         return ts.FieldType(dims=dims, dtype=dtype)
     raise TypeError("Expected a 'FieldType' or 'ScalarType'.")
@@ -558,6 +641,7 @@ def return_type_field(
             new_dims.append(d)
         else:
             new_dims.extend(target_dims)
+    new_dims = common._ordered_dims(new_dims)  # e.g. `Vertex, V2E, K` -> `Vertex, K, V2E`
     return ts.FieldType(dims=new_dims, dtype=field_type.dtype)
 
 
@@ -705,11 +789,7 @@ def function_signature_incompatibilities_func(
     for i, (a_arg, b_arg) in enumerate(
         zip(list(func_type.pos_only_args) + list(func_type.pos_or_kw_args.values()), args)
     ):
-        if (
-            b_arg is not UNDEFINED_ARG
-            and a_arg != b_arg
-            and not is_concretizable(a_arg, to_type=b_arg)
-        ):
+        if b_arg is not UNDEFINED_ARG and a_arg != b_arg and not is_compatible_type(a_arg, b_arg):
             if i < len(func_type.pos_only_args):
                 arg_repr = f"{_number_to_ordinal_number(i + 1)} argument"
             else:
@@ -719,7 +799,7 @@ def function_signature_incompatibilities_func(
     for kwarg in set(func_type.kw_only_args.keys()) & set(kwargs.keys()):
         if (a_kwarg := func_type.kw_only_args[kwarg]) != (
             b_kwarg := kwargs[kwarg]
-        ) and not is_concretizable(a_kwarg, to_type=b_kwarg):
+        ) and not is_compatible_type(a_kwarg, b_kwarg):
             yield f"Expected keyword argument '{kwarg}' to be of type '{func_type.kw_only_args[kwarg]}', got '{kwargs[kwarg]}'."
 
 

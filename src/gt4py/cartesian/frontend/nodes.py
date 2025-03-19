@@ -130,7 +130,6 @@ storing a reference to the piece of source code which originated the node.
                       parameters: List[VarDecl],
                       computations: List[ComputationBlock],
                       [externals: Dict[str, Any], sources: Dict[str, str]])
-
 """
 
 from __future__ import annotations

@@ -11,8 +11,8 @@ from typing import Generator
 import pytest
 
 
-@pytest.fixture()
-def set_dace_settings() -> Generator[None, None, None]:
+@pytest.fixture(autouse=True)
+def common_dace_config() -> Generator[None, None, None]:
     """Sets the common DaCe settings for the tests.
 
     The function will modify the following settings:
@@ -24,6 +24,6 @@ def set_dace_settings() -> Generator[None, None, None]:
     import dace
 
     with dace.config.temporary_config():
-        dace.Config.set("optimizer", "match_exception", value=False)
+        dace.Config.set("optimizer", "match_exception", value=True)
         dace.Config.set("compiler", "allow_view_arguments", value=True)
         yield

@@ -9,19 +9,16 @@
 from typing import ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
-from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
+from gt4py.eve import Coerced, SymbolName, SymbolRef
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
 from gt4py.next import common
+from gt4py.next.iterator.builtins import BUILTINS
 from gt4py.next.type_system import type_specifications as ts
 
 
 DimensionKind = common.DimensionKind
-
-# TODO(havogt):
-# After completion of refactoring to GTIR, FencilDefinition and StencilClosure should be removed everywhere.
-# During transition, we lower to FencilDefinitions and apply a transformation to GTIR-style afterwards.
 
 
 @noninstantiable
@@ -37,10 +34,14 @@ class Node(eve.Node):
         return pformat(self)
 
     def __hash__(self) -> int:
-        return hash(type(self)) ^ hash(
-            tuple(
-                hash(tuple(v)) if isinstance(v, list) else hash(v)
-                for v in self.iter_children_values()
+        return hash(
+            (
+                type(self),
+                *(
+                    tuple(v) if isinstance(v, list) else v
+                    for (k, v) in self.iter_children_items()
+                    if k not in ["location", "type"]
+                ),
             )
         )
 
@@ -93,114 +94,6 @@ class FunctionDefinition(Node, SymbolTableTrait):
     expr: Expr
 
 
-class StencilClosure(Node):
-    domain: FunCall
-    stencil: Expr
-    output: Union[SymRef, FunCall]
-    inputs: List[SymRef]
-
-    @datamodels.validator("output")
-    def _output_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
-        if isinstance(value, FunCall) and value.fun != SymRef(id="make_tuple"):
-            raise ValueError("Only FunCall to 'make_tuple' allowed.")
-
-
-UNARY_MATH_NUMBER_BUILTINS = {"abs"}
-UNARY_LOGICAL_BUILTINS = {"not_"}
-UNARY_MATH_FP_BUILTINS = {
-    "sin",
-    "cos",
-    "tan",
-    "arcsin",
-    "arccos",
-    "arctan",
-    "sinh",
-    "cosh",
-    "tanh",
-    "arcsinh",
-    "arccosh",
-    "arctanh",
-    "sqrt",
-    "exp",
-    "log",
-    "gamma",
-    "cbrt",
-    "floor",
-    "ceil",
-    "trunc",
-}
-UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
-BINARY_MATH_NUMBER_BUILTINS = {
-    "minimum",
-    "maximum",
-    "fmod",
-    "plus",
-    "minus",
-    "multiplies",
-    "divides",
-    "mod",
-    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
-}
-BINARY_MATH_COMPARISON_BUILTINS = {"eq", "less", "greater", "greater_equal", "less_equal", "not_eq"}
-BINARY_LOGICAL_BUILTINS = {"and_", "or_", "xor_"}
-
-ARITHMETIC_BUILTINS = {
-    *UNARY_MATH_NUMBER_BUILTINS,
-    *UNARY_LOGICAL_BUILTINS,
-    *UNARY_MATH_FP_BUILTINS,
-    *UNARY_MATH_FP_PREDICATE_BUILTINS,
-    *BINARY_MATH_NUMBER_BUILTINS,
-    "power",
-    *BINARY_MATH_COMPARISON_BUILTINS,
-    *BINARY_LOGICAL_BUILTINS,
-}
-
-#: builtin / dtype used to construct integer indices, like domain bounds
-INTEGER_INDEX_BUILTIN = "int32"
-INTEGER_BUILTINS = {"int32", "int64"}
-FLOATING_POINT_BUILTINS = {"float32", "float64"}
-TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
-
-BUILTINS = {
-    "tuple_get",
-    "cast_",
-    "cartesian_domain",
-    "unstructured_domain",
-    "make_tuple",
-    "shift",
-    "neighbors",
-    "named_range",
-    "list_get",
-    "map_",
-    "make_const_list",
-    "lift",
-    "reduce",
-    "deref",
-    "can_deref",
-    "scan",
-    "if_",
-    *ARITHMETIC_BUILTINS,
-    *TYPEBUILTINS,
-}
-
-# only used in `Program`` not `FencilDefinition`
-# TODO(havogt): restructure after refactoring to GTIR
-GTIR_BUILTINS = {
-    *BUILTINS,
-    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
-}
-
-
-class FencilDefinition(Node, ValidatedSymbolTableTrait):
-    id: Coerced[SymbolName]
-    function_definitions: List[FunctionDefinition]
-    params: List[Sym]
-    closures: List[StencilClosure]
-    implicit_domain: bool = False
-
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
-
-
 class Stmt(Node): ...
 
 
@@ -230,7 +123,9 @@ class Program(Node, ValidatedSymbolTableTrait):
     body: List[Stmt]
     implicit_domain: bool = False
 
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in GTIR_BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [
+        Sym(id=name) for name in sorted(BUILTINS)
+    ]  # sorted for serialization stability
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)
@@ -244,8 +139,6 @@ SymRef.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Lambda.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FunCall.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
-StencilClosure.__hash__ = Node.__hash__  # type: ignore[method-assign]
-FencilDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Program.__hash__ = Node.__hash__  # type: ignore[method-assign]
 SetAt.__hash__ = Node.__hash__  # type: ignore[method-assign]
 IfStmt.__hash__ = Node.__hash__  # type: ignore[method-assign]

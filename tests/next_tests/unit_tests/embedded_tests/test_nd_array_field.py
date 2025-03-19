@@ -15,7 +15,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.common import Dimension, Domain, UnitRange, NamedRange, NamedIndex
+from gt4py.next.common import Dimension, Domain, NamedIndex, NamedRange, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
@@ -26,19 +26,6 @@ from next_tests.integration_tests.feature_tests.math_builtin_test_data import ma
 D0 = Dimension("D0")
 D1 = Dimension("D1")
 D2 = Dimension("D2")
-
-
-def nd_array_implementation_params():
-    for xp in nd_array_field._nd_array_implementations:
-        if hasattr(nd_array_field, "cp") and xp == nd_array_field.cp:
-            yield pytest.param(xp, id=xp.__name__, marks=pytest.mark.requires_gpu)
-        else:
-            yield pytest.param(xp, id=xp.__name__)
-
-
-@pytest.fixture(params=nd_array_implementation_params())
-def nd_array_implementation(request):
-    yield request.param
 
 
 @pytest.fixture(
@@ -264,6 +251,16 @@ def test_binary_operations_with_intersection(binary_arithmetic_op, dims, expecte
     assert np.allclose(op_result.ndarray, expected_result)
 
 
+def test_as_scalar(nd_array_implementation):
+    testee = common._field(
+        nd_array_implementation.asarray(42.0, dtype=np.float32), domain=common.Domain()
+    )
+
+    result = testee.as_scalar()
+    assert result == 42.0
+    assert isinstance(result, np.float32)
+
+
 def product_nd_array_implementation_params():
     for xp1 in nd_array_field._nd_array_implementations:
         for xp2 in nd_array_field._nd_array_implementations:
@@ -367,10 +364,11 @@ def test_reshuffling_premap():
 
     ij_field = common._field(
         np.asarray([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]]),
-        domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 3), UnitRange(0, 3))),
+        domain=common.Domain(dims=(I, J), ranges=(UnitRange(1, 4), UnitRange(2, 5))),
     )
+
     max_ij_conn = common._connectivity(
-        np.fromfunction(lambda i, j: np.maximum(i, j), (3, 3), dtype=int),
+        np.asarray([[1, 2, 3], [2, 2, 3], [3, 3, 3]], dtype=int),
         domain=common.Domain(
             dims=ij_field.domain.dims,
             ranges=ij_field.domain.ranges,
@@ -381,7 +379,7 @@ def test_reshuffling_premap():
     result = ij_field.premap(max_ij_conn)
     expected = common._field(
         np.asarray([[0.0, 4.0, 8.0], [3.0, 4.0, 8.0], [6.0, 7.0, 8.0]]),
-        domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 3), UnitRange(0, 3))),
+        domain=common.Domain(dims=(I, J), ranges=(UnitRange(1, 4), UnitRange(2, 5))),
     )
 
     assert result.domain == expected.domain

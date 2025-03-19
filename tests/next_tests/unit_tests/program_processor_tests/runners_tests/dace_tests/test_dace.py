@@ -20,18 +20,11 @@ import gt4py.next as gtx
 from gt4py.next.ffront.fbuiltins import where
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import (
-    E2V,
-    cartesian_case,
-    unstructured_case,
-)
+from next_tests.integration_tests.cases import E2V, cartesian_case, unstructured_case  # noqa: F401
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    exec_alloc_descriptor,
-    mesh_descriptor,
+    exec_alloc_descriptor,  # noqa: F401
+    mesh_descriptor,  # noqa: F401
 )
-from unittest.mock import patch
-
-from . import pytestmark
 
 dace = pytest.importorskip("dace")
 
@@ -151,14 +144,14 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
 
     # check that test connectivities are allocated on host memory
     # this is an assumption to test that fast_call cannot be used for gpu tests
-    assert isinstance(connectivity_E2V.table, np.ndarray)
+    assert isinstance(connectivity_E2V.ndarray, np.ndarray)
 
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
         return a(E2V[0])
 
     (a,), kwfields = cases.get_default_data(unstructured_case, testee)
-    numpy_ref = lambda a: a[connectivity_E2V.table[:, 0]]
+    numpy_ref = lambda a: a[connectivity_E2V.ndarray[:, 0]]
 
     mock_fast_call, mock_construct_args = make_mocks(monkeypatch)
 
@@ -182,7 +175,7 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         offset_provider = unstructured_case.offset_provider
     else:
         assert gtx.allocators.is_field_allocator_for(
-            unstructured_case.backend.allocator, gtx.allocators.CUPY_DEVICE
+            unstructured_case.backend.allocator, core_defs.CUPY_DEVICE_TYPE
         )
 
         import cupy as cp
@@ -191,15 +184,14 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         # to gpu memory at each program call (see `dace_backend._ensure_is_on_device`),
         # therefore fast_call cannot be used (unless cupy reuses the same cupy array
         # from the its memory pool, but this behavior is random and unpredictable).
-        # Here we copy the connectivity to gpu memory, and resuse the same cupy array
+        # Here we copy the connectivity to gpu memory, and reuse the same cupy array
         # on multiple program calls, in order to ensure that fast_call is used.
         offset_provider = {
-            "E2V": gtx.NeighborTableOffsetProvider(
-                table=cp.asarray(connectivity_E2V.table),
-                origin_axis=connectivity_E2V.origin_axis,
-                neighbor_axis=connectivity_E2V.neighbor_axis,
-                max_neighbors=connectivity_E2V.max_neighbors,
-                has_skip_values=connectivity_E2V.has_skip_values,
+            "E2V": gtx.as_connectivity(
+                domain=connectivity_E2V.domain,
+                codomain=connectivity_E2V.codomain,
+                data=cp.asarray(connectivity_E2V.ndarray),
+                skip_value=connectivity_E2V.skip_value,
             )
         }
 

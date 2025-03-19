@@ -6,27 +6,12 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-# GT4Py - GridTools Framework
-#
-# Copyright (c) 2014-2023, ETH Zurich
-# All rights reserved.
-#
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
-
 from __future__ import annotations
 
 import dataclasses
 import typing
 from typing import Any, Iterable, Iterator, Optional
 
-import numpy as np
 from typing_extensions import Self
 
 from gt4py.next import common
@@ -50,45 +35,17 @@ class JITArgs:
 
 
 @dataclasses.dataclass(frozen=True)
-class CompileTimeConnectivity(common.Connectivity):
-    """Compile-time standin for a GTX connectivity, retaining everything except the connectivity tables."""
-
-    max_neighbors: int
-    has_skip_values: bool
-    origin_axis: common.Dimension
-    neighbor_axis: common.Dimension
-    index_type: type[int] | type[np.int32] | type[np.int64]
-
-    def mapped_index(
-        self, cur_index: int | np.integer, neigh_index: int | np.integer
-    ) -> Optional[int | np.integer]:
-        raise NotImplementedError(
-            "A CompileTimeConnectivity instance should not call `mapped_index`."
-        )
-
-    @classmethod
-    def from_connectivity(cls, connectivity: common.Connectivity) -> Self:
-        return cls(
-            max_neighbors=connectivity.max_neighbors,
-            has_skip_values=connectivity.has_skip_values,
-            origin_axis=connectivity.origin_axis,
-            neighbor_axis=connectivity.neighbor_axis,
-            index_type=connectivity.index_type,
-        )
-
-    @property
-    def table(self) -> None:
-        return None
-
-
-@dataclasses.dataclass(frozen=True)
 class CompileTimeArgs:
     """Compile-time standins for arguments to a GTX program to be used in ahead-of-time compilation."""
 
     args: tuple[ts.TypeSpec, ...]
     kwargs: dict[str, ts.TypeSpec]
-    offset_provider: dict[str, common.Connectivity | common.Dimension]
+    offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     column_axis: Optional[common.Dimension]
+
+    @property
+    def offset_provider_type(self) -> common.OffsetProviderType:
+        return common.offset_provider_to_type(self.offset_provider)
 
     @classmethod
     def from_concrete_no_size(cls, *args: Any, **kwargs: Any) -> Self:
@@ -98,8 +55,7 @@ class CompileTimeArgs:
         offset_provider = kwargs_copy.pop("offset_provider", {})
         return cls(
             args=compile_args,
-            offset_provider=offset_provider,  # TODO(ricoh): replace with the line below once the temporaries pass is AOT-ready. If unsure, just try it and run the tests.
-            # offset_provider={k: connectivity_or_dimension(v) for k, v in offset_provider.items()},  # noqa: ERA001 [commented-out-code]
+            offset_provider=offset_provider,
             column_axis=kwargs_copy.pop("column_axis", None),
             kwargs={
                 k: type_translation.from_value(v) for k, v in kwargs_copy.items() if v is not None
@@ -138,18 +94,6 @@ def adapted_jit_to_aot_args_factory() -> (
     return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
 
 
-def connectivity_or_dimension(
-    some_offset_provider: common.Connectivity | common.Dimension,
-) -> CompileTimeConnectivity | common.Dimension:
-    match some_offset_provider:
-        case common.Dimension():
-            return some_offset_provider
-        case common.Connectivity():
-            return CompileTimeConnectivity.from_connectivity(some_offset_provider)
-        case _:
-            raise ValueError
-
-
 def find_first_field(tuple_arg: tuple[Any, ...]) -> Optional[common.Field]:
     for element in tuple_arg:
         match element:
@@ -164,7 +108,7 @@ def find_first_field(tuple_arg: tuple[Any, ...]) -> Optional[common.Field]:
     return None
 
 
-def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
+def iter_size_args(args: tuple[Any, ...]) -> Iterator[tuple[int, int]]:
     """
     Yield the size of each field argument in each dimension.
 
@@ -178,7 +122,9 @@ def iter_size_args(args: tuple[Any, ...]) -> Iterator[int]:
                 if first_field:
                     yield from iter_size_args((first_field,))
             case common.Field():
-                yield from arg.ndarray.shape
+                for range_ in arg.domain.ranges:
+                    assert isinstance(range_, common.UnitRange)
+                    yield (range_.start, range_.stop)
             case _:
                 pass
 
@@ -198,6 +144,7 @@ def iter_size_compile_args(
         )
         if field_constituents:
             # we only need the first field, because all fields in a tuple must have the same dims and sizes
+            index_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
             yield from [
-                ts.ScalarType(kind=ts.ScalarKind.INT32) for dim in field_constituents[0].dims
+                ts.TupleType(types=[index_type, index_type]) for dim in field_constituents[0].dims
             ]

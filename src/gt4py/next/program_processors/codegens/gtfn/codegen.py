@@ -11,8 +11,8 @@ from typing import Any, Collection, Final, Union
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import common
+from gt4py.next.otf import cpp_utils
 from gt4py.next.program_processors.codegens.gtfn import gtfn_im_ir, gtfn_ir, gtfn_ir_common
-from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
@@ -23,6 +23,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     _builtins_mapping: Final = {
         "abs": "std::abs",
+        "neg": "std::negate<>{}",
         "sin": "std::sin",
         "cos": "std::cos",
         "tan": "std::tan",
@@ -52,24 +53,30 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "power": "std::pow",
         "float32": "float",
         "float64": "double",
+        "int8": "std::int8_t",
+        "uint8": "std::uint8_t",
+        "int16": "std::int16_t",
+        "uint16": "std::uint16_t",
         "int32": "std::int32_t",
+        "uint32": "std::uint32_t",
         "int64": "std::int64_t",
+        "uint64": "std::uint64_t",
         "bool": "bool",
-        "plus": "std::plus{}",
-        "minus": "std::minus{}",
-        "multiplies": "std::multiplies{}",
-        "divides": "std::divides{}",
-        "eq": "std::equal_to{}",
-        "not_eq": "std::not_equal_to{}",
-        "less": "std::less{}",
-        "less_equal": "std::less_equal{}",
-        "greater": "std::greater{}",
-        "greater_equal": "std::greater_equal{}",
-        "and_": "std::logical_and{}",
-        "or_": "std::logical_or{}",
-        "xor_": "std::bit_xor{}",
-        "mod": "std::modulus{}",
-        "not_": "std::logical_not{}",
+        "plus": "std::plus<>{}",
+        "minus": "std::minus<>{}",
+        "multiplies": "std::multiplies<>{}",
+        "divides": "std::divides<>{}",
+        "eq": "std::equal_to<>{}",
+        "not_eq": "std::not_equal_to<>{}",
+        "less": "std::less<>{}",
+        "less_equal": "std::less_equal<>{}",
+        "greater": "std::greater<>{}",
+        "greater_equal": "std::greater_equal<>{}",
+        "and_": "std::logical_and<>{}",
+        "or_": "std::logical_or<>{}",
+        "xor_": "std::bit_xor<>{}",
+        "mod": "std::modulus<>{}",
+        "not_": "std::logical_not<>{}",
     }
 
     Sym = as_fmt("{id}")
@@ -92,8 +99,11 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return value
 
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
+        if node.type == "axis_literal":
+            return node.value
+
         # TODO(tehrengruber): isn't this wrong and int32 should be casted to an actual int32?
-        match pytype_to_cpptype(node.type):
+        match cpp_utils.pytype_to_cpptype(node.type):
             case "float":
                 return self.asfloat(node.value) + "f"
             case "double":
@@ -101,6 +111,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             case "bool":
                 return node.value.lower()
             case _:
+                # TODO(tehrengruber): we should probably shouldn't just allow anything here. Revisit.
                 return node.value
 
     IntegralConstant = as_fmt("{value}_c")
@@ -260,7 +271,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <gridtools/fn/${grid_type_str}.hpp>
     #include <gridtools/fn/sid_neighbor_table.hpp>
     #include <gridtools/stencil/global_parameter.hpp>
-
+    
     namespace generated{
 
     namespace gtfn = ::gridtools::fn;

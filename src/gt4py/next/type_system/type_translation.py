@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import builtins
 import collections.abc
-import dataclasses
 import functools
 import types
 import typing
@@ -42,16 +41,10 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
         match dt:
             case np.bool_:
                 return ts.ScalarKind.BOOL
-            case np.int32:
-                return ts.ScalarKind.INT32
-            case np.int64:
-                return ts.ScalarKind.INT64
-            case np.float32:
-                return ts.ScalarKind.FLOAT32
-            case np.float64:
-                return ts.ScalarKind.FLOAT64
             case np.str_:
                 return ts.ScalarKind.STRING
+            case np.dtype():
+                return getattr(ts.ScalarKind, dt.name.upper())
             case _:
                 raise ValueError(f"Impossible to map '{dtype}' value to a 'ScalarKind'.")
     else:
@@ -105,7 +98,7 @@ def from_type_hint(
                 raise ValueError(f"Unbound tuples '{type_hint}' are not allowed.")
             tuple_types = [recursive_make_symbol(arg) for arg in args]
             assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
-            return ts.TupleType(types=tuple_types)  # type: ignore[arg-type] # checked in assert
+            return ts.TupleType(types=tuple_types)
 
         case common.Field:
             if (n_args := len(args)) != 2:
@@ -168,7 +161,6 @@ def from_type_hint(
     raise ValueError(f"'{type_hint}' type is not supported.")
 
 
-@dataclasses.dataclass(frozen=True)
 class UnknownPythonObject(ts.TypeSpec):
     _object: Any
 
@@ -217,9 +209,9 @@ def from_value(value: Any) -> ts.TypeSpec:
         # not needed anymore.
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
-        return ts.TupleType(types=elems)  # type: ignore[arg-type] # checked in assert
+        return ts.TupleType(types=elems)
     elif isinstance(value, types.ModuleType):
-        return UnknownPythonObject(_object=value)
+        return UnknownPythonObject(value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)

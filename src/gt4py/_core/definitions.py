@@ -39,15 +39,21 @@ from gt4py.eve.extended_typing import (
 )
 
 
-if TYPE_CHECKING:
+try:
     import cupy as cp
+except ImportError:
+    cp = None
 
+if TYPE_CHECKING:
     CuPyNDArray: TypeAlias = cp.ndarray
 
     import jax.numpy as jnp
 
     JaxNDArray: TypeAlias = jnp.ndarray
 
+# The actual assignment happens after the definition of `DeviceType` enum.
+CUPY_DEVICE_TYPE: Literal[None, DeviceType.CUDA, DeviceType.ROCM]
+"""Type of the GPU accelerator device, if present."""
 
 # -- Scalar types supported by GT4Py --
 bool_ = np.bool_
@@ -373,38 +379,31 @@ class DeviceType(enum.IntEnum):
 
     CPU = 1
     CUDA = 2
-    CPU_PINNED = 3
-    OPENCL = 4
-    VULKAN = 7
-    METAL = 8
-    VPI = 9
+    # CPU_PINNED = 3    # noqa: ERA001
+    # OPENCL = 4        # noqa: ERA001
+    # VULKAN = 7        # noqa: ERA001
+    # METAL = 8         # noqa: ERA001
+    # VPI = 9           # noqa: ERA001
     ROCM = 10
-    CUDA_MANAGED = 13
-    ONE_API = 14
+    # CUDA_MANAGED = 13 # noqa: ERA001
+    # ONE_API = 14      # noqa: ERA001
 
 
 CPUDeviceTyping: TypeAlias = Literal[DeviceType.CPU]
 CUDADeviceTyping: TypeAlias = Literal[DeviceType.CUDA]
-CPUPinnedDeviceTyping: TypeAlias = Literal[DeviceType.CPU_PINNED]
-OpenCLDeviceTyping: TypeAlias = Literal[DeviceType.OPENCL]
-VulkanDeviceTyping: TypeAlias = Literal[DeviceType.VULKAN]
-MetalDeviceTyping: TypeAlias = Literal[DeviceType.METAL]
-VPIDeviceTyping: TypeAlias = Literal[DeviceType.VPI]
 ROCMDeviceTyping: TypeAlias = Literal[DeviceType.ROCM]
-CUDAManagedDeviceTyping: TypeAlias = Literal[DeviceType.CUDA_MANAGED]
-OneApiDeviceTyping: TypeAlias = Literal[DeviceType.ONE_API]
 
 
 DeviceTypeT = TypeVar(
     "DeviceTypeT",
     CPUDeviceTyping,
     CUDADeviceTyping,
-    CPUPinnedDeviceTyping,
-    OpenCLDeviceTyping,
-    VulkanDeviceTyping,
-    MetalDeviceTyping,
-    VPIDeviceTyping,
     ROCMDeviceTyping,
+)
+
+
+CUPY_DEVICE_TYPE = (
+    None if not cp else (DeviceType.ROCM if cp.cuda.runtime.is_hip else DeviceType.CUDA)
 )
 
 
@@ -440,11 +439,19 @@ class NDArrayObject(Protocol):
     def shape(self) -> tuple[int, ...]: ...
 
     @property
+    def strides(self) -> tuple[int, ...]: ...
+
+    @property
     def dtype(self) -> Any: ...
+
+    @property
+    def itemsize(self) -> int: ...
 
     def item(self) -> Any: ...
 
     def astype(self, dtype: npt.DTypeLike) -> NDArrayObject: ...
+
+    def any(self) -> bool: ...
 
     def __getitem__(self, item: Any) -> NDArrayObject: ...
 
@@ -496,4 +503,4 @@ class NDArrayObject(Protocol):
 
     def __or__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __xor(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+    def __xor__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...

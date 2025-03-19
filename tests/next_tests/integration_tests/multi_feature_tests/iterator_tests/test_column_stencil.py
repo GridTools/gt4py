@@ -12,7 +12,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import field_utils
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
 
 from next_tests.integration_tests.cases import IDim, KDim
 from next_tests.unit_tests.conftest import program_processor, run_processor
@@ -122,19 +122,19 @@ def k_level_condition_upper_tuple(k_idx, k_level):
 @pytest.mark.parametrize(
     "fun, k_level, inp_function, ref_function",
     [
-        (
+        pytest.param(
             k_level_condition_lower,
             lambda inp: 0,
             lambda k_size: gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             lambda inp: np.concatenate([[0], inp[:-1]]),
         ),
-        (
+        pytest.param(
             k_level_condition_upper,
             lambda inp: inp.shape[0] - 1,
             lambda k_size: gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             lambda inp: np.concatenate([inp[1:], [0]]),
         ),
-        (
+        pytest.param(
             k_level_condition_upper_tuple,
             lambda inp: inp[0].shape[0] - 1,
             lambda k_size: (
@@ -142,6 +142,7 @@ def k_level_condition_upper_tuple(k_idx, k_level):
                 gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             ),
             lambda inp: np.concatenate([(inp[0][1:] + inp[1][1:]), [0]]),
+            marks=pytest.mark.uses_tuple_iterator,
         ),
     ],
 )
@@ -170,29 +171,21 @@ def test_k_level_condition(program_processor, fun, k_level, inp_function, ref_fu
 
 
 @fundef
-def sum_scanpass(state, inp):
+def ksum(state, inp):
     return state + deref(inp)
-
-
-@fundef
-def ksum(inp):
-    return scan(sum_scanpass, True, 0.0)(inp)
 
 
 @fendef(column_axis=KDim)
 def ksum_fencil(i_size, k_start, k_end, inp, out):
-    closure(
-        cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, k_start, k_end)),
-        ksum,
-        out,
-        [inp],
-    )
+    domain = cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, k_start, k_end))
+    set_at(as_fieldop(scan(ksum, True, 0.0), domain)(inp), domain, out)
 
 
 @pytest.mark.parametrize(
     "kstart, reference",
     [(0, np.asarray([[0, 1, 3, 6, 10, 15, 21]])), (2, np.asarray([[0, 0, 2, 5, 9, 14, 20]]))],
 )
+@pytest.mark.uses_scan
 def test_ksum_scan(program_processor, kstart, reference):
     program_processor, validate = program_processor
     shape = [1, 7]
@@ -214,21 +207,13 @@ def test_ksum_scan(program_processor, kstart, reference):
         assert np.allclose(reference, out.asnumpy())
 
 
-@fundef
-def ksum_back(inp):
-    return scan(sum_scanpass, False, 0.0)(inp)
-
-
 @fendef(column_axis=KDim)
 def ksum_back_fencil(i_size, k_size, inp, out):
-    closure(
-        cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size)),
-        ksum_back,
-        out,
-        [inp],
-    )
+    domain = cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size))
+    set_at(as_fieldop(scan(ksum, False, 0.0), domain)(inp), domain, out)
 
 
+@pytest.mark.uses_scan
 def test_ksum_back_scan(program_processor):
     program_processor, validate = program_processor
     shape = [1, 7]
@@ -252,23 +237,14 @@ def test_ksum_back_scan(program_processor):
 
 
 @fundef
-def doublesum_scanpass(state, inp0, inp1):
+def kdoublesum(state, inp0, inp1):
     return make_tuple(tuple_get(0, state) + deref(inp0), tuple_get(1, state) + deref(inp1))
-
-
-@fundef
-def kdoublesum(inp0, inp1):
-    return scan(doublesum_scanpass, True, make_tuple(0.0, 0))(inp0, inp1)
 
 
 @fendef(column_axis=KDim)
 def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
-    closure(
-        cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, k_start, k_end)),
-        kdoublesum,
-        out,
-        [inp0, inp1],
-    )
+    domain = cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, k_start, k_end))
+    set_at(as_fieldop(scan(kdoublesum, True, make_tuple(0.0, 0)), domain)(inp0, inp1), domain, out)
 
 
 @pytest.mark.parametrize(
@@ -325,7 +301,8 @@ def sum_shifted(inp0, inp1):
 
 @fendef(column_axis=KDim)
 def sum_shifted_fencil(out, inp0, inp1, k_size):
-    closure(cartesian_domain(named_range(KDim, 1, k_size)), sum_shifted, out, [inp0, inp1])
+    domain = cartesian_domain(named_range(KDim, 1, k_size))
+    set_at(as_fieldop(sum_shifted, domain)(inp0, inp1), domain, out)
 
 
 def test_different_vertical_sizes(program_processor):
@@ -352,7 +329,8 @@ def sum(inp0, inp1):
 
 @fendef(column_axis=KDim)
 def sum_fencil(out, inp0, inp1, k_size):
-    closure(cartesian_domain(named_range(KDim, 0, k_size)), sum, out, [inp0, inp1])
+    domain = cartesian_domain(named_range(KDim, 0, k_size))
+    set_at(as_fieldop(sum, domain)(inp0, inp1), domain, out)
 
 
 @pytest.mark.uses_origin

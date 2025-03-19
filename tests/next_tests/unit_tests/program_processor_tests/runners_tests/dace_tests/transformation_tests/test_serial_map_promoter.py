@@ -12,11 +12,11 @@ import pytest
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
+from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
 
-from . import pytestmark
+
 from . import util
 
 
@@ -68,7 +68,7 @@ def test_serial_map_promotion():
         external_edges=True,
     )
 
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     assert len(map_entry_1d.map.params) == 1
     assert len(map_entry_1d.map.range) == 1
     assert len(map_entry_2d.map.params) == 2
@@ -83,7 +83,7 @@ def test_serial_map_promotion():
         validate_all=True,
     )
 
-    assert util._count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     assert len(map_entry_1d.map.params) == 2
     assert len(map_entry_1d.map.range) == 2
     assert len(map_entry_2d.map.params) == 2

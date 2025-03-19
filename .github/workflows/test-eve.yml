@@ -4,17 +4,14 @@ on:
   push:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
   pull_request:
     branches:
     - main
-    - gtir  # TODO(tehrengruber): remove after GTIR refactoring #1582
     paths:  # Run when gt4py.eve files (or package settings) are changed
     - "src/gt4py/eve/**"
     - "tests/eve_tests/**"
-    - "workflows/**"
-    - "*.cfg"
-    - "*.ini"
+    - ".github/workflows/**"
+    - "*.lock"
     - "*.toml"
     - "*.yml"
 
@@ -22,51 +19,23 @@ jobs:
   test-eve:
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
         os: ["ubuntu-latest"]
+        python-version: ["3.10", "3.11"]
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+    - uses: actions/checkout@v4
+
+    - name: Install uv and set the python version
+      uses: astral-sh/setup-uv@v5
       with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
         python-version: ${{ matrix.python-version }}
-        cache: 'pip'
-        cache-dependency-path: |
-          **/pyproject.toml
-          **/constraints.txt
-          **/requirements-dev.txt
-    - name: Install python dependencies
-      run: |
-        python -m pip install -c ./constraints.txt pip setuptools wheel
-        python -m pip install -r ./requirements-dev.txt
-    - name: Run tox tests
+
+    - name: Run 'eve' tests with nox
       env:
         NUM_PROCESSES: auto
       shell: bash
-      run: |
-        pyversion=${{ matrix.python-version }}
-        pyversion_no_dot=${pyversion//./}
-        tox run -e eve-py${pyversion_no_dot}
-    #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}.json
-    # - name: Upload coverage.json artifact
-    #   uses: actions/upload-artifact@v3
-    #   with:
-    #     name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}
-    #     path: coverage-py${{ matrix.python-version }}-${{ matrix.os }}.json
-    # - name: Gather info
-    #   run: |
-    #     echo ${{ github.ref_type }} >> info.txt
-    #     echo ${{ github.ref }} >> info.txt
-    #     echo ${{ github.sha }} >> info.txt
-    #     echo ${{ github.event.number }} >> info.txt
-    #     echo ${{ github.event.pull_request.head.ref }} >> info.txt
-    #     echo ${{ github.event.pull_request.head.sha }} >> info.txt
-    #     echo ${{ github.run_id }} >> info.txt
-    # - name: Upload info artifact
-    #   uses: actions/upload-artifact@v3
-    #   with:
-    #     name: info-py${{ matrix.python-version }}-${{ matrix.os }}
-    #     path: info.txt
+      run: uv run nox -s test_eve-${{ matrix.python-version }}

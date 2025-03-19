@@ -36,12 +36,12 @@ def prune_unreferenced_fundefs(program: itir.Program) -> itir.Program:
     >>> fun1 = itir.FunctionDefinition(
     ...     id="fun1",
     ...     params=[im.sym("a")],
-    ...     expr=im.call("deref")("a"),
+    ...     expr=im.deref("a"),
     ... )
     >>> fun2 = itir.FunctionDefinition(
     ...     id="fun2",
     ...     params=[im.sym("a")],
-    ...     expr=im.call("deref")("a"),
+    ...     expr=im.deref("a"),
     ... )
     >>> program = itir.Program(
     ...     id="testee",
@@ -59,7 +59,7 @@ def prune_unreferenced_fundefs(program: itir.Program) -> itir.Program:
     >>> print(prune_unreferenced_fundefs(program))
     testee(inp, out) {
       fun1 = λ(a) → ·a;
-      out @ c⟨ IDimₕ: [0, 10) ⟩ ← fun1(inp);
+      out @ c⟨ IDimₕ: [0, 10[ ⟩ ← fun1(inp);
     }
     """
     fun_names = [fun.id for fun in program.function_definitions]

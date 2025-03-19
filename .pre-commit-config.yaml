@@ -1,21 +1,23 @@
-# -----------------------------------------------------------------------
-# This file contains 'cog' snippets (https://nedbatchelder.com/code/cog/) 
-# to keep version numbers in sync with 'constraints.txt'
-# -----------------------------------------------------------------------
-
 default_language_version:
   python: python3.10
+minimum_pre_commit_version: 3.8.0
 repos:
 # - repo: meta
 #   hooks:
 #   - id: check-hooks-apply
 #   - id: check-useless-excludes
+
+- repo: https://github.com/astral-sh/uv-pre-commit
+  # uv version.
+  rev: 0.5.25
+  hooks:
+  - id: uv-lock
+
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
   rev: v2.6.0
   hooks:
   - id: pretty-format-ini
     args: [--autofix]
-    exclude: tox.ini
   - id: pretty-format-toml
     args: [--autofix]
     exclude: tach.toml
@@ -43,89 +45,27 @@ repos:
   - id: check-merge-conflict
   - id: check-toml
   - id: check-yaml
-  - id: debug-statements
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  ##[[[cog
-  ## import re
-  ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
-  ## print(f"rev: v{version}")
-  ##]]]
-  rev: v0.6.4
-  ##[[[end]]]
+  rev: v0.8.6
   hooks:
-    # Run the linter.
-    # TODO: include tests here
   - id: ruff
-    files: ^src/
+    files: ^src/  # TODO(egparedes): also add the `tests` folder here
     args: [--fix]
-    # Run the formatter.
   - id: ruff-format
 
 - repo: https://github.com/gauge-sh/tach-pre-commit
-  rev: v0.10.7
+  rev: v0.23.0
   hooks:
   - id: tach
 
-- repo: https://github.com/pre-commit/mirrors-mypy
-  ##[[[cog
-  ## import re
-  ## version = re.search('mypy==([0-9\.]*)', open("constraints.txt").read())[1]
-  ## print(f"#========= FROM constraints.txt: v{version} =========")
-  ##]]]
-  #========= FROM constraints.txt: v1.11.2 =========
-  ##[[[end]]]
-  rev: v1.11.2  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
+- repo: local
   hooks:
   - id: mypy
-    additional_dependencies:  # versions from constraints.txt
-    ##[[[cog
-    ## import re, sys
-    ## if sys.version_info >= (3, 11):
-    ##    import tomllib
-    ## else:
-    ##    import tomli as tomllib
-    ## constraints = open("constraints.txt").read()
-    ## project = tomllib.loads(open("pyproject.toml").read())
-    ## packages = [re.match('^([\w-][\w\d-]*)', r)[1] for r in project["project"]["dependencies"] if r.strip()]
-    ## for pkg in packages:
-    ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
-    ##]]]
-    - astunparse==1.6.3
-    - attrs==24.2.0
-    - black==24.8.0
-    - boltons==24.0.0
-    - cached-property==1.5.2
-    - click==8.1.7
-    - cmake==3.30.3
-    - cytoolz==0.12.3
-    - deepdiff==8.0.1
-    - devtools==0.12.2
-    - factory-boy==3.3.1
-    - frozendict==2.4.4
-    - gridtools-cpp==2.3.4
-    - importlib-resources==6.4.5
-    - jinja2==3.1.4
-    - lark==1.2.2
-    - mako==1.3.5
-    - nanobind==2.1.0
-    - ninja==1.11.1.1
-    - numpy==1.24.4
-    - packaging==24.1
-    - pybind11==2.13.5
-    - setuptools==74.1.2
-    - tabulate==0.9.0
-    - typing-extensions==4.12.2
-    - xxhash==3.0.0
-    ##[[[end]]]
-    - types-tabulate
-    - types-typed-ast
-    args: [--no-install-types]
-    exclude: |
-      (?x)^(
-      setup.py |
-      build/.* |
-      ci/.* |
-      docs/.* |
-      tests/.*
-      )$
+    name: mypy static type checker
+    entry: uv run --frozen mypy --no-install-types src/
+    language: system
+    types_or: [python, pyi]
+    pass_filenames: false
+    require_serial: true
+    stages: [pre-commit]
