@@ -17,6 +17,7 @@ import gt4py.cartesian.gtc.definitions
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.common import LocNode
+from gt4py.cartesian.gtc.dace import prefix
 from gt4py.cartesian.gtc.dace.symbol_utils import (
     get_axis_bound_dace_symbol,
     get_axis_bound_diff_str,
@@ -525,10 +526,6 @@ class FieldAccessInfo(eve.Node):
     dynamic_access: bool = False
     variable_offset_axes: List[Axis] = eve.field(default_factory=list)
 
-    @property
-    def is_dynamic(self) -> bool:
-        return self.dynamic_access or len(self.variable_offset_axes) > 0
-
     def axes(self):
         yield from self.grid_subset.axes()
 
@@ -713,7 +710,7 @@ class FieldDecl(Decl):
 
     @property
     def is_dynamic(self) -> bool:
-        return self.access_info.is_dynamic
+        return self.access_info.dynamic_access
 
     def with_set_access_info(self, access_info: FieldAccessInfo) -> FieldDecl:
         return FieldDecl(
@@ -730,7 +727,8 @@ class Literal(common.Literal, Expr):
 
 
 class ScalarAccess(common.ScalarAccess, Expr):
-    pass
+    is_target: bool
+    original_name: Optional[str] = None
 
 
 class VariableKOffset(common.VariableKOffset[Expr]):
@@ -744,7 +742,12 @@ class VariableKOffset(common.VariableKOffset[Expr]):
 
 
 class IndexAccess(common.FieldAccess, Expr):
-    offset: Optional[Union[common.CartesianOffset, VariableKOffset]]
+    # ScalarAccess used for indirect addressing
+    offset: Optional[common.CartesianOffset | Literal | ScalarAccess | VariableKOffset]
+    is_target: bool
+
+    explicit_indices: Optional[list[Literal | ScalarAccess | VariableKOffset]] = None
+    """Used to access as a full field with explicit indices"""
 
 
 class AssignStmt(common.AssignStmt[Union[IndexAccess, ScalarAccess], Expr], Stmt):
@@ -842,33 +845,146 @@ class IterationNode(eve.Node):
     grid_subset: GridSubset
 
 
+class Condition(eve.Node):
+    condition: Tasklet
+    true_states: list[ComputationState | Condition | WhileLoop]
+
+    # Currently unused due to how `if` statements are parsed in `gtir_to_oir`, see
+    # https://github.com/GridTools/gt4py/issues/1898
+    false_states: list[ComputationState | Condition | WhileLoop] = eve.field(default_factory=list)
+
+    @datamodels.validator("condition")
+    def condition_has_boolean_expression(
+        self, attribute: datamodels.Attribute, tasklet: Tasklet
+    ) -> None:
+        assert isinstance(tasklet, Tasklet)
+        assert len(tasklet.stmts) == 1
+        assert isinstance(tasklet.stmts[0], AssignStmt)
+        assert isinstance(tasklet.stmts[0].left, ScalarAccess)
+        if tasklet.stmts[0].left.original_name is None:
+            raise ValueError(
+                f"Original node name not found for {tasklet.stmts[0].left.name}. DaCe IR error."
+            )
+        assert isinstance(tasklet.stmts[0].right, Expr)
+        if tasklet.stmts[0].right.dtype != common.DataType.BOOL:
+            raise ValueError("Condition must be a boolean expression.")
+
+
 class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
-    decls: List[LocalScalarDecl]
+    label: str
     stmts: List[Stmt]
     grid_subset: GridSubset = GridSubset.single_gridpoint()
+
+    @datamodels.validator("stmts")
+    def non_empty_list(self, attribute: datamodels.Attribute, v: list[Stmt]) -> None:
+        if len(v) < 1:
+            raise ValueError("Tasklet must contain at least one statement.")
+
+    @datamodels.validator("stmts")
+    def read_after_write(self, attribute: datamodels.Attribute, statements: list[Stmt]) -> None:
+        def _remove_prefix(name: eve.SymbolRef) -> str:
+            return name.removeprefix(prefix.TASKLET_OUT).removeprefix(prefix.TASKLET_IN)
+
+        class ReadAfterWriteChecker(eve.NodeVisitor):
+            def visit_IndexAccess(self, node: IndexAccess, writes: set[str]) -> None:
+                if node.is_target:
+                    # Keep track of writes
+                    writes.add(_remove_prefix(node.name))
+                    return
+
+                # Check reads
+                if (
+                    node.name.startswith(prefix.TASKLET_OUT)
+                    and _remove_prefix(node.name) not in writes
+                ):
+                    raise ValueError(f"Reading undefined '{node.name}'. DaCe IR error.")
+
+                if _remove_prefix(node.name) in writes and not node.name.startswith(
+                    prefix.TASKLET_OUT
+                ):
+                    raise ValueError(
+                        f"Read after write of '{node.name}' not connected to out connector. DaCe IR error."
+                    )
+
+            def visit_ScalarAccess(self, node: ScalarAccess, writes: set[str]) -> None:
+                # Handle stencil parameters differently because they are always available
+                if not node.name.startswith(prefix.TASKLET_IN) and not node.name.startswith(
+                    prefix.TASKLET_OUT
+                ):
+                    return
+
+                # Keep track of writes
+                if node.is_target:
+                    writes.add(_remove_prefix(node.name))
+                    return
+
+                # Make sure we don't read uninitialized memory
+                if (
+                    node.name.startswith(prefix.TASKLET_OUT)
+                    and _remove_prefix(node.name) not in writes
+                ):
+                    raise ValueError(f"Reading undefined '{node.name}'. DaCe IR error.")
+
+                if _remove_prefix(node.name) in writes and not node.name.startswith(
+                    prefix.TASKLET_OUT
+                ):
+                    raise ValueError(
+                        f"Read after write of '{node.name}' not connected to out connector. DaCe IR error."
+                    )
+
+            def visit_AssignStmt(self, node: AssignStmt, writes: Set[eve.SymbolRef]) -> None:
+                # Visiting order matters because `writes` must not contain the symbols from the left visit
+                self.visit(node.right, writes=writes)
+                self.visit(node.left, writes=writes)
+
+        writes: set[str] = set()
+        checker = ReadAfterWriteChecker()
+        for statement in statements:
+            checker.visit(statement, writes=writes)
 
 
 class DomainMap(ComputationNode, IterationNode):
     index_ranges: List[Range]
     schedule: MapSchedule
-    computations: List[Union[DomainMap, NestedSDFG, Tasklet]]
+    computations: List[Union[Tasklet, DomainMap, NestedSDFG]]
 
 
 class ComputationState(IterationNode):
-    computations: List[Union[DomainMap, Tasklet]]
+    computations: List[Union[Tasklet, DomainMap]]
 
 
 class DomainLoop(ComputationNode, IterationNode):
     axis: Axis
     index_range: Range
-    loop_states: List[Union[ComputationState, DomainLoop]]
+    loop_states: list[ComputationState | Condition | DomainLoop | WhileLoop]
+
+
+class WhileLoop(eve.Node):
+    condition: Tasklet
+    body: list[ComputationState | Condition | WhileLoop]
+
+    @datamodels.validator("condition")
+    def condition_has_boolean_expression(
+        self, attribute: datamodels.Attribute, tasklet: Tasklet
+    ) -> None:
+        assert isinstance(tasklet, Tasklet)
+        assert len(tasklet.stmts) == 1
+        assert isinstance(tasklet.stmts[0], AssignStmt)
+        assert isinstance(tasklet.stmts[0].left, ScalarAccess)
+        if tasklet.stmts[0].left.original_name is None:
+            raise ValueError(
+                f"Original node name not found for {tasklet.stmts[0].left.name}. DaCe IR error."
+            )
+        assert isinstance(tasklet.stmts[0].right, Expr)
+        if tasklet.stmts[0].right.dtype != common.DataType.BOOL:
+            raise ValueError("Condition must be a boolean expression.")
 
 
 class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
     label: eve.Coerced[eve.SymbolRef]
     field_decls: List[FieldDecl]
     symbol_decls: List[SymbolDecl]
-    states: List[Union[ComputationState, DomainLoop]]
+    states: list[ComputationState | Condition | DomainLoop | WhileLoop]
 
 
 # There are circular type references with string placeholders. These statements let datamodels resolve those.
