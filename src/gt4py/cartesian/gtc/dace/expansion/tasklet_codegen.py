@@ -30,23 +30,17 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         node: Union[dcir.VariableKOffset, common.CartesianOffset],
         *,
         access_info: dcir.FieldAccessInfo,
-        decl: dcir.FieldDecl,
         **kwargs: Any,
     ) -> str:
         int_sizes: List[Optional[int]] = []
         for i, axis in enumerate(access_info.axes()):
             memlet_shape = access_info.shape
-            if (
-                str(memlet_shape[i]).isnumeric()
-                and axis not in decl.access_info.variable_offset_axes
-            ):
+            if str(memlet_shape[i]).isnumeric() and axis not in access_info.variable_offset_axes:
                 int_sizes.append(int(memlet_shape[i]))
             else:
                 int_sizes.append(None)
         sym_offsets = [
-            dace.symbolic.pystr_to_symbolic(
-                self.visit(off, access_info=access_info, decl=decl, **kwargs)
-            )
+            dace.symbolic.pystr_to_symbolic(self.visit(off, access_info=access_info, **kwargs))
             for off in (node.to_dict()["i"], node.to_dict()["j"], node.k)
         ]
         for axis in access_info.variable_offset_axes:
@@ -62,10 +56,26 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         res = dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])
         return str(res)
 
-    def visit_CartesianOffset(self, node: common.CartesianOffset, **kwargs: Any) -> str:
+    def _explicit_indexing(
+        self, node: common.CartesianOffset | dcir.VariableKOffset, **kwargs: Any
+    ) -> str:
+        """If called from the explicit pass we need to be add manually the relative indexing"""
+        return f"__k+{self.visit(node.k, **kwargs)}"
+
+    def visit_CartesianOffset(
+        self, node: common.CartesianOffset, explicit=False, **kwargs: Any
+    ) -> str:
+        if explicit:
+            return self._explicit_indexing(node, **kwargs)
+
         return self._visit_offset(node, **kwargs)
 
-    def visit_VariableKOffset(self, node: dcir.VariableKOffset, **kwargs: Any) -> str:
+    def visit_VariableKOffset(
+        self, node: dcir.VariableKOffset, explicit=False, **kwargs: Any
+    ) -> str:
+        if explicit:
+            return self._explicit_indexing(node, **kwargs)
+
         return self._visit_offset(node, **kwargs)
 
     def visit_IndexAccess(
@@ -73,6 +83,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         node: dcir.IndexAccess,
         *,
         is_target: bool,
+        sdfg: dace.SDFG,
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs: Any,
     ) -> str:
@@ -90,22 +101,46 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
                 "Memlet connector and tasklet variable mismatch, DaCe IR error."
             ) from None
 
-        index_strs = []
-        if node.offset is not None:
-            index_strs.append(
-                self.visit(
-                    node.offset,
-                    decl=symtable[memlet.field],
-                    access_info=memlet.access_info,
-                    symtable=symtable,
-                    in_idx=True,
-                    **kwargs,
+        index_strs: list[str] = []
+        if node.explicit_indices:
+            # Full array access with every dimensions accessed in full.
+            # Everything was packed in `explicit_indices` in `DaCeIRBuilder._fix_memlet_array_access()`
+            # along the `reshape_memlet=True` code path.
+            assert len(node.explicit_indices) == len(sdfg.arrays[memlet.field].shape)
+            for idx in node.explicit_indices:
+                index_strs.append(
+                    self.visit(
+                        idx,
+                        symtable=symtable,
+                        in_idx=True,
+                        explicit=True,
+                        **kwargs,
+                    )
                 )
+        else:
+            # Grid-point access, I & J are unitary, K can be offsetted with variable
+            # Resolve K offset (also resolves I & J)
+            if node.offset is not None:
+                index_strs.append(
+                    self.visit(
+                        node.offset,
+                        access_info=memlet.access_info,
+                        symtable=symtable,
+                        in_idx=True,
+                        **kwargs,
+                    )
+                )
+            # Add any data dimensions
+            index_strs.extend(
+                self.visit(idx, symtable=symtable, in_idx=True, **kwargs) for idx in node.data_index
             )
-        index_strs.extend(
-            self.visit(idx, symtable=symtable, in_idx=True, **kwargs) for idx in node.data_index
+        # Filter empty strings
+        non_empty_indices = list(filter(None, index_strs))
+        return (
+            f"{node.name}[{','.join(non_empty_indices)}]"
+            if len(non_empty_indices) > 0
+            else node.name
         )
-        return f"{node.name}[{','.join(index_strs)}]"
 
     def visit_AssignStmt(self, node: dcir.AssignStmt, **kwargs: Any) -> str:
         # Visiting order matters because targets must not contain the target symbols from the left visit
@@ -207,10 +242,8 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
 
     Param = as_fmt("{name}")
 
-    LocalScalarDecl = as_fmt("{name}: {dtype}")
-
     def visit_Tasklet(self, node: dcir.Tasklet, **kwargs: Any) -> str:
-        return "\n".join(self.visit(node.decls, **kwargs) + self.visit(node.stmts, **kwargs))
+        return "\n".join(self.visit(node.stmts, **kwargs))
 
     def _visit_conditional(
         self,
