@@ -125,15 +125,14 @@ def _preserve_annex(
     node: concepts.Node, new_node: concepts.Node, preserved_annex_attrs: tuple[str, ...]
 ) -> None:
     # access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter
-    old_annex = node.annex
     new_annex_dict = new_node.annex.__dict__
-    for key in preserved_annex_attrs:
-        if (value := getattr(old_annex, key, NOTHING)) is not NOTHING:
-            # Note: The annex value of the new node might not be equal
-            # (in the sense that an equality comparison returns false),
-            # but in the context of the pass, they are equivalent.
-            # Therefore, we don't assert equality here.
-            new_annex_dict[key] = value
+    old_annex_dict = node.annex.__dict__
+    for key in old_annex_dict.keys() & preserved_annex_attrs:
+        # Note: The annex value of the new node might not be equal
+        # (in the sense that an equality comparison returns false),
+        # but in the context of the pass, they are equivalent.
+        # Therefore, we don't assert equality here.
+        new_annex_dict[key] = old_annex_dict[key]
 
 
 class NodeTranslator(NodeVisitor):
