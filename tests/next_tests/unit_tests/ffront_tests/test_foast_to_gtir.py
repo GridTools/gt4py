@@ -926,6 +926,6 @@ def test_scalar_broadcast():
     assert lowered.expr == im.call("broadcast")(
         1,
         im.make_tuple(
-            *tuple(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))
+            *(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))
         ),
     )
