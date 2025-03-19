@@ -576,6 +576,106 @@ def translate_as_fieldop(
     )
 
 
+def _construct_if_branch_output(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_sdfg.SDFGBuilder,
+    domain: gtir.Expr,
+    sym: gtir.Sym,
+    true_br: FieldopData,
+    false_br: FieldopData,
+) -> FieldopData:
+    """
+    Helper function called by `translate_if()` to allocate a temporary field to store
+    the result of an if expression.
+    """
+    assert true_br.gt_type == false_br.gt_type
+    out_type = true_br.gt_type
+
+    if isinstance(sym.type, ts.ScalarType):
+        assert sym.type == out_type
+        dtype = gtx_dace_utils.as_dace_type(sym.type)
+        out, _ = sdfg_builder.add_temp_scalar(sdfg, dtype)
+        out_node = state.add_access(out)
+        return FieldopData(out_node, sym.type, origin=())
+
+    assert isinstance(out_type, ts.FieldType)
+    assert isinstance(sym.type, ts.FieldType)
+    assert sym.type.dims == out_type.dims
+    dims, origin, shape = get_field_layout(extract_domain(domain))
+    assert dims == out_type.dims
+
+    if isinstance(sym.type.dtype, ts.ScalarType):
+        dtype = gtx_dace_utils.as_dace_type(sym.type.dtype)
+    else:
+        assert isinstance(out_type.dtype, ts.ListType)
+        assert isinstance(out_type.dtype.element_type, ts.ScalarType)
+        dtype = gtx_dace_utils.as_dace_type(out_type.dtype.element_type)
+        assert out_type.dtype.offset_type is not None
+        offset_provider_type = sdfg_builder.get_offset_provider_type(
+            out_type.dtype.offset_type.value
+        )
+        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+        shape = [*shape, offset_provider_type.max_neighbors]
+
+    out, _ = sdfg_builder.add_temp_array(sdfg, shape, dtype)
+    out_node = state.add_access(out)
+
+    return FieldopData(out_node, out_type, tuple(origin))
+
+
+def _write_if_branch_output(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    src: FieldopData,
+    dst: FieldopData,
+) -> None:
+    """
+    Helper function called by `translate_if()` to write the result on an if branch,
+    here `src` field, to the output 'dst' field. The write subset is based on the
+    domain of the `dst` field.
+    """
+    if src.gt_type != dst.gt_type:
+        raise ValueError(
+            f"Source and destination type mismatch, '{dst.gt_type}' vs '{src.gt_type}'."
+        )
+    dst_node = state.add_access(dst.dc_node.data)
+    dst_shape = dst_node.desc(sdfg).shape
+
+    if isinstance(src.gt_type, ts.ScalarType):
+        state.add_nedge(
+            src.dc_node,
+            dst_node,
+            dace.Memlet(data=src.dc_node.data, subset="0"),
+        )
+    else:
+        if isinstance(src.gt_type.dtype, ts.ListType):
+            src_origin = [*src.origin, 0]
+            dst_origin = [*dst.origin, 0]
+        else:
+            src_origin = [*src.origin]
+            dst_origin = [*dst.origin]
+
+        data_subset = dace_subsets.Range(
+            (
+                f"{dst_start - src_start}",
+                f"{dst_start + size - src_start - 1}",
+                1,
+            )
+            for src_start, dst_start, size in zip(src_origin, dst_origin, dst_shape, strict=True)
+        )
+
+        state.add_nedge(
+            src.dc_node,
+            dst_node,
+            dace.Memlet(
+                data=src.dc_node.data,
+                subset=data_subset,
+                other_subset=dace_subsets.Range.from_array(dst_node.desc(sdfg)),
+            ),
+        )
+
+
 def translate_if(
     node: gtir.Node,
     sdfg: dace.SDFG,
@@ -590,8 +690,8 @@ def translate_if(
     # expect condition as first argument
     if_stmt = gtir_python_codegen.get_source(cond_expr)
 
-    # use current head state to terminate the dataflow, and add a entry state
-    # to connect the true/false branch states as follows:
+    # evaluate the if-condition in a new entry state and use the current head state
+    # to join the true/false branch states as follows:
     #
     #               ------------
     #           === |   cond   | ===
@@ -629,109 +729,54 @@ def translate_if(
         head_state=false_state,
     )
 
-    def construct_output(
-        domain: gtir.Expr, sym: gtir.Sym, true_br: FieldopData, false_br: FieldopData
-    ) -> FieldopData:
-        assert true_br.gt_type == false_br.gt_type
-        out_type = true_br.gt_type
-
-        if isinstance(sym.type, ts.ScalarType):
-            assert sym.type == out_type
-            dtype = gtx_dace_utils.as_dace_type(sym.type)
-            out, _ = sdfg_builder.add_temp_scalar(sdfg, dtype)
-            out_node = state.add_access(out)
-            return FieldopData(out_node, sym.type, origin=())
-
-        assert isinstance(out_type, ts.FieldType)
-        assert isinstance(sym.type, ts.FieldType)
-        assert sym.type.dims == out_type.dims
-        dims, origin, shape = get_field_layout(extract_domain(domain))
-        assert dims == out_type.dims
-
-        if isinstance(sym.type.dtype, ts.ScalarType):
-            dtype = gtx_dace_utils.as_dace_type(sym.type.dtype)
-        else:
-            assert isinstance(out_type.dtype, ts.ListType)
-            assert isinstance(out_type.dtype.element_type, ts.ScalarType)
-            dtype = gtx_dace_utils.as_dace_type(out_type.dtype.element_type)
-            assert out_type.dtype.offset_type is not None
-            offset_provider_type = sdfg_builder.get_offset_provider_type(
-                out_type.dtype.offset_type.value
-            )
-            assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
-            shape = [*shape, offset_provider_type.max_neighbors]
-
-        out, _ = sdfg_builder.add_temp_array(sdfg, shape, dtype)
-        out_node = state.add_access(out)
-
-        return FieldopData(out_node, out_type, tuple(origin))
-
-    def connect_output(state: dace.SDFGState, src: FieldopData, dst: FieldopData) -> None:
-        if src.gt_type != dst.gt_type:
-            raise ValueError(
-                f"Source and destination type mismatch, '{dst.gt_type}' vs '{src.gt_type}'."
-            )
-        dst_node = state.add_access(dst.dc_node.data)
-        dst_shape = dst_node.desc(sdfg).shape
-
-        if isinstance(src.gt_type, ts.ScalarType):
-            state.add_nedge(
-                src.dc_node,
-                dst_node,
-                dace.Memlet(data=src.dc_node.data, subset="0"),
-            )
-        else:
-            if isinstance(src.gt_type.dtype, ts.ListType):
-                src_origin = [*src.origin, 0]
-                dst_origin = [*dst.origin, 0]
-            else:
-                src_origin = [*src.origin]
-                dst_origin = [*dst.origin]
-
-            data_subset = dace_subsets.Range(
-                (
-                    f"{dst_start - src_start}",
-                    f"{dst_start + size - src_start - 1}",
-                    1,
-                )
-                for src_start, dst_start, size in zip(
-                    src_origin, dst_origin, dst_shape, strict=True
-                )
-            )
-
-            state.add_nedge(
-                src.dc_node,
-                dst_node,
-                dace.Memlet(
-                    data=src.dc_node.data,
-                    subset=data_subset,
-                    other_subset=dace_subsets.Range.from_array(dst_node.desc(sdfg)),
-                ),
-            )
-
     if isinstance(node.type, ts.TupleType):
-        node_type_tree = gtir_sdfg_utils.make_symbol_tree("x", node.type)
+        symbol_tree = gtir_sdfg_utils.make_symbol_tree("x", node.type)
         if isinstance(node.annex.domain, tuple):
-            node_domain_tree = node.annex.domain
+            domain_tree = node.annex.domain
         else:
             # TODO(edopao): this is a workaround for some IR nodes where the inferred
-            #   domain on a tuple of fields is not a tuple
-            node_domain_tree = gtx_utils.tree_map(lambda _: node.annex.domain)(node_type_tree)
-        node_output = gtx_utils.tree_map(construct_output)(
-            node_domain_tree, node_type_tree, true_br_result, false_br_result
+            #   domain on a tuple of fields is not a tuple, see `test_execution.py::test_ternary_operator_tuple()`
+            domain_tree = gtx_utils.tree_map(lambda _: node.annex.domain)(symbol_tree)
+        node_output = gtx_utils.tree_map(
+            lambda domain,
+            sym,
+            true_br,
+            false_br,
+            sdfg=sdfg,
+            state=state,
+            sdfg_builder=sdfg_builder: _construct_if_branch_output(
+                sdfg,
+                state,
+                sdfg_builder,
+                domain,
+                sym,
+                true_br,
+                false_br,
+            )
+        )(
+            domain_tree,
+            symbol_tree,
+            true_br_result,
+            false_br_result,
         )
-        gtx_utils.tree_map(lambda src, dst, state=true_state: connect_output(state, src, dst))(
-            true_br_result, node_output
-        )
-        gtx_utils.tree_map(lambda src, dst, state=false_state: connect_output(state, src, dst))(
-            false_br_result, node_output
-        )
+        gtx_utils.tree_map(
+            lambda src, dst, state=true_state: _write_if_branch_output(sdfg, state, src, dst)
+        )(true_br_result, node_output)
+        gtx_utils.tree_map(
+            lambda src, dst, state=false_state: _write_if_branch_output(sdfg, state, src, dst)
+        )(false_br_result, node_output)
     else:
-        node_output = construct_output(
-            node.annex.domain, im.sym("x", node.type), true_br_result, false_br_result
+        node_output = _construct_if_branch_output(
+            sdfg,
+            state,
+            sdfg_builder,
+            node.annex.domain,
+            im.sym("x", node.type),
+            true_br_result,
+            false_br_result,
         )
-        connect_output(true_state, true_br_result, node_output)
-        connect_output(false_state, false_br_result, node_output)
+        _write_if_branch_output(sdfg, true_state, true_br_result, node_output)
+        _write_if_branch_output(sdfg, false_state, false_br_result, node_output)
 
     return node_output
 
