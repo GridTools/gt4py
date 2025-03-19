@@ -29,14 +29,6 @@ from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def _with_altered_arg(node: ir.FunCall, arg_idx: int, new_arg: ir.Expr | str):
-    """Given a itir.FunCall return a new call with one of its argument replaced."""
-    return ir.FunCall(
-        fun=node.fun,
-        args=[arg if i != arg_idx else im.ensure_expr(new_arg) for i, arg in enumerate(node.args)],
-    )
-
-
 def _is_trivial_make_tuple_call(node: ir.Expr):
     """Return if node is a `make_tuple` call with all elements `SymRef`s, `Literal`s or tuples thereof."""
     if not cpm.is_call_to(node, "make_tuple"):
@@ -334,10 +326,10 @@ class CollapseTuple(
                 if cpm.is_call_to(arg, "if_"):
                     cond, true_branch, false_branch = arg.args
                     new_true_branch = self.fp_transform(
-                        _with_altered_arg(node, i, true_branch), **kwargs
+                        ir_misc.with_altered_arg(node, i, true_branch), **kwargs
                     )
                     new_false_branch = self.fp_transform(
-                        _with_altered_arg(node, i, false_branch), **kwargs
+                        ir_misc.with_altered_arg(node, i, false_branch), **kwargs
                     )
                     return im.if_(cond, new_true_branch, new_false_branch)
         return None
@@ -397,7 +389,7 @@ class CollapseTuple(
                     for type_ in tuple_type.types
                 ]
                 f_args = [im.ref(param.id, param.type) for param in f_params]
-                f_body = _with_altered_arg(node, i, im.make_tuple(*f_args))
+                f_body = ir_misc.with_altered_arg(node, i, im.make_tuple(*f_args))
                 # simplify, e.g., inline trivial make_tuple args
                 new_f_body = self.fp_transform(f_body, **kwargs)
                 # if the continuation did not simplify there is nothing to gain. Skip
