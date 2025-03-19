@@ -57,8 +57,14 @@ def gt_simplify(
     - `InlineSDFGs`: Instead `gt_inline_nested_sdfg()` will be called.
 
     Further, the function will run the following passes in addition to DaCe simplify:
-    - `GT4PyGlobalSelfCopyElimination`: Special copy pattern that in the context
-        of GT4Py based SDFG behaves as a no op.
+    - `SingleStateGlobalSelfCopyElimination`: Special copy pattern that in the context
+        of GT4Py based SDFG behaves as a no op, i.e. `(G) -> (T) -> (G)`.
+    - `MultiStateGlobalSelfCopyElimination`: Very similar to
+        `SingleStateGlobalSelfCopyElimination`, with the exception that the write to
+        `T`, i.e. `(G) -> (T)` and the write back to `G`, i.e. `(T) -> (G)` might be
+        in different states.
+    - `CopyChainRemover`: Which removes some chains that are introduced by the
+        `concat_where` built-in function.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -86,6 +92,24 @@ def gt_simplify(
     while at_least_one_xtrans_run:
         at_least_one_xtrans_run = False
 
+        # NOTE: See comment in `gt_inline_nested_sdfg()` for more.
+        sdfg.reset_cfg_list()
+
+        # To mitigate DaCe issue 1959, we run the chain removal transformation here.
+        # TODO(phimuell): Remove as soon as we have a true solution.
+        if "CopyChainRemover" not in skip:
+            copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
+                sdfg=sdfg,
+                validate=validate,
+                validate_all=validate_all,
+            )
+            if copy_chain_remover_result is not None:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "CopyChainRemover" not in result:
+                    result["CopyChainRemover"] = 0
+                result["CopyChainRemover"] += copy_chain_remover_result
+
         if "InlineSDFGs" not in skip:
             inline_res = gt_inline_nested_sdfg(
                 sdfg=sdfg,
@@ -111,17 +135,45 @@ def gt_simplify(
             result = result or {}
             result.update(simplify_res)
 
-        if "GT4PyGlobalSelfCopyElimination" not in skip:
+        # This is the place were we actually want to apply the chain removal.
+        if "CopyChainRemover" not in skip:
+            copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
+                sdfg=sdfg,
+                validate=validate,
+                validate_all=validate_all,
+            )
+            if copy_chain_remover_result is not None:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "CopyChainRemover" not in result:
+                    result["CopyChainRemover"] = 0
+                result["CopyChainRemover"] += copy_chain_remover_result
+
+        if "SingleStateGlobalSelfCopyElimination" not in skip:
             self_copy_removal_result = sdfg.apply_transformations_repeated(
-                GT4PyGlobalSelfCopyElimination(),
+                gtx_transformations.SingleStateGlobalSelfCopyElimination(),
                 validate=validate,
                 validate_all=validate_all,
             )
             if self_copy_removal_result > 0:
                 at_least_one_xtrans_run = True
                 result = result or {}
-                result.setdefault("GT4PyGlobalSelfCopyElimination", 0)
-                result["GT4PyGlobalSelfCopyElimination"] += self_copy_removal_result
+                if "SingleStateGlobalSelfCopyElimination" not in result:
+                    result["SingleStateGlobalSelfCopyElimination"] = 0
+                result["SingleStateGlobalSelfCopyElimination"] += self_copy_removal_result
+
+        if "MultiStateGlobalSelfCopyElimination" not in skip:
+            distributed_self_copy_result = (
+                gtx_transformations.gt_multi_state_global_self_copy_elimination(
+                    sdfg, validate=validate_all
+                )
+            )
+            if distributed_self_copy_result is not None:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "MultiStateGlobalSelfCopyElimination" not in result:
+                    result["MultiStateGlobalSelfCopyElimination"] = set()
+                result["MultiStateGlobalSelfCopyElimination"].update(distributed_self_copy_result)
 
     return result
 
@@ -247,141 +299,10 @@ def gt_reduce_distributed_buffering(
         if ret is not None:
             all_result[rsdfg] = ret
 
+    if len(all_result) == 0:
+        return None
+
     return all_result
-
-
-@dace_properties.make_properties
-class GT4PyGlobalSelfCopyElimination(dace_transformation.SingleStateTransformation):
-    """Remove global self copy.
-
-    This transformation matches the following case `(G) -> (T) -> (G)`, i.e. `G`
-    is read from and written too at the same time, however, in between is `T`
-    used as a buffer. In the example above `G` is a global memory and `T` is a
-    temporary. This situation is generated by the lowering if the data node is
-    not needed (because the computation on it is only conditional).
-
-    In case `G` refers to global memory rule 3 of ADR-18 guarantees that we can
-    only have a point wise dependency of the output on the input.
-    This transformation will remove the write into `G`, i.e. we thus only have
-    `(G) -> (T)`. The read of `G` and the definition of `T`, will only be removed
-    if `T` is not used downstream. If it is used `T` will be maintained.
-    """
-
-    node_read_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
-    node_tmp = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
-    node_write_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
-
-    def __init__(
-        self,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(*args, **kwargs)
-
-    @classmethod
-    def expressions(cls) -> Any:
-        return [dace.sdfg.utils.node_path_graph(cls.node_read_g, cls.node_tmp, cls.node_write_g)]
-
-    def can_be_applied(
-        self,
-        graph: dace.SDFGState | dace.SDFG,
-        expr_index: int,
-        sdfg: dace.SDFG,
-        permissive: bool = False,
-    ) -> bool:
-        read_g = self.node_read_g
-        write_g = self.node_write_g
-        tmp_node = self.node_tmp
-        g_desc = read_g.desc(sdfg)
-        tmp_desc = tmp_node.desc(sdfg)
-
-        # NOTE: We do not check if `G` is read downstream.
-        if read_g.data != write_g.data:
-            return False
-        if g_desc.transient:
-            return False
-        if not tmp_desc.transient:
-            return False
-        if graph.in_degree(read_g) != 0:
-            return False
-        if graph.out_degree(read_g) != 1:
-            return False
-        if graph.degree(tmp_node) != 2:
-            return False
-        if graph.in_degree(write_g) != 1:
-            return False
-        if graph.out_degree(write_g) != 0:
-            return False
-        if graph.scope_dict()[read_g] is not None:
-            return False
-
-        return True
-
-    def _is_read_downstream(
-        self,
-        start_state: dace.SDFGState,
-        sdfg: dace.SDFG,
-        data_to_look: str,
-    ) -> bool:
-        """Scans for reads to `data_to_look`.
-
-        The function will go through states that are reachable from `start_state`
-        (including) and test if there is a read to the data container `data_to_look`.
-        It will return `True` the first time it finds such a node.
-        It is important that the matched nodes, i.e. `self.node_{read_g, write_g, tmp}`
-        are ignored.
-
-        Args:
-            start_state: The state where the scanning starts.
-            sdfg: The SDFG on which we operate.
-            data_to_look: The data that we want to look for.
-
-        Todo:
-            Port this function to use DaCe pass pipeline.
-        """
-        read_g: dace_nodes.AccessNode = self.node_read_g
-        write_g: dace_nodes.AccessNode = self.node_write_g
-        tmp_node: dace_nodes.AccessNode = self.node_tmp
-
-        # TODO(phimuell): Run the `StateReachability` pass in a pipeline and use
-        #  the `_pipeline_results` member to access the data.
-        return gtx_transformations.utils.is_accessed_downstream(
-            start_state=start_state,
-            sdfg=sdfg,
-            reachable_states=None,
-            data_to_look=data_to_look,
-            nodes_to_ignore={read_g, write_g, tmp_node},
-        )
-
-    def apply(
-        self,
-        graph: dace.SDFGState | dace.SDFG,
-        sdfg: dace.SDFG,
-    ) -> None:
-        read_g: dace_nodes.AccessNode = self.node_read_g
-        write_g: dace_nodes.AccessNode = self.node_write_g
-        tmp_node: dace_nodes.AccessNode = self.node_tmp
-
-        # We first check if `T`, the intermediate is not used downstream. In this
-        #  case we can remove the read to `G` and `T` itself from the SDFG.
-        #  We have to do this check before, because the matching is not fully stable.
-        is_tmp_used_downstream = self._is_read_downstream(
-            start_state=graph, sdfg=sdfg, data_to_look=tmp_node.data
-        )
-
-        # The write to `G` can always be removed.
-        graph.remove_node(write_g)
-
-        # Also remove the read to `G` and `T` from the SDFG if possible.
-        if not is_tmp_used_downstream:
-            graph.remove_node(read_g)
-            graph.remove_node(tmp_node)
-            # It could still be used in a parallel branch.
-            try:
-                sdfg.remove_data(tmp_node.data, validate=True)
-            except ValueError as e:
-                if not str(e).startswith(f"Cannot remove data descriptor {tmp_node.data}:"):
-                    raise
 
 
 AccessLocation: TypeAlias = tuple[dace_nodes.AccessNode, dace.SDFGState]
