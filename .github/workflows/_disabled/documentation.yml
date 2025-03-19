@@ -15,11 +15,11 @@ jobs:
     outputs:
       python-versions: ${{ steps.set-matrix.outputs.python-versions }}
     steps:
-      - uses: actions/checkout@v4
-      - id: set-matrix
-        run: |
-          PYTHON_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "python-versions=${PYTHON_VERSIONS}" >> $GITHUB_OUTPUT
+    - uses: actions/checkout@v4
+    - id: set-matrix
+      run: |
+        PYTHON_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
+        echo "python-versions=${PYTHON_VERSIONS}" >> $GITHUB_OUTPUT
 
   quickstart-guide:
     needs: get-python-versions

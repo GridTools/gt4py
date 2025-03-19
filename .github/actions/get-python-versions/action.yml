@@ -9,10 +9,10 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v4
-      if: ${{ github.repository == github.repository }}
-    - id: set-versions
-      shell: bash
-      run: |
-        PYTHON_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
-        echo "python-versions=${PYTHON_VERSIONS}" >> $GITHUB_OUTPUT
+  - uses: actions/checkout@v4
+    if: ${{ github.repository == github.repository }}
+  - id: set-versions
+    shell: bash
+    run: |
+      PYTHON_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
+      echo "python-versions=${PYTHON_VERSIONS}" >> $GITHUB_OUTPUT
