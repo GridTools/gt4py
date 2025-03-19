@@ -4,14 +4,14 @@ description: "Reads Python versions from .python-versions file and outputs them 
 outputs:
   python-versions:
     description: "JSON array of Python versions"
-    value: ${{ steps.set-matrix.outputs.python-versions }}
+    value: ${{ steps.set-versions.outputs.python-versions }}
 
 runs:
   using: "composite"
   steps:
     - uses: actions/checkout@v4
       if: ${{ github.repository == github.repository }}
-    - id: set-matrix
+    - id: set-versions
       shell: bash
       run: |
         PYTHON_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
