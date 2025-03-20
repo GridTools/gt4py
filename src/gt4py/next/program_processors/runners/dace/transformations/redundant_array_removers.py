@@ -492,8 +492,8 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
     input.
 
     Todo:
-        If `T` is only used in this state, then also redirect reads from `T` such
-        that they now read directly from `G`.
+        If `T` is only ready in this state, then `T` should not be created, instead
+        it should be read directly from `G`.
     """
 
     node_read_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
@@ -631,7 +631,8 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             if graph.degree(read_g) == 0:
                 graph.remove_node(read_g)
 
-            # It could still be used in a parallel branch.
+            # If it fails then `T` is still used in a parallel controlflow path, for
+            #  example in `if` branches.
             try:
                 sdfg.remove_data(tmp_node.data, validate=True)
             except ValueError as e:
@@ -646,17 +647,18 @@ class SingleStateGlobalDirectSelfCopyElimination(dace_transformation.SingleState
     This transformation is extremely similar to `SingleStateGlobalSelfCopyElimination`,
     however, this transformation does not need a buffer between the two global
     AccessNodes. Therefore it matches the pattern `(G) -> (G)`, where `G` refers to
-    global data.
+    global data. Note that the transformation only considers copies on global scope.
     The transformation has two modes in how this is achieved, which one is chosen,
     depends on if cycles are created or not. The first mode, which is selected if
     cycles would be created, is to merge the two AccessNodes together. For this
     the edges of the first AccessNode are reconnected to the second AccessNode.
 
-    In the second mode, which is selected if cycles would be created, is to simply
-    remove the edges connecting the two AccessNodes.
+    In the second mode, which is selected if cycles would be created, for example in
+    case of `if` branches, then the edges are removed, which will create two
+    independent `G` AccessNodes.
 
     Todo:
-        - Merge this transformation with `SingleStateGlobalSelfCopyElimination`.
+        Merge this transformation with `SingleStateGlobalSelfCopyElimination`.
     """
 
     node_read_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
@@ -689,6 +691,7 @@ class SingleStateGlobalDirectSelfCopyElimination(dace_transformation.SingleState
             return False
         if g_desc.transient:
             return False
+        # Restrict to global scope.
         if graph.scope_dict()[read_g] is not None:
             return False
 
@@ -796,9 +799,10 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
     fix point is reached and should be seen as an addition to the array removal passes
     that ship with DaCe.
     The transformation will look for the pattern `(A1) -> (A2)`, i.e. a data container
-    is copied into another one. The transformation will then remove `A1` and rewire
-    the edges such that they now refer to `A2`. Another, and probably better way, is to
-    consider the transformation as fusion transformation for AccessNodes.
+    is copied into another one, at the global scope. The transformation will then
+    remove `A1` and rewire the edges such that they now refer to `A2`. Another, and
+    probably better way, is to consider the transformation as fusion transformation
+    for AccessNodes.
 
     The transformation builds on ADR-18 and imposes the following additional
     requirements before it can be applied:
@@ -864,6 +868,10 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         a1: dace_nodes.AccessNode = self.node_a1
         a2: dace_nodes.AccessNode = self.node_a2
 
+        # We only allow that we operate on the top level scope.
+        if graph.scope_dict()[a1] is not None:
+            return False
+
         a1_desc = a1.desc(sdfg)
         a2_desc = a2.desc(sdfg)
 
@@ -882,10 +890,6 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         if gtx_transformations.utils.is_view(a1_desc, None):
             return False
         if gtx_transformations.utils.is_view(a2_desc, None):
-            return False
-
-        # We only allow that we operate on the top level scope.
-        if graph.scope_dict()[a1] is not None:
             return False
 
         # TODO(phimuell): Relax this to only prevent host-device copies.
