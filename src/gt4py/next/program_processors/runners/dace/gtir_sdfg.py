@@ -789,9 +789,34 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 src_node = lambda_arg_nodes[nsdfg_dataname].dc_node
                 dataname = src_node.data
                 datadesc = src_node.desc(sdfg)
-            else:
+            elif nsdfg_dataname in sdfg.arrays:
                 dataname = nsdfg_dataname
                 datadesc = sdfg.arrays[nsdfg_dataname]
+            else:
+                # By default, all scalar GTIR symbols are represented as scalar
+                # data containers in the SDFG. Exceptionally, scalars used in
+                # domain expressions need to be represented as SDFG symbols.
+                # However, it can happen that the same GTIR symbol is used inside
+                # a nested context as a regular symbol, outside of a domain
+                # expression, in which case it has to be written to a transient
+                # node and connected to the input connector of the nested SDFG.
+                assert nsdfg_dataname in sdfg.symbols
+                datatype = self.get_symbol_type(nsdfg_dataname)
+                assert isinstance(datatype, ts.ScalarType)
+                dataname, datadesc = self.add_temp_scalar(sdfg, nsdfg_datadesc.dtype)
+                src_node = head_state.add_access(dataname)
+                head_state.add_edge(
+                    head_state.add_tasklet(
+                        f"get_value_{nsdfg_dataname}", {}, {"val"}, f"val = {nsdfg_dataname}"
+                    ),
+                    "val",
+                    src_node,
+                    None,
+                    dace.Memlet(data=dataname, subset="0"),
+                )
+                lambda_arg_nodes[nsdfg_dataname] = gtir_builtin_translators.FieldopData(
+                    src_node, datatype, origin=()
+                )
 
             # ensure that connectivity tables are non-transient arrays in parent SDFG
             if dataname in connectivity_arrays:
