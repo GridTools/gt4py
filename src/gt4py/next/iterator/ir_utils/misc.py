@@ -147,3 +147,10 @@ def unwrap_scan(stencil: itir.Lambda | itir.FunCall):
 
     assert isinstance(stencil, itir.Lambda)
     return stencil, lambda s: s
+
+
+def with_altered_arg(node: itir.FunCall, arg_idx: int, new_arg: itir.Expr | str) -> itir.FunCall:
+    """Given a itir.FunCall return a new call with one of its argument replaced."""
+    return im.call(node.fun)(
+        *(arg if i != arg_idx else im.ensure_expr(new_arg) for i, arg in enumerate(node.args))
+    )
