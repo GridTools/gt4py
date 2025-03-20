@@ -16,14 +16,12 @@ on:
 jobs:
   upload:
     runs-on: ubuntu-latest
-    env:
-      PY_VERSION: "3.10"
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python ${{ env.PY_VERSION }}
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ env.PY_VERSION }}
+        python-version-file: ".default-python-version"
 
     - name: Install python dependencies
       shell: bash

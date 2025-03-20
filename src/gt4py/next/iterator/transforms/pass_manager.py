@@ -18,6 +18,7 @@ from gt4py.next.iterator.transforms import (
     inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
+    prune_broadcast,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -43,7 +44,9 @@ class GTIRTransform(Protocol):
 def apply_common_transforms(
     ir: itir.Program,
     *,
-    offset_provider=None,  # TODO(havogt): should be replaced by offset_provider_type, but global_tmps currently relies on runtime info
+    # TODO(havogt): should be replaced by `common.OffsetProviderType`, but global_tmps currently
+    #  relies on runtime info or `symbolic_domain_sizes`.
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     extract_temporaries=False,
     unroll_reduce=False,
     common_subexpression_elimination=True,
@@ -52,13 +55,10 @@ def apply_common_transforms(
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
-    offset_provider_type: Optional[common.OffsetProviderType] = None,
 ) -> itir.Program:
-    # TODO(havogt): if the runtime `offset_provider` is not passed, we cannot run global_tmps
-    if offset_provider_type is None:
-        offset_provider_type = common.offset_provider_to_type(offset_provider)
-
     assert isinstance(ir, itir.Program)
+
+    offset_provider_type = common.offset_provider_to_type(offset_provider)
 
     tmp_uids = eve_utils.UIDGenerator(prefix="__tmp")
     mergeasfop_uids = eve_utils.UIDGenerator()
@@ -92,6 +92,7 @@ def apply_common_transforms(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
+    ir = prune_broadcast.PruneBroadcast.apply(ir)
 
     for _ in range(10):
         inlined = ir
@@ -130,7 +131,12 @@ def apply_common_transforms(
 
     if extract_temporaries:
         ir = infer(ir, inplace=True, offset_provider_type=offset_provider_type)
-        ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider, uids=tmp_uids)
+        ir = global_tmps.create_global_tmps(
+            ir,
+            offset_provider=offset_provider,
+            symbolic_domain_sizes=symbolic_domain_sizes,
+            uids=tmp_uids,
+        )
 
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
@@ -187,4 +193,5 @@ def apply_fieldview_transforms(
         ir
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    ir = prune_broadcast.PruneBroadcast.apply(ir)
     return ir
