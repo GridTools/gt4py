@@ -596,34 +596,34 @@ def _make_concat_field_slice(
     concat_dim_origin: dace.symbolic.SymbolicType,
 ) -> tuple[FieldopData, dace.data.Array]:
     """
-    Helper function called by `translate_concat_where` to create a view over an
-    array 'f', that adds one dimension with a single level. This allows to treat
-    'f' as a slice and concatanate it to the other argument field.
+    Helper function called by `translate_concat_where` to create a slice along the
+    concat dimension, that is a new array with an extra diimension and a single level.
+    This allows to treat 'f' as a slice and concatanate it to the other argument field.
     """
     assert isinstance(f.gt_type, ts.FieldType)
-    view_dims = [*f.gt_type.dims[:concat_dim_index], concat_dim, *f.gt_type.dims[concat_dim_index:]]
-    view_origin = tuple(
+    dims = [*f.gt_type.dims[:concat_dim_index], concat_dim, *f.gt_type.dims[concat_dim_index:]]
+    origin = tuple(
         [*f.origin[:concat_dim_index], concat_dim_origin, *f.origin[concat_dim_index:]]
     )
-    view_shape = tuple([*f_desc.shape[:concat_dim_index], 1, *f_desc.shape[concat_dim_index:]])
-    view_strides = tuple(
+    shape = tuple([*f_desc.shape[:concat_dim_index], 1, *f_desc.shape[concat_dim_index:]])
+    strides = tuple(
         [*f_desc.strides[:concat_dim_index], 1, *f_desc.strides[concat_dim_index:]]
     )
-    view, view_desc = sdfg.add_view(
-        f"view_{f.dc_node.data}", view_shape, f_desc.dtype, strides=view_strides, find_new_name=True
+    slice, slice_desc = sdfg.add_temp_transient(
+        shape, f_desc.dtype, strides=strides
     )
-    view_node = state.add_access(view)
+    slice_node = state.add_access(slice)
     state.add_nedge(
         f.dc_node,
-        view_node,
+        slice_node,
         dace.Memlet(
             data=f.dc_node.data,
             subset=dace_subsets.Range.from_array(f_desc),
-            other_subset=dace_subsets.Range.from_array(view_desc),
+            other_subset=dace_subsets.Range.from_array(slice_desc),
         ),
     )
-    fview = FieldopData(view_node, ts.FieldType(dims=view_dims, dtype=f.gt_type.dtype), view_origin)
-    return fview, view_desc
+    fslice = FieldopData(slice_node, ts.FieldType(dims=dims, dtype=f.gt_type.dtype), origin)
+    return fslice, slice_desc
 
 
 def _make_concat_scalar_broadcast(
