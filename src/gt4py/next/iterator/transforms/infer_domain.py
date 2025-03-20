@@ -52,7 +52,7 @@ AccessedDomains: TypeAlias = dict[str, DomainAccess]
 
 
 class InferenceOptions(typing.TypedDict):
-    offset_provider: common.OffsetProvider
+    offset_provider: common.OffsetProvider | common.OffsetProviderType
     symbolic_domain_sizes: Optional[dict[str, str]]
     allow_uninferred: bool
 
@@ -162,7 +162,7 @@ def _extract_accessed_domains(
     stencil: itir.Expr,
     input_ids: list[str],
     target_domain: NonTupleDomainAccess,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]],
 ) -> dict[str, NonTupleDomainAccess]:
     accessed_domains: dict[str, NonTupleDomainAccess] = {}
@@ -195,7 +195,7 @@ def _infer_as_fieldop(
     applied_fieldop: itir.FunCall,
     target_domain: DomainAccess,
     *,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]],
     allow_uninferred: bool,
 ) -> tuple[itir.FunCall, AccessedDomains]:
@@ -412,7 +412,7 @@ def infer_expr(
     expr: itir.Expr,
     domain: DomainAccess,
     *,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     allow_uninferred: bool = False,
 ) -> tuple[itir.Expr, AccessedDomains]:
@@ -477,7 +477,7 @@ def _infer_stmt(
 def infer_program(
     program: itir.Program,
     *,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     allow_uninferred: bool = False,
 ) -> itir.Program:
