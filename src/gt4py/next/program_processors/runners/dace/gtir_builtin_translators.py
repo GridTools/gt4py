@@ -832,6 +832,7 @@ def translate_concat_where(
                 data=lower.dc_node.data,
                 subset=lower_subset,
                 other_subset=lower_output_subset,
+                dynamic=True,  # this memlet could be empty, but this is known only at runtime
             ),
         )
 
@@ -872,6 +873,7 @@ def translate_concat_where(
                 data=upper.dc_node.data,
                 subset=upper_subset,
                 other_subset=upper_output_subset,
+                dynamic=True,  # this memlet could be empty, but this is known only at runtime
             ),
         )
 
