@@ -632,9 +632,9 @@ def _write_if_branch_output(
     dst: FieldopData,
 ) -> None:
     """
-    Helper function called by `translate_if()` to write the result on an if branch,
-    here `src` field, to the output 'dst' field. The write subset is based on the
-    domain of the `dst` field.
+    Helper function called by `translate_if()` to write the result of an if-branch,
+    here `src` field, to the output 'dst' field. The data subset is based on the
+    domain of the `dst` field. Therefore, the full shape of `dst` array is written.
     """
     if src.gt_type != dst.gt_type:
         raise ValueError(
@@ -660,7 +660,7 @@ def _write_if_branch_output(
         data_subset = dace_subsets.Range(
             (
                 f"{dst_start - src_start}",
-                f"{dst_start + size - src_start - 1}",
+                f"{dst_start - src_start + size - 1}",  # subtract 1 because the range boundaries are included
                 1,
             )
             for src_start, dst_start, size in zip(src_origin, dst_origin, dst_shape, strict=True)

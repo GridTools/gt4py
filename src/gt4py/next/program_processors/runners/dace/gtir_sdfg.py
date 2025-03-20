@@ -493,21 +493,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert sink_states[0] == head_state
 
         def make_temps(
-            field: gtir_builtin_translators.FieldopData,
+            src: gtir_builtin_translators.FieldopData,
         ) -> gtir_builtin_translators.FieldopData:
-            desc = sdfg.arrays[field.dc_node.data]
-            if desc.transient or not use_temp:
-                return field
+            src_desc = sdfg.arrays[src.dc_node.data]
+            if src_desc.transient or not use_temp:
+                return src
             else:
-                temp, _ = self.add_temp_array_like(sdfg, desc)
-                temp_node = head_state.add_access(temp)
-                field_range = dace.subsets.Range.from_array(desc)
+                dst, dst_desc = self.add_temp_array_like(sdfg, src_desc)
+                dst_node = head_state.add_access(dst)
                 head_state.add_nedge(
-                    field.dc_node,
-                    temp_node,
-                    dace.Memlet(data=temp, subset=field_range, other_subset=field_range),
+                    src.dc_node,
+                    dst_node,
+                    dace.Memlet(
+                        data=dst,
+                        subset=dace.subsets.Range.from_array(dst_desc),
+                        other_subset=dace.subsets.Range.from_array(src_desc),
+                    ),
                 )
-                return gtir_builtin_translators.FieldopData(temp_node, field.gt_type, field.origin)
+                return gtir_builtin_translators.FieldopData(dst_node, src.gt_type, src.origin)
 
         temp_result = gtx_utils.tree_map(make_temps)(result)
         return list(gtx_utils.flatten_nested_tuple((temp_result,)))
