@@ -98,17 +98,15 @@ def make_mesh_symbols(mesh: MeshDescriptor):
 def build_dace_sdfg(
     ir: gtir.Program, offset_provider_type: gtx_common.OffsetProviderType
 ) -> Callable[..., Any]:
+    # run domain inference in order to add the domain annex information to the IR nodes
+    ir = infer_domain.infer_program(
+        ir,
+        offset_provider=offset_provider_type,
+        symbolic_domain_sizes={IDim.value: "size", Edge.value: "nedges", Vertex.value: "nvertices"},
+    )
     return dace_backend.build_sdfg_from_gtir(
         ir, offset_provider_type, disable_field_origin_on_program_arguments=True
     )
-
-
-def infer_domain_and_build_dace_sdfg(
-    ir: gtir.Program, offset_provider: gtx_common.OffsetProvider
-) -> Callable[..., Any]:
-    # run domain inference in order to add the domain annex information to the IR nodes
-    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
-    return build_dace_sdfg(ir, gtx_common.offset_provider_to_type(offset_provider))
 
 
 def test_gtir_broadcast():
@@ -662,7 +660,7 @@ def test_gtir_cond():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    sdfg = infer_domain_and_build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     for s1, s2 in [(1, 2), (2, 1)]:
         d = np.empty_like(a)
@@ -704,7 +702,7 @@ def test_gtir_cond_with_tuple_return():
     b = np.random.rand(N)
     c = np.random.rand(N)
 
-    sdfg = infer_domain_and_build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     tuple_symbols = {
         "__z_0_0_range_1": N,
@@ -752,7 +750,7 @@ def test_gtir_cond_nested():
 
     a = np.random.rand(N)
 
-    sdfg = infer_domain_and_build_dace_sdfg(testee, {})
+    sdfg = build_dace_sdfg(testee, {})
 
     for s1 in [False, True]:
         for s2 in [False, True]:
@@ -1520,7 +1518,7 @@ def test_gtir_reduce_with_cond_neighbors():
     e = np.random.rand(SKIP_VALUE_MESH.num_edges)
 
     for use_sparse in [False, True]:
-        sdfg = infer_domain_and_build_dace_sdfg(testee, SKIP_VALUE_MESH.offset_provider)
+        sdfg = build_dace_sdfg(testee, SKIP_VALUE_MESH.offset_provider_type)
 
         v = np.empty(SKIP_VALUE_MESH.num_vertices, dtype=e.dtype)
         v_ref = [
@@ -1814,7 +1812,7 @@ def test_gtir_let_lambda_with_cond():
         ],
     )
 
-    sdfg = infer_domain_and_build_dace_sdfg(testee, {})
+    sdfg = build_dace_sdfg(testee, {})
 
     a = np.random.rand(N)
     for s in [False, True]:
@@ -1964,7 +1962,7 @@ def test_gtir_if_scalars():
     d1 = np.random.randint(0, 1000)
     d2 = np.random.randint(0, 1000)
 
-    sdfg = infer_domain_and_build_dace_sdfg(testee, {})
+    sdfg = build_dace_sdfg(testee, {})
 
     tuple_symbols = {
         "__x_0_0_range_1": N,
@@ -2047,7 +2045,7 @@ def test_gtir_index():
 
     v = np.zeros(N, dtype=np.int32)
 
-    sdfg = infer_domain_and_build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     ref = np.concatenate(
         (v[:MARGIN], np.arange(MARGIN, N - MARGIN, dtype=np.int32), v[N - MARGIN :])
