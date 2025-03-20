@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "dace"
-version = "1.0.1"
+version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.11'",
@@ -739,7 +739,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "sympy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b4/67/fb1be2673868ee1f08e9c7bacc0b9b77d2bd5ff17ab47896f20006a2a1a5/dace-1.0.1.tar.gz", hash = "sha256:6f7a5defb082ed4f1a81f857d4268ed2bb606f6d9ea9c28d2831d1151e3a80f7", size = 5801727 }
+sdist = { url = "https://files.pythonhosted.org/packages/53/02/1a2ece00b229710a4db8f301bba6097eacfbc2a9af84d8746089242d1cf5/dace-1.0.2.tar.gz", hash = "sha256:6728f4bcf584b9f5bbb9c9a393fbdd87364af0c6ad9120da0302b8b470f4f71c", size = 5801789 }
 
 [[package]]
 name = "debugpy"
@@ -1087,7 +1087,7 @@ dependencies = [
 [package.optional-dependencies]
 all = [
     { name = "clang-format" },
-    { name = "dace", version = "1.0.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "dace", version = "1.0.2", source = { registry = "https://pypi.org/simple" } },
     { name = "hypothesis" },
     { name = "jax" },
     { name = "pytest" },
@@ -1100,7 +1100,7 @@ cuda12 = [
     { name = "cupy-cuda12x" },
 ]
 dace = [
-    { name = "dace", version = "1.0.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "dace", version = "1.0.2", source = { registry = "https://pypi.org/simple" } },
 ]
 dace-next = [
     { name = "dace", version = "1.0.0", source = { git = "https://github.com/spcl/dace?branch=main#5097d6f1a4b6e1dc8e06be6eb4aa585a6c6e04f3" } },
@@ -1227,7 +1227,7 @@ requires-dist = [
     { name = "cupy-rocm-4-3", marker = "extra == 'rocm4-3'", specifier = ">=13.3.0" },
     { name = "cupy-rocm-5-0", marker = "extra == 'rocm5-0'", specifier = ">=13.3.0" },
     { name = "cytoolz", specifier = ">=0.12.1" },
-    { name = "dace", marker = "extra == 'dace'", specifier = ">=1.0.1,<1.1.0" },
+    { name = "dace", marker = "extra == 'dace'", specifier = ">=1.0.2,<1.1.0" },
     { name = "dace", marker = "extra == 'dace-next'", git = "https://github.com/spcl/dace?branch=main" },
     { name = "deepdiff", specifier = ">=5.6.0" },
     { name = "devtools", specifier = ">=0.6" },
