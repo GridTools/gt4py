@@ -71,3 +71,10 @@ def is_equal(a: itir.Expr, b: itir.Expr):
     return a == b or (
         CannonicalizeBoundSymbolNames.apply(a) == CannonicalizeBoundSymbolNames.apply(b)
     )
+
+
+def with_altered_arg(node: itir.FunCall, arg_idx: int, new_arg: itir.Expr | str) -> itir.FunCall:
+    """Given a itir.FunCall return a new call with one of its argument replaced."""
+    return im.call(node.fun)(
+        *(arg if i != arg_idx else im.ensure_expr(new_arg) for i, arg in enumerate(node.args))
+    )
