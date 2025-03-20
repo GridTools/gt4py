@@ -656,9 +656,9 @@ def _make_concat_scalar_broadcast(
                 map_variables, dace_subsets.Range.from_array(out_desc), strict=True
             )
         },
-        code="out = inp",
-        inputs={"inp": dace.Memlet(data=inp.dc_node.data, subset=inp_index)},
-        outputs={"out": dace.Memlet(data=out_name, subset=",".join(map_variables))},
+        code="__out = __inp",
+        inputs={"__inp": dace.Memlet(data=inp.dc_node.data, subset=inp_index)},
+        outputs={"__out": dace.Memlet(data=out_name, subset=",".join(map_variables))},
         input_nodes={inp.dc_node},
         output_nodes={out_node},
         external_edges=True,

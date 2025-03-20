@@ -584,16 +584,16 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
         deref_node = self._add_tasklet(
             "deref",
-            {"field"} | set(index_connectors),
-            {"val"},
-            code=f"val = field[{index_internals}]",
+            {"__field"} | set(index_connectors),
+            {"__val"},
+            code=f"__val = __field[{index_internals}]",
         )
         # add new termination point for the field parameter
         self._add_input_data_edge(
             arg_expr.field,
             dace_subsets.Range.from_array(field_desc),
             deref_node,
-            "field",
+            "__field",
             src_offset=[offset for (_, offset) in arg_expr.field_domain],
         )
 
@@ -619,7 +619,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             else:
                 assert isinstance(index_expr, SymbolExpr)
 
-        return self._construct_tasklet_result(field_desc.dtype, deref_node, "val")
+        return self._construct_tasklet_result(field_desc.dtype, deref_node, "__val")
 
     def _visit_if_branch_arg(
         self,
@@ -1087,13 +1087,13 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
         elif isinstance(index_arg, ValueExpr):
             tasklet_node = self._add_tasklet(
-                "list_get", inputs={"index", "list"}, outputs={"value"}, code="value = list[index]"
+                "list_get", inputs={"__index", "list"}, outputs={"__val"}, code="__val = list[__index]"
             )
             self._add_edge(
                 index_arg.dc_node,
                 None,
                 tasklet_node,
-                "index",
+                "__index",
                 dace.Memlet(data=index_arg.dc_node.data, subset="0"),
             )
             self._add_edge(
@@ -1104,7 +1104,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 self.sdfg.make_array_memlet(list_arg.dc_node.data),
             )
             self._add_edge(
-                tasklet_node, "value", result_node, None, dace.Memlet(data=result, subset="0")
+                tasklet_node, "__val", result_node, None, dace.Memlet(data=result, subset="0")
             )
         else:
             raise TypeError(f"Unexpected value {index_arg} as index argument.")
