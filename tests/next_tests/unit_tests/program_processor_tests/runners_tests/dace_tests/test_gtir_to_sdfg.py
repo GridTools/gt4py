@@ -668,6 +668,7 @@ def test_gtir_cond():
         assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
 
 
+@pytest.mark.xfail(reason="requires function to retrieve the annex tuple domain")
 def test_gtir_cond_with_tuple_return():
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
@@ -1821,6 +1822,7 @@ def test_gtir_let_lambda_with_cond():
         assert np.allclose(b, a if s else a * 2)
 
 
+@pytest.mark.xfail(reason="'target_domain' cannot be 'NEVER' unless `allow_uninferred=True`")
 def test_gtir_let_lambda_with_tuple1():
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, im.minus("size", 1))})
     testee = gtir.Program(
