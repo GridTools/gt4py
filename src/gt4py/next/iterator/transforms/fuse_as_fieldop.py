@@ -282,9 +282,16 @@ class FuseAsFieldOp(
         if not uids:
             uids = eve_utils.UIDGenerator()
 
-        return cls(uids=uids, enabled_transformations=enabled_transformations).visit(
+        new_node = cls(uids=uids, enabled_transformations=enabled_transformations).visit(
             node, within_set_at_expr=within_set_at_expr
         )
+        
+        new_node = type_inference.infer(
+            new_node,
+            offset_provider_type=offset_provider_type,
+            allow_undeclared_symbols=allow_undeclared_symbols,
+        )
+        return new_node
 
     def transform_fuse_make_tuple(self, node: itir.Node, **kwargs):
         if not cpm.is_call_to(node, "make_tuple"):
