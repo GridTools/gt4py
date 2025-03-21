@@ -92,9 +92,13 @@ def gt_simplify(
     result: Optional[dict[str, Any]] = None
 
     at_least_one_xtrans_run = True
-
+    starvation_protection = 30
     while at_least_one_xtrans_run:
         at_least_one_xtrans_run = False
+
+        if starvation_protection == 0:
+            raise ValueError("Simplify did not converge.")
+        starvation_protection -= 1
 
         # NOTE: See comment in `gt_inline_nested_sdfg()` for more.
         sdfg.reset_cfg_list()
