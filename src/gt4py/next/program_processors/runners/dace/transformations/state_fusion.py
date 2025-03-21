@@ -26,9 +26,15 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
     - The first state has only one outgoing edge, that connects it with the second state.
     - The second only has one incoming edge, that connects is with the first state.
     - The connecting edge is unconditionally and does not contains any assignments.
+    - If global data is written to in the first state and there is an AccessNode that
+        reads and writes to the same data in the second state the transformation
+        does not apply.
 
     If the conditions above are met, then the transformation will copy the nodes from
     the second state into the first state and if needed create connections as needed.
+
+    Todo:
+        Improve robustness if there are multiple global AccessNodes.
     """
 
     first_state = dace_transformation.PatternNode(dace.SDFGState)
@@ -98,31 +104,44 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         second_scope_dict = second_state.scope_dict()
 
         # We have to preserve the order this means that every source node of the
-        #  second state, must be connected to the respective node in the first state.
-        #  We will now look for all nodes that are potentially read in the second
-        #  state, these are all AccessNodes that have a non zero in degree.
-        data_sources: dict[str, dace_nodes.AccessNode] = {
+        #  second state, must merge the nodes from the first node with the
+        #  corresponding nodes in the second state.
+        #  By definition and ADR-18, these are all AccessNodes with a non zero
+        #  input degree. Although not strictly needed, we also add globals that
+        #  are read, but not written to in the first state, the effect is that
+        #  there is only one reading AccessNode, which is closer to ADR-18.
+        data_producers: dict[str, dace_nodes.AccessNode] = {
             dnode.data: dnode
             for dnode in first_state.data_nodes()
-            if first_scope_dict[dnode] is None and first_state.in_degree(dnode) != 0
+            if (first_scope_dict[dnode] is None and first_state.in_degree(dnode) != 0)
         }
 
-        # Now we will look for all data sinks, i.e. nodes that are reading data from
-        #  the first state. This are all AccessNodes not have a non zero out degree
-        #  and are listed in `data_source`. Note that these nodes might have to be
+        # Adding globals that that only read.
+        for dnode in first_state.data_nodes():
+            if dnode.desc(sdfg).transient:
+                continue
+            if not (first_state.in_degree(dnode) == 0 and first_state.out_degree(dnode) != 0):
+                continue
+            if dnode.data in data_producers:
+                continue
+            data_producers[dnode.data] = dnode
+
+        # Now we will look for all data consumers, i.e. nodes that are reading data from
+        #  the first state. This are all AccessNodes not have a zero in degree
+        #  and are listed in `data_producers`. Note that these nodes might have to be
         #  replaced with the nodes from the source.
         #  Note we can not use a `dict` here because it is possible, not fully legal
-        #  though, that there are multiple access nodes that refers to the same data.
-        data_sinks: list[dace_nodes.AccessNode] = [
+        #  though, that there are multiple AccessNodes that refers to the same data.
+        data_consumers: list[dace_nodes.AccessNode] = [
             dnode
             for dnode in second_state.data_nodes()
             if (
                 second_scope_dict[dnode] is None
-                and second_state.out_degree(dnode) != 0
-                and dnode.data in data_sources
+                and second_state.in_degree(dnode) == 0
+                and dnode.data in data_producers
             )
         ]
-        assert all(second_state.in_degree(data_sink) == 0 for data_sink in data_sinks)
+        assert all(second_state.in_degree(consumer) == 0 for consumer in data_consumers)
 
         # Move the nodes and edges into from the second into the first state. However
         #  they are still part of the second state, this will be handled afterwards.
@@ -138,15 +157,42 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         #  merge the two nodes, which means that instead of reading from the original
         #  AccessNode (part of the second state) it should now read from the AccessNode
         #  from the first state.
-        for data_sink in data_sinks:
-            data_source: dace_nodes.AccessNode = data_sources[data_sink.data]
+        for data_consumer in data_consumers:
+            data_producer: dace_nodes.AccessNode = data_producers[data_consumer.data]
 
             # Now modify the edge, there is no other modification needed.
-            for old_edge in first_state.out_edges(data_sink):
+            for old_edge in first_state.out_edges(data_consumer):
                 first_state.add_edge(
-                    data_source, old_edge.src_conn, old_edge.dst, old_edge.dst_conn, old_edge.data
+                    data_producer, old_edge.src_conn, old_edge.dst, old_edge.dst_conn, old_edge.data
                 )
-            first_state.remove_node(data_sink)
+            first_state.remove_node(data_consumer)
+
+        # For ADR-18 compatibility we now have to ensure that there is only one sink
+        #  node for any global data in the combined state. The transients are handled
+        #  naturally because we maintain the SSA invariant, furthermore, the inputs
+        #  are already merged.
+        # TODO(phimuell): Improve this merging.
+        global_sink_nodes: dict[str, set[dace_nodes.AccessNode]] = {}
+        for sink_node in first_state.sink_nodes():
+            if not isinstance(sink_node, dace_nodes.AccessNode):
+                continue
+            if sink_node.desc(sdfg).transient:
+                continue
+            if sink_node.data not in global_sink_nodes:
+                global_sink_nodes[sink_node.data] = set()
+            global_sink_nodes[sink_node.data].add(sink_node)
+
+        for sink_nodes in global_sink_nodes.values():
+            if len(sink_nodes) <= 1:
+                continue
+            # We now select one node and redirect all writes to it.
+            final_sink_node = sink_nodes.pop()
+            for sink_node in sink_nodes:
+                for iedge in first_state.in_edges(sink_node):
+                    first_state.add_edge(
+                        iedge.src, iedge.src_conn, final_sink_node, iedge.dst_conn, iedge.data
+                    )
+                first_state.remove_node(sink_node)
 
     def apply(self, _: Any, sdfg: dace.SDFG) -> None:
         first_state: dace.SDFGState = self.first_state
