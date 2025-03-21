@@ -118,6 +118,10 @@ class Dimension:
     def __lt__(self, value: int) -> Domain:
         return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
 
+    def __le__(self, value: int) -> Domain:
+        # TODO add test
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
+
     def __eq__(self, value: Dimension | int) -> bool | Domain:
         if isinstance(value, Dimension):
             return self.value == value.value
@@ -129,7 +133,20 @@ class Dimension:
                 f"Cannot compare Dimension with {type(value)}, only with int or Dimension."
             )
 
-    # TODO add other comparison operators and tests
+    def __ne__(self, value: Dimension | int) -> bool | tuple[Domain, Domain]:
+        # TODO add test
+        if isinstance(value, Dimension):
+            return self.value != value.value
+        elif isinstance(value, int):
+            # TODO probably only within valid embedded context?
+            return (
+                Domain(self, UnitRange(Infinity.NEGATIVE, value)),
+                Domain(self, UnitRange(value + 1, Infinity.POSITIVE)),
+            )
+        else:
+            raise TypeError(
+                f"Cannot compare Dimension with {type(value)}, only with int or Dimension."
+            )
 
 
 class Infinity(enum.Enum):
