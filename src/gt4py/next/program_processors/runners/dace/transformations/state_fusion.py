@@ -61,6 +61,20 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         # TODO(phimuell): Lift this limitation.
         if len(conn_edge.data.assignments) != 0:
             return False
+
+        # If the first state writes to global memory and the second state contains
+        #  an AccessNode that reads and writes to the same global memory then we
+        #  do not apply. This is a very obscure case.
+        first_global_memory_write: set[str] = {
+            dnode.data for dnode in first_state.data_nodes() if not dnode.desc(sdfg).transient
+        }
+        if any(
+            dnode.name in first_global_memory_write
+            for dnode in second_state.data_nodes()
+            if second_state.in_degree(dnode) != 0 and second_state.out_degree(dnode) != 0
+        ):
+            return False
+
         return True
 
     def _move_nodes(self, sdfg: dace.SDFG) -> None:
@@ -102,9 +116,11 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         data_sinks: list[dace_nodes.AccessNode] = [
             dnode
             for dnode in second_state.data_nodes()
-            if second_scope_dict[dnode] is None
-            and second_state.out_degree(dnode) != 0
-            and dnode.data in data_sources
+            if (
+                second_scope_dict[dnode] is None
+                and second_state.out_degree(dnode) != 0
+                and dnode.data in data_sources
+            )
         ]
         assert all(second_state.in_degree(data_sink) == 0 for data_sink in data_sinks)
 
