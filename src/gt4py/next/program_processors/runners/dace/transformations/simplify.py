@@ -147,7 +147,7 @@ def gt_simplify(
             fuse_state_res = sdfg.apply_transformations_repeated(
                 [gtx_transformations.GT4PyStateFusion]
             )
-            if fuse_state_res is not None:
+            if fuse_state_res:
                 at_least_one_xtrans_run = True
                 result = result or {}
                 if "FuseStates" not in result:
