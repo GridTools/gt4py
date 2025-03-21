@@ -79,29 +79,44 @@ def tree_map(
 @overload
 def tree_map(
     *,
+    collection_type: type | tuple[type, ...],
+    result_collection_constructor: Optional[type | Callable] = None,
+) -> Callable[[Callable[_P, _R], ], Callable[..., _R | tuple[_R | tuple, ...]]]: ...
+
+
+@overload
+def tree_map(
+    fun: Callable[_P, _R],
+    *collections: Any,
     collection_type: type | tuple[type, ...] = tuple,
     result_collection_constructor: Optional[type | Callable] = None,
-) -> Callable[
-    [Callable[_P, _R]], Callable[..., Any]
-]: ...  # TODO(havogt): if result_collection_constructor is Callable, improve typing
+) -> _R | tuple[_R | tuple, ...]: ...
 
 
 def tree_map(
     fun: Optional[Callable[_P, _R]] = None,
-    *,
+    *collections: Any,
     collection_type: type | tuple[type, ...] = tuple,
     result_collection_constructor: Optional[type | Callable] = None,
-) -> Callable[..., _R | tuple[_R | tuple, ...]] | Callable[[Callable[_P, _R]], Callable[..., Any]]:
+) -> (
+    Callable[..., _R | tuple[_R | tuple, ...]]
+    | Callable[[Callable[_P, _R]], Callable[..., _R | tuple[_R | tuple, ...]]]
+    | _R
+    | tuple[_R | tuple, ...]
+):
     """
-    Apply `fun` to each entry of (possibly nested) collections (by default `tuple`s).
+    Apply `args[0]` to each entry of (possibly nested) collections (by default `tuple`s).
 
     Args:
-        fun: Function to apply to each entry of the collection.
+        args[0]: Function to apply to each entry of the collection.
         collection_type: Type of the collection to be traversed. Can be a single type or a tuple of types.
-        result_collection_constructor: Type of the collection to be returned. If `None` the same type as `collection_type` is used.
+        result_collection_constructor: Constructor of the collection to be returned. If `None` the same type as `collection_type` is used.
 
     Examples:
         >>> tree_map(lambda x: x + 1)(((1, 2), 3))
+        ((2, 3), 4)
+
+        >>> tree_map(lambda x: x + 1, ((1, 2), 3))
         ((2, 3), 4)
 
         >>> tree_map(lambda x, y: x + y)(((1, 2), 3), ((4, 5), 6))
@@ -129,25 +144,32 @@ def tree_map(
             )
         result_collection_constructor = collection_type
 
-    if fun:
-
-        @functools.wraps(fun)
-        def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
-            if isinstance(args[0], collection_type):
-                assert all(
-                    isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
-                )
-                assert result_collection_constructor is not None
-                return result_collection_constructor(impl(*arg) for arg in zip(*args))
-
-            return fun(  # type: ignore[call-arg, misc] # mypy not smart enough
-                *cast(_P.args, args)
-            )  # mypy doesn't understand that `args` at this point is of type `_P.args`
-
-        return impl
-    else:
+    if fun is None:
         return functools.partial(
             tree_map,
             collection_type=collection_type,
             result_collection_constructor=result_collection_constructor,
         )
+
+    if len(collections) == 0:
+        return functools.partial(
+            tree_map,
+            fun,
+            collection_type=collection_type,
+            result_collection_constructor=result_collection_constructor,
+        )
+
+    @functools.wraps(fun)
+    def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
+        if isinstance(args[0], collection_type):
+            assert all(
+                isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
+            )
+            assert result_collection_constructor is not None
+            return result_collection_constructor(impl(*arg) for arg in zip(*args))
+
+        return fun(  # type: ignore[call-arg, misc] # mypy not smart enough
+            *cast(_P.args, args)
+        )  # mypy doesn't understand that `args` at this point is of type `_P.args`
+
+    return impl(*collections)
