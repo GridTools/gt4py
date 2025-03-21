@@ -296,7 +296,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
                 ),
                 add_profile_info=self.builder.options.backend_opts.get("add_profile_info", False),
                 uses_cuda=uses_cuda,
-                gt_version=2,
             ),
         )
 
