@@ -41,6 +41,7 @@ from .simplify import (
     gt_simplify,
     gt_substitute_compiletime_symbols,
 )
+from .state_fusion import GT4PyStateFusion
 from .strides import (
     gt_change_transient_strides,
     gt_map_strides_to_dst_nested_sdfg,
@@ -57,6 +58,7 @@ __all__ = [
     "GPUSetBlockSize",
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
+    "GT4PyStateFusion",
     "LoopBlocking",
     "MapFusion",
     "MapFusionParallel",

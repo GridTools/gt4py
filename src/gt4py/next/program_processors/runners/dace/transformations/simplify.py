@@ -55,6 +55,8 @@ def gt_simplify(
     This function runs the DaCe simplification pass, but the following passes are
     replaced:
     - `InlineSDFGs`: Instead `gt_inline_nested_sdfg()` will be called.
+    - `FuseStates`: The normal DaCe transformation is still run, but after the DaCe
+        simplify pass has ended the function will run `GT4PyStateFusion`.
 
     Further, the function will run the following passes in addition to DaCe simplify:
     - `SingleStateGlobalSelfCopyElimination`: Special copy pattern that in the context
@@ -129,13 +131,28 @@ def gt_simplify(
             validate=validate,
             validate_all=validate_all,
             verbose=False,
-            skip=(skip | {"InlineSDFGs"}),
+            skip=(skip | {"InlineSDFGs", "FuseStates"}),
         ).apply_pass(sdfg, {})
 
         if simplify_res is not None:
             at_least_one_xtrans_run = True
             result = result or {}
             result.update(simplify_res)
+
+        # Note that it is not nice that we run the state fusion twice, but the to be
+        #  fully effective there are some preparatory transformations that are run in
+        #  DaCe simplify. So the GT4Py transformation is more like a clean up to handle
+        #  the parts DaCe is not able to do.
+        if "FuseStates" not in skip:
+            fuse_state_res = sdfg.apply_transformations_repeated(
+                [gtx_transformations.GT4PyStateFusion]
+            )
+            if fuse_state_res is not None:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "FuseStates" not in result:
+                    result["FuseStates"] = 0
+                result["FuseStates"] += fuse_state_res
 
         # This is the place were we actually want to apply the chain removal.
         if "CopyChainRemover" not in skip:
