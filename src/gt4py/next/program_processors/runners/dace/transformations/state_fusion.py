@@ -75,7 +75,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
             dnode.data for dnode in first_state.data_nodes() if not dnode.desc(sdfg).transient
         }
         if any(
-            dnode.name in first_global_memory_write
+            dnode.data in first_global_memory_write
             for dnode in second_state.data_nodes()
             if second_state.in_degree(dnode) != 0 and second_state.out_degree(dnode) != 0
         ):
