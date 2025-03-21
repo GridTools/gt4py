@@ -15,7 +15,6 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import _get_gridtype
 from gt4py.next.type_system import type_specifications as ts
 
@@ -92,10 +91,13 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                 return domain.as_expr()
             elif cpm.is_call_to(node, "not_eq"):
                 # `IDim != a -> `IDim < a & IDim > a`
-                return self.visit(im.call("and_")(
-                    self.visit(im.less(dim, value), **kwargs),
-                    self.visit(im.greater(dim, value), **kwargs),
-                ), **{**kwargs, "recurse": False})
+                return self.visit(
+                    im.call("and_")(
+                        self.visit(im.less(dim, value), **kwargs),
+                        self.visit(im.greater(dim, value), **kwargs),
+                    ),
+                    **{**kwargs, "recurse": False},
+                )
             else:
                 raise AssertionError()
 

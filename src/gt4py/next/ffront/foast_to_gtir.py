@@ -413,7 +413,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # TODO: use this case again. breaks domain inference in fused_velocity_advection_stencil_1_to_7
         #  because some tuple elements are never accessed and the collapse tuple
         #  does not propagate across concat where
-        #return im.concat_where(domain, true_branch, false_branch)
+        # return im.concat_where(domain, true_branch, false_branch)
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return im.call("broadcast")(*self.visit(node.args, **kwargs))

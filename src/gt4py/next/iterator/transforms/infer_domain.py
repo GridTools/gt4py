@@ -8,14 +8,13 @@
 
 from __future__ import annotations
 
-import functools
 import itertools
 import typing
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Callable, Optional, TypeAlias, Unpack
-from gt4py.next import common, utils
+from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -379,7 +378,7 @@ def _infer_concat_where(
     **kwargs: Unpack[InferenceOptions],
 ) -> tuple[itir.Expr, AccessedDomains]:
     assert cpm.is_call_to(expr, "concat_where")
-    #assert all(isinstance(domain, domain_utils.SymbolicDomain) for domain in utils.flatten_nested_tuple(domain))
+    # assert all(isinstance(domain, domain_utils.SymbolicDomain) for domain in utils.flatten_nested_tuple(domain))
     infered_args_expr = []
     actual_domains: AccessedDomains = {}
     cond, true_field, false_field = expr.args
@@ -387,13 +386,13 @@ def _infer_concat_where(
     cond_complement = domain_utils.domain_complement(symbolic_cond)
 
     for arg in [true_field, false_field]:
+
         @tree_map
         def mapper(d: NonTupleDomainAccess):
             if isinstance(d, DomainAccessDescriptor):
                 return d
             promoted_cond = domain_utils.promote_to_same_dimensions(
-                symbolic_cond if arg == true_field else cond_complement,
-                d
+                symbolic_cond if arg == true_field else cond_complement, d
             )
             return domain_utils.domain_intersection(d, promoted_cond)
 

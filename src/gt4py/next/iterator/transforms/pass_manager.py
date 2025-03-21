@@ -21,8 +21,8 @@ from gt4py.next.iterator.transforms import (
     inline_fundefs,
     inline_lifts,
     nest_concat_wheres,
-    transform_concat_where,
     prune_broadcast,
+    transform_concat_where,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
