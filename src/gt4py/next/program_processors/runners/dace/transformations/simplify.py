@@ -131,7 +131,7 @@ def gt_simplify(
             validate=validate,
             validate_all=validate_all,
             verbose=False,
-            skip=(skip | {"InlineSDFGs", "FuseStates"}),
+            skip=(skip | {"InlineSDFGs"}),
         ).apply_pass(sdfg, {})
 
         if simplify_res is not None:
