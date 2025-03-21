@@ -229,10 +229,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
         return im.ref(node.id)
 
-    def visit_Attribute(self, node: foast.Attribute, **kwargs):
+    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> itir.AxisLiteral:
         if isinstance(node.type, ts.DimensionType):
             return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
-        raise AssertionError()
+        raise AssertionError(
+            "Unexpected attribute access. At this point all accesses should have been removed by `ClosureVarFolding`."
+        )
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         return im.tuple_get(node.index, self.visit(node.value, **kwargs))
@@ -414,8 +416,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         #return im.concat_where(domain, true_branch, false_branch)
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        expr = self.visit(node.args[0], **kwargs)
-        return im.as_fieldop(im.ref("deref"))(expr)
+        return im.call("broadcast")(*self.visit(node.args, **kwargs))
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self._lower_and_map(self.visit(node.func, **kwargs), *node.args)

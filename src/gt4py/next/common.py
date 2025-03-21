@@ -69,7 +69,7 @@ class DimensionKind(StrEnum):
         return self.value
 
 
-_DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 1, DimensionKind.VERTICAL: 2, DimensionKind.LOCAL: 3}
+_DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
 
 
 def dimension_to_implicit_offset(dim: str) -> str:
@@ -1015,7 +1015,21 @@ OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
 
 
-def offset_provider_to_type(offset_provider: OffsetProvider) -> OffsetProviderType:
+def is_offset_provider(obj: Any) -> TypeGuard[OffsetProvider]:
+    if not isinstance(obj, Mapping):
+        return False
+    return all(isinstance(el, OffsetProviderElem) for el in obj.values())
+
+
+def is_offset_provider_type(obj: Any) -> TypeGuard[OffsetProviderType]:
+    if not isinstance(obj, Mapping):
+        return False
+    return all(isinstance(el, OffsetProviderTypeElem) for el in obj.values())
+
+
+def offset_provider_to_type(
+    offset_provider: OffsetProvider | OffsetProviderType,
+) -> OffsetProviderType:
     return {
         k: v.__gt_type__() if isinstance(v, Connectivity) else v for k, v in offset_provider.items()
     }
@@ -1145,7 +1159,7 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     Find an ordering of multiple lists of dimensions.
 
     The resulting list contains all unique dimensions from the input lists,
-    sorted first by dims_kind_order, i.e., `Dimension.kind` (`HORIZONTAL` < `VERTICAL` < `LOCAL`) and then
+    sorted first by dims_kind_order, i.e., `Dimension.kind` (`HORIZONTAL` < `LOCAL` < `VERTICAL`) and then
     lexicographically by `Dimension.value`.
 
     Examples:
@@ -1161,9 +1175,9 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         Traceback (most recent call last):
         ...
         ValueError: Dimensions 'K[vertical], J[horizontal]' are not ordered correctly, expected 'J[horizontal], K[vertical]'.
-        >>> promote_dims([I, K], [J, E2V]) == [I, J, K, E2V]
+        >>> promote_dims([I, K], [J, E2V]) == [I, J, E2V, K]
         True
-        >>> promote_dims([I, E2C], [K, E2V])
+        >>> promote_dims([I, E2C], [E2V, K])
         Traceback (most recent call last):
         ...
         ValueError: There are more than one dimension with DimensionKind 'LOCAL'.
