@@ -122,7 +122,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     def make_field(
         self,
         data_node: dace.nodes.AccessNode,
-        data_type: ts.FieldType | ts.ScalarType,
+        data_type: ts.FieldType,
     ) -> gtir_builtin_translators.FieldopData:
         """Retrieve the field data descriptor including the domain offset information."""
         ...
@@ -248,7 +248,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def make_field(
         self,
         data_node: dace.nodes.AccessNode,
-        data_type: ts.FieldType | ts.ScalarType,
+        data_type: ts.FieldType,
     ) -> gtir_builtin_translators.FieldopData:
         """
         Helper method to build the field data type associated with a data access node.
@@ -271,8 +271,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             The descriptor associated with the SDFG data storage, filled with field origin.
         """
-        if isinstance(data_type, ts.ScalarType):
-            return gtir_builtin_translators.FieldopData(data_node, data_type, origin=())
         local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
         if len(local_dims) == 0:
             # do nothing: the field domain consists of all global dimensions
@@ -495,18 +493,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert sink_states[0] == head_state
 
         def make_temps(
-            field: gtir_builtin_translators.FieldopData,
+            src: gtir_builtin_translators.FieldopData,
         ) -> gtir_builtin_translators.FieldopData:
-            desc = sdfg.arrays[field.dc_node.data]
-            if desc.transient or not use_temp:
-                return field
+            src_desc = sdfg.arrays[src.dc_node.data]
+            if src_desc.transient or not use_temp:
+                return src
             else:
-                temp, _ = self.add_temp_array_like(sdfg, desc)
-                temp_node = head_state.add_access(temp)
+                dst, dst_desc = self.add_temp_array_like(sdfg, src_desc)
+                dst_node = head_state.add_access(dst)
                 head_state.add_nedge(
-                    field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
+                    src.dc_node,
+                    dst_node,
+                    dace.Memlet(
+                        data=dst,
+                        subset=dace.subsets.Range.from_array(dst_desc),
+                        other_subset=dace.subsets.Range.from_array(src_desc),
+                    ),
                 )
-                return gtir_builtin_translators.FieldopData(temp_node, field.gt_type, field.origin)
+                return gtir_builtin_translators.FieldopData(dst_node, src.gt_type, src.origin)
 
         temp_result = gtx_utils.tree_map(make_temps)(result)
         return list(gtx_utils.flatten_nested_tuple((temp_result,)))
