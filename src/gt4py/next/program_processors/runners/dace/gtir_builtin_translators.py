@@ -605,12 +605,10 @@ def _construct_if_branch_output(
     assert dims == out_type.dims
 
     if isinstance(out_type.dtype, ts.ScalarType):
-        assert sym.type.dims == out_type.dims
         dtype = gtx_dace_utils.as_dace_type(out_type.dtype)
     else:
         assert isinstance(out_type.dtype, ts.ListType)
         assert out_type.dtype.offset_type is not None
-        assert sym.type.dims == [*out_type.dims, out_type.dtype.offset_type]
         assert isinstance(out_type.dtype.element_type, ts.ScalarType)
         dtype = gtx_dace_utils.as_dace_type(out_type.dtype.element_type)
         offset_provider_type = sdfg_builder.get_offset_provider_type(

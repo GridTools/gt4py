@@ -1822,7 +1822,6 @@ def test_gtir_let_lambda_with_cond():
         assert np.allclose(b, a if s else a * 2)
 
 
-@pytest.mark.xfail(reason="'target_domain' cannot be 'NEVER' unless `allow_uninferred=True`")
 def test_gtir_let_lambda_with_tuple1():
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, im.minus("size", 1))})
     testee = gtir.Program(
@@ -1852,7 +1851,11 @@ def test_gtir_let_lambda_with_tuple1():
     a = np.random.rand(N)
     b = np.random.rand(N)
 
-    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+    # TODO(edopao): call `build_dace_sdfg` as in all other tests, once this error is fixed
+    #   in domain inference: 'target_domain' cannot be 'NEVER' unless `allow_uninferred=True`
+    sdfg = dace_backend.build_sdfg_from_gtir(
+        testee, CARTESIAN_OFFSETS, disable_field_origin_on_program_arguments=True
+    )
 
     z_fields = (np.zeros_like(a), np.zeros_like(a))
     a_ref = np.concatenate((z_fields[0][:1], a[1 : N - 1], z_fields[0][N - 1 :]))
