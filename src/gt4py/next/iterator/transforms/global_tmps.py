@@ -190,11 +190,15 @@ def create_global_tmps(
     arguments into temporaries.
     """
     # TODO: document why to keep existing domains, add test
-    offset_provider_type = common.offset_provider_to_type(offset_provider)
     program = infer_domain.infer_program(
-        program, offset_provider=offset_provider, symbolic_domain_sizes=symbolic_domain_sizes, keep_existing_domains=True
+        program,
+        offset_provider=offset_provider,
+        symbolic_domain_sizes=symbolic_domain_sizes,
+        keep_existing_domains=True,
     )
-    program = type_inference.infer(program, offset_provider_type=common.offset_provider_to_type(offset_provider))
+    program = type_inference.infer(
+        program, offset_provider_type=common.offset_provider_to_type(offset_provider)
+    )
 
     if not uids:
         uids = eve_utils.UIDGenerator(prefix="__tmp")

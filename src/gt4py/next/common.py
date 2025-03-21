@@ -109,6 +109,28 @@ class Dimension:
     def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
 
+    def __gt__(self, value: int) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
+
+    def __ge__(self, value: int) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value, Infinity.POSITIVE),))
+
+    def __lt__(self, value: int) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
+
+    def __eq__(self, value: Dimension | int) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value == value.value
+        elif isinstance(value, int):
+            # TODO probably only within valid embedded context?
+            return Domain(dims=(self,), ranges=(UnitRange(value, value + 1),))
+        else:
+            raise TypeError(
+                f"Cannot compare Dimension with {type(value)}, only with int or Dimension."
+            )
+
+    # TODO add other comparison operators and tests
+
 
 class Infinity(enum.Enum):
     """Describes an unbounded `UnitRange`."""
@@ -499,6 +521,24 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             )
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
+
+    def __or__(self, other: Domain) -> Domain:
+        # TODO support arbitrary union of domains
+        # TODO add tests
+        if self.ndim > 1 or other.ndim > 1:
+            raise NotImplementedError("Union of multidimensional domains is not supported.")
+        if self.ndim == 0:
+            return other
+        if other.ndim == 0:
+            return self
+        sorted_ = sorted((self, other), key=lambda x: x.ranges[0].start)
+        if sorted_[0].ranges[0].stop >= sorted_[1].ranges[0].start:
+            return Domain(
+                dims=(self.dims[0],),
+                ranges=(UnitRange(sorted_[0].ranges[0].start, sorted_[1].ranges[0].stop),),
+            )
+        else:
+            return (sorted_[0], sorted_[1])
 
     @functools.cached_property
     def slice_at(self) -> utils.IndexerCallable[slice, Domain]:
