@@ -229,10 +229,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
         return im.ref(node.id)
 
-    def visit_Attribute(self, node: foast.Attribute, **kwargs):
+    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> itir.AxisLiteral:
         if isinstance(node.type, ts.DimensionType):
             return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
-        raise AssertionError()
+        raise AssertionError(
+            "Unexpected attribute access. At this point all accesses should have been removed by `ClosureVarFolding`."
+        )
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         return im.tuple_get(node.index, self.visit(node.value, **kwargs))
@@ -403,11 +405,18 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         domain, true_branch, false_branch = self.visit(node.args)
-        return im.concat_where(domain, true_branch, false_branch)
+        return lowering_utils.process_elements(
+            lambda tb, fb: im.call("concat_where")(domain, tb, fb),
+            (true_branch, false_branch),
+            node.type,
+        )
+        # TODO: use this case again. breaks domain inference in fused_velocity_advection_stencil_1_to_7
+        #  because some tuple elements are never accessed and the collapse tuple
+        #  does not propagate across concat where
+        #return im.concat_where(domain, true_branch, false_branch)
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        expr = self.visit(node.args[0], **kwargs)
-        return im.as_fieldop(im.ref("deref"))(expr)
+        return im.call("broadcast")(*self.visit(node.args, **kwargs))
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self._lower_and_map(self.visit(node.func, **kwargs), *node.args)

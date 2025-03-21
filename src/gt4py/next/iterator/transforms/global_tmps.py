@@ -176,7 +176,10 @@ def _transform_stmt(
 
 def create_global_tmps(
     program: itir.Program,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
+    #: more details.
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
     *,
     uids: Optional[eve_utils.UIDGenerator] = None,
 ) -> itir.Program:
@@ -187,12 +190,11 @@ def create_global_tmps(
     arguments into temporaries.
     """
     # TODO: document why to keep existing domains, add test
+    offset_provider_type = common.offset_provider_to_type(offset_provider)
     program = infer_domain.infer_program(
-        program, offset_provider=offset_provider, keep_existing_domains=True
+        program, offset_provider=offset_provider, symbolic_domain_sizes=symbolic_domain_sizes, keep_existing_domains=True
     )
-    program = type_inference.infer(
-        program, offset_provider_type=common.offset_provider_to_type(offset_provider)
-    )
+    program = type_inference.infer(program, offset_provider_type=common.offset_provider_to_type(offset_provider))
 
     if not uids:
         uids = eve_utils.UIDGenerator(prefix="__tmp")

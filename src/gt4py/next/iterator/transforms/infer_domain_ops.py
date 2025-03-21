@@ -92,10 +92,10 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
                 return domain.as_expr()
             elif cpm.is_call_to(node, "not_eq"):
                 # `IDim != a -> `IDim < a & IDim > a`
-                return im.call("and_")(
+                return self.visit(im.call("and_")(
                     self.visit(im.less(dim, value), **kwargs),
                     self.visit(im.greater(dim, value), **kwargs),
-                )
+                ), **{**kwargs, "recurse": False})
             else:
                 raise AssertionError()
 

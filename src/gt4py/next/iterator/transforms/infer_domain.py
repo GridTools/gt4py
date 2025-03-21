@@ -15,12 +15,13 @@ import typing
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Callable, Optional, TypeAlias, Unpack
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
     domain_utils,
     ir_makers as im,
+    misc as ir_misc,
 )
 from gt4py.next.iterator.ir_utils.domain_utils import SymbolicDomain
 from gt4py.next.iterator.transforms import constant_folding, trace_shifts
@@ -53,7 +54,7 @@ AccessedDomains: TypeAlias = dict[str, DomainAccess]
 
 
 class InferenceOptions(typing.TypedDict):
-    offset_provider: common.OffsetProvider
+    offset_provider: common.OffsetProvider | common.OffsetProviderType
     symbolic_domain_sizes: Optional[dict[str, str]]
     allow_uninferred: bool
     keep_existing_domains: bool
@@ -127,8 +128,8 @@ def _canonicalize_domain_structure(
     ... )
     True
     """
-    if d1 is DomainAccessDescriptor.NEVER and isinstance(d2, tuple):
-        return _canonicalize_domain_structure((DomainAccessDescriptor.NEVER,) * len(d2), d2)
+    if not isinstance(d1, tuple) and isinstance(d2, tuple):
+        return _canonicalize_domain_structure((d1,) * len(d2), d2)
     if d2 is DomainAccessDescriptor.NEVER and isinstance(d1, tuple):
         return _canonicalize_domain_structure(d1, (DomainAccessDescriptor.NEVER,) * len(d1))
     if isinstance(d1, tuple) and isinstance(d2, tuple):
@@ -164,7 +165,7 @@ def _extract_accessed_domains(
     stencil: itir.Expr,
     input_ids: list[str],
     target_domain: NonTupleDomainAccess,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]],
 ) -> dict[str, NonTupleDomainAccess]:
     accessed_domains: dict[str, NonTupleDomainAccess] = {}
@@ -197,7 +198,7 @@ def _infer_as_fieldop(
     applied_fieldop: itir.FunCall,
     target_domain: DomainAccess,
     *,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]],
     allow_uninferred: bool,
     keep_existing_domains: bool,
@@ -378,23 +379,25 @@ def _infer_concat_where(
     **kwargs: Unpack[InferenceOptions],
 ) -> tuple[itir.Expr, AccessedDomains]:
     assert cpm.is_call_to(expr, "concat_where")
-    # assert isinstance(domain, domain_utils.SymbolicDomain)  # todo: per el assert
+    #assert all(isinstance(domain, domain_utils.SymbolicDomain) for domain in utils.flatten_nested_tuple(domain))
     infered_args_expr = []
     actual_domains: AccessedDomains = {}
     cond, true_field, false_field = expr.args
     symbolic_cond = domain_utils.SymbolicDomain.from_expr(cond)
+    cond_complement = domain_utils.domain_complement(symbolic_cond)
+
     for arg in [true_field, false_field]:
-        if arg == true_field:
-            extended_cond = tree_map(
-                functools.partial(domain_utils.promote_to_same_dimensions, symbolic_cond)
-            )(domain)
-            domain_ = tree_map(domain_utils.domain_intersection)(domain, extended_cond)
-        elif arg == false_field:
-            cond_complement = domain_utils.domain_complement(symbolic_cond)
-            extended_cond_complement = tree_map(
-                functools.partial(domain_utils.promote_to_same_dimensions, cond_complement)
-            )(domain)
-            domain_ = tree_map(domain_utils.domain_intersection)(domain, extended_cond_complement)
+        @tree_map
+        def mapper(d: NonTupleDomainAccess):
+            if isinstance(d, DomainAccessDescriptor):
+                return d
+            promoted_cond = domain_utils.promote_to_same_dimensions(
+                symbolic_cond if arg == true_field else cond_complement,
+                d
+            )
+            return domain_utils.domain_intersection(d, promoted_cond)
+
+        domain_ = mapper(domain)
 
         infered_arg_expr, actual_domains_arg = infer_expr(arg, domain_, **kwargs)
         infered_args_expr.append(infered_arg_expr)
@@ -402,6 +405,19 @@ def _infer_concat_where(
 
     result_expr = im.call(expr.fun)(cond, *infered_args_expr)
     return result_expr, actual_domains
+
+
+def _infer_broadcast(
+    expr: itir.Expr,
+    domain: DomainAccess,
+    **kwargs: Unpack[InferenceOptions],
+) -> tuple[itir.Expr, AccessedDomains]:
+    assert cpm.is_call_to(expr, "broadcast")
+    # We just propagate the domain to the first argument. Restriction of the domain is based
+    # on the type and occurs in a general setting (not yet merged #1853).
+    infered_expr, actual_domains = infer_expr(expr.args[0], domain, **kwargs)
+
+    return ir_misc.with_altered_arg(expr, 0, infered_expr), actual_domains
 
 
 def _infer_expr(
@@ -425,6 +441,8 @@ def _infer_expr(
         return _infer_if(expr, domain, **kwargs)
     elif cpm.is_call_to(expr, "concat_where"):
         return _infer_concat_where(expr, domain, **kwargs)
+    elif cpm.is_call_to(expr, "broadcast"):
+        return _infer_broadcast(expr, domain, **kwargs)
     elif (
         cpm.is_call_to(expr, builtins.ARITHMETIC_BUILTINS)
         or cpm.is_call_to(expr, builtins.TYPE_BUILTINS)
@@ -439,7 +457,7 @@ def infer_expr(
     expr: itir.Expr,
     domain: DomainAccess,
     *,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     allow_uninferred: bool = False,
     keep_existing_domains: bool = False,
@@ -511,7 +529,7 @@ def _infer_stmt(
 def infer_program(
     program: itir.Program,
     *,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     allow_uninferred: bool = False,
     # TODO: add test

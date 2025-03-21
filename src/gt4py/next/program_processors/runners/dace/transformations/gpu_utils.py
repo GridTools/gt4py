@@ -92,15 +92,10 @@ def gt_gpu_transformation(
     gtx_transformations.gt_simplify(sdfg)
 
     if try_removing_trivial_maps:
-        # In DaCe a Tasklet, outside of a Map, can not write into an _array_ that is on
-        #  GPU. `sdfg.apply_gpu_transformations()` will wrap such Tasklets in a Map. So
-        #  we might end up with lots of these trivial Maps, each requiring a separate
-        #  kernel launch. To prevent this we will combine these trivial maps, if
-        #  possible, with their downstream maps.
-        sdfg.apply_transformations_once_everywhere(
-            TrivialGPUMapElimination(),
-            validate=False,
-            validate_all=False,
+        gt_remove_trivial_gpu_maps(
+            sdfg=sdfg,
+            validate=validate,
+            validate_all=validate_all,
         )
         gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
 
@@ -297,7 +292,14 @@ def _gt_expand_non_standard_memlets_sdfg(
             # Turn unsupported copy to a map
             try:
                 dace_transformation.dataflow.CopyToMap.apply_to(
-                    sdfg, save=False, annotate=False, a=a, b=b
+                    sdfg,
+                    save=False,
+                    annotate=False,
+                    a=a,
+                    b=b,
+                    options={
+                        "ignore_strides": True
+                    },  # apply 'CopyToMap' even if src/dst strides are different
                 )
             except ValueError:  # If transformation doesn't match, continue normally
                 continue
@@ -569,6 +571,80 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         gpu_map.gpu_block_size = block_size
         if launch_bounds is not None:  # Note: empty string has a meaning in DaCe
             gpu_map.gpu_launch_bounds = launch_bounds
+
+
+def gt_remove_trivial_gpu_maps(
+    sdfg: dace.SDFG,
+    validate: bool = True,
+    validate_all: bool = False,
+) -> dace.SDFG:
+    """Removes trivial maps that were created by the GPU transformation.
+
+    The main problem is that a Tasklet outside of a Map cannot write into an
+    _array_ that is on GPU. `sdfg.apply_gpu_transformations()` will wrap such
+    Tasklets in a Map. The `GT4PyMoveTaskletIntoMap` pass, that runs before,
+    but only works if the tasklet is adjacent to a map.
+
+    It first tries to promote them such that they can be fused in other non-trivial
+    maps, it will then also perform fusion on them, to reduce the number of kernel
+    calls.
+
+    Args:
+        sdfg: The SDFG that we process.
+        validate: Perform validation at the end of the function.
+        validate_all: Perform validation also on intermediate steps.
+    """
+
+    # First we try to promote and fuse them with other non-trivial maps.
+    sdfg.apply_transformations_once_everywhere(
+        TrivialGPUMapElimination(
+            do_not_fuse=False,
+            only_gpu_maps=True,
+        ),
+        validate=False,
+        validate_all=False,
+    )
+    gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+
+    # Now we try to fuse them together, however, we restrict the fusion to trivial
+    #  GPU map.
+    def restrict_to_trivial_gpu_maps(
+        self: gtx_transformations.MapFusion,
+        map_entry_1: dace_nodes.MapEntry,
+        map_entry_2: dace_nodes.MapEntry,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
+        permissive: bool,
+    ) -> bool:
+        for map_entry in [map_entry_1, map_entry_2]:
+            _map = map_entry.map
+            if len(_map.params) != 1:
+                return False
+            if _map.range[0][0] != _map.range[0][1]:
+                return False
+            if _map.schedule not in [
+                dace.dtypes.ScheduleType.GPU_Device,
+                dace.dtypes.ScheduleType.GPU_Default,
+            ]:
+                return False
+        return True
+
+    sdfg.apply_transformations_repeated(
+        [
+            gtx_transformations.MapFusionSerial(
+                only_toplevel_maps=True,
+                apply_fusion_callback=restrict_to_trivial_gpu_maps,
+            ),
+            gtx_transformations.MapFusionParallel(
+                only_toplevel_maps=True,
+                apply_fusion_callback=restrict_to_trivial_gpu_maps,
+            ),
+        ],
+        validate=validate,
+        validate_all=validate_all,
+    )
+
+    return sdfg
 
 
 @dace_properties.make_properties
