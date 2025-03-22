@@ -94,7 +94,7 @@ def expression_test_cases():
             im.call("cartesian_domain")(
                 im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
             ),
-            it_ts.DomainType(dims=[IDim]),
+            ts.DomainType(dims=[IDim]),
         ),
         (
             im.call("unstructured_domain")(
@@ -102,7 +102,7 @@ def expression_test_cases():
                     itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
                 )
             ),
-            it_ts.DomainType(dims=[Vertex]),
+            ts.DomainType(dims=[Vertex]),
         ),
         # make_tuple
         (
@@ -215,6 +215,23 @@ def expression_test_cases():
             ),
             ts.TupleType(types=[float_i_field, float_i_field]),
         ),
+        # concat_where
+        (
+            im.concat_where(
+                im.domain(common.GridType.CARTESIAN, {IDim: (0, 1)}),
+                im.ref("a", float_i_field),
+                im.ref("b", float_ij_field),
+            ),
+            float_ij_field,
+        ),
+        (
+            im.concat_where(
+                im.domain(common.GridType.CARTESIAN, {IDim: (0, 1)}),
+                im.ref("a", ts.TupleType(types=[float_i_field] * 2)),
+                im.ref("b", ts.TupleType(types=[float_i_field] * 2)),
+            ),
+            ts.TupleType(types=[float_i_field] * 2),
+        ),
     )
 
 
@@ -320,7 +337,7 @@ def test_cartesian_fencil_definition():
 
     program_type = it_ts.ProgramType(params={"inp": float_i_field, "out": float_i_field})
     assert result.type == program_type
-    domain_type = it_ts.DomainType(dims=[IDim])
+    domain_type = ts.DomainType(dims=[IDim])
     assert result.body[0].domain.type == domain_type
     assert result.body[0].expr.type == float_i_field
     assert result.body[0].target.type == float_i_field
@@ -359,7 +376,7 @@ def test_unstructured_fencil_definition():
         params={"inp": float_edge_k_field, "out": float_vertex_k_field}
     )
     assert result.type == program_type
-    domain_type = it_ts.DomainType(dims=[Vertex, KDim])
+    domain_type = ts.DomainType(dims=[Vertex, KDim])
     assert result.body[0].domain.type == domain_type
     assert result.body[0].expr.type == float_vertex_k_field
     assert result.body[0].target.type == float_vertex_k_field
