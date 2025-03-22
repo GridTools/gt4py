@@ -129,9 +129,7 @@ class Dimension:
             # TODO probably only within valid embedded context?
             return Domain(dims=(self,), ranges=(UnitRange(value, value + 1),))
         else:
-            raise TypeError(
-                f"Cannot compare Dimension with {type(value)}, only with int or Dimension."
-            )
+            return False
 
     def __ne__(self, value: Dimension | int) -> bool | tuple[Domain, Domain]:
         # TODO add test
@@ -144,9 +142,7 @@ class Dimension:
                 Domain(self, UnitRange(value + 1, Infinity.POSITIVE)),
             )
         else:
-            raise TypeError(
-                f"Cannot compare Dimension with {type(value)}, only with int or Dimension."
-            )
+            return True
 
 
 class Infinity(enum.Enum):
