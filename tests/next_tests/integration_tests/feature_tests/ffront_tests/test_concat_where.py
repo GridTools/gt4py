@@ -18,6 +18,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
 )
 
+# TODO test non-Python int for embedded comparison
+
 
 @pytest.mark.uses_frontend_concat_where
 def test_concat_where_simple(cartesian_case):

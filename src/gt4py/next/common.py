@@ -109,33 +109,33 @@ class Dimension:
     def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
 
-    def __gt__(self, value: int) -> Domain:
+    def __gt__(self, value: core_defs.IntegralScalar) -> Domain:
         return Domain(dims=(self,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
 
-    def __ge__(self, value: int) -> Domain:
+    def __ge__(self, value: core_defs.IntegralScalar) -> Domain:
         return Domain(dims=(self,), ranges=(UnitRange(value, Infinity.POSITIVE),))
 
-    def __lt__(self, value: int) -> Domain:
+    def __lt__(self, value: core_defs.IntegralScalar) -> Domain:
         return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
 
-    def __le__(self, value: int) -> Domain:
+    def __le__(self, value: core_defs.IntegralScalar) -> Domain:
         # TODO add test
         return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
 
-    def __eq__(self, value: Dimension | int) -> bool | Domain:
+    def __eq__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
         if isinstance(value, Dimension):
             return self.value == value.value
-        elif isinstance(value, int):
+        elif isinstance(value, core_defs.INTEGRAL_TYPES):
             # TODO probably only within valid embedded context?
             return Domain(dims=(self,), ranges=(UnitRange(value, value + 1),))
         else:
             return False
 
-    def __ne__(self, value: Dimension | int) -> bool | tuple[Domain, Domain]:
+    def __ne__(self, value: Dimension | core_defs.IntegralScalar) -> bool | tuple[Domain, Domain]:
         # TODO add test
         if isinstance(value, Dimension):
             return self.value != value.value
-        elif isinstance(value, int):
+        elif isinstance(value, core_defs.INTEGRAL_TYPES):
             # TODO probably only within valid embedded context?
             return (
                 Domain(self, UnitRange(Infinity.NEGATIVE, value)),
