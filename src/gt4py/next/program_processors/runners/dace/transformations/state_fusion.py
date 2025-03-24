@@ -203,6 +203,10 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         The function checks if by the elimination of states creates read write
         conflicts. Because of the structure outlined by ADR-18 it only checks this
         for the global data, since transients are by definition written only once.
+
+        Note:
+            The implementation is too restrictive and needs to be rewritten, it has
+            to consider concurrent subgraphs.
         """
         first_state: dace.SDFGState = self.first_state
         first_scope_dict = first_state.scope_dict()

@@ -298,6 +298,52 @@ def _make_swapping_sdfg() -> dace.SDFG:
     return sdfg
 
 
+def _make_non_concurrent_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
+    sdfg = dace.SDFG(util.unique_name("non_concurrent_sdfg"))
+    state1 = sdfg.add_state(is_start_block=True)
+    state2 = sdfg.add_state_after(state1)
+
+    for name in ["x", "y", "t1", "t2"]:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=name.startswith("t"),
+        )
+
+    state1.add_mapped_tasklet(
+        "comp1",
+        map_ranges={"__i": "0:10"},
+        inputs={
+            "__in1": dace.Memlet("x[__i]"),
+            "__in2": dace.Memlet("y[__i]"),
+        },
+        code="__out1 = __in1 + __in2\n__out2 = __in1 - __in2",
+        outputs={
+            "__out1": dace.Memlet("t1[__i]"),
+            "__out2": dace.Memlet("t2[__i]"),
+        },
+        external_edges=True,
+    )
+
+    state2.add_mapped_tasklet(
+        "comp2",
+        map_ranges={"__i": "0:10"},
+        inputs={
+            "__in1": dace.Memlet("t1[__i]"),
+            "__in2": dace.Memlet("t2[__i]"),
+        },
+        code="__out1 = __in1 * 2.\n__out2 = __in2 * 3.",
+        outputs={
+            "__out1": dace.Memlet("y[__i]"),
+            "__out2": dace.Memlet("x[__i]"),
+        },
+        external_edges=True,
+    )
+
+    return sdfg, state1, state2
+
+
 def test_simple_fusion():
     sdfg, state1, state2 = _make_simple_two_state_sdfg()
     assert sdfg.start_block is state1
@@ -520,3 +566,18 @@ def test_swapping():
     sdfg.validate()
 
     assert nb_applied == 0
+
+
+def test_non_concurrent_data_dependency():
+    sdfg, state1, state2 = _make_non_concurrent_sdfg()
+
+    # Because the intermediate are generate in one go, they should be considered as
+    #  one and thus the transformation should apply.
+    nb_applied = sdfg.apply_transformations_repeated(gtx_transformations.GT4PyStateFusion)
+    sdfg.validate()
+
+    assert nb_applied == 1
+    assert sdfg.start_block is state1
+    assert sdfg.number_of_nodes() == 1
+    assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 6
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
