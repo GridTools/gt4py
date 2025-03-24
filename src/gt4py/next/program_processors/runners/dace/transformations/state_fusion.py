@@ -97,7 +97,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         self,
         sdfg: dace.SDFG,
     ) -> bool:
-        """Return `True` if there are no conflicts."""
+        """Return `True` if there are conflicts."""
 
         if self._check_for_transient_conflicts(sdfg=sdfg):
             return True
@@ -147,10 +147,10 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         self,
         sdfg: dace.SDFG,
     ) -> bool:
-        """Checks if wcr edges prevent the nodes.
+        """Checks if wcr edges prevent two consecutive states to be fused.
 
         If both states contains a write to the same data, and one of them has a set
-        `wcr` then we can not remove the states. Note that we allow the case that
+        `wcr` then we can not merge the states. Note that we allow the case that
         the first state contains a `wcr` write to a data and the second state contains
         a read to it.
         """
@@ -159,33 +159,37 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         second_state: dace.SDFGState = self.second_state
         second_scope_dict = second_state.scope_dict()
 
-        # Collect the names of all data that in the first state are written to.
-        first_state_writes: set[str] = {
-            dnode.data
+        # Collect the AccessNodes that are written to in the first state.
+        first_state_writes: list[dace_nodes.AccessNode] = [
+            dnode
             for dnode in first_state.data_nodes()
             if first_scope_dict[dnode] is None and first_state.in_degree(dnode) != 0
-        }
+        ]
+        first_state_writes_names: set[str] = {ac.data for ac in first_state_writes}
 
-        # Collect all the nodes in the second state that writes to data. Note that it
-        #  is possible that there are multiple nodes that writes to the data, in case
-        #  of global data. It is a very edge case but possible.
-        second_state_writes: dict[str, set[dace_nodes.AccessNode]] = {}
-        for second_dnode in second_state.data_nodes():
-            if second_dnode.data not in first_state_writes:
-                continue
-            if second_scope_dict[second_dnode] is not None:
-                continue
-            if second_state.in_degree(second_dnode) == 0:
-                continue
-            if second_dnode.data not in second_state_writes:
-                second_state_writes[second_dnode.data] = set()
-            second_state_writes[second_dnode.data].add(second_dnode)
+        # Now collect all the AccessNodes that are written to in the second state.
+        second_state_writes: list[dace_nodes.AccessNode] = [
+            dnode
+            for dnode in second_state.data_nodes()
+            if second_scope_dict[dnode] is None and second_state.in_degree(dnode) != 0
+        ]
+        second_state_writes_names: set[str] = {ac.data for ac in second_state_writes}
 
-        # Check if the second state contains a `wcr` write to a data container the
-        #  first state also writes to. It does not matter how the first state writes.
-        for second_dnodes in second_state_writes.values():
-            for second_dnode in second_dnodes:
-                if any(iedge.data.wcr is not None for iedge in second_state.in_edges(second_dnode)):
+        # If there is no data that is written to in both state then there is no conflict.
+        common_write_data: set[str] = first_state_writes_names.intersection(
+            second_state_writes_names
+        )
+        if second_state_writes_names.isdisjoint(first_state_writes_names):
+            return False
+
+        for state, ac_nodes in [
+            (first_state, first_state_writes),
+            (second_state, second_state_writes),
+        ]:
+            for ac in ac_nodes:
+                if ac.data not in common_write_data:
+                    continue
+                if any(iedge.data.wcr is not None for iedge in state.in_edges(ac)):
                     return True
 
         return False
@@ -375,13 +379,13 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 continue
             data_producers[dnode.data] = dnode
 
-        # Now we will look for all data consumers, i.e. nodes that are reading data from
-        #  the first state. This are all AccessNodes have a zero indegree and are
-        #  listed in `data_producers`. Note that these nodes might have to be
-        #  replaced with the nodes from the source.
-        #  Note we can not use a `dict` here because it is possible, not fully not
-        #  compliant with ADR-18 though, that there are multiple AccessNodes that
-        #  refers to the same data.
+        # Now we will look for all data consumers, i.e. nodes that are reading data
+        #  from the first state. These are all AccessNodes that have a zero indegree
+        #  and that are listed in `data_producers`. Note that these nodes might have
+        #  to be replaced with the nodes from the source.
+        #  Note we can not use a `dict` here because it is possible, although not
+        #  fully compliant to ADR-18 though, that there are multiple AccessNodes
+        #  referring to the same data.
         data_consumers: list[dace_nodes.AccessNode] = [
             dnode
             for dnode in second_state.data_nodes()
