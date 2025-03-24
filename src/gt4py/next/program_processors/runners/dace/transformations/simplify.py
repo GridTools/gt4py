@@ -143,9 +143,9 @@ def gt_simplify(
             result = result or {}
             result.update(simplify_res)
 
-        # Note that it is not nice that we run the state fusion twice, but the to be
-        #  fully effective there are some preparatory transformations that are run in
-        #  DaCe simplify. So the GT4Py transformation is more like a clean up to handle
+        # Note that it is not nice that we run the state fusion twice, but to be fully
+        #  effective there are some preparatory transformations that are run in DaCe
+        #  simplify. So the GT4Py transformation is more like a clean up to handle
         #  the parts DaCe is not able to do.
         if "FuseStates" not in skip:
             fuse_state_res = sdfg.apply_transformations_repeated(

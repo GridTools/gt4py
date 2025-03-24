@@ -13,7 +13,6 @@ from dace import transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
 
 
-# @dace_properties.make_properties
 @dace_transformation.explicit_cf_compatible
 class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
     """Implements a state fusion transformation that is specific to GT4Py.
@@ -24,8 +23,8 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
 
     The transformation can only be applied in the following cases:
     - The first state has only one outgoing edge, that connects it with the second state.
-    - The second only has one incoming edge, that connects is with the first state.
-    - The connecting edge is unconditionally and does not contains any assignments.
+    - The second only has one incoming edge, that connects it with the first state.
+    - The connecting edge is unconditional and does not contain any assignments.
     - If global data is written to in the first state and there is an AccessNode that
         reads and writes to the same data in the second state the transformation
         does not apply.
@@ -116,7 +115,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
             if (first_scope_dict[dnode] is None and first_state.in_degree(dnode) != 0)
         }
 
-        # Adding globals that that only read.
+        # Adding globals that are only read.
         for dnode in first_state.data_nodes():
             if dnode.desc(sdfg).transient:
                 continue
@@ -127,11 +126,12 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
             data_producers[dnode.data] = dnode
 
         # Now we will look for all data consumers, i.e. nodes that are reading data from
-        #  the first state. This are all AccessNodes not have a zero in degree
-        #  and are listed in `data_producers`. Note that these nodes might have to be
+        #  the first state. This are all AccessNodes have a zero indegree and are
+        #  listed in `data_producers`. Note that these nodes might have to be
         #  replaced with the nodes from the source.
-        #  Note we can not use a `dict` here because it is possible, not fully legal
-        #  though, that there are multiple AccessNodes that refers to the same data.
+        #  Note we can not use a `dict` here because it is possible, not fully not
+        #  compliant with ADR18 though, that there are multiple AccessNodes that
+        #  refers to the same data.
         data_consumers: list[dace_nodes.AccessNode] = [
             dnode
             for dnode in second_state.data_nodes()
@@ -141,7 +141,6 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 and dnode.data in data_producers
             )
         ]
-        assert all(second_state.in_degree(consumer) == 0 for consumer in data_consumers)
 
         # Move the nodes and edges into from the second into the first state. However
         #  they are still part of the second state, this will be handled afterwards.
