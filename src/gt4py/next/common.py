@@ -109,6 +109,41 @@ class Dimension:
     def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
 
+    def __gt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
+
+    def __ge__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value, Infinity.POSITIVE),))
+
+    def __lt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
+
+    def __le__(self, value: core_defs.IntegralScalar) -> Domain:
+        # TODO add test
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
+
+    def __eq__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value == value.value
+        elif isinstance(value, core_defs.INTEGRAL_TYPES):
+            # TODO probably only within valid embedded context?
+            return Domain(dims=(self,), ranges=(UnitRange(value, value + 1),))
+        else:
+            return False
+
+    def __ne__(self, value: Dimension | core_defs.IntegralScalar) -> bool | tuple[Domain, Domain]:
+        # TODO add test
+        if isinstance(value, Dimension):
+            return self.value != value.value
+        elif isinstance(value, core_defs.INTEGRAL_TYPES):
+            # TODO probably only within valid embedded context?
+            return (
+                Domain(self, UnitRange(Infinity.NEGATIVE, value)),
+                Domain(self, UnitRange(value + 1, Infinity.POSITIVE)),
+            )
+        else:
+            return True
+
 
 class Infinity(enum.Enum):
     """Describes an unbounded `UnitRange`."""
@@ -499,6 +534,24 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             )
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
+
+    def __or__(self, other: Domain) -> Domain:
+        # TODO support arbitrary union of domains
+        # TODO add tests
+        if self.ndim > 1 or other.ndim > 1:
+            raise NotImplementedError("Union of multidimensional domains is not supported.")
+        if self.ndim == 0:
+            return other
+        if other.ndim == 0:
+            return self
+        sorted_ = sorted((self, other), key=lambda x: x.ranges[0].start)
+        if sorted_[0].ranges[0].stop >= sorted_[1].ranges[0].start:
+            return Domain(
+                dims=(self.dims[0],),
+                ranges=(UnitRange(sorted_[0].ranges[0].start, sorted_[1].ranges[0].stop),),
+            )
+        else:
+            return (sorted_[0], sorted_[1])
 
     @functools.cached_property
     def slice_at(self) -> utils.IndexerCallable[slice, Domain]:
