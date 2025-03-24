@@ -147,9 +147,9 @@ class FieldopData:
                 assert len(self.gt_type.dims) == 0  # zero-dimensional field
                 it_indices = {}
             else:
-                # The property below is ensured by calling `make_field()` to construct `FieldopData`.
-                # The `make_field` constructor ensures that any local dimension, if present, is converted
-                # to `ListType` element type, while the field domain consists of all global dimensions.
+                # The invariant below is ensured by calling `make_field()` to construct `FieldopData`.
+                # The `make_field` constructor converts any local dimension, if present, to `ListType`
+                # element type, while leaving the field domain with all global dimensions.
                 assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
                 domain_dims = [dim for dim, _, _ in domain]
                 domain_indices = get_domain_indices(domain_dims, origin=None)
@@ -463,17 +463,17 @@ def _create_field_operator(
         field or a tuple fields.
     """
 
-    # create map range corresponding to the field operator domain
-    map_range = (
-        {
+    if len(domain) == 0:
+        # create a trivial map for zero-dimensional fields
+        map_range = {
+            "__gt4py_zerodim": "0",
+        }
+    else:
+        # create map range corresponding to the field operator domain
+        map_range = {
             gtir_sdfg_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
             for dim, lower_bound, upper_bound in domain
         }
-        if len(domain) != 0
-        else {  # create a trivial map for zero-dimensional fields
-            "__zerodim": "0",
-        }
-    )
     map_entry, map_exit = sdfg_builder.add_map("fieldop", state, map_range)
 
     # here we setup the edges passing through the map entry node
