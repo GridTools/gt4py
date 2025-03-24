@@ -391,7 +391,9 @@ def _create_field_operator_impl(
 
     # the memory layout of the output field follows the field operator compute domain
     field_dims, field_origin, field_shape = get_field_layout(domain)
-    if len(domain) == 0:  # zero-dimensional field
+    if len(domain) == 0:
+        # The field operator computes a zero-dimensional field, and the data subset
+        # is set later depending on the element type (`ts.ListType` or `ts.ScalarType`)
         field_subset = dace_subsets.Range([])
     else:
         field_indices = get_domain_indices(field_dims, field_origin)
