@@ -73,8 +73,9 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
             return False
 
         # If the first state writes to global memory and the second state contains
-        #  an AccessNode that reads and writes to the same global memory then we
-        #  do not apply. This is a very obscure case.
+        #  an AccessNode that reads and writes to the same global memory. In this case
+        #  we do not know how to merge the nodes together. Thus we reject these cases
+        # NOTE: This is a very obscure case.
         first_global_memory_write: set[str] = {
             dnode.data
             for dnode in first_state.data_nodes()
@@ -97,9 +98,48 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         sdfg: dace.SDFG,
     ) -> bool:
         """Return `True` if there are no conflicts."""
+
+        if self._check_for_transient_conflicts(sdfg=sdfg):
+            return True
         if self._check_for_global_read_write_conflicts(sdfg=sdfg):
             return True
         if self._check_for_wcr_conflicts(sdfg=sdfg):
+            return True
+        return False
+
+    def _check_for_transient_conflicts(
+        self,
+        sdfg: dace.SDFG,
+    ) -> bool:
+        """Tests if there are conflicts involving transients.
+
+        The function checks if there is a write to data in the second state, that
+        was used inside in the first state.
+
+        Note that the pattern this function looks for violates ADR-18, but it is
+        required to support scan operation. It appears inside scan loops, where
+        the state variable or carry, is written to in multiple locations.
+        """
+        first_state: dace.SDFGState = self.first_state
+        first_scope_dict = first_state.scope_dict()
+        second_state: dace.SDFGState = self.second_state
+        second_scope_dict = second_state.scope_dict()
+
+        # Find the set of transients that are written to in the first state.
+        first_transient_reads: set[str] = {
+            dnode.data
+            for dnode in first_state.data_nodes()
+            if (
+                first_scope_dict[dnode] is None
+                and dnode.desc(sdfg).transient
+                and first_state.out_degree(dnode) != 0
+            )
+        }
+        if any(
+            dnode.data in first_transient_reads
+            for dnode in second_state.data_nodes()
+            if (second_scope_dict[dnode] is None and second_state.in_degree(dnode) != 0)
+        ):
             return True
         return False
 
