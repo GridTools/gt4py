@@ -267,6 +267,37 @@ def _make_global_merge_2() -> dace.SDFG:
     return sdfg
 
 
+def _make_swapping_sdfg() -> dace.SDFG:
+    """Makes an SDFG that implements `x, y = y, x` with Memlets."""
+    sdfg = dace.SDFG(util.unique_name("swapping_sdfg"))
+    state1 = sdfg.add_state(is_start_block=True)
+    state2 = sdfg.add_state_after(state1)
+
+    for name in ["x", "y", "t1", "t2"]:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=name.startswith("t"),
+        )
+
+    state1.add_nedge(
+        state1.add_access("x"), state1.add_access("t1"), dace.Memlet("x[0:10] -> [0:10]")
+    )
+    state1.add_nedge(
+        state1.add_access("y"), state1.add_access("t2"), dace.Memlet("y[0:10] -> [0:10]")
+    )
+
+    state2.add_nedge(
+        state2.add_access("t1"), state2.add_access("y"), dace.Memlet("t1[0:10] -> [0:10]")
+    )
+    state2.add_nedge(
+        state2.add_access("t2"), state2.add_access("x"), dace.Memlet("t2[0:10] -> [0:10]")
+    )
+
+    return sdfg
+
+
 def test_simple_fusion():
     sdfg, state1, state2 = _make_simple_two_state_sdfg()
     assert sdfg.start_block is state1
@@ -477,3 +508,15 @@ def test_global_merge_2():
 
     assert all(edge.src.map.label == "comp1_map" for edge in state.in_edges(intermediate_node))
     assert all(edge.dst.map.label == "comp2_map" for edge in state.out_edges(intermediate_node))
+
+
+def test_swapping():
+    sdfg = _make_swapping_sdfg()
+
+    # The transformation does not apply. If it would apply then we would have the two
+    #  independent dataflows `(x) -> (t1) -> (y)` and `(y) -> (t2) -> (x)` and because
+    #  the execution is arbitrary it might or might not work.
+    nb_applied = sdfg.apply_transformations_repeated(gtx_transformations.GT4PyStateFusion)
+    sdfg.validate()
+
+    assert nb_applied == 0
