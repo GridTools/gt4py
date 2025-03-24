@@ -28,6 +28,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
     - If global data is written to in the first state and there is an AccessNode that
         reads and writes to the same data in the second state the transformation
         does not apply.
+    - No read writes conflicts are created.
 
     If the conditions above are met, then the transformation will copy the nodes from
     the second state into the first state and if needed create connections as needed.
@@ -53,6 +54,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         first_state: dace.SDFGState = self.first_state
         second_state: dace.SDFGState = self.second_state
         graph: dace.sdfg.state.AbstractControlFlowRegion = first_state.parent_graph
+        # assert False, "ADR COMPATIBILITY; SINGLE NODE+"
 
         if graph.out_degree(first_state) != 1:
             return False
@@ -80,7 +82,150 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         ):
             return False
 
+        if self.check_for_global_read_write_conflicts(state=graph, sdfg=sdfg):
+            return False
+
         return True
+
+    def check_for_global_read_write_conflicts(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> bool:
+        """Checks for read write conflicts in the global memory.
+
+        The function checks if by the elimination of states creates read write
+        conflicts. Because of the structure outlined by ADR-18 it only checks this
+        for the global data, since transients are by definition written only once.
+        """
+        first_state: dace.SDFGState = self.first_state
+        first_scope_dict = first_state.scope_dict()
+        second_state: dace.SDFGState = self.second_state
+        second_scope_dict = second_state.scope_dict()
+
+        # Find all transients that are defined, i.e. written to, in the first state.
+        #  There is only one node into which we write.
+        data_producers: dict[str, dace_nodes.AccessNode] = {
+            dnode.data: dnode
+            for dnode in first_state.data_nodes()
+            if (
+                first_scope_dict[dnode] is None
+                and first_state.in_degree(dnode) != 0
+                and dnode.desc(sdfg).transient
+            )
+        }
+
+        # Find all consumers, i.e. all AccessNodes in the second state that refer
+        #  to data that was defined in the first state. There might be multiple nodes
+        #  that reads from it (borderline ADR-18 compatibility).
+        data_consumers: list[dace_nodes.AccessNode] = [
+            dnode
+            for dnode in second_state.data_nodes()
+            if (
+                second_scope_dict[dnode] is None
+                and second_state.in_degree(dnode) == 0
+                and dnode.data in data_producers
+                and dnode.desc(sdfg).transient
+            )
+        ]
+
+        # For every data, that was defined in the first state and read in the second
+        #  state, find the set of global data that is finally written to, there might
+        #  be none.
+        consumer_destinations: dict[str, set[str]] = {}
+        for data_consumer in data_consumers:
+            consumer_destination = self._find_global_destination_data_for(
+                dnode=data_consumer,
+                state=second_state,
+                sdfg=sdfg,
+            )
+            if len(consumer_destination) != 0:
+                this_destination = consumer_destinations.setdefault(data_consumer.data, set())
+                this_destination.update(consumer_destination)
+
+        # The second state does not write into any global data, so there are no
+        #  read-write conflicts.
+        if len(consumer_destinations) == 0:
+            return False
+
+        # Now we check if there are read write conflicts. The process is quite simple,
+        #  for every "coupling transient" (defined in the first state and read in the
+        #  second state) we determine the set of global data it depends on. Then we
+        #  look at the set of global data the other _other_ coupling transients write
+        #  to. If there is an intersection, i.e. one coupling transient depends on
+        #  a certain global data and another coupling transient writes to it, then
+        #  we consider this as read write conflict.
+        # TODO(phimuell): This is a very simple solution, that does not takes into
+        #   account Maps. We should actually focus on concurrent dataflow, i.e. data
+        #   flow that is not connected.
+        for coupling_data, source_node in data_producers.items():
+            if coupling_data not in consumer_destinations:
+                continue
+            global_sources: set[str] = self._find_global_source_data_of(
+                dnode=source_node,
+                state=first_state,
+                sdfg=sdfg,
+            )
+            if any(
+                not global_sources.isdisjoint(global_destination)
+                for dname, global_destination in consumer_destinations.items()
+                if dname != coupling_data
+            ):
+                return True
+
+        return False
+
+    def _find_global_source_data_of(
+        self,
+        dnode: dace_nodes.AccessNode,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> set[str]:
+        """Finds the global data `dnode` depends on in `state`.
+
+        Essentially traverse the dataflow graph in reverse order. After all nodes
+        have been visited the set of global data that was encountered is returned.
+        """
+        global_data: set[str] = set()
+        to_visit: list[dace_nodes.Node] = [dnode]
+        seen: set[dace_nodes.Node] = set()
+
+        while len(to_visit) > 0:
+            node = to_visit.pop()
+            if node in seen:
+                continue
+            elif isinstance(node, dace_nodes.AccessNode) and not node.desc(sdfg).transient:
+                global_data.add(node.data)
+            to_visit.extend(iedge.src for iedge in state.in_edges(node))
+            seen.add(node)
+
+        return global_data
+
+    def _find_global_destination_data_for(
+        self,
+        dnode: dace_nodes.AccessNode,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> set[str]:
+        """Find the global data in to which `dnode` is written to.
+
+        Essentially this function traverse the graph starting from `dnode`. It
+        will record all AccessNodes that refers to the data it encounters on the way.
+        """
+        global_data: set[str] = set()
+        to_visit: list[dace_nodes.Node] = [dnode]
+        seen: set[dace_nodes.Node] = set()
+
+        while len(to_visit) > 0:
+            node = to_visit.pop()
+            if node in seen:
+                continue
+            elif isinstance(node, dace_nodes.AccessNode) and not node.desc(sdfg).transient:
+                global_data.add(node.data)
+            to_visit.extend(oedge.dst for oedge in state.out_edges(node))
+            seen.add(node)
+
+        return global_data
 
     def _move_nodes(self, sdfg: dace.SDFG) -> None:
         """Moves the nodes from the second state to the first state.
