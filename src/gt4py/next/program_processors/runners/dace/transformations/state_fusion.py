@@ -34,7 +34,10 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
     the second state into the first state and if needed create connections as needed.
 
     Todo:
-        Improve robustness if there are multiple global AccessNodes.
+        - Add a step that merges global AccessNodes together, this is borderline
+            ADR-18 compatibility.
+        - If both states read from the same transient data, that was not defined in
+            either, then the AccessNodes are not merged.
     """
 
     first_state = dace_transformation.PatternNode(dace.SDFGState)
@@ -54,7 +57,6 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         first_state: dace.SDFGState = self.first_state
         second_state: dace.SDFGState = self.second_state
         graph: dace.sdfg.state.AbstractControlFlowRegion = first_state.parent_graph
-        # assert False, "ADR COMPATIBILITY; SINGLE NODE+"
 
         if graph.out_degree(first_state) != 1:
             return False
@@ -254,13 +256,16 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         #  input degree. Although not strictly needed, we also add globals that
         #  are read, but not written to in the first state, the effect is that
         #  there is only one reading AccessNode, which is closer to ADR-18.
+        # TODO(phimuell): In case of global data it might be possible that there are
+        #   multiple AccessNodes that writes to the data. We currently ignore that case.
         data_producers: dict[str, dace_nodes.AccessNode] = {
             dnode.data: dnode
             for dnode in first_state.data_nodes()
             if (first_scope_dict[dnode] is None and first_state.in_degree(dnode) != 0)
         }
 
-        # Adding globals that are only read.
+        # Add the AccessNodes from the first state that read from global memory.
+        #  However, if there is an AccessNodes that writes to it use that one.
         for dnode in first_state.data_nodes():
             if dnode.desc(sdfg).transient:
                 continue
@@ -275,7 +280,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         #  listed in `data_producers`. Note that these nodes might have to be
         #  replaced with the nodes from the source.
         #  Note we can not use a `dict` here because it is possible, not fully not
-        #  compliant with ADR18 though, that there are multiple AccessNodes that
+        #  compliant with ADR-18 though, that there are multiple AccessNodes that
         #  refers to the same data.
         data_consumers: list[dace_nodes.AccessNode] = [
             dnode
@@ -299,8 +304,10 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         # The first state generated data that the second state consumed, since they
         #  are now in one single state, we have to ensure an order. For this we simply
         #  merge the two nodes, which means that instead of reading from the original
-        #  AccessNode (part of the second state) it should now read from the AccessNode
-        #  from the first state.
+        #  AccessNode (that was part of the second state) it should now read from the
+        #  AccessNode that was defined in the first state. If there were multiple
+        #  AccessNodes in the second state, that refer to the same data, they are
+        #  all merged.
         for data_consumer in data_consumers:
             data_producer: dace_nodes.AccessNode = data_producers[data_consumer.data]
 
