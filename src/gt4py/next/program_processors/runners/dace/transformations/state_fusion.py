@@ -209,35 +209,28 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         second_state: dace.SDFGState = self.second_state
         second_scope_dict = second_state.scope_dict()
 
-        # Find all transients that are defined, i.e. written to, in the first state.
-        #  There is only one node into which we write.
-        data_producers: dict[str, dace_nodes.AccessNode] = {
-            dnode.data: dnode
+        # First we find all "messenger data" these are the data that is defined, i.e.
+        #  written to, in the first state and read in the second state. It is important
+        #  that this is not limited to transients.
+        data_producers: list[dace_nodes.AccessNode] = [
+            dnode
             for dnode in first_state.data_nodes()
-            if (
-                first_scope_dict[dnode] is None
-                and first_state.in_degree(dnode) != 0
-                and dnode.desc(sdfg).transient
-            )
-        }
+            if first_scope_dict[dnode] is None and first_state.in_degree(dnode) != 0
+        ]
+        data_producers_names: set[str] = {ac.data for ac in data_producers}
 
-        # Find all consumers, i.e. all AccessNodes in the second state that refer
-        #  to data that was defined in the first state. There might be multiple nodes
-        #  that reads from it (borderline ADR-18 compatibility).
         data_consumers: list[dace_nodes.AccessNode] = [
             dnode
             for dnode in second_state.data_nodes()
-            if (
-                second_scope_dict[dnode] is None
-                and second_state.in_degree(dnode) == 0
-                and dnode.data in data_producers
-                and dnode.desc(sdfg).transient
-            )
+            if second_scope_dict[dnode] is None and dnode.data in data_producers_names
         ]
 
-        # For every data, that was defined in the first state and read in the second
-        #  state, find the set of global data that is finally written to, there might
-        #  be none.
+        # There are no data exchange between the two states.
+        if len(data_consumers) == 0:
+            return False
+
+        # For every message data find the global data that it influences, i.e. all
+        #  global data that are downstream reachable from that node.
         consumer_destinations: dict[str, set[str]] = {}
         for data_consumer in data_consumers:
             consumer_destination = self._find_global_destination_data_for(
@@ -246,25 +239,26 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 sdfg=sdfg,
             )
             if len(consumer_destination) != 0:
-                this_destination = consumer_destinations.setdefault(data_consumer.data, set())
-                this_destination.update(consumer_destination)
+                if data_consumer.data not in consumer_destinations:
+                    consumer_destinations[data_consumer.data] = set()
+                consumer_destinations[data_consumer.data].update(consumer_destination)
 
         # The second state does not write into any global data, so there are no
-        #  read-write conflicts.
+        #  read-write conflicts to check.
         if len(consumer_destinations) == 0:
             return False
 
         # Now we check if there are read write conflicts. The process is quite simple,
-        #  for every "coupling transient" (defined in the first state and read in the
-        #  second state) we determine the set of global data it depends on. Then we
-        #  look at the set of global data the other _other_ coupling transients write
-        #  to. If there is an intersection, i.e. one coupling transient depends on
+        #  for every messenger data we determine the set of global data it depends on.
+        #  Then we look at the set of global data the other _other_ coupling transients
+        #  write to. If there is an intersection, i.e. one coupling transient depends on
         #  a certain global data and another coupling transient writes to it, then
         #  we consider this as read write conflict.
         # TODO(phimuell): This is a very simple solution, that does not takes into
         #   account Maps. We should actually focus on concurrent dataflow, i.e. data
         #   flow that is not connected.
-        for coupling_data, source_node in data_producers.items():
+        for source_node in data_producers:
+            coupling_data = source_node.data
             if coupling_data not in consumer_destinations:
                 continue
             global_sources: set[str] = self._find_global_source_data_of(
