@@ -426,7 +426,4 @@ class FuseAsFieldOp(
 
         node = super().visit(node, **kwargs)
 
-        if isinstance(node, itir.Expr) and hasattr(node.annex, "domain"):
-            node.annex.domain = node.annex.domain
-
         return node

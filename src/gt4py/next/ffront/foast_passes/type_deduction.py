@@ -10,8 +10,8 @@ from typing import Any, Optional, TypeAlias, TypeVar, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
-from gt4py.next import errors
-from gt4py.next.common import DimensionKind
+from gt4py.next import errors, utils
+from gt4py.next.common import DimensionKind, promote_dims
 from gt4py.next.ffront import (  # noqa
     dialect_ast_enums,
     experimental,
@@ -20,6 +20,7 @@ from gt4py.next.ffront import (  # noqa
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.foast_passes.utils import compute_assign_indices
+from gt4py.next.iterator import builtins
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -566,16 +567,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
 
-    def _deduce_compare_type(
+    def _deduce_arithmetic_compare_type(
         self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
-        # check both types compatible
-        for arg in (left, right):
-            if not type_info.is_arithmetic(arg.type):
-                raise errors.DSLError(
-                    arg.location, f"Type '{arg.type}' can not be used in operator '{node.op}'."
-                )
-
+        # e.g. `1 < 2`
         self._check_operand_dtypes_match(node, left=left, right=right)
 
         try:
@@ -591,6 +586,48 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"Could not promote '{left.type}' and '{right.type}' to common type"
                 f" in call to '{node.op}'.",
             ) from ex
+
+    def _deduce_dimension_compare_type(
+        self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
+    ) -> Optional[ts.TypeSpec]:
+        # e.g. `IDim > 1`
+        index_type = ts.ScalarType(
+            kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
+        )
+
+        if isinstance(left.type, ts.DimensionType):
+            if not right.type == index_type:
+                raise errors.DSLError(
+                    right.location,
+                    f"Expected an {index_type}, but got '{right.type}' instead.",
+                )
+            return ts.DomainType(dims=[left.type.dim])
+        elif isinstance(right.type, ts.DimensionType):
+            if not left.type == index_type:
+                raise errors.DSLError(
+                    left.location,
+                    f"Expected an {index_type}, but got '{right.type}' instead.",
+                )
+            return ts.DomainType(dims=[right.type.dim])
+        else:
+            raise AssertionError()
+
+    def _deduce_compare_type(
+        self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
+    ) -> Optional[ts.TypeSpec]:
+        # e.g. `1 < 1`
+        if all(type_info.is_arithmetic(arg) for arg in (left.type, right.type)):
+            return self._deduce_arithmetic_compare_type(node, left=left, right=right)
+        # e.g. `IDim > 1`
+        if any(isinstance(arg, ts.DimensionType) for arg in (left.type, right.type)):
+            return self._deduce_dimension_compare_type(node, left=left, right=right)
+
+        raise errors.DSLError(
+            left.location,
+            "Comparison operators can only be used between arithmetic types "
+            "(scalars, fields) or between a dimension and an index type "
+            "({builtins.INTEGER_INDEX_BUILTIN}).",
+        )
 
     def _deduce_binop_type(
         self, node: foast.BinOp, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
@@ -612,37 +649,48 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             dialect_ast_enums.BinaryOperator.BIT_OR,
             dialect_ast_enums.BinaryOperator.BIT_XOR,
         }
-        is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
-        # check both types compatible
-        for arg in (left, right):
-            if not is_compatible(arg.type):
+        err_msg = f"Unsupported operand type(s) for {node.op}: '{left.type}' and '{right.type}'."
+
+        if isinstance(left.type, (ts.ScalarType, ts.FieldType)) and isinstance(
+            right.type, (ts.ScalarType, ts.FieldType)
+        ):
+            is_compatible = (
+                type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
+            )
+            for arg in (left, right):
+                if not is_compatible(arg.type):
+                    raise errors.DSLError(arg.location, err_msg)
+
+            if node.op == dialect_ast_enums.BinaryOperator.POW:
+                return left.type
+
+            if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(
+                right.type
+            ):
                 raise errors.DSLError(
-                    arg.location, f"Type '{arg.type}' can not be used in operator '{node.op}'."
+                    arg.location,
+                    f"Type '{right.type}' can not be used in operator '{node.op}', it only accepts 'int'.",
                 )
 
-        left_type = cast(ts.FieldType | ts.ScalarType, left.type)
-        right_type = cast(ts.FieldType | ts.ScalarType, right.type)
-
-        if node.op == dialect_ast_enums.BinaryOperator.POW:
-            return left_type
-
-        if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(
-            right_type
-        ):
-            raise errors.DSLError(
-                arg.location,
-                f"Type '{right_type}' can not be used in operator '{node.op}', it only accepts 'int'.",
-            )
-
-        try:
-            return type_info.promote(left_type, right_type)
-        except ValueError as ex:
-            raise errors.DSLError(
-                node.location,
-                f"Could not promote '{left_type}' and '{right_type}' to common type"
-                f" in call to '{node.op}'.",
-            ) from ex
+            try:
+                return type_info.promote(left.type, right.type)
+            except ValueError as ex:
+                raise errors.DSLError(
+                    node.location,
+                    f"Could not promote '{left.type}' and '{right.type}' to common type"
+                    f" in call to '{node.op}'.",
+                ) from ex
+        elif isinstance(left.type, ts.DomainType) and isinstance(right.type, ts.DomainType):
+            if node.op not in logical_ops:
+                raise errors.DSLError(
+                    node.location,
+                    f"{err_msg} Operator "
+                    f"must be one of {', '.join((str(op) for op in logical_ops))}.",
+                )
+            return ts.DomainType(dims=promote_dims(left.type.dims, right.type.dims))
+        else:
+            raise errors.DSLError(node.location, err_msg)
 
     def _check_operand_dtypes_match(
         self, node: foast.BinOp | foast.Compare, left: foast.Expr, right: foast.Expr
@@ -908,6 +956,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
 
         try:
+            # TODO(tehrengruber): the construct_tuple_type function doesn't look correct
             if isinstance(true_branch_type, ts.TupleType) and isinstance(
                 false_branch_type, ts.TupleType
             ):
@@ -943,7 +992,39 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             location=node.location,
         )
 
-    _visit_concat_where = _visit_where
+    def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
+        mask_type, true_branch_type, false_branch_type = (arg.type for arg in node.args)
+
+        assert isinstance(mask_type, ts.DomainType)
+        assert all(
+            isinstance(el, (ts.FieldType, ts.ScalarType))
+            for arg in (true_branch_type, false_branch_type)
+            for el in type_info.primitive_constituents(arg)
+        )
+
+        @utils.tree_map(
+            collection_type=ts.TupleType,
+            result_collection_constructor=lambda el: ts.TupleType(types=list(el)),
+        )
+        def deduce_return_type(tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType):
+            if (t_dtype := type_info.extract_dtype(tb)) != (f_dtype := type_info.extract_dtype(fb)):
+                raise errors.DSLError(
+                    node.location,
+                    f"Field arguments must be of same dtype, got '{t_dtype}' != '{f_dtype}'.",
+                )
+            return_dims = promote_dims(mask_type.dims, type_info.promote(tb, fb).dims)
+            return_type = ts.FieldType(dims=return_dims, dtype=type_info.promote(t_dtype, f_dtype))
+            return return_type
+
+        return_type = deduce_return_type(true_branch_type, false_branch_type)
+
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            type=return_type,
+            location=node.location,
+        )
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         arg_type = cast(ts.FieldType | ts.ScalarType, node.args[0].type)

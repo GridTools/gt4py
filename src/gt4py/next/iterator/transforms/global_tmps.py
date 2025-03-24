@@ -189,11 +189,16 @@ def create_global_tmps(
     This pass looks at all `as_fieldop` calls and transforms field-typed subexpressions of its
     arguments into temporaries.
     """
-    offset_provider_type = common.offset_provider_to_type(offset_provider)
+    # TODO: document why to keep existing domains, add test
     program = infer_domain.infer_program(
-        program, offset_provider=offset_provider, symbolic_domain_sizes=symbolic_domain_sizes
+        program,
+        offset_provider=offset_provider,
+        symbolic_domain_sizes=symbolic_domain_sizes,
+        keep_existing_domains=True,
     )
-    program = type_inference.infer(program, offset_provider_type=offset_provider_type)
+    program = type_inference.infer(
+        program, offset_provider_type=common.offset_provider_to_type(offset_provider)
+    )
 
     if not uids:
         uids = eve_utils.UIDGenerator(prefix="__tmp")

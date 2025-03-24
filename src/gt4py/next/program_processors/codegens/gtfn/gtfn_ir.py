@@ -124,7 +124,11 @@ class SidComposite(Expr):
     ) -> None:
         if not all(
             isinstance(el, (SidFromScalar, SidComposite))
-            or _is_tuple_expr_of(lambda expr: isinstance(expr, (SymRef, Literal)), el)
+            or _is_tuple_expr_of(
+                lambda expr: isinstance(expr, (SymRef, Literal))
+                or (isinstance(expr, FunCall) and expr.fun == SymRef(id="index")),
+                el,
+            )
             for el in value
         ):
             raise ValueError(
