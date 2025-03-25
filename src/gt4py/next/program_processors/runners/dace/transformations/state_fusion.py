@@ -217,18 +217,18 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         #  data it writes to. Furthermore, we determine on which global data the
         #  component depends, i.e. reads from.
         first_subgraphs = dace.sdfg.utils.concurrent_subgraphs(first_state)
-        data_producers_parts: list[set[str]] = []
-        data_producers_parts_dependencies: list[set[str]] = []
-        data_producer_names: set[str] = set()
+        data_producers: list[set[str]] = []
+        data_producers_dependencies: list[set[str]] = []
+        all_data_producers: set[str] = set()
         for first_subgraph in first_subgraphs:
-            data_producers_parts.append(
+            data_producers.append(
                 {
                     dnode.data
                     for dnode in first_subgraph.data_nodes()
                     if (first_scope_dict[dnode] is None and first_subgraph.in_degree(dnode) != 0)
                 }
             )
-            data_producers_parts_dependencies.append(
+            data_producers_dependencies.append(
                 {
                     dnode.data
                     for dnode in first_subgraph.data_nodes()
@@ -239,7 +239,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                     )
                 }
             )
-            data_producer_names.update(data_producers_parts[-1])
+            all_data_producers.update(data_producers[-1])
 
         # Now for every independent subgraph of the second state we determine which
         #  data it reads, that were defined in the first state, the so called messenger
@@ -251,18 +251,18 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         #  independent subgraphs that read and write from the same global data.
         #  This is indeterministic behaviour, thus we should reject it.
         second_subgraphs = dace.sdfg.utils.concurrent_subgraphs(second_state)
-        data_consumers_parts: list[set[str]] = []
-        data_consumers_parts_influences: list[set[str]] = []
+        data_consumers: list[set[str]] = []
+        data_consumers_influences: list[set[str]] = []
         messanger_data: set[str] = set()
         for second_subgraph in second_subgraphs:
-            data_consumers_parts.append(
+            data_consumers.append(
                 {
                     dnode.data
                     for dnode in second_subgraph.data_nodes()
-                    if (second_scope_dict[dnode] is None and dnode.data in data_producer_names)
+                    if second_scope_dict[dnode] is None and dnode.data in all_data_producers
                 }
             )
-            data_consumers_parts_influences.append(
+            data_consumers_influences.append(
                 {
                     dnode.data
                     for dnode in second_subgraph.data_nodes()
@@ -273,18 +273,16 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                     )
                 }
             )
-            messanger_data.update(data_consumers_parts[-1])
+            messanger_data.update(data_consumers[-1])
 
-        for data_producers_part, producer_component_dependency in zip(
-            data_producers_parts, data_producers_parts_dependencies
-        ):
-            if data_producers_part.isdisjoint(messanger_data):
+        for data_producer, producer_dependency in zip(data_producers, data_producers_dependencies):
+            if data_producer.isdisjoint(messanger_data):
                 # The component does not generate any messenger data. In that case
                 #  we must ensure that it does not depend on any global data that is
                 #  modified by the second state.
                 if not all(
-                    producer_component_dependency.isdisjoint(consumer_influece)
-                    for consumer_influece in data_consumers_parts_influences
+                    producer_dependency.isdisjoint(consumer_influece)
+                    for consumer_influece in data_consumers_influences
                 ):
                     return True
 
@@ -292,14 +290,14 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 # This component generates some messenger data. We must now check if
                 #  any consumer component, that is not related through messengers to
                 #  the producer influences that global data.
-                for data_consumers_part, consumer_influece in zip(
-                    data_consumers_parts, data_consumers_parts_influences
+                for data_consumer, consumer_influece in zip(
+                    data_consumers, data_consumers_influences
                 ):
-                    if not data_consumers_part.isdisjoint(data_producers_part):
-                        # The two components get merged, so there is no conflict.
-                        #  Because we assume that the graph is pointwise.
+                    if not data_consumer.isdisjoint(data_producer):
+                        # The two components get merged, so there is no conflict,
+                        #  because we assume that the graph is pointwise.
                         continue
-                    if not consumer_influece.isdisjoint(producer_component_dependency):
+                    if not consumer_influece.isdisjoint(producer_dependency):
                         # The component, will not be merged with the producer, so they
                         #  end up independent, but they read and write, respectively
                         #  from the same global memory, thus the states can not be
