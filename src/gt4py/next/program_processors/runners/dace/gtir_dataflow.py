@@ -1087,7 +1087,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
         elif isinstance(index_arg, ValueExpr):
             tasklet_node = self._add_tasklet(
-                "list_get", inputs={"__index", "list"}, outputs={"__val"}, code="__val = list[__index]"
+                "list_get",
+                inputs={"__index", "list"},
+                outputs={"__val"},
+                code="__val = list[__index]",
             )
             self._add_edge(
                 index_arg.dc_node,

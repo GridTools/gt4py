@@ -602,13 +602,9 @@ def _make_concat_field_slice(
     """
     assert isinstance(f.gt_type, ts.FieldType)
     dims = [*f.gt_type.dims[:concat_dim_index], concat_dim, *f.gt_type.dims[concat_dim_index:]]
-    origin = tuple(
-        [*f.origin[:concat_dim_index], concat_dim_origin, *f.origin[concat_dim_index:]]
-    )
+    origin = tuple([*f.origin[:concat_dim_index], concat_dim_origin, *f.origin[concat_dim_index:]])
     shape = tuple([*f_desc.shape[:concat_dim_index], 1, *f_desc.shape[concat_dim_index:]])
-    strides = tuple(
-        [*f_desc.strides[:concat_dim_index], 1, *f_desc.strides[concat_dim_index:]]
-    )
+    strides = tuple([*f_desc.strides[:concat_dim_index], 1, *f_desc.strides[concat_dim_index:]])
     # TODO(edopao): use `add_view` once dace issue in `ArrayElimination` is fixed
     slice, slice_desc = sdfg.add_temp_transient(shape, f_desc.dtype, strides=strides)
     slice_node = state.add_access(slice)
@@ -646,14 +642,14 @@ def _make_concat_scalar_broadcast(
     out_node = state.add_access(out_name)
 
     map_variables = [gtir_sdfg_utils.get_map_variable(dim) for dim in out_dims]
-    inp_index = f"({map_variables[concat_dim_index]} + {out_origin[concat_dim_index] - inp.origin[0]})"
+    inp_index = (
+        f"({map_variables[concat_dim_index]} + {out_origin[concat_dim_index] - inp.origin[0]})"
+    )
     state.add_mapped_tasklet(
         "broadcast",
         map_ranges={
             index: r
-            for index, r in zip(
-                map_variables, dace_subsets.Range.from_array(out_desc), strict=True
-            )
+            for index, r in zip(map_variables, dace_subsets.Range.from_array(out_desc), strict=True)
         },
         code="__out = __inp",
         inputs={"__inp": dace.Memlet(data=inp.dc_node.data, subset=inp_index)},
@@ -818,9 +814,7 @@ def translate_concat_where(
         # we write the data of the lower range into the output array starting from the index zero
         lower_output_subset = dace_subsets.Range(
             [
-                (0, lower_range_size - 1, 1)
-                if dim_index == concat_dim_index
-                else (0, size - 1, 1)
+                (0, lower_range_size - 1, 1) if dim_index == concat_dim_index else (0, size - 1, 1)
                 for dim_index, size in enumerate(output_desc.shape)
             ]
         )
@@ -890,6 +884,7 @@ def translate_concat_where(
             node.annex.domain, node.args[1].annex.domain, node.args[2].annex.domain, tb, fb
         )
     )
+
 
 def _construct_if_branch_output(
     sdfg: dace.SDFG,
