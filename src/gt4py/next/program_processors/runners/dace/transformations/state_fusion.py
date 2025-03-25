@@ -153,6 +153,10 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         `wcr` then we can not merge the states. Note that we allow the case that
         the first state contains a `wcr` write to a data and the second state contains
         a read to it.
+
+        Note:
+            In case all writes are `wcr` it might be possible to merge them, but
+            this is a rather obscure case that we ignore.
         """
         first_state: dace.SDFGState = self.first_state
         first_scope_dict = first_state.scope_dict()
@@ -203,133 +207,106 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         The function checks if by the elimination of states creates read write
         conflicts. Because of the structure outlined by ADR-18 it only checks this
         for the global data, since transients are by definition written only once.
-
-        Note:
-            The implementation is too restrictive and needs to be rewritten, it has
-            to consider concurrent subgraphs.
         """
         first_state: dace.SDFGState = self.first_state
         first_scope_dict = first_state.scope_dict()
         second_state: dace.SDFGState = self.second_state
         second_scope_dict = second_state.scope_dict()
 
-        # First we find all "messenger data" these are the data that is defined, i.e.
-        #  written to, in the first state and read in the second state. It is important
-        #  that this is not limited to transients.
-        data_producers: list[dace_nodes.AccessNode] = [
-            dnode
-            for dnode in first_state.data_nodes()
-            if first_scope_dict[dnode] is None and first_state.in_degree(dnode) != 0
-        ]
-        data_producers_names: set[str] = {ac.data for ac in data_producers}
-
-        data_consumers: list[dace_nodes.AccessNode] = [
-            dnode
-            for dnode in second_state.data_nodes()
-            if second_scope_dict[dnode] is None and dnode.data in data_producers_names
-        ]
-
-        # There are no data exchange between the two states.
-        if len(data_consumers) == 0:
-            return False
-
-        # For every message data find the global data that it influences, i.e. all
-        #  global data that are downstream reachable from that node.
-        consumer_destinations: dict[str, set[str]] = {}
-        for data_consumer in data_consumers:
-            consumer_destination = self._find_global_destination_data_for(
-                dnode=data_consumer,
-                state=second_state,
-                sdfg=sdfg,
+        # For each independent subgraph in the first state we now determine the
+        #  data it writes to. Furthermore, we determine on which global data the
+        #  component depends, i.e. reads from.
+        first_subgraphs = dace.sdfg.utils.concurrent_subgraphs(first_state)
+        data_producers_parts: list[set[str]] = []
+        data_producers_parts_dependencies: list[set[str]] = []
+        data_producer_names: set[str] = set()
+        for first_subgraph in first_subgraphs:
+            data_producers_parts.append(
+                {
+                    dnode.data
+                    for dnode in first_subgraph.data_nodes()
+                    if (first_scope_dict[dnode] is None and first_subgraph.in_degree(dnode) != 0)
+                }
             )
-            if len(consumer_destination) != 0:
-                if data_consumer.data not in consumer_destinations:
-                    consumer_destinations[data_consumer.data] = set()
-                consumer_destinations[data_consumer.data].update(consumer_destination)
-
-        # The second state does not write into any global data, so there are no
-        #  read-write conflicts to check.
-        if len(consumer_destinations) == 0:
-            return False
-
-        # Now we check if there are read write conflicts. The process is quite simple,
-        #  for every messenger data we determine the set of global data it depends on.
-        #  Then we look at the set of global data the other _other_ coupling transients
-        #  write to. If there is an intersection, i.e. one coupling transient depends on
-        #  a certain global data and another coupling transient writes to it, then
-        #  we consider this as read write conflict.
-        # TODO(phimuell): This is a very simple solution, that does not takes into
-        #   account Maps. We should actually focus on concurrent dataflow, i.e. data
-        #   flow that is not connected.
-        for source_node in data_producers:
-            coupling_data = source_node.data
-            if coupling_data not in consumer_destinations:
-                continue
-            global_sources: set[str] = self._find_global_source_data_of(
-                dnode=source_node,
-                state=first_state,
-                sdfg=sdfg,
+            data_producers_parts_dependencies.append(
+                {
+                    dnode.data
+                    for dnode in first_subgraph.data_nodes()
+                    if (
+                        first_scope_dict[dnode] is None
+                        and first_subgraph.out_degree(dnode) != 0
+                        and not dnode.desc(sdfg).transient
+                    )
+                }
             )
-            if any(
-                not global_sources.isdisjoint(global_destination)
-                for dname, global_destination in consumer_destinations.items()
-                if dname != coupling_data
-            ):
-                return True
+            data_producer_names.update(data_producers_parts[-1])
+
+        # Now for every independent subgraph of the second state we determine which
+        #  data it reads, that were defined in the first state, the so called messenger
+        #  data. Components that share a messenger data will be merged together, if
+        #  the states are fused. Furthermore, we determine the set of global data,
+        #  a component writes to. Because if a component, from the first state, depends
+        #  on a global data a component from the second state writes to and the two
+        #  are not related through a messenger data, then we end up with two
+        #  independent subgraphs that read and write from the same global data.
+        #  This is indeterministic behaviour, thus we should reject it.
+        second_subgraphs = dace.sdfg.utils.concurrent_subgraphs(second_state)
+        data_consumers_parts: list[set[str]] = []
+        data_consumers_parts_influences: list[set[str]] = []
+        messanger_data: set[str] = set()
+        for second_subgraph in second_subgraphs:
+            data_consumers_parts.append(
+                {
+                    dnode.data
+                    for dnode in second_subgraph.data_nodes()
+                    if (second_scope_dict[dnode] is None and dnode.data in data_producer_names)
+                }
+            )
+            data_consumers_parts_influences.append(
+                {
+                    dnode.data
+                    for dnode in second_subgraph.data_nodes()
+                    if (
+                        second_scope_dict[dnode] is None
+                        and second_subgraph.in_degree(dnode) != 0
+                        and not dnode.desc(sdfg).transient
+                    )
+                }
+            )
+            messanger_data.update(data_consumers_parts[-1])
+
+        for data_producers_part, producer_component_dependency in zip(
+            data_producers_parts, data_producers_parts_dependencies
+        ):
+            if data_producers_part.isdisjoint(messanger_data):
+                # The component does not generate any messenger data. In that case
+                #  we must ensure that it does not depend on any global data that is
+                #  modified by the second state.
+                if not all(
+                    producer_component_dependency.isdisjoint(consumer_influece)
+                    for consumer_influece in data_consumers_parts_influences
+                ):
+                    return True
+
+            else:
+                # This component generates some messenger data. We must now check if
+                #  any consumer component, that is not related through messengers to
+                #  the producer influences that global data.
+                for data_consumers_part, consumer_influece in zip(
+                    data_consumers_parts, data_consumers_parts_influences
+                ):
+                    if not data_consumers_part.isdisjoint(data_producers_part):
+                        # The two components get merged, so there is no conflict.
+                        #  Because we assume that the graph is pointwise.
+                        continue
+                    if not consumer_influece.isdisjoint(producer_component_dependency):
+                        # The component, will not be merged with the producer, so they
+                        #  end up independent, but they read and write, respectively
+                        #  from the same global memory, thus the states can not be
+                        #  merged.
+                        return True
 
         return False
-
-    def _find_global_source_data_of(
-        self,
-        dnode: dace_nodes.AccessNode,
-        state: dace.SDFGState,
-        sdfg: dace.SDFG,
-    ) -> set[str]:
-        """Finds the global data `dnode` depends on in `state`.
-
-        Essentially traverse the dataflow graph in reverse order. After all nodes
-        have been visited the set of global data that was encountered is returned.
-        """
-        global_data: set[str] = set()
-        to_visit: list[dace_nodes.Node] = [dnode]
-        seen: set[dace_nodes.Node] = set()
-
-        while len(to_visit) > 0:
-            node = to_visit.pop()
-            if node in seen:
-                continue
-            elif isinstance(node, dace_nodes.AccessNode) and not node.desc(sdfg).transient:
-                global_data.add(node.data)
-            to_visit.extend(iedge.src for iedge in state.in_edges(node))
-            seen.add(node)
-
-        return global_data
-
-    def _find_global_destination_data_for(
-        self,
-        dnode: dace_nodes.AccessNode,
-        state: dace.SDFGState,
-        sdfg: dace.SDFG,
-    ) -> set[str]:
-        """Find the global data in to which `dnode` is written to.
-
-        Essentially this function traverse the graph starting from `dnode`. It
-        will record all AccessNodes that refers to the data it encounters on the way.
-        """
-        global_data: set[str] = set()
-        to_visit: list[dace_nodes.Node] = [dnode]
-        seen: set[dace_nodes.Node] = set()
-
-        while len(to_visit) > 0:
-            node = to_visit.pop()
-            if node in seen:
-                continue
-            elif isinstance(node, dace_nodes.AccessNode) and not node.desc(sdfg).transient:
-                global_data.add(node.data)
-            to_visit.extend(oedge.dst for oedge in state.out_edges(node))
-            seen.add(node)
-
-        return global_data
 
     def _move_nodes(self, sdfg: dace.SDFG) -> None:
         """Moves the nodes from the second state to the first state.
