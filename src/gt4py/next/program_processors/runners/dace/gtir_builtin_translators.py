@@ -605,8 +605,9 @@ def _make_concat_field_slice(
     origin = tuple([*f.origin[:concat_dim_index], concat_dim_origin, *f.origin[concat_dim_index:]])
     shape = tuple([*f_desc.shape[:concat_dim_index], 1, *f_desc.shape[concat_dim_index:]])
     strides = tuple([*f_desc.strides[:concat_dim_index], 1, *f_desc.strides[concat_dim_index:]])
-    # TODO(edopao): use `add_view` once dace issue in `ArrayElimination` is fixed
-    slice, slice_desc = sdfg.add_temp_transient(shape, f_desc.dtype, strides=strides)
+    slice, slice_desc = sdfg.add_view(
+        f"view_{f.dc_node.data}", shape, f_desc.dtype, strides=strides
+    )
     slice_node = state.add_access(slice)
     state.add_nedge(
         f.dc_node,
@@ -735,6 +736,7 @@ def translate_concat_where(
                 origin=(origin,),
             )
 
+        is_lower_slice, is_upper_slice = (False, False)
         if concat_dim not in lower.gt_type.dims:
             assert lower.gt_type.dims == [
                 *upper.gt_type.dims[0:concat_dim_index],
@@ -743,6 +745,7 @@ def translate_concat_where(
             lower, lower_desc = _make_concat_field_slice(
                 sdfg, state, lower, lower_desc, concat_dim, concat_dim_index, concat_dim_bound - 1
             )
+            is_lower_slice = True
         elif concat_dim not in upper.gt_type.dims:
             assert upper.gt_type.dims == [
                 *lower.gt_type.dims[0:concat_dim_index],
@@ -751,6 +754,7 @@ def translate_concat_where(
             upper, upper_desc = _make_concat_field_slice(
                 sdfg, state, upper, upper_desc, concat_dim, concat_dim_index, concat_dim_bound
             )
+            is_upper_slice = True
         elif len(lower.gt_type.dims) == 1:
             lower, lower_desc = _make_concat_scalar_broadcast(
                 sdfg, state, lower, lower_desc, lower_domain, concat_dim_index
@@ -769,13 +773,21 @@ def translate_concat_where(
 
         # the lower/upper range to be copied is defined by the start ('range_0') and stop ('range_1') indices
         lower_range_0 = lower_domain[concat_dim_index][1]
-        lower_range_1 = dace.symbolic.pystr_to_symbolic(
-            f"max({lower_range_0}, {lower_domain[concat_dim_index][2]})"
+        lower_range_1 = (
+            (lower_range_0 + 1)
+            if is_lower_slice
+            else dace.symbolic.pystr_to_symbolic(
+                f"max({lower_range_0}, {lower_domain[concat_dim_index][2]})"
+            )
         )
 
         upper_range_0 = upper_domain[concat_dim_index][1]
-        upper_range_1 = dace.symbolic.pystr_to_symbolic(
-            f"max({upper_range_0}, {upper_domain[concat_dim_index][2]})"
+        upper_range_1 = (
+            (upper_range_0 + 1)
+            if is_upper_slice
+            else dace.symbolic.pystr_to_symbolic(
+                f"max({upper_range_0}, {upper_domain[concat_dim_index][2]})"
+            )
         )
 
         # prune empty branches
