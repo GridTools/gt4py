@@ -397,24 +397,10 @@ class ProgramWithBoundArgs(Program):
         return super().__call__(*tuple(full_args), offset_provider=offset_provider, **full_kwargs)
 
     @functools.cached_property
-    def itir(self):
-        new_itir = super().itir
-        for new_clos in new_itir.closures:
-            new_args = [ref(inp.id) for inp in new_clos.inputs]
-            for key, value in self.bound_args.items():
-                index = next(
-                    index
-                    for index, closure_input in enumerate(new_clos.inputs)
-                    if closure_input.id == key
-                )
-                new_args[new_args.index(new_clos.inputs[index])] = promote_to_const_iterator(
-                    literal_from_value(value)
-                )
-                new_clos.inputs.pop(index)
-            params = [sym(inp.id) for inp in new_clos.inputs]
-            expr = itir.FunCall(fun=new_clos.stencil, args=new_args)
-            new_clos.stencil = itir.Lambda(params=params, expr=expr)
-        return new_itir
+    def gtir(self):
+        from gt4py.next.iterator.transforms import bind_args
+
+        return bind_args.BindArgs.apply(super().gtir, **self.bound_args)
 
 
 @typing.overload
