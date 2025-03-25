@@ -609,9 +609,8 @@ def _make_concat_field_slice(
     strides = tuple(
         [*f_desc.strides[:concat_dim_index], 1, *f_desc.strides[concat_dim_index:]]
     )
-    slice, slice_desc = sdfg.add_temp_transient(
-        shape, f_desc.dtype, strides=strides
-    )
+    # TODO(edopao): use `add_view` once dace issue in `ArrayElimination` is fixed
+    slice, slice_desc = sdfg.add_temp_transient(shape, f_desc.dtype, strides=strides)
     slice_node = state.add_access(slice)
     state.add_nedge(
         f.dc_node,
