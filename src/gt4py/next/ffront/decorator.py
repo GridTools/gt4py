@@ -18,6 +18,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
+from concurrent import futures
 from typing import Any, Generic, Optional, TypeVar
 
 from gt4py import eve
@@ -257,7 +258,11 @@ class Program:
         return FrozenProgram(
             self.definition_stage if self.definition_stage else self.past_stage,
             backend=self.backend,
+            connectivities=self.connectivities,
         )
+
+
+executor = futures.ThreadPoolExecutor(max_workers=32)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -270,13 +275,36 @@ class FrozenProgram:
 
     program: ffront_stages.DSL_PRG | ffront_stages.PRG
     backend: next_backend.Backend
+    connectivities: common.OffsetProvider
     _compiled_program: Optional[stages.CompiledProgram] = dataclasses.field(
         init=False, default=None
     )
 
     def __post_init__(self) -> None:
+        print(f"Freezing program {self.program.definition.__name__}", flush=True)
         if self.backend is None:
             raise ValueError("Can not JIT-compile programs without backend (embedded execution).")
+        if self.connectivities is None:
+            raise ValueError("Can not JIT-compile programs without connectivities.")
+        if not self._compiled_program:
+            from gt4py.next.otf.arguments import CompileTimeArgs
+
+            no_args_def = toolchain.CompilableProgram(
+                self.program, arguments.CompileTimeArgs.empty()
+            )
+            past_stage = self.backend.transforms.func_to_past(no_args_def).data
+
+            past_node_type = past_stage.past_node.type
+            args = tuple(past_node_type.definition.pos_or_kw_args.values())
+
+            compile_time_args = CompileTimeArgs(
+                offset_provider=self.connectivities, column_axis=None, args=args, kwargs={}
+            )
+            print(f"Compiling program {self.program.definition.__name__}", flush=True)
+            super().__setattr__(
+                "_compiled_program",
+                executor.submit(lambda: self.backend.compile(self.program, compile_time_args)),
+            )
 
     @property
     def definition(self) -> str:
@@ -298,11 +326,9 @@ class FrozenProgram:
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         args, kwargs = signature.convert_to_positional(self.program, *args, **kwargs)
 
-        if not self._compiled_program:
-            super().__setattr__(
-                "_compiled_program", self.jit(*args, offset_provider=offset_provider, **kwargs)
-            )
-        self._compiled_program(*args, offset_provider=offset_provider, **kwargs)
+        compiled_program = self._compiled_program.result()
+        print(f"Executing program {self.program.definition.__name__}")
+        compiled_program(*args, offset_provider=offset_provider, **kwargs)
 
 
 try:
