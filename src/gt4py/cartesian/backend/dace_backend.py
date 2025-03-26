@@ -19,6 +19,7 @@ import dace.data
 from dace.sdfg.utils import inline_sdfgs
 
 from gt4py import storage as gt_storage
+from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
 from gt4py.cartesian.backend.base import CLIBackendMixin, register
 from gt4py.cartesian.backend.gtc_common import (
@@ -31,10 +32,10 @@ from gt4py.cartesian.backend.gtc_common import (
 )
 from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
 from gt4py.cartesian.gtc import common, gtir
+from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.oir_to_dace import OirSDFGBuilder
 from gt4py.cartesian.gtc.dace.transformations import (
-    InlineThreadLocalTransients,
     NoEmptyEdgeTrivialMapElimination,
     nest_sequential_map_scopes,
 )
@@ -119,8 +120,6 @@ def _set_expansion_orders(sdfg: dace.SDFG):
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
-    import gt4py.cartesian.gtc.dace.daceir as dcir  # avoid circular import
-
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
     ):
@@ -151,10 +150,6 @@ def _pre_expand_transformations(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, la
         sdfg.add_state(gtir_pipeline.gtir.name)
         return sdfg
 
-    for array in sdfg.arrays.values():
-        if array.transient:
-            array.lifetime = dace.AllocationLifetime.Persistent
-
     sdfg.simplify(validate=False)
 
     _set_expansion_orders(sdfg)
@@ -178,7 +173,8 @@ def _post_expand_transformations(sdfg: dace.SDFG):
         if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
             node.schedule = dace.ScheduleType.Sequential
 
-    sdfg.apply_transformations_repeated(InlineThreadLocalTransients, validate=False)
+    # To be re-evaluated with https://github.com/GridTools/gt4py/issues/1896
+    # sdfg.apply_transformations_repeated(InlineThreadLocalTransients, validate=False) # noqa: ERA001
     sdfg.simplify(validate=False)
     nest_sequential_map_scopes(sdfg)
     for sd in sdfg.all_sdfgs_recursive():
@@ -528,7 +524,7 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
         with dace.config.temporary_config():
             # To prevent conflict with 3rd party usage of DaCe config always make sure that any
             #  changes be under the temporary_config manager
-            if gt_config.GT4PY_USE_HIP:
+            if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
                 dace.config.Config.set("compiler", "cuda", "backend", value="hip")
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set(

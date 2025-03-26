@@ -515,7 +515,7 @@ def test_cond(offset_provider):
 
     testee = im.if_(cond, field_1, field_2)
 
-    domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11)})
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain_tmp = translate_domain(domain, {"Ioff": -1}, offset_provider)
     expected_domains_dict = {"in_field1": {IDim: (0, 12)}, "in_field2": {IDim: (-2, 12)}}
     expected_tmp2 = im.as_fieldop(tmp_stencil2, domain_tmp)(
@@ -1091,5 +1091,14 @@ def test_never_accessed_domain_tuple(offset_provider):
     expected_domains = {
         "in_field1": {IDim: (0, 10)},
         "in_field2": infer_domain.DomainAccessDescriptor.NEVER,
+    }
+    run_test_expr(testee, testee, domain, expected_domains, offset_provider)
+
+
+def test_broadcast(offset_provider):
+    testee = im.call("broadcast")("in_field", im.make_tuple(itir.AxisLiteral(value="IDim")))
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10)})
+    expected_domains = {
+        "in_field": {IDim: (0, 10)},
     }
     run_test_expr(testee, testee, domain, expected_domains, offset_provider)

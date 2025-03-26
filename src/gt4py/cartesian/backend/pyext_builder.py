@@ -18,6 +18,7 @@ import setuptools
 from setuptools import distutils
 from setuptools.command.build_ext import build_ext
 
+from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
 
 
@@ -47,10 +48,10 @@ def get_gt_pyext_build_opts(
     add_profile_info: bool = False,
     uses_openmp: bool = True,
     uses_cuda: bool = False,
-    gt_version: int = 1,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
     include_dirs = [gt_config.build_settings["boost_include_path"]]
     extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
+    is_rocm_gpu = core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
 
     if uses_cuda:
         compute_capability = get_cuda_compute_capability()
@@ -67,8 +68,6 @@ def get_gt_pyext_build_opts(
         cuda_arch = ""
 
     gt_include_path = gt_config.build_settings["gt_include_path"]
-
-    import os
 
     extra_compile_args = dict(
         cxx=[
@@ -93,7 +92,7 @@ def get_gt_pyext_build_opts(
         "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
         *extra_compile_args_from_config["cuda"],
     ]
-    if gt_config.GT4PY_USE_HIP:
+    if is_rocm_gpu:
         extra_compile_args["cuda"] += [
             "-isystem{}".format(gt_include_path),
             "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
@@ -125,7 +124,7 @@ def get_gt_pyext_build_opts(
         extra_compile_args["cxx"].append(
             "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
         )
-        if gt_config.GT4PY_USE_HIP:
+        if is_rocm_gpu:
             extra_compile_args["cuda"].append(
                 "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
             )
@@ -158,7 +157,7 @@ def get_gt_pyext_build_opts(
         if uses_cuda:
             cuda_flags = []
             for cpp_flag in cpp_flags:
-                if gt_config.GT4PY_USE_HIP:
+                if is_rocm_gpu:
                     cuda_flags.extend([cpp_flag])
                 else:
                     cuda_flags.extend(["--compiler-options", cpp_flag])
@@ -309,7 +308,7 @@ def build_pybind_cuda_ext(
     library_dirs = library_dirs or []
     library_dirs = [*library_dirs, gt_config.build_settings["cuda_library_path"]]
     libraries = libraries or []
-    if gt_config.GT4PY_USE_HIP:
+    if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
         libraries = [*libraries, "hiprtc"]
     else:
         libraries = [*libraries, "cudart"]
@@ -363,7 +362,7 @@ class CUDABuildExtension(build_ext, object):
             cflags = copy.deepcopy(extra_postargs)
             try:
                 if os.path.splitext(src)[-1] == ".cu":
-                    if gt_config.GT4PY_USE_HIP:
+                    if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
                         cuda_exec = os.path.join(gt_config.build_settings["cuda_bin_path"], "hipcc")
                     else:
                         cuda_exec = os.path.join(gt_config.build_settings["cuda_bin_path"], "nvcc")

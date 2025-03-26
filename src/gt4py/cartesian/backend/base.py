@@ -172,9 +172,9 @@ class CLIBackendMixin(Backend):
         Returns
         -------
         Dict[str, str | Dict] of source file names / directories -> contents:
-            If a key's value is a string it is interpreted as a file name and the value as the
-            source code of that file
-            If a key's value is a Dict, it is interpreted as a directory name and it's
+            If a key's value is a string, it is interpreted as a file name and its value as the
+            source code of that file.
+            If a key's value is a Dict, it is interpreted as a directory name and its
             value as a nested file hierarchy to which the same rules are applied recursively.
             The root path is relative to the build directory.
 
@@ -222,7 +222,7 @@ class CLIBackendMixin(Backend):
 
         Returns
         -------
-        Analog to :py:meth:`generate_computation` but containing bindings source code, The
+        Analog to :py:meth:`generate_computation` but containing bindings source code. The
         dictionary contains a tree of directories with leaves being a mapping from filename to
         source code pairs, relative to the build directory.
 
