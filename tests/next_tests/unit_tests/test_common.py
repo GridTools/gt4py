@@ -582,11 +582,11 @@ def dimension_promotion_cases() -> (
             "Dimensions 'KDim[vertical], JDim[horizontal]' are not ordered correctly, expected 'JDim[horizontal], KDim[vertical]'.",
         ),
         (
-            [[JDim, V2E], [IDim, KDim, E2C2V]],
+            [[JDim, V2E], [IDim, E2C2V, KDim]],
             None,
             "There are more than one dimension with DimensionKind 'LOCAL'.",
         ),
-        ([[JDim, V2E], [IDim, KDim]], [IDim, JDim, KDim, V2E], None),
+        ([[JDim, V2E], [IDim, KDim]], [IDim, JDim, V2E, KDim], None),
     ]
     return [
         ([[el for el in arg] for arg in args], [el for el in result] if result else result, msg)

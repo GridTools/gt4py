@@ -12,14 +12,13 @@ import collections.abc
 import functools
 import math
 import numbers
-from typing import Final, Literal, Optional, Sequence, Tuple, Union, cast
+from typing import Literal, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 import numpy.typing as npt
 from numpy.typing import DTypeLike
 
 from gt4py._core import definitions as core_defs
-from gt4py.cartesian import config as gt_config
 from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
 from gt4py.storage import allocators
 
@@ -28,13 +27,6 @@ try:
     import cupy as cp
 except ImportError:
     cp = None
-
-
-CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]] = (
-    None
-    if not cp
-    else (core_defs.DeviceType.ROCM if cp.cuda.get_hipcc_path() else core_defs.DeviceType.CUDA)
-)
 
 
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
@@ -47,12 +39,12 @@ _GPUBufferAllocator: Optional[allocators.NDArrayBufferAllocator] = None
 if cp:
     assert isinstance(allocators.cupy_array_utils, allocators.ArrayUtils)
 
-    if CUPY_DEVICE == core_defs.DeviceType.CUDA:
+    if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.CUDA:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
             device_type=core_defs.DeviceType.CUDA,
             array_utils=allocators.cupy_array_utils,
         )
-    elif CUPY_DEVICE == core_defs.DeviceType.ROCM:
+    elif core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
         _GPUBufferAllocator = allocators.NDArrayBufferAllocator(
             device_type=core_defs.DeviceType.ROCM,
             array_utils=allocators.cupy_array_utils,
@@ -266,9 +258,10 @@ def _allocate_gpu(
 ) -> Tuple["cp.ndarray", "cp.ndarray"]:
     assert cp is not None
     assert _GPUBufferAllocator is not None, "GPU allocation library or device not found"
+    if core_defs.CUPY_DEVICE_TYPE is None:
+        raise ValueError("CUPY_DEVICE_TYPE detection failed.")
     device = core_defs.Device(  # type: ignore[type-var]
-        (core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA),
-        0,
+        core_defs.CUPY_DEVICE_TYPE, 0
     )
     buffer = _GPUBufferAllocator.allocate(
         shape,
@@ -286,7 +279,7 @@ def _allocate_gpu(
 
 allocate_gpu = _allocate_gpu
 
-if CUPY_DEVICE == core_defs.DeviceType.ROCM:
+if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
 
     class CUDAArrayInterfaceNDArray(cp.ndarray):
         def __new__(cls, input_array: "cp.ndarray") -> CUDAArrayInterfaceNDArray:
