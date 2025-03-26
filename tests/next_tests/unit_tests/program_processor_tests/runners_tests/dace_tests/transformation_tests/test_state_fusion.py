@@ -344,6 +344,55 @@ def _make_non_concurrent_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGSta
     return sdfg, state1, state2
 
 
+def _make_double_producer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
+    sdfg = dace.SDFG(util.unique_name("double_producer_sdfg"))
+    state1 = sdfg.add_state(is_start_block=True)
+    state2 = sdfg.add_state_after(state1)
+
+    for name in ["x", "y", "t1", "t2"]:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=name.startswith("t"),
+        )
+
+    state1.add_mapped_tasklet(
+        "comp1_1",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("x[__i]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("t1[__i]")},
+        external_edges=True,
+    )
+    state1.add_mapped_tasklet(
+        "comp1_2",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("y[__i]")},
+        code="__out = __in + 2.0",
+        outputs={"__out": dace.Memlet("t2[__i]")},
+        external_edges=True,
+    )
+
+    state2.add_mapped_tasklet(
+        "comp2",
+        map_ranges={"__i": "0:10"},
+        inputs={
+            "__in1": dace.Memlet("t1[__i]"),
+            "__in2": dace.Memlet("t2[__i]"),
+        },
+        code="__out1 = __in1 * 2.\n__out2 = __in2 * 3.",
+        outputs={
+            "__out1": dace.Memlet("y[__i]"),
+            "__out2": dace.Memlet("x[__i]"),
+        },
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    return sdfg, state1, state2
+
+
 def test_simple_fusion():
     sdfg, state1, state2 = _make_simple_two_state_sdfg()
     assert sdfg.start_block is state1
@@ -581,3 +630,26 @@ def test_non_concurrent_data_dependency():
     assert sdfg.number_of_nodes() == 1
     assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 6
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+
+
+def test_double_producer():
+    sdfg, state1, state2 = _make_double_producer_sdfg()
+    assert all(
+        all(
+            state.degree(ac) == 1
+            for ac in util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+        )
+        for state in [state1, state2]
+    )
+
+    nb_applied = sdfg.apply_transformations_repeated(gtx_transformations.GT4PyStateFusion)
+    sdfg.validate()
+
+    ac_nodes: list[dace_nodes.AccessNode] = util.count_nodes(
+        sdfg, dace_nodes.AccessNode, return_nodes=True
+    )
+    assert nb_applied == 1
+    assert sdfg.start_block is state1
+    assert sdfg.number_of_nodes() == 1
+    assert len(ac_nodes) == 6
+    assert all(state1.degree(ac) == (2 if ac.data.startswith("t") else 1) for ac in ac_nodes)
