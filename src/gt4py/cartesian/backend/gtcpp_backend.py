@@ -8,12 +8,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian.backend.base import CLIBackendMixin, register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
+    BaseGTBackend,
+    CUDAPyExtModuleGenerator,
+    GTBackendOptions,
     bindings_main_template,
     pybuffer_to_sid,
 )
@@ -25,8 +28,6 @@ from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.eve import codegen
-
-from .gtc_common import BaseGTBackend, CUDAPyExtModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -152,7 +153,7 @@ class GTCpuIfirstBackend(GTBaseBackend):
 
     name = "gt:cpu_ifirst"
     GT_BACKEND_T = "cpu_ifirst"
-    languages = {"computation": "c++", "bindings": ["python"]}
+    languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
     storage_info = gt_storage.layout.CPUIFirstLayout
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
@@ -165,7 +166,7 @@ class GTCpuKfirstBackend(GTBaseBackend):
 
     name = "gt:cpu_kfirst"
     GT_BACKEND_T = "cpu_kfirst"
-    languages = {"computation": "c++", "bindings": ["python"]}
+    languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
     storage_info = gt_storage.layout.CPUKFirstLayout
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
@@ -179,8 +180,11 @@ class GTGpuBackend(GTBaseBackend):
     MODULE_GENERATOR_CLASS = CUDAPyExtModuleGenerator
     name = "gt:gpu"
     GT_BACKEND_T = "gpu"
-    languages = {"computation": "cuda", "bindings": ["python"]}
-    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
+    languages: ClassVar[dict] = {"computation": "cuda", "bindings": ["python"]}
+    options: ClassVar[GTBackendOptions] = {
+        **BaseGTBackend.GT_BACKEND_OPTS,
+        "device_sync": {"versioning": True, "type": bool},
+    }
     storage_info = gt_storage.layout.CUDALayout
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:

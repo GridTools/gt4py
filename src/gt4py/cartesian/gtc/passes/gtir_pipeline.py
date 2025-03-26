@@ -28,11 +28,12 @@ class GtirPipeline:
     May only call existing passes and may not contain any pass logic itself.
     """
 
-    _cache: Dict[Tuple[StencilID, Tuple[PASS_T, ...]], gtir.Stencil] = {}
+    _cache: Dict[Tuple[StencilID, Tuple[PASS_T, ...]], gtir.Stencil]
 
     def __init__(self, node: gtir.Stencil, stencil_id: StencilID):
         self.gtir = node
         self._stencil_id = stencil_id
+        self._cache = {}
 
     @property
     def stencil_id(self) -> StencilID:

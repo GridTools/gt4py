@@ -29,7 +29,10 @@ if TYPE_CHECKING:
 
 
 class StencilComputationExpansion(dace.library.ExpandTransformation):
-    environments: List = []
+    environments: List
+
+    def __init__(self):
+        self.environments = []
 
     @staticmethod
     def _solve_for_domain(field_decls: Dict[str, dcir.FieldDecl], outer_subsets):

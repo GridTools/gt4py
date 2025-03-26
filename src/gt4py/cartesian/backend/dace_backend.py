@@ -12,7 +12,7 @@ import copy
 import os
 import pathlib
 import re
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Tuple, Type
 
 import dace
 import dace.data
@@ -26,6 +26,7 @@ from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
     BaseGTBackend,
     CUDAPyExtModuleGenerator,
+    GTBackendOptions,
     PyExtModuleGenerator,
     bindings_main_template,
     pybuffer_to_sid,
@@ -314,10 +315,11 @@ def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, doma
 
 
 class SDFGManager:
-    _loaded_sdfgs: Dict[str, dace.SDFG] = dict()
+    _loaded_sdfgs: Dict[str, dace.SDFG]
 
     def __init__(self, builder):
         self.builder = builder
+        self._loaded_sdfgs = dict()
 
     @staticmethod
     def _strip_history(sdfg):
@@ -772,8 +774,8 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 @register
 class DaceCPUBackend(BaseDaceBackend):
     name = "dace:cpu"
-    languages = {"computation": "c++", "bindings": ["python"]}
-    storage_info = {
+    languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
+    storage_info: ClassVar[gt_storage.layout.LayoutInfo] = {
         "alignment": 1,
         "device": "cpu",
         "layout_map": gt_storage.layout.layout_maker_factory((0, 1, 2)),
@@ -794,8 +796,8 @@ class DaceGPUBackend(BaseDaceBackend):
     """DaCe python backend using gt4py.cartesian.gtc."""
 
     name = "dace:gpu"
-    languages = {"computation": "cuda", "bindings": ["python"]}
-    storage_info = {
+    languages: ClassVar[dict] = {"computation": "cuda", "bindings": ["python"]}
+    storage_info: ClassVar[gt_storage.layout.LayoutInfo] = {
         "alignment": 32,
         "device": "gpu",
         "layout_map": gt_storage.layout.layout_maker_factory((2, 1, 0)),
@@ -804,7 +806,10 @@ class DaceGPUBackend(BaseDaceBackend):
         ),
     }
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
-    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
+    options: ClassVar[GTBackendOptions] = {
+        **BaseGTBackend.GT_BACKEND_OPTS,
+        "device_sync": {"versioning": True, "type": bool},
+    }
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(uses_cuda=True)
