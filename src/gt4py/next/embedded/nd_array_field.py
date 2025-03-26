@@ -761,7 +761,8 @@ def _hyperslice(
     nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
 
     slices = tuple(
-        slice(xp.min(dim_nnz_indices), xp.max(dim_nnz_indices) + 1) for dim_nnz_indices in nnz
+        slice(xp.min(dim_nnz_indices).item(), xp.max(dim_nnz_indices).item() + 1)
+        for dim_nnz_indices in nnz
     )
     hcube = select_mask[tuple(slices)]
     if skip_value is not None:
