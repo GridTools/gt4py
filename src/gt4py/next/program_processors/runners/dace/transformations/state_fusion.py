@@ -207,6 +207,9 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         The function checks if by the elimination of states creates read write
         conflicts. Because of the structure outlined by ADR-18 it only checks this
         for the global data, since transients are by definition written only once.
+
+        Todo:
+            Refine this function.
         """
         first_state: dace.SDFGState = self.first_state
         first_scope_dict = first_state.scope_dict()
@@ -214,8 +217,8 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         second_scope_dict = second_state.scope_dict()
 
         # For each independent subgraph in the first state we now determine the
-        #  data it writes to. Furthermore, we determine on which global data the
-        #  component depends, i.e. reads from.
+        #  data it writes to. Furthermore, we determine on which data the
+        #  component depends on, i.e. reads from.
         first_subgraphs = dace.sdfg.utils.concurrent_subgraphs(first_state)
         data_producers: list[set[str]] = []
         data_producers_dependencies: list[set[str]] = []
@@ -225,30 +228,29 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 {
                     dnode.data
                     for dnode in first_subgraph.data_nodes()
-                    if (first_scope_dict[dnode] is None and first_subgraph.in_degree(dnode) != 0)
+                    if first_scope_dict[dnode] is None and first_subgraph.in_degree(dnode) != 0
                 }
             )
             data_producers_dependencies.append(
                 {
                     dnode.data
                     for dnode in first_subgraph.data_nodes()
-                    if (
-                        first_scope_dict[dnode] is None
-                        and first_subgraph.out_degree(dnode) != 0
-                        and not dnode.desc(sdfg).transient
-                    )
+                    if first_scope_dict[dnode] is None and first_subgraph.out_degree(dnode) != 0
                 }
             )
+            assert all_data_producers.isdisjoint(
+                data_producers[-1]
+            ), "Found multiple AccessNodes that writes to data in one state."
             all_data_producers.update(data_producers[-1])
 
         # Now for every independent subgraph of the second state we determine which
-        #  data it reads, that were defined in the first state, the so called messenger
-        #  data. Components that share a messenger data will be merged together, if
-        #  the states are fused. Furthermore, we determine the set of global data,
+        #  data it reads, that were written to in the first state, the so called
+        #  messenger data. Components that share a messenger data will be merged
+        #  together, if the states are fused. Furthermore, we determine the set of data,
         #  a component writes to. Because if a component, from the first state, depends
-        #  on a global data a component from the second state writes to and the two
-        #  are not related through a messenger data, then we end up with two
-        #  independent subgraphs that read and write from the same global data.
+        #  on data a component from the second state writes to and the two  are not
+        #  related through a messenger data, then we end up with two independent
+        #   subgraphs that read and write from the same global data.
         #  This is indeterministic behaviour, thus we should reject it.
         second_subgraphs = dace.sdfg.utils.concurrent_subgraphs(second_state)
         data_consumers: list[set[str]] = []
@@ -266,19 +268,34 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 {
                     dnode.data
                     for dnode in second_subgraph.data_nodes()
-                    if (
-                        second_scope_dict[dnode] is None
-                        and second_subgraph.in_degree(dnode) != 0
-                        and not dnode.desc(sdfg).transient
-                    )
+                    if second_scope_dict[dnode] is None and second_subgraph.in_degree(dnode) != 0
                 }
             )
-            messanger_data.update(data_consumers[-1])
+            assert messanger_data.isdisjoint(
+                data_consumers[-1]
+            ), "Found multiple AccessNodes that reads from the same data in one state."
+            messanger_data.update(data_consumers[-1].intersection(all_data_producers))
 
+        # Inspect the consumer
+        for data_consumer, consumer_influece in zip(data_consumers, data_consumers_influences):
+            consumed_messenger = messanger_data.intersection(data_consumer)
+            if len(consumed_messenger) == 0:
+                # This component does not consume anything the first state generates,
+                #  This means it is an isolated component and remains an isolated
+                #  component. There is technically nothing to do. However, there is
+                #  the special case that it writes a variable some component of the
+                #  first state depends on. Strictly speaking this violates ADR-18, but
+                #  it happens in some scan expressions.
+                if not all(
+                    data_producer.isdisjoint(consumer_influece) for data_producer in data_producers
+                ):
+                    return True
+
+        # Inspect the producer
         for data_producer, producer_dependency in zip(data_producers, data_producers_dependencies):
             if data_producer.isdisjoint(messanger_data):
                 # The component does not generate any messenger data. In that case
-                #  we must ensure that it does not depend on any global data that is
+                #  we must ensure that it does not depend on any data that is
                 #  modified by the second state.
                 if not all(
                     producer_dependency.isdisjoint(consumer_influece)
@@ -296,6 +313,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                     if not data_consumer.isdisjoint(data_producer):
                         # The two components get merged, so there is no conflict,
                         #  because we assume that the graph is pointwise.
+                        # TODO(phimuell): Refine this check.
                         continue
                     if not consumer_influece.isdisjoint(producer_dependency):
                         # The component, will not be merged with the producer, so they
