@@ -65,7 +65,6 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
             return False
         if graph.in_degree(second_state) != 1:
             return False
-
         conn_edge = next(iter(graph.out_edges(first_state)))
         if not conn_edge.data.is_unconditional():
             return False
@@ -73,6 +72,13 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         # TODO(phimuell): Lift this limitation.
         if len(conn_edge.data.assignments) != 0:
             return False
+
+        # If one of the states is empty, then we can accept it because it will not
+        #  create any data access issues.
+        if first_state.number_of_nodes() == 0:
+            return True
+        if second_state.number_of_nodes() == 0:
+            return True
 
         # If the first state writes to global memory and the second state contains
         #  an AccessNode that reads and writes to the same global memory. In this case
