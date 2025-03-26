@@ -315,11 +315,11 @@ def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, doma
 
 
 class SDFGManager:
-    _loaded_sdfgs: Dict[str, dace.SDFG]
+    # Cache loaded SDFGs across all instances
+    _loaded_sdfgs: ClassVar[Dict[str, dace.SDFG]] = dict()
 
     def __init__(self, builder):
         self.builder = builder
-        self._loaded_sdfgs = dict()
 
     @staticmethod
     def _strip_history(sdfg):
@@ -358,7 +358,7 @@ class SDFGManager:
                     self.builder.backend.storage_info["layout_map"],
                 )
                 self._save_sdfg(sdfg, path)
-            self._loaded_sdfgs[path] = sdfg
+            SDFGManager._loaded_sdfgs[path] = sdfg
 
         return SDFGManager._loaded_sdfgs[path]
 
@@ -380,7 +380,7 @@ class SDFGManager:
         path = self.builder.module_path
         basename = os.path.splitext(path)[0]
         path = basename + "_" + str(frozen_hash) + ".sdfg"
-        if path not in self._loaded_sdfgs:
+        if path not in SDFGManager._loaded_sdfgs:
             try:
                 sdfg = dace.SDFG.from_file(path)
             except FileNotFoundError:
@@ -395,8 +395,8 @@ class SDFGManager:
                     domain=domain,
                 )
                 self._save_sdfg(sdfg, path)
-            self._loaded_sdfgs[path] = sdfg
-        return self._loaded_sdfgs[path]
+            SDFGManager._loaded_sdfgs[path] = sdfg
+        return SDFGManager._loaded_sdfgs[path]
 
     def frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
         return copy.deepcopy(self._frozen_sdfg(origin=origin, domain=domain))
