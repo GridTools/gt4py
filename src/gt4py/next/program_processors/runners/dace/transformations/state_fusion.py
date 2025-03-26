@@ -341,13 +341,10 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         first_scope_dict = first_state.scope_dict()
         second_scope_dict = second_state.scope_dict()
 
-        # We have to preserve the order this means that every source node of the
-        #  second state, must merge the nodes from the first node with the
-        #  corresponding nodes in the second state.
-        #  By definition and ADR-18, these are all AccessNodes with a non zero
-        #  input degree. Although not strictly needed, we also add globals that
-        #  are read, but not written to in the first state, the effect is that
-        #  there is only one reading AccessNode, which is closer to ADR-18.
+        # We have to preserve the order this means that every node from the second
+        #  state, must merge with the corresponding node from the first state.
+        #  These are all nodes that have a non zero input degree. For convenient,
+        #  we also add all other data that is read, except if it is not written
         # TODO(phimuell): In case of global data it might be possible that there are
         #   multiple AccessNodes that writes to the data. We currently ignore that case.
         data_producers: dict[str, dace_nodes.AccessNode] = {
@@ -356,21 +353,19 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
             if (first_scope_dict[dnode] is None and first_state.in_degree(dnode) != 0)
         }
 
-        # Add the AccessNodes from the first state that read from global memory.
-        #  However, if there is an AccessNodes that writes to it use that one.
+        # Now add everything that is read too, if it is not already present.
         for dnode in first_state.data_nodes():
-            if dnode.desc(sdfg).transient:
-                continue
             if not (first_state.in_degree(dnode) == 0 and first_state.out_degree(dnode) != 0):
                 continue
             if dnode.data in data_producers:
+                assert not dnode.desc(sdfg).transient
                 continue
             data_producers[dnode.data] = dnode
 
         # Now we will look for all data consumers, i.e. nodes that are reading data
         #  from the first state. These are all AccessNodes that have a zero indegree
         #  and that are listed in `data_producers`. Note that these nodes might have
-        #  to be replaced with the nodes from the source.
+        #  to be replaced with the nodes from the first state.
         #  Note we can not use a `dict` here because it is possible, although not
         #  fully compliant to ADR-18 though, that there are multiple AccessNodes
         #  referring to the same data.
