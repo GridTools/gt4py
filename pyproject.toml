@@ -128,7 +128,6 @@ requires-python = '>=3.10, <3.12'
 [project.optional-dependencies]
 # bundles
 all = ['gt4py[dace,formatting,jax,performance,testing]']
-all-next = ['gt4py[dace-next,formatting,jax,performance,testing]']
 # device-specific extras
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
@@ -320,6 +319,7 @@ markers = [
   'uses_sparse_fields_as_output: tests that require backend support for writing sparse fields',
   'uses_strided_neighbor_offset: tests that require backend support for strided neighbor offset',
   'uses_tuple_args: tests that require backend support for tuple arguments',
+  'uses_tuple_args_with_different_but_promotable_dims: test that requires backend support for tuple args with different but promotable dims',
   'uses_tuple_iterator: tests that require backend support to deref tuple iterators',
   'uses_tuple_returns: tests that require backend support for tuple results',
   'uses_zero_dimensional_fields: tests that require backend support for zero-dimensional fields',
@@ -331,6 +331,7 @@ markers = [
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
 testpaths = 'tests'
+xfail_strict = true
 
 # -- ruff --
 [tool.ruff]
@@ -446,15 +447,7 @@ conflicts = [
   ],
   [
     {extra = 'all'},
-    {extra = 'all-next'}
-  ],
-  [
-    {extra = 'all'},
     {extra = 'dace-next'}
-  ],
-  [
-    {extra = 'all-next'},
-    {extra = 'dace'}
   ]
 ]
 
