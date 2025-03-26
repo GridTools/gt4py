@@ -142,7 +142,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         self,
         sdfg: dace.SDFG,
         parent: dace.SDFG,
-        global_symbols: dict[str, ts.DataType],
+        scope_symbols: dict[str, ts.DataType],
     ) -> SDFGBuilder:
         """
         Create an SDFG context to translate a nested expression, indipendent
@@ -155,7 +155,8 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         Args:
             sdfg: The SDFG where to lower the nested expression.
             parent: The parent SDFG.
-            global_symbols: Mapping from symbol name to GTIR data type.
+            scope_symbols: Mapping from symbol name to data type for the GTIR symbols
+                forwarded to the nested context.
 
         Returns:
             A visitor object implementing the `SDFGBuilder` protocol.
@@ -312,10 +313,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self,
         sdfg: dace.SDFG,
         parent: dace.SDFG,
-        global_symbols: dict[str, ts.DataType],
+        scope_symbols: dict[str, ts.DataType],
     ) -> SDFGBuilder:
-        nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, global_symbols)
-        params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in global_symbols.items()]
+        nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, scope_symbols)
+        params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in scope_symbols.items()]
         symbolic_arguments = {
             # scalar values represented as dace symbols in parent SDFG are mapped
             # to dace symbols in the nested SDFG
