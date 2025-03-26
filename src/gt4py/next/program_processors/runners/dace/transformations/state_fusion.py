@@ -240,24 +240,10 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
             ), "Found multiple AccessNodes that reads from the same data in one state."
             messanger_data.update(data_consumers[-1].intersection(all_data_producers))
 
-        # Inspect the consumer
-        for data_consumer, consumer_influece in zip(data_consumers, data_consumers_influences):
-            consumed_messenger = messanger_data.intersection(data_consumer)
-            if len(consumed_messenger) == 0:
-                # This component does not consume anything the first state generates,
-                #  This means it is an isolated component and remains an isolated
-                #  component. There is technically nothing to do. However, there is
-                #  the special case that it writes a variable some component of the
-                #  first state depends on. Strictly speaking this violates ADR-18, but
-                #  it happens in some scan expressions.
-                if not all(
-                    data_producer.isdisjoint(consumer_influece) for data_producer in data_producers
-                ):
-                    return True
-
-        # Inspect the producer
         for data_producer, producer_dependency in zip(data_producers, data_producers_dependencies):
-            if data_producer.isdisjoint(messanger_data):
+            produced_messenger = data_producer.intersection(messanger_data)
+
+            if len(produced_messenger) == 0:
                 # The component does not generate any messenger data. In that case
                 #  we must ensure that it does not depend on any data that is
                 #  modified by the second state.
@@ -266,25 +252,66 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                     for consumer_influece in data_consumers_influences
                 ):
                     return True
+                continue
 
-            else:
-                # This component generates some messenger data. We must now check if
-                #  any consumer component, that is not related through messengers to
-                #  the producer influences that global data.
-                for data_consumer, consumer_influece in zip(
-                    data_consumers, data_consumers_influences
-                ):
-                    if not data_consumer.isdisjoint(data_producer):
-                        # The two components get merged, so there is no conflict,
-                        #  because we assume that the graph is pointwise.
-                        # TODO(phimuell): Refine this check.
-                        continue
-                    if not consumer_influece.isdisjoint(producer_dependency):
-                        # The component, will not be merged with the producer, so they
-                        #  end up independent, but they read and write, respectively
-                        #  from the same global memory, thus the states can not be
-                        #  merged.
+            # The ID of the consumers that that depends on the current producer. Note
+            #  that we do not consider consumers here that fully depends on the
+            #  producer.
+            depending_consumers: list[int] = []
+
+            for consumer_id, (data_consumer, consumer_influece) in enumerate(
+                zip(data_consumers, data_consumers_influences)
+            ):
+                consumed_messenger = data_consumer.intersection(messanger_data)
+                exchanged_messenger = produced_messenger.intersection(consumed_messenger)
+                if len(exchanged_messenger) == 0:
+                    # This component does not consume anything the first state
+                    #  generates, this means it is an isolated component and remains
+                    #  an isolated component. There is technically nothing to do.
+                    #  However, there is the special case that it writes a variable
+                    #  some component of the first state depends on. Strictly speaking
+                    #  this violates ADR-18, but it happens in some scan expressions.
+                    # We do not add the consumer to `depending_consumer` because there
+                    #  is no connection.
+                    if not producer_dependency.isdisjoint(consumer_influece):
+                        # The consumer modifies something the producer needs. So we
+                        #  can not fuse it.
                         return True
+
+                else:
+                    # There is some exchange between the producer and the consumer.
+                    #  We assume that despite the merge the inner dependencies are
+                    #  meet, i.e. all messenger materializes before the dependent
+                    #  dataflow is executed. We thus have to ensure that the new
+                    #  component will not affect any component that is not involved
+                    #  inside the merge.
+                    unaffected_producers: list[int] = [
+                        producer_id
+                        for producer_id, data_producer in enumerate(data_producers)
+                        if data_producer.isdisjoint(data_consumer)
+                    ]
+                    dependencies_of_unaffected_producers: set[str] = set()
+                    for unaffected_producer in unaffected_producers:
+                        dependencies_of_unaffected_producers.update(
+                            data_producers_dependencies[unaffected_producer]
+                        )
+                    if not dependencies_of_unaffected_producers.isdisjoint(consumer_influece):
+                        return True
+
+                    # In case the consumer did not consume everything inside the
+                    #  producer add it to the list of dependent consumers. See
+                    #  bellow for more.
+                    # TODO(phimuell): Lift this or refine this.
+                    if exchanged_messenger != produced_messenger:
+                        depending_consumers.append(consumer_id)
+
+            if len(depending_consumers) > 1:
+                # If we have more than one depending consumer, then this means that
+                #  we several consumer would partially read the producer. This
+                #  essentially creates concurrent dataflow within the component, which
+                #  would lead to indeterministic results, so we have to reject the
+                #  merge.
+                return True
 
         return False
 
