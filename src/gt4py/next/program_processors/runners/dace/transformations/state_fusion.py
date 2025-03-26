@@ -96,7 +96,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         ):
             return False
 
-        if self._check_for_read_write_conflicts(sdfg=sdfg):
+        if self._check_for_read_write_conflicts(sdfg):
             return False
 
         return True
@@ -107,9 +107,9 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
     ) -> bool:
         """Return `True` if there are conflicts."""
 
-        if self._check_for_read_write_dependencies(sdfg=sdfg):
+        if self._check_for_read_write_dependencies(sdfg):
             return True
-        if self._check_for_wcr_conflicts(sdfg=sdfg):
+        if self._check_for_wcr_conflicts(sdfg):
             return True
         return False
 
@@ -120,9 +120,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         """Checks if wcr edges prevent two consecutive states to be fused.
 
         If both states contains a write to the same data, and one of them has a set
-        `wcr` then we can not merge the states. Note that we allow the case that
-        the first state contains a `wcr` write to a data and the second state contains
-        a read to it.
+        `wcr` then we can not merge the states.
 
         Note:
             In case all writes are `wcr` it might be possible to merge them, but
@@ -153,7 +151,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         common_write_data: set[str] = first_state_writes_names.intersection(
             second_state_writes_names
         )
-        if second_state_writes_names.isdisjoint(first_state_writes_names):
+        if len(common_write_data) == 0:
             return False
 
         for state, ac_nodes in [
