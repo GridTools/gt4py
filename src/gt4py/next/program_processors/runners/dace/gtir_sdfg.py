@@ -140,8 +140,8 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     @abc.abstractmethod
     def setup_nested_context(
         self,
-        expr: gtir.Expr,
         sdfg: dace.SDFG,
+        parent: dace.SDFG,
         global_symbols: dict[str, ts.DataType],
     ) -> SDFGBuilder:
         """
@@ -150,11 +150,11 @@ class SDFGBuilder(DataflowBuilder, Protocol):
 
         This method will setup the global symbols, that correspond to the parameters
         of the expression to be lowered, as well as the set of symbolic arguments,
-        that is scalar values used in internal domain expressions.
+        that is scalar values represented as dace symbols in the parent SDFG.
 
         Args:
-            expr: The nested expresson to be lowered.
             sdfg: The SDFG where to lower the nested expression.
+            parent: The parent SDFG.
             global_symbols: Mapping from symbol name to GTIR data type.
 
         Returns:
@@ -310,18 +310,20 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def setup_nested_context(
         self,
-        expr: gtir.Expr,
         sdfg: dace.SDFG,
+        parent: dace.SDFG,
         global_symbols: dict[str, ts.DataType],
     ) -> SDFGBuilder:
         nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, global_symbols)
-        nsdfg_params = [
-            gtir.Sym(id=p_name, type=p_type) for p_name, p_type in global_symbols.items()
-        ]
-        domain_symbols = _collect_symbols_in_domain_expressions(expr, nsdfg_params)
-        nsdfg_builder._add_sdfg_params(
-            sdfg, node_params=nsdfg_params, symbolic_arguments=domain_symbols
-        )
+        params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in global_symbols.items()]
+        symbolic_arguments = {
+            # scalar values represented as dace symbols in parent SDFG are mapped
+            # to dace symbols in the nested SDFG
+            pname
+            for sym in params
+            if (pname := str(sym.id)) in parent.symbols
+        }
+        nsdfg_builder._add_sdfg_params(sdfg, params, symbolic_arguments)
         return nsdfg_builder
 
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
@@ -765,7 +767,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # lower let-statement lambda node as a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nsdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=sdfg.debuginfo)
-        lambda_translator = self.setup_nested_context(node.expr, nsdfg, lambda_symbols)
+        lambda_translator = self.setup_nested_context(nsdfg, sdfg, lambda_symbols)
 
         nstate = nsdfg.add_state("lambda")
         lambda_result = lambda_translator.visit(
@@ -793,34 +795,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 src_node = lambda_arg_nodes[nsdfg_dataname].dc_node
                 dataname = src_node.data
                 datadesc = src_node.desc(sdfg)
-            elif nsdfg_dataname in sdfg.arrays:
+            else:
                 dataname = nsdfg_dataname
                 datadesc = sdfg.arrays[nsdfg_dataname]
-            else:
-                # By default, all scalar GTIR symbols are represented as scalar
-                # data containers in the SDFG. Exceptionally, scalars used in
-                # domain expressions need to be represented as SDFG symbols.
-                # However, it can happen that the same GTIR symbol is used inside
-                # a nested context as a regular symbol, outside of a domain
-                # expression, in which case it has to be written to a transient
-                # node and connected to the input connector of the nested SDFG.
-                assert nsdfg_dataname in sdfg.symbols
-                datatype = self.get_symbol_type(nsdfg_dataname)
-                assert isinstance(datatype, ts.ScalarType)
-                dataname, datadesc = self.add_temp_scalar(sdfg, nsdfg_datadesc.dtype)
-                src_node = head_state.add_access(dataname)
-                head_state.add_edge(
-                    head_state.add_tasklet(
-                        f"get_value_{nsdfg_dataname}", {}, {"val"}, f"val = {nsdfg_dataname}"
-                    ),
-                    "val",
-                    src_node,
-                    None,
-                    dace.Memlet(data=dataname, subset="0"),
-                )
-                lambda_arg_nodes[nsdfg_dataname] = gtir_builtin_translators.FieldopData(
-                    src_node, datatype, origin=()
-                )
 
             # ensure that connectivity tables are non-transient arrays in parent SDFG
             if dataname in connectivity_arrays:
