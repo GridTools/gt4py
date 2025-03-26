@@ -12,6 +12,8 @@ import dace
 from dace import transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
 
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+
 
 @dace_transformation.explicit_cf_compatible
 class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
@@ -181,7 +183,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         # For each independent subgraph in the first state we now determine the
         #  data it writes to. Furthermore, we determine on which data the
         #  component depends on, i.e. reads from.
-        first_subgraphs = dace.sdfg.utils.concurrent_subgraphs(first_state)
+        first_subgraphs = gtx_transformations.utils.find_all_subgraphs(first_state)
         data_producers: list[set[str]] = []
         data_producers_dependencies: list[set[str]] = []
         all_data_producers: set[str] = set()
@@ -214,7 +216,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         #  related through a messenger data, then we end up with two independent
         #   subgraphs that read and write from the same global data.
         #  This is indeterministic behaviour, thus we should reject it.
-        second_subgraphs = dace.sdfg.utils.concurrent_subgraphs(second_state)
+        second_subgraphs = gtx_transformations.utils.find_all_subgraphs(second_state)
         data_consumers: list[set[str]] = []
         data_consumers_influences: list[set[str]] = []
         messanger_data: set[str] = set()
