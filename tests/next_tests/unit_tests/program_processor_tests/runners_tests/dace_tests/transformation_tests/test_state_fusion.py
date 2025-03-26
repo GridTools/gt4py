@@ -393,6 +393,80 @@ def _make_double_producer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGSt
     return sdfg, state1, state2
 
 
+def _make_double_consumer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
+    sdfg = dace.SDFG(util.unique_name("double_consumer_sdfg"))
+    state1 = sdfg.add_state(is_start_block=True)
+    state2 = sdfg.add_state_after(state1)
+
+    for name in ["x", "y", "t1", "t2"]:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=name.startswith("t"),
+        )
+
+    x1 = state1.add_access("x")
+    y1 = state1.add_access("y")
+
+    state1.add_mapped_tasklet(
+        "comp1_1",
+        map_ranges={"__i": "0:10"},
+        inputs={
+            "__in1": dace.Memlet("x[__i]"),
+            "__in2": dace.Memlet("y[__i]"),
+        },
+        code="__out = __in1 * 2.",
+        outputs={
+            "__out": dace.Memlet("t1[__i]"),
+        },
+        input_nodes={x1, y1},
+        external_edges=True,
+    )
+    state1.add_mapped_tasklet(
+        "comp1_2",
+        map_ranges={"__i": "0:10"},
+        inputs={
+            "__in1": dace.Memlet("x[__i]"),
+            "__in2": dace.Memlet("y[__i]"),
+        },
+        code="__out = __in1 * 3.",
+        outputs={
+            "__out": dace.Memlet("t2[__i]"),
+        },
+        input_nodes={x1, y1},
+        external_edges=True,
+    )
+
+    state2.add_mapped_tasklet(
+        "comp2_1",
+        map_ranges={"__i": "0:10"},
+        inputs={
+            "__in1": dace.Memlet("t1[__i]"),
+        },
+        code="__out = __in1 + 1.",
+        outputs={
+            "__out": dace.Memlet("x[__i]"),
+        },
+        external_edges=True,
+    )
+    state2.add_mapped_tasklet(
+        "comp2_1",
+        map_ranges={"__i": "0:10"},
+        inputs={
+            "__in1": dace.Memlet("t2[__i]"),
+        },
+        code="__out = __in1 + 2.",
+        outputs={
+            "__out": dace.Memlet("y[__i]"),
+        },
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    return sdfg, state1, state2
+
+
 def test_simple_fusion():
     sdfg, state1, state2 = _make_simple_two_state_sdfg()
     assert sdfg.start_block is state1
@@ -653,3 +727,13 @@ def test_double_producer():
     assert sdfg.number_of_nodes() == 1
     assert len(ac_nodes) == 6
     assert all(state1.degree(ac) == (2 if ac.data.startswith("t") else 1) for ac in ac_nodes)
+
+
+def test_double_consumer():
+    sdfg, state1, state2 = _make_double_consumer_sdfg()
+    nb_applied = sdfg.apply_transformations_repeated(gtx_transformations.GT4PyStateFusion)
+    sdfg.validate()
+
+    # The transformation does not apply, because it would be indeterministic, i.e.
+    #  `x` could be updated before it is read to compute the final value for `y`.
+    assert nb_applied == 0
