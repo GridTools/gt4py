@@ -27,6 +27,8 @@ __author__: Final = "ETH Zurich and individual contributors"
 __copyright__: Final = "Copyright (c) 2014-2024 ETH Zurich"
 __license__: Final = "BSD-3-Clause"
 
+# This would be overwritten by the actual version at build time
+# using the versioningit onbuild hook
 __on_build_version: Final = "0.0.0+missing.version.info"
 
 if dist := _imp_metadata.distribution("gt4py"):

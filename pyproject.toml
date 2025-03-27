@@ -441,7 +441,7 @@ dace = {git = "https://github.com/spcl/dace", branch = "main", extra = "dace-nex
 
 # -- versioningit --
 [tool.versioningit]
-default-version="0.0.0+missing.version.info"
+default-version = "0.0.0+missing.version.info"
 
 [tool.versioningit.format]
 dirty = "{base_version}+d{build_date:%Y%m%d}"  # Example: 1.2.3+d20230922
@@ -449,8 +449,8 @@ distance = "{base_version}+{vcs}{distance}.{rev}"  # Example: 1.2.3.+g42.e174a1f
 distance-dirty = "{base_version}+{vcs}{distance}.{rev}.d{build_date:%Y%m%d}"  # Example: 1.2.3+g42.e174a1f.d20230922
 
 [tool.versioningit.onbuild]
-regex = "^__on_build_version: Final\\s*=\\s*(?P<version>.*)"
 build-file = "gt4py/__about__.py"
+regex = "^__on_build_version: Final\\s*=\\s*(?P<version>.*)"
 source-file = "src/gt4py/__about__.py"
 
 [tool.versioningit.vcs]

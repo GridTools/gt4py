@@ -999,6 +999,7 @@ wheels = [
 
 [[package]]
 name = "gt4py"
+version = "1.1.0+g115.86bfb561a"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
@@ -1028,6 +1029,7 @@ dependencies = [
     { name = "tabulate" },
     { name = "toolz" },
     { name = "typing-extensions" },
+    { name = "versioningit" },
     { name = "xxhash" },
 ]
 
@@ -1081,7 +1083,6 @@ build = [
     { name = "cython" },
     { name = "pip" },
     { name = "setuptools" },
-    { name = "versioningit" },
     { name = "wheel" },
 ]
 dev = [
@@ -1117,7 +1118,6 @@ dev = [
     { name = "types-pytz" },
     { name = "types-pyyaml" },
     { name = "types-tabulate" },
-    { name = "versioningit" },
     { name = "wheel" },
 ]
 docs = [
@@ -1202,6 +1202,7 @@ requires-dist = [
     { name = "tabulate", specifier = ">=0.8.10" },
     { name = "toolz", specifier = ">=0.12.1" },
     { name = "typing-extensions", specifier = ">=4.11.0" },
+    { name = "versioningit", specifier = ">=3.1.1" },
     { name = "xxhash", specifier = ">=1.4.4,<3.1.0" },
 ]
 
@@ -1210,7 +1211,6 @@ build = [
     { name = "cython", specifier = ">=3.0.0" },
     { name = "pip", specifier = ">=22.1.1" },
     { name = "setuptools", specifier = ">=70.0.0" },
-    { name = "versioningit", specifier = ">=3.1.1" },
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dev = [
@@ -1246,7 +1246,6 @@ dev = [
     { name = "types-pytz", specifier = ">=2024.2.0" },
     { name = "types-pyyaml", specifier = ">=6.0.10" },
     { name = "types-tabulate", specifier = ">=0.8.10" },
-    { name = "versioningit", specifier = ">=3.1.1" },
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 docs = [
