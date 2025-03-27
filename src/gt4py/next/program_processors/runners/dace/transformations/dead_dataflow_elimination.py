@@ -27,8 +27,8 @@ def gt_eliminate_dead_dataflow(
     The function will fist run GT4Py's dead datflow elimination and if requested
     simplify afterwards. It is recommended to use this function instead as it will
     also run `FindSingleUseData` before.
-    The function returns the number of eliminated objects (the output of `gt_simplify()`
-    if any is ignored).
+    The function returns the number of AccessNodes whose outgoing edges where
+    processed. (the output of `gt_simplify()` if any is ignored).
 
     Args:
         sdfg: The SDFG to process.
@@ -92,7 +92,7 @@ class DeadMemletElimination(dace_transformation.SingleStateTransformation):
     def _find_candidates(
         self,
         state: dace.SDFGState,
-    ) -> list[dace.sdfg.MultiConnectorEdge]:
+    ) -> list[dace.sdfg.state.MultiConnectorEdge]:
         """Find all edges of `self.access_node` that can be removed."""
 
         access_node: dace_nodes.AccessNode = self.access_node
@@ -147,8 +147,8 @@ class DeadMemletElimination(dace_transformation.SingleStateTransformation):
 
         if graph.degree(access_node) == 0:
             graph.remove_node(access_node)
-            if other_node.desc(sdfg).transient:
-                removed_data_names.add(other_node.data)
+            if access_node.desc(sdfg).transient:
+                removed_data_names.add(access_node.data)
 
         if len(removed_data_names) != 0 and self._single_use_data is not None:
             single_use_data: set[str] = self._single_use_data[sdfg]
