@@ -14,13 +14,7 @@ from typing import Final
 from packaging import version as pkg_version
 
 
-__all__ = [
-    "__author__",
-    "__copyright__",
-    "__license__",
-    "__version__",
-    "__version_info__",
-]
+__all__ = ["__author__", "__copyright__", "__license__", "__version__", "__version_info__"]
 
 
 __author__: Final = "ETH Zurich and individual contributors"
