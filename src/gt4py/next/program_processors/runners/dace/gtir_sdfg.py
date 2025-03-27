@@ -391,6 +391,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         name: str,
         gt_type: ts.DataType,
         transient: bool = True,
+        tuple_name: Optional[str] = None,
     ) -> list[tuple[str, ts.DataType]]:
         """
         Add storage in the SDFG for a given GT4Py data symbol.
@@ -410,6 +411,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             name: Symbol Name to be allocated.
             gt_type: GT4Py symbol type.
             transient: True when the data symbol has to be allocated as internal storage.
+            tuple_name: Name of the tuple the current GT4Py data symbol belongs to.
+                Set to `None` if the symbol does not belong to a tuple.
 
         Returns:
             List of tuples '(data_name, gt_type)' where 'data_name' is the name of
@@ -422,8 +425,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             tuple_fields = []
             for sym in gtir_sdfg_utils.flatten_tuple_fields(name, gt_type):
                 assert isinstance(sym.type, ts.DataType)
+                # for nested tuples, we always pass the root tuple symbol name
+                sym_ref = name if tuple_name is None else tuple_name
                 tuple_fields.extend(
-                    self._add_storage(sdfg, symbolic_arguments, sym.id, sym.type, transient)
+                    self._add_storage(
+                        sdfg, symbolic_arguments, sym.id, sym.type, transient, tuple_name=sym_ref
+                    )
                 )
             return tuple_fields
 
@@ -443,7 +450,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         elif isinstance(gt_type, ts.ScalarType):
             dc_dtype = gtx_dace_utils.as_dace_type(gt_type)
-            if gtx_dace_utils.is_field_symbol(name) or name in symbolic_arguments:
+            # note that `symbolic_arguments` contains the name of the tuple a scalar belongs to
+            sym_ref = name if tuple_name is None else tuple_name
+            if gtx_dace_utils.is_field_symbol(name) or sym_ref in symbolic_arguments:
                 if name in sdfg.symbols:
                     # Sometimes, when the field domain is implicitly derived from the
                     # field domain, the gt4py lowering adds the field size as a scalar
