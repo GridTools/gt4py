@@ -14,13 +14,20 @@ from typing import Final
 from packaging import version as pkg_version
 
 
-__all__ = ["__author__", "__copyright__", "__license__", "__version__", "__version_info__"]
+__all__ = [
+    "__author__",
+    "__copyright__",
+    "__license__",
+    "__version__",
+    "__version_info__",
+]
 
 
 __author__: Final = "ETH Zurich and individual contributors"
 __copyright__: Final = "Copyright (c) 2014-2024 ETH Zurich"
 __license__: Final = "BSD-3-Clause"
 
+__on_build_version: Final = "0.0.0+missing.version.info"
 
 if dist := _imp_metadata.distribution("gt4py"):
     _version: str = dist.version
@@ -47,8 +54,8 @@ if dist := _imp_metadata.distribution("gt4py"):
             pass
 
 else:
-    # TODO(egparedes): should we fallback to a default version instead??
-    raise RuntimeError("Could not find 'gt4py' package metadata")
+    # Fallback to a default version instead??
+    _version = __on_build_version
 
 __version__: Final[str] = _version
 __version_info__: Final = pkg_version.parse(__version__)

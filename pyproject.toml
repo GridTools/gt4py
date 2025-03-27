@@ -10,7 +10,6 @@ build = [
   'cython>=3.0.0',
   'pip>=22.1.1',
   'setuptools>=70.0.0',
-  'versioningit>=3.1.1',
   'wheel>=0.33.6'
 ]
 dev = [
@@ -107,6 +106,7 @@ dependencies = [
   'tabulate>=0.8.10',
   'toolz>=0.12.1',
   'typing-extensions>=4.11.0',
+  'versioningit>=3.1.1',
   'xxhash>=1.4.4,<3.1.0'
 ]
 description = 'Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL)'
@@ -400,6 +400,10 @@ max-complexity = 15
 [tool.setuptools]
 platforms = ['Linux', 'Mac']
 
+[tool.setuptools.cmdclass]
+build_py = "versioningit.cmdclass.build_py"
+sdist = "versioningit.cmdclass.sdist"
+
 [tool.setuptools.package-data]
 '*' = ['*.in', '*.txt']
 'gt4py' = ['py.typed', '*.md', '*.rst']
@@ -437,11 +441,17 @@ dace = {git = "https://github.com/spcl/dace", branch = "main", extra = "dace-nex
 
 # -- versioningit --
 [tool.versioningit]
+default-version="0.0.0+missing.version.info"
 
 [tool.versioningit.format]
 dirty = "{base_version}+d{build_date:%Y%m%d}"  # Example: 1.2.3+d20230922
 distance = "{base_version}+{vcs}{distance}.{rev}"  # Example: 1.2.3.+g42.e174a1f
 distance-dirty = "{base_version}+{vcs}{distance}.{rev}.d{build_date:%Y%m%d}"  # Example: 1.2.3+g42.e174a1f.d20230922
+
+[tool.versioningit.onbuild]
+regex = "^__on_build_version: Final\\s*=\\s*(?P<version>.*)"
+build-file = "gt4py/__about__.py"
+source-file = "src/gt4py/__about__.py"
 
 [tool.versioningit.vcs]
 describe-subst = "$Format:%(describe:tags,match=v*)$"
