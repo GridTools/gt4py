@@ -285,9 +285,9 @@ class FuseAsFieldOp(
         new_node = cls(uids=uids, enabled_transformations=enabled_transformations).visit(
             node, within_set_at_expr=within_set_at_expr
         )
-        # This pass does not fully preserve the type information yet. In particular for the
-        # generated lifts this is tricky and error prone. For simplicity we just reinfer everything
-        # here.
+        # The `FuseAsFieldOp` pass does not fully preserve the type information yet. In particular
+        # for the generated lifts this is tricky and error-prone. For simplicity, we just reinfer
+        # everything here ensuring later passes can use the information.
         new_node = type_inference.infer(
             new_node,
             offset_provider_type=offset_provider_type,
