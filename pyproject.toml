@@ -2,15 +2,15 @@
 
 [build-system]
 build-backend = 'setuptools.build_meta'
-requires = ['setuptools>=70.0.0', 'wheel>=0.33.6', 'cython>=3.0.0']
+requires = ['cython>=3.0.0', 'setuptools>=70.0.0', 'versioningit>=3.1.1', 'wheel>=0.33.6']
 
 # -- Dependency groups --
 [dependency-groups]
 build = [
-  'bump-my-version>=0.16.0',
   'cython>=3.0.0',
   'pip>=22.1.1',
   'setuptools>=70.0.0',
+  'versioningit>=3.1.1',
   'wheel>=0.33.6'
 ]
 dev = [
@@ -151,27 +151,6 @@ Homepage = 'https://gridtools.github.io/'
 Repository = 'https://github.com/GridTools/gt4py'
 
 # ---- Other tools ----
-# -- bump-my-version --
-[tool.bumpversion]
-allow_dirty = false
-commit = false
-commit_args = ''
-current_version = '1.0.4'
-ignore_missing_version = false
-message = 'Bump version: {current_version} → {new_version}'
-parse = '(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<patch>\d+))?'
-regex = false
-replace = '{new_version}'
-search = '{current_version}'
-serialize = ['{major}.{minor}.{patch}']
-sign_tags = false
-tag = false
-tag_message = 'Bump version: {current_version} → {new_version}'
-tag_name = 'v{new_version}'
-
-[[tool.bumpversion.files]]
-filename = 'src/gt4py/__about__.py'
-
 # -- coverage --
 [tool.coverage]
 
@@ -421,9 +400,6 @@ max-complexity = 15
 [tool.setuptools]
 platforms = ['Linux', 'Mac']
 
-[tool.setuptools.dynamic]
-version = {attr = 'gt4py.__about__.__version__'}
-
 [tool.setuptools.package-data]
 '*' = ['*.in', '*.txt']
 'gt4py' = ['py.typed', '*.md', '*.rst']
@@ -458,3 +434,15 @@ url = 'https://test.pypi.org/simple/'
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = {git = "https://github.com/spcl/dace", branch = "main", extra = "dace-next"}
+
+# -- versioningit --
+[tool.versioningit]
+
+[tool.versioningit.format]
+dirty = "{base_version}+d{build_date:%Y%m%d}"  # Example: 1.2.3+d20230922
+distance = "{base_version}+{vcs}{distance}.{rev}"  # Example: 1.2.3.+g42.e174a1f
+distance-dirty = "{base_version}+{vcs}{distance}.{rev}.d{build_date:%Y%m%d}"  # Example: 1.2.3+g42.e174a1f.d20230922
+
+[tool.versioningit.vcs]
+describe-subst = "$Format:%(describe:tags,match=v*)$"
+method = "git-archive"  # git

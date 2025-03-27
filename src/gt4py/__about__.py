@@ -8,6 +8,7 @@
 
 """Package metadata: version, authors, license and copyright."""
 
+import importlib.metadata as _imp_metadata
 from typing import Final
 
 from packaging import version as pkg_version
@@ -21,5 +22,33 @@ __copyright__: Final = "Copyright (c) 2014-2024 ETH Zurich"
 __license__: Final = "BSD-3-Clause"
 
 
-__version__: Final = "1.0.4"
+if dist := _imp_metadata.distribution("gt4py"):
+    _version: str = dist.version
+
+    if contents := dist.read_text("direct_url.json"):
+        # This branch should only be executed in editable installs.
+        # In this case, the version reported by `gt4py.__version__`
+        # is directly computed from the status of the `git` repository
+        # with the source code, if available, which might differ from the
+        # version reported by `importlib.metadata.version("gt4py")`
+        # (and `$ pip show gt4py`).
+        try:
+            import json as _json
+
+            import versioningit as _versioningit
+
+            _url_data = _json.loads(contents)
+            assert _url_data["dir_info"]["editable"] is True
+            assert _url_data["url"].startswith("file://")
+
+            _src_path = _url_data["url"][7:]
+            _version = _versioningit.get_version(_src_path)
+        except Exception:
+            pass
+
+else:
+    # TODO(egparedes): should we fallback to a default version instead??
+    raise RuntimeError("Could not find 'gt4py' package metadata")
+
+__version__: Final[str] = _version
 __version_info__: Final = pkg_version.parse(__version__)
