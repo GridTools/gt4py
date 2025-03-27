@@ -16,6 +16,8 @@ jobs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - id: get-versions
       uses: ./.github/actions/get-python-versions
 
@@ -30,6 +32,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Install C++ libraries
       if: ${{ matrix.os == 'macos-latest' }}

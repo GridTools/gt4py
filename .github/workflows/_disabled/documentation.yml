@@ -16,6 +16,8 @@ jobs:
       python-versions: ${{ steps.set-matrix.outputs.python-versions }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - id: set-matrix
       run: |
         PYTHON_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
