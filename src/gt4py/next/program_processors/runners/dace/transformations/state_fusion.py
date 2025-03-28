@@ -214,11 +214,11 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         # Now for every independent subgraph of the second state we determine which
         #  data it reads, that were written to in the first state, the so called
         #  messenger data. Components that share a messenger data will be merged
-        #  together, if the states are fused. Furthermore, we determine the set of data,
+        #  together, if the states are fused. Furthermore, we determine the set of data
         #  a component writes to. Because if a component, from the first state, depends
-        #  on data a component from the second state writes to and the two  are not
-        #  related through a messenger data, then we end up with two independent
-        #   subgraphs that read and write from the same global data.
+        #  on data a component from the second state writes to and the two components
+        #  are not related through a messenger data, then we end up with two
+        #  independent subgraphs that read and write from the same global data.
         #  This is indeterministic behaviour, thus we should reject it.
         second_subgraphs = gtx_transformations.utils.find_all_subgraphs(second_state)
         data_consumers: list[set[str]] = []
@@ -258,9 +258,8 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                     return True
                 continue
 
-            # The ID of the consumers that that depends on the current producer. Note
-            #  that we do not consider consumers here that fully depends on the
-            #  producer.
+            # The ID of the consumers that depend on the current producer. Note that
+            #  we do not consider consumers here that fully depends on the producer.
             depending_consumers: list[int] = []
 
             for consumer_id, (data_consumer, consumer_influece) in enumerate(
@@ -304,16 +303,16 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
 
                     # In case the consumer did not consume everything inside the
                     #  producer add it to the list of dependent consumers. See
-                    #  bellow for more.
+                    #  below for more.
                     # TODO(phimuell): Lift this or refine this.
                     if exchanged_messenger != produced_messenger:
                         depending_consumers.append(consumer_id)
 
             if len(depending_consumers) > 1:
                 # If we have more than one depending consumer, then this means that
-                #  we several consumer would partially read the producer. This
+                #  several consumers would partially read the producer. This
                 #  essentially creates concurrent dataflow within the component, which
-                #  would lead to indeterministic results, so we have to reject the
+                #  would lead to non-deterministic results, so we have to reject the
                 #  merge.
                 return True
 
@@ -341,7 +340,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
 
         # We have to preserve the order this means that every node from the second
         #  state, must merge with the corresponding node from the first state.
-        #  These are all nodes that have a non zero input degree. For convenient,
+        #  These are all nodes that have a non zero input degree. For convenience,
         #  we also add all other data that is read, except if it is not written
         # TODO(phimuell): In case of global data it might be possible that there are
         #   multiple AccessNodes that writes to the data. We currently ignore that case.
