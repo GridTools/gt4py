@@ -10,6 +10,7 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     build-essential \
     tar \
     wget \
+    cmake \
     curl \
     ca-certificates \
     zlib1g-dev \
