@@ -58,6 +58,105 @@ def gt_eliminate_dead_dataflow(
 
 
 @dace_properties.make_properties
+class DeadMapElimination(dace_transformation.SingleStateTransformation):
+    """The transformation removes all Maps that are no-ops.
+
+    The transformation matches any MapEntry, at the top level and evaluates the ranges,
+    if it concludes that the map never execute, because at least one dimension as
+    zero or less iteration steps, it will remove the entire Map.
+
+    The function will also remove the nodes that have become isolated. If the optional
+    `single_use_data` was passed at construction, the transformation will also remove
+    the data from the registry, i.e. `SDFG.arrays`.
+    """
+
+    map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
+    _single_use_data: Optional[dict[dace.SDFG, set[str]]]
+
+    def __init__(
+        self,
+        single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        self._single_use_data = None
+        if single_use_data is not None:
+            self._single_use_data = single_use_data
+        super().__init__(*args, **kwargs)
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [dace.sdfg.utils.node_path_graph(cls.map_entry)]
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState,
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        map_entry: dace_nodes.MapEntry = self.map_entry
+        map_range: dace.subsets.Range = map_entry.map.range
+        scope_dict = graph.scope_dict()
+
+        # The map must be on the top.
+        if scope_dict[map_entry] is not None:
+            return False
+
+        # Look if there is a dimension with zero or "less" iteration steps.
+        if not any(mr <= 0 for mr in map_range.size()):
+            return False
+
+        # For ease of implementation we also require that the Map scope is only
+        #  adjacent to AccessNodes.
+        if not all(
+            isinstance(iedge.src, dace_nodes.AccessNode) for iedge in graph.in_edges(map_entry)
+        ):
+            return False
+
+        map_exit: dace_nodes.MapExit = graph.exit_node(map_entry)
+        if not all(
+            isinstance(oedge.dst, dace_nodes.AccessNode) for oedge in graph.out_edges(map_exit)
+        ):
+            return False
+
+        return True
+
+    def apply(
+        self,
+        graph: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> None:
+        map_entry: dace_nodes.MapEntry = self.map_entry
+        map_exit: dace_nodes.MapExit = graph.exit_node(map_entry)
+        map_scope = graph.scope_subgraph(map_entry, include_exit=True, include_entry=True)
+
+        # Now find all notes that are producer or consumer of the Map, after we removed
+        #  the nodes of the Maps we need to check if they have become isolated.
+        adjacent_nodes: list[dace_nodes.AccessNode] = [
+            iedge.src for iedge in graph.in_edges(map_entry)
+        ]
+        adjacent_nodes.extend(oedge.dst for oedge in graph.out_edges(map_exit))
+
+        # Now we delete all nodes that constitute the Map scope.
+        graph.remove_nodes_from(map_scope.nodes())
+
+        # Remove the nodes that have become isolated.
+        removed_data_names: set[str] = set()
+        for adjacent_node in adjacent_nodes:
+            if graph.degree(adjacent_node) == 0:
+                graph.remove_node(adjacent_node)
+                if adjacent_node.desc(sdfg).transient:
+                    removed_data_names.add(adjacent_node.data)
+
+        if self._single_use_data is not None:
+            single_use_data = self._single_use_data[sdfg]
+            for removed_data in removed_data_names:
+                if removed_data in single_use_data:
+                    sdfg.remove_data(removed_data, validate=False)
+
+
+@dace_properties.make_properties
 class DeadMemletElimination(dace_transformation.SingleStateTransformation):
     """Removes Melets that does not carry any dataflow.
 
