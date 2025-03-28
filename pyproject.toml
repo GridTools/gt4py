@@ -401,6 +401,7 @@ max-complexity = 15
 platforms = ['Linux', 'Mac']
 
 [tool.setuptools.cmdclass]
+# This is required for the `onbuild` versioningit hook
 build_py = "versioningit.cmdclass.build_py"
 sdist = "versioningit.cmdclass.sdist"
 
@@ -444,9 +445,9 @@ dace = {git = "https://github.com/spcl/dace", branch = "main", extra = "dace-nex
 default-version = "0.0.0+missing.version.info"
 
 [tool.versioningit.format]
-dirty = "{base_version}+d{build_date:%Y%m%d}"  # Example: 1.2.3+d20230922
-distance = "{base_version}+{vcs}{distance}.{rev}"  # Example: 1.2.3.+g42.e174a1f
-distance-dirty = "{base_version}+{vcs}{distance}.{rev}.d{build_date:%Y%m%d}"  # Example: 1.2.3+g42.e174a1f.d20230922
+dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty
+distance = "{base_version}.post{distance}+{rev}"  # Example: 1.2.3.post42+e174a1f
+distance-dirty = "{base_version}.post{distance}+{rev}.dirty"  # Example: 1.2.3.post42+e174a1f.dirty
 
 [tool.versioningit.onbuild]
 build-file = "gt4py/__about__.py"

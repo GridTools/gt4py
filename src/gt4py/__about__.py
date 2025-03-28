@@ -32,9 +32,9 @@ __version_info__: pkg_version.Version
 
 #: This should be overwritten by the `onbuild` hook of versioningit
 # with the actual version string at build time. If the hook is not
-# run for any reason, the fallback value defined here would be usedj,
-# which should match the value in `tool.versioningit.default-version`
-# in pyproject.toml.
+# run for any reason, the fallback value defined here would be used,
+# so, for consistency, it should be set to the same value as the one
+# in `tool.versioningit.default-version` in pyproject.toml.
 on_build_version: Final = "0.0.0+missing.version.info"
 
 _static_version: tuple[str, pkg_version.Version] | None = None
@@ -122,6 +122,7 @@ def __dir__() -> list[str]:
     if _dir is None:
         import sys
 
+        # Add virtual attributes (e.g. __version__, __version_info__) to the list
         _dir = list(set(__annotations__.keys()) | vars(sys.modules[__name__]).keys())
 
     return _dir
