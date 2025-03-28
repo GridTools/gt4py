@@ -67,8 +67,8 @@ def gt_simplify(
         in different states.
     - `CopyChainRemover`: Which removes some chains that are introduced by the
         `concat_where` built-in function.
-    - `DeadMemletElimination`: Try to remove memlet that does not transfer any data,
-        by calling `gt_eliminate_dead_dataflow()`.
+    - `GT4PyDeadDataflowElimination`: Run `gt_eliminate_dead_dataflow()` on the SDFG,
+        which removes more dead dataflow than the native DaCe version.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -114,7 +114,7 @@ def gt_simplify(
 
         # TODO(phimuell): Is this the correct location for this, should it be even
         #   inside `gt_simplify()`?
-        if "DeadMemletElimination" not in skip:
+        if "GT4PyDeadDataflowElimination" not in skip:
             eliminate_dead_dataflow_res = gtx_transformations.gt_eliminate_dead_dataflow(
                 sdfg=sdfg,
                 run_simplify=False,
@@ -124,9 +124,9 @@ def gt_simplify(
             if eliminate_dead_dataflow_res != 0:
                 at_least_one_xtrans_run = True
                 result = result or {}
-                if "DeadMemletElimination" not in result:
-                    result["DeadMemletElimination"] = 0
-                result["DeadMemletElimination"] += eliminate_dead_dataflow_res
+                if "GT4PyDeadDataflowElimination" not in result:
+                    result["GT4PyDeadDataflowElimination"] = 0
+                result["GT4PyDeadDataflowElimination"] += eliminate_dead_dataflow_res
 
         simplify_res = dace_passes.SimplifyPass(
             validate=validate,

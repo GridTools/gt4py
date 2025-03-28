@@ -24,11 +24,11 @@ def gt_eliminate_dead_dataflow(
 ) -> int:
     """Performs dead dataflow elimination on the `sdfg`.
 
-    The function will fist run GT4Py's dead datflow elimination and if requested
-    simplify afterwards. It is recommended to use this function instead as it will
-    also run `FindSingleUseData` before.
-    The function returns the number of AccessNodes whose outgoing edges where
-    processed. (the output of `gt_simplify()` if any is ignored).
+    The function will run GT4Py's dead datflow elimination transformation and if
+    requested simplify afterwards. It is recommended to use this function instead
+    as it will also run `FindSingleUseData` before.
+    The function returns the number of times the transformation was applied or zero
+    if it was never applied.
 
     Args:
         sdfg: The SDFG to process.
@@ -39,9 +39,11 @@ def gt_eliminate_dead_dataflow(
     find_single_use_data = dace_analysis.FindSingleUseData()
     single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
+    # TODO(phimuell): Figuring out if `apply_transformations_once_everywhere()` is enough.
     ret = sdfg.apply_transformations_repeated(
         [
             DeadMemletElimination(single_use_data=single_use_data),
+            DeadMapElimination(single_use_data=single_use_data),
         ],
         validate=validate,
         validate_all=validate_all,
