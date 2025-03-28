@@ -455,4 +455,4 @@ source-file = "src/gt4py/__about__.py"
 
 [tool.versioningit.vcs]
 describe-subst = "$Format:%(describe:tags,match=v*)$"
-method = "git-archive"  # git
+method = "git-archive"

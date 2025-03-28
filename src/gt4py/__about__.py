@@ -21,7 +21,7 @@ __author__: Final = "ETH Zurich and individual contributors"
 __copyright__: Final = "Copyright (c) 2014-2024 ETH Zurich"
 __license__: Final = "BSD-3-Clause"
 
-# This would be overwritten by the actual version at build time
+# This should be overwritten by the actual version at build time
 # using the versioningit onbuild hook
 __on_build_version: Final = "0.0.0+missing.version.info"
 
@@ -50,7 +50,7 @@ if dist := _imp_metadata.distribution("gt4py"):
             pass
 
 else:
-    # Fallback to a default version instead??
+    # Fallback to the static or default version
     _version = __on_build_version
 
 __version__: Final[str] = _version
