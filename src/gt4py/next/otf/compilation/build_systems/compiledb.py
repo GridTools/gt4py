@@ -14,6 +14,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+from concurrent import futures
 from typing import Optional, TypeVar
 
 from gt4py.next import config
@@ -24,6 +25,9 @@ from gt4py.next.otf.compilation.build_systems import cmake, cmake_lists
 
 
 SrcL = TypeVar("SrcL", bound=languages.NanobindSrcL)
+
+
+_blocking_executor = futures.ThreadPoolExecutor(max_workers=1)
 
 
 @dataclasses.dataclass
@@ -67,15 +71,17 @@ class CompiledbFactory(
             implicit_domain=source.program_source.implicit_domain,
         )
 
-        if self.renew_compiledb or not (
-            compiledb_template := _cc_find_compiledb(cc_prototype_program_source, cache_lifetime)
-        ):
-            compiledb_template = _cc_create_compiledb(
+        compile_db_future = _blocking_executor.submit(
+            lambda: _cc_get_compiledb(
+                self.renew_compiledb,
                 cc_prototype_program_source,
                 build_type=self.cmake_build_type,
                 cmake_flags=self.cmake_extra_flags or [],
                 cache_lifetime=cache_lifetime,
             )
+        )
+
+        compiledb_template = compile_db_future.result()
 
         return CompiledbProject(
             root_path=cache.get_cache_folder(source, cache_lifetime),
@@ -224,6 +230,25 @@ def _cc_prototype_program_source(
         language=language,
         language_settings=language_settings,
         implicit_domain=implicit_domain,
+    )
+
+
+def _cc_get_compiledb(
+    renew_compiledb: bool,
+    prototype_program_source: stages.ProgramSource,
+    build_type: config.CMakeBuildType,
+    cmake_flags: list[str],
+    cache_lifetime: config.BuildCacheLifetime,
+) -> pathlib.Path:
+    if not renew_compiledb and (
+        compiled_db := _cc_find_compiledb(prototype_program_source, cache_lifetime)
+    ):
+        return compiled_db
+    return _cc_create_compiledb(
+        prototype_program_source,
+        build_type=build_type,
+        cmake_flags=cmake_flags,
+        cache_lifetime=cache_lifetime,
     )
 
 
