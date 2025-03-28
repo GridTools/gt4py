@@ -13,6 +13,7 @@ import pathlib
 from typing import Protocol, TypeVar
 
 import factory
+from flufl import lock
 
 from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
@@ -67,17 +68,18 @@ class Compiler(
     ) -> stages.ExtendedCompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
-        data = build_data.read_data(src_dir)
+        with lock.Lock(str(src_dir / "file.lock"), default_timeout=300):
+            data = build_data.read_data(src_dir)
 
-        if not data or not is_compiled(data) or self.force_recompile:
-            self.builder_factory(inp, self.cache_lifetime).build()
+            if not data or not is_compiled(data) or self.force_recompile:
+                self.builder_factory(inp, self.cache_lifetime).build()
 
-        new_data = build_data.read_data(src_dir)
+            new_data = build_data.read_data(src_dir)
 
-        if not new_data or not is_compiled(new_data) or not module_exists(new_data, src_dir):
-            raise CompilationError(
-                f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
-            )
+            if not new_data or not is_compiled(new_data) or not module_exists(new_data, src_dir):
+                raise CompilationError(
+                    f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
+                )
 
         compiled_prog = getattr(
             importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name

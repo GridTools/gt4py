@@ -16,6 +16,8 @@ import shutil
 import subprocess
 from typing import Optional, TypeVar
 
+from flufl import lock
+
 from gt4py.next import config
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import interface
@@ -67,15 +69,13 @@ class CompiledbFactory(
             implicit_domain=source.program_source.implicit_domain,
         )
 
-        if self.renew_compiledb or not (
-            compiledb_template := _cc_find_compiledb(cc_prototype_program_source, cache_lifetime)
-        ):
-            compiledb_template = _cc_create_compiledb(
-                cc_prototype_program_source,
-                build_type=self.cmake_build_type,
-                cmake_flags=self.cmake_extra_flags or [],
-                cache_lifetime=cache_lifetime,
-            )
+        compiledb_template = _cc_get_compiledb(
+            self.renew_compiledb,
+            cc_prototype_program_source,
+            build_type=self.cmake_build_type,
+            cmake_flags=self.cmake_extra_flags or [],
+            cache_lifetime=cache_lifetime,
+        )
 
         return CompiledbProject(
             root_path=cache.get_cache_folder(source, cache_lifetime),
@@ -227,12 +227,29 @@ def _cc_prototype_program_source(
     )
 
 
-def _cc_find_compiledb(
-    prototype_program_source: stages.ProgramSource, cache_lifetime: config.BuildCacheLifetime
-) -> Optional[pathlib.Path]:
+def _cc_get_compiledb(
+    renew_compiledb: bool,
+    prototype_program_source: stages.ProgramSource,
+    build_type: config.CMakeBuildType,
+    cmake_flags: list[str],
+    cache_lifetime: config.BuildCacheLifetime,
+) -> pathlib.Path:
     cache_path = cache.get_cache_folder(
         stages.CompilableSource(prototype_program_source, None), cache_lifetime
     )
+
+    with lock.Lock(str(cache_path / "compiledb.lock"), default_timeout=10) as compiledb_look:
+        if not renew_compiledb and (compiled_db := _cc_find_compiledb(cache_path=cache_path)):
+            return compiled_db
+        return _cc_create_compiledb(
+            cache_path=cache_path,
+            prototype_program_source=prototype_program_source,
+            build_type=build_type,
+            cmake_flags=cmake_flags,
+        )
+
+
+def _cc_find_compiledb(cache_path: pathlib.Path) -> Optional[pathlib.Path]:
     compile_db_path = cache_path / "compile_commands.json"
     if compile_db_path.exists():
         return compile_db_path
@@ -240,16 +257,12 @@ def _cc_find_compiledb(
 
 
 def _cc_create_compiledb(
+    cache_path: pathlib.Path,
     prototype_program_source: stages.ProgramSource,
     build_type: config.CMakeBuildType,
     cmake_flags: list[str],
-    cache_lifetime: config.BuildCacheLifetime,
 ) -> pathlib.Path:
     name = prototype_program_source.entry_point.name
-    cache_path = cache.get_cache_folder(
-        stages.CompilableSource(prototype_program_source, None), cache_lifetime
-    )
-
     header_ext = prototype_program_source.language_settings.header_extension
     src_ext = prototype_program_source.language_settings.file_extension
     prog_src_name = f"{name}.{header_ext}"
