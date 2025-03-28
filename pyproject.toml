@@ -450,7 +450,7 @@ distance-dirty = "{base_version}+{vcs}{distance}.{rev}.d{build_date:%Y%m%d}"  # 
 
 [tool.versioningit.onbuild]
 build-file = "gt4py/__about__.py"
-regex = "^__on_build_version: Final\\s*=\\s*(?P<version>.*)"
+regex = "^\\s*on_build_version:\\s*Final\\s*=\\s*(?P<version>.*)"
 source-file = "src/gt4py/__about__.py"
 
 [tool.versioningit.vcs]
