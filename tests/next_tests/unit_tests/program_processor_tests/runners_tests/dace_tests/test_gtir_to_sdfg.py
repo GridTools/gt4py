@@ -381,6 +381,7 @@ def test_gtir_tuple_broadcast_scalar():
 
 def test_gtir_zero_dim_fields():
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    empty_domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={})
     testee = gtir.Program(
         id="gtir_zero_dim_fields",
         function_definitions=[],
@@ -392,7 +393,9 @@ def test_gtir_zero_dim_fields():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.as_fieldop("deref", domain)("x"),
+                expr=im.op_as_fieldop("multiplies", domain)(
+                    "x", im.op_as_fieldop("plus", empty_domain)(1.0, 1.0)
+                ),
                 domain=domain,
                 target=gtir.SymRef(id="y"),
             )
@@ -405,7 +408,7 @@ def test_gtir_zero_dim_fields():
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     sdfg(a.item(), b, **FSYMBOLS)
-    assert np.allclose(a, b)
+    assert np.allclose(b, a * 2)
 
 
 def test_gtir_tuple_return():
