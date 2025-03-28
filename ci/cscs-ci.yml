@@ -131,7 +131,7 @@ build_py310_image_aarch64:
 #       VARIANT: [-nomesh, -atlas]
 #       SUBVARIANT: [-cuda11x, -cpu]
 .test_helper_aarch64:
-  extends: [.container-runner-santis-gh200, .test_helper]
+  extends: [.container-runner-daint-gh200, .test_helper]
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian]
