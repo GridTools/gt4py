@@ -480,8 +480,8 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         raise NotImplementedError()
 
     @property
-    # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
-    def codomain(self) -> common.DimT:
+    # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
+    def codomain(self) -> common.DimT:  # type: ignore[override]
         return self._codomain
 
     @property

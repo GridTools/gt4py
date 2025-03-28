@@ -848,9 +848,8 @@ class NeighborConnectivityType(ConnectivityType):
         return self.domain[1]
 
 
-@runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but then it breaks in other places
-class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
+@runtime_checkable  # DimT should be covariant, but then it breaks in other places
+class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):  # type: ignore[misc]
     @property
     @abc.abstractmethod
     def codomain(self) -> DimT:
