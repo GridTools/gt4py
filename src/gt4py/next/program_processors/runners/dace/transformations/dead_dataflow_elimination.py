@@ -106,7 +106,7 @@ class DeadMapElimination(dace_transformation.SingleStateTransformation):
             return False
 
         # Look if there is a dimension with zero or "less" iteration steps.
-        if not any(mr <= 0 for mr in map_range.size()):
+        if not any((mr <= 0) == True for mr in map_range.size()):  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
             return False
 
         # For ease of implementation we also require that the Map scope is only
@@ -207,7 +207,7 @@ class DeadMemletElimination(dace_transformation.SingleStateTransformation):
             memlet: dace.Memlet = oedge.data
             subset = memlet.subset if memlet.subset is not None else memlet.other_subset
             assert subset is not None, "Failed to identify the subset."
-            if not any((ss <= 0) for ss in subset.size()):
+            if not any((ss <= 0) == True for ss in subset.size()):  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
                 continue
 
             candidates.append(oedge)
