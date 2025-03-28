@@ -10,7 +10,7 @@ import copy
 import functools
 import itertools
 import numbers
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, Final, List, Optional, Tuple, Union, cast
 
 import numpy as np
 
@@ -267,18 +267,23 @@ class UnrollVectorExpressions(IRNodeMapper):
 
 
 class DefIRToGTIR(IRNodeVisitor):
-    GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER = {
+    GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER: Final[dict[IterationOrder, common.LoopOrder]] = {
         IterationOrder.BACKWARD: common.LoopOrder.BACKWARD,
         IterationOrder.PARALLEL: common.LoopOrder.PARALLEL,
         IterationOrder.FORWARD: common.LoopOrder.FORWARD,
     }
 
-    GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER = {
+    GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER: Final[dict[LevelMarker, common.LevelMarker]] = {
         LevelMarker.START: common.LevelMarker.START,
         LevelMarker.END: common.LevelMarker.END,
     }
 
-    GT4PY_OP_TO_GTIR_OP = {
+    GT4PY_OP_TO_GTIR_OP: Final[
+        dict[
+            BinaryOperator,
+            common.ArithmeticOperator | common.LogicalOperator | common.ComparisonOperator,
+        ]
+    ] = {
         # arithmetic
         BinaryOperator.ADD: common.ArithmeticOperator.ADD,
         BinaryOperator.SUB: common.ArithmeticOperator.SUB,
@@ -296,13 +301,13 @@ class DefIRToGTIR(IRNodeVisitor):
         BinaryOperator.GE: common.ComparisonOperator.GE,
     }
 
-    GT4PY_UNARYOP_TO_GTIR = {
+    GT4PY_UNARYOP_TO_GTIR: Final[dict[UnaryOperator, common.UnaryOperator]] = {
         UnaryOperator.POS: common.UnaryOperator.POS,
         UnaryOperator.NEG: common.UnaryOperator.NEG,
         UnaryOperator.NOT: common.UnaryOperator.NOT,
     }
 
-    GT4PY_NATIVE_FUNC_TO_GTIR = {
+    GT4PY_NATIVE_FUNC_TO_GTIR: Final[dict[NativeFunction, common.NativeFunction]] = {
         NativeFunction.ABS: common.NativeFunction.ABS,
         NativeFunction.MIN: common.NativeFunction.MIN,
         NativeFunction.MAX: common.NativeFunction.MAX,
@@ -333,7 +338,7 @@ class DefIRToGTIR(IRNodeVisitor):
         NativeFunction.TRUNC: common.NativeFunction.TRUNC,
     }
 
-    GT4PY_BUILTIN_TO_GTIR = {
+    GT4PY_BUILTIN_TO_GTIR: Final[dict[Builtin, common.BuiltInLiteral]] = {
         Builtin.TRUE: common.BuiltInLiteral.TRUE,
         Builtin.FALSE: common.BuiltInLiteral.FALSE,
     }

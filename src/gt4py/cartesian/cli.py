@@ -17,6 +17,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Final,
     Generator,
     KeysView,
     Optional,
@@ -105,7 +106,12 @@ class BackendOption(click.ParamType):
 
     name = "option"
 
-    converter_map = {bool: click.BOOL, int: click.INT, float: click.FLOAT, str: click.STRING}
+    converter_map: Final[dict] = {
+        bool: click.BOOL,
+        int: click.INT,
+        float: click.FLOAT,
+        str: click.STRING,
+    }
 
     def _convert_value(
         self,
