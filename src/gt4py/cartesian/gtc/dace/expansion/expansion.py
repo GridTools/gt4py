@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING, Dict, List
+from typing import TYPE_CHECKING, ClassVar, Dict, List
 
 import dace
 import dace.data
@@ -20,8 +20,7 @@ import sympy
 from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
 from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gt4py.cartesian.gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
-
-from .utils import split_horizontal_executions_regions
+from gt4py.cartesian.gtc.dace.expansion.utils import split_horizontal_executions_regions
 
 
 if TYPE_CHECKING:
@@ -29,7 +28,7 @@ if TYPE_CHECKING:
 
 
 class StencilComputationExpansion(dace.library.ExpandTransformation):
-    environments: List = []
+    environments: ClassVar[List] = []
 
     @staticmethod
     def _solve_for_domain(field_decls: Dict[str, dcir.FieldDecl], outer_subsets):
