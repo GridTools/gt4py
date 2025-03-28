@@ -134,7 +134,7 @@ def test_neighbor_sum(unstructured_case_3d, fop):
 
 
 @pytest.mark.uses_unstructured_shift
-def test_reduction_execution_with_offset(unstructured_case):
+def test_reduction_execution_with_offset(unstructured_case_3d):
     EKField: TypeAlias = gtx.Field[[Edge, KDim], np.int32]
     VKField: TypeAlias = gtx.Field[[Vertex, KDim], np.int32]
 
@@ -151,12 +151,12 @@ def test_reduction_execution_with_offset(unstructured_case):
     def fencil(edge_f: EKField, out: VKField):
         fencil_op(edge_f, out=out)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
-    field = cases.allocate(unstructured_case, fencil, "edge_f", sizes={KDim: 2})()
-    out = cases.allocate(unstructured_case, fencil_op, cases.RETURN, sizes={KDim: 1})()
+    v2e_table = unstructured_case_3d.offset_provider["V2E"].ndarray
+    field = cases.allocate(unstructured_case_3d, fencil, "edge_f", sizes={KDim: 2})()
+    out = cases.allocate(unstructured_case_3d, fencil_op, cases.RETURN, sizes={KDim: 1})()
 
     cases.verify(
-        unstructured_case,
+        unstructured_case_3d,
         fencil,
         field,
         out,
@@ -167,7 +167,7 @@ def test_reduction_execution_with_offset(unstructured_case):
             initial=0,
             where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ).reshape(out.shape),
-        offset_provider=unstructured_case.offset_provider | {"Koff": KDim},
+        offset_provider=unstructured_case_3d.offset_provider,
     )
 
 
