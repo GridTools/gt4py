@@ -456,5 +456,5 @@ name = 'test.pypi'
 url = 'https://test.pypi.org/simple/'
 
 [tool.uv.sources]
-atlas4py = {index = "test.pypi"}
+atlas4py = {git = "https://github.com/GridTools/atlas4py", branch = "master"}
 dace = {git = "https://github.com/spcl/dace", branch = "main", extra = "dace-next"}
