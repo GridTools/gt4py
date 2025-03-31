@@ -165,13 +165,13 @@ def gt_dead_memlet_elimination(
     sdfg: dace.SDFG,
     single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
 ) -> int:
-    """Removes Melets that does not carry any dataflow.
+    """Removes Memlets that do not carry any dataflow.
 
     The function will recursively examine the outgoing Memlets of all AccessNodes.
-    If it finds a Memlet that does not carrying any data it will be removed. However
-    the function will only consider connection between two AccessNodes.
-    If the removing of the Memlets will lead to isolated nodes, these will be removed.
-    Furthermore, if `single_use_data` was passed the function will also removed
+    If it finds a Memlet that does not carry any data, the Memlet will be removed.
+    However, the function will only consider connections between two AccessNodes.
+    If the removing of the Memlet leads to isolated nodes, these will be removed.
+    Furthermore, if `single_use_data` was passed the function will also remove
     the data descriptors that have become obsolete from the registry.
 
     Args:
@@ -192,7 +192,7 @@ def _gt_dead_memlet_elimination_sdfg(
     sdfg: dace.SDFG,
     single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
 ) -> int:
-    """Removes Melets that does not carry any dataflow.
+    """Removes Memlets that do not carry any dataflow.
 
     The same as `gt_dead_memlet_elimination` but only operates on a single level.
     """
