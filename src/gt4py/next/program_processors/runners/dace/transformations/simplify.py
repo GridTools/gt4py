@@ -124,23 +124,6 @@ def gt_simplify(
             result = result or {}
             result.update(simplify_res)
 
-        # This is the place were we actually want to apply the chain removal.
-        if "CopyChainRemover" not in skip:
-            copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
-                sdfg=sdfg,
-                validate=validate,
-                validate_all=validate_all,
-            )
-            if copy_chain_remover_result is not None:
-                at_least_one_xtrans_run = True
-                result = result or {}
-                if "CopyChainRemover" not in result:
-                    result["CopyChainRemover"] = 0
-                result["CopyChainRemover"] += copy_chain_remover_result
-
-        # TODO(phimuell): Is this the correct location? I think it is best calling
-        #   it after we have created dataflow as large as possible, but should we run
-        #   it after or before `CopyChainRemover`?
         if "GT4PyDeadDataflowElimination" not in skip:
             eliminate_dead_dataflow_res = gtx_transformations.gt_eliminate_dead_dataflow(
                 sdfg=sdfg,
@@ -154,6 +137,19 @@ def gt_simplify(
                 if "GT4PyDeadDataflowElimination" not in result:
                     result["GT4PyDeadDataflowElimination"] = 0
                 result["GT4PyDeadDataflowElimination"] += eliminate_dead_dataflow_res
+
+        if "CopyChainRemover" not in skip:
+            copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
+                sdfg=sdfg,
+                validate=validate,
+                validate_all=validate_all,
+            )
+            if copy_chain_remover_result is not None:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "CopyChainRemover" not in result:
+                    result["CopyChainRemover"] = 0
+                result["CopyChainRemover"] += copy_chain_remover_result
 
         if "SingleStateGlobalDirectSelfCopyElimination" not in skip:
             direct_self_copy_removal_result = sdfg.apply_transformations_repeated(
