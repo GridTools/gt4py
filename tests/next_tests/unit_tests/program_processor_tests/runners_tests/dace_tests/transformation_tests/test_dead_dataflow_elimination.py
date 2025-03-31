@@ -93,9 +93,7 @@ def test_remove_empty_dataflow():
     assert state.number_of_edges() == 6
     assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 3
 
-    # Out of the three 6 edges only the one between `a` and `c` is valid.
-    #  The function will process and clean two nodes, `a` and `b` and thus the
-    #  return value will be 2.
+    # Out of the 6 edges only the one between `a` and `c` is valid.
     nb_removed = gtx_transformations.gt_eliminate_dead_dataflow(
         sdfg=sdfg,
         run_simplify=False,
@@ -104,7 +102,7 @@ def test_remove_empty_dataflow():
     )
 
     ac_nodes = util.count_nodes(sdfg, dace_nodes.AccessNode, return_nodes=True)
-    assert nb_removed == 2
+    assert nb_removed == 5
     assert len(ac_nodes) == 2
     assert {"a", "c"} == {ac.data for ac in ac_nodes}
     assert {"a", "c"} == sdfg.arrays.keys()

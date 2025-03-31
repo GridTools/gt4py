@@ -13,7 +13,7 @@ that explains the general structure and requirements on the SDFGs.
 """
 
 from .auto_optimize import gt_auto_optimize
-from .dead_dataflow_elimination import DeadMemletElimination, gt_eliminate_dead_dataflow
+from .dead_dataflow_elimination import gt_eliminate_dead_dataflow
 from .gpu_utils import (
     GPUSetBlockSize,
     gt_gpu_transform_non_standard_memlet,
@@ -55,7 +55,6 @@ from .utils import gt_find_constant_arguments, gt_make_transients_persistent
 __all__ = [
     "GT_SIMPLIFY_DEFAULT_SKIP_SET",
     "CopyChainRemover",
-    "DeadMemletElimination",
     "GPUSetBlockSize",
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",

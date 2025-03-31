@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
 import dace
 from dace import properties as dace_properties, transformation as dace_transformation
@@ -27,8 +27,8 @@ def gt_eliminate_dead_dataflow(
     The function will run GT4Py's dead datflow elimination transformation and if
     requested simplify afterwards. It is recommended to use this function instead
     as it will also run `FindSingleUseData` before.
-    The function returns the number of times the transformation was applied or zero
-    if it was never applied.
+    The function will return the number maps and memlets that have been removed,
+    the output of `gt_simplify()`, if any, is ignored.
 
     Args:
         sdfg: The SDFG to process.
@@ -47,11 +47,9 @@ def gt_eliminate_dead_dataflow(
         validate=validate,
         validate_all=validate_all,
     )
-    # TODO(phimuell): Implement a more efficient matching system.
-    ret += sdfg.apply_transformations_repeated(
-        DeadMemletElimination(single_use_data=single_use_data),
-        validate=validate,
-        validate_all=validate_all,
+    ret += gt_dead_memlet_elimination(
+        sdfg=sdfg,
+        single_use_data=single_use_data,
     )
 
     if run_simplify:
@@ -163,101 +161,102 @@ class DeadMapElimination(dace_transformation.SingleStateTransformation):
                     sdfg.remove_data(removed_data, validate=False)
 
 
-@dace_properties.make_properties
-class DeadMemletElimination(dace_transformation.SingleStateTransformation):
+def gt_dead_memlet_elimination(
+    sdfg: dace.SDFG,
+    single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+) -> int:
     """Removes Melets that does not carry any dataflow.
 
-    The transformation matches an AccessNode and then processes all of its outgoing
-    edges. An edge is removed if:
-    - The Memlet carries no data.
-    - The Memlet is connected to another AccessNode.
+    The function will recursively examine the outgoing Memlets of all AccessNodes.
+    If it finds a Memlet that does not carrying any data it will be removed. However
+    the function will only consider connection between two AccessNodes.
+    If the removing of the Memlets will lead to isolated nodes, these will be removed.
+    Furthermore, if `single_use_data` was passed the function will also removed
+    the data descriptors that have become obsolete from the registry.
 
-    If this would lead to isolated nodes then they are removed. By default the function
-    will not remove the data from the registry, i.e. `sdfg.arrays`, except the
-    `single_use_data` was passed at construction time.
+    Args:
+        sdfg: The SDFG that is processed.
+        single_use_data: List of data that is only used at a single location.
+            If passed the function will also clean the registry.
+
+    Return:
+        The number of Memlets that were removed.
+    """
+    ret = 0
+    for rsdfg in sdfg.all_sdfgs_recursive():
+        ret += _gt_dead_memlet_elimination_sdfg(sdfg=rsdfg, single_use_data=single_use_data)
+    return ret
+
+
+def _gt_dead_memlet_elimination_sdfg(
+    sdfg: dace.SDFG,
+    single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+) -> int:
+    """Removes Melets that does not carry any dataflow.
+
+    The same as `gt_dead_memlet_elimination` but only operates on a single level.
     """
 
-    access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
-    _single_use_data: Optional[dict[dace.SDFG, set[str]]]
-
-    def __init__(
-        self,
-        single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
-        self._single_use_data = None
-        if single_use_data is not None:
-            self._single_use_data = single_use_data
-        super().__init__(*args, **kwargs)
-
-    @classmethod
-    def expressions(cls) -> Any:
-        return [dace.sdfg.utils.node_path_graph(cls.access_node)]
-
-    def _find_candidates(
-        self,
+    def _find_candidates_for(
+        access_node: dace_nodes.AccessNode,
         state: dace.SDFGState,
     ) -> list[dace.sdfg.state.MultiConnectorEdge]:
-        """Find all edges of `self.access_node` that can be removed."""
-
-        access_node: dace_nodes.AccessNode = self.access_node
         candidates: list[dace.sdfg.MultiConnectorEdge] = []
-
         for oedge in state.out_edges(access_node):
             dst: dace_nodes.Node = oedge.dst
             if not isinstance(dst, dace_nodes.AccessNode):
                 continue
-
             memlet: dace.Memlet = oedge.data
             subset = memlet.subset if memlet.subset is not None else memlet.other_subset
             assert subset is not None, "Failed to identify the subset."
             if not any((ss <= 0) == True for ss in subset.size()):  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
                 continue
-
             candidates.append(oedge)
-
         return candidates
 
-    def can_be_applied(
-        self,
-        graph: dace.SDFGState,
-        expr_index: int,
-        sdfg: dace.SDFG,
-        permissive: bool = False,
-    ) -> bool:
-        access_node: dace_nodes.AccessNode = self.access_node
-        if graph.out_degree(access_node) == 0:
-            return False
-        if len(self._find_candidates(graph)) == 0:
-            return False
-        return True
-
-    def apply(
-        self,
-        graph: dace.SDFGState,
-        sdfg: dace.SDFG,
-    ) -> None:
-        access_node: dace_nodes.AccessNode = self.access_node
-        removed_data_names: set[str] = set()
-
-        for oedge in self._find_candidates(graph):
+    def _process_access_node(
+        access_node: dace_nodes.AccessNode,
+        state: dace.SDFGState,
+    ) -> tuple[int, set[dace_nodes.AccessNode]]:
+        removed_access_nodes: set[dace_nodes.AccessNode] = set()
+        removed_memlets: int = 0
+        for oedge in _find_candidates_for(access_node, state):
             other_node: dace_nodes.AccessNode = oedge.dst
-            graph.remove_edge(oedge)
+            state.remove_edge(oedge)
+            removed_memlets += 1
+            if state.degree(other_node) == 0:
+                state.remove_node(other_node)
+                removed_access_nodes.add(other_node)
+        if state.degree(access_node) == 0:
+            state.remove_node(access_node)
+            removed_access_nodes.add(access_node)
+        return removed_memlets, removed_access_nodes
 
-            if graph.degree(other_node) == 0:
-                graph.remove_node(other_node)
-                # Ensures that we never remove global data from the registry.
-                if other_node.desc(sdfg).transient:
-                    removed_data_names.add(other_node.data)
+    # Now go through all states and process the data nodes, also keep track of all
+    removed_memlets: int = 0
+    for state in sdfg.states():
+        # Keep track of all AccessNodes that have been removed, for the later cleaning
+        #  and to prevent `NondeNotFoundError`s in DaCe.
+        removed_access_nodes: set[dace_nodes.AccessNode] = set()
+        for dnode in state.data_nodes():
+            if dnode in removed_access_nodes:
+                continue
+            this_removed_memlets, this_removed_access_nodes = _process_access_node(
+                access_node=dnode,
+                state=state,
+            )
+            removed_memlets += this_removed_memlets
+            removed_access_nodes.update(this_removed_access_nodes)
 
-        if graph.degree(access_node) == 0:
-            graph.remove_node(access_node)
-            if access_node.desc(sdfg).transient:
-                removed_data_names.add(access_node.data)
-
-        if len(removed_data_names) != 0 and self._single_use_data is not None:
-            single_use_data: set[str] = self._single_use_data[sdfg]
+        # Now remove the data that is no longer needed from the registry.
+        if single_use_data is not None and len(removed_access_nodes) != 0:
+            sdfg_single_use_data = single_use_data[sdfg]
+            removed_data_names: set[str] = {ac.data for ac in removed_access_nodes}
+            arrays: Mapping[str, dace.data.Data] = sdfg.arrays
             for removed_data in removed_data_names:
-                if removed_data in single_use_data:
+                if not arrays[removed_data].transient:
+                    continue
+                if removed_data in sdfg_single_use_data:
                     sdfg.remove_data(removed_data, validate=False)
+
+    return removed_memlets
