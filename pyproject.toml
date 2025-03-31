@@ -132,7 +132,7 @@ all = ['gt4py[dace,formatting,jax,performance,testing]']
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
 # features
-dace = ['dace>=1.0.1,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
+dace = ['dace>=1.0.2,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
 dace-next = ['dace']  # pull dace latest version from the git repository
 formatting = ['clang-format>=9.0']
 jax = ['jax>=0.4.26']
@@ -416,7 +416,6 @@ split-on-trailing-comma = false
 max-complexity = 15
 
 [tool.ruff.lint.per-file-ignores]
-'src/gt4py/cartesian/*' = ['RUF012']
 'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
 'src/gt4py/next/__init__.py' = ['F401']
 

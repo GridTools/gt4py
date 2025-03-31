@@ -54,6 +54,7 @@ def get_domain_indices(
         as `dace.subsets.Indices`, it should be converted to `dace.subsets.Range` before
         being used in memlet subset because ranges are better supported throughout DaCe.
     """
+    assert len(dims) != 0
     index_variables = [
         dace.symbolic.pystr_to_symbolic(gtir_sdfg_utils.get_map_variable(dim)) for dim in dims
     ]
@@ -129,10 +130,11 @@ class FieldopData:
         return FieldopData(outer_node, self.gt_type, tuple(outer_origin))
 
     def get_local_view(
-        self, domain: FieldopDomain
+        self, domain: FieldopDomain, sdfg: dace.SDFG
     ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
         """Helper method to access a field in local view, given the compute domain of a field operator."""
         if isinstance(self.gt_type, ts.ScalarType):
+            assert isinstance(self.dc_node.desc(sdfg), dace.data.Scalar)
             return gtir_dataflow.MemletExpr(
                 dc_node=self.dc_node,
                 gt_dtype=self.gt_type,
@@ -140,20 +142,25 @@ class FieldopData:
             )
 
         if isinstance(self.gt_type, ts.FieldType):
-            domain_dims = [dim for dim, _, _ in domain]
-            domain_indices = get_domain_indices(domain_dims, origin=None)
-            it_indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr] = {
-                dim: gtir_dataflow.SymbolExpr(index, INDEX_DTYPE)
-                for dim, index in zip(domain_dims, domain_indices)
-            }
+            it_indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr]
+            if isinstance(self.dc_node.desc(sdfg), dace.data.Scalar):
+                assert len(self.gt_type.dims) == 0  # zero-dimensional field
+                it_indices = {}
+            else:
+                # The invariant below is ensured by calling `make_field()` to construct `FieldopData`.
+                # The `make_field` constructor converts any local dimension, if present, to `ListType`
+                # element type, while leaving the field domain with all global dimensions.
+                assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
+                domain_dims = [dim for dim, _, _ in domain]
+                domain_indices = get_domain_indices(domain_dims, origin=None)
+                it_indices = {
+                    dim: gtir_dataflow.SymbolExpr(index, INDEX_DTYPE)
+                    for dim, index in zip(domain_dims, domain_indices)
+                }
             field_origin = [
                 (dim, dace.symbolic.SymExpr(0) if self.origin is None else self.origin[i])
                 for i, dim in enumerate(self.gt_type.dims)
             ]
-            # The property below is ensured by calling `make_field()` to construct `FieldopData`.
-            # The `make_field` constructor ensures that any local dimension, if present, is converted
-            # to `ListType` element type, while the field domain consists of all global dimensions.
-            assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
             return gtir_dataflow.IteratorExpr(
                 self.dc_node, self.gt_type.dtype, field_origin, it_indices
             )
@@ -315,7 +322,7 @@ def _parse_fieldop_arg(
     arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
 
     if isinstance(arg, FieldopData):
-        return arg.get_local_view(domain)
+        return arg.get_local_view(domain, sdfg)
     else:
         # handle tuples of fields
         return gtx_utils.tree_map(lambda targ: targ.get_local_view(domain))(arg)
@@ -345,6 +352,8 @@ def get_field_layout(
             - the domain origin, that is the start indices in all dimensions
             - the domain size in each dimension
     """
+    if len(domain) == 0:
+        return [], [], []
     domain_dims, domain_lbs, domain_ubs = zip(*domain)
     # after introduction of concat_where, the strict order of lower and upper bounds is not guaranteed
     domain_ubs = tuple(
@@ -389,8 +398,13 @@ def _create_field_operator_impl(
 
     # the memory layout of the output field follows the field operator compute domain
     field_dims, field_origin, field_shape = get_field_layout(domain)
-    field_indices = get_domain_indices(field_dims, field_origin)
-    field_subset = dace_subsets.Range.from_indices(field_indices)
+    if len(domain) == 0:
+        # The field operator computes a zero-dimensional field, and the data subset
+        # is set later depending on the element type (`ts.ListType` or `ts.ScalarType`)
+        field_subset = dace_subsets.Range([])
+    else:
+        field_indices = get_domain_indices(field_dims, field_origin)
+        field_subset = dace_subsets.Range.from_indices(field_indices)
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         if output_edge.result.gt_dtype != output_type.dtype:
@@ -413,7 +427,11 @@ def _create_field_operator_impl(
         field_subset = field_subset + dace_subsets.Range.from_array(dataflow_output_desc)
 
     # allocate local temporary storage
-    field_name, _ = sdfg_builder.add_temp_array(sdfg, field_shape, dataflow_output_desc.dtype)
+    if len(field_shape) == 0:  # zero-dimensional field
+        field_name, _ = sdfg_builder.add_temp_scalar(sdfg, dataflow_output_desc.dtype)
+        field_subset = dace_subsets.Range.from_string("0")
+    else:
+        field_name, _ = sdfg_builder.add_temp_array(sdfg, field_shape, dataflow_output_desc.dtype)
     field_node = state.add_access(field_name)
 
     # and here the edge writing the dataflow result data through the map exit node
@@ -454,15 +472,18 @@ def _create_field_operator(
         field or a tuple fields.
     """
 
-    # create map range corresponding to the field operator domain
-    map_entry, map_exit = sdfg_builder.add_map(
-        "fieldop",
-        state,
-        ndrange={
+    if len(domain) == 0:
+        # create a trivial map for zero-dimensional fields
+        map_range = {
+            "__gt4py_zerodim": "0",
+        }
+    else:
+        # create map range corresponding to the field operator domain
+        map_range = {
             gtir_sdfg_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
             for dim, lower_bound, upper_bound in domain
-        },
-    )
+        }
+    map_entry, map_exit = sdfg_builder.add_map("fieldop", state, map_range)
 
     # here we setup the edges passing through the map entry node
     for edge in input_edges:

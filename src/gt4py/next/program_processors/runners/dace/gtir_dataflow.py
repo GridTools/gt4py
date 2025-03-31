@@ -88,7 +88,7 @@ class MemletExpr:
 class SymbolExpr:
     """Any symbolic expression that is constant in the context of current SDFG."""
 
-    value: dace.symbolic.SymExpr
+    value: dace.symbolic.SymbolicType
     dc_dtype: dace.typeclass
 
 
@@ -121,6 +121,9 @@ class IteratorExpr:
         return ts.FieldType([dim for dim, _ in self.field_domain], self.gt_dtype)
 
     def get_memlet_subset(self, sdfg: dace.SDFG) -> dace_subsets.Range:
+        if len(self.field_domain) == 0:  # zero-dimensional field
+            return dace_subsets.Range.from_string("0")
+
         if not all(isinstance(self.indices[dim], SymbolExpr) for dim, _ in self.field_domain):
             raise ValueError(f"Cannot deref iterator {self}.")
 
