@@ -17,16 +17,64 @@ import pytest
 
 import gt4py._core.definitions as core_defs
 import gt4py.next as gtx
+import gt4py.next.common as gtx_common
 from gt4py.next.ffront.fbuiltins import where
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import E2V, cartesian_case, unstructured_case  # noqa: F401
+from next_tests.integration_tests.cases import E2V
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    exec_alloc_descriptor,  # noqa: F401
+    Edge,
+    IDim,
+    Vertex,
     mesh_descriptor,  # noqa: F401
 )
 
 dace = pytest.importorskip("dace")
+
+from gt4py.next.program_processors.runners import dace as dace_backends
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(dace_backends.run_dace_cpu_cached, marks=pytest.mark.requires_dace),
+        pytest.param(
+            dace_backends.run_dace_gpu_cached,
+            marks=(pytest.mark.requires_gpu, pytest.mark.requires_dace),
+        ),
+    ]
+)
+def gtir_dace_backend(request):
+    """
+    Test fixture to select the dace backends only. In order to trigger `fast_call`,
+    we have to use the cached backend so that the same `CompiledSDFG` object is
+    used on the second call.
+    """
+    yield request.param
+
+
+@pytest.fixture
+def cartesian_case(request, gtir_dace_backend):
+    yield cases.Case(
+        backend=gtir_dace_backend,
+        offset_provider={"Ioff": IDim},
+        default_sizes={IDim: 10},
+        grid_type=gtx_common.GridType.CARTESIAN,
+        allocator=gtir_dace_backend.allocator,
+    )
+
+
+@pytest.fixture
+def unstructured_case(request, gtir_dace_backend, mesh_descriptor):  # noqa: F811
+    yield cases.Case(
+        backend=gtir_dace_backend,
+        offset_provider=mesh_descriptor.offset_provider,
+        default_sizes={
+            Vertex: mesh_descriptor.num_vertices,
+            Edge: mesh_descriptor.num_edges,
+        },
+        grid_type=gtx_common.GridType.UNSTRUCTURED,
+        allocator=gtir_dace_backend.allocator,
+    )
 
 
 def make_mocks(monkeypatch):
@@ -66,9 +114,6 @@ def make_mocks(monkeypatch):
 
 def test_dace_fastcall(cartesian_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
-
-    if not cartesian_case.backend or "dace" not in cartesian_case.backend.name:
-        pytest.skip("requires dace backend")
 
     @gtx.field_operator
     def testee(
@@ -135,9 +180,6 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 
 def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
-
-    if not unstructured_case.backend or "dace" not in unstructured_case.backend.name:
-        pytest.skip("requires dace backend")
 
     connectivity_E2V = unstructured_case.offset_provider["E2V"]
     assert isinstance(connectivity_E2V, gtx.common.NeighborTable)
