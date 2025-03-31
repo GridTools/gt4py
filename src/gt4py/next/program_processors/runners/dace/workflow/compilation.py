@@ -41,6 +41,9 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
         result = self.sdfg_program(*args, **kwargs)
         assert result is None
 
+    def __del__(self) -> None:
+        self.sdfg_program.finalize()
+
     def fast_call(self) -> None:
         result = self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
         assert result is None
