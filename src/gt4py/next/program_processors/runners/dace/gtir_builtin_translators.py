@@ -784,6 +784,7 @@ def translate_concat_where(
                 f"max({lower_range_0}, {lower_domain[concat_dim_index][2]})"
             )
         )
+        lower_range_size = lower_range_1 - lower_range_0
 
         upper_range_0 = upper_domain[concat_dim_index][1]
         upper_range_1 = (
@@ -793,20 +794,7 @@ def translate_concat_where(
                 f"max({upper_range_0}, {upper_domain[concat_dim_index][2]})"
             )
         )
-
-        # prune empty branches
-        lower_range_size = lower_range_1 - lower_range_0
-        if lower_range_size.is_constant() and lower_range_size == 0:
-            if state.degree(lower.dc_node) == 0:
-                assert not lower_desc.transient
-                state.remove_node(lower.dc_node)
-            return upper
         upper_range_size = upper_range_1 - upper_range_0
-        if upper_range_size.is_constant() and upper_range_size == 0:
-            if state.degree(upper.dc_node) == 0:
-                assert not upper_desc.transient
-                state.remove_node(upper.dc_node)
-            return lower
 
         output, output_desc = sdfg_builder.add_temp_array(sdfg, output_shape, lower_desc.dtype)
         output_node = state.add_access(output)
