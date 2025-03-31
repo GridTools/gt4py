@@ -644,7 +644,11 @@ def _make_concat_scalar_broadcast(
 
     map_variables = [gtir_sdfg_utils.get_map_variable(dim) for dim in out_dims]
     inp_index = (
-        f"({map_variables[concat_dim_index]} + {out_origin[concat_dim_index] - inp.origin[0]})"
+        "0"
+        if isinstance(inp.dc_node.desc(sdfg), dace.data.Scalar)
+        else (
+            f"({map_variables[concat_dim_index]} + {out_origin[concat_dim_index] - inp.origin[0]})"
+        )
     )
     state.add_mapped_tasklet(
         "broadcast",
