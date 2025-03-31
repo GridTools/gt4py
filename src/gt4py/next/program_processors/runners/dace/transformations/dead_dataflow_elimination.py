@@ -35,16 +35,21 @@ def gt_eliminate_dead_dataflow(
         run_simplify: Run `gt_simplify()` after the dead datflow elimination.
         validate: Perform validation.
         validate_all: Perform extensive validation.
+
+    Todo:
+        Implement a better way of applying the `DeadMemletElimination` transformation.
     """
     find_single_use_data = dace_analysis.FindSingleUseData()
     single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
-    # TODO(phimuell): Figuring out if `apply_transformations_once_everywhere()` is enough.
-    ret = sdfg.apply_transformations_repeated(
-        [
-            DeadMemletElimination(single_use_data=single_use_data),
-            DeadMapElimination(single_use_data=single_use_data),
-        ],
+    ret = sdfg.apply_transformations_once_everywhere(
+        DeadMapElimination(single_use_data=single_use_data),
+        validate=validate,
+        validate_all=validate_all,
+    )
+    # TODO(phimuell): Implement a more efficient matching system.
+    ret += sdfg.apply_transformations_repeated(
+        DeadMemletElimination(single_use_data=single_use_data),
         validate=validate,
         validate_all=validate_all,
     )
