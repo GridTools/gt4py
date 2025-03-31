@@ -63,7 +63,7 @@ def _parse_scan_fieldop_arg(
     def _parse_fieldop_arg_impl(
         arg: gtir_translators.FieldopData,
     ) -> gtir_dataflow.MemletExpr:
-        arg_expr = arg.get_local_view(domain)
+        arg_expr = arg.get_local_view(domain, sdfg)
         if isinstance(arg_expr, gtir_dataflow.MemletExpr):
             return arg_expr
         # In scan field operator, the arguments to the vertical stencil are passed by value.
@@ -316,7 +316,7 @@ def _lower_lambda_to_nested_sdfg(
     # This property is used by pattern matching in SDFG transformation framework
     # to skip those transformations that do not yet support control flow blocks.
     nsdfg.using_explicit_control_flow = True
-    lambda_translator = sdfg_builder.setup_nested_context(lambda_node, nsdfg, lambda_symbols)
+    lambda_translator = sdfg_builder.setup_nested_context(nsdfg, sdfg, lambda_symbols)
 
     # use the vertical dimension in the domain as scan dimension
     scan_domain = [
