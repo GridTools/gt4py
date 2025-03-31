@@ -300,3 +300,26 @@ def test_with_tuples(cartesian_case):
         out=out,
         ref=(ref0, ref1),
     )
+
+
+@pytest.mark.uses_frontend_concat_where
+def test_nested_conditions_with_empty_branches(cartesian_case):
+    @gtx.field_operator
+    def testee(interior: cases.IField, boundary: cases.IField, N: gtx.int32) -> cases.IField:
+        interior = concat_where(IDim == 0, boundary, interior)
+        interior = concat_where(1 <= IDim < N - 1, interior * 2, interior)
+        interior = concat_where(IDim == N - 1, boundary, interior)
+        return interior
+
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    N = cartesian_case.default_sizes[IDim]
+
+    i = np.arange(0, cartesian_case.default_sizes[IDim])
+    ref = np.where(
+        (i[:] == 0) | (i[:] == N - 1),
+        boundary.asnumpy(),
+        interior.asnumpy() * 2,
+    )
+    cases.verify(cartesian_case, testee, interior, boundary, N, out=out, ref=ref)
