@@ -133,8 +133,17 @@ wheels = [
 
 [[package]]
 name = "atlas4py"
-version = "0.35.1.dev16"
-source = { git = "https://github.com/GridTools/atlas4py?branch=master#d2f701c91ee0e9519bc99b56153be4e1597dbbc2" }
+version = "0.35.1.dev15"
+source = { registry = "https://test.pypi.org/simple/" }
+sdist = { url = "https://test-files.pythonhosted.org/packages/59/e4/48ede747be846f80b30d6303d732f96ca44ee9858504140db5222d2345bb/atlas4py-0.35.1.dev15.tar.gz", hash = "sha256:3c4274261d99a03ffd14a23dfb9ee9265ce79d8db7887751f4fbf1a315091664", size = 15079 }
+wheels = [
+    { url = "https://test-files.pythonhosted.org/packages/7a/47/0d1f8f7ba596a60bef920638724dfcc76f4edbfdb6bb79932b7e12ec45fc/atlas4py-0.35.1.dev15-cp310-cp310-macosx_13_0_x86_64.whl", hash = "sha256:244ae7f016d28ad04f8e9071de34192c1f8a58fd075477e327c4528cad8daacf", size = 6040572 },
+    { url = "https://test-files.pythonhosted.org/packages/5d/f5/2b5645ec670b4088816ca7089fae06c6d72f0a4c301ef186ec8ac8e715fd/atlas4py-0.35.1.dev15-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:12b8f63df17e22d0ddc8310ced42e4db903e73b167c4f261f180cc2c011888ca", size = 5752419 },
+    { url = "https://test-files.pythonhosted.org/packages/41/c3/03f3f061d28865f307c7916a0b82b8d37efeddb6cd4085aa687718341aee/atlas4py-0.35.1.dev15-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cadd6e5de2e0771d129b6242cbe0bd9268bed16d37ee3cc65b97a7de19a67933", size = 5251334 },
+    { url = "https://test-files.pythonhosted.org/packages/22/fe/32d912deb54d7e9eaecc652b813b86925616be358222e069ded6e3bea8c6/atlas4py-0.35.1.dev15-cp311-cp311-macosx_13_0_x86_64.whl", hash = "sha256:0cacea024adb384aacb5da5a5a233e23cf8563e4f357e9687eeac0d9c4c9a4d8", size = 6041915 },
+    { url = "https://test-files.pythonhosted.org/packages/ef/94/e85cc3588d836e58974f7be1b362ce321f5989ae8c355a75faee5b09f131/atlas4py-0.35.1.dev15-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:d5f3147e8ad52b890ffc4d92b51d6fd2b34bb39b89e09d6d4d5d7fec9f48aa0f", size = 5753565 },
+    { url = "https://test-files.pythonhosted.org/packages/36/5e/71c7c054ae756f7cd5a984a44edad85ca20f4a0364ccc10052363314a9f2/atlas4py-0.35.1.dev15-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c13f4a4a88dbe0eb056920d57eafa3e0f1e9fc117bd3c8773cfebca945ed8d76", size = 5253094 },
+]
 
 [[package]]
 name = "attrs"
@@ -1260,7 +1269,7 @@ build = [
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dev = [
-    { name = "atlas4py", git = "https://github.com/GridTools/atlas4py?branch=master" },
+    { name = "atlas4py", specifier = ">=0.35", index = "https://test.pypi.org/simple/" },
     { name = "bump-my-version", specifier = ">=0.16.0" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.5.0" },
     { name = "cython", specifier = ">=3.0.0" },
@@ -1305,7 +1314,7 @@ docs = [
     { name = "sphinx-rtd-theme", specifier = ">=3.0.1" },
     { name = "sphinx-toolbox", specifier = ">=3.8.1" },
 ]
-frameworks = [{ name = "atlas4py", git = "https://github.com/GridTools/atlas4py?branch=master" }]
+frameworks = [{ name = "atlas4py", specifier = ">=0.35", index = "https://test.pypi.org/simple/" }]
 lint = [
     { name = "pre-commit", specifier = ">=4.0.1" },
     { name = "ruff", specifier = ">=0.8.0" },
