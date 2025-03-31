@@ -112,22 +112,6 @@ def gt_simplify(
                 result = result or {}
                 result.update(inline_res)
 
-        # TODO(phimuell): Is this the correct location for this, should it be even
-        #   inside `gt_simplify()`?
-        if "GT4PyDeadDataflowElimination" not in skip:
-            eliminate_dead_dataflow_res = gtx_transformations.gt_eliminate_dead_dataflow(
-                sdfg=sdfg,
-                run_simplify=False,
-                validate=False,
-                validate_all=validate_all,
-            )
-            if eliminate_dead_dataflow_res != 0:
-                at_least_one_xtrans_run = True
-                result = result or {}
-                if "GT4PyDeadDataflowElimination" not in result:
-                    result["GT4PyDeadDataflowElimination"] = 0
-                result["GT4PyDeadDataflowElimination"] += eliminate_dead_dataflow_res
-
         simplify_res = dace_passes.SimplifyPass(
             validate=validate,
             validate_all=validate_all,
@@ -153,6 +137,23 @@ def gt_simplify(
                 if "CopyChainRemover" not in result:
                     result["CopyChainRemover"] = 0
                 result["CopyChainRemover"] += copy_chain_remover_result
+
+        # TODO(phimuell): Is this the correct location? I think it is best calling
+        #   it after we have created dataflow as large as possible, but should we run
+        #   it after or before `CopyChainRemover`?
+        if "GT4PyDeadDataflowElimination" not in skip:
+            eliminate_dead_dataflow_res = gtx_transformations.gt_eliminate_dead_dataflow(
+                sdfg=sdfg,
+                run_simplify=False,
+                validate=False,
+                validate_all=validate_all,
+            )
+            if eliminate_dead_dataflow_res != 0:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "GT4PyDeadDataflowElimination" not in result:
+                    result["GT4PyDeadDataflowElimination"] = 0
+                result["GT4PyDeadDataflowElimination"] += eliminate_dead_dataflow_res
 
         if "SingleStateGlobalDirectSelfCopyElimination" not in skip:
             direct_self_copy_removal_result = sdfg.apply_transformations_repeated(
