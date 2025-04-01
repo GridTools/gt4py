@@ -12,57 +12,17 @@ from contextlib import contextmanager
 
 from gt4py import eve
 from gt4py.cartesian import utils
-from gt4py.cartesian.gtc.common import (
-    AxisBound,
-    BuiltInLiteral,
-    CartesianOffset,
-    DataType,
-    FieldAccess,
-    HorizontalInterval,
-    HorizontalMask,
-    LevelMarker,
-    LoopOrder,
-    While,
-)
-from gt4py.cartesian.gtc.definitions import Extent
-from gt4py.cartesian.gtc.oir import (
-    AssignStmt,
-    BinaryOp,
-    CacheDesc,
-    Cast,
-    Decl,
-    FieldDecl,
-    HorizontalExecution,
-    HorizontalRestriction,
-    IJCache,
-    Interval,
-    KCache,
-    Literal,
-    LocalScalar,
-    MaskStmt,
-    NativeFuncCall,
-    ScalarAccess,
-    ScalarDecl,
-    Stencil,
-    Temporary,
-    TernaryOp,
-    UnaryOp,
-    UnboundedInterval,
-    VariableKOffset,
-    VerticalLoop,
-    VerticalLoopSection,
-)
-from gt4py.cartesian.gtc.passes.oir_optimizations.utils import StencilExtentComputer
-from gt4py.eve import codegen
-from gt4py.eve.concepts import SymbolRef
+from gt4py.cartesian.gtc import common as gtc_common, definitions as gtc_definitions, oir
+from gt4py.cartesian.gtc.passes.oir_optimizations import utils as optimization_utils
+from gt4py.eve import codegen, concepts
 
 
 class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def __init__(self) -> None:
         self.body = utils.text.TextBlock()
-        self.symbol_table: dict[str, FieldDecl] = {}
+        self.symbol_table: dict[str, oir.FieldDecl] = {}
 
-    def visit_Stencil(self, stencil: Stencil, **_) -> str:
+    def visit_Stencil(self, stencil: oir.Stencil, **_) -> str:
         self.generate_imports()
 
         self.generate_run_function(stencil)
@@ -79,13 +39,17 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         self.body.append("from gt4py.cartesian.utils import Field")
 
     @staticmethod
-    def compute_extents(node: Stencil, **_) -> tuple[dict[str, Extent], dict[int, Extent]]:
-        ctx: StencilExtentComputer.Context = StencilExtentComputer().visit(node)
+    def compute_extents(
+        node: oir.Stencil, **_
+    ) -> tuple[dict[str, gtc_definitions.Extent], dict[int, gtc_definitions.Extent]]:
+        ctx: optimization_utils.StencilExtentComputer.Context = (
+            optimization_utils.StencilExtentComputer().visit(node)
+        )
         return ctx.fields, ctx.blocks
 
     def initial_declarations(
-        self, stencil: Stencil, field_extents: dict[str, Extent]
-    ) -> dict[str, FieldDecl]:
+        self, stencil: oir.Stencil, field_extents: dict[str, gtc_definitions.Extent]
+    ) -> dict[str, oir.FieldDecl]:
         self.body.append("# ===== Domain Description ===== #")
         self.body.append("i_0, j_0, k_0 = 0, 0, 0")
         self.body.append("i_size, j_size, k_size = _domain_")
@@ -99,18 +63,20 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return symbol_table
 
     def generate_temp_decls(
-        self, temporary_declarations: list[Temporary], field_extents: dict[str, Extent]
-    ) -> dict[str, FieldDecl]:
-        symbol_table: dict[str, FieldDecl] = {}
+        self,
+        temporary_declarations: list[oir.Temporary],
+        field_extents: dict[str, gtc_definitions.Extent],
+    ) -> dict[str, oir.FieldDecl]:
+        symbol_table: dict[str, oir.FieldDecl] = {}
         for declaration in temporary_declarations:
             self.body.append(self.visit(declaration, field_extents=field_extents))
             symbol_table[str(declaration.name)] = declaration
         return symbol_table
 
-    def generate_field_decls(self, declarations: list[Decl]) -> dict[str, FieldDecl]:
+    def generate_field_decls(self, declarations: list[oir.Decl]) -> dict[str, oir.FieldDecl]:
         symbol_table = {}
         for declaration in declarations:
-            if isinstance(declaration, FieldDecl):
+            if isinstance(declaration, oir.FieldDecl):
                 self.body.append(
                     f"{declaration.name} = Field({declaration.name}, _origin_['{declaration.name}'], "
                     f"({', '.join([str(x) for x in declaration.dimensions])}))"
@@ -118,7 +84,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 symbol_table[str(declaration.name)] = declaration
         return symbol_table
 
-    def generate_run_function(self, stencil: Stencil) -> None:
+    def generate_run_function(self, stencil: oir.Stencil) -> None:
         function_signature = "def run(*"
         args = []
         for param in stencil.params:
@@ -130,8 +96,8 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def generate_stencil_code(
         self,
-        stencil: Stencil,
-        block_extents: dict[int, Extent],
+        stencil: oir.Stencil,
+        block_extents: dict[int, gtc_definitions.Extent],
     ) -> None:
         for loop in stencil.vertical_loops:
             for section in loop.sections:
@@ -141,9 +107,11 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                             self.visit(execution)
 
     @contextmanager
-    def create_k_loop_code(self, section: VerticalLoopSection, loop: VerticalLoop) -> Generator:
+    def create_k_loop_code(
+        self, section: oir.VerticalLoopSection, loop: oir.VerticalLoop
+    ) -> Generator:
         loop_bounds: str = self.visit(section.interval, var="k", direction=loop.loop_order)
-        increment = "-1" if loop.loop_order == LoopOrder.BACKWARD else "1"
+        increment = "-1" if loop.loop_order == gtc_common.LoopOrder.BACKWARD else "1"
         loop_code = f"for k in range( {loop_bounds} , {increment}):"
         self.body.append(loop_code)
         self.body.indent()
@@ -152,7 +120,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     @contextmanager
     def generate_ij_loop(
-        self, block_extents: dict[int, Extent], execution: HorizontalExecution
+        self, block_extents: dict[int, gtc_definitions.Extent], execution: oir.HorizontalExecution
     ) -> Generator:
         extents = block_extents[id(execution)]
         i_loop = f"for i in range(i_0 + {extents[0][0]} , i_size + {extents[0][1]}):"
@@ -165,7 +133,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         self.body.dedent()
         self.body.dedent()
 
-    def visit_While(self, while_node: While, **_) -> None:
+    def visit_While(self, while_node: gtc_common.While, **_) -> None:
         while_condition = self.visit(while_node.cond)
         while_code = f"while {while_condition}:"
         self.body.append(while_code)
@@ -174,17 +142,17 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             self.visit(statement)
         self.body.dedent()
 
-    def visit_FieldDecl(self, field_decl: FieldDecl, **_) -> str:
+    def visit_FieldDecl(self, field_decl: oir.FieldDecl, **_) -> str:
         return str(field_decl.name)
 
-    def visit_AxisBound(self, axis_bound: AxisBound, **kwargs) -> str:
-        if axis_bound.level == LevelMarker.START:
+    def visit_AxisBound(self, axis_bound: gtc_common.AxisBound, **kwargs) -> str:
+        if axis_bound.level == gtc_common.LevelMarker.START:
             return f"{kwargs['var']}_0 + {axis_bound.offset}"
-        if axis_bound.level == LevelMarker.END:
+        if axis_bound.level == gtc_common.LevelMarker.END:
             return f"{kwargs['var']}_size + {axis_bound.offset}"
 
-    def visit_Interval(self, interval: Interval, **kwargs) -> str:
-        if kwargs["direction"] == LoopOrder.BACKWARD:
+    def visit_Interval(self, interval: oir.Interval, **kwargs) -> str:
+        if kwargs["direction"] == gtc_common.LoopOrder.BACKWARD:
             return ",".join(
                 [
                     self.visit(interval.end, **kwargs) + "- 1",
@@ -193,7 +161,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             )
         return ",".join([self.visit(interval.start, **kwargs), self.visit(interval.end, **kwargs)])
 
-    def visit_Temporary(self, temporary_declaration: Temporary, **kwargs) -> str:
+    def visit_Temporary(self, temporary_declaration: oir.Temporary, **kwargs) -> str:
         field_extents = kwargs["field_extents"]
         local_field_extent = field_extents[temporary_declaration.name]
         i_padding: int = local_field_extent[0][1] - local_field_extent[0][0]
@@ -209,15 +177,15 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         )
         return f"{temporary_declaration.name} = Field.empty(({shape_decl}), {dtype}, ({', '.join(offset)}))"
 
-    def visit_DataType(self, data_type: DataType, **_) -> str:
-        if data_type in {DataType.BOOL}:
+    def visit_DataType(self, data_type: gtc_common.DataType, **_) -> str:
+        if data_type in {gtc_common.DataType.BOOL}:
             return data_type.name.lower()
         return f"np.{data_type.name.lower()}"
 
-    def visit_VariableKOffset(self, variable_k_offset: VariableKOffset, **_) -> str:
+    def visit_VariableKOffset(self, variable_k_offset: oir.VariableKOffset, **_) -> str:
         return f"i,j,k+int({self.visit(variable_k_offset.k)})"
 
-    def visit_CartesianOffset(self, cartesian_offset: CartesianOffset, **kwargs) -> str:
+    def visit_CartesianOffset(self, cartesian_offset: gtc_common.CartesianOffset, **kwargs) -> str:
         if "dimensions" in kwargs.keys():
             dimensions = kwargs["dimensions"]
             dimension_strings = []
@@ -230,10 +198,10 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             return ",".join(dimension_strings)
         return f"i + {cartesian_offset.i}, j + {cartesian_offset.j}, k + {cartesian_offset.k}"
 
-    def visit_SymbolRef(self, symbol_ref: SymbolRef) -> str:
+    def visit_SymbolRef(self, symbol_ref: concepts.SymbolRef) -> str:
         return symbol_ref
 
-    def visit_FieldAccess(self, field_access: FieldAccess, **_) -> str:
+    def visit_FieldAccess(self, field_access: gtc_common.FieldAccess, **_) -> str:
         if str(field_access.name) in self.symbol_table:
             dimensions = self.symbol_table[str(field_access.name)].dimensions
             offset_str = self.visit(field_access.offset, dimensions=dimensions)
@@ -249,17 +217,17 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             return field_access.name + "[" + offset_str + "," + data_index_access + "]"
         return field_access.name + "[" + offset_str + "]"
 
-    def visit_AssignStmt(self, assignment_statement: AssignStmt, **_) -> None:
+    def visit_AssignStmt(self, assignment_statement: oir.AssignStmt, **_) -> None:
         self.body.append(
             f"{self.visit(assignment_statement.left)} = {self.visit(assignment_statement.right)}"
         )
 
-    def visit_BinaryOp(self, binary: BinaryOp, **_) -> str:
+    def visit_BinaryOp(self, binary: oir.BinaryOp, **_) -> str:
         return f"( {self.visit(binary.left)} {binary.op} {self.visit(binary.right)} )"
 
-    def visit_Literal(self, literal: Literal, **_) -> str:
-        if literal.dtype == DataType.BOOL:
-            literal_value = "True" if literal.value == BuiltInLiteral.TRUE else "False"
+    def visit_Literal(self, literal: oir.Literal, **_) -> str:
+        if literal.dtype == gtc_common.DataType.BOOL:
+            literal_value = "True" if literal.value == gtc_common.BuiltInLiteral.TRUE else "False"
         else:
             literal_value = str(literal.value)
 
@@ -268,14 +236,14 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
         return literal_value
 
-    def visit_Cast(self, cast: Cast, **_) -> str:
+    def visit_Cast(self, cast: oir.Cast, **_) -> str:
         return f"{self.visit(cast.dtype)}({self.visit(cast.expr)})"
 
-    def visit_HorizontalExecution(self, horizontal_execution: HorizontalExecution, **_) -> None:
+    def visit_HorizontalExecution(self, horizontal_execution: oir.HorizontalExecution, **_) -> None:
         for statement in horizontal_execution.body:
             self.visit(statement)
 
-    def visit_HorizontalMask(self, horizontal_mask: HorizontalMask, **_) -> None:
+    def visit_HorizontalMask(self, horizontal_mask: gtc_common.HorizontalMask, **_) -> None:
         i_min, i_max = self.visit(horizontal_mask.i, var="i")
         j_min, j_max = self.visit(horizontal_mask.j, var="j")
         conditions = []
@@ -292,7 +260,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         self.body.append(if_code)
 
     def visit_HorizontalInterval(
-        self, horizontal_interval: HorizontalInterval, **kwargs
+        self, horizontal_interval: gtc_common.HorizontalInterval, **kwargs
     ) -> tuple[str | None, str | None]:
         return self.visit(
             horizontal_interval.start, **kwargs
@@ -301,7 +269,7 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         ) if horizontal_interval.end else None
 
     def visit_HorizontalRestriction(
-        self, horizontal_restriction: HorizontalRestriction, **_
+        self, horizontal_restriction: oir.HorizontalRestriction, **_
     ) -> None:
         self.visit(horizontal_restriction.mask)
         self.body.indent()
@@ -311,45 +279,47 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_VerticalLoop(self) -> None:
         pass
 
-    def visit_ScalarAccess(self, scalar_access: ScalarAccess, **_) -> str:
+    def visit_ScalarAccess(self, scalar_access: oir.ScalarAccess, **_) -> str:
         return scalar_access.name
 
-    def visit_ScalarDecl(self, scalar_declaration: ScalarDecl, **_) -> str:
+    def visit_ScalarDecl(self, scalar_declaration: oir.ScalarDecl, **_) -> str:
         return scalar_declaration.name
 
-    def visit_NativeFuncCall(self, native_function_call: NativeFuncCall, **_) -> str:
+    def visit_NativeFuncCall(self, native_function_call: oir.NativeFuncCall, **_) -> str:
         arglist = [self.visit(arg) for arg in native_function_call.args]
         arguments = ",".join(arglist)
         return f"ufuncs.{native_function_call.func.value}({arguments})"
 
-    def visit_UnaryOp(self, unary_operator: UnaryOp, **_) -> str:
+    def visit_UnaryOp(self, unary_operator: oir.UnaryOp, **_) -> str:
         return f"{unary_operator.op.value} {self.visit(unary_operator.expr)}"
 
-    def visit_TernaryOp(self, ternary_operator: TernaryOp, **_) -> str:
+    def visit_TernaryOp(self, ternary_operator: oir.TernaryOp, **_) -> str:
         return f"{self.visit(ternary_operator.true_expr)} if {self.visit(ternary_operator.cond)} else {self.visit(ternary_operator.false_expr)}"
 
-    def visit_MaskStmt(self, mask_statement: MaskStmt, **_) -> None:
+    def visit_MaskStmt(self, mask_statement: oir.MaskStmt, **_) -> None:
         self.body.append(f"if {self.visit(mask_statement.mask)}:")
         with self.body.indented():
             for statement in mask_statement.body:
                 self.visit(statement)
 
-    def visit_LocalScalar(self, local_scalar: LocalScalar, **__) -> None:
+    def visit_LocalScalar(self, local_scalar: oir.LocalScalar, **__) -> None:
         raise NotImplementedError(
             "This state should not be reached because LocalTemporariesToScalars should not have been called."
         )
 
-    def visit_CacheDesc(self, cache_descriptor: CacheDesc, **_) -> None:
+    def visit_CacheDesc(self, cache_descriptor: oir.CacheDesc, **_) -> None:
         raise NotImplementedError("CacheDescriptors should never be visited in the debug backends")
 
-    def visit_IJCache(self, ij_cache: IJCache, **_) -> None:
+    def visit_IJCache(self, ij_cache: oir.IJCache, **_) -> None:
         raise NotImplementedError("IJCaches should never be visited in the debug backend.")
 
-    def visit_KCache(self, k_cache: KCache, **_) -> None:
+    def visit_KCache(self, k_cache: oir.KCache, **_) -> None:
         raise NotImplementedError("KCaches should never be visited in the debug backend.")
 
-    def visit_VerticalLoopSection(self, vertical_loop_section: VerticalLoopSection, **_) -> None:
+    def visit_VerticalLoopSection(
+        self, vertical_loop_section: oir.VerticalLoopSection, **_
+    ) -> None:
         raise NotImplementedError("Vertical Loop section is not in the right place.")
 
-    def visit_UnboundedInterval(self, unbounded_interval: UnboundedInterval, **_) -> None:
+    def visit_UnboundedInterval(self, unbounded_interval: oir.UnboundedInterval, **_) -> None:
         raise NotImplementedError("Unbounded Intervals are not supported in the debug backend.")

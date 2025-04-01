@@ -10,34 +10,30 @@
 from typing import TYPE_CHECKING, Any, ClassVar, Type, Union
 
 from gt4py import storage
-from gt4py.cartesian.backend.base import BaseBackend, CLIBackendMixin, register
-from gt4py.cartesian.backend.numpy_backend import ModuleGenerator
-from gt4py.cartesian.gtc.debug.debug_codegen import DebugCodeGen
-from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
-from gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging import (
-    HorizontalExecutionMerging,
-)
-from gt4py.cartesian.gtc.passes.oir_optimizations.temporaries import LocalTemporariesToScalars
-from gt4py.cartesian.gtc.passes.oir_pipeline import OirPipeline
-from gt4py.eve.codegen import format_source
+from gt4py.cartesian.backend import base as backend_base, numpy_backend
+from gt4py.cartesian.gtc import gtir_to_oir
+from gt4py.cartesian.gtc.debug import debug_codegen
+from gt4py.cartesian.gtc.passes import oir_pipeline
+from gt4py.cartesian.gtc.passes.oir_optimizations import horizontal_execution_merging, temporaries
+from gt4py.eve import codegen
 
 
 if TYPE_CHECKING:
     from gt4py.cartesian.stencil_object import StencilObject
 
 
-@register
-class DebugBackend(BaseBackend, CLIBackendMixin):
+@backend_base.register
+class DebugBackend(backend_base.BaseBackend, backend_base.CLIBackendMixin):
     """Debug backend using plain python loops."""
 
     name = "debug"
     options: ClassVar[dict[str, Any]] = {
-        "oir_pipeline": {"versioning": True, "type": OirPipeline},
+        "oir_pipeline": {"versioning": True, "type": oir_pipeline.OirPipeline},
         "ignore_np_errstate": {"versioning": True, "type": bool},
     }
     storage_info = storage.layout.NaiveCPULayout
     languages = {"computation": "python", "bindings": ["python"]}
-    MODULE_GENERATOR_CLASS = ModuleGenerator
+    MODULE_GENERATOR_CLASS = numpy_backend.ModuleGenerator
 
     def generate_computation(self) -> dict[str, Union[str, dict]]:
         computation_name = (
@@ -45,13 +41,13 @@ class DebugBackend(BaseBackend, CLIBackendMixin):
             + f"computation{self.builder.caching.module_postfix}.py"
         )
 
-        oir = GTIRToOIR().visit(self.builder.gtir)
-        oir = HorizontalExecutionMerging().visit(oir)
-        oir = LocalTemporariesToScalars().visit(oir)
-        source_code = DebugCodeGen().visit(oir)
+        oir = gtir_to_oir.GTIRToOIR().visit(self.builder.gtir)
+        oir = horizontal_execution_merging.HorizontalExecutionMerging().visit(oir)
+        oir = temporaries.LocalTemporariesToScalars().visit(oir)
+        source_code = debug_codegen.DebugCodeGen().visit(oir)
 
         if self.builder.options.format_source:
-            source_code = format_source("python", source_code)
+            source_code = codegen.format_source("python", source_code)
 
         return {computation_name: source_code}
 
