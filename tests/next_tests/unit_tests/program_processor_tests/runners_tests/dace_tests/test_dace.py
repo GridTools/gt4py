@@ -64,7 +64,7 @@ def cartesian_case(request, cached_dace_backend):
 
 
 @pytest.fixture
-def unstructured_case(request, cached_dace_backend, mesh_descriptor):  # noqa: F811
+def unstructured_case(request, cached_dace_backend, mesh_descriptor):
     yield cases.Case(
         backend=cached_dace_backend,
         offset_provider=mesh_descriptor.offset_provider,
