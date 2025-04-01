@@ -68,7 +68,7 @@ class Compiler(
     ) -> stages.ExtendedCompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
-        with lock.Lock(str(src_dir / "file.lock"), default_timeout=300):
+        with lock.Lock(str(src_dir / "file.lock"), lifetime=600):
             data = build_data.read_data(src_dir)
 
             if not data or not is_compiled(data) or self.force_recompile:
