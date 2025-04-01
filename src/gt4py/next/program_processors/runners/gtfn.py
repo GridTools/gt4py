@@ -124,6 +124,7 @@ class FileCache(diskcache.Cache):
         else:
             lock_dir = pathlib.Path(tempfile.gettempdir())
 
+        lock_dir.mkdir(parents=True, exist_ok=True)
         lockfile = str(lock_dir / "file_cache.lock")
         with lock.Lock(lockfile, lifetime=10):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
             super().__init__(directory=directory, **settings)
