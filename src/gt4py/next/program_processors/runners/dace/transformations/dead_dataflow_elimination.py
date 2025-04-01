@@ -204,9 +204,11 @@ def _gt_dead_memlet_elimination_sdfg(
         candidates: list[dace.sdfg.MultiConnectorEdge] = []
         for oedge in state.out_edges(access_node):
             dst: dace_nodes.Node = oedge.dst
+            memlet: dace.Memlet = oedge.data
             if not isinstance(dst, dace_nodes.AccessNode):
                 continue
-            memlet: dace.Memlet = oedge.data
+            if memlet.is_empty():
+                continue
             subset = memlet.subset if memlet.subset is not None else memlet.other_subset
             assert subset is not None, "Failed to identify the subset."
             if not any((ss <= 0) == True for ss in subset.size()):  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
@@ -224,9 +226,11 @@ def _gt_dead_memlet_elimination_sdfg(
             other_node: dace_nodes.AccessNode = oedge.dst
             state.remove_edge(oedge)
             removed_memlets += 1
+            # TODO(phimuell): Handle the case if there are only empty Memlets.
             if state.degree(other_node) == 0:
                 state.remove_node(other_node)
                 removed_access_nodes.add(other_node)
+        # TODO(phimuell): Handle the case if there are only empty Memlets.
         if state.degree(access_node) == 0:
             state.remove_node(access_node)
             removed_access_nodes.add(access_node)
