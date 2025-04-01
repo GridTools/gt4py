@@ -107,7 +107,7 @@ dependencies = [
   'tabulate>=0.8.10',
   'toolz>=0.12.1',
   'typing-extensions>=4.11.0',
-  'xxhash>=1.4.4,<3.1.0',
+  'xxhash>=1.4.4,<3.1.0'
 ]
 description = 'Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL)'
 dynamic = ['version']

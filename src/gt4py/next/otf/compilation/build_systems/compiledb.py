@@ -238,7 +238,7 @@ def _cc_get_compiledb(
         stages.CompilableSource(prototype_program_source, None), cache_lifetime
     )
 
-    with lock.Lock(str(cache_path / "compiledb.lock"), lifetime=120) as compiledb_look:
+    with lock.Lock(str(cache_path / "compiledb.lock"), lifetime=120):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
         if not renew_compiledb and (compiled_db := _cc_find_compiledb(cache_path=cache_path)):
             return compiled_db
         return _cc_create_compiledb(
