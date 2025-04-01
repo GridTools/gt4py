@@ -67,6 +67,8 @@ def gt_simplify(
         in different states.
     - `CopyChainRemover`: Which removes some chains that are introduced by the
         `concat_where` built-in function.
+    - `GT4PyDeadDataflowElimination`: Run `gt_eliminate_dead_dataflow()` on the SDFG,
+        which removes more dead dataflow than the native DaCe version.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -122,7 +124,20 @@ def gt_simplify(
             result = result or {}
             result.update(simplify_res)
 
-        # This is the place were we actually want to apply the chain removal.
+        if "GT4PyDeadDataflowElimination" not in skip:
+            eliminate_dead_dataflow_res = gtx_transformations.gt_eliminate_dead_dataflow(
+                sdfg=sdfg,
+                run_simplify=False,
+                validate=False,
+                validate_all=validate_all,
+            )
+            if eliminate_dead_dataflow_res != 0:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "GT4PyDeadDataflowElimination" not in result:
+                    result["GT4PyDeadDataflowElimination"] = 0
+                result["GT4PyDeadDataflowElimination"] += eliminate_dead_dataflow_res
+
         if "CopyChainRemover" not in skip:
             copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
                 sdfg=sdfg,
