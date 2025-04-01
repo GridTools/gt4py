@@ -122,7 +122,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     def make_field(
         self,
         data_node: dace.nodes.AccessNode,
-        data_type: ts.FieldType | ts.ScalarType,
+        data_type: ts.FieldType,
     ) -> gtir_builtin_translators.FieldopData:
         """Retrieve the field data descriptor including the domain offset information."""
         ...
@@ -140,9 +140,9 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     @abc.abstractmethod
     def setup_nested_context(
         self,
-        expr: gtir.Expr,
         sdfg: dace.SDFG,
-        global_symbols: dict[str, ts.DataType],
+        parent: dace.SDFG,
+        scope_symbols: dict[str, ts.DataType],
     ) -> SDFGBuilder:
         """
         Create an SDFG context to translate a nested expression, indipendent
@@ -150,12 +150,13 @@ class SDFGBuilder(DataflowBuilder, Protocol):
 
         This method will setup the global symbols, that correspond to the parameters
         of the expression to be lowered, as well as the set of symbolic arguments,
-        that is scalar values used in internal domain expressions.
+        that is scalar values represented as dace symbols in the parent SDFG.
 
         Args:
-            expr: The nested expresson to be lowered.
             sdfg: The SDFG where to lower the nested expression.
-            global_symbols: Mapping from symbol name to GTIR data type.
+            parent: The parent SDFG.
+            scope_symbols: Mapping from symbol name to data type for the GTIR symbols
+                forwarded to the nested context.
 
         Returns:
             A visitor object implementing the `SDFGBuilder` protocol.
@@ -248,7 +249,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def make_field(
         self,
         data_node: dace.nodes.AccessNode,
-        data_type: ts.FieldType | ts.ScalarType,
+        data_type: ts.FieldType,
     ) -> gtir_builtin_translators.FieldopData:
         """
         Helper method to build the field data type associated with a data access node.
@@ -271,8 +272,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             The descriptor associated with the SDFG data storage, filled with field origin.
         """
-        if isinstance(data_type, ts.ScalarType):
-            return gtir_builtin_translators.FieldopData(data_node, data_type, origin=())
         local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
         if len(local_dims) == 0:
             # do nothing: the field domain consists of all global dimensions
@@ -312,18 +311,20 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def setup_nested_context(
         self,
-        expr: gtir.Expr,
         sdfg: dace.SDFG,
-        global_symbols: dict[str, ts.DataType],
+        parent: dace.SDFG,
+        scope_symbols: dict[str, ts.DataType],
     ) -> SDFGBuilder:
-        nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, global_symbols)
-        nsdfg_params = [
-            gtir.Sym(id=p_name, type=p_type) for p_name, p_type in global_symbols.items()
-        ]
-        domain_symbols = _collect_symbols_in_domain_expressions(expr, nsdfg_params)
-        nsdfg_builder._add_sdfg_params(
-            sdfg, node_params=nsdfg_params, symbolic_arguments=domain_symbols
-        )
+        nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, scope_symbols)
+        params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in scope_symbols.items()]
+        symbolic_arguments = {
+            # scalar values represented as dace symbols in parent SDFG are mapped
+            # to dace symbols in the nested SDFG
+            pname
+            for sym in params
+            if (pname := str(sym.id)) in parent.symbols
+        }
+        nsdfg_builder._add_sdfg_params(sdfg, params, symbolic_arguments)
         return nsdfg_builder
 
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
@@ -390,6 +391,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         name: str,
         gt_type: ts.DataType,
         transient: bool = True,
+        tuple_name: Optional[str] = None,
     ) -> list[tuple[str, ts.DataType]]:
         """
         Add storage in the SDFG for a given GT4Py data symbol.
@@ -409,6 +411,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             name: Symbol Name to be allocated.
             gt_type: GT4Py symbol type.
             transient: True when the data symbol has to be allocated as internal storage.
+            tuple_name: Name of the tuple the current GT4Py data symbol belongs to.
+                Set to `None` if the symbol does not belong to a tuple.
 
         Returns:
             List of tuples '(data_name, gt_type)' where 'data_name' is the name of
@@ -421,8 +425,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             tuple_fields = []
             for sym in gtir_sdfg_utils.flatten_tuple_fields(name, gt_type):
                 assert isinstance(sym.type, ts.DataType)
+                # for nested tuples, we always pass the root tuple symbol name
+                sym_ref = name if tuple_name is None else tuple_name
                 tuple_fields.extend(
-                    self._add_storage(sdfg, symbolic_arguments, sym.id, sym.type, transient)
+                    self._add_storage(
+                        sdfg, symbolic_arguments, sym.id, sym.type, transient, tuple_name=sym_ref
+                    )
                 )
             return tuple_fields
 
@@ -442,7 +450,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         elif isinstance(gt_type, ts.ScalarType):
             dc_dtype = gtx_dace_utils.as_dace_type(gt_type)
-            if gtx_dace_utils.is_field_symbol(name) or name in symbolic_arguments:
+            # note that `symbolic_arguments` contains the name of the tuple a scalar belongs to
+            sym_ref = name if tuple_name is None else tuple_name
+            if gtx_dace_utils.is_field_symbol(name) or sym_ref in symbolic_arguments:
                 if name in sdfg.symbols:
                     # Sometimes, when the field domain is implicitly derived from the
                     # field domain, the gt4py lowering adds the field size as a scalar
@@ -495,18 +505,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert sink_states[0] == head_state
 
         def make_temps(
-            field: gtir_builtin_translators.FieldopData,
+            src: gtir_builtin_translators.FieldopData,
         ) -> gtir_builtin_translators.FieldopData:
-            desc = sdfg.arrays[field.dc_node.data]
-            if desc.transient or not use_temp:
-                return field
+            src_desc = sdfg.arrays[src.dc_node.data]
+            if src_desc.transient or not use_temp:
+                return src
             else:
-                temp, _ = self.add_temp_array_like(sdfg, desc)
-                temp_node = head_state.add_access(temp)
+                dst, dst_desc = self.add_temp_array_like(sdfg, src_desc)
+                dst_node = head_state.add_access(dst)
                 head_state.add_nedge(
-                    field.dc_node, temp_node, sdfg.make_array_memlet(field.dc_node.data)
+                    src.dc_node,
+                    dst_node,
+                    dace.Memlet(
+                        data=dst,
+                        subset=dace.subsets.Range.from_array(dst_desc),
+                        other_subset=dace.subsets.Range.from_array(src_desc),
+                    ),
                 )
-                return gtir_builtin_translators.FieldopData(temp_node, field.gt_type, field.origin)
+                return gtir_builtin_translators.FieldopData(dst_node, src.gt_type, src.origin)
 
         temp_result = gtx_utils.tree_map(make_temps)(result)
         return list(gtx_utils.flatten_nested_tuple((temp_result,)))
@@ -761,7 +777,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # lower let-statement lambda node as a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nsdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=sdfg.debuginfo)
-        lambda_translator = self.setup_nested_context(node.expr, nsdfg, lambda_symbols)
+        lambda_translator = self.setup_nested_context(nsdfg, sdfg, lambda_symbols)
 
         nstate = nsdfg.add_state("lambda")
         lambda_result = lambda_translator.visit(

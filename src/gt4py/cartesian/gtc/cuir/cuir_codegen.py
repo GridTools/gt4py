@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Collection, Dict, List, Set, Union
+from typing import Any, Collection, Dict, Final, List, Set, Union
 
 import numpy as np
 
@@ -109,7 +109,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     BinaryOp = as_fmt("({left} {op} {right})")
 
-    UNARY_OPERATOR_TO_CODE = {
+    UNARY_OPERATOR_TO_CODE: Final[dict[UnaryOperator, str]] = {
         UnaryOperator.NOT: "!",
         UnaryOperator.NEG: "-",
         UnaryOperator.POS: "+",
@@ -121,7 +121,10 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     Cast = as_fmt("static_cast<{dtype}>({expr})")
 
-    BUILTIN_LITERAL_TO_CODE = {BuiltInLiteral.TRUE: "true", BuiltInLiteral.FALSE: "false"}
+    BUILTIN_LITERAL_TO_CODE: Final[dict[BuiltInLiteral, str]] = {
+        BuiltInLiteral.TRUE: "true",
+        BuiltInLiteral.FALSE: "false",
+    }
 
     def visit_BuiltInLiteral(self, builtin: BuiltInLiteral, **kwargs: Any) -> str:
         try:
@@ -139,7 +142,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             dtype = self.visit(node.dtype, **kwargs)
             return f"static_cast<{dtype}>({value})"
 
-    NATIVE_FUNCTION_TO_CODE = {
+    NATIVE_FUNCTION_TO_CODE: Final[dict[NativeFunction, str]] = {
         NativeFunction.ABS: "std::abs",
         NativeFunction.MIN: "std::min",
         NativeFunction.MAX: "std::max",
@@ -181,7 +184,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
-    DATA_TYPE_TO_CODE = {
+    DATA_TYPE_TO_CODE: Final[dict[DataType, str]] = {
         DataType.BOOL: "bool",
         DataType.INT8: "std::int8_t",
         DataType.INT16: "std::int16_t",

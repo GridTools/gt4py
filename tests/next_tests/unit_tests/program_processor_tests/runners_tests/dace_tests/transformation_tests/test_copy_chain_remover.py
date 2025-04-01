@@ -430,6 +430,21 @@ def test_multi_stage_reduction():
 def test_not_fully_copied():
     sdfg = _make_not_fully_copied()
 
+    # NOTE: In the unprocessed SDFG, especially in the `(d) -> (e)` Memlet.
+    #  we read uninitialized memory from `d`, because we only write into `[0:8]`
+    #  but read from it in the range `[0:10]`, thus the range `[8:10]` in `e`
+    #  has undefined value. We have to take that into account.
+    ref = {
+        "a": np.array(np.random.rand(10), dtype=np.float64, copy=True),
+        "e": np.array(np.random.rand(10), dtype=np.float64, copy=True),
+    }
+    res = copy.deepcopy(ref)
+    org = copy.deepcopy(ref)
+
+    # Compile and run the original SDFG
+    csdfg_ref = sdfg.compile()
+    csdfg_ref(**ref)
+
     # Apply the transformation.
     #  It will only remove `d` all the others are retained, because they are not read
     #  correctly, i.e. fully.
@@ -442,6 +457,15 @@ def test_not_fully_copied():
     assert len(acnodes) == 4
     assert nb_applies == 1
     assert "d" not in acnodes
+
+    # Now run the test and compare the results, see above for the ranges.
+    csdfg_res = sdfg.compile()
+    csdfg_res(**res)
+
+    assert np.all(ref["a"] == res["a"])
+    assert np.all(org["a"] == res["a"])
+    assert np.all(res["e"][0:8] == ref["e"][0:8])
+    assert np.all(res["e"][8:10] == org["e"][8:10])
 
 
 def test_possible_cyclic_sdfg():
