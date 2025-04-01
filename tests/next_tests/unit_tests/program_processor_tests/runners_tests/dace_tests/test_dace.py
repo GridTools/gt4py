@@ -43,37 +43,37 @@ from gt4py.next.program_processors.runners import dace as dace_backends
         ),
     ]
 )
-def gtir_dace_backend(request):
+def cached_dace_backend(request):
     """
     Test fixture to select the dace backends only. In order to trigger `fast_call`,
     we have to use the cached backend so that the same `CompiledSDFG` object is
-    used on the second call.
+    used on the second SDFG call.
     """
     yield request.param
 
 
 @pytest.fixture
-def cartesian_case(request, gtir_dace_backend):
+def cartesian_case(request, cached_dace_backend):
     yield cases.Case(
-        backend=gtir_dace_backend,
+        backend=cached_dace_backend,
         offset_provider={"Ioff": IDim},
         default_sizes={IDim: 10},
         grid_type=gtx_common.GridType.CARTESIAN,
-        allocator=gtir_dace_backend.allocator,
+        allocator=cached_dace_backend.allocator,
     )
 
 
 @pytest.fixture
-def unstructured_case(request, gtir_dace_backend, mesh_descriptor):  # noqa: F811
+def unstructured_case(request, cached_dace_backend, mesh_descriptor):  # noqa: F811
     yield cases.Case(
-        backend=gtir_dace_backend,
+        backend=cached_dace_backend,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
             Edge: mesh_descriptor.num_edges,
         },
         grid_type=gtx_common.GridType.UNSTRUCTURED,
-        allocator=gtir_dace_backend.allocator,
+        allocator=cached_dace_backend.allocator,
     )
 
 
