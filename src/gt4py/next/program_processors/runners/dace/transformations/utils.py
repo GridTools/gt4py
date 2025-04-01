@@ -11,7 +11,7 @@
 from typing import Any, Container, Optional, Sequence, TypeVar, Union
 
 import dace
-from dace import data as dace_data, transformation as dace_transformation
+from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
@@ -365,19 +365,3 @@ def find_all_subgraphs(
         assert state.number_of_nodes() == 0
 
     return [dace.sdfg.ScopeSubgraphView(state, component, None) for component in components]
-
-
-def explicit_cf_compatible_wrapper(klass: _PassT) -> _PassT:
-    """Apply the `explicit_cf_compatible` decorator to `klass`.
-
-    The decorator was introduced by DaCe in [PR#1676](https://github.com/spcl/dace/pull/1676)
-    and is not part of version 1 of DaCe, that is used by `gt4py.cartesian`. The
-    problem is, that importing `cartesian` as a side effect also imports the DaCe
-    transformation within `gt4py.next` which then causes an error.
-    This wrapper applies the decorator if present or does nothing if it is not present.
-    """
-    return (
-        dace_transformation.explicit_cf_compatible(klass)
-        if hasattr(dace_transformation, "explicit_cf_compatible")
-        else klass
-    )

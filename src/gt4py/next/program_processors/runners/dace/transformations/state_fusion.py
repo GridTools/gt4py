@@ -14,10 +14,17 @@ from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
-from .utils import explicit_cf_compatible_wrapper
+
+# Conditional import because `gt4py.cartesian` uses an older DaCe version without
+#  `explicit_cf_compatible`.
+# TODO(phimuell): Remove once `gt4py.cartesian` has been updated.
+try:
+    explicit_cf_compatible = dace_transformation.explicit_cf_compatible
+except AttributeError:
+    explicit_cf_compatible = lambda x: x  # noqa: E731 [lambda-assignment]
 
 
-@explicit_cf_compatible_wrapper
+@explicit_cf_compatible
 class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
     """Implements a state fusion transformation that is specific to GT4Py.
 
