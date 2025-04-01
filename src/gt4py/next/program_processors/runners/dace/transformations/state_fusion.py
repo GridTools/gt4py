@@ -14,8 +14,10 @@ from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
+from .utils import explicit_cf_compatible_wrapper
 
-@dace_transformation.explicit_cf_compatible
+
+@explicit_cf_compatible_wrapper
 class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
     """Implements a state fusion transformation that is specific to GT4Py.
 
