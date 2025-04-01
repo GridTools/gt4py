@@ -54,8 +54,14 @@ class DaCeBackendFactory(factory.Factory):
     transforms = backend.DEFAULT_TRANSFORMS
 
 
-run_dace_cpu = DaCeBackendFactory(cached=True, auto_optimize=True)
-run_dace_cpu_noopt = DaCeBackendFactory(cached=True, auto_optimize=False)
+run_dace_cpu = DaCeBackendFactory(auto_optimize=True)
+run_dace_cpu_noopt = DaCeBackendFactory(auto_optimize=False)
+run_dace_cpu_cached = DaCeBackendFactory(
+    auto_optimize=True, cached=True, otf_workflow__cached_translation=True
+)
 
-run_dace_gpu = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=True)
-run_dace_gpu_noopt = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=False)
+run_dace_gpu = DaCeBackendFactory(gpu=True, auto_optimize=True)
+run_dace_gpu_noopt = DaCeBackendFactory(gpu=True, auto_optimize=False)
+run_dace_gpu_cached = DaCeBackendFactory(
+    gpu=True, auto_optimize=True, cached=True, otf_workflow__cached_translation=True
+)
