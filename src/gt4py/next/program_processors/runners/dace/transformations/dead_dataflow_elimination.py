@@ -238,7 +238,7 @@ def _gt_dead_memlet_elimination_sdfg(
         # Keep track of all AccessNodes that have been removed, for the later cleaning
         #  and to prevent `NondeNotFoundError`s in DaCe.
         removed_access_nodes: set[dace_nodes.AccessNode] = set()
-        for dnode in state.data_nodes():
+        for dnode in list(state.data_nodes()):
             if dnode in removed_access_nodes:
                 continue
             this_removed_memlets, this_removed_access_nodes = _process_access_node(
