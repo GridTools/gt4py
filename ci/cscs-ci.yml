@@ -149,7 +149,9 @@ build_py310_image_aarch64:
     # Grace-Hopper gpu architecture is not enabled by default in CUDA build
     CUDAARCHS: "90"
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
-    NUM_PROCESSES: 64
+    # Another problem, observed in test stage, is that gpu tests hang in combination with CUDA MPS,
+    # when high test parallelism is used.
+    NUM_PROCESSES: 16
 
 # test_py311_x86_64:
 #   extends: [.test_helper_x86_64]
