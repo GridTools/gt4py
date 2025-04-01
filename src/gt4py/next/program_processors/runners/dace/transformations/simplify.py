@@ -55,6 +55,8 @@ def gt_simplify(
     This function runs the DaCe simplification pass, but the following passes are
     replaced:
     - `InlineSDFGs`: Instead `gt_inline_nested_sdfg()` will be called.
+    - `FuseStates`: The normal DaCe transformation is still run, but after the DaCe
+        simplify pass has ended the function will run `GT4PyStateFusion`.
 
     Further, the function will run the following passes in addition to DaCe simplify:
     - `SingleStateGlobalSelfCopyElimination`: Special copy pattern that in the context
@@ -92,9 +94,13 @@ def gt_simplify(
     result: Optional[dict[str, Any]] = None
 
     at_least_one_xtrans_run = True
-
+    starvation_protection = 30
     while at_least_one_xtrans_run:
         at_least_one_xtrans_run = False
+
+        if starvation_protection == 0:
+            raise ValueError("Simplify did not converge.")
+        starvation_protection -= 1
 
         # NOTE: See comment in `gt_inline_nested_sdfg()` for more.
         sdfg.reset_cfg_list()
@@ -123,6 +129,21 @@ def gt_simplify(
             at_least_one_xtrans_run = True
             result = result or {}
             result.update(simplify_res)
+
+        # Note that it is not nice that we run the state fusion twice, but to be fully
+        #  effective there are some preparatory transformations that are run in DaCe
+        #  simplify. So the GT4Py transformation is more like a clean up to handle
+        #  the parts DaCe is not able to do.
+        if "FuseStates" not in skip:
+            fuse_state_res = sdfg.apply_transformations_repeated(
+                [gtx_transformations.GT4PyStateFusion]
+            )
+            if fuse_state_res:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "FuseStates" not in result:
+                    result["FuseStates"] = 0
+                result["FuseStates"] += fuse_state_res
 
         if "GT4PyDeadDataflowElimination" not in skip:
             eliminate_dead_dataflow_res = gtx_transformations.gt_eliminate_dead_dataflow(
