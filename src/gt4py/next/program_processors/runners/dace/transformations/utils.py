@@ -8,14 +8,18 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-from typing import Any, Container, Optional, Sequence, Union
+from typing import Any, Container, Optional, Sequence, TypeVar, Union
 
 import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes
+from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
+
+
+_PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
 
 
 def gt_make_transients_persistent(
@@ -318,3 +322,46 @@ def track_view(
             raise RuntimeError(f"View tracing of '{org_view}' failed at note '{view}'.")
         view = next_node(curr_edge)
     return view
+
+
+def find_all_subgraphs(
+    state: dace.SDFGState,
+) -> list[dace.sdfg.ScopeSubgraphView]:
+    """Finds all components in `state`.
+
+    This is different from `dace.sdfg.utils.concurrent_subgraphs()`, which might
+    generate subgraphs that share some nodes. This function is more related to
+    the "connected component" concept.
+    """
+    components: list[set[dace_nodes.Node]] = []
+    partitioned_nodes: set[dace_nodes.Node] = set()
+    for start_node in state.source_nodes():
+        newly_found_nodes: set[dace_nodes.Node] = set()
+        to_visit: list[dace_nodes.Node] = [start_node]
+        previously_found_node: Optional[dace_nodes.Node] = None
+
+        while len(to_visit) > 0:
+            node = to_visit.pop()
+            if node in partitioned_nodes:
+                previously_found_node = node
+                continue
+            if node in newly_found_nodes:
+                continue
+            newly_found_nodes.add(node)
+            to_visit.extend(oedge.dst for oedge in state.out_edges(node))
+
+        if previously_found_node is not None:
+            # We discovered another part of a component that was already known.
+            old_component = next(
+                iter(component for component in components if previously_found_node in component)
+            )
+            old_component.update(newly_found_nodes)
+        else:
+            # We have found a new component.
+            components.append(newly_found_nodes)
+        partitioned_nodes.update(newly_found_nodes)
+
+    if len(components) == 0:
+        assert state.number_of_nodes() == 0
+
+    return [dace.sdfg.ScopeSubgraphView(state, component, None) for component in components]
