@@ -68,6 +68,8 @@ class Compiler(
     ) -> stages.ExtendedCompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
+        # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
+        # we need to make sure that only one of them accesses the same build directory for compilation.
         with lock.Lock(str(src_dir / "compilation.lock"), lifetime=600):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
             data = build_data.read_data(src_dir)
 

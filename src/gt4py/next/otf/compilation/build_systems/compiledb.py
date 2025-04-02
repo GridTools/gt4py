@@ -238,15 +238,18 @@ def _cc_get_compiledb(
         stages.CompilableSource(prototype_program_source, None), cache_lifetime
     )
 
+    # In a multi-threaded environment, multiple threads may try to create the compiledb at the same time
+    # leading to compilation errors.
     with lock.Lock(str(cache_path / "compiledb.lock"), lifetime=120):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
-        if not renew_compiledb and (compiled_db := _cc_find_compiledb(path=cache_path)):
-            return compiled_db
-        return _cc_create_compiledb(
-            path=cache_path,
-            prototype_program_source=prototype_program_source,
-            build_type=build_type,
-            cmake_flags=cmake_flags,
-        )
+        if renew_compiledb or not (compiled_db := _cc_find_compiledb(path=cache_path)):
+            compiled_db = _cc_create_compiledb(
+                path=cache_path,
+                prototype_program_source=prototype_program_source,
+                build_type=build_type,
+                cmake_flags=cmake_flags,
+            )
+
+        return compiled_db
 
 
 def _cc_find_compiledb(path: pathlib.Path) -> Optional[pathlib.Path]:
