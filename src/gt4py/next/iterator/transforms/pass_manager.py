@@ -175,6 +175,7 @@ def apply_common_transforms(
     )
 
     assert isinstance(ir, itir.Program)
+    print(ir)
     return ir
 
 

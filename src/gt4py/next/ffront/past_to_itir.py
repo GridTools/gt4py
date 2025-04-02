@@ -26,6 +26,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.stages import AOT_PRG
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms import remap_symbols
 from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -66,6 +67,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         >>> print(type(itir_copy.data))
         <class 'gt4py.next.iterator.ir.Program'>
     """
+    print(inp.args)
     all_closure_vars = transform_utils._get_closure_vars_recursively(inp.data.closure_vars)
     offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
         all_closure_vars, fbuiltins.FieldOffset, common.Dimension
@@ -90,6 +92,20 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
     itir_program = ProgramLowering.apply(
         inp.data.past_node, function_definitions=lowered_funcs, grid_type=grid_type
     )
+    print(itir_program)
+
+    body = remap_symbols.RemapSymbolRefs().visit(
+        itir_program.body, symbol_map={"a": im.literal_from_value(inp.args.args[0].value)}
+    )
+    itir_program = itir.Program(
+        id=itir_program.id,
+        function_definitions=itir_program.function_definitions,
+        params=itir_program.params,
+        declarations=itir_program.declarations,
+        body=body,
+        implicit_domain=itir_program.implicit_domain,
+    )
+    print(itir_program)
 
     if config.DEBUG or inp.data.debug:
         devtools.debug(itir_program)

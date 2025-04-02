@@ -259,6 +259,19 @@ class Program:
             backend=self.backend,
         )
 
+    def compile(self, **kwargs):
+        past_node_type = self.past_stage.past_node.type
+        arg_types_dict = past_node_type.definition.pos_or_kw_args
+
+        for key, value in kwargs.items():
+            arg_types_dict[key] = arguments.StaticArg(value, arg_types_dict[key])
+
+        args = tuple(arg_types_dict.values())  # TODO: is this ordered
+        compile_time_args = arguments.CompileTimeArgs(
+            offset_provider=self.connectivities, column_axis=None, args=args, kwargs={}
+        )
+        self.backend.compile(self.definition_stage, compile_time_args=compile_time_args)
+
 
 @dataclasses.dataclass(frozen=True)
 class FrozenProgram:

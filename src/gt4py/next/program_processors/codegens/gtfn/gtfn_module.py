@@ -85,6 +85,7 @@ class GTFNTranslationStep(
         arg_exprs: list[str] = []
 
         for arg_type, program_param in zip(arg_types, program.params, strict=True):
+            arg_type = arg_type.type if hasattr(arg_type, "type") else arg_type
             # parameter
             parameter = get_param_description(program_param.id, arg_type)
             parameters.append(parameter)
@@ -310,8 +311,7 @@ class GTFNTranslationStep(
 
     def _not_implemented_for_device_type(self) -> NotImplementedError:
         return NotImplementedError(
-            f"{self.__class__.__name__} is not implemented for "
-            f"device type {self.device_type.name}"
+            f"{self.__class__.__name__} is not implemented for device type {self.device_type.name}"
         )
 
 
