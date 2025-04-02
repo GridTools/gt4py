@@ -78,7 +78,7 @@ class DaCeCompiler(
             #  up with the cuda streams, i.e. it allocates N streams but uses N+1.
             #  This is a workaround until this issue if fixed in DaCe.
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=1)
-            
+
             if self.device_type == core_defs.DeviceType.CPU:
                 compiler_args = dace.config.Config.get("compiler", "cpu", "args")
                 # disable finite-math-only in order to support isfinite/isinf/isnan builtins
