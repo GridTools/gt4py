@@ -28,6 +28,11 @@ def index(*args):
 
 
 @builtin_dispatch
+def broadcast(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def deref(*args):
     raise BackendNotSelectedError()
 
@@ -470,6 +475,7 @@ ARITHMETIC_BUILTINS = {
 
 BUILTINS = {
     "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
+    "broadcast",
     "can_deref",
     "cartesian_domain",
     "cast_",

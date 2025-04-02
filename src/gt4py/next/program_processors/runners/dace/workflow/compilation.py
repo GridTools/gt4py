@@ -69,12 +69,16 @@ class DaCeCompiler(
         inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
     ) -> CompiledDaceProgram:
         sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-
-        src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
-        sdfg.build_folder = src_dir / ".dacecache"
+        sdfg.build_folder = cache.get_cache_folder(inp, self.cache_lifetime)
 
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "build_type", value=self.cmake_build_type.value)
+            dace.config.Config.set("compiler", "use_cache", value=False)  # we use the gt4py cache
+            # In some stencils, mostly in `apply_diffusion_to_w` the cuda codegen messes
+            #  up with the cuda streams, i.e. it allocates N streams but uses N+1.
+            #  This is a workaround until this issue if fixed in DaCe.
+            dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=1)
+
             if self.device_type == core_defs.DeviceType.CPU:
                 compiler_args = dace.config.Config.get("compiler", "cpu", "args")
                 # disable finite-math-only in order to support isfinite/isinf/isnan builtins

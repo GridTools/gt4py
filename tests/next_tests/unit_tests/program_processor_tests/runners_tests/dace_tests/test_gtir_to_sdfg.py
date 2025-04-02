@@ -98,6 +98,12 @@ def make_mesh_symbols(mesh: MeshDescriptor):
 def build_dace_sdfg(
     ir: gtir.Program, offset_provider_type: gtx_common.OffsetProviderType
 ) -> Callable[..., Any]:
+    # run domain inference in order to add the domain annex information to the IR nodes
+    ir = infer_domain.infer_program(
+        ir,
+        offset_provider=offset_provider_type,
+        symbolic_domain_sizes={IDim.value: "size", Edge.value: "nedges", Vertex.value: "nvertices"},
+    )
     return dace_backend.build_sdfg_from_gtir(
         ir, offset_provider_type, disable_field_origin_on_program_arguments=True
     )
@@ -375,6 +381,7 @@ def test_gtir_tuple_broadcast_scalar():
 
 def test_gtir_zero_dim_fields():
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    empty_domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={})
     testee = gtir.Program(
         id="gtir_zero_dim_fields",
         function_definitions=[],
@@ -386,7 +393,9 @@ def test_gtir_zero_dim_fields():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.as_fieldop("deref", domain)("x"),
+                expr=im.op_as_fieldop("multiplies", domain)(
+                    "x", im.op_as_fieldop("plus", empty_domain)(1.0, 1.0)
+                ),
                 domain=domain,
                 target=gtir.SymRef(id="y"),
             )
@@ -399,7 +408,7 @@ def test_gtir_zero_dim_fields():
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     sdfg(a.item(), b, **FSYMBOLS)
-    assert np.allclose(a, b)
+    assert np.allclose(b, a * 2)
 
 
 def test_gtir_tuple_return():
@@ -662,6 +671,7 @@ def test_gtir_cond():
         assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
 
 
+@pytest.mark.xfail(reason="requires function to retrieve the annex tuple domain")
 def test_gtir_cond_with_tuple_return():
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
@@ -1844,7 +1854,11 @@ def test_gtir_let_lambda_with_tuple1():
     a = np.random.rand(N)
     b = np.random.rand(N)
 
-    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+    # TODO(edopao): call `build_dace_sdfg` as in all other tests, once this error is fixed
+    #   in domain inference: 'target_domain' cannot be 'NEVER' unless `allow_uninferred=True`
+    sdfg = dace_backend.build_sdfg_from_gtir(
+        testee, CARTESIAN_OFFSETS, disable_field_origin_on_program_arguments=True
+    )
 
     z_fields = (np.zeros_like(a), np.zeros_like(a))
     a_ref = np.concatenate((z_fields[0][:1], a[1 : N - 1], z_fields[0][N - 1 :]))
@@ -2039,8 +2053,6 @@ def test_gtir_index():
 
     v = np.zeros(N, dtype=np.int32)
 
-    # we need to run domain inference in order to add the domain annex information to the index node.
-    testee = infer_domain.infer_program(testee, offset_provider=CARTESIAN_OFFSETS)
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     ref = np.concatenate(

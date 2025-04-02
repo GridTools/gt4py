@@ -55,16 +55,22 @@ def gt_simplify(
     This function runs the DaCe simplification pass, but the following passes are
     replaced:
     - `InlineSDFGs`: Instead `gt_inline_nested_sdfg()` will be called.
+    - `FuseStates`: The normal DaCe transformation is still run, but after the DaCe
+        simplify pass has ended the function will run `GT4PyStateFusion`.
 
     Further, the function will run the following passes in addition to DaCe simplify:
     - `SingleStateGlobalSelfCopyElimination`: Special copy pattern that in the context
         of GT4Py based SDFG behaves as a no op, i.e. `(G) -> (T) -> (G)`.
+    - `SingleStateGlobalDirectSelfCopyElimination`: Special copy pattern of the form
+        `(G) -> (G)` which can always be eliminated.
     - `MultiStateGlobalSelfCopyElimination`: Very similar to
         `SingleStateGlobalSelfCopyElimination`, with the exception that the write to
         `T`, i.e. `(G) -> (T)` and the write back to `G`, i.e. `(T) -> (G)` might be
         in different states.
     - `CopyChainRemover`: Which removes some chains that are introduced by the
         `concat_where` built-in function.
+    - `GT4PyDeadDataflowElimination`: Run `gt_eliminate_dead_dataflow()` on the SDFG,
+        which removes more dead dataflow than the native DaCe version.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -88,27 +94,16 @@ def gt_simplify(
     result: Optional[dict[str, Any]] = None
 
     at_least_one_xtrans_run = True
-
+    starvation_protection = 30
     while at_least_one_xtrans_run:
         at_least_one_xtrans_run = False
 
+        if starvation_protection == 0:
+            raise ValueError("Simplify did not converge.")
+        starvation_protection -= 1
+
         # NOTE: See comment in `gt_inline_nested_sdfg()` for more.
         sdfg.reset_cfg_list()
-
-        # To mitigate DaCe issue 1959, we run the chain removal transformation here.
-        # TODO(phimuell): Remove as soon as we have a true solution.
-        if "CopyChainRemover" not in skip:
-            copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
-                sdfg=sdfg,
-                validate=validate,
-                validate_all=validate_all,
-            )
-            if copy_chain_remover_result is not None:
-                at_least_one_xtrans_run = True
-                result = result or {}
-                if "CopyChainRemover" not in result:
-                    result["CopyChainRemover"] = 0
-                result["CopyChainRemover"] += copy_chain_remover_result
 
         if "InlineSDFGs" not in skip:
             inline_res = gt_inline_nested_sdfg(
@@ -135,7 +130,35 @@ def gt_simplify(
             result = result or {}
             result.update(simplify_res)
 
-        # This is the place were we actually want to apply the chain removal.
+        # Note that it is not nice that we run the state fusion twice, but to be fully
+        #  effective there are some preparatory transformations that are run in DaCe
+        #  simplify. So the GT4Py transformation is more like a clean up to handle
+        #  the parts DaCe is not able to do.
+        if "FuseStates" not in skip:
+            fuse_state_res = sdfg.apply_transformations_repeated(
+                [gtx_transformations.GT4PyStateFusion]
+            )
+            if fuse_state_res:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "FuseStates" not in result:
+                    result["FuseStates"] = 0
+                result["FuseStates"] += fuse_state_res
+
+        if "GT4PyDeadDataflowElimination" not in skip:
+            eliminate_dead_dataflow_res = gtx_transformations.gt_eliminate_dead_dataflow(
+                sdfg=sdfg,
+                run_simplify=False,
+                validate=False,
+                validate_all=validate_all,
+            )
+            if eliminate_dead_dataflow_res != 0:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "GT4PyDeadDataflowElimination" not in result:
+                    result["GT4PyDeadDataflowElimination"] = 0
+                result["GT4PyDeadDataflowElimination"] += eliminate_dead_dataflow_res
+
         if "CopyChainRemover" not in skip:
             copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
                 sdfg=sdfg,
@@ -148,6 +171,21 @@ def gt_simplify(
                 if "CopyChainRemover" not in result:
                     result["CopyChainRemover"] = 0
                 result["CopyChainRemover"] += copy_chain_remover_result
+
+        if "SingleStateGlobalDirectSelfCopyElimination" not in skip:
+            direct_self_copy_removal_result = sdfg.apply_transformations_repeated(
+                gtx_transformations.SingleStateGlobalDirectSelfCopyElimination(),
+                validate=validate,
+                validate_all=validate_all,
+            )
+            if direct_self_copy_removal_result > 0:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "SingleStateGlobalDirectSelfCopyElimination" not in result:
+                    result["SingleStateGlobalDirectSelfCopyElimination"] = 0
+                result["SingleStateGlobalDirectSelfCopyElimination"] += (
+                    direct_self_copy_removal_result
+                )
 
         if "SingleStateGlobalSelfCopyElimination" not in skip:
             self_copy_removal_result = sdfg.apply_transformations_repeated(

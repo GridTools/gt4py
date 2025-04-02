@@ -111,7 +111,6 @@ def test_examples(session: nox.Session) -> None:
     session.run(*"jupytext docs/user/next/QuickstartGuide.md --to .ipynb".split())
     session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split())
 
-    num_processes = os.environ.get("NUM_PROCESSES", "auto")
     for notebook, extra_args in [
         ("docs/user/next/workshop/slides", None),
         ("docs/user/next/workshop/exercises", ["-k", "solutions"]),
@@ -120,7 +119,7 @@ def test_examples(session: nox.Session) -> None:
         ("examples", (None)),
     ]:
         session.run(
-            *f"pytest --nbmake {notebook} -sv -n {num_processes}".split(),
+            *f"pytest --nbmake {notebook} -sv -n 1 --benchmark-disable".split(),
             *(extra_args or []),
         )
 
