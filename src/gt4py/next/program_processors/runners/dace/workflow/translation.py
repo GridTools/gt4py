@@ -61,7 +61,11 @@ class DaCeTranslator(
         )
 
         if auto_opt:
-            gtx_transformations.gt_auto_optimize(sdfg, gpu=on_gpu)
+            gtx_transformations.gt_auto_optimize(
+                sdfg,
+                gpu=on_gpu,
+                make_persistent=False,
+            )
         elif on_gpu:
             # We run simplify to bring the SDFG into a canonical form that the gpu transformations
             # can handle. This is a workaround for an issue with scalar expressions that are

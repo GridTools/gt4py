@@ -13,6 +13,7 @@ that explains the general structure and requirements on the SDFGs.
 """
 
 from .auto_optimize import gt_auto_optimize
+from .dead_dataflow_elimination import gt_eliminate_dead_dataflow
 from .gpu_utils import (
     GPUSetBlockSize,
     gt_gpu_transform_non_standard_memlet,
@@ -41,6 +42,7 @@ from .simplify import (
     gt_simplify,
     gt_substitute_compiletime_symbols,
 )
+from .state_fusion import GT4PyStateFusion
 from .strides import (
     gt_change_transient_strides,
     gt_map_strides_to_dst_nested_sdfg,
@@ -57,6 +59,7 @@ __all__ = [
     "GPUSetBlockSize",
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
+    "GT4PyStateFusion",
     "LoopBlocking",
     "MapFusion",
     "MapFusionParallel",
@@ -70,6 +73,7 @@ __all__ = [
     "gt_auto_optimize",
     "gt_change_transient_strides",
     "gt_create_local_double_buffering",
+    "gt_eliminate_dead_dataflow",
     "gt_find_constant_arguments",
     "gt_gpu_transform_non_standard_memlet",
     "gt_gpu_transformation",

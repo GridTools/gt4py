@@ -8,14 +8,18 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-from typing import Any, Container, Optional, Sequence, Union
+from typing import Any, Container, Optional, Sequence, TypeVar, Union
 
 import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes
+from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
+
+
+_PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
 
 
 def gt_make_transients_persistent(

@@ -82,6 +82,11 @@ CMAKE_BUILD_TYPE: CMakeBuildType = CMakeBuildType[
     os.environ.get("GT4PY_CMAKE_BUILD_TYPE", "debug" if DEBUG else "release").upper()
 ]
 
+#: Experimental, use at your own risk: assume horizontal dimension has stride 1
+UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
+    "GT4PY_UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", default=False
+)
+
 #: Number of threads to use to use for compilation.
 #: Default:
 #: - use os.cpu_count(), TODO(havogt): in Python >= 3.13 use `process_cpu_count()`
