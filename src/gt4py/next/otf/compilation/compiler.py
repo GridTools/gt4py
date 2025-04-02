@@ -68,7 +68,7 @@ class Compiler(
     ) -> stages.ExtendedCompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
-        with lock.Lock(str(src_dir / "file.lock"), lifetime=600):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
+        with lock.Lock(str(src_dir / "compilation.lock"), lifetime=600):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
             data = build_data.read_data(src_dir)
 
             if not data or not is_compiled(data) or self.force_recompile:

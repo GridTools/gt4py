@@ -239,25 +239,25 @@ def _cc_get_compiledb(
     )
 
     with lock.Lock(str(cache_path / "compiledb.lock"), lifetime=120):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
-        if not renew_compiledb and (compiled_db := _cc_find_compiledb(cache_path=cache_path)):
+        if not renew_compiledb and (compiled_db := _cc_find_compiledb(path=cache_path)):
             return compiled_db
         return _cc_create_compiledb(
-            cache_path=cache_path,
+            path=cache_path,
             prototype_program_source=prototype_program_source,
             build_type=build_type,
             cmake_flags=cmake_flags,
         )
 
 
-def _cc_find_compiledb(cache_path: pathlib.Path) -> Optional[pathlib.Path]:
-    compile_db_path = cache_path / "compile_commands.json"
+def _cc_find_compiledb(path: pathlib.Path) -> Optional[pathlib.Path]:
+    compile_db_path = path / "compile_commands.json"
     if compile_db_path.exists():
         return compile_db_path
     return None
 
 
 def _cc_create_compiledb(
-    cache_path: pathlib.Path,
+    path: pathlib.Path,
     prototype_program_source: stages.ProgramSource,
     build_type: config.CMakeBuildType,
     cmake_flags: list[str],
@@ -275,7 +275,7 @@ def _cc_create_compiledb(
         generator_name="Ninja",
         build_type=build_type,
         extra_cmake_flags=cmake_flags,
-        root_path=cache_path,
+        root_path=path,
         source_files={
             **{name: "" for name in [binding_src_name, prog_src_name]},
             "CMakeLists.txt": cmake_lists.generate_cmakelists_source(
@@ -290,11 +290,11 @@ def _cc_create_compiledb(
 
     prototype_project.build()
 
-    log_file = cache_path / "log_compiledb.txt"
+    log_file = path / "log_compiledb.txt"
 
     with log_file.open("w") as log_file_pointer:
         commands_json_str = subprocess.check_output(
-            ["ninja", "-t", "compdb"], cwd=cache_path / "build", stderr=log_file_pointer
+            ["ninja", "-t", "compdb"], cwd=path / "build", stderr=log_file_pointer
         ).decode("utf-8")
         commands = json.loads(commands_json_str)
 
@@ -305,19 +305,19 @@ def _cc_create_compiledb(
     assert compile_db
 
     for entry in compile_db:
-        entry["directory"] = entry["directory"].replace(str(cache_path), "$SRC_PATH")
+        entry["directory"] = entry["directory"].replace(str(path), "$SRC_PATH")
         entry["command"] = (
             entry["command"]
             .replace(f"CMakeFiles/{name}.dir", ".")
-            .replace(str(cache_path), "$SRC_PATH")
+            .replace(str(path), "$SRC_PATH")
             .replace(binding_src_name, "$BINDINGS_FILE")
             .replace(name, "$NAME")
-            .replace("-I$SRC_PATH/build/_deps", f"-I{cache_path}/build/_deps")
+            .replace("-I$SRC_PATH/build/_deps", f"-I{path}/build/_deps")
         )
         entry["file"] = (
             entry["file"]
             .replace(f"CMakeFiles/{name}.dir", ".")
-            .replace(str(cache_path), "$SRC_PATH")
+            .replace(str(path), "$SRC_PATH")
             .replace(binding_src_name, "$BINDINGS_FILE")
         )
         entry["output"] = (
@@ -327,6 +327,6 @@ def _cc_create_compiledb(
             .replace(name, "$NAME")
         )
 
-    compile_db_path = cache_path / "compile_commands.json"
+    compile_db_path = path / "compile_commands.json"
     compile_db_path.write_text(json.dumps(compile_db))
     return compile_db_path
