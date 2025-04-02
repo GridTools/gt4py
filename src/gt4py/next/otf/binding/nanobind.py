@@ -27,17 +27,15 @@ class Expr(eve.Node):
     pass
 
 
-class DimensionType(Expr):
+class DimensionSpec(Expr):
     name: str
     static_stride: Optional[int]
 
 
 class BufferSID(Expr):
     source_buffer: str
-    dimensions: Sequence[DimensionType]
+    dimensions: Sequence[DimensionSpec]
     scalar_type: ts.ScalarType
-    # TODO(havogt): implement `strides_kind: int` once we have the "frozen stencil" mechanism
-    # TODO(havogt): we can fix the dimension with `unit_stride_dim: int` once we have the "frozen stencil" mechanism
 
 
 class Tuple(Expr):
@@ -164,7 +162,7 @@ class BindingCodeGenerator(TemplatedGenerator):
 
     Tuple = as_jinja("""gridtools::tuple({{','.join(elems)}})""")
 
-    DimensionType = as_jinja("""generated::{{name}}_t""")
+    DimensionSpec = as_jinja("""generated::{{name}}_t""")
 
 
 def _tuple_get(index: int, var: str) -> str:
@@ -176,11 +174,11 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
         return BufferSID(
             source_buffer=name,
             dimensions=[
-                DimensionType(
+                DimensionSpec(
                     name=dim.value,
                     static_stride=1
                     if (
-                        config.UNSTRUCTURED_HORIZONTAL_STRIDE_1
+                        config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
                         and dim.kind == common.DimensionKind.HORIZONTAL
                     )
                     else None,

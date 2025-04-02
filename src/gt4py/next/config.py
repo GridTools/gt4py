@@ -83,6 +83,6 @@ CMAKE_BUILD_TYPE: CMakeBuildType = CMakeBuildType[
 ]
 
 #: Experimental, use at your own risk: assume horizontal dimension has stride 1
-UNSTRUCTURED_HORIZONTAL_STRIDE_1: bool = env_flag_to_bool(
-    "GT4PY_UNSTRUCTURED_HORIZONTAL_STRIDE_1", default=False
+UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
+    "GT4PY_UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", default=False
 )
