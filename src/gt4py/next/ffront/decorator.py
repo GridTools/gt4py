@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import concurrent
+import concurrent.futures
 import dataclasses
 import functools
 import types
@@ -27,6 +29,7 @@ from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
     common,
+    config,
     embedded as next_embedded,
     errors,
 )
@@ -53,6 +56,9 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 
 DEFAULT_BACKEND: Optional[next_backend.Backend] = None
+
+# TODO(havogt): We would lke this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
+ASYNC_COMPILATION_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -82,6 +88,9 @@ class Program:
     backend: Optional[next_backend.Backend]
     connectivities: Optional[common.OffsetProvider] = (
         None  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
+    )
+    _compiled_program: concurrent.futures.Future[stages.CompiledProgram] | None = dataclasses.field(
+        init=False, default=None
     )
 
     @classmethod
@@ -245,10 +254,35 @@ class Program:
                 ctx.run(self.definition_stage.definition, *args, **kwargs)
             return
 
-        self.backend(
-            self.definition_stage,
-            *args,
-            **(kwargs | {"offset_provider": offset_provider}),
+        if self._compiled_program is not None:
+            # TODO check that offset_provider_type of compiled program  is compatible with the runtime offset_provider
+            self._compiled_program.result()(
+                *args, **(kwargs | {"offset_provider": offset_provider})
+            )
+        else:
+            self.backend(
+                self.definition_stage,
+                *args,
+                **(kwargs | {"offset_provider": offset_provider}),
+            )
+
+    def compile(self, offset_provider_type: Optional[common.OffsetProviderType]) -> None:
+        if self.backend is None:
+            raise ValueError("Can not freeze a program without backend (embedded execution).")
+        if self.connectivities is None and offset_provider_type is None:
+            raise ValueError(
+                "Can not freeze a program without connectivities / OffsetProviderType."
+            )
+        past_node_type = self.past_stage.past_node.type
+        arg_types_dict = past_node_type.definition.pos_or_kw_args
+        # TODO pos only, kwarg only
+
+        args = tuple(arg_types_dict.values())  # TODO: is this ordered
+        compile_time_args = arguments.CompileTimeArgs(
+            offset_provider=self.connectivities, column_axis=None, args=args, kwargs={}
+        )
+        self._compiled_program = ASYNC_COMPILATION_POOL.submit(
+            self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
         )
 
     def freeze(self) -> FrozenProgram:
