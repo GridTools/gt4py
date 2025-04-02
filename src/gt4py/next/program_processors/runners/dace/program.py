@@ -89,7 +89,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             compile_workflow.translation
             if not hasattr(compile_workflow.translation, "step")
             else compile_workflow.translation.step
-        )  # Same applies to the translation stage.
+        )  # Same for the translation stage, which could be a `CachedStep` depending on backend configuration.
         # TODO(ricoh): switch 'disable_itir_transforms=True' because we ran them separately previously
         # and so we can ensure the SDFG does not know any runtime info it shouldn't know. Remove with
         # the other parts of the workaround when possible.
