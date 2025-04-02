@@ -854,12 +854,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"Invalid call to 'astype': second argument must be a scalar type, got '{new_type}'.",
             )
 
-        return_type = type_info.apply_to_primitive_constituents(
+        return_type = type_info.type_tree_map(
             lambda primitive_type: with_altered_scalar_kind(
                 primitive_type, getattr(ts.ScalarKind, new_type.id.upper())
             ),
             value.type,
         )
+
         assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
 
         return foast.Call(

@@ -465,7 +465,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         assert isinstance(domain, it_ts.DomainType)
         assert domain.dims != "unknown"
         assert node.dtype
-        return type_info.apply_to_primitive_constituents(
+        return type_info.type_tree_map(
             lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype),
             node.dtype,
         )

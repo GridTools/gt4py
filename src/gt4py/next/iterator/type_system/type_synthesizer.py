@@ -148,7 +148,7 @@ def if_(
         return tree_map(
             collection_type=ts.TupleType,
             result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
-        )(functools.partial(if_, pred))(true_branch, false_branch)
+        )(functools.partial(if_, pred))(true_branch, false_branch)  # type: ignore[return-value]  # mypy not smart enough
 
     assert not isinstance(true_branch, ts.TupleType) and not isinstance(false_branch, ts.TupleType)
     assert isinstance(pred, ts.DeferredType) or (
@@ -285,7 +285,7 @@ def _convert_as_fieldop_input_to_iterator(
         input_dims = []
 
     element_type: ts.DataType
-    element_type = type_info.apply_to_primitive_constituents(type_info.extract_dtype, input_)
+    element_type = type_info.type_tree_map(type_info.extract_dtype, input_)
 
     # handle neighbor / sparse input fields
     defined_dims = []
@@ -338,10 +338,12 @@ def as_fieldop(
             offset_provider_type=offset_provider_type,
         )
         assert isinstance(stencil_return, ts.DataType)
-        return type_info.apply_to_primitive_constituents(
-            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
-            if domain.dims != "unknown"
-            else ts.DeferredType(constraint=ts.FieldType),
+        return type_info.type_tree_map(
+            (
+                lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
+                if domain.dims != "unknown"
+                else ts.DeferredType(constraint=ts.FieldType)
+            ),
             stencil_return,
         )
 
