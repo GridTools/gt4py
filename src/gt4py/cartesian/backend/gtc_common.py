@@ -12,7 +12,7 @@ import abc
 import os
 import textwrap
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, Final, List, Optional, Tuple, Type, Union
 
 import gt4py.cartesian.gtc.utils
 import gt4py.cartesian.gtc.utils as gtc_utils
@@ -213,8 +213,11 @@ class BackendCodegen:
         pass
 
 
+GTBackendOptions = Dict[str, Dict[str, Any]]
+
+
 class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
-    GT_BACKEND_OPTS: Dict[str, Dict[str, Any]] = {
+    GT_BACKEND_OPTS: Final[GTBackendOptions] = {
         "add_profile_info": {"versioning": True, "type": bool},
         "clean": {"versioning": False, "type": bool},
         "debug_mode": {"versioning": True, "type": bool},
@@ -296,7 +299,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
                 ),
                 add_profile_info=self.builder.options.backend_opts.get("add_profile_info", False),
                 uses_cuda=uses_cuda,
-                gt_version=2,
             ),
         )
 

@@ -11,24 +11,70 @@
 import ctypes
 import unittest
 import unittest.mock
-from unittest.mock import patch
 
 import numpy as np
 import pytest
 
 import gt4py._core.definitions as core_defs
 import gt4py.next as gtx
+import gt4py.next.common as gtx_common
 from gt4py.next.ffront.fbuiltins import where
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import E2V, cartesian_case, unstructured_case
+from next_tests.integration_tests.cases import E2V
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    exec_alloc_descriptor,
-    mesh_descriptor,
+    Edge,
+    IDim,
+    Vertex,
+    mesh_descriptor,  # noqa: F401
 )
 
-
 dace = pytest.importorskip("dace")
+
+from gt4py.next.program_processors.runners import dace as dace_backends
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(dace_backends.run_dace_cpu_cached, marks=pytest.mark.requires_dace),
+        pytest.param(
+            dace_backends.run_dace_gpu_cached,
+            marks=(pytest.mark.requires_gpu, pytest.mark.requires_dace),
+        ),
+    ]
+)
+def cached_dace_backend(request):
+    """
+    Test fixture to select the dace backends only. In order to trigger `fast_call`,
+    we have to use the cached backend so that the same `CompiledSDFG` object is
+    used on the second SDFG call.
+    """
+    yield request.param
+
+
+@pytest.fixture
+def cartesian_case(request, cached_dace_backend):
+    yield cases.Case(
+        backend=cached_dace_backend,
+        offset_provider={"Ioff": IDim},
+        default_sizes={IDim: 10},
+        grid_type=gtx_common.GridType.CARTESIAN,
+        allocator=cached_dace_backend.allocator,
+    )
+
+
+@pytest.fixture
+def unstructured_case(request, cached_dace_backend, mesh_descriptor):
+    yield cases.Case(
+        backend=cached_dace_backend,
+        offset_provider=mesh_descriptor.offset_provider,
+        default_sizes={
+            Vertex: mesh_descriptor.num_vertices,
+            Edge: mesh_descriptor.num_edges,
+        },
+        grid_type=gtx_common.GridType.UNSTRUCTURED,
+        allocator=cached_dace_backend.allocator,
+    )
 
 
 def make_mocks(monkeypatch):
@@ -68,9 +114,6 @@ def make_mocks(monkeypatch):
 
 def test_dace_fastcall(cartesian_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
-
-    if not cartesian_case.backend or "dace" not in cartesian_case.backend.name:
-        pytest.skip("requires dace backend")
 
     @gtx.field_operator
     def testee(
@@ -138,9 +181,6 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
-    if not unstructured_case.backend or "dace" not in unstructured_case.backend.name:
-        pytest.skip("requires dace backend")
-
     connectivity_E2V = unstructured_case.offset_provider["E2V"]
     assert isinstance(connectivity_E2V, gtx.common.NeighborTable)
 
@@ -177,7 +217,7 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         offset_provider = unstructured_case.offset_provider
     else:
         assert gtx.allocators.is_field_allocator_for(
-            unstructured_case.backend.allocator, gtx.allocators.CUPY_DEVICE
+            unstructured_case.backend.allocator, core_defs.CUPY_DEVICE_TYPE
         )
 
         import cupy as cp
@@ -186,7 +226,7 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
         # to gpu memory at each program call (see `dace_backend._ensure_is_on_device`),
         # therefore fast_call cannot be used (unless cupy reuses the same cupy array
         # from the its memory pool, but this behavior is random and unpredictable).
-        # Here we copy the connectivity to gpu memory, and resuse the same cupy array
+        # Here we copy the connectivity to gpu memory, and reuse the same cupy array
         # on multiple program calls, in order to ensure that fast_call is used.
         offset_provider = {
             "E2V": gtx.as_connectivity(

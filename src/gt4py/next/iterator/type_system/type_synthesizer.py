@@ -206,6 +206,25 @@ def index(arg: ts.DimensionType) -> ts.FieldType:
 
 
 @_register_builtin_type_synthesizer
+def broadcast(
+    arg: ts.FieldType | ts.ScalarType | ts.DeferredType, dims: tuple[ts.DimensionType]
+) -> ts.FieldType | ts.DeferredType:
+    if isinstance(arg, ts.DeferredType):
+        return arg
+
+    dims_ = [dim.dim for dim in dims]
+
+    if isinstance(arg, ts.FieldType):
+        dtype = arg.dtype
+    elif isinstance(arg, ts.ScalarType):
+        dtype = arg
+    else:
+        raise AssertionError("`args` need to be either `ts.FieldType` or `ts.ScalarType`.")
+
+    return ts.FieldType(dims=dims_, dtype=dtype)
+
+
+@_register_builtin_type_synthesizer
 def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> ts.ListType:
     assert (
         isinstance(offset_literal, it_ts.OffsetLiteralType)

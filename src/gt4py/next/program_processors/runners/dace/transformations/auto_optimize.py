@@ -27,7 +27,7 @@ def gt_auto_optimize(
     ] = None,
     aggressive_fusion: bool = True,
     max_optimization_rounds_p2: int = 100,
-    make_persistent: bool = True,
+    make_persistent: bool = False,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,

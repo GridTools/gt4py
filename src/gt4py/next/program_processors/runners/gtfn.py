@@ -15,6 +15,7 @@ from typing import Any, Optional
 import diskcache
 import factory
 import filelock
+import numpy as np
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
@@ -34,6 +35,9 @@ def convert_arg(arg: Any) -> Any:
         arr = arg.ndarray
         origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
         return arr, origin
+    if isinstance(arg, np.bool_):
+        # nanobind does not support implicit conversion of `np.bool` to `bool`
+        return bool(arg)
     else:
         return arg
 
@@ -185,7 +189,7 @@ class GTFNBackendFactory(factory.Factory):
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=next_allocators.CUPY_DEVICE or core_defs.DeviceType.CUDA,
+            device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
             name_device="gpu",
         )
         cached = factory.Trait(

@@ -402,22 +402,14 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
 
 def domain(
     grid_type: Union[common.GridType, str],
-    ranges: dict[Union[common.Dimension, str], tuple[itir.Expr, itir.Expr]],
+    ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]],
 ) -> itir.FunCall:
     """
-    >>> str(
-    ...     domain(
-    ...         common.GridType.CARTESIAN,
-    ...         {
-    ...             common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 10),
-    ...             common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL): (0, 20),
-    ...         },
-    ...     )
-    ... )
+    >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
+    >>> JDim = common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL)
+    >>> str(domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 20)}))
     'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
-    >>> str(domain(common.GridType.CARTESIAN, {"IDim": (0, 10), "JDim": (0, 20)}))
-    'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
-    >>> str(domain(common.GridType.UNSTRUCTURED, {"IDim": (0, 10), "JDim": (0, 20)}))
+    >>> str(domain(common.GridType.UNSTRUCTURED, {IDim: (0, 10), JDim: (0, 20)}))
     'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     """
     if isinstance(grid_type, common.GridType):
@@ -445,7 +437,7 @@ def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Cal
     >>> str(as_fieldop(lambda_("it1", "it2")(plus(deref("it1"), deref("it2"))))("field1", "field2"))
     '(⇑(λ(it1, it2) → ·it1 + ·it2))(field1, field2)'
     """
-    from gt4py.next.iterator.ir_utils import domain_utils
+    from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 
     result = call(
         call("as_fieldop")(
@@ -462,7 +454,9 @@ def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Cal
 
     def _populate_domain_annex_wrapper(*args, **kwargs):
         node = result(*args, **kwargs)
-        if domain:
+        # note: if the domain is not a direct construction, e.g. because it is only a reference
+        # to a domain defined in a let, don't populate the annex
+        if domain and cpm.is_call_to(domain, ("cartesian_domain", "unstructured_domain")):
             node.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)
         return node
 

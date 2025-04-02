@@ -27,7 +27,7 @@ class DaCeBackendFactory(factory.Factory):
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=next_allocators.CUPY_DEVICE or core_defs.DeviceType.CUDA,
+            device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
             name_device="gpu",
         )
         cached = factory.Trait(
@@ -54,8 +54,14 @@ class DaCeBackendFactory(factory.Factory):
     transforms = backend.DEFAULT_TRANSFORMS
 
 
-run_dace_cpu = DaCeBackendFactory(cached=True, auto_optimize=True)
-run_dace_cpu_noopt = DaCeBackendFactory(cached=True, auto_optimize=False)
+run_dace_cpu = DaCeBackendFactory(auto_optimize=True)
+run_dace_cpu_noopt = DaCeBackendFactory(auto_optimize=False)
+run_dace_cpu_cached = DaCeBackendFactory(
+    auto_optimize=True, cached=True, otf_workflow__cached_translation=True
+)
 
-run_dace_gpu = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=True)
-run_dace_gpu_noopt = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=False)
+run_dace_gpu = DaCeBackendFactory(gpu=True, auto_optimize=True)
+run_dace_gpu_noopt = DaCeBackendFactory(gpu=True, auto_optimize=False)
+run_dace_gpu_cached = DaCeBackendFactory(
+    gpu=True, auto_optimize=True, cached=True, otf_workflow__cached_translation=True
+)

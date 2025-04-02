@@ -1,0 +1,17 @@
+name: "Get Python Versions"
+description: "Reads Python versions from .python-versions file and outputs them as a JSON array"
+
+outputs:
+  python-versions:
+    description: "JSON array of Python versions"
+    value: ${{ steps.set-versions.outputs.python-versions }}
+
+runs:
+  using: "composite"
+  steps:
+  - uses: actions/checkout@v4
+  - id: set-versions
+    shell: bash
+    run: |
+      PYTHON_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
+      echo "python-versions=${PYTHON_VERSIONS}" >> $GITHUB_OUTPUT
