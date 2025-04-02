@@ -81,3 +81,8 @@ BUILD_CACHE_LIFETIME: BuildCacheLifetime = BuildCacheLifetime[
 CMAKE_BUILD_TYPE: CMakeBuildType = CMakeBuildType[
     os.environ.get("GT4PY_CMAKE_BUILD_TYPE", "debug" if DEBUG else "release").upper()
 ]
+
+#: Experimental, use at your own risk: assume horizontal dimension has stride 1
+UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
+    "GT4PY_UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", default=False
+)
