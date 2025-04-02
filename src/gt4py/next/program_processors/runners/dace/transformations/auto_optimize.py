@@ -25,6 +25,7 @@ def gt_auto_optimize(
     leading_dim: Optional[
         Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
     ] = None,
+    leading_kind: Optional[gtx_common.DimensionKind] = None,
     aggressive_fusion: bool = True,
     max_optimization_rounds_p2: int = 100,
     make_persistent: bool = False,
@@ -65,7 +66,7 @@ def gt_auto_optimize(
         the function assumes that the dimension indicated by `leading_dim` is the
         one with stride one.
     5. If requested the function will now apply loop blocking, on the dimension
-        indicated by `leading_dim`.
+        indicated by `leading_dim` or `leading_kind`.
     6. The strides of temporaries are set to match the compute order.
     7. If requested the SDFG will be transformed to GPU. For this the
         `gt_gpu_transformation()` function is used, that might apply several other
@@ -81,6 +82,8 @@ def gt_auto_optimize(
         sdfg: The SDFG that should be optimized in place.
         gpu: Optimize for GPU or CPU.
         leading_dim: Leading dimension, indicates where the stride is 1.
+        leading_kind: Make dimensions of this kind leading, if there are multiple
+            the order is unspecific.
         aggressive_fusion: Be more aggressive during phase 2, will lead to the promotion
             of certain maps (over computation) but will lead to larger kernels.
         max_optimization_rounds_p2: Maximum number of optimization rounds in phase 2.
@@ -212,10 +215,11 @@ def gt_auto_optimize(
         # Phase 4: Iteration Space
         #   This essentially ensures that the stride 1 dimensions are handled
         #   by the inner most loop nest (CPU) or x-block (GPU)
-        if leading_dim is not None:
+        if leading_dim is not None or leading_kind is not None:
             gtx_transformations.gt_set_iteration_order(
                 sdfg=sdfg,
                 leading_dim=leading_dim,
+                leading_kind=leading_kind,
                 validate=validate,
                 validate_all=validate_all,
             )
