@@ -48,7 +48,6 @@ def get_gt_pyext_build_opts(
     add_profile_info: bool = False,
     uses_openmp: bool = True,
     uses_cuda: bool = False,
-    gt_version: int = 1,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
     include_dirs = [gt_config.build_settings["boost_include_path"]]
     extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]

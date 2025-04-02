@@ -156,7 +156,7 @@ class GTFNTranslationStep(
     def _preprocess_program(
         self,
         program: itir.Program,
-        offset_provider: common.OffsetProvider,
+        offset_provider: common.OffsetProvider | common.OffsetProviderType,
     ) -> itir.Program:
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,
@@ -184,7 +184,7 @@ class GTFNTranslationStep(
     def generate_stencil_source(
         self,
         program: itir.Program,
-        offset_provider: common.OffsetProvider,
+        offset_provider: common.OffsetProvider | common.OffsetProviderType,
         column_axis: Optional[common.Dimension],
     ) -> str:
         if self.enable_itir_transforms:

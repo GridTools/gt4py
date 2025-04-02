@@ -22,7 +22,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_misc,
 )
-from gt4py.next.iterator.transforms import trace_shifts
+from gt4py.next.iterator.transforms import constant_folding, trace_shifts
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.utils import flatten_nested_tuple, tree_map
@@ -54,7 +54,7 @@ AccessedDomains: TypeAlias = dict[str, DomainAccess]
 
 
 class InferenceOptions(typing.TypedDict):
-    offset_provider: common.OffsetProvider
+    offset_provider: common.OffsetProvider | common.OffsetProviderType
     symbolic_domain_sizes: Optional[dict[str, str]]
     allow_uninferred: bool
 
@@ -164,7 +164,7 @@ def _extract_accessed_domains(
     stencil: itir.Expr,
     input_ids: list[str],
     target_domain: NonTupleDomainAccess,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]],
     input_types: list[ts.TypeSpec],
 ) -> dict[str, NonTupleDomainAccess]:
@@ -239,7 +239,7 @@ def _infer_as_fieldop(
     applied_fieldop: itir.FunCall,
     target_domain: DomainAccess,
     *,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]],
     allow_uninferred: bool,
 ) -> tuple[itir.FunCall, AccessedDomains]:
@@ -458,7 +458,7 @@ def infer_expr(
     expr: itir.Expr,
     domain: DomainAccess,
     *,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     allow_uninferred: bool = False,
 ) -> tuple[itir.Expr, AccessedDomains]:
@@ -524,8 +524,12 @@ def _infer_stmt(
     **kwargs: Unpack[InferenceOptions],
 ):
     if isinstance(stmt, itir.SetAt):
+        # constant fold once otherwise constant folding after domain inference might create (syntactic) differences
+        # between the domain stored in IR and in the annex
+        domain = constant_folding.ConstantFolding.apply(stmt.domain)
+
         transformed_call, _ = infer_expr(
-            stmt.expr, domain_utils.SymbolicDomain.from_expr(stmt.domain), **kwargs
+            stmt.expr, domain_utils.SymbolicDomain.from_expr(domain), **kwargs
         )
 
         return itir.SetAt(
@@ -545,7 +549,7 @@ def _infer_stmt(
 def infer_program(
     program: itir.Program,
     *,
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     allow_uninferred: bool = False,
 ) -> itir.Program:

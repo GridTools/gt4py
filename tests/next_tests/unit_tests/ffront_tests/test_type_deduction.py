@@ -163,6 +163,20 @@ def test_premap_nbfield(premap_setup):
     )
 
 
+def test_premap_nbfield_with_vertical(premap_setup):
+    X, Y, Y2XDim, Y2X = premap_setup
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+
+    def premap_fo(bar: Field[[X, K], int64]) -> Field[[Y, Y2XDim, K], int64]:
+        return bar(Y2X)
+
+    parsed = FieldOperatorParser.apply_to_function(premap_fo)
+
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
+        dims=[Y, Y2XDim, K], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
+    )
+
+
 def test_premap_reduce(premap_setup):
     X, Y, Y2XDim, Y2X = premap_setup
 
