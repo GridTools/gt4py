@@ -188,7 +188,11 @@ class Program:
 
         return ProgramWithBoundArgs(
             bound_args=kwargs,
-            **{field.name: getattr(self, field.name) for field in dataclasses.fields(self)},
+            **{
+                field.name: getattr(self, field.name)
+                for field in dataclasses.fields(self)
+                if field.init
+            },
         )
 
     @functools.cached_property
@@ -449,6 +453,10 @@ class ProgramWithBoundArgs(Program):
             expr = itir.FunCall(fun=new_clos.stencil, args=new_args)
             new_clos.stencil = itir.Lambda(params=params, expr=expr)
         return new_itir
+
+    @xtyping.override
+    def compile(self):
+        raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
 
 
 @typing.overload
