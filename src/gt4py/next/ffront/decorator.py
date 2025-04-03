@@ -259,10 +259,15 @@ class Program:
             return
 
         if self._compiled_program is not None:
-            # TODO check that offset_provider_type of compiled program  is compatible with the runtime offset_provider
-            self._compiled_program.result()(
-                *args, **(kwargs | {"offset_provider": offset_provider})
+            # TODO(havogt): we should check that offset_provider_type of compiled program
+            # is compatible with the runtime offset_provider
+
+            # TODO measure overhead of canonicalize_arguments
+            args, kwargs = type_info.canonicalize_arguments(
+                self.past_stage.past_node.type, args, kwargs
             )
+            assert not kwargs  # we don't support kw-only args
+            self._compiled_program.result()(*args, offset_provider=offset_provider)
         else:
             self.backend(
                 self.definition_stage,
@@ -270,23 +275,33 @@ class Program:
                 **(kwargs | {"offset_provider": offset_provider}),
             )
 
-    def compile(self, offset_provider_type: Optional[common.OffsetProviderType]) -> None:
+    def compile(
+        self, offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None
+    ) -> None:
         if self.backend is None:
             raise ValueError("Can not freeze a program without backend (embedded execution).")
         if self.connectivities is None and offset_provider_type is None:
             raise ValueError(
                 "Can not freeze a program without connectivities / OffsetProviderType."
             )
+        offset_provider_type = offset_provider_type or self.connectivities
         past_node_type = self.past_stage.past_node.type
         arg_types_dict = past_node_type.definition.pos_or_kw_args
-        # TODO pos only, kwarg only
 
-        args = tuple(arg_types_dict.values())  # TODO: is this ordered
+        # TODO(havogt): we currently don't support pos_only or kw_only args at the program level
+        assert not past_node_type.definition.kw_only_args
+        assert not past_node_type.definition.pos_only_args
+
+        args = tuple(arg_types_dict.values())
         compile_time_args = arguments.CompileTimeArgs(
-            offset_provider=self.connectivities, column_axis=None, args=args, kwargs={}
+            offset_provider=offset_provider_type, column_axis=None, args=args, kwargs={}
         )
-        self._compiled_program = ASYNC_COMPILATION_POOL.submit(
-            self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
+        object.__setattr__(
+            self,
+            "_compiled_program",
+            ASYNC_COMPILATION_POOL.submit(
+                self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
+            ),
         )
 
     def freeze(self) -> FrozenProgram:
