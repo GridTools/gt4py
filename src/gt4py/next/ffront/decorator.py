@@ -57,7 +57,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 DEFAULT_BACKEND: Optional[next_backend.Backend] = None
 
-# TODO(havogt): We would lke this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
+# TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
 ASYNC_COMPILATION_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
 
 
@@ -276,13 +276,13 @@ class Program:
             )
 
     def compile(
-        self, offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None
+        self, offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None
     ) -> None:
-        if self.backend is None:
-            raise ValueError("Can not freeze a program without backend (embedded execution).")
+        if self.backend is None or self.backend == eve.NOTHING:
+            raise ValueError("Cannot compile a program without backend.")
         if self.connectivities is None and offset_provider_type is None:
             raise ValueError(
-                "Can not freeze a program without connectivities / OffsetProviderType."
+                "Cannot compile a program without connectivities / OffsetProviderType."
             )
         offset_provider_type = offset_provider_type or self.connectivities
         past_node_type = self.past_stage.past_node.type
