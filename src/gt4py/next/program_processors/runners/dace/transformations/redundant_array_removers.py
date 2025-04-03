@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, Sequence
+from typing import Any, Iterable, Optional, Sequence
 
 import dace
 from dace import (
@@ -16,7 +16,7 @@ from dace import (
     symbolic as dace_sym,
     transformation as dace_transformation,
 )
-from dace.sdfg import graph as dace_graph, nodes as dace_nodes, validation as dace_validation
+from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -1084,6 +1084,7 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
         - It is not valid to call this transformation after the GPU transformation
             or the strides have been decided.
     """
+
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
 
     # Name of all data that is used at only one place. Is computed by the
@@ -1103,7 +1104,6 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
     @classmethod
     def expressions(cls) -> Any:
         return [dace.sdfg.utils.node_path_graph(cls.access_node)]
-
 
     def can_be_applied(
         self,
@@ -1149,42 +1149,41 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
         assignment = self._match_consumers_to_producers(graph)
         if assignment is None:
             return False
-        if not self._check_inner_constraints(
-                state=graph,
-                sdfg=sdfg,
-                assignment=assignment,
+        if not self._check_spliting_constraints(
+            state=graph,
+            sdfg=sdfg,
+            assignment=assignment,
         ):
             return False
 
         return True
 
-
     def apply(
         self,
-        graph: dace.SDFGState | dace.SDFG,
+        graph: dace.SDFGState,
         sdfg: dace.SDFG,
     ) -> None:
         access_node: dace_nodes.AccessNode = self.access_node
 
-        # Compute the assignment.
         assignment = self._match_consumers_to_producers(graph)
         assert assignment is not None
 
         for producer_edge, consumer_edges in assignment.items():
-            self._reroute_read(
-                    producer_edge=producer_edge,
-                    consumer_edges=consumer_edges,
-                    sdfg=graph,
-                    state=state,
+            self._reroute_consumer(
+                producer_edge=producer_edge,
+                consumer_edges=consumer_edges,
+                sdfg=sdfg,
+                state=graph,
             )
 
         # Remove the old intermediate that is no longer needed.
+        # TODO(phimuell): Make this smarter.
         assert graph.degree(access_node) == 0
         graph.remove_node(access_node)
 
     def _match_consumers_to_producers(
-            self,
-            state: dace.SDFGState,
+        self,
+        state: dace.SDFGState,
     ) -> dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]] | None:
         """For each incoming (writing) edge, find the edges that read the data.
 
@@ -1196,7 +1195,7 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
         """
         access_node: dace_nodes.AccessNode = self.access_node
 
-        # Which input edge can cover which output edge assignment 
+        # Which input edge can cover which output edge assignment
         assignment: dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]] = {}
         for iedge in state.in_edges(access_node):
             # TODO(phimuell): Lift this.
@@ -1206,7 +1205,7 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
 
         # Now match the outgoing edges to their incoming producers.
         for oedge in state.out_edges(access_node):
-            possible_producer = self._find_producer(oedge, matching.keys())
+            possible_producer = self._find_producer(oedge, assignment.keys())
             if possible_producer is None:
                 return None
             assignment[possible_producer].add(oedge)
@@ -1219,9 +1218,9 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
         return assignment
 
     def _find_producer(
-            self,
-            consumer_edge: dace_graph.MultiConnectorEdge,
-            producer_edges: Sequence[dace_graph.MultiConnectorEdge],
+        self,
+        consumer_edge: dace_graph.MultiConnectorEdge,
+        producer_edges: Iterable[dace_graph.MultiConnectorEdge],
     ) -> dace_graph.MultiConnectorEdge | None:
         """Find the producer edge that generates what the consumer reads.
 
@@ -1244,8 +1243,9 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
         #  is consumed later. However, we also have to ensure that nothing is computed
         #  what is not consumed later. Thus.
         possible_producers = [
-                producer_edge.data.dst_subset.covers(consumer_subset)
-                for producer_edge in producer_edges
+            producer_edge
+            for producer_edge in producer_edges
+            if producer_edge.data.dst_subset.covers(consumer_subset)
         ]
 
         # We only allow the case that one producer covers the consumer. If we found
@@ -1253,22 +1253,23 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
         #  producer writes to the same memory location.
         if len(possible_producers) == 0:
             return None
-        elif len(possible_producers) == 1:
-            return possible_producers[0]
-        raise ValueError(
+        elif len(possible_producers) != 1:
+            raise ValueError(
                 f"Found an invalid SDFG, there are multiple producer for '{self.access_node.data}"
-        )
+            )
+        return possible_producers[0]
 
-    def _check_inner_constraints(
-            self,
-            state: dace.SDFGState,
-            sdfg: dace.SDFG,
-            assignment: dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]],
+    def _check_spliting_constraints(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+        assignment: dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]],
     ) -> bool:
         """Checks if the decomposition can be handled.
 
-        Essentially perform the feasibility tests that were not performed by
-        `_match_consumers_to_producers()`.
+        Perform the feasibility tests that were not performed by
+        `_match_consumers_to_producers()`. The function returns `True` if the node
+        can be split.
         """
 
         for producer_edge, consumer_edges in assignment.items():
@@ -1281,9 +1282,7 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
             #  do not apply.
             if producer_edge.data.wcr is not None:
                 return False
-            if any(
-                consumer_edge.data.wcr is not None for consumer_edge in consumer_edges
-            ):
+            if any(consumer_edge.data.wcr is not None for consumer_edge in consumer_edges):
                 return False
 
             if isinstance(data_source, dace_nodes.AccessNode):
@@ -1303,7 +1302,9 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
                 #  the tightness of the temporaries, i.e. what is computed is also
                 #  read, which is core assumption of the `CopyChainRemover`.
                 if len(consumer_edges) == 1:
-                    if not consumer_edges[0].data.src_subset.covers(producer_edge.data.dst_subset):
+                    if not next(iter(consumer_edges)).data.src_subset.covers(
+                        producer_edge.data.dst_subset
+                    ):
                         return False
 
             elif isinstance(data_source, dace_nodes.MapExit):
@@ -1312,20 +1313,21 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
                 #  all consumer read exactly what is is written by the map. This
                 #  is to ensure some tightness of the domains.
                 if not all(
-                        consumer_edge.data.src_subset.covers(producer_edge.data.dst_subset)
-                        for consumer_edge in consumer_edges
+                    consumer_edge.data.src_subset.covers(producer_edge.data.dst_subset)
+                    for consumer_edge in consumer_edges
                 ):
                     return False
 
             else:
                 return False
+        return True
 
     def _reroute_consumer(
-            self,
-            producer_edge: dace_graph.MultiConnectorEdge,
-            consumer_edges: set[dace_graph.MultiConnectorEdge],
-            state: dace.SDFGState,
-            sdfg: dace.SDFG,
+        self,
+        producer_edge: dace_graph.MultiConnectorEdge,
+        consumer_edges: set[dace_graph.MultiConnectorEdge],
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
     ) -> None:
         """Perform the rerouting for `producer_edge`.
 
@@ -1346,29 +1348,30 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
 
         if isinstance(data_producer, dace_nodes.MapExit):
             self._reroute_consumer_map_producer(
-                    producer_edge=producer_edge,
-                    consumer_edges=consumer_edges,
-                    sdfg=graph,
-                    state=state,
+                producer_edge=producer_edge,
+                consumer_edges=consumer_edges,
+                sdfg=sdfg,
+                state=state,
             )
 
         elif isinstance(data_producer, dace_nodes.AccessNode):
             self._reroute_consumer_access_node_producer(
-                    producer_edge=producer_edge,
-                    consumer_edges=consumer_edges,
-                    sdfg=graph,
-                    state=state,
+                producer_edge=producer_edge,
+                consumer_edges=consumer_edges,
+                sdfg=sdfg,
+                state=state,
             )
         else:
-            raise NotImplementedError(f"Can not handle a '{data_producer.__class__.__name__}' producer.")
-
+            raise NotImplementedError(
+                f"Can not handle a '{data_producer.__class__.__name__}' producer."
+            )
 
     def _reroute_consumer_access_node_producer(
-            self,
-            producer_edge: dace_graph.MultiConnectorEdge,
-            consumer_edges: set[dace_graph.MultiConnectorEdge],
-            state: dace.SDFGState,
-            sdfg: dace.SDFG,
+        self,
+        producer_edge: dace_graph.MultiConnectorEdge,
+        consumer_edges: set[dace_graph.MultiConnectorEdge],
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
     ) -> None:
         """Perform the rerouting if the producer is an AccessNode.
 
@@ -1402,121 +1405,147 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
             #  some offsets since it has gone through `self.access_node`. The size
             #  of the reads, i.e. how much is read has not changed and we take it
             #  from what is read from `self.access_node`.
-            old_consumer_read_start = consumer_subset.min_element()
-            consumer_read_size = consumer_subset.size()
+            old_consumer_read_start = consumer_edge.data.src_subset.min_element()
+            consumer_read_size = consumer_edge.data.src_subset.size()
             new_consumer_direct_read_start = [
-                dace.symbolic.pystr_to_symbolic(f"({old_producer_read}) + (({old_consumer_read}) - ({old_producer_write}))", simplify=True)
-                for old_producer_read, old_consumer_read, old_producer_write
-                in zip(old_producer_read_start, old_consumer_read_start, old_producer_write_start, strict=True)
+                dace.symbolic.pystr_to_symbolic(
+                    f"({old_producer_read}) + (({old_consumer_read}) - ({old_producer_write}))",
+                    simplify=True,
+                )
+                for old_producer_read, old_consumer_read, old_producer_write in zip(
+                    old_producer_read_start,
+                    old_consumer_read_start,
+                    old_producer_write_start,
+                    strict=True,
+                )
             ]
             new_consumer_read_subset = dace_sbs.Range(
-                    [
-                        (new_consumer_direct_read, dace.symbolic.pystr_to_symbolic(f"({new_consumer_direct_read}) + ({read_size})", simplify=True), 1)
-                        for new_consumer_direct_read, read_size in zip(new_consumer_direct_read_start, consumer_read_size)
-                    ]
+                [
+                    (
+                        new_consumer_direct_read,
+                        dace.symbolic.pystr_to_symbolic(
+                            f"({new_consumer_direct_read}) + ({read_size})", simplify=True
+                        ),
+                        1,
+                    )
+                    for new_consumer_direct_read, read_size in zip(
+                        new_consumer_direct_read_start, consumer_read_size
+                    )
+                ]
             )
 
             # Create a new edge that reads from the producer directly and remove the
             #  old edge.
             new_consumer_edge = state.add_edge(
-                    producer_edge.src,
-                    producer_edge.src_conn,
-                    consumer_edge.dst,
-                    consumer_edge.dst_conn,
-                    dace.Memlet(
-                        data=data_producer.data,
-                        subset=consumer_direct_read,
-                        other_subset=consumer_edge.data.dst_subset,
-                        dynamic=consumer_edge.data.dynamic or producer_edge.data.dynamic,
-                    )
+                producer_edge.src,
+                producer_edge.src_conn,
+                consumer_edge.dst,
+                consumer_edge.dst_conn,
+                dace.Memlet(
+                    data=data_producer.data,
+                    subset=new_consumer_read_subset,
+                    other_subset=consumer_edge.data.dst_subset,
+                    dynamic=consumer_edge.data.dynamic or producer_edge.data.dynamic,
+                ),
             )
             state.remove_edge(consumer_edge)
-            new_consumer_edges.append( new_consumer_edge )
+            new_consumer_edges.append(new_consumer_edge)
 
             # If needed reconfigure the consumers since it now involves the
             #  original producer.
             #  The stride propagation is done after all edges have been updated.
             if (consumer_node, consumer_conn) in reconfigured_consumer:
                 consumer_subset_correction = [
-                    dace.symbolic.pystr_to_symbolic(f"-(({old_consumer_read}) - ({old_producer_write}))", simplify=True)
-                    for old_producer_read, old_consumer_read, old_producer_write
-                    in zip(old_producer_read_start, old_consumer_read_start, old_producer_write_start, strict=True)
+                    dace.symbolic.pystr_to_symbolic(
+                        f"-(({old_consumer_read}) - ({old_producer_write}))", simplify=True
+                    )
+                    for old_producer_read, old_consumer_read, old_producer_write in zip(
+                        old_producer_read_start,
+                        old_consumer_read_start,
+                        old_producer_write_start,
+                        strict=True,
+                    )
                 ]
                 gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
-                        is_producer_edge=False,
-                        new_edge=new_consumer_edge,
-                        ss_offset=consumer_subset_correction,
-                        state=state,
-                        sdfg=sdfg,
-                        old_node=access_node,
-                        new_node=data_producer,
+                    is_producer_edge=False,
+                    new_edge=new_consumer_edge,
+                    ss_offset=consumer_subset_correction,
+                    state=state,
+                    sdfg=sdfg,
+                    old_node=access_node,
+                    new_node=data_producer,
                 )
                 reconfigured_consumer.add((consumer_node, consumer_conn))
 
         # All data has been rerouted, so remove the write to the old intermediate
         #  and propagate the now strides.
         state.remove_edge(producer_edge)
+        processed_nsdfgs: set = set()
         for new_consumer_edge in new_consumer_edges:
             gtx_transformations.gt_map_strides_to_dst_nested_sdfg(
                 outer_node=data_producer,
                 edge=new_consumer_edge,
                 sdfg=sdfg,
                 state=state,
+                processed_nsdfgs=processed_nsdfgs,
             )
 
-
     def _reroute_consumer_map_producer(
-            self,
-            producer_edge: dace_graph.MultiConnectorEdge,
-            consumer_edges: set[dace_graph.MultiConnectorEdge],
-            state: dace.SDFGState,
-            sdfg: dace.SDFG,
+        self,
+        producer_edge: dace_graph.MultiConnectorEdge,
+        consumer_edges: set[dace_graph.MultiConnectorEdge],
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
     ) -> None:
         """Perform the rerouting in case where the data producer is a Map.
 
-        This will create a new intermediate node where the results of the Map is stored.
-        It will 
+        The function will create a new intermediate node, into which the map will
+        write to. The corresponding reads will be redirected such that they will
+        go to this new intermediate node.
+
+        Args:
+            producer_edge: The edge generating the data.
+            consumer_edges: List of all consumer edges that read from data
+                generated by `producer_edge`.
+            state: The state in which we operate.
+            sdfg: The SDFG in which we operate.
         """
         access_node: dace_nodes.AccessNode = producer_edge.dst
-        data_producer: dace_nodes.Node = producer_edge.src
+        access_node_desc = access_node.desc(sdfg)
         producer_subset = producer_edge.data.dst_subset
 
         # Create the intermediate storage.
-        tmp_shape = producer_subset.size()
-        tmp_desc = access_node.desc(sdfg).clone()
         tmp_name, tmp_desc = sdfg.add_temp_transient(
-                shape=tmp_shape,
-                dtype=tmp_dtype,
+            shape=producer_subset.size(),
+            dtype=access_node_desc.dtype,
+            storage=access_node_desc.storage,
         )
         tmp_node: dace_nodes.AccessNode = state.add_access(tmp_name)
 
-        # Subset for the modification 
-        #  Before the Map was writing _somewhere_ into `access_nodes`, but now it
-        #  writes into `tmp_node` from the beginning, Thus we have to substract
-        #  the old offsets from the producer region. The minus is needed because the
-        #  correction is added to the subsets.
-        ss_correction = [
-                f"- ({old_ss_start})" for old_ss_start in producer_subset.min_element()
-        ]
+        # Subset for the modification :
+        #  Before, the Map was writing _somewhere_ into `access_nodes`, but now it
+        #  writes into `tmp_node`. Thus we have to modify the Memlets inside the Map.
+        #  The minus is because the correction is added, but we need a subtraction.
+        ss_correction = [f"- ({old_ss_start})" for old_ss_start in producer_subset.min_element()]
 
         # Now perform the rerouting.
         new_producer_edge = gtx_transformations.utils.reroute_edge(
-                is_producer_edge=True,
-                current_edge=producer_edge,
-                ss_offset=ss_correction,
-                state=state,
-                sdfg=sdfg,
-                old_node=access_node,
-                new_node=tmp_node,
+            is_producer_edge=True,
+            current_edge=producer_edge,
+            ss_offset=ss_correction,
+            state=state,
+            sdfg=sdfg,
+            old_node=access_node,
+            new_node=tmp_node,
         )
         gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
-                is_producer_edge=True,
-                new_edge=new_producer_edge,
-                ss_offset=ss_correction,
-                state=state,
-                sdfg=sdfg,
-                old_node=access_node,
-                new_node=tmp_node,
+            is_producer_edge=True,
+            new_edge=new_producer_edge,
+            ss_offset=ss_correction,
+            state=state,
+            sdfg=sdfg,
+            old_node=access_node,
+            new_node=tmp_node,
         )
         state.remove_edge(producer_edge)
 
@@ -1550,6 +1579,6 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
 
         gtx_transformations.gt_propagate_strides_from_access_node(
             sdfg=sdfg,
-            state=graph,
+            state=state,
             outer_node=tmp_node,
         )
