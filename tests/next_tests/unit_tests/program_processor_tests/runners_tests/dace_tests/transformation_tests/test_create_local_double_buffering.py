@@ -13,6 +13,7 @@ import copy
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 from dace import data as dace_data
+from dace.transformation import dataflow as dace_dftrafo
 
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
@@ -71,7 +72,7 @@ def _create_sdfg_double_read_part_2(
 
 def _create_sdfg_double_read(
     version: int,
-) -> tuple[dace.SDFG]:
+) -> dace.SDFG:
     sdfg = dace.SDFG(util.unique_name(f"double_read_version_{version}"))
     state = sdfg.add_state(is_start_block=True)
     for name in "AB":
@@ -93,6 +94,34 @@ def _create_sdfg_double_read(
     else:
         raise ValueError(f"Does not know version {version}")
     sdfg.validate()
+    return sdfg
+
+
+def _create_non_scalar_read() -> dace.SDFG:
+    sdfg = dace.SDFG(util.unique_name(f"non_scalar_read_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array(
+        name="A",
+        shape=(10, 10),
+        dtype=dace.float64,
+        transient=False,
+    )
+
+    state.add_mapped_tasklet(
+        "comp",
+        map_ranges={
+            "__i": "0:10",
+            "__j": "0:10",
+        },
+        inputs={"__in": dace.Memlet("A[__i, __j]")},
+        code="__out = __in + 10.0",
+        outputs={"__out": dace.Memlet("A[__i, __j]")},
+        external_edges=True,
+    )
+    sdfg.apply_transformations(dace_dftrafo.MapExpansion)
+    sdfg.validate()
+
     return sdfg
 
 
@@ -235,5 +264,15 @@ def test_local_double_buffering_already_buffered():
     state.remove_edge(me_to_tskl_edge)
     sdfg.validate()
 
+    count = gtx_transformations.gt_create_local_double_buffering(sdfg)
+    assert count == 0
+
+
+def test_non_scalar_read():
+    sdfg = _create_non_scalar_read()
+
+    # Because of the nested Maps, the Memlet that connects the outer with the
+    #  inner Map carries more than a scalar and thus the transformation
+    #  does not apply.
     count = gtx_transformations.gt_create_local_double_buffering(sdfg)
     assert count == 0
