@@ -23,7 +23,7 @@ def gt_auto_optimize(
     sdfg: dace.SDFG,
     gpu: bool,
     unit_strides_dim: Optional[
-        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]], bool],
+        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]], bool]
     ] = None,
     unit_strides_kind: Optional[Union[gtx_common.DimensionKind, bool]] = None,
     aggressive_fusion: bool = True,
