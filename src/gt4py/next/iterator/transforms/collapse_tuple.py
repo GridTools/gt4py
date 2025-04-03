@@ -51,7 +51,7 @@ def _with_altered_iterator_position_dims(
     )
 
 
-def _is_trivial_make_tuple_call(node: ir.Expr):
+def _is_trivial_make_tuple_call(node: itir.Expr):
     """Return if node is a `make_tuple` call with all elements `SymRef`s, `Literal`s or tuples thereof."""
     if not cpm.is_call_to(node, "make_tuple"):
         return False
