@@ -23,7 +23,7 @@ from . import util
 
 def _perform_reorder_test(
     sdfg: dace.SDFG,
-    leading_dim: list[str],
+    unit_strides_dim: list[str],
     expected_order: list[str],
 ) -> None:
     """Performs the reorder transformation and test it.
@@ -37,7 +37,7 @@ def _perform_reorder_test(
 
     apply_count = sdfg.apply_transformations_repeated(
         gtx_transformations.MapIterationOrder(
-            leading_dims=leading_dim,
+            unit_strides_dims=unit_strides_dim,
         ),
         validate=True,
         validate_all=True,
@@ -81,7 +81,7 @@ def _make_test_sdfg(map_params: list[str]) -> dace.SDFG:
     return sdfg
 
 
-def test_map_order_leading_kind_1():
+def test_map_order_unit_strides_kind_1():
     sdfg = _make_test_sdfg(["EDim_horizontal", "KDim_vertical", "VDim_horizontal"])
     map_entrie: dace.nodes.MapEntry = util.count_nodes(sdfg, dace.nodes.MapEntry, True)[0]
     original_map_order = map_entrie.map.params.copy()
@@ -89,7 +89,7 @@ def test_map_order_leading_kind_1():
 
     gtx_transformations.gt_set_iteration_order(
         sdfg=sdfg,
-        leading_kind=gtx_common.DimensionKind.HORIZONTAL,
+        unit_strides_kind=gtx_common.DimensionKind.HORIZONTAL,
     )
     new_map_order = map_entrie.map.params.copy()
 
@@ -101,7 +101,7 @@ def test_map_order_leading_kind_1():
     assert len(new_map_order) == len(original_map_order)
 
 
-def test_map_order_leading_kind_2():
+def test_map_order_unit_strides_kind_2():
     sdfg = _make_test_sdfg(["EDim_horizontal", "VDim_horizontal"])
     map_entrie: dace.nodes.MapEntry = util.count_nodes(sdfg, dace.nodes.MapEntry, True)[0]
     original_map_order = map_entrie.map.params.copy()
@@ -109,7 +109,7 @@ def test_map_order_leading_kind_2():
 
     nb_applies = gtx_transformations.gt_set_iteration_order(
         sdfg=sdfg,
-        leading_kind=gtx_common.DimensionKind.VERTICAL,
+        unit_strides_kind=gtx_common.DimensionKind.VERTICAL,
     )
     new_map_order = map_entrie.map.params.copy()
 
@@ -118,21 +118,21 @@ def test_map_order_leading_kind_2():
     assert original_map_order == new_map_order
 
 
-def test_map_order_leading_dim_1():
+def test_map_order_unit_strides_dim_1():
     sdfg = _make_test_sdfg(["EDim", "KDim", "VDim"])
     _perform_reorder_test(sdfg, ["EDim", "VDim"], ["KDim", "VDim", "EDim"])
 
 
-def test_map_order_leading_dim_2():
+def test_map_order_unit_strides_dim_2():
     sdfg = _make_test_sdfg(["VDim", "KDim"])
     _perform_reorder_test(sdfg, ["EDim", "VDim"], ["KDim", "VDim"])
 
 
-def test_map_order_leading_dim_3():
+def test_map_order_unit_strides_dim_3():
     sdfg = _make_test_sdfg(["EDim", "KDim"])
     _perform_reorder_test(sdfg, ["EDim", "VDim"], ["KDim", "EDim"])
 
 
-def test_map_order_leading_dim_4():
+def test_map_order_unit_strides_dim_4():
     sdfg = _make_test_sdfg(["CDim", "KDim"])
     _perform_reorder_test(sdfg, ["EDim", "VDim"], [])

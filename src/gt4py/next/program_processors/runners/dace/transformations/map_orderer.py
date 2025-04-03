@@ -18,10 +18,10 @@ from gt4py.next.program_processors.runners.dace import gtir_sdfg_utils
 
 def gt_set_iteration_order(
     sdfg: dace.SDFG,
-    leading_dim: Optional[
+    unit_strides_dim: Optional[
         Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
     ] = None,
-    leading_kind: Optional[gtx_common.DimensionKind] = None,
+    unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
     validate: bool = True,
     validate_all: bool = False,
 ) -> Any:
@@ -33,17 +33,20 @@ def gt_set_iteration_order(
     of the array.
     This function will reorder the map indexes such that this is the case.
 
+    See the `MapIterationOrder` transformation for more.
+
     Args:
         sdfg: The SDFG to process.
-        leading_dims: List of concrete leading dimensions.
-        leading_kind: Make all dimensions of this kind leading.
+        unit_strides_dims: List of dimensions that is considered to have unit strides.
+        unit_strides_kind: All dimensions of this kind are considered to have unit
+            strides.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
     """
     return sdfg.apply_transformations_once_everywhere(
         MapIterationOrder(
-            leading_dims=leading_dim,
-            leading_kind=leading_kind,
+            unit_strides_dims=unit_strides_dim,
+            unit_strides_kind=unit_strides_kind,
         ),
         validate=validate,
         validate_all=validate_all,
@@ -60,49 +63,48 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
     of the array.
     This transformation will reorder the map indexes such that this is the case.
 
-    There are two ways to specify the leading dimensions. The first one is to
-    specify `leading_dim` at construction. It is possible to either pass a single
-    dimension or a list of dimension, in which case they are interpreted as
-    priorities, the lower the index the higher its priority, see example below.
-    Assuming we have the `leading_dim=[EdgeDim, VertexDim]`, then we have the
+    There are two ways to specify the unit stride dimensions. The first one is to
+    specify `unit_strides_dim` at construction. It is possible to either pass a
+    single dimension or a list of dimension, in which case they are interpreted
+    as priorities, the lower the index the higher its priority, see example below.
+    Assuming we have the `unit_strides_dim=[EdgeDim, VertexDim]`, then we have the
     following:
     - `Map[EdgeDim, KDim, VertexDim]` -> `Map[KDim, VertexDim, EdgeDim]`.
     - `Map[VertexDim, KDim]` -> `Map[KDim, VertexDim]`.
     - `Map[EdgeDim, KDim]` -> `Map[KDim, EdgeDim]`.
     - `Map[CellDim, KDim]` -> `Map[CellDim, KDim]` (no modification).
 
-    The second way is to specify `leading_kind`, which is a GT4Py `DimensionKind`
-    enum value. In that case either all dimensions that are associated to a
-    horizontal or vertical dimensions are made leading. Note that within the leading
-    group the order is unspecific.
+    The second way is to specify `unit_strides_kind`, which is a GT4Py `DimensionKind`
+    enum value. In that case the all dimensions that are associated to this kind
+    will be ordered such that they are the inner most. If a Map has multiple
+    dimensions of the same kind, then their relative order is unspecific.
 
-    While the place of the leading dimension is clearly defined, the order of the
-    other loop indexes, after this transformation is unspecified.
+    In any case the order of the non matches dimensions is unspecific.
 
     Args:
-        leading_dims: GT4Py dimensions that are associated with the dimension that is
-            supposed to have stride 1. If it is a list it is used as a ranking.
-        leading_kind: Make all dimensions of this kind leading.
+        unit_strides_dims: GT4Py dimensions that are associated with the dimension
+            that is supposed to have stride 1. If it is a list it is used as a ranking.
+        unit_strides_kind: All dimension of this kind have potential stride 1.
 
     Note:
         - The transformation does follow the rules outlines in
             [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md)
             especially rule 11, regarding the names. This is used to identify vertical
-            and horizontal dimensions if `leading_kind` is used.
-        - String passed to `leading_dim` have to match the name of the Map parameter
+            and horizontal dimensions if `unit_strides_kind` is used.
+        - String passed to `unit_strides_dim` have to match the name of the Map parameter
             exactly.
 
     Todo:
         - Maybe also process the parameters to bring them in a canonical order.
     """
 
-    leading_dims = dace_properties.ListProperty(
+    unit_strides_dims = dace_properties.ListProperty(
         element_type=str,
         allow_none=True,
         default=None,
         desc="Dimensions that should become the leading dimension.",
     )
-    leading_kind = dace_properties.Property(
+    unit_strides_kind = dace_properties.Property(
         dtype=gtx_common.DimensionKind,
         allow_none=True,
         default=None,
@@ -112,29 +114,29 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
 
     def __init__(
         self,
-        leading_dims: Optional[
+        unit_strides_dims: Optional[
             Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
         ] = None,
-        leading_kind: Optional[gtx_common.DimensionKind] = None,
+        unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        if leading_dims is not None and leading_kind is not None:
-            raise ValueError("Specified both 'leading_dims' and 'leading_kind'.")
-        elif leading_dims is not None:
-            if isinstance(leading_dims, (gtx_common.Dimension, str)):
-                leading_dims = [leading_dims]
-            self.leading_dims = [
-                leading_dim
-                if isinstance(leading_dim, str)
-                else gtir_sdfg_utils.get_map_variable(leading_dim)
-                for leading_dim in leading_dims
+        if unit_strides_dims is not None and unit_strides_kind is not None:
+            raise ValueError("Specified both 'unit_strides_dims' and 'unit_strides_kind'.")
+        elif unit_strides_dims is not None:
+            if isinstance(unit_strides_dims, (gtx_common.Dimension, str)):
+                unit_strides_dims = [unit_strides_dims]
+            self.unit_strides_dims = [
+                unit_strides_dim
+                if isinstance(unit_strides_dim, str)
+                else gtir_sdfg_utils.get_map_variable(unit_strides_dim)
+                for unit_strides_dim in unit_strides_dims
             ]
-        elif leading_kind is not None:
-            self.leading_kind = leading_kind
+        elif unit_strides_kind is not None:
+            self.unit_strides_kind = unit_strides_kind
         else:
-            raise ValueError("Neither specified 'leading_kind' not 'leading_dim'")
+            raise ValueError("Neither specified 'unit_strides_kind' not 'unit_strides_dim'")
 
     @classmethod
     def expressions(cls) -> Any:
@@ -164,7 +166,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
         """Performs the actual parameter reordering.
 
         The function will make the map variable, that corresponds to
-        `self.leading_dim` the last map variable (this is given by the structure of
+        `self.unit_strides_dim` the last map variable (this is given by the structure of
         DaCe's code generator).
         """
         map_object: dace_nodes.Map = self.map_entry.map
@@ -189,9 +191,9 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
         map_params: list[str] = map_entry.map.params
 
         new_map_params = (
-            self._compute_map_param_order_leading_dims()
-            if self.leading_dims is not None
-            else self._compute_map_param_order_leading_kind()
+            self._compute_map_param_order_unit_strides_dims()
+            if self.unit_strides_dims is not None
+            else self._compute_map_param_order_unit_strides_kind()
         )
 
         if new_map_params is None or map_params == new_map_params:
@@ -200,11 +202,11 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
         initial_order: dict[str, int] = {map_param: i for i, map_param in enumerate(map_params)}
         return [initial_order[new_map_param] for new_map_param in new_map_params]
 
-    def _compute_map_param_order_leading_kind(self) -> Optional[list[str]]:
-        """Compute the new Map order for the case a `leading_kind` was specified."""
+    def _compute_map_param_order_unit_strides_kind(self) -> Optional[list[str]]:
+        """Compute the new Map order for the case a `unit_strides_kind` was specified."""
         map_entry: dace_nodes.MapEntry = self.map_entry
         map_params: list[str] = map_entry.map.params
-        kind_to_look_for: str = "_" + str(self.leading_kind)
+        kind_to_look_for: str = "_" + str(self.unit_strides_kind)
 
         # Because of the way how GT4Py generates the names, we can just check if the
         #  parameter ends with kind keyword. We will now divide the parameters into
@@ -224,28 +226,27 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
 
         return new_map_params
 
-    def _compute_map_param_order_leading_dims(self) -> Optional[list[str]]:
+    def _compute_map_param_order_unit_strides_dims(self) -> Optional[list[str]]:
         """Computes the new iteration order if concrete dimensions were specified."""
         map_entry: dace_nodes.MapEntry = self.map_entry
         map_params: list[str] = map_entry.map.params
-        leading_dims: list[str] = self.leading_dims
 
         # Find all the parameters that we want to order.
         map_params_to_order: set[str] = {
-            map_param for map_param in map_params if map_param in leading_dims
+            map_param for map_param in map_params if map_param in self.unit_strides_dims
         }
         if not map_params_to_order:
             return None
 
         # We start with all parameters that we ignore/do not care about.
         new_map_params: list[str] = [
-            map_param for map_param in map_params if map_param not in leading_dims
+            map_param for map_param in map_params if map_param not in self.unit_strides_dims
         ]
 
         # Because how code generation works the leading dimension must be the most
-        #  right one. Because this is also `self.leading_dims[0]` we have to process
+        #  right one. Because this is also `self.unit_strides_dims[0]` we have to process
         #  then in reverse order.
-        for map_param_to_check in reversed(leading_dims):
+        for map_param_to_check in reversed(self.unit_strides_dims):
             if map_param_to_check in map_params_to_order:
                 new_map_params.append(map_param_to_check)
         return new_map_params
