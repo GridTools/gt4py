@@ -79,6 +79,41 @@ def gt_remove_copy_chain(
     return result if result != 0 else None
 
 
+def gt_split_access_nodes(
+    sdfg: dace.SDFG,
+    validate: bool = False,
+    validate_all: bool = False,
+    single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+) -> Optional[int]:
+    """Applies the `SplitAccessNode` transformation to the SDFG.
+
+    The transformation returns the number of AccessNodes that have been split.
+
+    Args:
+        sdfg: The SDFG to process.
+        validate: Perform validation after the pass has run.
+        validate_all: Perform extensive validation.
+        single_use_data: Which data descriptors are used only once.
+            If not passed the function will run `FindSingleUseData`.
+    """
+
+    # To ensures that the `{src,dst}_subset` are properly set, run initialization.
+    #  See [issue 1703](https://github.com/spcl/dace/issues/1703)
+    for state in sdfg.states():
+        for edge in state.edges():
+            edge.data.try_initialize(sdfg, state, edge)
+
+    if single_use_data is None:
+        find_single_use_data = dace_analysis.FindSingleUseData()
+        single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+    return sdfg.apply_transformations_repeated(
+        SplitAccessNode(single_use_data=single_use_data),
+        validate=validate,
+        validate_all=validate_all,
+    )
+
+
 @dace_properties.make_properties
 class MultiStateGlobalSelfCopyElimination(dace_transformation.Pass):
     """Removes self copying across different states.
@@ -1077,12 +1112,18 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
 
 
 @dace_properties.make_properties
-class CopyBypasser(dace_transformation.SingleStateTransformation):
-    """Bypasses a transient that is bypassed.
+class SplitAccessNode(dace_transformation.SingleStateTransformation):
+    """The transformation will split an AccessNode into multiple ones.
 
-    NOTE:
-        - It is not valid to call this transformation after the GPU transformation
-            or the strides have been decided.
+    If there is no interesection between a write and different reads,
+    i.e. if every read to the AccessNode can be satisfied by a single write
+    to the AccessNode and the AccessNode is only used at one location,
+    then the node is split.
+    This means that the reads will be satisfied directly and the node
+    does not have to materialize.
+
+    Args:
+        single_use_data: The list of data that is used only once.
     """
 
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
@@ -1180,6 +1221,7 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
         # TODO(phimuell): Make this smarter.
         assert graph.degree(access_node) == 0
         graph.remove_node(access_node)
+        sdfg.remove_data(access_node.data, validate=False)
 
     def _match_consumers_to_producers(
         self,
@@ -1213,7 +1255,7 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
         # At least every producer should have at least one consumer. If this is not the
         #  case then we compute something that is not needed.
         # TODO(phimuell): Figuring out what we should actually do.
-        assert any(len(assigned_consumers) == 0 for assigned_consumers in assignment.values())
+        assert not any(len(assigned_consumers) == 0 for assigned_consumers in assignment.values())
 
         return assignment
 
@@ -1301,6 +1343,7 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
                 #  case we do not impose further restrictions. We do this to ensure
                 #  the tightness of the temporaries, i.e. what is computed is also
                 #  read, which is core assumption of the `CopyChainRemover`.
+                # TODO(phimuell): Lift this limitation.
                 if len(consumer_edges) == 1:
                     if not next(iter(consumer_edges)).data.src_subset.covers(
                         producer_edge.data.dst_subset
@@ -1424,7 +1467,7 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
                     (
                         new_consumer_direct_read,
                         dace.symbolic.pystr_to_symbolic(
-                            f"({new_consumer_direct_read}) + ({read_size})", simplify=True
+                            f"({new_consumer_direct_read}) + ({read_size}) - 1", simplify=True
                         ),
                         1,
                     )
@@ -1565,6 +1608,7 @@ class CopyBypasser(dace_transformation.SingleStateTransformation):
                 old_node=access_node,
                 new_node=tmp_node,
             )
+            state.remove_edge(consumer_edge)
             if (consumer, consumer_conn) not in reconfigured_consumer:
                 gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
                     is_producer_edge=False,

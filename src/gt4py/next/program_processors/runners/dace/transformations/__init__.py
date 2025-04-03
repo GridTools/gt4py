@@ -30,8 +30,10 @@ from .redundant_array_removers import (
     MultiStateGlobalSelfCopyElimination,
     SingleStateGlobalDirectSelfCopyElimination,
     SingleStateGlobalSelfCopyElimination,
+    SplitAccessNode,
     gt_multi_state_global_self_copy_elimination,
     gt_remove_copy_chain,
+    gt_split_access_nodes,
 )
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
@@ -70,6 +72,7 @@ __all__ = [
     "SerialMapPromoterGPU",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
+    "SplitAccessNode",
     "gt_auto_optimize",
     "gt_change_transient_strides",
     "gt_create_local_double_buffering",
@@ -89,5 +92,6 @@ __all__ = [
     "gt_set_gpu_blocksize",
     "gt_set_iteration_order",
     "gt_simplify",
+    "gt_split_access_nodes",
     "gt_substitute_compiletime_symbols",
 ]
