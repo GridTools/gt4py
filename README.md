@@ -65,7 +65,7 @@ Follow the installation instructions below to initialize a development virtual e
 
 ### Development Environment Installation using `uv`
 
-GT4Py uses the [`uv`](https://docs.astral.sh/uv/) project manager (`uv>=0.5.25`) for the development workflow. `uv` is a versatile tool that consolidates functionality usually distributed across different applications into subcommands.
+GT4Py uses the [`uv`](https://docs.astral.sh/uv/) project manager for the development workflow. `uv` is a versatile tool that consolidates functionality usually distributed across different applications into subcommands.
 
 - The `uv pip` subcommand provides a _fast_ Python package manager, emulating [`pip`](https://pip.pypa.io/en/stable/).
 - The `uv export | lock | sync` subcommands manage dependency versions in a manner similar to the [`pip-tools`](https://pip-tools.readthedocs.io/en/stable/) command suite.
@@ -73,7 +73,7 @@ GT4Py uses the [`uv`](https://docs.astral.sh/uv/) project manager (`uv>=0.5.25`)
 - The `uv tool` subcommand serves as a runner for Python applications in isolation, similar to [`pipx`](https://pipx.pypa.io/stable/).
 - The `uv python` subcommands manage different Python installations and versions, much like [`pyenv`](https://github.com/pyenv/pyenv).
 
-`uv` can be installed in various ways (see its [installation instructions](https://docs.astral.sh/uv/getting-started/installation/)), with the recommended method being the standalone installer:
+We require a reasonably recent version of `uv`, which can be installed in various ways (see its [installation instructions](https://docs.astral.sh/uv/getting-started/installation/)), with the recommended method being the standalone installer:
 
 ```bash
 $ curl -LsSf https://astral.sh/uv/install.sh | sh
