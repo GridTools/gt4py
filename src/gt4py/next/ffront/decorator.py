@@ -16,6 +16,7 @@ import concurrent
 import concurrent.futures
 import dataclasses
 import functools
+import itertools
 import types
 import typing
 import warnings
@@ -89,9 +90,10 @@ class Program:
     connectivities: Optional[common.OffsetProvider] = (
         None  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     )
-    _compiled_program: concurrent.futures.Future[stages.CompiledProgram] | None = dataclasses.field(
-        init=False, default=None
+    _compiled_programs: dict[int, concurrent.futures.Future[stages.CompiledProgram]] = (
+        dataclasses.field(init=False, default_factory=dict)
     )
+    _static_args: tuple[str] | None = dataclasses.field(init=False, default=None)
 
     @classmethod
     def from_function(
@@ -258,7 +260,7 @@ class Program:
                 ctx.run(self.definition_stage.definition, *args, **kwargs)
             return
 
-        if self._compiled_program is not None:
+        if self._compiled_programs:
             # TODO(havogt): we should check that offset_provider_type of compiled program
             # is compatible with the runtime offset_provider
 
@@ -267,7 +269,8 @@ class Program:
                 self.past_stage.past_node.type, args, kwargs
             )
             assert not kwargs  # we don't support kw-only args
-            self._compiled_program.result()(*args, offset_provider=offset_provider)
+            key = tuple(args[i] for i in self._static_arg_indices)
+            self._compiled_programs[key].result()(*args, offset_provider=offset_provider)
         else:
             self.backend(
                 self.definition_stage,
@@ -276,7 +279,9 @@ class Program:
             )
 
     def compile(
-        self, offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None
+        self,
+        offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
+        **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
     ) -> None:
         if self.backend is None:
             raise ValueError("Can not freeze a program without backend (embedded execution).")
@@ -284,6 +289,13 @@ class Program:
             raise ValueError(
                 "Can not freeze a program without connectivities / OffsetProviderType."
             )
+        if self._compiled_programs:
+            raise RuntimeError("Program is already compiled.")
+        if not all(isinstance(v, list) for v in static_args.values()):
+            raise TypeError(
+                "Please provide the static arguments as lists. This is to avoid confusion with tuple arguments."
+            )
+
         offset_provider_type = offset_provider_type or self.connectivities
         past_node_type = self.past_stage.past_node.type
         arg_types_dict = past_node_type.definition.pos_or_kw_args
@@ -292,17 +304,24 @@ class Program:
         assert not past_node_type.definition.kw_only_args
         assert not past_node_type.definition.pos_only_args
 
-        args = tuple(arg_types_dict.values())
-        compile_time_args = arguments.CompileTimeArgs(
-            offset_provider=offset_provider_type, column_axis=None, args=args, kwargs={}
+        static_args_indices = tuple(
+            sorted(list(arg_types_dict.keys()).index(k) for k in static_args.keys())
         )
-        object.__setattr__(
-            self,
-            "_compiled_program",
-            ASYNC_COMPILATION_POOL.submit(
+        object.__setattr__(self, "_static_arg_indices", static_args_indices)
+        for static_values in itertools.product(*static_args.values()):
+            variant = dict(zip(static_args.keys(), static_values))
+            args = tuple(
+                type_
+                if name not in variant
+                else arguments.StaticArg(value=variant[name], type_=type_)
+                for name, type_ in arg_types_dict.items()
+            )
+            compile_time_args = arguments.CompileTimeArgs(
+                offset_provider=offset_provider_type, column_axis=None, args=args, kwargs={}
+            )
+            self._compiled_programs[static_values] = ASYNC_COMPILATION_POOL.submit(
                 self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
-            ),
-        )
+            )
 
     def freeze(self) -> FrozenProgram:
         if self.backend is None:

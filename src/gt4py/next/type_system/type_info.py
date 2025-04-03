@@ -597,7 +597,7 @@ def return_type(
     with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.TypeSpec:
     raise NotImplementedError(
-        f"Return type deduction of type " f"'{type(callable_type).__name__}' not implemented."
+        f"Return type deduction of type '{type(callable_type).__name__}' not implemented."
     )
 
 

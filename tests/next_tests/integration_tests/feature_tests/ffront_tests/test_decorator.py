@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from gt4py import next as gtx
+from gt4py.next.ffront.fbuiltins import astype, int32
 from gt4py.next.iterator import ir as itir
 
 from next_tests import definitions as test_definitions
@@ -87,9 +88,9 @@ def test_compile(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    assert compile_testee._compiled_program is None
+    assert not compile_testee._compiled_programs
     compile_testee.compile(offset_provider_type=cartesian_case.offset_provider)
-    assert compile_testee._compiled_program is not None
+    assert compile_testee._compiled_programs
 
     args, kwargs = cases.get_default_data(cartesian_case, compile_testee)
 
@@ -104,9 +105,9 @@ def test_compile_kwargs(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    assert compile_testee._compiled_program is None
+    assert not compile_testee._compiled_programs
     compile_testee.compile(offset_provider_type=cartesian_case.offset_provider)
-    assert compile_testee._compiled_program is not None
+    assert compile_testee._compiled_programs
 
     (a, b), kwargs = cases.get_default_data(cartesian_case, compile_testee)
 
@@ -115,3 +116,70 @@ def test_compile_kwargs(cartesian_case, compile_testee):
 
     compile_testee(offset_provider=cartesian_case.offset_provider, b=b, a=a, **kwargs)
     assert np.allclose(kwargs["out"].ndarray, a.ndarray + b.ndarray)
+
+
+@pytest.fixture
+def compile_variants_testee(cartesian_case):
+    @gtx.field_operator
+    def testee_op(
+        field_a: cases.IField,
+        scalar_int: int32,
+        scalar_float: float,
+        scalar_bool: bool,
+        field_b: cases.IFloatField,
+    ) -> tuple[cases.IField, cases.IFloatField]:
+        return (
+            (field_a + scalar_int, field_b + scalar_float)
+            if scalar_bool
+            else (field_a - scalar_int, field_b - scalar_float)
+        )
+
+    @gtx.program(backend=cartesian_case.backend)
+    def testee(
+        field_a: cases.IField,
+        scalar_int: int32,
+        scalar_float: float,
+        scalar_bool: bool,
+        field_b: cases.IFloatField,
+        out: tuple[cases.IField, cases.IFloatField],
+    ):
+        testee_op(field_a, scalar_int, scalar_float, scalar_bool, field_b, out=out)
+
+    return testee
+
+
+def test_compile_variants(cartesian_case, compile_variants_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    assert not compile_variants_testee._compiled_programs
+    compile_variants_testee.compile(
+        scalar_int=[1, 2],
+        scalar_float=[3.0, 4.0],
+        scalar_bool=[True, False],
+        offset_provider_type=cartesian_case.offset_provider,
+    )
+    assert compile_variants_testee._compiled_programs
+
+    field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
+    field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
+
+    # make sure the backend is never called
+    object.__setattr__(compile_variants_testee, "backend", _always_raise_callable)
+
+    out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
+
+    compile_variants_testee(
+        field_a,
+        int32(1),
+        3.0,
+        True,
+        field_b,
+        out=out,
+        offset_provider=cartesian_case.offset_provider,
+    )
+    assert np.allclose(out[0].ndarray, field_a.ndarray + 1)
+    assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
+
+    # TODO Can we add a check that we are executing an optimized program?
+    # TODO test more variants
