@@ -327,6 +327,7 @@ class ProgramFromPast(Program):
 
     past_stage: ffront_stages.PastProgramDefinition
 
+    @xtyping.override
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         if self.backend is None:
             raise NotImplementedError(
@@ -349,6 +350,7 @@ class ProgramFromPast(Program):
 class ProgramWithBoundArgs(Program):
     bound_args: dict[str, float | int | bool] = dataclasses.field(default_factory=dict)
 
+    @xtyping.override
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         type_ = self.past_stage.past_node.type
         assert isinstance(type_, ts_ffront.ProgramType)
