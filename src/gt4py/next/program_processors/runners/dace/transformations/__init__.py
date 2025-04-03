@@ -30,10 +30,8 @@ from .redundant_array_removers import (
     MultiStateGlobalSelfCopyElimination,
     SingleStateGlobalDirectSelfCopyElimination,
     SingleStateGlobalSelfCopyElimination,
-    SplitAccessNode,
     gt_multi_state_global_self_copy_elimination,
     gt_remove_copy_chain,
-    gt_split_access_nodes,
 )
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
@@ -44,6 +42,7 @@ from .simplify import (
     gt_simplify,
     gt_substitute_compiletime_symbols,
 )
+from .split_access_nodes import SplitAccessNode, gt_split_access_nodes
 from .state_fusion import GT4PyStateFusion
 from .strides import (
     gt_change_transient_strides,
