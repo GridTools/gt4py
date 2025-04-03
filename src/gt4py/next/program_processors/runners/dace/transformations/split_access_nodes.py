@@ -10,8 +10,10 @@ from typing import Any, Iterable, Optional
 
 import dace
 from dace import (
+    data as dace_data,
     properties as dace_properties,
     subsets as dace_sbs,
+    symbolic as dace_sym,
     transformation as dace_transformation,
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
@@ -378,8 +380,8 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         access_node: dace_nodes.AccessNode = producer_edge.dst
         data_producer: dace_nodes.AccessNode = producer_edge.src
 
-        old_producer_read_start = producer_edge.data.src_subset.min_element()
-        old_producer_write_start = producer_edge.data.dst_subset.min_element()
+        old_producer_read = producer_edge.data.src_subset.min_element()
+        old_producer_write = producer_edge.data.dst_subset.min_element()
 
         reconfigured_consumer: set[tuple[dace_nodes.Node, str]] = set()
         new_consumer_edges: list[dace_graph.MultiConnectorEdge] = []
@@ -388,38 +390,37 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
             consumer_conn = consumer_edge.dst_conn
 
             # Index from where the consumer should start reading from the producer
-            #  directly. That data that is read has not changed, but there might be
-            #  some offsets since it has gone through `self.access_node`. The size
-            #  of the reads, i.e. how much is read has not changed and we take it
-            #  from what is read from `self.access_node`.
-            old_consumer_read_start = consumer_edge.data.src_subset.min_element()
+            #  directly. But since it has gone through the intermediate AccessNode,
+            #  the indexes are different and we have to compute them. At the end it
+            #  is some kind of projection starting at what was read from the
+            #  intermediate to the indexes where it has been written to, to the
+            #  intermediate and finally from where it is originally coming from.
+            #  We only do this projection for the start index, the end index
+            #  is computed by adding the length to the start index.
+            old_consumer_read = consumer_edge.data.src_subset.min_element()
             consumer_read_size = consumer_edge.data.src_subset.size()
-            new_consumer_direct_read_start = [
-                dace.symbolic.pystr_to_symbolic(
-                    f"({old_producer_read}) + (({old_consumer_read}) - ({old_producer_write}))",
+            consumer_direct_read: list[
+                tuple[dace_sym.SymbolicType, dace_sym.SymbolicType, int]
+            ] = []
+            for i in range(len(old_producer_read)):
+                old_producer_read_start = old_producer_read[i]
+                old_consumer_read_start = old_consumer_read[i]
+                old_producer_write_start = old_producer_write[i]
+                transfer_size = consumer_read_size[i]
+
+                consumer_direct_read_start = dace.symbolic.pystr_to_symbolic(
+                    f"({old_producer_read_start}) + (({old_consumer_read_start}) - ({old_producer_write_start}))",
                     simplify=True,
                 )
-                for old_producer_read, old_consumer_read, old_producer_write in zip(
-                    old_producer_read_start,
-                    old_consumer_read_start,
-                    old_producer_write_start,
-                    strict=True,
+                # The `-1` is because the end is considered inclusive in DaCe.
+                consumer_direct_read_end = dace.symbolic.pystr_to_symbolic(
+                    f"({consumer_direct_read_start}) + ({transfer_size}) - 1", simplify=True
                 )
-            ]
-            new_consumer_read_subset = dace_sbs.Range(
-                [
-                    (
-                        new_consumer_direct_read,
-                        dace.symbolic.pystr_to_symbolic(
-                            f"({new_consumer_direct_read}) + ({read_size}) - 1", simplify=True
-                        ),
-                        1,
-                    )
-                    for new_consumer_direct_read, read_size in zip(
-                        new_consumer_direct_read_start, consumer_read_size
-                    )
-                ]
-            )
+                consumer_direct_read.append(
+                    (consumer_direct_read_start, consumer_direct_read_end, 1)
+                )
+
+            new_consumer_direct_read_subset = dace_sbs.Range(consumer_direct_read)
 
             # Create a new edge that reads from the producer directly and remove the
             #  old edge.
@@ -430,7 +431,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 consumer_edge.dst_conn,
                 dace.Memlet(
                     data=data_producer.data,
-                    subset=new_consumer_read_subset,
+                    subset=new_consumer_direct_read_subset,
                     other_subset=consumer_edge.data.dst_subset,
                     dynamic=consumer_edge.data.dynamic or producer_edge.data.dynamic,
                 ),
@@ -441,18 +442,59 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
             # If needed reconfigure the consumers since it now involves the
             #  original producer.
             #  The stride propagation is done after all edges have been updated.
-            if (consumer_node, consumer_conn) in reconfigured_consumer:
-                consumer_subset_correction = [
-                    dace.symbolic.pystr_to_symbolic(
-                        f"-(({old_consumer_read}) - ({old_producer_write}))", simplify=True
+            if (consumer_node, consumer_conn) not in reconfigured_consumer:
+                reconfigured_consumer.add((consumer_node, consumer_conn))
+
+                # The subset correct we have to apply to the consumer depends on the
+                #  type of the consumer.
+                if isinstance(data_producer.desc(sdfg), dace_data.Scalar):
+                    # The producer is a scalar so we just set the subset to `0`,
+                    #  which is indicated by `None`.
+                    consumer_subset_correction = None
+
+                elif isinstance(consumer_node, dace_nodes.AccessNode):
+                    # Here we only have to consider the offset between the reading
+                    #  from the intermediate and where we write into it. The minus
+                    #  is because we have to subtract this value.
+                    consumer_subset_correction = [
+                        dace.symbolic.pystr_to_symbolic(
+                            f"-(({old_consumer_read_start}) - ({old_producer_write_start}))",
+                            simplify=True,
+                        )
+                        for old_consumer_read_start, old_producer_write_start in zip(
+                            old_consumer_read,
+                            old_producer_write,
+                            strict=True,
+                        )
+                    ]
+                elif isinstance(consumer_node, dace_nodes.MapEntry):
+                    # Things are different here, because the map ranges (and the
+                    #  offsets in the inner Memlets handle everything, Thus, in
+                    #  this case we have to correct the case that they now read
+                    #  from the producer instead of the intermediate.
+                    consumer_subset_correction = [
+                        dace.symbolic.pystr_to_symbolic(
+                            f"-(({old_producer_write_start}) - ({old_producer_read_start}))",
+                            simplify=True,
+                        )
+                        for old_producer_read_start, old_producer_write_start in zip(
+                            old_producer_read,
+                            old_producer_write,
+                            strict=True,
+                        )
+                    ]
+
+                elif isinstance(consumer_node, dace_nodes.NestedSDFG):
+                    # Since a NestedSDFG can only read from an AccessNode there is
+                    #  nothing to do, except for the stride propagation, which is
+                    #  done later.
+                    continue
+
+                else:
+                    raise TypeError(
+                        f"Can not correct a consumer of type '{type(consumer_node).__name__}'"
                     )
-                    for old_producer_read, old_consumer_read, old_producer_write in zip(
-                        old_producer_read_start,
-                        old_consumer_read_start,
-                        old_producer_write_start,
-                        strict=True,
-                    )
-                ]
+
                 gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
                     is_producer_edge=False,
                     new_edge=new_consumer_edge,
@@ -496,6 +538,11 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 generated by `producer_edge`.
             state: The state in which we operate.
             sdfg: The SDFG in which we operate.
+
+
+        Todo:
+            Try to merge this function with the function for handling AccessNode
+            producers.
         """
         access_node: dace_nodes.AccessNode = producer_edge.dst
         access_node_desc = access_node.desc(sdfg)
