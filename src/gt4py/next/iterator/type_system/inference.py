@@ -569,11 +569,10 @@ class ITIRTypeInference(eve.NodeTranslator):
             return tuple_.type.types[index]
         shifts = {}
         if is_applied_as_fieldop(node):
-            referenced_fun_names = symbol_ref_utils.collect_symbol_refs(node.fun.args[0])
+            stencil = node.fun.args[0]  # type: ignore[attr-defined] # assured by if above
+            referenced_fun_names = symbol_ref_utils.collect_symbol_refs(stencil)
             if not referenced_fun_names:
-                shifts_results = trace_shifts.trace_stencil(
-                    node.fun.args[0], num_args=len(node.args)
-                )
+                shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(node.args))
                 shifts["shift_results"] = shifts_results
             else:
                 shifts["shift_results"] = []
