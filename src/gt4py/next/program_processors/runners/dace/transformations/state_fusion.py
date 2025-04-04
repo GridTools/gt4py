@@ -12,8 +12,6 @@ import dace
 from dace import transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
 
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-
 
 # Conditional import because `gt4py.cartesian` uses an older DaCe version without
 #  `explicit_cf_compatible`.
@@ -193,10 +191,12 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         second_state: dace.SDFGState = self.second_state
         second_scope_dict = second_state.scope_dict()
 
-        # For each independent subgraph in the first state we now determine the
-        #  data it writes to. Furthermore, we determine on which data the
-        #  component depends on, i.e. reads from.
-        first_subgraphs = gtx_transformations.utils.find_all_subgraphs(first_state)
+        # Determine the concurrent subgraphs, i.e. the data flow that can, in theory
+        #  execute in parallel. Note that this is not the same as connected components.
+        #  As subgraphs might share nodes, although this should happen only for source
+        #  nodes. For each of them we determine the set of data they write and on
+        #  which data they depend on.
+        first_subgraphs = dace.sdfg.utils.concurrent_subgraphs(first_state)
         data_producers: list[set[str]] = []
         data_producers_dependencies: list[set[str]] = []
         all_data_producers: set[str] = set()
@@ -220,8 +220,9 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
             ), "Found multiple AccessNodes that writes to data in one state."
             all_data_producers.update(data_producers[-1])
 
-        # Now for every independent subgraph of the second state we determine which
-        #  data it reads, that were written to in the first state, the so called
+        # Now determine the concurrent subgraphs of the second state, i.e. the parts
+        #  that in theory could execute in parallel. For every subgraph we determine
+        #  which data it reads, that were written to in the first state, the so called
         #  messenger data. Components that share a messenger data will be merged
         #  together, if the states are fused. Furthermore, we determine the set of data
         #  a component writes to. Because if a component, from the first state, depends
@@ -229,7 +230,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         #  are not related through a messenger data, then we end up with two
         #  independent subgraphs that read and write from the same global data.
         #  This is indeterministic behaviour, thus we should reject it.
-        second_subgraphs = gtx_transformations.utils.find_all_subgraphs(second_state)
+        second_subgraphs = dace.sdfg.utils.concurrent_subgraphs(second_state)
         data_consumers: list[set[str]] = []
         data_consumers_influences: list[set[str]] = []
         messanger_data: set[str] = set()
@@ -248,9 +249,6 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                     if second_scope_dict[dnode] is None and second_subgraph.in_degree(dnode) != 0
                 }
             )
-            assert messanger_data.isdisjoint(
-                data_consumers[-1]
-            ), "Found multiple AccessNodes that reads from the same data in one state."
             messanger_data.update(data_consumers[-1].intersection(all_data_producers))
 
         for data_producer, producer_dependency in zip(data_producers, data_producers_dependencies):
