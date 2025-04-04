@@ -88,7 +88,8 @@ class CMakeFactory(
             languages=cmake_languages,
         )
 
-        self.cmake_extra_flags.append(get_cmake_device_arch_option())
+        if device_arch_flag := get_cmake_device_arch_option():
+            self.cmake_extra_flags.append(device_arch_flag)
 
         return CMakeProject(
             root_path=cache.get_cache_folder(source, cache_lifetime),
