@@ -77,17 +77,17 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
     The second way is to specify `unit_strides_kind`, which is a GT4Py `DimensionKind`
     enum value. In that case the all dimensions that are associated to this kind
     will be ordered such that they are the inner most. If a Map has multiple
-    dimensions of the same kind, then their relative order is unspecific.
+    dimensions of the same kind, then their relative order is undefined.
 
     In any case the order of the non matches dimensions is unspecific.
 
     Args:
         unit_strides_dims: GT4Py dimensions that are associated with the dimension
             that is supposed to have stride 1. If it is a list it is used as a ranking.
-        unit_strides_kind: All dimension of this kind have potential stride 1.
+        unit_strides_kind: All dimensions of this kind have potential stride 1.
 
     Note:
-        - The transformation does follow the rules outlines in
+        - The transformation does follow the rules outlined in
             [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md)
             especially rule 11, regarding the names. This is used to identify vertical
             and horizontal dimensions if `unit_strides_kind` is used.
@@ -108,7 +108,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
         dtype=gtx_common.DimensionKind,
         allow_none=True,
         default=None,
-        desc="Which kind of dimension, should be make leading.",
+        desc="Which kind of dimension should be made leading.",
     )
     map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
