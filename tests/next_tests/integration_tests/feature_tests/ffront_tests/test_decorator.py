@@ -213,3 +213,4 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
 
     # TODO Can we add a check that we are executing an optimized program?
     # TODO test more variants
+    # TODO add test for static tuple values

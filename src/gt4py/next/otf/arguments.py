@@ -25,7 +25,7 @@ DATA_T = typing.TypeVar("DATA_T")
 
 @dataclasses.dataclass(frozen=True)
 class StaticArg(Generic[core_defs.ScalarT]):
-    value: core_defs.ScalarT
+    value: core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...]
     type_: ts.TypeSpec
 
 
