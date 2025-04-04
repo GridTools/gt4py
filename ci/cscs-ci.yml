@@ -139,7 +139,7 @@ build_py310_image_aarch64:
       SUBVARIANT: ['cuda12', 'cpu']
     - SUBPACKAGE: eve
     - SUBPACKAGE: next
-      VARIANT: ['internal', 'dace']
+      VARIANT: ['internal', 'dace', 'dace_program']
       SUBVARIANT: ['cuda12', 'cpu']
       DETAIL: ['nomesh', 'atlas']
     - SUBPACKAGE: [storage]
