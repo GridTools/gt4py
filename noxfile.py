@@ -50,7 +50,7 @@ DeviceTestSettings: Final[dict[str, dict[str, Sequence]]] = {
     },
 }
 
-CodeGenOption: TypeAlias = Literal["internal", "dace", "dace_program"]
+CodeGenOption: TypeAlias = Literal["internal", "dace"]
 CodeGenNoxParam: Final = types.SimpleNamespace(
     **{
         codegen: nox.param(codegen, id=codegen, tags=[codegen])
@@ -63,8 +63,7 @@ CodeGenTestSettings: Final[dict[str, dict[str, Sequence]]] = {
 }
 # Use dace-next for GT4Py-next, to install a different dace version than in cartesian
 CodeGenNextTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": ["dace-next"], "markers": ["requires_dace", "not uses_dace_program_decorator"]},
-    "dace_program": {"extras": ["dace-next"], "markers": ["uses_dace_program_decorator"]},
+    "dace": {"extras": ["dace-next"], "markers": ["requires_dace"]},
 }
 
 
@@ -153,7 +152,7 @@ def test_eve(session: nox.Session) -> None:
     ],
 )
 @nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
-@nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace, CodeGenNoxParam.dace_program])
+@nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace])
 def test_next(
     session: nox.Session,
     codegen: CodeGenOption,
@@ -180,11 +179,11 @@ def test_next(
         groups=groups,
     )
 
-    parallel = f"-n {os.environ.get("NUM_PROCESSES", "auto")}" if codegen != "dace_program" else ""
+    num_processes = os.environ.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
 
     session.run(
-        *f"pytest --cache-clear -sv {parallel}".split(),
+        *f"pytest --cache-clear -sv -n {num_processes}".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
