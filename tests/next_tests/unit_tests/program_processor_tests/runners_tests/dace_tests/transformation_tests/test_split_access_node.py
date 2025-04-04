@@ -261,7 +261,9 @@ def _make_transient_producer_sdfg(
     The read from the intermediate transient is can either be partial or full
     depending on the value of `partial_read`.
     """
-    sdfg = dace.SDFG(util.unique_name("partial_ac_read"))
+    sdfg = dace.SDFG(
+        util.unique_name("partial_ac_read" + ("_partial_read" if partial_read else "_full_read"))
+    )
     state = sdfg.add_state(is_start_block=True)
     for name in ["a", "b", "c", "d", "t1", "t2"]:
         sdfg.add_array(
@@ -333,7 +335,11 @@ def _make_map_producer_multiple_consumer(
     The same data is also read by an AccessNode, depending on the value of
     `partial_read` it will either read the full data for only parts of it.
     """
-    sdfg = dace.SDFG(util.unique_name("map_producer_map_consumer"))
+    sdfg = dace.SDFG(
+        util.unique_name(
+            "map_producer_map_consumer" + ("_partial_read" if partial_read else "_full_read")
+        )
+    )
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abtcde":
