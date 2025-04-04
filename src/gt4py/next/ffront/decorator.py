@@ -280,7 +280,7 @@ class Program:
         self,
         offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
         **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
-    ) -> None:
+    ) -> Program:
         if self.backend is None or self.backend == eve.NOTHING:
             raise ValueError("Cannot compile a program without backend.")
         if self.connectivities is None and offset_provider_type is None:
@@ -294,7 +294,9 @@ class Program:
                 "Please provide the static arguments as lists. This is to avoid confusion with tuple arguments."
             )
 
-        offset_provider_type = offset_provider_type or self.connectivities
+        offset_provider_type = (
+            self.connectivities if offset_provider_type is None else offset_provider_type
+        )
         assert common.is_offset_provider(offset_provider_type) or common.is_offset_provider_type(
             offset_provider_type
         )
@@ -328,6 +330,7 @@ class Program:
             self._compiled_programs[static_values] = ASYNC_COMPILATION_POOL.submit(
                 self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
             )
+        return self
 
     def freeze(self) -> FrozenProgram:
         if self.backend is None:
@@ -486,7 +489,7 @@ class ProgramWithBoundArgs(Program):
         self,
         offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
         **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
-    ) -> None:
+    ) -> Program:
         raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
 
 
