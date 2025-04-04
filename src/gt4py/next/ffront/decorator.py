@@ -259,15 +259,12 @@ class Program:
             return
 
         if self._compiled_program is not None:
-            # TODO(havogt): we should check that offset_provider_type of compiled program
-            # is compatible with the runtime offset_provider
-
-            # TODO measure overhead of canonicalize_arguments
+            # TODO(havogt): make offset_provider_type part of the compiled program hash once we have variants
+            # TODO(havogt): measure overhead of canonicalize_arguments
             args, kwargs = type_info.canonicalize_arguments(
                 self.past_stage.past_node.type, args, kwargs
             )
-            assert not kwargs  # we don't support kw-only args
-            self._compiled_program.result()(*args, offset_provider=offset_provider)
+            self._compiled_program.result()(*args, **kwargs, offset_provider=offset_provider)
         else:
             self.backend(
                 self.definition_stage,
@@ -293,6 +290,8 @@ class Program:
         assert not past_node_type.definition.pos_only_args
 
         args = tuple(arg_types_dict.values())
+
+        # TODO(havogt): column_axis seems to a unused, even for programs with scans
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider_type, column_axis=None, args=args, kwargs={}
         )
