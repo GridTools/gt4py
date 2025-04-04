@@ -65,7 +65,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
 
     There are two ways to specify the unit stride dimensions. The first one is to
     specify `unit_strides_dim` at construction. It is possible to either pass a
-    single dimension or a list of dimension, in which case they are interpreted
+    single dimension or a list of dimensions, in which case they are interpreted
     as priorities, the lower the index the higher its priority, see example below.
     Assuming we have the `unit_strides_dim=[EdgeDim, VertexDim]`, then we have the
     following:
