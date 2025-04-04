@@ -58,7 +58,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 DEFAULT_BACKEND: Optional[next_backend.Backend] = None
 
-# TODO(havogt): We would lke this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
+# TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
 ASYNC_COMPILATION_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
 
 
@@ -261,16 +261,13 @@ class Program:
             return
 
         if self._compiled_programs:
-            # TODO(havogt): we should check that offset_provider_type of compiled program
-            # is compatible with the runtime offset_provider
-
-            # TODO measure overhead of canonicalize_arguments
+            # TODO(havogt): make offset_provider_type part of the compiled program hash once we have variants
+            # TODO(havogt): measure overhead of canonicalize_arguments
             args, kwargs = type_info.canonicalize_arguments(
                 self.past_stage.past_node.type, args, kwargs
             )
-            assert not kwargs  # we don't support kw-only args
             key = tuple(args[i] for i in self._static_arg_indices)
-            self._compiled_programs[key].result()(*args, offset_provider=offset_provider)
+            self._compiled_programs[key].result()(*args, **kwargs, offset_provider=offset_provider)
         else:
             self.backend(
                 self.definition_stage,
@@ -283,11 +280,11 @@ class Program:
         offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
         **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
     ) -> None:
-        if self.backend is None:
-            raise ValueError("Can not freeze a program without backend (embedded execution).")
+        if self.backend is None or self.backend == eve.NOTHING:
+            raise ValueError("Cannot compile a program without backend.")
         if self.connectivities is None and offset_provider_type is None:
             raise ValueError(
-                "Can not freeze a program without connectivities / OffsetProviderType."
+                "Cannot compile a program without connectivities / OffsetProviderType."
             )
         if self._compiled_programs:
             raise RuntimeError("Program is already compiled.")
@@ -316,6 +313,7 @@ class Program:
                 else arguments.StaticArg(value=variant[name], type_=type_)
                 for name, type_ in arg_types_dict.items()
             )
+            # TODO(havogt): column_axis seems to a unused, even for programs with scans
             compile_time_args = arguments.CompileTimeArgs(
                 offset_provider=offset_provider_type, column_axis=None, args=args, kwargs={}
             )
