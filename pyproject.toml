@@ -2,12 +2,11 @@
 
 [build-system]
 build-backend = 'setuptools.build_meta'
-requires = ['setuptools>=70.0.0', 'wheel>=0.33.6', 'cython>=3.0.0']
+requires = ['cython>=3.0.0', 'setuptools>=70.0.0', 'versioningit>=3.1.1', 'wheel>=0.33.6']
 
 # -- Dependency groups --
 [dependency-groups]
 build = [
-  'bump-my-version>=0.16.0',
   'cython>=3.0.0',
   'pip>=22.1.1',
   'setuptools>=70.0.0',
@@ -107,6 +106,7 @@ dependencies = [
   'tabulate>=0.8.10',
   'toolz>=0.12.1',
   'typing-extensions>=4.11.0',
+  'versioningit>=3.1.1',
   'xxhash>=1.4.4,<3.1.0'
 ]
 description = 'Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL)'
@@ -151,27 +151,6 @@ Homepage = 'https://gridtools.github.io/'
 Repository = 'https://github.com/GridTools/gt4py'
 
 # ---- Other tools ----
-# -- bump-my-version --
-[tool.bumpversion]
-allow_dirty = false
-commit = false
-commit_args = ''
-current_version = '1.0.4'
-ignore_missing_version = false
-message = 'Bump version: {current_version} → {new_version}'
-parse = '(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<patch>\d+))?'
-regex = false
-replace = '{new_version}'
-search = '{current_version}'
-serialize = ['{major}.{minor}.{patch}']
-sign_tags = false
-tag = false
-tag_message = 'Bump version: {current_version} → {new_version}'
-tag_name = 'v{new_version}'
-
-[[tool.bumpversion.files]]
-filename = 'src/gt4py/__about__.py'
-
 # -- coverage --
 [tool.coverage]
 
@@ -417,8 +396,10 @@ max-complexity = 15
 [tool.setuptools]
 platforms = ['Linux', 'Mac']
 
-[tool.setuptools.dynamic]
-version = {attr = 'gt4py.__about__.__version__'}
+[tool.setuptools.cmdclass]
+# This is required for the `onbuild` versioningit hook
+build_py = "versioningit.cmdclass.build_py"
+sdist = "versioningit.cmdclass.sdist"
 
 [tool.setuptools.package-data]
 '*' = ['*.in', '*.txt']
@@ -454,3 +435,21 @@ url = 'https://test.pypi.org/simple/'
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = {git = "https://github.com/spcl/dace", branch = "main", extra = "dace-next"}
+
+# -- versioningit --
+[tool.versioningit]
+default-version = "0.0.0+missing.version.info"
+
+[tool.versioningit.format]
+dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty
+distance = "{base_version}.post{distance}+{rev}"  # Example: 1.2.3.post42+e174a1f
+distance-dirty = "{base_version}.post{distance}+{rev}.dirty"  # Example: 1.2.3.post42+e174a1f.dirty
+
+[tool.versioningit.onbuild]
+build-file = "gt4py/__about__.py"
+regex = "^\\s*on_build_version:\\s*Final\\s*=\\s*(?P<version>.*)"
+source-file = "src/gt4py/__about__.py"
+
+[tool.versioningit.vcs]
+describe-subst = "$Format:%(describe:tags,match=v*)$"
+method = "git-archive"
