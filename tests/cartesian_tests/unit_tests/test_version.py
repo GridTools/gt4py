@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import re
+
 import gt4py
 
 
@@ -19,7 +21,9 @@ def test_version_info():
     from packaging.version import Version
 
     assert isinstance(gt4py.__version_info__, Version)
-    assert gt4py.__version_info__.release == tuple(int(p) for p in gt4py.__version__.split(".+")[:3])
+    assert gt4py.__version_info__.release == tuple(
+        int(p) for p in re.split("[\.\+]", gt4py.__version__)[:3]
+    )
     assert gt4py.__version__.startswith(gt4py.__version_info__.public)
     assert gt4py.__version__.endswith(gt4py.__version_info__.local)
     assert gt4py.__about__.__version_info__ == gt4py.__version_info__
