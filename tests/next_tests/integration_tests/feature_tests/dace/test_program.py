@@ -77,6 +77,7 @@ def unstructured(request, gtir_dace_backend, mesh_descriptor):  # noqa: F811
     )
 
 
+@pytest.mark.uses_dace_program_decorator
 def test_halo_exchange_helper_attrs(unstructured):
     local_int = gtx.int
 
