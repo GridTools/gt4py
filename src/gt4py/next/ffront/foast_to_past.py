@@ -34,7 +34,7 @@ class ItirShim:
     """
 
     definition: AOT_FOP
-    foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr]
+    foast_to_itir: workflow.Workflow[AOT_FOP, itir.FunctionDefinition]
 
     def __gt_closure_vars__(self) -> Optional[dict[str, Any]]:
         return self.definition.data.closure_vars
@@ -42,11 +42,11 @@ class ItirShim:
     def __gt_type__(self) -> ts.CallableType:
         return self.definition.data.foast_node.type
 
-    def __gt_itir__(self) -> itir.Expr:
+    def __gt_itir__(self) -> itir.FunctionDefinition:
         return self.foast_to_itir(self.definition)
 
     # FIXME[#1582](tehrengruber): remove after refactoring to GTIR
-    def __gt_gtir__(self) -> itir.Expr:
+    def __gt_gtir__(self) -> itir.FunctionDefinition:
         # backend should have self.foast_to_itir set to foast_to_gtir
         return self.foast_to_itir(self.definition)
 
@@ -85,7 +85,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         >>> assert copy_program.data.closure_vars["copy"].definition.data is copy.foast_stage
     """
 
-    foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr]
+    foast_to_itir: workflow.Workflow[AOT_FOP, itir.FunctionDefinition]
 
     def __call__(self, inp: AOT_FOP) -> AOT_PRG:
         # TODO(tehrengruber): implement mechanism to deduce default values
@@ -164,7 +164,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
 
 
 def operator_to_program_factory(
-    foast_to_itir_step: Optional[workflow.Workflow[AOT_FOP, itir.Expr]] = None,
+    foast_to_itir_step: Optional[workflow.Workflow[AOT_FOP, itir.FunctionDefinition]] = None,
     cached: bool = True,
 ) -> workflow.Workflow[AOT_FOP, AOT_PRG]:
     """Optionally wrap `OperatorToProgram` in a `CachedStep`."""
