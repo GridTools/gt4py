@@ -45,12 +45,6 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         project({{project_name}})
 
         # Languages
-        if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-            set(CMAKE_CUDA_ARCHITECTURES 60)
-        endif()
-        if(NOT DEFINED CMAKE_HIP_ARCHITECTURES)
-            set(CMAKE_HIP_ARCHITECTURES gfx90a)
-        endif()
         {{"\\n".join(languages)}}
 
         # Paths

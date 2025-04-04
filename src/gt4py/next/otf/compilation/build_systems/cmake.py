@@ -9,14 +9,45 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 import pathlib
 import subprocess
-from typing import Optional
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.compilation import build_data, cache, common, compiler
 from gt4py.next.otf.compilation.build_systems import cmake_lists
+
+
+def get_device_arch() -> str | None:
+    if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.CUDA:
+        # use `cp` from core_defs to avoid trying to re-import cupy
+        return core_defs.cp.cuda.Device(0).compute_capability  # type: ignore[attr-defined]
+    elif core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
+        # TODO(egparedes): Implement this properly, either parsing the output of `$ rocminfo`
+        # or using the HIP low level bindings.
+        # Check: https://rocm.docs.amd.com/projects/hip-python/en/latest/user_guide/1_usage.html
+        return "gfx90a"
+
+    return None
+
+
+def get_cmake_device_arch_option() -> str:
+    cmake_flag: str
+
+    match core_defs.CUPY_DEVICE_TYPE:
+        case core_defs.DeviceType.CUDA:
+            device_archs = os.environ.get("CUDAARCHS", "").strip() or get_device_arch()
+            cmake_flag = f"DCMAKE_CUDA_ARCHITECTURES={device_archs}"
+        case core_defs.DeviceType.ROCM:
+            # `HIPARCHS` is not officially supported by CMake yet, but it might be in the future
+            device_archs = os.environ.get("HIPARCHS", "").strip() or get_device_arch()
+            cmake_flag = f"-DCMAKE_HIP_ARCHITECTURES={device_archs}"
+        case None:
+            cmake_flag = ""
+
+    return cmake_flag
 
 
 @dataclasses.dataclass
@@ -31,7 +62,7 @@ class CMakeFactory(
 
     cmake_generator_name: str = "Ninja"
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
-    cmake_extra_flags: Optional[list[str]] = None
+    cmake_extra_flags: list[str] = dataclasses.field(default_factory=list)
 
     def __call__(
         self,
@@ -53,8 +84,15 @@ class CMakeFactory(
         if (src_lang := source.program_source.language) in [languages.CUDA, languages.HIP]:
             cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang.__name__)]
         cmake_lists_src = cmake_lists.generate_cmakelists_source(
-            name, source.library_deps, [header_name, bindings_name], languages=cmake_languages
+            name,
+            source.library_deps,
+            [header_name, bindings_name],
+            languages=cmake_languages,
         )
+
+        if device_arch_flag := get_cmake_device_arch_option():
+            self.cmake_extra_flags.append(device_arch_flag)
+
         return CMakeProject(
             root_path=cache.get_cache_folder(source, cache_lifetime),
             source_files={
@@ -65,7 +103,7 @@ class CMakeFactory(
             program_name=name,
             generator_name=self.cmake_generator_name,
             build_type=self.cmake_build_type,
-            extra_cmake_flags=self.cmake_extra_flags or [],
+            extra_cmake_flags=self.cmake_extra_flags,
         )
 
 
