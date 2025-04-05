@@ -22,9 +22,10 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 def gt_auto_optimize(
     sdfg: dace.SDFG,
     gpu: bool,
-    leading_dim: Optional[
-        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
+    unit_strides_dim: Optional[
+        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]], bool]
     ] = None,
+    unit_strides_kind: Optional[Union[gtx_common.DimensionKind, bool]] = None,
     aggressive_fusion: bool = True,
     max_optimization_rounds_p2: int = 100,
     make_persistent: bool = False,
@@ -61,11 +62,14 @@ def gt_auto_optimize(
         `gt_auto_fuse_top_level_maps()` for more details.
     3. After the function created big kernels/maps it will apply some optimization,
         inside the kernels itself. For example fuse maps inside them.
-    4. Afterwards it will process the map ranges and iteration order. For this
-        the function assumes that the dimension indicated by `leading_dim` is the
-        one with stride one.
+    4. Afterwards it will process the map ranges and iteration order. Such that the
+        array dimensions with unit strides are on the inner most loop. For this
+        `unit_strides_dim` or `unit_strides_kind` are used, see
+        `gt_set_iteration_order()` for more.
+        If they are not specified they are inferred from `gpu`, to disable this
+        set either `unit_strides_dim` or `unit_strides_kind` to `False`.
     5. If requested the function will now apply loop blocking, on the dimension
-        indicated by `leading_dim`.
+        indicated by `blocking_dim`, the step size if given by `blocking_size`.
     6. The strides of temporaries are set to match the compute order.
     7. If requested the SDFG will be transformed to GPU. For this the
         `gt_gpu_transformation()` function is used, that might apply several other
@@ -80,7 +84,9 @@ def gt_auto_optimize(
     Args:
         sdfg: The SDFG that should be optimized in place.
         gpu: Optimize for GPU or CPU.
-        leading_dim: Leading dimension, indicates where the stride is 1.
+        unit_strides_dim: List of dimensions that is considered to have unit strides.
+        unit_strides_kind: All dimensions of this kind are considered to have unit
+            strides.
         aggressive_fusion: Be more aggressive during phase 2, will lead to the promotion
             of certain maps (over computation) but will lead to larger kernels.
         max_optimization_rounds_p2: Maximum number of optimization rounds in phase 2.
@@ -211,11 +217,24 @@ def gt_auto_optimize(
 
         # Phase 4: Iteration Space
         #   This essentially ensures that the stride 1 dimensions are handled
-        #   by the inner most loop nest (CPU) or x-block (GPU)
-        if leading_dim is not None:
+        #   by the inner most loop nest (CPU) or x-block (GPU).
+        #   If not given we assume that on GPU we have horizontal and on CPU
+        #   vertical.
+        if any(
+            unit_strides_arg is False for unit_strides_arg in [unit_strides_dim, unit_strides_kind]
+        ):
+            unit_strides_dim = None
+            unit_strides_kind = None
+        elif unit_strides_dim is None and unit_strides_kind is None:
+            unit_strides_kind = (
+                gtx_common.DimensionKind.HORIZONTAL if gpu else gtx_common.DimensionKind.VERTICAL
+            )
+
+        if unit_strides_dim is not None or unit_strides_kind is not None:
             gtx_transformations.gt_set_iteration_order(
                 sdfg=sdfg,
-                leading_dim=leading_dim,
+                unit_strides_dim=unit_strides_dim,  # type: ignore[arg-type]
+                unit_strides_kind=unit_strides_kind,  # type: ignore[arg-type]
                 validate=validate,
                 validate_all=validate_all,
             )
@@ -240,6 +259,7 @@ def gt_auto_optimize(
         #   It is important that we set the strides before the GPU transformation.
         #   Because this transformation will also apply `CopyToMap` for the Memlets
         #   that the DaCe runtime can not handle.
+        # TODO(phimuell): Should also get the unit stride information.
         gtx_transformations.gt_change_transient_strides(sdfg, gpu=gpu)
 
         # Phase 7: Going to GPU
