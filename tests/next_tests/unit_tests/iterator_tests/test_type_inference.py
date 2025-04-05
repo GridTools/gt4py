@@ -119,7 +119,7 @@ def expression_test_cases():
         # neighbors
         (
             im.neighbors("E2V", im.ref("a", it_on_e_of_e_type)),
-            ts.ListType(element_type=it_on_e_of_e_type.element_type),
+            ts.ListType(element_type=it_on_e_of_e_type.element_type, offset_type=E2VDim),
         ),
         # cast
         (im.cast_(1, int_type), int_type),
@@ -129,6 +129,13 @@ def expression_test_cases():
         (
             im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.ref("b", int_list_type)),
             int_list_type,
+        ),
+        (
+            im.map_(im.ref("plus"))(
+                im.ref("a", int_list_type),
+                im.ref("b", ts.ListType(element_type=int_type, offset_type=V2EDim)),
+            ),
+            ts.ListType(element_type=int_type, offset_type=V2EDim),
         ),
         # reduce
         (im.reduce("plus", 0)(im.ref("l", int_list_type)), int_type),
@@ -426,7 +433,7 @@ def test_fencil_with_nb_field_input():
     result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
 
     stencil = result.body[0].expr.fun.args[0]
-    assert stencil.expr.args[0].type == float64_list_type
+    assert stencil.expr.args[0].type == ts.ListType(element_type=float64_type, offset_type=V2EDim)
     assert stencil.type.returns == float64_type
 
 
