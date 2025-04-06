@@ -317,6 +317,15 @@ class BaseBackend(Backend):
         source = self.MODULE_GENERATOR_CLASS()(args_data, self.builder, **kwargs)
         return source
 
+    def recursive_write(self, root_path: pathlib.Path, tree: dict[str, Union[str, dict]]):
+        root_path.mkdir(parents=True, exist_ok=True)
+        for key, value in tree.items():
+            if isinstance(value, dict):
+                self.recursive_write(root_path / key, value)
+            else:
+                src_path = root_path / key
+                src_path.write_text(value)
+
 
 class MakeModuleSourceCallable(Protocol):
     def __call__(self, *, args_data: Optional[ModuleData] = None, **kwargs: Any) -> str: ...
