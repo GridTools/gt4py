@@ -48,10 +48,12 @@ def test_inspect_version_editable():
     """Test version with an editable installation."""
     with (
         patch("importlib.metadata.distribution") as dist_mock,
-        patch("versioningit.get_version") as get_version_mock
+        patch("versioningit.get_version") as get_version_mock,
     ):
         dist_mock.return_value.version = "1.2.3"
-        dist_mock.return_value.read_text.return_value = '{"dir_info": {"editable": true}, "url": "file:///some/path"}'
+        dist_mock.return_value.read_text.return_value = (
+            '{"dir_info": {"editable": true}, "url": "file:///some/path"}'
+        )
         get_version_mock.return_value = "1.2.3.post42+e174a1f.dirty"
 
         version, version_info = _inspect_version()
@@ -63,7 +65,7 @@ def test_inspect_version_fallback():
     """Test version fallback to `on_build_version`."""
     with (
         patch("importlib.metadata.distribution", return_value=None),
-        patch("versioningit.get_version", side_effect=Exception)
+        patch("versioningit.get_version", side_effect=Exception),
     ):
         version, version_info = _inspect_version()
         assert version == on_build_version
