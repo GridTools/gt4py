@@ -29,12 +29,12 @@ from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
+    if origin := getattr(
+        arg, "__gt_origin__", None
+    ):  # TODO: double-check all fields have __gt_origin__
+        return arg.ndarray, origin
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
-    if isinstance(arg, common.Field):
-        arr = arg.ndarray
-        origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
-        return arr, origin
     if isinstance(arg, np.bool_):
         # nanobind does not support implicit conversion of `np.bool` to `bool`
         return bool(arg)
@@ -84,22 +84,10 @@ def extract_connectivity_args(
 ) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
     # note: the order here needs to agree with the order of the generated bindings
     args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = []
-    for name, conn in offset_provider.items():
-        if isinstance(conn, common.Connectivity):
-            if not common.is_neighbor_table(conn):
-                raise NotImplementedError(
-                    "Only 'NeighborTable' connectivities implemented at this point."
-                )
-            # copying to device here is a fallback for easy testing and might be removed later
-            conn_arg = _ensure_is_on_device(conn.ndarray, device)
-            args.append((conn_arg, tuple([0] * 2)))
-        elif isinstance(conn, common.Dimension):
-            pass
-        else:
-            raise AssertionError(
-                f"Expected offset provider '{name}' to be a 'Connectivity' or 'Dimension', "
-                f"but got '{type(conn).__name__}'."
-            )
+    for conn in offset_provider.values():
+        if ndarray := getattr(conn, "ndarray", None) is not None:
+            assert common.is_neighbor_table(conn)
+            args.append((ndarray, tuple([0] * 2)))
     return args
 
 
