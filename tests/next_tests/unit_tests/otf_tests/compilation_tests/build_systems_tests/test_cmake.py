@@ -6,10 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import os
 import pathlib
+from unittest import mock
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import config
-from gt4py.next.otf.compilation import build_data, cache, importer
+from gt4py.next.otf.compilation import build_data, importer
 from gt4py.next.otf.compilation.build_systems import cmake
 
 
@@ -28,3 +31,31 @@ def test_default_cmake_factory(compilable_source_example, clean_example_session_
     assert hasattr(
         importer.import_from_path(otf_builder.root_path / data.module), data.entry_point_name
     )
+
+
+def test_get_cmake_device_arch_option_cuda():
+    with mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA):
+        with mock.patch(
+            "gt4py.next.otf.compilation.build_systems.cmake.get_device_arch", lambda: "90"
+        ):
+            # Test CUDA device without CUDAARCHS environment variable
+            with mock.patch.dict(os.environ, {}):
+                assert cmake.get_cmake_device_arch_option() == "-DCMAKE_CUDA_ARCHITECTURES=90"
+
+            # Test CUDA device with CUDAARCHS environment variable
+            with mock.patch.dict(os.environ, {"CUDAARCHS": "80", "HIPARCHS": "gfx90a"}):
+                assert cmake.get_cmake_device_arch_option() == "-DCMAKE_CUDA_ARCHITECTURES=80"
+
+
+def test_get_cmake_device_arch_option_rocm():
+    with mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.ROCM):
+        with mock.patch(
+            "gt4py.next.otf.compilation.build_systems.cmake.get_device_arch", lambda: "gfx942"
+        ):
+            # Test ROCM device without HIPARCHS environment variable
+            with mock.patch.dict(os.environ, {}):
+                assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx942"
+
+            # Test ROCM device with HIPARCHS environment variable
+            with mock.patch.dict(os.environ, {"CUDAARCHS": "80", "HIPARCHS": "gfx90a"}):
+                assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx90a"

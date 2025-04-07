@@ -34,18 +34,16 @@ def get_device_arch() -> str | None:
 
 
 def get_cmake_device_arch_option() -> str:
-    cmake_flag: str
+    cmake_flag = ""
 
     match core_defs.CUPY_DEVICE_TYPE:
         case core_defs.DeviceType.CUDA:
             device_archs = os.environ.get("CUDAARCHS", "").strip() or get_device_arch()
-            cmake_flag = f"DCMAKE_CUDA_ARCHITECTURES={device_archs}"
+            cmake_flag = f"-DCMAKE_CUDA_ARCHITECTURES={device_archs}"
         case core_defs.DeviceType.ROCM:
             # `HIPARCHS` is not officially supported by CMake yet, but it might be in the future
             device_archs = os.environ.get("HIPARCHS", "").strip() or get_device_arch()
             cmake_flag = f"-DCMAKE_HIP_ARCHITECTURES={device_archs}"
-        case None:
-            cmake_flag = ""
 
     return cmake_flag
 
