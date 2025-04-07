@@ -64,10 +64,10 @@ CodeGenTestSettings: Final[dict[str, dict[str, Sequence]]] = {
 # Use dace-next for GT4Py-next, to install a different dace version than in cartesian
 CodeGenNextTestSettings = CodeGenTestSettings | {
     "dace": {
-        "extras": ["dace-next"],
+        "extras": ["dace"],
         "markers": ["requires_dace", "not uses_dace_program_decorator"],
     },
-    "dace_program": {"extras": ["dace-next"], "markers": ["uses_dace_program_decorator"]},
+    "dace_program": {"extras": ["dace"], "markers": ["uses_dace_program_decorator"]},
 }
 
 
