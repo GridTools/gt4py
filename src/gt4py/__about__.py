@@ -72,15 +72,16 @@ def _inspect_version() -> tuple[str, pkg_version.Version]:
 
                 src_path = url_data["url"][7:]
                 version = versioningit.get_version(src_path)
-                version_info = pkg_version.parse(version)
-
-                return version, version_info
 
             except Exception:
                 # There is something wrong in the current editable installation.
                 # Fallback to the static version, but don't store the result as a
                 # static version, since the package is installed in editable mode.
-                return version, pkg_version.parse(version)
+                pass
+
+            version_info = pkg_version.parse(version)
+
+            return version, version_info
 
         else:
             # If the package is not installed in editable mode, the version
@@ -99,10 +100,11 @@ def _inspect_version() -> tuple[str, pkg_version.Version]:
             import pathlib
 
             version = versioningit.get_version(pathlib.Path(__file__).parent.resolve())
-            version_info = pkg_version.parse(version)
         except Exception:
             # Fallback to the on-build version, if everything else fails.
-            version, version_info = on_build_version, pkg_version.parse(on_build_version)
+            version = on_build_version
+
+        version_info = pkg_version.parse(version)
 
         return version, version_info
 
