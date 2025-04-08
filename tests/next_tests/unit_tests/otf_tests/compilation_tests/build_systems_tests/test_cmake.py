@@ -38,8 +38,10 @@ def test_get_cmake_device_arch_option_cuda():
         mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA),
         mock.patch("gt4py.next.otf.compilation.build_systems.cmake.get_device_arch", lambda: "90"),
     ):
-        # Test CUDA device without CUDAARCHS environment variable
+        # Test CUDA device without user-provided environment variable
         with mock.patch.dict(os.environ, {}):
+            assert cmake.get_cmake_device_arch_option() == "-DCMAKE_CUDA_ARCHITECTURES=90"
+        with mock.patch.dict(os.environ, {"CUDAARCHS": ""}):
             assert cmake.get_cmake_device_arch_option() == "-DCMAKE_CUDA_ARCHITECTURES=90"
 
         # Test CUDA device with CUDAARCHS environment variable
@@ -54,8 +56,10 @@ def test_get_cmake_device_arch_option_rocm():
             "gt4py.next.otf.compilation.build_systems.cmake.get_device_arch", lambda: "gfx942"
         ),
     ):
-        # Test ROCM device without HIPARCHS environment variable
+        # Test ROCM device without user-provided environment variable
         with mock.patch.dict(os.environ, {}):
+            assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx942"
+        with mock.patch.dict(os.environ, {"HIPARCHS": ""}):
             assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx942"
 
         # Test ROCM device with HIPARCHS environment variable
