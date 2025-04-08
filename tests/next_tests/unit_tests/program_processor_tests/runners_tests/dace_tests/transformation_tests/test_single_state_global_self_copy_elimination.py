@@ -8,7 +8,7 @@
 
 import pytest
 
-import dace
+dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
 import numpy as np

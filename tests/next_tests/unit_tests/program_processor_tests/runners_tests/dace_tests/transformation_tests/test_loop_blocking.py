@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 
-import dace
+dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 
 from gt4py.next.program_processors.runners.dace import (

@@ -29,7 +29,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     mesh_descriptor,  # noqa: F401
 )
 
-import dace
+dace = pytest.importorskip("dace")
 
 from gt4py.next.program_processors.runners import dace as dace_backends
 

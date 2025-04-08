@@ -10,7 +10,7 @@
 
 import pytest
 
-import dace
+dace = pytest.importorskip("dace")
 
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 

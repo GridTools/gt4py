@@ -10,7 +10,7 @@ import pytest
 import numpy as np
 import copy
 
-import dace
+dace = pytest.importorskip("dace")
 from dace import symbolic as dace_symbolic
 from dace.sdfg import nodes as dace_nodes
 

@@ -23,7 +23,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-import dace
+dace = pytest.importorskip("dace")
 
 from gt4py.next.program_processors.runners import dace as dace_backends
 

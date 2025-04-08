@@ -10,7 +10,4 @@ import pytest
 
 
 #: Attribute defining package-level marks used by a custom pytest hook.
-package_pytestmarks = [
-    pytest.mark.requires_dace,
-    pytest.mark.usefixtures("common_dace_config"),
-]
+package_pytestmarks = [pytest.mark.usefixtures("common_dace_config")]
