@@ -597,7 +597,7 @@ def return_type(
     with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.TypeSpec:
     raise NotImplementedError(
-        f"Return type deduction of type " f"'{type(callable_type).__name__}' not implemented."
+        f"Return type deduction of type '{type(callable_type).__name__}' not implemented."
     )
 
 
@@ -656,7 +656,7 @@ def canonicalize_arguments(
     *,
     ignore_errors: bool = False,
     use_signature_ordering: bool = False,
-) -> tuple[list, dict]:
+) -> tuple[tuple, dict]:
     raise NotImplementedError(f"Not implemented for type '{type(func_type).__name__}'.")
 
 
@@ -668,7 +668,7 @@ def canonicalize_function_arguments(
     *,
     ignore_errors: bool = False,
     use_signature_ordering: bool = False,
-) -> tuple[list, dict]:
+) -> tuple[tuple, dict]:
     num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
     cargs = [UNDEFINED_ARG] * max(num_pos_params, len(args))
     ckwargs = {**kwargs}
@@ -696,7 +696,7 @@ def canonicalize_function_arguments(
     if use_signature_ordering:
         ckwargs = {k: ckwargs[k] for k in func_type.kw_only_args.keys() if k in ckwargs}
 
-    return list(cargs), ckwargs
+    return tuple(cargs), ckwargs
 
 
 def structural_function_signature_incompatibilities(

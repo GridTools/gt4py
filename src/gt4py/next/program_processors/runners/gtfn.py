@@ -14,8 +14,8 @@ from typing import Any, Optional
 
 import diskcache
 import factory
-import filelock
 import numpy as np
+from flufl import lock
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
@@ -124,8 +124,9 @@ class FileCache(diskcache.Cache):
         else:
             lock_dir = pathlib.Path(tempfile.gettempdir())
 
-        lock = filelock.FileLock(lock_dir / "file_cache.lock")
-        with lock:
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        lockfile = str(lock_dir / "file_cache.lock")
+        with lock.Lock(lockfile, lifetime=10):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
             super().__init__(directory=directory, **settings)
 
         self._init_complete = True
