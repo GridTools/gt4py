@@ -85,7 +85,7 @@ def extract_connectivity_args(
     # note: the order here needs to agree with the order of the generated bindings
     args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = []
     for conn in offset_provider.values():
-        if ndarray := getattr(conn, "ndarray", None) is not None:
+        if (ndarray := getattr(conn, "ndarray", None)) is not None:
             assert common.is_neighbor_table(conn)
             args.append((ndarray, tuple([0] * 2)))
     return args
