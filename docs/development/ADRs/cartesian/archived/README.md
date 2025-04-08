@@ -10,7 +10,7 @@ Example: Feature F replaces both previous features E and D.
 
 Process:
 
-- Move ADRs of features D and E in this folder.
+- Move ADRs of features D and E in this folder change their status to "deprecated".
 - Create a new ADR for feature F.
 - Link from ADRs of features D and E to ADR of feature F (at the top)
 - Link from ADR of feature F to ADRs of features D and E (e.g. in the references section at the bottom)
@@ -25,7 +25,7 @@ Example: Feature F is deprecated and removed after a grace period.
 
 Process:
 
-- Move ADR of feature F in this folder.
+- Move ADR of feature F in this folder and change its status to "deprecated".
 - Check for references (to the ADR of feature F) and update them accordingly.
 
 Rationale:

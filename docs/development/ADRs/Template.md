@@ -1,5 +1,10 @@
 # Title, e.g. name of the feature
 
+- **Status**: valid | superseded | deprecated
+- **Authors**: Someone Foo (@github_handle)
+- **Created**: YYYY-MM-DD
+- **Updated**: YYYY-MM-DD
+
 Why-statement: In the context of [use case/user story], facing [concern], we decided to [do thing X] to achieve [system qualities/desired consequences]. We considered [thing Y] and accept [downsides / undesired consequences].
 
 ## Context
@@ -15,7 +20,7 @@ You might want to add a list of drivers, forces, concerns
 
 What is the change that we're proposing and/or doing?
 
-We chose option X because [justification. e.g., only option, which meets k.o. criterion decision driver | which resolves force force | ... | comes out best (see below)].
+We chose option X because [justification. e.g., only option, which meets k.o. criterion or decision driver | which resolves force | ... | comes out best (see below)].
 
 ## Consequences
 
