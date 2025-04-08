@@ -467,6 +467,40 @@ def _make_double_consumer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGSt
     return sdfg, state1, state2
 
 
+def _make_hidden_double_producer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
+    sdfg = dace.SDFG(util.unique_name("hidden_double_producer_sdfg"))
+    state1 = sdfg.add_state(is_start_block=True)
+    state2 = sdfg.add_state_after(state1)
+
+    for name in ["a", "b", "t1", "t2"]:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=name.startswith("t"),
+        )
+
+    a1, t2_1 = state1.add_access("a"), state1.add_access("t2")
+    state1.add_mapped_tasklet(
+        "comp",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i]")},
+        code="__out = __in + 10.0",
+        outputs={"__out": dace.Memlet("t1[__i]")},
+        input_nodes={a1},
+        external_edges=True,
+    )
+    state1.add_nedge(a1, t2_1, dace.Memlet("a[0:10] -> [0:10]"))
+    state1.add_nedge(t2_1, state1.add_access("b"), dace.Memlet("t2[0:10] -> [0:10]"))
+
+    state2.add_nedge(
+        state2.add_access("t1"), state2.add_access("a"), dace.Memlet("t1[0:10] -> [0:10]")
+    )
+    sdfg.validate()
+
+    return sdfg, state1, state2
+
+
 def test_simple_fusion():
     sdfg, state1, state2 = _make_simple_two_state_sdfg()
     assert sdfg.start_block is state1
@@ -736,4 +770,13 @@ def test_double_consumer():
 
     # The transformation does not apply, because it would be indeterministic, i.e.
     #  `x` could be updated before it is read to compute the final value for `y`.
+    assert nb_applied == 0
+
+
+def test_hidden_double_producer():
+    sdfg, state1, state2 = _make_hidden_double_producer_sdfg()
+
+    nb_applied = sdfg.apply_transformations_repeated(gtx_transformations.GT4PyStateFusion)
+    sdfg.validate()
+
     assert nb_applied == 0
