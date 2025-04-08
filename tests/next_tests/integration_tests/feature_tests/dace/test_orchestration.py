@@ -30,7 +30,7 @@ from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacia
 )
 
 
-dace = pytest.importorskip("dace")
+import dace
 
 
 @pytest.mark.uses_dace_program_decorator

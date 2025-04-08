@@ -10,7 +10,7 @@ import pytest
 
 from typing import Optional
 
-dace = pytest.importorskip("dace")
+import dace
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 

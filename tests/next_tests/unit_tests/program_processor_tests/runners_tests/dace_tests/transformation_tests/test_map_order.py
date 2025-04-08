@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 import numpy as np
 
-dace = pytest.importorskip("dace")
+import dace
 
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,

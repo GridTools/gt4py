@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 
-dace = pytest.importorskip("dace")
+import dace
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 from dace.transformation import dataflow as dace_dataflow
 

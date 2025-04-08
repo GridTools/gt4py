@@ -10,7 +10,7 @@ import pytest
 import numpy as np
 import copy
 
-dace = pytest.importorskip("dace")
+import dace
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import (
