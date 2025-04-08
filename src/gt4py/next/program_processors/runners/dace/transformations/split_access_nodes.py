@@ -70,6 +70,11 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
     Args:
         single_use_data: The list of data that is used only once.
+
+    Todo:
+        Currently for every consumer there can only be one producer. In case the
+        consumer is a Map, this makes sense, but in case the consumer is an
+        AccessNode one could split the consumer.
     """
 
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
