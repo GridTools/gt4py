@@ -283,7 +283,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     inner_desc.transient = False
                     inner_sdfg.add_datadesc(outer_data.data, inner_desc)
                     state.add_edge(
-                        enclosing_map,
+                        iedge.src,
                         iedge.src_conn,
                         if_block,
                         outer_data.data,
