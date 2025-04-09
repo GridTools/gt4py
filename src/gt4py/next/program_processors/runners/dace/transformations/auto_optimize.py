@@ -347,6 +347,9 @@ def gt_auto_fuse_top_level_maps(
         call `gt_auto_optimize()` directly.
     """
     # Compute the SDFG hash to see if something has changed.
+    #  We use the hash instead of the return values of the transformation, because
+    #  computing the hash invalidates some caches that are not properly updated
+    # TODO(phimuell): Remove this hack as soon as DaCe is fixed.
     sdfg_hash = sdfg.hash_sdfg()
 
     # We use a loop to optimize because we are using multiple transformations
@@ -354,8 +357,8 @@ def gt_auto_fuse_top_level_maps(
     #  We use the hash of the SDFG to detect if we have reached a fix point.
     for _ in range(max_optimization_rounds):
         # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
-        # TODO(phimuell): Add parallel fusion transformation. Should it run after
-        #                   or with the serial one?
+        # TODO(phimuell): When should the parallel fusing happen before, after or
+        #                   together with the serial one?
         # TODO(phimuell): Switch to `FullMapFusion` once DaCe has parallel map fusion
         #   and [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
 
@@ -382,7 +385,14 @@ def gt_auto_fuse_top_level_maps(
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.
         phase2_cleanup = []
-        phase2_cleanup.append(dace_dataflow.TrivialTaskletElimination())
+        phase2_cleanup.extend(
+            [
+                dace_dataflow.TrivialTaskletElimination(),
+                gtx_transformations.SplitAccessNode(
+                    single_use_data=single_use_data,
+                ),
+            ]
+        )
 
         # If requested perform map promotion, this will lead to more fusion.
         if aggressive_fusion:
