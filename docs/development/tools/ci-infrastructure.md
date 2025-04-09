@@ -87,7 +87,7 @@ flowchart LR
     linkStyle 18 stroke:ForestGreen,stroke-width:2px;
 ```
 
-The `Test Cartesian (CPU)`, `Test Eve`, `Test Next (CPU)` and `Test Storage (CPU)` workflows run the automated tests for the respective subpackages. In all cases only tests are run that do not require the presence of a GPU. The `Test Package Root` workflow runs the automated tests for the root package features.
+The `Test Cartesian (CPU)`, `Test Eve`, `Test Next (CPU)` and `Test Storage (CPU)` workflows run the automated tests for the respective subpackages. In all cases only tests are run that do not require the presence of a GPU. The `Test Package Root` workflow runs the automated tests for the root package code.
 
 The `Code Quality` workflow runs pre-commit to check code quality requirements through tools like **mypy** or **ruff**.
 

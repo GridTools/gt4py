@@ -1,4 +1,4 @@
-name: "Test Package Infrastructure"
+name: "Test Package Root"
 
 on:
   push:
