@@ -350,23 +350,23 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         inner_sdfg: dace.SDFG = if_block.sdfg
         conditional_block: dace.sdfg.state.ConditionalBlock = next(iter(inner_sdfg.nodes()))
 
-        for _, branch in conditional_block.branches:
+        # This actually finds the first state (in a unspecific order that has
+        #  an AccessNode that refers to `connector`, this is good enough because
+        #  of the matching, but is not super robust.
+        for inner_state in conditional_block.all_states():
             connector_nodes: list[dace_nodes.AccessNode] = [
-                dnode for dnode in branch.data_nodes() if dnode.data == connector
+                dnode for dnode in inner_state.data_nodes() if dnode.data == connector
             ]
             if len(connector_nodes) == 0:
                 continue
-            assert len(connector_nodes) == 1
-            if not isinstance(branch, dace.SDFGState):
-                assert isinstance(branch, dace.ControlFlowRegion)
-                branch = next(iter(branch.nodes()))
             break
         else:
             raise ValueError(f"Did not found a branch associated to '{connector}'.")
 
-        assert branch.in_degree(connector_nodes[0]) == 0
-        assert branch.out_degree(connector_nodes[0]) > 0
-        return branch, connector_nodes[0]
+        assert isinstance(inner_state, dace.SDFGState)
+        assert inner_state.in_degree(connector_nodes[0]) == 0
+        assert inner_state.out_degree(connector_nodes[0]) > 0
+        return inner_state, connector_nodes[0]
 
     def _check_if_there_is_something_to_relocate(
         self,
@@ -475,9 +475,10 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         b1_name = "__arg1"
         b2_name = "__arg2"
         cond_name = "__cond"
+        out_name = "__output"
 
         # There shall only be one output and three inputs with given names.
-        if if_block.out_connectors.keys() != {"__output"}:
+        if if_block.out_connectors.keys() != {out_name}:
             return None
         if if_block.in_connectors.keys() != {b1_name, b2_name, cond_name}:
             return None
@@ -496,15 +497,28 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if len(inner_if_block.branches) != 2:
             return None
 
-        for _, branch in inner_if_block.branches:
-            if isinstance(branch, dace.SDFGState):
-                continue
-            if isinstance(branch, dace.ControlFlowRegion):
-                if branch.number_of_nodes() != 1:
+        # See note in `_find_branch_for()`
+        reference_count: dict[str, int] = {b1_name: 0, b2_name: 0}
+        for inner_state in inner_if_block.all_states():
+            assert isinstance(inner_state, dace.SDFGState)
+            found_output_node = False
+            for dnode in inner_state.data_nodes():
+                if dnode.data in reference_count:
+                    reference_count[dnode.data] += 1
+                    exp_in_deg, exp_out_deg = 0, 1
+                elif dnode.data == out_name:
+                    exp_in_deg, exp_out_deg = 1, 0
+                    found_output_node = True
+                else:
                     return None
-                inner_state = next(iter(branch.nodes()))
-                if not isinstance(inner_state, dace.SDFGState):
+                if inner_state.in_degree(dnode) != exp_in_deg:
                     return None
+                if inner_state.out_degree(dnode) != exp_out_deg:
+                    return None
+            if not found_output_node:
+                return None
+        if any(count != 1 for count in reference_count.values()):
+            return None
 
         return (cond_name, b1_name, b2_name)
 
