@@ -131,7 +131,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         return True
 
-
     def apply(
         self,
         graph: dace.SDFGState,
@@ -179,7 +178,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         #  clean up the registry.
         for node_to_remove in [*move_into_b1, *move_into_b2]:
             if isinstance(node_to_remove, dace_nodes.AccessNode):
-                assert node_to_remove.dec(sdfg).transient
+                assert node_to_remove.desc(sdfg).transient
                 sdfg.remove_data(node_to_remove, validate=False)
             graph.remove_node(node_to_remove)
 
@@ -202,13 +201,14 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         )
 
         # There might be AccessNodes inside `nodes_to_move`, we now have to make sure
-        #  that they are present inside the nested ones.
+        #  that they are present inside the nested ones. By our base assumption they
+        #  are transients, because they are only used in one place
         for node in nodes_to_move:
             if not isinstance(node, dace_nodes.AccessNode):
                 continue
             assert node.data not in inner_sdfg.arrays
             assert sdfg.arrays[node.data].transient
-            inner_sdfg.add_datadesc(node.data, sdfg.array[node.data].clone())
+            inner_sdfg.add_datadesc(node.data, sdfg.arrays[node.data].clone())
 
         # Replicate the nodes. Also make a mapping that allows to map the old ones
         #  to the new ones.
@@ -216,18 +216,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             old_node: copy.deepcopy(old_node) for old_node in nodes_to_move
         }
         branch_state.add_nodes_from(new_nodes.values())
-
-        # Now add the data descriptors to the inner SDFG. They will be made transients.
-        #  We do not remove them yet from the outer SDFG.
-        for node in new_nodes.values():
-            if not isinstance(node, dace_nodes.AccessNode):
-                continue
-            data_name = node.data
-            old_desc = node.desc(sdfg)
-            assert old_desc.transient
-            assert data_name not in inner_sdfg.arrays
-            new_desc = old_desc.clone()
-            inner_sdfg.add_datadesc(data_name, new_desc)
 
         # Now add the edges between the edges that have been replicated inside the
         #  branch state, these are the outgoing edges. The data dependencies of the
@@ -253,8 +241,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     branch_state.add_edge(
                         new_nodes[oedge.src],
                         oedge.src_conn,
-                        oedge.dst,
-                        new_nodes[oedge.dst_conn],
+                        new_nodes[oedge.dst],
+                        oedge.dst_conn,
                         dace.Memlet.from_memlet(oedge.data),
                     )
 
@@ -278,7 +266,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 # Now we have to figuring out where the data is coming from. This is
                 #  `iedge.src` except it is the `enclosing_map`.
                 if iedge.src is enclosing_map:
-                    memlet_path = state.memlet_path(iedge)[0]
+                    memlet_path = state.memlet_path(iedge)
                     assert (
                         memlet_path[0].dst is enclosing_map
                     ), "Expected that the AccessNode is directly adjacent to the Map."
@@ -291,7 +279,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 #  patch it through.
                 if outer_data.data not in inner_sdfg.arrays:
                     inner_desc = sdfg.arrays[outer_data.data].clone()
-                    inner_desc.transient = True
+                    inner_desc.transient = False
                     inner_sdfg.add_datadesc(outer_data.data, inner_desc)
                     state.add_edge(
                         enclosing_map,
@@ -306,9 +294,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     # TODO(phimuell): Do we have modify the subset of what is read outside now
                     #   or is it fine if we wait until Memlet propagation runs the next time?
 
-                # Create the Node of the outer data inside the branch state.
                 if outer_data not in new_nodes:
-                    assert not any(
+                    assert all(
                         outer_data.data != mapped_nodes.data
                         for mapped_nodes in new_nodes.values()
                         if isinstance(mapped_nodes, dace_nodes.AccessNode)
@@ -338,18 +325,23 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         inner_sdfg: dace.SDFG = if_block.sdfg
         conditional_block: dace.sdfg.state.ConditionalBlock = next(iter(inner_sdfg.nodes()))
 
-        for _, branche in conditional_block.branches:
+        for _, branch in conditional_block.branches:
             connector_nodes: list[dace_nodes.AccessNode] = [
-                dnode for dnode in branche.data_nodes() if dnode.data == connector
+                dnode for dnode in branch.data_nodes() if dnode.data == connector
             ]
             if len(connector_nodes) == 0:
                 continue
             assert len(connector_nodes) == 1
-            assert branche.in_degree(connector_nodes[0]) == 0
-            assert branche.out_degree(connector_nodes[0]) > 0
-            return branche, connector_nodes[0]
+            if not isinstance(branch, dace.SDFGState):
+                assert isinstance(branch, dace.ControlFlowRegion)
+                branch = next(iter(branch.nodes()))
+            break
+        else:
+            raise ValueError(f"Did not found a branch associated to '{connector}'.")
 
-        raise ValueError(f"Did not found a branch associated to '{connector}'.")
+        assert branch.in_degree(connector_nodes[0]) == 0
+        assert branch.out_degree(connector_nodes[0]) > 0
+        return branch, connector_nodes[0]
 
     def _check_if_there_is_something_to_relocate(
         self,
@@ -409,7 +401,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # Now filter what can not be inside the two sets, i.e. we know that for
         #  sure the content of the condition computation can not be part of them.
         move_into_b1: set[dace_nodes.Node] = b1_dependency.difference(cond_dependency)
-        move_into_b2: set[dace_nodes.Node] = b1_dependency.difference(cond_dependency)
+        move_into_b2: set[dace_nodes.Node] = b2_dependency.difference(cond_dependency)
 
         # Then nothing that is in both sets can exclusively be relocated into one
         #  branch, so filter that out.
@@ -420,19 +412,26 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # Furthermore, a node that generates output that it is used somewhere else,
         #  i.e. outside the branch, can not be moved inside it. This is an iterative
         #  process.
-        def filter_nodes(
-            branch_nodes: set[dace_nodes.Node], state: dace.SDFGState
-        ) -> set[dace_nodes.Node]:
+        def filter_nodes(branch_nodes: set[dace_nodes.Node]) -> set[dace_nodes.Node]:
+            # Notes that have an outgoing connection to `if_block` should not be
+            #  should not be removed, although it is not inside `branch_nodes`.
+            #  So we add it now and remove it later. Furthermore, we also ignore
+            #  it in the scanning.
+            branch_nodes.add(if_block)
             has_been_updated = True
             while has_been_updated:
                 has_been_updated = False
                 for node in list(branch_nodes):
+                    if node is if_block:
+                        continue
                     if any(oedge.dst not in branch_nodes for oedge in state.out_edges(node)):
                         branch_nodes.remove(node)
                         has_been_updated = True
+            assert if_block in branch_nodes
+            branch_nodes.remove(if_block)
             return branch_nodes
 
-        return filter_nodes(move_into_b1, state), filter_nodes(move_into_b2, state)
+        return filter_nodes(move_into_b1), filter_nodes(move_into_b2)
 
     def _is_valid_if_block(
         self,
@@ -472,6 +471,16 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if len(inner_if_block.branches) != 2:
             return None
 
+        for _, branch in inner_if_block.branches:
+            if isinstance(branch, dace.SDFGState):
+                continue
+            if isinstance(branch, dace.ControlFlowRegion):
+                if branch.number_of_nodes() != 1:
+                    return None
+                inner_state = next(iter(branch.nodes()))
+                if not isinstance(inner_state, dace.SDFGState):
+                    return None
+
         return (cond_name, b1_name, b2_name)
 
     def _find_upstream_nodes(
@@ -495,9 +504,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         if start_connector is None:
             to_visit: list[dace_nodes.Node] = [
-                iedge.src
-                for iedge in state.in_edges(start, start_connector)
-                if iedge.src is not limit_node
+                iedge.src for iedge in state.in_edges(start) if iedge.src is not limit_node
             ]
         else:
             to_visit = [
