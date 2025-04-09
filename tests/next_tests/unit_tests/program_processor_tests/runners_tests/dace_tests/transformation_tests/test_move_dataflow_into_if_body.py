@@ -99,11 +99,22 @@ def _perform_test(
 
 
 def test_if_mover_independent_branches():
+    """
+    Essentially tests the following situation:
+    ```python
+    a = foo(...)
+    b = bar(...)
+    __cond = baz(...)
+    if __cond:
+        res = a
+    else:
+        res = b"""
     sdfg = dace.SDFG(util.unique_name("if_mover_independent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
-    for name in ["a", "b", "c", "d"]:
+    input_names = ["a", "b", "c", "d"]
+    for name in input_names:
         sdfg.add_array(
             name,
             shape=(10,),
@@ -175,9 +186,29 @@ def test_if_mover_independent_branches():
         me.add_out_connector(f"OUT_{iname}")
     mx.add_in_connector("IN_d")
     mx.add_out_connector("OUT_d")
-
     sdfg.validate()
 
     _perform_test(sdfg, explected_applies=1)
 
-    sdfg.view()
+    # Examine the structure of the SDFG.
+    top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert {ac.data for ac in top_ac} == set(input_names).union(["c1"])
+    assert len(sdfg.arrays) == len(top_ac)
+
+    top_tlet: list[dace_nodes.Tasklet] = util.count_nodes(state, dace_nodes.Tasklet, True)
+    assert len(top_tlet) == 1
+    assert "tasklet_cond" == top_tlet[0].label
+
+    inner_ac: list[dace_nodes.AccessNode] = util.count_nodes(
+        if_block.sdfg, dace_nodes.AccessNode, True
+    )
+    expected_data: set[str] = (
+        set(temporary_names).union(input_names).union(["__arg1", "__arg2", "__output"])
+    )
+    expected_data.difference_update(["c1", "c", "d"])
+    assert expected_data == {ac.data for ac in inner_ac}
+
+    inner_tlet: list[dace_nodes.Tasklet] = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
+    assert len(inner_tlet) == 4
+    expected_tlet = {tlet.label for tlet in [tasklet_a1, tasklet_a2, tasklet_b1, tasklet_b2]}
+    assert {tlet.label for tlet in inner_tlet} == expected_tlet
