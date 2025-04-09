@@ -179,6 +179,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 sdfg.remove_data(node_to_remove, validate=False)
             graph.remove_node(node_to_remove)
 
+        print("SYMBOL MAPPING IS NOT HANDLED.")
+
     def _replicate_dataflow_into_branche(
         self,
         state: dace.SDFGState,
