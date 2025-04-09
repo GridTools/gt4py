@@ -279,10 +279,6 @@ module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
-module = 'gt4py.next.ffront.decorator'
-
-[[tool.mypy.overrides]]
-ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
 
 # -- pytest --

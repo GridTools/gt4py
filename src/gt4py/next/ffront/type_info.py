@@ -35,8 +35,8 @@ def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
 
 
 def promote_zero_dims(
-    function_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
-) -> tuple[list, dict]:
+    function_type: ts.FunctionType, args: Sequence[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+) -> tuple[tuple, dict]:
     """
     Promote arg types to zero dimensional fields if compatible and required by function signature.
 
@@ -78,7 +78,7 @@ def promote_zero_dims(
     for name in set(function_type.kw_only_args.keys()) & set(kwargs.keys()):
         new_kwargs[name] = promote_arg(function_type.kw_only_args[name], kwargs[name])
 
-    return new_args, new_kwargs
+    return tuple(new_args), new_kwargs
 
 
 @type_info.return_type.register
@@ -103,7 +103,7 @@ def canonicalize_program_or_fieldop_arguments(
     *,
     ignore_errors: bool = False,
     use_signature_ordering: bool = False,
-) -> tuple[list, dict]:
+) -> tuple[tuple, dict]:
     return type_info.canonicalize_arguments(
         program_type.definition,
         args,
@@ -121,7 +121,7 @@ def canonicalize_scanop_arguments(
     *,
     ignore_errors: bool = False,
     use_signature_ordering: bool = False,
-) -> tuple[list, dict]:
+) -> tuple[tuple, dict]:
     (_, *cargs), ckwargs = type_info.canonicalize_arguments(
         scanop_type.definition,
         (None, *args),
@@ -129,7 +129,7 @@ def canonicalize_scanop_arguments(
         ignore_errors=ignore_errors,
         use_signature_ordering=use_signature_ordering,
     )
-    return cargs, ckwargs
+    return tuple(cargs), ckwargs
 
 
 @type_info.function_signature_incompatibilities.register
@@ -269,7 +269,7 @@ def function_signature_incompatibilities_scanop(
 
 @type_info.function_signature_incompatibilities.register
 def function_signature_incompatibilities_program(
-    program_type: ts_ffront.ProgramType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+    program_type: ts_ffront.ProgramType, args: tuple[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     args, kwargs = type_info.canonicalize_arguments(
         program_type.definition, args, kwargs, ignore_errors=True
