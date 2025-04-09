@@ -33,6 +33,8 @@ nox.options.sessions = [
     "test_next-3.10(dace, cpu, nomesh)",
     "test_next-3.11(internal, cpu, nomesh)",
     "test_next-3.11(dace, cpu, nomesh)",
+    "test_package-3.10",
+    "test_package-3.11",
     "test_storage-3.10(cpu)",
     "test_storage-3.11(cpu)",
 ]
@@ -102,6 +104,25 @@ def test_cartesian(
     )
 
 
+@nox.session(python=["3.10", "3.11"], tags=["cartesian", "next", "cpu"])
+def test_eve(session: nox.Session) -> None:
+    """Run 'gt4py.eve' tests."""
+
+    _install_session_venv(session, groups=["test"])
+
+    num_processes = os.environ.get("NUM_PROCESSES", "auto")
+
+    session.run(
+        *f"pytest --cache-clear -sv -n {num_processes}".split(),
+        str(pathlib.Path("tests") / "eve_tests"),
+        *session.posargs,
+    )
+    session.run(
+        *"pytest --doctest-modules -sv".split(),
+        str(pathlib.Path("src") / "gt4py" / "eve"),
+    )
+
+
 @nox.session(python=["3.10", "3.11"])
 def test_examples(session: nox.Session) -> None:
     """Run and test documentation workflows."""
@@ -122,25 +143,6 @@ def test_examples(session: nox.Session) -> None:
             *f"pytest --nbmake {notebook} -sv -n 1 --benchmark-disable".split(),
             *(extra_args or []),
         )
-
-
-@nox.session(python=["3.10", "3.11"], tags=["cartesian", "next", "cpu"])
-def test_eve(session: nox.Session) -> None:
-    """Run 'gt4py.eve' tests."""
-
-    _install_session_venv(session, groups=["test"])
-
-    num_processes = os.environ.get("NUM_PROCESSES", "auto")
-
-    session.run(
-        *f"pytest --cache-clear -sv -n {num_processes}".split(),
-        str(pathlib.Path("tests") / "eve_tests"),
-        *session.posargs,
-    )
-    session.run(
-        *"pytest --doctest-modules -sv".split(),
-        str(pathlib.Path("src") / "gt4py" / "eve"),
-    )
 
 
 @nox.session(python=["3.10", "3.11"], tags=["next"])
@@ -192,6 +194,26 @@ def test_next(
     session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "next"),
+        success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+    )
+
+
+@nox.session(python=["3.10", "3.11"], tags=["cartesian", "next", "cpu"])
+def test_package(session: nox.Session) -> None:
+    """Run 'gt4py' package level tests."""
+
+    _install_session_venv(session, groups=["test"])
+
+    session.run(
+        *f"pytest --cache-clear -sv".split(),
+        str(pathlib.Path("tests") / "package_tests"),
+        *session.posargs,
+    )
+
+    modules = [str(path) for path in (pathlib.Path("src") / "gt4py").glob("*.py")]
+    session.run(
+        *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
+        *modules,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
 
