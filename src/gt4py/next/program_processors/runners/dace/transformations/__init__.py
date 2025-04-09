@@ -42,6 +42,7 @@ from .simplify import (
     gt_simplify,
     gt_substitute_compiletime_symbols,
 )
+from .split_access_nodes import SplitAccessNode, gt_split_access_nodes
 from .state_fusion import GT4PyStateFusion
 from .strides import (
     gt_change_transient_strides,
@@ -70,6 +71,7 @@ __all__ = [
     "SerialMapPromoterGPU",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
+    "SplitAccessNode",
     "gt_auto_optimize",
     "gt_change_transient_strides",
     "gt_create_local_double_buffering",
@@ -89,5 +91,6 @@ __all__ = [
     "gt_set_gpu_blocksize",
     "gt_set_iteration_order",
     "gt_simplify",
+    "gt_split_access_nodes",
     "gt_substitute_compiletime_symbols",
 ]
