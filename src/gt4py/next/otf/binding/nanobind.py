@@ -102,7 +102,7 @@ def _type_string(type_: ts.TypeSpec) -> str:
 class BindingCodeGenerator(TemplatedGenerator):
     BindingFile = as_jinja(
         """\
-        include "{{callee_header_file}}"
+        #include "{{callee_header_file}}"
 
         {% for header_file in header_files: %}\
         #include <{{header_file}}>
