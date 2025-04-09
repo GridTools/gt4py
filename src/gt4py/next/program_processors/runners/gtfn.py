@@ -9,7 +9,6 @@
 import functools
 import pathlib
 import tempfile
-import warnings
 from typing import Any, Optional
 
 import diskcache
@@ -29,17 +28,14 @@ from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
-    if origin := getattr(
-        arg, "__gt_origin__", None
-    ):  # TODO: double-check all fields have __gt_origin__
+    if (origin := getattr(arg, "__gt_origin__", None)) is not None:
         return arg.ndarray, origin
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
     if isinstance(arg, np.bool_):
         # nanobind does not support implicit conversion of `np.bool` to `bool`
         return bool(arg)
-    else:
-        return arg
+    return arg
 
 
 def convert_args(
@@ -50,9 +46,10 @@ def convert_args(
         offset_provider: dict[str, common.Connectivity | common.Dimension],
         out: Any = None,
     ) -> None:
+        # Note: this function is on the hot path and needs to have minimal overhead.
         if out is not None:
             args = (*args, out)
-        converted_args = [convert_arg(arg) for arg in args]
+        converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
         return inp(
@@ -64,30 +61,30 @@ def convert_args(
     return decorated_program
 
 
-def _ensure_is_on_device(
+def _verify_connectivity_array_type(
     connectivity_arg: core_defs.NDArrayObject, device: core_defs.DeviceType
-) -> core_defs.NDArrayObject:
+) -> bool:
     if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]:
         import cupy as cp
 
-        if not isinstance(connectivity_arg, cp.ndarray):
-            warnings.warn(
-                "Copying connectivity to device. For performance make sure connectivity is provided on device.",
-                stacklevel=2,
-            )
-            return cp.asarray(connectivity_arg)
-    return connectivity_arg
+        return isinstance(connectivity_arg, cp.ndarray)
+    else:
+        return isinstance(connectivity_arg, np.ndarray)
 
 
 def extract_connectivity_args(
     offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
 ) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
-    # note: the order here needs to agree with the order of the generated bindings
+    # Note: this function is on the hot path and needs to have minimal overhead.
     args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = []
+    # Note: the order here needs to agree with the order of the generated bindings
     for conn in offset_provider.values():
         if (ndarray := getattr(conn, "ndarray", None)) is not None:
             assert common.is_neighbor_table(conn)
-            args.append((ndarray, tuple([0] * 2)))
+            assert _verify_connectivity_array_type(ndarray, device)
+            args.append((ndarray, (0, 0)))
+            continue
+        assert isinstance(conn, common.Dimension)
     return args
 
 
