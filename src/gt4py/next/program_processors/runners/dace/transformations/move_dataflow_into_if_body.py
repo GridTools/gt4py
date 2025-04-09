@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 import dace
 from dace import (
+    dtypes as dace_dtypes,
     properties as dace_properties,
     subsets as dace_sbs,
     transformation as dace_transformation,
@@ -174,6 +175,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 connector=connector,
             )
 
+        self._update_symbol_mapping(if_block)
+
         # Now remove the nodes that have been relocated from the SDFG and also
         #  clean up the registry.
         for node_to_remove in [*move_into_b1, *move_into_b2]:
@@ -181,8 +184,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 assert node_to_remove.desc(sdfg).transient
                 sdfg.remove_data(node_to_remove, validate=False)
             graph.remove_node(node_to_remove)
-
-        print("SYMBOL MAPPING IS NOT HANDLED.")
 
     def _replicate_dataflow_into_branche(
         self,
@@ -316,6 +317,30 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # The old connector name is no longer valid.
         inner_sdfg.arrays[connector].transient = True
         if_block.remove_in_connector(connector)
+
+    def _update_symbol_mapping(
+        self,
+        if_block: dace_nodes.NestedSDFG,
+    ) -> None:
+        """Updates the symbol mapping of the nested SDFG.
+
+        The function assumes that the symbols that are missing in the nested SDFG
+        are available in the parent SDFG.
+        """
+        symbol_mapping = if_block.symbol_mapping
+        missing_symbols = [ms for ms in if_block.sdfg.free_symbols if ms not in symbol_mapping]
+        symbol_mapping.update({s: s for s in missing_symbols})
+        if_block.symbol_mapping = symbol_mapping  # Performs conversion.
+
+        # Add new global symbols to nested SDFG.
+        #  The code is based on `SDFGState.add_nested_sdfg()`.
+        for sym, symval in if_block.symbol_mapping.items():
+            if sym not in if_block.sdfg.symbols:
+                if_block.sdfg.add_symbol(
+                    sym,
+                    dace.codegen.tools.type_inference.infer_expr_type(symval, if_block.sdfg.symbols)
+                    or dace_dtypes.typeclass(int),
+                )
 
     def _find_branch_for(
         self,
