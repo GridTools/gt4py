@@ -182,7 +182,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         for node_to_remove in [*move_into_b1, *move_into_b2]:
             if isinstance(node_to_remove, dace_nodes.AccessNode):
                 assert node_to_remove.desc(sdfg).transient
-                sdfg.remove_data(node_to_remove, validate=False)
+                sdfg.remove_data(node_to_remove.data, validate=False)
             graph.remove_node(node_to_remove)
 
     def _replicate_dataflow_into_branche(
