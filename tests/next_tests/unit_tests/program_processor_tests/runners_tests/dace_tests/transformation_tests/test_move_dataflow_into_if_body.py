@@ -104,11 +104,13 @@ def test_if_mover_independent_branches():
     ```python
     a = foo(...)
     b = bar(...)
-    __cond = baz(...)
-    if __cond:
-        res = a
+    c = baz(...)
+    if c:
+        d = a
     else:
-        res = b"""
+        d = b
+    ```
+    """
     sdfg = dace.SDFG(util.unique_name("if_mover_independent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
@@ -181,7 +183,9 @@ def test_if_mover_independent_branches():
     state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
 
     # Now add the connectors to the Map*
-    for iname in ["a", "b", "c"]:
+    for iname in input_names:
+        if iname == "d":
+            continue
         me.add_in_connector(f"IN_{iname}")
         me.add_out_connector(f"OUT_{iname}")
     mx.add_in_connector("IN_d")
@@ -207,8 +211,211 @@ def test_if_mover_independent_branches():
     )
     expected_data.difference_update(["c1", "c", "d"])
     assert expected_data == {ac.data for ac in inner_ac}
+    assert len([ac for ac in inner_ac if ac.data == "__output"]) == 2
+    assert len(expected_data) + 1 == len(inner_ac)
+    assert if_block.sdfg.arrays.keys() == expected_data.union(["__cond"])
 
     inner_tlet: list[dace_nodes.Tasklet] = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
     assert len(inner_tlet) == 4
     expected_tlet = {tlet.label for tlet in [tasklet_a1, tasklet_a2, tasklet_b1, tasklet_b2]}
     assert {tlet.label for tlet in inner_tlet} == expected_tlet
+
+
+def test_if_mover_dependent_branch_1():
+    """
+    Essentially tests the following situation:
+    ```python
+    s = buu(...)
+    a = foo(s, ...)
+    b = bar(s, ...)
+    c = baz(...)
+    if c:
+        d = a
+    else:
+        d = b
+    ```
+    """
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # Inputs
+    input_names = ["a", "b", "c", "d", "s"]
+    for name in input_names:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
+
+    # Temporaries
+    temporary_names = ["a1", "a2", "b1", "b2", "c1", "s1"]
+    for name in temporary_names:
+        sdfg.add_scalar(
+            name, dtype=dace.bool_ if name.startswith("c") else dace.float64, transient=True
+        )
+
+    a1, a2, b1, b2, c1, s1 = (state.add_access(name) for name in temporary_names)
+    me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
+
+    # The auxiliary computation involving `s`:
+    tasklet_s1 = state.add_tasklet(
+        "tasklet_s1", inputs={"__in"}, outputs={"__out"}, code="__out = - __in"
+    )
+
+    state.add_edge(state.add_access("s"), None, me, "IN_s", dace.Memlet("s[0:10]"))
+    state.add_edge(me, "OUT_s", tasklet_s1, "__in", dace.Memlet("s[__i]"))
+    state.add_edge(tasklet_s1, "__out", s1, None, dace.Memlet("s1[0]"))
+
+    # Computation involving `a`:
+    tasklet_a1 = state.add_tasklet(
+        "tasklet_a1",
+        inputs={"__in", "__in_s"},
+        outputs={"__out"},
+        code="__out = math.sin(__in) + __in_s",
+    )
+    tasklet_a2 = state.add_tasklet(
+        "tasklet_a2", inputs={"__in"}, outputs={"__out"}, code="__out = math.exp(__in)"
+    )
+    state.add_edge(state.add_access("a"), None, me, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(me, "OUT_a", tasklet_a1, "__in", dace.Memlet("a[__i]"))
+    state.add_edge(s1, None, tasklet_a1, "__in_s", dace.Memlet("s1[0]"))
+    state.add_edge(tasklet_a1, "__out", a1, None, dace.Memlet("a1[0]"))
+    state.add_edge(a1, None, tasklet_a2, "__in", dace.Memlet("a1[0]"))
+    state.add_edge(tasklet_a2, "__out", a2, None, dace.Memlet("a2[0]"))
+
+    # Computation involving `b`:
+    tasklet_b1 = state.add_tasklet(
+        "tasklet_b1", inputs={"__in"}, outputs={"__out"}, code="__out = math.exp(__in)"
+    )
+    tasklet_b2 = state.add_tasklet(
+        "tasklet_b2",
+        inputs={"__in", "__in_s"},
+        outputs={"__out"},
+        code="__out = math.sin(__in) - __in_s",
+    )
+
+    state.add_edge(state.add_access("b"), None, me, "IN_b", dace.Memlet("b[0:10]"))
+    state.add_edge(me, "OUT_b", tasklet_b1, "__in", dace.Memlet("b[__i]"))
+    state.add_edge(tasklet_b1, "__out", b1, None, dace.Memlet("b1[0]"))
+    state.add_edge(b1, None, tasklet_b2, "__in", dace.Memlet("b1[0]"))
+    state.add_edge(s1, None, tasklet_b2, "__in_s", dace.Memlet("s1[0]"))
+    state.add_edge(tasklet_b2, "__out", b2, None, dace.Memlet("b2[0]"))
+
+    # Now the condition.
+    tasklet_cond = state.add_tasklet(
+        "tasklet_cond",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in <= 0.5",
+    )
+    state.add_edge(state.add_access("c"), None, me, "IN_c", dace.Memlet("c[0:10]"))
+    state.add_edge(me, "OUT_c", tasklet_cond, "__in", dace.Memlet("c[__i]"))
+    state.add_edge(tasklet_cond, "__out", c1, None, dace.Memlet("c1[0]"))
+
+    # Make the if selection.
+    if_block = _make_if_block(state=state, outer_sdfg=sdfg)
+    state.add_edge(a2, None, if_block, "__arg1", dace.Memlet("a2[0]"))
+    state.add_edge(b2, None, if_block, "__arg2", dace.Memlet("b2[0]"))
+    state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
+
+    # Now handle the output.
+    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
+
+    # Now add the connectors to the Map*
+    for iname in input_names:
+        if iname == "d":
+            continue
+        me.add_in_connector(f"IN_{iname}")
+        me.add_out_connector(f"OUT_{iname}")
+    mx.add_in_connector("IN_d")
+    mx.add_out_connector("OUT_d")
+    sdfg.validate()
+
+    _perform_test(sdfg, explected_applies=1)
+
+    # Examine the structure of the SDFG.
+    top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "s1"])
+    assert len(sdfg.arrays) == len(top_ac)
+
+    top_tlet: list[dace_nodes.Tasklet] = util.count_nodes(state, dace_nodes.Tasklet, True)
+    assert len(top_tlet) == 2
+    assert {"tasklet_cond", "tasklet_s1"} == {tlet.label for tlet in top_tlet}
+
+    inner_ac: list[dace_nodes.AccessNode] = util.count_nodes(
+        if_block.sdfg, dace_nodes.AccessNode, True
+    )
+    expected_data: set[str] = (
+        set(temporary_names).union(input_names).union(["__arg1", "__arg2", "__output"])
+    )
+    expected_data.difference_update(["c1", "c", "d", "s"])
+    assert expected_data == {ac.data for ac in inner_ac}
+    assert len([ac for ac in inner_ac if ac.data == "s1"]) == 2
+    assert len([ac for ac in inner_ac if ac.data == "__output"]) == 2
+    assert len(expected_data) + 2 == len(inner_ac)
+    assert if_block.sdfg.arrays.keys() == expected_data.union(["__cond"])
+
+    inner_tlet: list[dace_nodes.Tasklet] = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
+    assert len(inner_tlet) == 4
+    expected_tlet = {tlet.label for tlet in [tasklet_a1, tasklet_a2, tasklet_b1, tasklet_b2]}
+    assert {tlet.label for tlet in inner_tlet} == expected_tlet
+
+
+def test_if_mover_dependent_branch_2():
+    """
+    Essentially tests the following situation:
+    ```python
+    a = foo(s1, s2)
+    b = bar(s1, s2)
+    c = baz(...)
+    if c:
+        d = a
+    else:
+        d = b
+    ```
+    """
+    assert False
+
+
+def test_if_mover_chain():
+    """
+    Essentially tests the following situation:
+    ```python
+    a = foo(...)
+    b = bar(...)
+    c = baz(...)
+    d = a if c else b
+    cc = baz2(d, ...)
+    aa = foo2(...)
+    bb = bar2(...)
+    e = aa if cc else bb
+    ```
+    """
+    assert False
+
+
+def test_if_mover_no_ops():
+    """
+    Essentially tests the following situation:
+    ```python
+    d = a if c else b
+    ```
+    I.e. there is no gain from moving something inside the body.
+    """
+    # TODO(phimuell): Also handle the case where there is only an AccessNode.
+    assert False
+
+
+def test_if_mover_one_branch_is_nothing():
+    """
+    Essentially tests the following situation:
+    ```python
+    a = foo(...)
+    d = a if c else b
+    ```
+    I.e. in one case something can be moved in but there is nothing to move for the
+    other branch.
+    """
+    assert False
