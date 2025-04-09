@@ -195,6 +195,11 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         connector: str,
     ) -> None:
         """ """
+
+        # No work nothing to do.
+        if len(nodes_to_move) == 0:
+            return
+
         inner_sdfg: dace.SDFG = if_block.sdfg
         branch_state, connector_node = self._find_branch_for(
             if_block=if_block,
