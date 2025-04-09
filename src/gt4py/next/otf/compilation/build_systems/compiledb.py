@@ -194,8 +194,8 @@ class CompiledbProject(
                     )
         except subprocess.CalledProcessError as e:
             with logfile.open(mode="r") as log_file_pointer:
-                msg = log_file_pointer.read()
-            raise errors.CompilationError(msg) from e
+                log = log_file_pointer.read()
+            raise errors.CompilationError(log) from e
 
         build_data.update_status(new_status=build_data.BuildStatus.COMPILED, path=self.root_path)
 
