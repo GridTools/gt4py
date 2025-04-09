@@ -121,12 +121,16 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             ),
         )
 
-        return self._check_if_there_is_something_to_relocate(
+        if not self._check_if_there_is_something_to_relocate(
             if_block=if_block,
             state=graph,
             enclosing_map=enclosing_map,
             branch_dependencies=branch_dependencies,
-        )
+        ):
+            return False
+
+        return True
+
 
     def apply(
         self,
@@ -502,7 +506,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 if iedge.src is not limit_node
             ]
 
-        while len(seen) != 0:
+        while len(to_visit) != 0:
             node = to_visit.pop()
             if node in seen:
                 continue
