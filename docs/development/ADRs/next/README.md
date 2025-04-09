@@ -1,8 +1,8 @@
-# Architecture Decision Records Index
+# Architecture Decision Records Index (`gt4py.next`)
 
-This document contains links to all _Architecture Decision Record_ (ADR) documents written in this project. Existing ADRs should convey the rationale for the design decisions in the current codebase and their associated trade-offs.
+This document contains links to all _Architecture Decision Record_ (ADR) documents written in the `gt4py.next` project. The [top-level README](../README.md) explains when and why we write ADRs.
 
-## Writing ADRs
+## How to write ADRs
 
 See [top-level README](../README.md) on when and why we write ADRs.
 
