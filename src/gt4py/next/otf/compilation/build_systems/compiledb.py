@@ -126,17 +126,26 @@ class CompiledbProject(
             self._run_build()
 
     def _write_files(self) -> None:
-        def ignore_not_libraries(folder: str, children: list[str]) -> list[str]:
+        def ignore_function(folder: str, children: list[str]) -> list[str]:
             pattern = r"((lib.*\.a)|(.*\.lib))"
-            libraries = [child for child in children if re.match(pattern, child)]
-            folders = [child for child in children if (pathlib.Path(folder) / child).is_dir()]
-            ignored = list(set(children) - set(libraries) - set(folders))
+            folder_path = pathlib.Path(folder)
+
+            ignored = []
+            for child in children:
+                if re.match(pattern, child):  # static library -> keep
+                    continue
+                if child.endswith(".sh"):  # utility script -> keep
+                    continue
+                if (folder_path / child).is_dir():  # folder -> keep
+                    continue
+                ignored.append(child)
+
             return ignored
 
         shutil.copytree(
             self.compile_commands_cache.parent,
             self.root_path,
-            ignore=ignore_not_libraries,
+            ignore=ignore_function,
             dirs_exist_ok=True,
         )
 
@@ -327,6 +336,17 @@ def _cc_create_compiledb(
             .replace(name, "$NAME")
         )
 
+    build_script_path = path / "build.sh"
+    try:
+        build_script_path.chmod(0o755)
+    except Exception:
+        pass
+    with build_script_path.open("w") as build_script_pointer:
+        build_script_pointer.write("#!/bin/sh\n")
+        for entry in compile_db:
+            build_script_pointer.write(f"{entry['command']}\n")
+
     compile_db_path = path / "compile_commands.json"
     compile_db_path.write_text(json.dumps(compile_db))
+
     return compile_db_path
