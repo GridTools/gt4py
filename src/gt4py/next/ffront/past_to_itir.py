@@ -349,7 +349,9 @@ class ProgramLowering(
         domain_args_kind = []
         for dim_i, dim in enumerate(out_dims):
             # an expression for the range of a dimension
-            dim_range = itir.SymRef(id=_range_arg_from_field(out_field.id, dim_i))
+            dim_range = im.call("get_domain")(
+                out_field.id, itir.AxisLiteral(value=dim.value, kind=dim.kind)
+            )
             dim_start, dim_stop = im.tuple_get(0, dim_range), im.tuple_get(1, dim_range)
             # bounds
             lower: itir.Expr
