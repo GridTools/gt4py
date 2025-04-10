@@ -30,10 +30,14 @@ import dace
 def _make_if_block(
     state: dace.SDFGState,
     outer_sdfg: dace.SDFG,
+    b1_name: str = "__arg1",
+    b2_name: str = "__arg2",
+    cond_name: str = "__cond",
+    output_name: str = "__output",
 ) -> dace_nodes.NestedSDFG:
     inner_sdfg = dace.SDFG(util.unique_name("inner_sdfg"))
 
-    for name in ["__arg1", "__arg2", "__output", "__cond"]:
+    for name in {b1_name, b2_name, cond_name, output_name}:
         inner_sdfg.add_scalar(
             name,
             dtype=dace.bool_ if name == "__cond" else dace.float64,
@@ -46,27 +50,27 @@ def _make_if_block(
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
     tstate = then_body.add_state("true_branch", is_start_block=True)
     tstate.add_nedge(
-        tstate.add_access("__arg1"),
-        tstate.add_access("__output"),
-        dace.Memlet("__arg1[0] -> [0]"),
+        tstate.add_access(b1_name),
+        tstate.add_access(output_name),
+        dace.Memlet(f"{b1_name}[0] -> [0]"),
     )
 
     else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
     fstate = else_body.add_state("false_branch", is_start_block=True)
     fstate.add_nedge(
-        fstate.add_access("__arg2"),
-        fstate.add_access("__output"),
-        dace.Memlet("__arg2[0] -> [0]"),
+        fstate.add_access(b2_name),
+        fstate.add_access(output_name),
+        dace.Memlet(f"{b2_name}[0] -> [0]"),
     )
 
-    if_region.add_branch(dace.sdfg.state.CodeBlock("__cond"), then_body)
-    if_region.add_branch(dace.sdfg.state.CodeBlock("not __cond"), else_body)
+    if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
+    if_region.add_branch(dace.sdfg.state.CodeBlock(f"not {cond_name}"), else_body)
 
     return state.add_nested_sdfg(
         sdfg=inner_sdfg,
         parent=outer_sdfg,
-        inputs={"__arg1", "__arg2", "__cond"},
-        outputs={"__output"},
+        inputs={b1_name, b2_name, cond_name},
+        outputs={output_name},
     )
 
 
