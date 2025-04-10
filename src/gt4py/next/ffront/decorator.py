@@ -52,7 +52,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
-ASYNC_COMPILATION_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
+_async_compilation_pool = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -316,7 +316,7 @@ class Program:
         object.__setattr__(
             self,
             "_compiled_program",
-            ASYNC_COMPILATION_POOL.submit(
+            _async_compilation_pool.submit(
                 self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
             ),
         )
