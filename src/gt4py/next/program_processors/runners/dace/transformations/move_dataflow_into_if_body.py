@@ -69,6 +69,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     ) -> bool:
         scope_dict = graph.scope_dict()
         if_block: dace_nodes.NestedSDFG = self.if_block
+        assert isinstance(if_block, dace_nodes.NestedSDFG)
 
         # We must be inside a top level Map, thus our parent must be a Map that
         #  is located in global scope.
@@ -184,6 +185,11 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 assert node_to_remove.desc(sdfg).transient
                 sdfg.remove_data(node_to_remove.data, validate=False)
             graph.remove_node(node_to_remove)
+
+        # Because we relocate some node its seems that DaCe gets a bit confused.
+        #  So we have to reset the list. Without it the `test_if_mover_chain`
+        #  test would fail.
+        sdfg.reset_cfg_list()
 
     def _replicate_dataflow_into_branche(
         self,
