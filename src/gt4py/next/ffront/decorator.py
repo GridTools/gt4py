@@ -84,7 +84,9 @@ class Program:
         common.OffsetProvider
     ]  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
 
-    _compiled_program: concurrent.futures.Future[stages.CompiledProgram] | None = dataclasses.field(
+    _compiled_program: (
+        concurrent.futures.Future[stages.CompiledProgram] | stages.CompiledProgram | None
+    ) = dataclasses.field(
         init=False, default=None
     )  # this pattern is used because a subclass is adding a new field without default
 
@@ -264,7 +266,14 @@ class Program:
             program_type = self.past_stage.past_node.type
             assert isinstance(program_type, ts_ffront.ProgramType)
             args, kwargs = type_info.canonicalize_arguments(program_type, args, kwargs)
-            self._compiled_program.result()(*args, **kwargs, offset_provider=offset_provider)
+            try:
+                # if this call works, the future was already resolved
+                self._compiled_program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # `Future` not callable, but that's why we are in `try`
+            except TypeError:  # 'Future' object is not callable
+                # otherwise we resolve the future and call again
+                assert isinstance(self._compiled_program, concurrent.futures.Future)
+                object.__setattr__(self, "_compiled_program", self._compiled_program.result())
+                self._compiled_program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # here it is a `CompiledProgram`
         else:
             self.backend(
                 self.definition_stage,

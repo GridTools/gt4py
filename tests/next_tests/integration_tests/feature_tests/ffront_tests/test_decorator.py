@@ -112,6 +112,10 @@ def test_compile(cartesian_case, compile_testee):
     compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
     assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
 
+    # run a second time to check if it still works after the future is resolved
+    compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+    assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
+
 
 def test_compile_twice_errors(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
