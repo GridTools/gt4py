@@ -86,7 +86,7 @@ class Program:
 
     _compiled_program: concurrent.futures.Future[stages.CompiledProgram] | None = dataclasses.field(
         init=False, default=None
-    )
+    )  # this pattern is used because a subclass is adding a new field without default
 
     @classmethod
     def from_function(
@@ -275,6 +275,8 @@ class Program:
     def compile(
         self, offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None
     ) -> Program:
+        if self._compiled_program is not None:
+            raise RuntimeError("Program is already compiled.")
         if self.backend is None or self.backend == eve.NOTHING:
             raise ValueError("Cannot compile a program without backend.")
         if self.connectivities is None and offset_provider_type is None:

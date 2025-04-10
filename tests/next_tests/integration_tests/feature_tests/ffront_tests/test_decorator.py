@@ -113,6 +113,15 @@ def test_compile(cartesian_case, compile_testee):
     assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
 
 
+def test_compile_twice_errors(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+    with pytest.raises(RuntimeError):
+        compile_testee.compile(offset_provider_type=cartesian_case.offset_provider).compile(
+            offset_provider_type=cartesian_case.offset_provider
+        )
+
+
 def test_compile_kwargs(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
