@@ -18,7 +18,7 @@ from typing import Optional, TypeVar
 
 from flufl import lock
 
-from gt4py.next import config
+from gt4py.next import config, errors
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler
@@ -185,6 +185,7 @@ class CompiledbProject(
             with logfile.open(mode="w") as log_file_pointer:
                 for entry in compile_db:
                     log_file_pointer.write(entry["command"] + "\n")
+                    log_file_pointer.flush()
                     subprocess.check_call(
                         entry["command"],
                         cwd=entry["directory"],
@@ -194,8 +195,8 @@ class CompiledbProject(
                     )
         except subprocess.CalledProcessError as e:
             with logfile.open(mode="r") as log_file_pointer:
-                print(log_file_pointer.read())
-            raise e
+                log = log_file_pointer.read()
+            raise errors.CompilationError(log) from e
 
         build_data.update_status(new_status=build_data.BuildStatus.COMPILED, path=self.root_path)
 

@@ -1,0 +1,45 @@
+name: "Test Package Root"
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+
+jobs:
+  # First job to read Python versions from .python-versions file
+  get-python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      python-versions: ${{ steps.get-versions.outputs.python-versions }}
+    steps:
+    - uses: actions/checkout@v4
+    - id: get-versions
+      uses: ./.github/actions/get-python-versions
+
+  test-package:
+    needs: get-python-versions
+    strategy:
+      matrix:
+        os: ["ubuntu-latest"]
+        python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv and set the python version
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+        python-version: ${{ matrix.python-version }}
+
+    - name: Run 'package' tests with nox
+      env:
+        NUM_PROCESSES: auto
+      shell: bash
+      run: uv run nox -s test_package-${{ matrix.python-version }}
