@@ -41,6 +41,13 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         __output = bar(...)
     ```
 
+    Note:
+        - The current implementation is restricted to only handle `if_block`s that
+            are inside a Map.
+        - By default if there is another `if_block` in the dataflow that would be
+            inlinied into the matched `if_block` then the transformation will not
+            apply. This behaviour can be disabled.
+
     Args:
         ignore_upstream_blocks: By default if there is an `if_block` that is upstream
             of the currently matched one the transformation does not apply.
