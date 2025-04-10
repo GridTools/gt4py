@@ -64,7 +64,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     ignore_upstream_blocks = dace_properties.Property(
         dtype=bool,
         default=False,
-        help="If 'True' ignore 'if_block's that are upstream.",
+        desc="If 'True' ignore 'if_block's that are upstream.",
     )
 
     @classmethod
