@@ -10,6 +10,9 @@ import numpy as np
 import pytest
 import copy
 
+from typing import Optional
+import gc
+
 
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
@@ -70,7 +73,20 @@ def _make_if_block(
 def _perform_test(
     sdfg: dace.SDFG,
     explected_applies: int,
+    if_block: Optional[dace_nodes.NestedSDFG] = None,
 ) -> None:
+    if if_block is not None:
+        # The test should be applied in a specific location.
+        assert 0 <= explected_applies <= 1
+        can_be_applied_ref = explected_applies != 0
+        can_be_applied_res = gtx_transformations.MoveDataflowIntoIfBody.can_be_applied_to(
+            sdfg=sdfg,
+            if_block=if_block,
+        )
+        assert can_be_applied_ref == can_be_applied_res
+        return
+
+    # General case, run the SDFG first and then compare the result.
     ref = {
         name: np.array(np.random.rand(*desc.shape), copy=True, dtype=desc.dtype.as_numpy_dtype())
         for name, desc in sdfg.arrays.items()
@@ -81,6 +97,7 @@ def _perform_test(
     if explected_applies != 0:
         csdfg_ref = sdfg.compile()
         csdfg_ref(**ref)
+        del csdfg_ref  # See note below.
 
     nb_apply = sdfg.apply_transformations_repeated(
         gtx_transformations.MoveDataflowIntoIfBody(),
@@ -96,6 +113,10 @@ def _perform_test(
     csdfg_res(**res)
 
     assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
+
+    # NOTE: This ensures that the SDFG gets properly unloaded.
+    del csdfg_res
+    gc.collect()
 
 
 def test_if_mover_independent_branches():
@@ -534,6 +555,92 @@ def test_if_mover_no_ops():
     _perform_test(sdfg, explected_applies=0)
 
 
+def test_if_mover_one_branch_is_nothing():
+    """
+    Essentially tests the following situation:
+    ```python
+    a = foo(...)
+    d = a if c else b
+    ```
+    I.e. in one case something can be moved in but there is nothing to move for the
+    other branch.
+    """
+    sdfg = dace.SDFG(util.unique_name("if_mover_one_branch_is_nothing"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # Inputs
+    input_names = ["a", "b", "c", "d"]
+    for name in input_names:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
+
+    # Temporaries
+    temporary_names = ["a1", "a2", "c1"]
+    for name in temporary_names:
+        sdfg.add_scalar(
+            name, dtype=dace.bool_ if name.startswith("c") else dace.float64, transient=True
+        )
+
+    a1, a2, c1 = (state.add_access(name) for name in temporary_names)
+    me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
+
+    # Computing the first branch.
+    tasklet_a1 = state.add_tasklet(
+        "tasklet_a1", inputs={"__in"}, outputs={"__out"}, code="__out = math.sin(__in)"
+    )
+    tasklet_a2 = state.add_tasklet(
+        "tasklet_a2", inputs={"__in"}, outputs={"__out"}, code="__out = math.exp(__in)"
+    )
+    state.add_edge(state.add_access("a"), None, me, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(me, "OUT_a", tasklet_a1, "__in", dace.Memlet("a[__i]"))
+    state.add_edge(tasklet_a1, "__out", a1, None, dace.Memlet("a1[0]"))
+    state.add_edge(a1, None, tasklet_a2, "__in", dace.Memlet("a1[0]"))
+    state.add_edge(tasklet_a2, "__out", a2, None, dace.Memlet("a2[0]"))
+
+    # Computing the second branch, but there is nothing to do here.
+    state.add_edge(state.add_access("b"), None, me, "IN_b", dace.Memlet("b[0:10]"))
+
+    # Now the condition.
+    tasklet_cond = state.add_tasklet(
+        "tasklet_cond",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in <= 0.5",
+    )
+    state.add_edge(state.add_access("c"), None, me, "IN_c", dace.Memlet("c[0:10]"))
+    state.add_edge(me, "OUT_c", tasklet_cond, "__in", dace.Memlet("c[__i]"))
+    state.add_edge(tasklet_cond, "__out", c1, None, dace.Memlet("c1[0]"))
+
+    # Make the if selection.
+    if_block = _make_if_block(state=state, outer_sdfg=sdfg)
+    state.add_edge(a2, None, if_block, "__arg1", dace.Memlet("a2[0]"))
+    state.add_edge(me, "OUT_b", if_block, "__arg2", dace.Memlet("b[__i]"))
+    state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
+
+    # Now handle the output.
+    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
+
+    # Now add the connectors to the Map*
+    for iname in input_names:
+        if iname == "d":
+            continue
+        me.add_in_connector(f"IN_{iname}")
+        me.add_out_connector(f"OUT_{iname}")
+    mx.add_in_connector("IN_d")
+    mx.add_out_connector("OUT_d")
+    sdfg.validate()
+
+    _perform_test(sdfg, explected_applies=1)
+
+    top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert {ac.data for ac in top_ac} == set(input_names).union(["c1"])
+
+
 def test_if_mover_chain():
     """
     Essentially tests the following situation:
@@ -548,17 +655,114 @@ def test_if_mover_chain():
     e = aa if cc else bb
     ```
     """
-    assert False
+    sdfg = dace.SDFG(util.unique_name("if_mover_chain_of_blocks"))
+    state = sdfg.add_state(is_start_block=True)
 
+    # Inputs
+    input_names = ["c", "cc", "a", "b", "d", "e"]
+    for name in input_names:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
 
-def test_if_mover_one_branch_is_nothing():
-    """
-    Essentially tests the following situation:
-    ```python
-    a = foo(...)
-    d = a if c else b
-    ```
-    I.e. in one case something can be moved in but there is nothing to move for the
-    other branch.
-    """
-    assert False
+    # Temporaries
+    temporary_names = ["a1", "b1", "t1", "t2", "c1", "cc1", "d1"]
+    for name in temporary_names:
+        sdfg.add_scalar(
+            name, dtype=dace.bool_ if name.startswith("c") else dace.float64, transient=True
+        )
+
+    a1, b1, t1, t2, c1, cc1, d1 = (state.add_access(name) for name in temporary_names)
+    me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
+
+    # First branch of top `if_block`
+    tasklet_a1 = state.add_tasklet(
+        "tasklet_a1", inputs={"__in"}, outputs={"__out"}, code="__out = math.sin(__in)"
+    )
+    state.add_edge(state.add_access("a"), None, me, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(me, "OUT_a", tasklet_a1, "__in", dace.Memlet("a[__i]"))
+    state.add_edge(tasklet_a1, "__out", a1, None, dace.Memlet("a1[0]"))
+
+    # Second branch of the top `if_block`
+    tasklet_b1 = state.add_tasklet(
+        "tasklet_b1", inputs={"__in"}, outputs={"__out"}, code="__out = math.cos(__in)"
+    )
+    state.add_edge(state.add_access("b"), None, me, "IN_b", dace.Memlet("b[0:10]"))
+    state.add_edge(me, "OUT_b", tasklet_b1, "__in", dace.Memlet("b[__i]"))
+    state.add_edge(tasklet_b1, "__out", b1, None, dace.Memlet("b1[0]"))
+
+    # The condition of the top `if_block`
+    tasklet_c1 = state.add_tasklet(
+        "tasklet_c1", inputs={"__in"}, outputs={"__out"}, code="__out = __in < 0.5"
+    )
+    state.add_edge(state.add_access("c"), None, me, "IN_c", dace.Memlet("c[0:10]"))
+    state.add_edge(me, "OUT_c", tasklet_c1, "__in", dace.Memlet("c[__i]"))
+    state.add_edge(tasklet_c1, "__out", c1, None, dace.Memlet("c1[0]"))
+
+    # Create the top `if_block`
+    top_if_block = _make_if_block(state, sdfg)
+    state.add_edge(a1, None, top_if_block, "__arg1", dace.Memlet("a1[0]"))
+    state.add_edge(b1, None, top_if_block, "__arg2", dace.Memlet("b1[0]"))
+    state.add_edge(c1, None, top_if_block, "__cond", dace.Memlet("c1[0]"))
+    state.add_edge(top_if_block, "__output", t1, None, dace.Memlet("t1[0]"))
+
+    # The first branch of the lower/second `if_block`, which uses data computed
+    #  by the top `if_block`.
+    tasklet_t2 = state.add_tasklet(
+        "tasklet_t2", inputs={"__in"}, outputs={"__out"}, code="__out = math.exp(__in)"
+    )
+    state.add_edge(t1, None, tasklet_t2, "__in", dace.Memlet("t1[0]"))
+    state.add_edge(tasklet_t2, "__out", t2, None, dace.Memlet("t2[0]"))
+
+    # Second branch of the second `if_block`.
+    tasklet_d1 = state.add_tasklet(
+        "tasklet_d1", inputs={"__in"}, outputs={"__out"}, code="__out = math.atan(__in)"
+    )
+    state.add_edge(state.add_access("d"), None, me, "IN_d", dace.Memlet("d[0:10]"))
+    state.add_edge(me, "OUT_d", tasklet_d1, "__in", dace.Memlet("d[__i]"))
+    state.add_edge(tasklet_d1, "__out", d1, None, dace.Memlet("d1[0]"))
+
+    # Condition branch of the second `if_block`.
+    tasklet_cc1 = state.add_tasklet(
+        "tasklet_cc1", inputs={"__in"}, outputs={"__out"}, code="__out = __in < 0.5"
+    )
+    state.add_edge(state.add_access("cc"), None, me, "IN_cc", dace.Memlet("cc[0:10]"))
+    state.add_edge(me, "OUT_cc", tasklet_cc1, "__in", dace.Memlet("cc[__i]"))
+    state.add_edge(tasklet_cc1, "__out", cc1, None, dace.Memlet("cc1[0]"))
+
+    # Create the second `if_block`
+    bot_if_block = _make_if_block(state, sdfg)
+    state.add_edge(t2, None, bot_if_block, "__arg1", dace.Memlet("t2[0]"))
+    state.add_edge(d1, None, bot_if_block, "__arg2", dace.Memlet("d1[0]"))
+    state.add_edge(cc1, None, bot_if_block, "__cond", dace.Memlet("cc1[0]"))
+
+    # Generate the output
+    state.add_edge(bot_if_block, "__output", mx, "IN_e", dace.Memlet("e[__i]"))
+    state.add_edge(mx, "OUT_e", state.add_access("e"), None, dace.Memlet("e[0:10]"))
+
+    # Now add the connectors to the Map*
+    for iname in input_names:
+        if iname == "e":
+            mx.add_in_connector(f"IN_{iname}")
+            mx.add_out_connector(f"OUT_{iname}")
+        else:
+            me.add_in_connector(f"IN_{iname}")
+            me.add_out_connector(f"OUT_{iname}")
+    sdfg.validate()
+
+    # It is not possible to apply the transformation on the lower `if_block`,
+    #  because it is limited by the top one.
+    _perform_test(
+        sdfg,
+        explected_applies=0,
+        if_block=bot_if_block,
+    )
+
+    # But we are able to inline both.
+    _perform_test(
+        sdfg,
+        explected_applies=2,
+    )
