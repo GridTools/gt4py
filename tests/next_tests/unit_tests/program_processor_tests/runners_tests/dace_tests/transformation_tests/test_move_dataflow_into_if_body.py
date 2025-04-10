@@ -484,7 +484,54 @@ def test_if_mover_no_ops():
     ```
     I.e. there is no gain from moving something inside the body.
     """
-    assert False
+    sdfg = dace.SDFG(util.unique_name("if_mover_no_ops"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # Inputs
+    input_names = ["a", "b", "c", "d"]
+    for name in input_names:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
+    sdfg.add_scalar("c1", dtype=dace.bool_, transient=True)
+    c1 = state.add_access("c1")
+
+    tlet_to_delete, me, mx = state.add_mapped_tasklet(
+        "comp",
+        map_ranges={"__i": "0:10"},
+        inputs={
+            "__arg1": dace.Memlet("a[__i]"),
+            "__arg2": dace.Memlet("b[__i]"),
+            "__cond": dace.Memlet("c[__i]"),
+        },
+        code="",  # Tasklet will be replaced with the `if`.
+        outputs={"__output": dace.Memlet("d[__i]")},
+        external_edges=True,
+    )
+    state.remove_node(tlet_to_delete)
+
+    if_block = _make_if_block(state, sdfg)
+
+    state.add_edge(me, "OUT_a", if_block, "__arg1", dace.Memlet("a[__i]"))
+    state.add_edge(me, "OUT_b", if_block, "__arg2", dace.Memlet("b[__i]"))
+
+    # The condition needs its own tasklet.
+    tasklet_c1 = state.add_tasklet(
+        "tasklet_c1", inputs={"__in"}, outputs={"__out"}, code="__out = __in < 0.0"
+    )
+    state.add_edge(me, "OUT_c", tasklet_c1, "__in", dace.Memlet("c[__i]"))
+    state.add_edge(tasklet_c1, "__out", c1, None, dace.Memlet("c1[0]"))
+    state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
+
+    # The output.
+    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    sdfg.validate()
+
+    # This might change if we will move the read fully inside the branches.
+    _perform_test(sdfg, explected_applies=0)
 
 
 def test_if_mover_chain():
