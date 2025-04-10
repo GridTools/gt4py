@@ -24,6 +24,7 @@ from gt4py.next.type_system import type_specifications as ts
 
 def _value_from_literal(literal: ir.Literal) -> core_defs.Scalar:
     if literal.type.kind == ts.ScalarKind.BOOL:
+        assert literal.value in ["True", "False"]
         return literal.value == "True"
     return getattr(embedded, str(literal.type))(literal.value)
 
