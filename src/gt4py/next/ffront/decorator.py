@@ -84,11 +84,10 @@ class Program:
         common.OffsetProvider
     ]  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
 
+    # TODO(havogt): pattern will be changed in the compile with variants PR, this pattern is used because a subclass is adding a new field without default
     _compiled_program: (
         concurrent.futures.Future[stages.CompiledProgram] | stages.CompiledProgram | None
-    ) = dataclasses.field(
-        init=False, default=None
-    )  # this pattern is used because a subclass is adding a new field without default
+    ) = dataclasses.field(init=False, default=None, hash=False, repr=False)
 
     @classmethod
     def from_function(
