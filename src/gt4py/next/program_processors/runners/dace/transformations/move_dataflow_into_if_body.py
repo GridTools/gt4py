@@ -301,10 +301,10 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     #  created above.
                     continue
                 if iedge.data.is_empty():
-                    # These kind of Memlet was only needed to keep `iedge.dst` inside
-                    #  the scope, this scope has now gone, so the Memlet is no longer
-                    #  needed: We are done!
-                    # TODO(phimuell): There might be some problems in some cases.
+                    # Empty Memlets are there to maintain some order relation, "happens
+                    #  before". Depending on the situation we can remove or have to
+                    #  recreate them. The case where the connection comes from a
+                    #  node within the relocated dataflow is handled above.
                     assert iedge.src is enclosing_map
                     continue
 
@@ -520,7 +520,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # TODO(phimuell): If we operate outside a Map then we would also have to
         #   check if the data is single use or not.
         def filter_nodes(
-            branch_nodes: set[dace_nodes.Node], sdfg: dace.SDFG
+            branch_nodes: set[dace_nodes.Node],
+            sdfg: dace.SDFG,
+            state: dace.SDFGState,
         ) -> set[dace_nodes.Node]:
             # For this to work the `if_block` must be considered part, we remove it later.
             branch_nodes.add(if_block)
@@ -531,7 +533,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     if node is if_block:
                         continue
                     remove_node = False
-                    if isinstance(node, dace_nodes.AccessNode) and (not node.desc(sdfg).transient):
+                    if isinstance(node, dace_nodes.AccessNode) and (
+                        (not node.desc(sdfg).transient) or (state.in_degree(node) == 0)
+                    ):
                         remove_node = True
                     if any(oedge.dst not in branch_nodes for oedge in state.out_edges(node)):
                         remove_node = True
@@ -543,7 +547,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             return branch_nodes
 
         return {
-            conn_name: filter_nodes(rel_df, sdfg)
+            conn_name: filter_nodes(rel_df, sdfg, state)
             for conn_name, rel_df in relocatable_dataflow.items()
         }
 
