@@ -73,7 +73,7 @@ GT4Py uses the [`uv`](https://docs.astral.sh/uv/) project manager for the develo
 - The `uv tool` subcommand serves as a runner for Python applications in isolation, similar to [`pipx`](https://pipx.pypa.io/stable/).
 - The `uv python` subcommands manage different Python installations and versions, much like [`pyenv`](https://github.com/pyenv/pyenv).
 
-`uv` can be installed in various ways (see its [installation instructions](https://docs.astral.sh/uv/getting-started/installation/)), with the recommended method being the standalone installer:
+We require a reasonably recent version of `uv`, which can be installed in various ways (see its [installation instructions](https://docs.astral.sh/uv/getting-started/installation/)), with the recommended method being the standalone installer:
 
 ```bash
 $ curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -111,7 +111,7 @@ Recurrent development tasks like bumping versions of used development tools or r
 GT4Py uses the Sphinx tool for the documentation. To build browseable HTML documentation, install the required tools provided in the `docs` dependency group:
 
 ```bash
-uv install --group docs --extra all  # or --group dev
+uv sync --group docs --extra all  # or --group dev
 ```
 
 (Note that most likely these tools are already installed in your development environment, since the `docs` group is included in the `dev` group, which installed by default by `uv sync` if no dependency groups are specified.)

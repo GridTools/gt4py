@@ -15,6 +15,7 @@ The following workflows are currently active:
 }%%
 flowchart LR
     always[always] --> qua[Code Quality]
+    always --> pkg[Test Package Root]
 
     src_eve[eve sources changed] --> eve["Test Eve"]
     src_eve --> car["Test Cartesian (CPU)"]
@@ -22,13 +23,9 @@ flowchart LR
 
     src_car[cartesian sources changed] --> car["Test Cartesian (CPU)"]
 
-    src_cab[cartesian backend sources changed] --> sto["Test Storage (CPU)"]
-
-    src_sto[storage sources changed] --> sto
-    src_sto --> car
-    src_sto --> nxt
-
     src_nxt[next sources changed] --> nxt
+
+    src_cab[cartesian backend sources changed] --> sto["Test Storage (CPU)"]
 
     cfg_wfl[workflows changed] --> car
     cfg_wfl --> eve
@@ -38,8 +35,14 @@ flowchart LR
     other["other files changed, excluding examples (the examples folder) and docs (.md and .rst files)"] --> car
     other --> nxt
 
-    pkg_cfg[package config files changed] --> eve
-    pkg_cfg --> sto
+    cfg[config files changed] --> car
+    cfg --> eve
+    cfg --> nxt
+    cfg --> sto
+
+    src_sto[storage sources changed] --> sto
+    src_sto --> car
+    src_sto --> nxt
 
     style always fill:White,stroke:black,text:black;
     style src_eve fill:Plum,stroke:MediumOrchid,text:black;
@@ -49,7 +52,7 @@ flowchart LR
     style src_nxt fill:LightBlue,stroke:CornFlowerBlue,text:black;
     style cfg_wfl fill:Coral,stroke:Tomato,text:black;
     style other fill:PaleGreen,stroke:ForestGreen,text:black;
-    style pkg_cfg fill:PaleGreen,stroke:ForestGreen,text:black;
+    style cfg fill:PaleGreen,stroke:ForestGreen,text:black;
 
     style qua fill:White,stroke:black,text:black;
     style eve fill:Plum,stroke:MediumOrchid,text:black;
@@ -58,32 +61,33 @@ flowchart LR
     style nxt fill:LightBlue,stroke:CornFlowerBlue,text:black;
 
     linkStyle 0 stroke:#999,stroke-width:2px;
+    linkStyle 1 stroke:#999,stroke-width:2px;
 
-    linkStyle 1 stroke:MediumOrchid,stroke-width:2px;
     linkStyle 2 stroke:MediumOrchid,stroke-width:2px;
     linkStyle 3 stroke:MediumOrchid,stroke-width:2px;
+    linkStyle 4 stroke:MediumOrchid,stroke-width:2px;
 
-    linkStyle 4 stroke:Brown,stroke-width:2px;
     linkStyle 5 stroke:Brown,stroke-width:2px;
+    linkStyle 6 stroke:Brown,stroke-width:2px;
 
-    linkStyle 6 stroke:DarkCyan,stroke-width:2px;
     linkStyle 7 stroke:DarkCyan,stroke-width:2px;
     linkStyle 8 stroke:DarkCyan,stroke-width:2px;
+    linkStyle 9 stroke:DarkCyan,stroke-width:2px;
 
-    linkStyle 9 stroke:CornFlowerBlue,stroke-width:2px;
+    linkStyle 10 stroke:CornFlowerBlue,stroke-width:2px;
 
-    linkStyle 10 stroke:Tomato,stroke-width:2px;
     linkStyle 11 stroke:Tomato,stroke-width:2px;
     linkStyle 12 stroke:Tomato,stroke-width:2px;
     linkStyle 13 stroke:Tomato,stroke-width:2px;
+    linkStyle 14 stroke:Tomato,stroke-width:2px;
 
-    linkStyle 14 stroke:ForestGreen,stroke-width:2px;
     linkStyle 15 stroke:ForestGreen,stroke-width:2px;
     linkStyle 16 stroke:ForestGreen,stroke-width:2px;
     linkStyle 17 stroke:ForestGreen,stroke-width:2px;
+    linkStyle 18 stroke:ForestGreen,stroke-width:2px;
 ```
 
-The `Test Eve`, `Test Storage (CPU)`, `Test Cartesian (CPU)`, and `Test Next (CPU)` workflows run the automated tests for the respective subpackages. In all cases only tests are run that do not require the presence of a GPU.
+The `Test Cartesian (CPU)`, `Test Eve`, `Test Next (CPU)` and `Test Storage (CPU)` workflows run the automated tests for the respective subpackages. In all cases only tests are run that do not require the presence of a GPU. The `Test Package Root` workflow runs the automated tests for the root package code.
 
 The `Code Quality` workflow runs pre-commit to check code quality requirements through tools like **mypy** or **ruff**.
 
