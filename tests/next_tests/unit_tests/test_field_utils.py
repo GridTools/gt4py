@@ -13,7 +13,12 @@ from gt4py.next import common, constructors, field_utils
 
 
 @pytest.mark.parametrize(
-    "device_type", [core_defs.DeviceType.CPU, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]
+    "device_type",
+    [
+        core_defs.DeviceType.CPU,
+        pytest.param(core_defs.DeviceType.CUDA, marks=pytest.mark.requires_gpu),
+        pytest.param(core_defs.DeviceType.ROCM, marks=pytest.mark.requires_gpu),
+    ],
 )
 def test_verify_device_field_type(nd_array_implementation_and_device_type, device_type):
     nd_array_implementation, compatible_device_type = nd_array_implementation_and_device_type
