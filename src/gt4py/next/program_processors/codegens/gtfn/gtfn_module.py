@@ -85,6 +85,7 @@ class GTFNTranslationStep(
         arg_exprs: list[str] = []
 
         for arg_type, program_param in zip(arg_types, program.params, strict=True):
+            arg_type = arg_type.type if hasattr(arg_type, "type") else arg_type
             # parameter
             parameter = get_param_description(program_param.id, arg_type)
             parameters.append(parameter)
