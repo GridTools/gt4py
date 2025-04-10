@@ -18,7 +18,8 @@ from flufl import lock
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
-from gt4py.next import backend, common, config
+from gt4py.next import backend, common, config, field_utils
+from gt4py.next.embedded import nd_array_field
 from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
@@ -26,15 +27,21 @@ from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 
 
-# TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
+    # Note: this function is on the hot path and needs to have minimal overhead.
     if (origin := getattr(arg, "__gt_origin__", None)) is not None:
+        # `Field` is the most likely case, we use `__gt_origin__` as the property is needed anyway
+        # and (currently) uniquely identifies a `NDArrayField` (which is the only supported `Field`)
+        assert isinstance(arg, nd_array_field.NdArrayField)
         return arg.ndarray, origin
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
     if isinstance(arg, np.bool_):
         # nanobind does not support implicit conversion of `np.bool` to `bool`
         return bool(arg)
+    # TODO(havogt): if this function still appears in profiles,
+    # we should avoid going through the previous isinstance checks for detecting a scalar.
+    # E.g. functools.cache on the arg type, returning a function that does the conversion
     return arg
 
 
@@ -61,17 +68,6 @@ def convert_args(
     return decorated_program
 
 
-def _verify_connectivity_array_type(
-    connectivity_arg: core_defs.NDArrayObject, device: core_defs.DeviceType
-) -> bool:
-    if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]:
-        import cupy as cp
-
-        return isinstance(connectivity_arg, cp.ndarray)
-    else:
-        return isinstance(connectivity_arg, np.ndarray)
-
-
 def extract_connectivity_args(
     offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
 ) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
@@ -81,7 +77,7 @@ def extract_connectivity_args(
     for conn in offset_provider.values():
         if (ndarray := getattr(conn, "ndarray", None)) is not None:
             assert common.is_neighbor_table(conn)
-            assert _verify_connectivity_array_type(ndarray, device)
+            assert field_utils.verify_device_field_type(conn, device)
             args.append((ndarray, (0, 0)))
             continue
         assert isinstance(conn, common.Dimension)

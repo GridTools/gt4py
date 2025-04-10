@@ -15,6 +15,12 @@ from gt4py.next import common, utils
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
+
 @utils.tree_map
 def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
     return field.asnumpy() if isinstance(field, common.Field) else field
@@ -65,3 +71,15 @@ def get_array_ns(
         if hasattr(arg, "array_ns"):
             return arg.array_ns
     return np
+
+
+def verify_device_field_type(field: common.Field, device: core_defs.DeviceType) -> bool:
+    """Check if `field` is suitable for `device`."""
+    if not (array_ns := getattr(field, "array_ns", False)):
+        return False  # not a NDArrayField
+    if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]:
+        assert core_defs.CUPY_DEVICE_TYPE is not None
+        # TODO(havogt): generalize to other array libraries
+        return device == core_defs.CUPY_DEVICE_TYPE and array_ns == cp
+    else:
+        return array_ns == np
