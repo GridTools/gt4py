@@ -367,14 +367,122 @@ def test_if_mover_dependent_branch_2():
     """
     Essentially tests the following situation:
     ```python
-    a = foo(s1, s2)
-    b = bar(s1, s2)
+    a1 = foo(a, b)
+    b1 = bar(a)
     c = baz(...)
     if c:
-        d = a
+        d = a1
     else:
-        d = b
+        d = b1
     ```
+    """
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches_2"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # Inputs
+    input_names = ["a", "b", "c", "d"]
+    for name in input_names:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
+
+    # Temporaries
+    temporary_names = ["a1", "b1", "c1"]
+    for name in temporary_names:
+        sdfg.add_scalar(
+            name, dtype=dace.bool_ if name.startswith("c") else dace.float64, transient=True
+        )
+
+    a1, b1, c1 = (state.add_access(name) for name in temporary_names)
+    a, b, c, d = (state.add_access(name) for name in input_names)
+    me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
+
+    # Computing of `a1`:
+    tasklet_a1 = state.add_tasklet(
+        "tasklet_a1",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = math.sin(__in1) + __in2",
+    )
+    state.add_edge(a, None, me, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(me, "OUT_a", tasklet_a1, "__in1", dace.Memlet("a[__i]"))
+    state.add_edge(b, None, me, "IN_b", dace.Memlet("b[0:10]"))
+    state.add_edge(me, "OUT_b", tasklet_a1, "__in2", dace.Memlet("b[__i]"))
+    state.add_edge(tasklet_a1, "__out", a1, None, dace.Memlet("a1[0]"))
+
+    # Computing of `b1`:
+    tasklet_b1 = state.add_tasklet(
+        "tasklet_b1", inputs={"__in"}, outputs={"__out"}, code="__out = math.exp(__in)"
+    )
+
+    state.add_edge(me, "OUT_b", tasklet_b1, "__in", dace.Memlet("b[__i]"))
+    state.add_edge(tasklet_b1, "__out", b1, None, dace.Memlet("b1[0]"))
+
+    # Now the condition.
+    tasklet_cond = state.add_tasklet(
+        "tasklet_cond",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in <= 0.5",
+    )
+    state.add_edge(c, None, me, "IN_c", dace.Memlet("c[0:10]"))
+    state.add_edge(me, "OUT_c", tasklet_cond, "__in", dace.Memlet("c[__i]"))
+    state.add_edge(tasklet_cond, "__out", c1, None, dace.Memlet("c1[0]"))
+
+    # Make the if selection.
+    if_block = _make_if_block(state=state, outer_sdfg=sdfg)
+    state.add_edge(a1, None, if_block, "__arg1", dace.Memlet("a1[0]"))
+    state.add_edge(b1, None, if_block, "__arg2", dace.Memlet("b1[0]"))
+    state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
+
+    # Now handle the output.
+    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10]"))
+
+    # Now add the connectors to the Map*
+    for iname in input_names:
+        if iname == "d":
+            continue
+        me.add_in_connector(f"IN_{iname}")
+        me.add_out_connector(f"OUT_{iname}")
+    mx.add_in_connector("IN_d")
+    mx.add_out_connector("OUT_d")
+
+    _perform_test(sdfg, explected_applies=1)
+
+    # Examine the structure of the SDFG.
+    top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert {ac.data for ac in top_ac} == set(input_names).union(["c1"])
+    assert len(sdfg.arrays) == len(top_ac)
+
+    assert set(if_block.in_connectors.keys()) == set(input_names).union(["__cond"]).difference(
+        ["d", "c"]
+    )
+    assert set(if_block.out_connectors.keys()) == {"__output"}
+
+    inner_ac: list[dace_nodes.AccessNode] = util.count_nodes(
+        if_block.sdfg, dace_nodes.AccessNode, True
+    )
+    expected_data: set[str] = (
+        set(temporary_names).union(input_names).union(["__arg1", "__arg2", "__output", "__cond"])
+    ).difference(["c1", "d", "c"])
+
+    assert {ac.data for ac in inner_ac} == expected_data.difference(["__cond"])
+    # `__output` & `b` in both branches, but there is no AccessNode for `__cond`.
+    assert len(expected_data) + 2 - 1 == len(inner_ac)
+    assert if_block.sdfg.arrays.keys() == expected_data
+
+
+def test_if_mover_no_ops():
+    """
+    Essentially tests the following situation:
+    ```python
+    d = a if c else b
+    ```
+    I.e. there is no gain from moving something inside the body.
     """
     assert False
 
@@ -393,18 +501,6 @@ def test_if_mover_chain():
     e = aa if cc else bb
     ```
     """
-    assert False
-
-
-def test_if_mover_no_ops():
-    """
-    Essentially tests the following situation:
-    ```python
-    d = a if c else b
-    ```
-    I.e. there is no gain from moving something inside the body.
-    """
-    # TODO(phimuell): Also handle the case where there is only an AccessNode.
     assert False
 
 
