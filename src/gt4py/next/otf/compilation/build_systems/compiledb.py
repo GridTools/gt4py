@@ -176,7 +176,7 @@ class CompiledbProject(
         (self.root_path / "compile_commands.json").write_text(json.dumps(compile_db))
 
         (build_script_path := self.root_path / "build.sh").write_text(
-            "\n".join(["#!/bin/sh", "cd build"] + [entry["command"] for entry in compile_db])
+            "\n".join(["#!/bin/sh", "cd build", *(entry["command"] for entry in compile_db)])
         )
         try:
             build_script_path.chmod(0o755)
