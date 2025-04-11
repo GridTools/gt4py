@@ -170,7 +170,7 @@ class CMakeProject(
             build_script_pointer.write(" ".join(self._config_command()))
         try:
             configure_script_path.chmod(0o755)
-        except Exception:
+        except OSError:
             # if setting permissions fails, it's not a problem
             pass
 

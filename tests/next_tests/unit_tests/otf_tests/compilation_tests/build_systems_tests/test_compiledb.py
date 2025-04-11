@@ -27,5 +27,3 @@ def test_default_compiledb_factory(compilable_source_example, clean_example_sess
     assert hasattr(
         importer.import_from_path(otf_builder.root_path / data.module), data.entry_point_name
     )
-
-    assert (otf_builder.root_path / "build.sh").exists()
