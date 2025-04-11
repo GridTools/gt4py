@@ -17,7 +17,7 @@ from dace import (
     subsets as dace_sbs,
     transformation as dace_transformation,
 )
-from dace.sdfg import nodes as dace_nodes
+from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 
 
 @dace_properties.make_properties
@@ -56,7 +56,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     Note:
         - Extend the implementation that it is also able to handle `if_blocks` that
             are not inside a Map.
-        - After this pass Memlet propagation should be run.
     """
 
     if_block = dace_transformation.PatternNode(dace_nodes.NestedSDFG)
@@ -205,6 +204,15 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         #  So we have to reset the list. Without it the `test_if_mover_chain`
         #  test would fail.
         sdfg.reset_cfg_list()
+
+        # Readjust the Subsets.
+        # TODO(phimuell): Technically only needed if we patched some data from
+        #   beyond the Map inside the SDFG.
+        dace_propagation.propagate_memlets_nested_sdfg(
+                parent_sdfg=sdfg,
+                parent_state=graph,
+                nsdfg_node=if_block,
+        )
 
     def _replicate_dataflow_into_branche(
         self,
