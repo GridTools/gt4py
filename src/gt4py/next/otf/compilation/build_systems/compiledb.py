@@ -204,7 +204,7 @@ class CompiledbProject(
                     log_file_pointer.flush()
                     subprocess.check_call(
                         entry["command"],
-                        cwd=entry["directory"],
+                        cwd=self.root_path / entry["directory"],
                         shell=True,
                         stdout=log_file_pointer,
                         stderr=log_file_pointer,
@@ -321,7 +321,7 @@ def _cc_create_compiledb(
     assert compile_db
 
     for entry in compile_db:
-        entry["directory"] = entry["directory"].replace(str(path), "$SRC_PATH")
+        entry["directory"] = entry["directory"].replace(str(path), ".")
         entry["command"] = (
             entry["command"]
             .replace(f"CMakeFiles/{name}.dir", ".")
@@ -329,6 +329,8 @@ def _cc_create_compiledb(
             .replace(binding_src_name, "$BINDINGS_FILE")
             .replace(name, "$NAME")
             .replace("-I$SRC_PATH/build/_deps", f"-I{path}/build/_deps")
+            # make path relative to the build folder
+            .replace("$SRC_PATH/$BINDINGS_FILE", "../$BINDINGS_FILE")
         )
         entry["file"] = (
             entry["file"]
