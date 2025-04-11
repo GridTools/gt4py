@@ -56,7 +56,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     Note:
         - Extend the implementation that it is also able to handle `if_blocks` that
             are not inside a Map.
-        - Allow to handle multiple branches and also those with different names.
+        - After this pass Memlet propagation should be run.
     """
 
     if_block = dace_transformation.PatternNode(dace_nodes.NestedSDFG)
@@ -94,11 +94,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # NOTE: The main benefit of requiring that the `if_block` must be inside a
         #   Map is that we know that every transient we encounter is single use data.
-        # TODO(phimuell): Is the single nesting requirement really needed?
         enclosing_map = scope_dict[if_block]
         if not isinstance(enclosing_map, dace_nodes.MapEntry):
-            return False
-        if scope_dict[enclosing_map] is not None:
             return False
 
         # Test if the `if_block` is valid. This will also give us the names.
@@ -308,13 +305,15 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     assert iedge.src is enclosing_map
                     continue
 
-                # Now we have to figuring out where the data is coming from. This is
-                #  `iedge.src` except it is the `enclosing_map`.
+                # Now we have to figuring out where the data is coming from, since
+                #  the data was not relocated, we must patch it into `if_block`.
                 if iedge.src is enclosing_map:
+                    # The data is coming from outside the Map scope, i.e. not defined
+                    #  inside the Map scope, so we have to trace it back.
                     memlet_path = state.memlet_path(iedge)
-                    assert memlet_path[0].dst is enclosing_map
                     outer_data = memlet_path[0].src
                 else:
+                    # The data is defined somewhere in the Map scope itself.
                     outer_data = iedge.src
                 assert isinstance(outer_data, dace_nodes.AccessNode)
 
@@ -324,6 +323,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     inner_desc = sdfg.arrays[outer_data.data].clone()
                     inner_desc.transient = False
                     inner_sdfg.add_datadesc(outer_data.data, inner_desc)
+                    # TODO(phimeull): Since we pass in everything the subsets along
+                    #  the way might be wrong. This must be investigated and handled.
+                    #  Probably running Memlet propagation is enough.
                     state.add_edge(
                         iedge.src,
                         iedge.src_conn,
@@ -334,8 +336,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         ),
                     )
                     if_block.add_in_connector(outer_data.data)
-                    # TODO(phimuell): Do we have modify the subset of what is read outside now
-                    #   or is it fine if we wait until Memlet propagation runs the next time?
 
                 if outer_data not in new_nodes:
                     assert all(

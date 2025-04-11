@@ -225,6 +225,7 @@ def gt_auto_optimize(
             validate=validate,
             validate_all=validate_all,
         )
+        # TODO(phimuell): Run Memlet propagation.
 
         # Phase 4: Iteration Space
         #   This essentially ensures that the stride 1 dimensions are handled
