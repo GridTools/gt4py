@@ -99,7 +99,7 @@ class DaCeTranslator(
             unit_strides_kind = (
                 common.DimensionKind.HORIZONTAL
                 if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
-                else common.DimensionKind.VERTICAL
+                else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
             )
             constant_symbols = _find_constant_symbols(ir, sdfg, offset_provider_type)
             gtx_transformations.gt_auto_optimize(
