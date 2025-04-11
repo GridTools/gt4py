@@ -336,16 +336,6 @@ def _cc_create_compiledb(
             .replace(name, "$NAME")
         )
 
-    build_script_path = path / "build.sh"
-    try:
-        build_script_path.chmod(0o755)
-    except Exception:
-        pass
-    with build_script_path.open("w") as build_script_pointer:
-        build_script_pointer.write("#!/bin/sh\n")
-        for entry in compile_db:
-            build_script_pointer.write(f"{entry['command']}\n")
-
     compile_db_path = path / "compile_commands.json"
     compile_db_path.write_text(json.dumps(compile_db))
 

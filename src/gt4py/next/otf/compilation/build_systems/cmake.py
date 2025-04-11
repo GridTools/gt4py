@@ -147,21 +147,38 @@ class CMakeProject(
             self.root_path,
         )
 
+        self._write_configure_script()
+
+    def _config_command(self) -> list[str]:
+        return [
+            "cmake",
+            "-G",
+            self.generator_name,
+            "-S",
+            str(self.root_path),
+            "-B",
+            str(self.root_path / "build"),
+            f"-DCMAKE_BUILD_TYPE={self.build_type.value}",
+            *self.extra_cmake_flags,
+        ]
+
+    def _write_configure_script(self) -> None:
+        # TODO(havogt): additionally we could store all `env` vars
+        configure_script_path = self.root_path / "configure.sh"
+        with configure_script_path.open("w") as build_script_pointer:
+            build_script_pointer.write("#!/bin/sh\n")
+            build_script_pointer.write(" ".join(self._config_command()))
+        try:
+            configure_script_path.chmod(0o755)
+        except Exception:
+            # if setting permissions fails, it's not a problem
+            pass
+
     def _run_config(self) -> None:
         logfile = self.root_path / "log_config.txt"
         with logfile.open(mode="w") as log_file_pointer:
             subprocess.check_call(
-                [
-                    "cmake",
-                    "-G",
-                    self.generator_name,
-                    "-S",
-                    str(self.root_path),
-                    "-B",
-                    str(self.root_path / "build"),
-                    f"-DCMAKE_BUILD_TYPE={self.build_type.value}",
-                    *self.extra_cmake_flags,
-                ],
+                self._config_command(),
                 stdout=log_file_pointer,
                 stderr=log_file_pointer,
             )
