@@ -53,7 +53,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
-ASYNC_COMPILATION_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
+_async_compilation_pool = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -85,10 +85,13 @@ class Program:
         common.OffsetProvider
     ]  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
 
-    _compiled_programs: dict[tuple[Any, ...], concurrent.futures.Future[stages.CompiledProgram]] = (
-        dataclasses.field(init=False, default_factory=dict)
+    # TODO improve pattern
+    _compiled_programs: dict[
+        tuple[Any, ...], concurrent.futures.Future[stages.CompiledProgram] | stages.CompiledProgram
+    ] = dataclasses.field(default_factory=dict, init=False, hash=False, repr=False)
+    _static_arg_indices: tuple[int, ...] | None = dataclasses.field(
+        default=None, init=False, hash=False, repr=False
     )
-    _static_arg_indices: tuple[int, ...] | None = dataclasses.field(init=False, default=None)
 
     @classmethod
     def from_function(
@@ -268,7 +271,15 @@ class Program:
             args, kwargs = type_info.canonicalize_arguments(program_type, args, kwargs)
             assert self._static_arg_indices is not None
             key = tuple(args[i] for i in self._static_arg_indices)
-            self._compiled_programs[key].result()(*args, **kwargs, offset_provider=offset_provider)
+            try:
+                # if this call works, the future was already resolved
+                self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # `Future` not callable, but that's why we are in `try`
+            except TypeError:  # 'Future' object is not callable
+                # otherwise we resolve the future and call again
+                future = self._compiled_programs[key]
+                assert isinstance(future, concurrent.futures.Future)
+                self._compiled_programs[key] = future.result()
+                self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # here it is a `CompiledProgram`
         else:
             self.backend(
                 self.definition_stage,
@@ -281,6 +292,9 @@ class Program:
         offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
         **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
     ) -> Program:
+        if len(self._compiled_programs) > 0:
+            # TODO discuss this behavior
+            raise RuntimeError("Program variants were already compiled.")
         if self.backend is None or self.backend == eve.NOTHING:
             raise ValueError("Cannot compile a program without backend.")
         if self.connectivities is None and offset_provider_type is None:
@@ -327,7 +341,7 @@ class Program:
                 args=args,
                 kwargs={},
             )
-            self._compiled_programs[static_values] = ASYNC_COMPILATION_POOL.submit(
+            self._compiled_programs[static_values] = _async_compilation_pool.submit(
                 self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
             )
         return self

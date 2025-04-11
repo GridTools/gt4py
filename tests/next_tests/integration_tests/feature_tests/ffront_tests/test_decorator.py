@@ -113,6 +113,19 @@ def test_compile(cartesian_case, compile_testee):
     compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
     assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
 
+    # run a second time to check if it still works after the future is resolved
+    compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+    assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
+
+
+def test_compile_twice_errors(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+    with pytest.raises(RuntimeError):
+        compile_testee.compile(offset_provider_type=cartesian_case.offset_provider).compile(
+            offset_provider_type=cartesian_case.offset_provider
+        )
+
 
 def test_compile_kwargs(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
@@ -135,9 +148,9 @@ def test_compile_scan(cartesian_case, compile_testee_scan):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    assert compile_testee_scan._compiled_program is None
+    assert not compile_testee_scan._compiled_programs
     compile_testee_scan.compile(offset_provider_type=cartesian_case.offset_provider)
-    assert compile_testee_scan._compiled_program is not None
+    assert compile_testee_scan._compiled_programs
 
     args, kwargs = cases.get_default_data(cartesian_case, compile_testee_scan)
 
