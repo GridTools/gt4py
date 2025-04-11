@@ -177,6 +177,16 @@ class CompiledbProject(
 
         (self.root_path / "compile_commands.json").write_text(json.dumps(compile_db))
 
+        newline = "\n"
+        (build_script_path := self.root_path / "build.sh").write_text(
+            f"#!/bin/sh{newline.join(entry['command'] for entry in compile_db)}"
+        )
+        try:
+            build_script_path.chmod(0o755)
+        except OSError:
+            # if setting permissions fails, it's not a problem
+            pass
+
         build_data.write_data(
             build_data.BuildData(
                 status=build_data.BuildStatus.CONFIGURED,

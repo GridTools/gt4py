@@ -149,6 +149,7 @@ class CMakeProject(
 
         self._write_configure_script()
 
+    @property
     def _config_command(self) -> list[str]:
         return [
             "cmake",
@@ -167,7 +168,7 @@ class CMakeProject(
         configure_script_path = self.root_path / "configure.sh"
         with configure_script_path.open("w") as build_script_pointer:
             build_script_pointer.write("#!/bin/sh\n")
-            build_script_pointer.write(" ".join(self._config_command()))
+            build_script_pointer.write(" ".join(self._config_command))
         try:
             configure_script_path.chmod(0o755)
         except OSError:
@@ -178,7 +179,7 @@ class CMakeProject(
         logfile = self.root_path / "log_config.txt"
         with logfile.open(mode="w") as log_file_pointer:
             subprocess.check_call(
-                self._config_command(),
+                self._config_command,
                 stdout=log_file_pointer,
                 stderr=log_file_pointer,
             )
