@@ -134,8 +134,6 @@ class CompiledbProject(
             for child in children:
                 if re.match(pattern, child):  # static library -> keep
                     continue
-                if child.endswith(".sh"):  # utility script -> keep
-                    continue
                 if (folder_path / child).is_dir():  # folder -> keep
                     continue
                 ignored.append(child)
@@ -177,9 +175,8 @@ class CompiledbProject(
 
         (self.root_path / "compile_commands.json").write_text(json.dumps(compile_db))
 
-        newline = "\n"
         (build_script_path := self.root_path / "build.sh").write_text(
-            f"#!/bin/sh{newline.join(entry['command'] for entry in compile_db)}"
+            "\n".join(["#!/bin/sh", "cd build"] + [entry["command"] for entry in compile_db])
         )
         try:
             build_script_path.chmod(0o755)
