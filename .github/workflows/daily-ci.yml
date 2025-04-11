@@ -44,16 +44,6 @@ jobs:
       with:
         fetch-depth: 0  # Use a deep clone to get the correct version from tags
 
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'macos-latest' }}
-      shell: bash
-      run: brew install boost
-
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-      shell: bash
-      run: sudo apt install libboost-dev
-
     - name: Install uv and set the python version
       uses: astral-sh/setup-uv@v5
       with:

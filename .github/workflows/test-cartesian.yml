@@ -43,16 +43,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'macos-latest' }}
-      shell: bash
-      run: brew install boost
-
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-      shell: bash
-      run: sudo apt install libboost-dev
-
     - name: Install uv and set the python version
       uses: astral-sh/setup-uv@v5
       with:
