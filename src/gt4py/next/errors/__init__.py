@@ -10,6 +10,7 @@
 
 from . import excepthook  # noqa: F401 [unused-import]
 from .exceptions import (
+    CompilationError,
     DSLError,
     InvalidParameterAnnotationError,
     MissingArgumentError,
@@ -21,6 +22,7 @@ from .exceptions import (
 
 
 __all__ = [
+    "CompilationError",
     "DSLError",
     "InvalidParameterAnnotationError",
     "MissingArgumentError",
