@@ -81,8 +81,11 @@ def _transform_by_pattern(
             #  able to eliminate all tuples, e.g., by propagating the scalar ifs to the top-level
             #  of a SetAt, the CollapseTuple pass will eliminate most of this cases.
             if isinstance(domain, tuple):
-                flattened_domains: tuple[domain_utils.SymbolicDomain] = (
-                    next_utils.flatten_nested_tuple(domain)  # type: ignore[assignment]  # mypy not smart enough
+                flattened_domains: tuple[domain_utils.SymbolicDomain] = tuple(
+                    domain
+                    for domain in next_utils.flatten_nested_tuple(domain)
+                    if domain is not infer_domain.DomainAccessDescriptor.NEVER
+                    # type: ignore[assignment]  # mypy not smart enough
                 )
                 if not all(d == flattened_domains[0] for d in flattened_domains):
                     raise NotImplementedError(
