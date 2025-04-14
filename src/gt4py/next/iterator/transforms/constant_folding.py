@@ -15,12 +15,17 @@ import operator
 from typing import Optional
 
 from gt4py import eve
+from gt4py._core import definitions as core_defs
 from gt4py.next.iterator import builtins, embedded, ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import fixed_point_transformation
+from gt4py.next.type_system import type_specifications as ts
 
 
-def _value_from_literal(literal: ir.Literal):
+def _value_from_literal(literal: ir.Literal) -> core_defs.Scalar:
+    if literal.type.kind == ts.ScalarKind.BOOL:
+        assert literal.value in ["True", "False"]
+        return literal.value == "True"
     return getattr(embedded, str(literal.type))(literal.value)
 
 
@@ -37,12 +42,12 @@ class UndoCanonicalizeMinus(eve.NodeTranslator):
             a, b = node.args
             if cpm.is_call_to(b, "neg"):
                 return im.minus(a, b.args[0])
-            if isinstance(b, ir.Literal) and _value_from_literal(b) < 0:
-                return im.minus(a, -_value_from_literal(b))
+            if isinstance(b, ir.Literal) and (val := _value_from_literal(b)) < 0:
+                return im.minus(a, -val)  # type: ignore[operator] # if val would represent an unsigend int, `-` is not supported, but error would be somewhere else
             if cpm.is_call_to(a, "neg"):
                 return im.minus(b, a.args[0])
-            if isinstance(a, ir.Literal) and _value_from_literal(a) < 0:
-                return im.minus(b, -_value_from_literal(a))
+            if isinstance(a, ir.Literal) and (val := _value_from_literal(a)) < 0:
+                return im.minus(b, -val)  # type: ignore[operator] # if val would represent an unsigend int, `-` is not supported, but error would be somewhere else
         return node
 
 
@@ -227,5 +232,6 @@ class ConstantFolding(
             if node.args[0].value == "True":
                 return node.args[1]
             else:
+                assert node.args[0].value == "False"
                 return node.args[2]
         return None
