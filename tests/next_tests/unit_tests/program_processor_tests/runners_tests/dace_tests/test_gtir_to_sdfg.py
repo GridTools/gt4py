@@ -37,7 +37,20 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 dace_backend = pytest.importorskip("gt4py.next.program_processors.runners.dace")
+dace = pytest.importorskip("dace")
 
+
+@pytest.fixture
+def allow_view_arguments():
+    path = ["compiler", "allow_view_arguments"]
+    value = True
+    old_value = dace.Config.get(*path)
+    dace.Config.set(*path, value=value)
+    yield
+    dace.Config.set(*path, value=old_value)
+
+
+pytestmark = pytest.mark.usefixtures("allow_view_arguments")
 
 N = 10
 FLOAT_TYPE = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
