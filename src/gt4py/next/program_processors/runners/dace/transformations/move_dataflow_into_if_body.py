@@ -281,7 +281,12 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 continue
             assert node.data not in inner_sdfg.arrays
             assert sdfg.arrays[node.data].transient
-            inner_sdfg.add_datadesc(node.data, sdfg.arrays[node.data].clone())
+            # TODO(phimuell): Handle the case we need to rename something.
+            inner_sdfg.add_datadesc(
+                node.data,
+                sdfg.arrays[node.data].clone(),
+                find_new_name=False,
+            )
 
         # Replicate the nodes. Also make a mapping that allows to map the old ones
         #  to the new ones.
@@ -351,7 +356,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 if outer_data.data not in inner_sdfg.arrays:
                     inner_desc = sdfg.arrays[outer_data.data].clone()
                     inner_desc.transient = False
-                    inner_sdfg.add_datadesc(outer_data.data, inner_desc)
+                    # TODO(phimuell): Handle the case we need to rename something.
+                    inner_sdfg.add_datadesc(outer_data.data, inner_desc, False)
                     # TODO(phimeull): We pass the whole data inside the SDFG.
                     #   Find out if there are cases were this is wrong.
                     state.add_edge(
