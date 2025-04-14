@@ -26,7 +26,7 @@ def get_device_arch() -> str | None:
         try:
             return core_defs.cp.cuda.Device(0).compute_capability  # type: ignore[attr-defined]
         except core_defs.cp.cuda.runtime.CUDARuntimeError as e:
-            if 'no CUDA-capable device is detected' not in str(e):
+            if "no CUDA-capable device is detected" not in str(e):
                 raise e
     elif core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
         # TODO(egparedes): Implement this properly, either parsing the output of `$ rocminfo`
