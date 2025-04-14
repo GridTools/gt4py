@@ -42,30 +42,34 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     else:
         __output = bar(...)
     ```
-    I.e. computation that is need in only one branch is relocated or inlined into
-    that specific branch, which might educe computation.
+    I.e. computation that is needed in only one branch is relocated or inlined into
+    that specific branch, which might reduce computation.
 
-    Despite its name the transformation is not only able to handle `if` expression,
+    Despite its name the transformation is not only able to handle `if` expressions,
     but more general `switch` like expressions. The requirements are:
     - The expression must be inside a nested SDFG containing only a `ConditionalBlock`.
     - The matched nested SDFG must be inside a Map (might be dropped).
     - For every incoming connector there must be exactly one AccessNode in the
         entire nested SDFG (might be dropped).
-    - Every branch must write to every output.
+    - Every branch must write to every output of the nested SDFG.
     - The only dataflow allowed inside the branches is `(i) -> (o)` i.e. AccessNode
         to AccessNode connections.
+
+    Furthermore, the transformation should be applied as long as possible, i.e.
+    it should be applied by passing it to `SDFG.apply_transformations_repeated()`.
 
     Args:
         ignore_upstream_blocks: If `True` do not require that upstream `if_block`s
             have to be processed first.
 
     Note:
-        - By default the transformation will only apply if the upstream dataflow,
-            that will be inlined, does not contain an `if_block` to which this
-            transformation could also apply. By setting `ignore_upstream_blocks`
-            to `True` this behaviour can be disabled.
-            This rule is due to the current limitation that the transformation can
-            only handle cases where the `if_block` is located inside a Map.
+        - If there is a chain of suitable `if` expression, i.e. an `if` expression is
+            in the upstream dataflow of the one that is currently matched, then the
+            transformation will not apply. This is done to ensure that everything is
+            properly inlined into the branches. This behaviour can be disabled by
+            setting `ignore_upstream_blocks` to `True`.
+            The reason for this behaviour is that the current implementation can only
+            handle the case where the `if` expression is _directly_ inside a Map.
 
     Todo:
         - Allow that an inconnector can be used multiple times, as long as it is in
@@ -156,7 +160,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     self._has_if_block_relocatable_dataflow(
                         sdfg=sdfg,
                         state=graph,
-                        if_block=upstream_if_block,
+                        upstream_if_block=upstream_if_block,
                         enclosing_map=enclosing_map,
                     )
                     for upstream_if_block in reloc_dataflow
@@ -359,7 +363,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     # TODO(phimuell): Handle the case we need to rename something.
                     inner_sdfg.add_datadesc(outer_data.data, inner_desc, False)
                     # TODO(phimeull): We pass the whole data inside the SDFG.
-                    #   Find out if there are cases were this is wrong.
+                    #   Find out if there are cases where this is wrong.
                     state.add_edge(
                         iedge.src,
                         iedge.src_conn,
@@ -453,32 +457,31 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        if_block: dace_nodes.NestedSDFG,
+        upstream_if_block: dace_nodes.NestedSDFG,
         enclosing_map: dace_nodes.MapEntry,
     ) -> bool:
-        """Check if `if_block` has relocatable dataflow.
+        """Check if `upstream_if_block` has relocatable dataflow.
 
-        The function is used to enforce the rule that no `if_block` should be
-        processed before all suitable `if` expression in its upstream dataflow
-        are processed first.
+        The function is used to enforce the rule that no `if` expression should be
+        processed before all suitable `if` expressions in its upstream dataflow of
+        the matched `if_block` has been processed first.
 
         Args:
             sdfg: The SDFG on which we operate.
             state: The state on which we operate on.
-            if_block: The `if_block` into which we want to inline, not the one
-                that was matched, but an `if_block` in the relocatable dataflow
-                of the one that was matched.
+            upstream_if_block: The `if` expression that was found in the relocatable
+                dataflow of the matched `if_block`.
             enclosing_map: The limiting node, i.e. the MapEntry of the Map `if_block`
                 is located in.
         """
-        if_block_spec = self._partition_if_block(if_block)
+        if_block_spec = self._partition_if_block(upstream_if_block)
         if if_block_spec is None:
             return False
 
         raw_relocatable_dataflow, non_relocatable_dataflow = (
             {
                 conn_name: gtx_transformations.utils.find_upstream_nodes(
-                    start=if_block,
+                    start=upstream_if_block,
                     state=state,
                     start_connector=conn_name,
                     limit_node=enclosing_map,
@@ -490,7 +493,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         filtered_relocatable_dataflow = self._filter_relocatable_dataflow(
             sdfg=sdfg,
             state=state,
-            if_block=if_block,
+            if_block=upstream_if_block,
             raw_relocatable_dataflow=raw_relocatable_dataflow,
             non_relocatable_dataflow=non_relocatable_dataflow,
         )
@@ -553,7 +556,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         #  then we can not relocate it.
         # TODO(phimuell): If we operate outside of a Map we also have to make sure that
         #   the data is single use data, is not an AccessNode that refers to global
-        #   memory or is an source AccessNode.
+        #   memory nor is a source AccessNode.
         def filter_nodes(
             branch_nodes: set[dace_nodes.Node],
             sdfg: dace.SDFG,
