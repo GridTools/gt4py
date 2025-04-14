@@ -85,11 +85,16 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             if not hasattr(self.backend.executor, "step")
             else self.backend.executor.step,
         )  # We know which backend we are using, but we don't know if the compile workflow is cached.
+        compile_workflow_translation = (
+            compile_workflow.translation
+            if not hasattr(compile_workflow.translation, "step")
+            else compile_workflow.translation.step
+        )  # Same for the translation stage, which could be a `CachedStep` depending on backend configuration.
         # TODO(ricoh): switch 'disable_itir_transforms=True' because we ran them separately previously
         # and so we can ensure the SDFG does not know any runtime info it shouldn't know. Remove with
         # the other parts of the workaround when possible.
         sdfg = dace.SDFG.from_json(
-            compile_workflow.translation.replace(
+            compile_workflow_translation.replace(
                 disable_itir_transforms=True, disable_field_origin_on_program_arguments=True
             )(gtir_stage).source_code
         )

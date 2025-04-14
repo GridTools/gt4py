@@ -11,6 +11,7 @@ import inspect
 import sys
 import types
 from itertools import count, product
+from typing import Final
 
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
@@ -58,7 +59,14 @@ class SuiteMeta(type):
     to test a stencil definition and implementations using Hypothesis and pytest.
     """
 
-    required_members = {"domain_range", "symbols", "definition", "validation", "backends", "dtypes"}
+    required_members: Final[set[str]] = {
+        "domain_range",
+        "symbols",
+        "definition",
+        "validation",
+        "backends",
+        "dtypes",
+    }
 
     def collect_symbols(cls_name, cls_dict):
         domain_range = cls_dict["domain_range"]

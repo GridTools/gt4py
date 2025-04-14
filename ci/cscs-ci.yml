@@ -115,7 +115,7 @@ build_py310_image_aarch64:
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 15
+    SLURM_TIMELIMIT: 20
     NUM_PROCESSES: auto
     PYENV_VERSION: $PYVERSION
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
@@ -131,7 +131,7 @@ build_py310_image_aarch64:
 #       VARIANT: [-nomesh, -atlas]
 #       SUBVARIANT: [-cuda11x, -cpu]
 .test_helper_aarch64:
-  extends: [.container-runner-daint-gh200, .test_helper]
+  extends: [.container-runner-santis-gh200, .test_helper]
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian]
@@ -145,8 +145,6 @@ build_py310_image_aarch64:
     - SUBPACKAGE: [storage]
       VARIANT: ['cuda12', 'cpu']
   variables:
-    # Grace-Hopper gpu architecture is not enabled by default in CUDA build
-    CUDAARCHS: "90"
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     # Another problem, observed in test stage, is that gpu tests hang in combination with CUDA MPS,
     # when high test parallelism is used.

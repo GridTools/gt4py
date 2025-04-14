@@ -16,7 +16,7 @@ from dace import (
     symbolic as dace_symbolic,
     transformation as dace_transformation,
 )
-from dace.sdfg import nodes as dace_nodes
+from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -37,6 +37,9 @@ def gt_create_local_double_buffering(
     access node to cache this read. This is essentially a double buffer, but
     it is not needed that the whole data is stored, but only the working set
     of a single thread.
+
+    Todo:
+        Simplify this function.
     """
     processed_maps = 0
     for nsdfg in sdfg.all_sdfgs_recursive():
@@ -125,63 +128,47 @@ def _add_local_double_buffering_to_single_data(
     inner_read_edges = _get_inner_edges(input_edges[0], map_entry, state, False)
     inner_write_edges = _get_inner_edges(output_edges[0], map_exit, state, True)
 
-    # For now we assume that all read the same, which is checked below.
-    new_double_inner_buff_shape_raw = dace_symbolic.overapproximate(
-        inner_read_edges[0].data.get_src_subset(inner_read_edges[0], state).size()
-    )
-
-    # Over approximation will leave us with some unneeded size one dimensions.
-    #  If they are removed some dace transformations (especially auto optimization)
-    #  will have problems.
-    squeezed_dims: list[int] = []  # These are the dimensions we removed.
-    new_double_inner_buff_shape: list[int] = []  # This is the final shape of the new intermediate.
-    for dim, (proposed_dim_size, full_dim_size) in enumerate(
-        zip(new_double_inner_buff_shape_raw, input_node.desc(sdfg).shape)
-    ):
-        if full_dim_size == 1:  # Must be kept!
-            new_double_inner_buff_shape.append(proposed_dim_size)
-        elif proposed_dim_size == 1:  # This dimension was reduced, so we can remove it.
-            squeezed_dims.append(dim)
-        else:
-            new_double_inner_buff_shape.append(proposed_dim_size)
-
+    # Create the data container, we know that it is a scalar from the filtering
+    assert _is_inner_read_a_scalar(inner_read_edges[0], state, sdfg)
     new_double_inner_buff_name: str = f"__inner_double_buffer_for_{input_node.data}"
-    # Now generate the intermediate data container.
-    if len(new_double_inner_buff_shape) == 0:
-        new_double_inner_buff_name, new_double_inner_buff_desc = sdfg.add_scalar(
-            new_double_inner_buff_name,
-            dtype=input_node.desc(sdfg).dtype,
-            transient=True,
-            storage=dace_dtypes.StorageType.Register,
-            find_new_name=True,
-        )
-    else:
-        new_double_inner_buff_name, new_double_inner_buff_desc = sdfg.add_transient(
-            new_double_inner_buff_name,
-            shape=new_double_inner_buff_shape,
-            dtype=input_node.desc(sdfg).dtype,
-            find_new_name=True,
-            storage=dace_dtypes.StorageType.Register,
-        )
+    new_double_inner_buff_name, _ = sdfg.add_scalar(
+        new_double_inner_buff_name,
+        dtype=input_node.desc(sdfg).dtype,
+        transient=True,
+        storage=dace_dtypes.StorageType.Register,
+        find_new_name=True,
+    )
     new_double_inner_buff_node = state.add_access(new_double_inner_buff_name)
 
     # Now reroute the data flow through the new access node.
+    reconfigured_dataflow: set[tuple[dace_nodes.Node, str]] = set()
     for old_inner_read_edge in inner_read_edges:
-        # To do handle the case the memlet is "fancy"
-        state.add_edge(
+        # TODO(phimuell): Handle the case the memlet is "fancy"
+        new_edge = state.add_edge(
             new_double_inner_buff_node,
             None,
             old_inner_read_edge.dst,
             old_inner_read_edge.dst_conn,
             dace.Memlet(
                 data=new_double_inner_buff_name,
-                subset=dace.subsets.Range.from_array(new_double_inner_buff_desc),
+                subset="0",
                 other_subset=copy.deepcopy(
                     old_inner_read_edge.data.get_dst_subset(old_inner_read_edge, state)
                 ),
             ),
         )
         state.remove_edge(old_inner_read_edge)
+        if (new_edge.dst, new_edge.dst_conn) not in reconfigured_dataflow:
+            gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
+                is_producer_edge=False,
+                new_edge=new_edge,
+                ss_offset=None,
+                state=state,
+                sdfg=sdfg,
+                old_node=input_node,
+                new_node=new_double_inner_buff_node,
+            )
+            reconfigured_dataflow.add((new_edge.dst, new_edge.dst_conn))
 
     # Now create a connection between the map entry and the intermediate node.
     state.add_edge(
@@ -194,7 +181,7 @@ def _add_local_double_buffering_to_single_data(
             subset=copy.deepcopy(
                 inner_read_edges[0].data.get_src_subset(inner_read_edges[0], state)
             ),
-            other_subset=dace.subsets.Range.from_array(new_double_inner_buff_desc),
+            other_subset="0",
         ),
     )
 
@@ -210,6 +197,33 @@ def _add_local_double_buffering_to_single_data(
             inner_write_edge.src,
             dace.Memlet(),
         )
+
+
+def _is_inner_read_a_scalar(
+    inner_reading_edge: dace_graph.MultiConnectorEdge,
+    state: dace.SDFGState,
+    sdfg: dace.SDFG,
+) -> bool:
+    """Tests if the read by `inner_reading_edge` is a scalar.
+
+    A condition for being pointwise is that only one scalar is read, so this function
+    checks this.
+
+    Args:
+        inner_reading_edge: The edge at the inside of the Map that reads from data
+            that is connected to the MapEntry from the outside.
+        state: The state in which we operate.
+        sdfg: The SDFG we operate on.
+    """
+    new_double_inner_buff_shape_raw = dace_symbolic.overapproximate(
+        inner_reading_edge.data.get_src_subset(inner_reading_edge, state).size()
+    )
+
+    # We can decay it into a scalar if all shapes have size 1.
+    for proposed_dim_size in new_double_inner_buff_shape_raw:
+        if (proposed_dim_size == 1) == False:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
+            return False
+    return True
 
 
 def _check_if_map_must_be_handled_classify_adjacent_access_node(
@@ -356,6 +370,19 @@ def _check_if_map_must_be_handled(
             len(inner_read_edges) == 1
             and isinstance(inner_read_edges[0].dst, dace_nodes.AccessNode)
             and not gtx_transformations.utils.is_view(inner_read_edges[0].dst, sdfg)
+        ):
+            inout_datas.pop(inout_data_name)
+            continue
+
+        # For being pointwise the read must only be a scalar, so by definition
+        #  if this does not hold, we can ignore it.
+        # NOTE: This is not always true, in case of nested Maps, for example the
+        #   ones that are generated by `LoopBlocking`, but this transformation
+        #   should run before that anyway and it is invalid to run auto optimizer
+        #   multiple time on the SDFG.
+        if not all(
+            _is_inner_read_a_scalar(inner_read_edge, state, sdfg)
+            for inner_read_edge in inner_read_edges
         ):
             inout_datas.pop(inout_data_name)
             continue

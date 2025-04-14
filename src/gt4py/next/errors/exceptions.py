@@ -110,3 +110,8 @@ class InvalidParameterAnnotationError(TypeError_):
         )
         self.param_name = param_name
         self.annotated_type = type_
+
+
+class CompilationError(GT4PyError):
+    def __init__(self, compilation_error: str) -> None:
+        super().__init__(f"See attached compilation log.\n{compilation_error}")
