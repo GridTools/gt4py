@@ -49,8 +49,8 @@ V2E_FTYPE = ts.FieldType(dims=[Vertex, V2EDim], dtype=EFTYPE.dtype)
 CARTESIAN_OFFSETS = {
     IDim.value: IDim,
 }
-SIMPLE_MESH: MeshDescriptor = simple_mesh()
-SKIP_VALUE_MESH: MeshDescriptor = skip_value_mesh()
+SIMPLE_MESH: MeshDescriptor = simple_mesh(None)
+SKIP_VALUE_MESH: MeshDescriptor = skip_value_mesh(None)
 SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 FSYMBOLS = dict(
     __w_0_range_1=N,
