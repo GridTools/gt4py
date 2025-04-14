@@ -50,7 +50,9 @@ def build_gridtools_test(tmp_path: Path, code: str):
         "--build-lib=" + str(tmp_src.parent),
         "--force",
     ]
-    pyext_builder.setuptools_setup(name="test", ext_modules=[ext_module], script_args=args)
+    pyext_builder.setuptools_setup(
+        name="test", ext_modules=[ext_module], script_args=args, build_ext_class=None
+    )
 
 
 def make_compilation_input_and_expected():
