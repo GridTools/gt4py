@@ -31,7 +31,7 @@ def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
             return ts.FieldType(dims=[], dtype=type_el)
         return type_el
 
-    return type_info.apply_to_primitive_constituents(promote_el, type_)
+    return type_info.type_tree_map(promote_el, type_)
 
 
 def promote_zero_dims(
@@ -308,6 +308,7 @@ def return_type_scanop(
         #  field
         [callable_type.axis],
     )
-    return type_info.apply_to_primitive_constituents(
+
+    return type_info.type_tree_map(
         lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)), carry_dtype
     )

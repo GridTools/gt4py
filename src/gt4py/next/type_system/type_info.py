@@ -25,7 +25,7 @@ from typing import (
 import numpy as np
 
 from gt4py.eve.utils import XIterable, xiter
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
 
@@ -196,6 +196,11 @@ def apply_to_primitive_constituents(
         return fun(*symbol_types, path=_path)
     else:
         return fun(*symbol_types)
+
+
+type_tree_map = utils.tree_map(
+    collection_type=ts.TupleType, result_collection_constructor=lambda x: ts.TupleType(types=[*x])
+)
 
 
 def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType:
