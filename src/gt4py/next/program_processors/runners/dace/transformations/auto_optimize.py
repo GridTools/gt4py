@@ -214,7 +214,7 @@ def gt_auto_optimize(
                 break
             gtx_transformations.gt_simplify(sdfg)
 
-        # Move as much data as possible inside the branches of the `if`.
+        # Move as much dataflow as possible inside the branches of the `if`.
         # TODO(phimuell): This transformation belongs to phase 3, but I am not sure
         #   where exactly. It might be that parallel map fusion is limiting what
         #   can be moved inside by creating dependencies.

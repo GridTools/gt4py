@@ -19,6 +19,8 @@ from dace import (
 )
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+
 
 @dace_properties.make_properties
 class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
@@ -40,22 +42,37 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     else:
         __output = bar(...)
     ```
+    I.e. computation that is need in only one branch is relocated or inlined into
+    that specific branch, which might educe computation.
 
-    Note:
-        - The current implementation is restricted to only handle `if_block`s that
-            are inside a Map.
-        - By default if there is another `if_block` in the dataflow that would be
-            inlinied into the matched `if_block` then the transformation will not
-            apply. This behaviour can be disabled.
+    Despite its name the transformation is not only able to handle `if` expression,
+    but more general `switch` like expressions. The requirements are:
+    - The expression must be inside a nested SDFG containing only a `ConditionalBlock`.
+    - The matched nested SDFG must be inside a Map (might be dropped).
+    - For every incoming connector there must be exactly one AccessNode in the
+        entire nested SDFG (might be dropped).
+    - Every branch must write to every output.
+    - The only dataflow allowed inside the branches is `(i) -> (o)` i.e. AccessNode
+        to AccessNode connections.
 
     Args:
-        ignore_upstream_blocks: By default if there is an `if_block` that is upstream
-            of the currently matched one the transformation does not apply.
-            If this is `True` then ignore this case and apply.
+        ignore_upstream_blocks: If `True` do not require that upstream `if_block`s
+            have to be processed first.
 
     Note:
+        - By default the transformation will only apply if the upstream dataflow,
+            that will be inlined, does not contain an `if_block` to which this
+            transformation could also apply. By setting `ignore_upstream_blocks`
+            to `True` this behaviour can be disabled.
+            This rule is due to the current limitation that the transformation can
+            only handle cases where the `if_block` is located inside a Map.
+
+    Todo:
+        - Allow that an inconnector can be used multiple times, as long as it is in
+            different branches.
         - Extend the implementation that it is also able to handle `if_blocks` that
-            are not inside a Map.
+            are not inside a Map. This would allow to drop the need to process
+            upstream `if` expressions first.
     """
 
     if_block = dace_transformation.PatternNode(dace_nodes.NestedSDFG)
@@ -98,14 +115,14 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             return False
 
         # Test if the `if_block` is valid. This will also give us the names.
-        if_block_spec = self._is_valid_if_block(if_block)
+        if_block_spec = self._partition_if_block(if_block)
         if if_block_spec is None:
             return False
 
         # Compute the dataflow that is relocated.
         raw_relocatable_dataflow, non_relocatable_dataflow = (
             {
-                conn_name: self._find_upstream_nodes(
+                conn_name: gtx_transformations.utils.find_upstream_nodes(
                     start=if_block,
                     state=graph,
                     start_connector=conn_name,
@@ -127,13 +144,16 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if all(len(rel_df) == 0 for rel_df in relocatable_dataflow.values()):
             return False
 
-        # Because we restrict ourself to only inline `if_blocks` only if they are
-        #  inside a Map, we must them inline from top to bottom, so we must make
-        #  there is no `if_block` upstream.
+        # Because the transformation can only handle `if` expressions that
+        #  are _directly_ inside a Map, we must check if the upstream contains
+        #  suitable `if` expressions that must be processed first. The simplest way
+        #  is to return `False` and not apply. However, this implies that the
+        #  transformation is applied in a loop until it applies nowhere anymore.
+        # NOTE: This is a restriction due to the current implementation.
         if not self.ignore_upstream_blocks:
             for reloc_dataflow in relocatable_dataflow.values():
                 if any(
-                    self._check_if_block_upstream(
+                    self._has_if_block_relocatable_dataflow(
                         sdfg=sdfg,
                         state=graph,
                         if_block=upstream_if_block,
@@ -152,14 +172,14 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
     ) -> None:
         if_block: dace_nodes.NestedSDFG = self.if_block
-        if_block_spec = self._is_valid_if_block(if_block)
+        if_block_spec = self._partition_if_block(if_block)
         assert if_block_spec is not None
         enclosing_map = graph.scope_dict()[if_block]
 
         # Find the dataflow that should be relocated.
         raw_relocatable_dataflow, non_relocatable_dataflow = (
             {
-                conn_name: self._find_upstream_nodes(
+                conn_name: gtx_transformations.utils.find_upstream_nodes(
                     start=if_block,
                     state=graph,
                     start_connector=conn_name,
@@ -179,7 +199,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # Finally relocate the dataflow
         for conn_name, nodes_to_move in relocatable_dataflow.items():
-            self._replicate_dataflow_into_branche(
+            self._replicate_dataflow_into_branch(
                 state=graph,
                 sdfg=sdfg,
                 if_block=if_block,
@@ -200,7 +220,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     sdfg.remove_data(node_to_remove.data, validate=False)
                 graph.remove_node(node_to_remove)
 
-        # Because we relocate some node its seems that DaCe gets a bit confused.
+        # Because we relocate some node it seems that DaCe gets a bit confused.
         #  So we have to reset the list. Without it the `test_if_mover_chain`
         #  test would fail.
         sdfg.reset_cfg_list()
@@ -209,12 +229,12 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # TODO(phimuell): Technically only needed if we patched some data from
         #   beyond the Map inside the SDFG.
         dace_propagation.propagate_memlets_nested_sdfg(
-                parent_sdfg=sdfg,
-                parent_state=graph,
-                nsdfg_node=if_block,
+            parent_sdfg=sdfg,
+            parent_state=graph,
+            nsdfg_node=if_block,
         )
 
-    def _replicate_dataflow_into_branche(
+    def _replicate_dataflow_into_branch(
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
@@ -324,6 +344,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     # The data is defined somewhere in the Map scope itself.
                     outer_data = iedge.src
                 assert isinstance(outer_data, dace_nodes.AccessNode)
+                assert not gtx_transformations.utils.is_view(outer_data, sdfg)
 
                 # If the data is not yet available in the inner SDFG made
                 #  patch it through.
@@ -331,9 +352,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     inner_desc = sdfg.arrays[outer_data.data].clone()
                     inner_desc.transient = False
                     inner_sdfg.add_datadesc(outer_data.data, inner_desc)
-                    # TODO(phimeull): Since we pass in everything the subsets along
-                    #  the way might be wrong. This must be investigated and handled.
-                    #  Probably running Memlet propagation is enough.
+                    # TODO(phimeull): We pass the whole data inside the SDFG.
+                    #   Find out if there are cases were this is wrong.
                     state.add_edge(
                         iedge.src,
                         iedge.src_conn,
@@ -347,9 +367,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
                 if outer_data not in new_nodes:
                     assert all(
-                        outer_data.data != mapped_nodes.data
-                        for mapped_nodes in new_nodes.values()
-                        if isinstance(mapped_nodes, dace_nodes.AccessNode)
+                        outer_data.data != mapped_node.data
+                        for mapped_node in new_nodes.values()
+                        if isinstance(mapped_node, dace_nodes.AccessNode)
                     )
                     assert outer_data.data in inner_sdfg.arrays
                     assert not inner_sdfg.arrays[outer_data.data].transient
@@ -405,7 +425,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         conditional_block: dace.sdfg.state.ConditionalBlock = next(iter(inner_sdfg.nodes()))
 
         # This will locate the state where the first AccessNode that refers to
-        #  `connector` is found. Since `_is_valid_if_block()` makes sure that
+        #  `connector` is found. Since `_partition_if_block()` makes sure that
         #  there is only one match this is okay. But it must be changed, if we
         #  lift this restriction.
         for inner_state in conditional_block.all_states():
@@ -416,41 +436,42 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 continue
             break
         else:
-            raise ValueError(f"Did not found a branch associated to '{connector}'.")
+            raise ValueError(f"Did not find a branch associated to '{connector}'.")
 
         assert isinstance(inner_state, dace.SDFGState)
         assert inner_state.in_degree(connector_nodes[0]) == 0
         assert inner_state.out_degree(connector_nodes[0]) > 0
         return inner_state, connector_nodes[0]
 
-    def _check_if_block_upstream(
+    def _has_if_block_relocatable_dataflow(
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         if_block: dace_nodes.NestedSDFG,
         enclosing_map: dace_nodes.MapEntry,
     ) -> bool:
-        """Check if `if_block` would be processed.
+        """Check if `if_block` has relocatable dataflow.
 
-        Essentially, the function checks if there is dataflow that can be inlined
-        into `if_block`. This is used to check if an `if_block` that was found
-        upstream of another `if_block` that must be inlined first.
-        The function skips some checks.
+        The function is used to enforce the rule that no `if_block` should be
+        processed before all suitable `if` expression in its upstream dataflow
+        are processed first.
 
         Args:
             sdfg: The SDFG on which we operate.
             state: The state on which we operate on.
-            if_block: The `if_block` into which we want to inline.
+            if_block: The `if_block` into which we want to inline, not the one
+                that was matched, but an `if_block` in the relocatable dataflow
+                of the one that was matched.
             enclosing_map: The limiting node, i.e. the MapEntry of the Map `if_block`
                 is located in.
         """
-        if_block_spec = self._is_valid_if_block(if_block)
+        if_block_spec = self._partition_if_block(if_block)
         if if_block_spec is None:
             return False
 
         raw_relocatable_dataflow, non_relocatable_dataflow = (
             {
-                conn_name: self._find_upstream_nodes(
+                conn_name: gtx_transformations.utils.find_upstream_nodes(
                     start=if_block,
                     state=state,
                     start_connector=conn_name,
@@ -490,7 +511,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         Note that the sets that are returned by this function are distinct.
 
         Args:
-            state: The sate on which we operate.
+            state: The state on which we operate.
             if_block: The `if_block` that is processed.
             raw_relocatable_dataflow: The connectors and their associated dataflow
                 that can be relocated, not yet filtered.
@@ -510,23 +531,23 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # Now we determine the nodes that are in more than one sets.
         #  These sets must be removed, from the individual sets.
         known_nodes: set[dace_nodes.Node] = set()
-        multiple_nodes: set[dace_nodes.Node] = set()
+        multiple_df_nodes: set[dace_nodes.Node] = set()
         for rel_df in relocatable_dataflow.values():
             seen_before: set[dace_nodes.Node] = known_nodes.intersection(rel_df)
             if len(seen_before) != 0:
-                multiple_nodes.update(seen_before)
+                multiple_df_nodes.update(seen_before)
             known_nodes.update(rel_df)
         relocatable_dataflow = {
-            conn_name: rel_df.difference(multiple_nodes)
+            conn_name: rel_df.difference(multiple_df_nodes)
             for conn_name, rel_df in relocatable_dataflow.items()
         }
 
         # However, not all dataflow can be moved inside the branch. For example if
         #  something is used outside the dataflow, that is moved inside the `if`,
-        #  then we can not relocate it. As a simplicity we also remove AccessNodes
-        #  referring to global memory.
-        # TODO(phimuell): If we operate outside a Map then we would also have to
-        #   check if the data is single use or not.
+        #  then we can not relocate it.
+        # TODO(phimuell): If we operate outside of a Map we also have to make sure that
+        #   the data is single use data, is not an AccessNode that refers to global
+        #   memory or is an source AccessNode.
         def filter_nodes(
             branch_nodes: set[dace_nodes.Node],
             sdfg: dace.SDFG,
@@ -540,14 +561,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 for node in list(branch_nodes):
                     if node is if_block:
                         continue
-                    remove_node = False
-                    if isinstance(node, dace_nodes.AccessNode) and (
-                        (not node.desc(sdfg).transient) or (state.in_degree(node) == 0)
-                    ):
-                        remove_node = True
                     if any(oedge.dst not in branch_nodes for oedge in state.out_edges(node)):
-                        remove_node = True
-                    if remove_node:
                         branch_nodes.remove(node)
                         has_been_updated = True
             assert if_block in branch_nodes
@@ -559,28 +573,32 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             for conn_name, rel_df in relocatable_dataflow.items()
         }
 
-    def _is_valid_if_block(
+    def _partition_if_block(
         self,
         if_block: dace_nodes.NestedSDFG,
     ) -> Optional[tuple[set[str], set[str]]]:
-        """Checks if `if_block` is a valid block that the transformation operates on.
+        """Check if `if_block` can be processed and partition the input connectors.
 
-        If `if_block` is not applicable, then the function returns `None` if it is
-        applicable the function returns a pair with two sets.
-        The first lists contains the connectors whose upstream dataflow can be moved
-        inside the if branches. The second list contains the connectors whose
-        upstream dataflow can not be relocated inside an if body.
+        The function will check if `if_block` has the right structure, i.e. if it is
+        roughly equivalent to the Python expression `a if cond else b`.
+        It will also identify which input connectors refer to dataflow that can
+        be inlined into the `if_block` and which can not.
+
+        Returns:
+            If `if_block` is unsuitable the function will return `None`.
+            If `if_block` meets the structural requirements the function will return
+            two sets of strings. The first set contains the connectors that can be
+            relocated and the second one of the conditions that can not be relocated.
         """
-        out_name = "__output"
-
         # There shall only be one output and three inputs with given names.
-        if if_block.out_connectors.keys() != {out_name}:
+        if len(if_block.out_connectors.keys()) == 0:
             return None
+
+        # These are all the output names.
+        output_names: set[str] = set(if_block.out_connectors.keys())
 
         # We require that the nested SDFG contains a single node, which is a
         #  `ConditionalBlock` containing two branches.
-        #  TODO(phimuell): Check if the connetors are really access nodes and
-        #   if the condition is really used.
         inner_sdfg: dace.SDFG = if_block.sdfg
         if inner_sdfg.number_of_nodes() != 1:
             return None
@@ -588,29 +606,33 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if not isinstance(inner_if_block, dace.sdfg.state.ConditionalBlock):
             return None
 
-        # See note in `_find_branch_for()`
+        # Defining it outside will ensure that there is only one AccessNode for every
+        #  inconnector, which is something `_find_branch_for()` relies on.
         reference_count: dict[str, int] = {conn_name: 0 for conn_name in if_block.in_connectors}
-        for _, branche in inner_if_block.branches:
-            for inner_state in branche.all_states():
+
+        for _, branch in inner_if_block.branches:
+            output_count: dict[str, int] = {conn_name: 0 for conn_name in output_names}
+            for inner_state in branch.all_states():
                 assert isinstance(inner_state, dace.SDFGState)
-                found_output_node = False
                 for node in inner_state.nodes():
                     if not isinstance(node, dace_nodes.AccessNode):
                         return None
                     if node.data in reference_count:
                         reference_count[node.data] += 1
                         exp_in_deg, exp_out_deg = 0, 1
-                    elif node.data == out_name:
+                    elif node.data in output_count:
+                        output_count[node.data] += 1
                         exp_in_deg, exp_out_deg = 1, 0
-                        found_output_node = True
                     else:
                         return None
                     if inner_state.in_degree(node) != exp_in_deg:
                         return None
                     if inner_state.out_degree(node) != exp_out_deg:
                         return None
-                if not found_output_node:
-                    return None
+            # Each branch must write to all outputs.
+            # TODO(phimuell): Think if this should be lifted.
+            if any(count != 1 for count in output_count.values()):
+                return None
 
         # The connectors that can be pulled inside must appear exactly once.
         #  In theory they could appear more, but then we would have to replicate
@@ -631,42 +653,3 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if len(relocatable_connectors) == 0:
             return None
         return relocatable_connectors, non_relocatable_connectors
-
-    def _find_upstream_nodes(
-        self,
-        start: dace_nodes.Node,
-        state: dace.SDFGState,
-        start_connector: Optional[str] = None,
-        limit_node: Optional[dace_nodes.Node] = None,
-    ) -> set[dace_nodes.Node]:
-        """Finds all upstream nodes, i.e. all producers, of `start`.
-
-        It is important to note that this function does not perform any filtering,
-        it just finds the nodes. The filtering is done in `_filter_relocatable_dataflow()`.
-
-        Args:
-            start: Start the exploring from this node.
-            state: The state in which it should be explored.
-            start_connector: If given then only consider edges that terminate
-                in this connector.
-            limit_node: Consider this node as "limiting wall", i.e. do not explore
-                beyond it.
-        """
-        seen: set[dace_nodes.Node] = set()
-
-        to_visit = [
-            iedge.src
-            for iedge in state.in_edges_by_connector(start, start_connector)
-            if iedge.src is not limit_node
-        ]
-
-        while len(to_visit) != 0:
-            node = to_visit.pop()
-            if node in seen:
-                continue
-            seen.add(node)
-            to_visit.extend(
-                iedge.src for iedge in state.in_edges(node) if iedge.src is not limit_node
-            )
-
-        return seen
