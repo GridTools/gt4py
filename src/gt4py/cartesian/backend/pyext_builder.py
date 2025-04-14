@@ -11,7 +11,7 @@ import copy
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union, cast, overload
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union, overload
 
 import pybind11
 import setuptools
@@ -185,7 +185,8 @@ def setuptools_setup(*, build_ext_class: type[build_ext] | None, **kwargs) -> No
     old_setup_stop_after = setuptools.distutils.core._setup_stop_after
     setuptools.distutils.core._setup_stop_after = "commandline"
     dist = setuptools.setup(**kwargs)
-    dist.cmdclass.update({"build_ext": build_ext_class})
+    if build_ext_class is not None:
+        dist.cmdclass.update({"build_ext": build_ext_class})
     setuptools.distutils.core._setup_stop_after = old_setup_stop_after
     setuptools.distutils.core.run_commands(dist)
 
@@ -268,8 +269,7 @@ def build_pybind_ext(
     )
 
     if verbose:
-        script_args = cast(List[str], setuptools_args["script_args"])
-        script_args.append("-v")
+        setuptools_args["script_args"].append("-v")
         setuptools_setup(**setuptools_args, build_ext_class=build_ext_class)
     else:
         setuptools_args["script_args"].append("-q")
