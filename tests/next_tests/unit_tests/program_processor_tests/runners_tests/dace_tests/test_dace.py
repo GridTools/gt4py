@@ -34,6 +34,8 @@ dace = pytest.importorskip("dace")
 from gt4py.next.program_processors.runners import dace as dace_backends
 
 
+# Override the exec_alloc_descriptor with a custom Backend,
+# see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture(
     params=[
         pytest.param(dace_backends.run_dace_cpu_cached, marks=pytest.mark.requires_dace),
@@ -43,7 +45,7 @@ from gt4py.next.program_processors.runners import dace as dace_backends
         ),
     ]
 )
-def cached_dace_backend(request):
+def exec_alloc_descriptor(request):
     """
     Test fixture to select the dace backends only. In order to trigger `fast_call`,
     we have to use the cached backend so that the same `CompiledSDFG` object is
@@ -53,27 +55,27 @@ def cached_dace_backend(request):
 
 
 @pytest.fixture
-def cartesian_case(request, cached_dace_backend):
+def cartesian_case(request, exec_alloc_descriptor):
     yield cases.Case(
-        backend=cached_dace_backend,
+        backend=exec_alloc_descriptor,
         offset_provider={"Ioff": IDim},
         default_sizes={IDim: 10},
         grid_type=gtx_common.GridType.CARTESIAN,
-        allocator=cached_dace_backend.allocator,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
 
 @pytest.fixture
-def unstructured_case(request, cached_dace_backend, mesh_descriptor):
+def unstructured_case(request, exec_alloc_descriptor, mesh_descriptor):
     yield cases.Case(
-        backend=cached_dace_backend,
+        backend=exec_alloc_descriptor,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
             Edge: mesh_descriptor.num_edges,
         },
         grid_type=gtx_common.GridType.UNSTRUCTURED,
-        allocator=cached_dace_backend.allocator,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
 
