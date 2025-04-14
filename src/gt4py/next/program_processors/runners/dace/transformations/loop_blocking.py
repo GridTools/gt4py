@@ -444,6 +444,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
             new_independent_nodes.update(map_scope.nodes())
 
+        elif isinstance(node_to_classify, dace.libraries.standard.nodes.Reduce):
+            # The only checks we impose on them is the free symbols check and the
+            #  input output checks.
+            pass
+
         else:
             # Any other node type we can not handle, so the partition can not exist.
             # TODO(phimuell): Try to handle certain kind of library nodes.

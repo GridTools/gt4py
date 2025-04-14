@@ -678,8 +678,6 @@ def _make_loop_blocking_sdfg_with_independent_inner_map() -> (
     """
     Creates a nested Map that is independent from the blocking parameter.
     """
-    import dace
-
     sdfg = dace.SDFG(util.unique_name("sdfg_with_inner_independent_map"))
     state = sdfg.add_state(is_start_block=True)
 
@@ -746,6 +744,100 @@ def test_loop_blocking_sdfg_with_independent_inner_map():
     scope_dict = state.scope_dict()
     assert scope_dict[outer_me] is None
     assert scope_dict[inner_me] is outer_me
+
+
+def _make_loop_blocking_with_reduction(
+    reduction_is_dependent: bool,
+) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.LibraryNode]:
+    """
+    The SDFG contains an reduction node.
+
+    Depending on `reduction_is_dependent` the node is either dependent or not.
+    """
+    sdfg = dace.SDFG(
+        util.unique_name(
+            "sdfg_with_" + ("" if reduction_is_dependent else "in") + "dependent_reduction"
+        )
+    )
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array(
+        "A",
+        shape=((40, 10, 4) if reduction_is_dependent else (40, 4)),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array("B", shape=(40, 10), dtype=dace.float64, transient=False)
+    sdfg.add_scalar("t", dtype=dace.float64, transient=True)
+
+    me, mx = state.add_map("outer_map", ndrange={"__i0": "0:40", "__i1": "0:10"})
+    ac_A, ac_B, ac_t = (state.add_access(name) for name in ["A", "B", "t"])
+    red = state.add_reduce(wcr="lambda a, b: a + b", axes=[len(sdfg.arrays["A"].shape)])
+    tlet = state.add_tasklet("comp", inputs={"__in"}, code="__out = __in + 10.0", outputs={"__out"})
+
+    state.add_edge(
+        ac_A,
+        None,
+        me,
+        "IN_A",
+        dace.Memlet("A[0:40, 0:10, 0:4]" if reduction_is_dependent else "A[0:40, 0:4]"),
+    )
+    me.add_in_connector("IN_A")
+    state.add_edge(
+        me,
+        "OUT_A",
+        red,
+        None,
+        dace.Memlet("A[__i0, __i1, 0:4]" if reduction_is_dependent else "A[__i0, 0:4]"),
+    )
+    me.add_out_connector("OUT_A")
+
+    state.add_edge(red, None, ac_t, None, dace.Memlet("t[0]"))
+    state.add_edge(ac_t, None, tlet, "__in", dace.Memlet("t[0]"))
+    state.add_edge(tlet, "__out", mx, "IN_B", dace.Memlet("B[__i0, __i1]"))
+    mx.add_in_connector("IN_B")
+    state.add_edge(mx, "OUT_B", ac_B, None, dace.Memlet("B[0:40, 0:10]"))
+    mx.add_out_connector("OUT_B")
+    sdfg.validate()
+
+    return sdfg, state, me, red
+
+
+def test_loop_blocking_dependent_reduction():
+    sdfg, state, me, red = _make_loop_blocking_with_reduction(reduction_is_dependent=True)
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameter="__i1"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    # The reduction node is dependent, so it can not be inside the scope defined
+    #  by the outer map.
+    scope_dict = state.scope_dict()
+    assert scope_dict[red] is not me
+    assert scope_dict[red] is not None
+    assert isinstance(scope_dict[red], dace_nodes.MapEntry)
+
+
+def test_loop_blocking_independent_reduction():
+    sdfg, state, me, red = _make_loop_blocking_with_reduction(reduction_is_dependent=False)
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameter="__i1"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    # Because the reduction does not depend on the blocking parameter, the reduction
+    #  node should be inside the outer Map.
+    scope_dict = state.scope_dict()
+    assert scope_dict[red] is me
+    assert state.out_degree(red) == 1
+    assert all(
+        isinstance(oedge.dst, dace_nodes.AccessNode) and oedge.dst.data == "t"
+        for oedge in state.out_edges(red)
+    )
 
 
 def _make_mixed_memlet_sdfg(
