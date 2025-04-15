@@ -44,8 +44,7 @@ def test_compiledb_project_is_relocatable(compilable_source_example, clean_examp
 
     builder.build()
 
-    if True:
-        # with tempfile.TemporaryDirectory(dir=config.BUILD_CACHE_DIR) as tmpdir:
+    with tempfile.TemporaryDirectory(dir=config.BUILD_CACHE_DIR) as tmpdir:
 
         # copy the project to a new location
         tmpdir = tempfile.mkdtemp(dir=config.BUILD_CACHE_DIR)
