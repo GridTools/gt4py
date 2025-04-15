@@ -196,7 +196,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         # This is the name of the iterator that we use in the outer map for the
         #  blocked dimension
-        coarse_block_var = "__coarse_" + self.blocking_parameter
+        # NOTE: The way how we create the mangled name is important such that it
+        #   could be matched through the `unit_strides_kind` argument, which is
+        #   the case with this approach. But it makes the `unit_strides_dim`
+        #   argument `gt_set_iteration_order()` inapplicable.
+        coarse_block_var = "__gtx_coarse_" + self.blocking_parameter
 
         # Generate the sequential inner map
         rng_start = outer_range[blocking_parameter_dim][0]

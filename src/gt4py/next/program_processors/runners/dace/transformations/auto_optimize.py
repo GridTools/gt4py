@@ -151,9 +151,6 @@ def gt_auto_optimize(
         gtx_transformations.gt_create_local_double_buffering(sdfg)
 
         # Optimize the interior of the Maps:
-        #  TODO(phimuell): BUG!! `LoopBlock` must actually be called after setting
-        #   map order, because it invalidates the name. So it will not work!!!
-        assert False  # noqa: B011  # Temporary reminder for me until LoopBlocking is fixed.
         sdfg = _gt_auto_process_dataflow_inside_maps(
             sdfg=sdfg,
             blocking_dim=blocking_dim,
