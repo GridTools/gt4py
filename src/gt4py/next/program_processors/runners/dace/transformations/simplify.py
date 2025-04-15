@@ -288,6 +288,7 @@ def gt_substitute_compiletime_symbols(
     simplify_afterwards: bool = False,
     validate: bool = False,
     validate_all: bool = False,
+    **kwargs: Any,
 ) -> None:
     """Substitutes symbols that are known at compile time with their value.
 
@@ -311,11 +312,14 @@ def gt_substitute_compiletime_symbols(
     #   fails. Furthermore, there is [DaCe issue 1817](https://github.com/spcl/dace/issues/1817),
     #   causing problems if there are two states in a nested SDFG. To avoid them
     #   we initially call simplify and hope for the best.
-    gtx_transformations.gt_simplify(
-        sdfg=sdfg,
-        validate=validate,
-        validate_all=validate_all,
-    )
+    # For testing purposes we need to be able to disable this initial simplify.
+    #  This is an implementation detail that we should get rid of.
+    if not kwargs.get("no_initial_simplification", False):
+        gtx_transformations.gt_simplify(
+            sdfg=sdfg,
+            validate=validate,
+            validate_all=validate_all,
+        )
 
     # We will use the `replace` function of the top SDFG, however, lower levels
     #  are handled using ConstantPropagation.
