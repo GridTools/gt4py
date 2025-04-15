@@ -12,6 +12,7 @@ import dataclasses
 import os
 import pathlib
 import subprocess
+import warnings
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
@@ -25,9 +26,11 @@ def get_device_arch() -> str | None:
         # use `cp` from core_defs to avoid trying to re-import cupy
         try:
             return core_defs.cp.cuda.Device(0).compute_capability  # type: ignore[attr-defined]
-        except core_defs.cp.cuda.runtime.CUDARuntimeError as e:
-            if "no CUDA-capable device is detected" not in str(e):
-                raise e
+        except core_defs.cp.cuda.runtime.CUDARuntimeError as e:  # type: ignore[attr-defined]
+            warnings.warn(
+                UserWarning(f"Could not determine the CUDA compute capability: {e}"), stacklevel=2
+            )
+            return None
     elif core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
         # TODO(egparedes): Implement this properly, either parsing the output of `$ rocminfo`
         # or using the HIP low level bindings.
@@ -43,11 +46,13 @@ def get_cmake_device_arch_option() -> str:
     match core_defs.CUPY_DEVICE_TYPE:
         case core_defs.DeviceType.CUDA:
             device_archs = os.environ.get("CUDAARCHS", "").strip() or get_device_arch()
-            cmake_flag = f"-DCMAKE_CUDA_ARCHITECTURES={device_archs}"
+            cmake_flag_template = "-DCMAKE_CUDA_ARCHITECTURES={device_archs}"
         case core_defs.DeviceType.ROCM:
             # `HIPARCHS` is not officially supported by CMake yet, but it might be in the future
             device_archs = os.environ.get("HIPARCHS", "").strip() or get_device_arch()
-            cmake_flag = f"-DCMAKE_HIP_ARCHITECTURES={device_archs}"
+            cmake_flag_template = "-DCMAKE_HIP_ARCHITECTURES={device_archs}"
+
+    cmake_flag = cmake_flag_template.format(device_archs=device_archs) if device_archs else ""
 
     return cmake_flag
 
