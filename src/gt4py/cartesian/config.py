@@ -17,11 +17,6 @@ from gt4py._core import definitions as core_defs
 
 GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
 
-# Default paths (taken from user's environment vars when possible)
-BOOST_ROOT: str = os.environ.get(
-    "BOOST_ROOT", os.environ.get("BOOST_HOME", os.path.abspath("/usr/local"))
-)
-
 CUDA_ROOT: str = os.environ.get(
     "CUDA_HOME", os.environ.get("CUDA_PATH", os.path.abspath("/usr/local/cuda"))
 )
@@ -44,7 +39,6 @@ GT4PY_EXTRA_LINK_ARGS: str = os.environ.get("GT4PY_EXTRA_LINK_ARGS", "")
 extra_link_args: List[str] = list(GT4PY_EXTRA_LINK_ARGS.split(" ")) if GT4PY_EXTRA_LINK_ARGS else []
 
 build_settings: Dict[str, Any] = {
-    "boost_include_path": os.path.join(BOOST_ROOT, "include"),
     "cuda_bin_path": os.path.join(CUDA_ROOT, "bin"),
     "cuda_include_path": os.path.join(CUDA_ROOT, "include"),
     "cuda_arch": os.environ.get("CUDA_ARCH", None),
