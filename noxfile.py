@@ -97,54 +97,6 @@ def session_metadata(**kwargs: Any) -> Callable[[T], T]:
 
 
 # -- Sessions --
-@nox.session(python=["3.10", "3.11"], tags=["ci"])
-def ci_against_commit(session: nox.Session) -> None:
-    import optparse
-
-    opt_parser = optparse.OptionParser(
-        usage="\n".join(
-            [
-                "nox -e ci_against_commit -- [OPTIONS] [SESSION_NAMES]",
-                "",
-                "Example: nox -e ci_against_commit -- -c main test_cartesian",
-            ]
-        ),
-        option_list=[
-            optparse.make_option("-c", "--commit", action="store", default="main", dest="commit"),
-            optparse.make_option(
-                "-v", "--verbose", action="store_true", default=False, dest="verbose"
-            ),
-        ],
-    )
-    options, args = opt_parser.parse_args(session.posargs)
-
-    out = session.run(*f"git diff --name-only {options.commit}".split(), external=True, silent=True)
-    changed_files = out.strip().split("\n")
-    if options.verbose:
-        print(f"Modified files from '{options.commit}': {changed_files}")
-
-    for bare_session_name in args:
-        test_session = globals()[bare_session_name]
-        paths, ignore_paths = _extract_name_matching_pattern(
-            test_session, accept="paths", reject="ignore_paths"
-        )
-
-        session_name = f"{bare_session_name}-{session.python}"
-        relevant_files = _filter_names(changed_files, paths, ignore_paths)
-        if options.verbose:
-            print(
-                f"\n'{session_name}':\n"
-                f"  - Include patterns: {paths}\n"
-                f"  - Exclude patterns: {ignore_paths}\n"
-                f"  - Relevant files: {list(relevant_files)}\n"
-            )
-        if relevant_files:
-            print(f"'{session_name}': Running tests")
-            print(f"session.notify({session_name})")
-        else:
-            print(f"'{session_name}': Skipping")
-
-
 @session_metadata(
     env_vars=["NUM_PROCESSES"],
     ignore_paths=["src/gt4py/next/*", "tests/next_tests/**", "examples/**", "*.md", "*.rst"],
@@ -158,6 +110,10 @@ def test_cartesian(
     device: DeviceOption,
 ) -> None:
     """Run selected 'gt4py.cartesian' tests."""
+
+    if _should_session_run(session):
+        print(f"[{session.name}]: Skipping. No relevant changes detected.")
+        return
 
     codegen_settings = CodeGenTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
@@ -198,6 +154,10 @@ def test_cartesian(
 @nox.session(python=["3.10", "3.11"], tags=["cartesian", "next", "cpu"])
 def test_eve(session: nox.Session) -> None:
     """Run 'gt4py.eve' tests."""
+
+    if _should_session_run(session):
+        print(f"[{session.name}]: Skipping. No relevant changes detected.")
+        return
 
     _install_session_venv(session, groups=["test"])
 
@@ -263,6 +223,10 @@ def test_next(
     meshlib: Literal["nomesh", "atlas"],
 ) -> None:
     """Run selected 'gt4py.next' tests."""
+
+    if _should_session_run(session):
+        print(f"[{session.name}]: Skipping. No relevant changes detected.")
+        return
 
     codegen_settings = CodeGenNextTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
@@ -339,6 +303,10 @@ def test_storage(
 ) -> None:
     """Run selected 'gt4py.storage' tests."""
 
+    if _should_session_run(session):
+        print(f"[{session.name}]: Skipping. No relevant changes detected.")
+        return
+
     device_settings = DeviceTestSettings[device]
 
     _install_session_venv(
@@ -362,6 +330,34 @@ def test_storage(
 
 
 # -- Internal implementation utilities --
+@nox.session(tags=["ci"])
+def _should_session_run(session: nox.Session) -> None:
+    if not (commit_spec := os.environ("GT4PY_CI_RUN_ONLY_IF_CHANGED_FROM_COMMIT", "")):
+        return True
+
+    verbose = int(os.environ("GT4PY_CI_RUN_ONLY_IF_CHANGED_FROM_COMMIT_VERBOSE", "0"))
+
+    out = session.run(*f"git diff --name-only {commit_spec}".split(), external=True, silent=True)
+    changed_files = out.strip().split("\n")
+    if verbose:
+        print(f"Modified files from '{commit_spec}': {changed_files}")
+
+    paths, ignore_paths = _extract_name_matching_pattern(
+        session, accept="paths", reject="ignore_paths"
+    )
+
+    relevant_files = _filter_names(changed_files, paths, ignore_paths)
+    if verbose:
+        print(
+            f"\n[{session.name}]:\n"
+            f"  - Include patterns: {paths}\n"
+            f"  - Exclude patterns: {ignore_paths}\n"
+            f"  - Relevant files: {list(relevant_files)}\n"
+        )
+
+    return bool(relevant_files)
+
+
 def _extract_name_matching_pattern(
     session: nox.Session, accept: str, reject: str
 ) -> tuple[list[str], list[str]]:
@@ -375,8 +371,8 @@ def _extract_name_matching_pattern(
         ), "Only one of '{accept}' or '{reject}' patterns can be specified."
 
         metadata = session._metadata_
-        patterns.extend(metadata.get(accept, []))
-        ignore_patterns.extend(metadata.get(reject, []))
+        patterns = metadata.get(accept, [])
+        ignore_patterns = metadata.get(reject, [])
 
     return patterns, ignore_patterns
 
@@ -424,6 +420,8 @@ def _install_session_venv(
     patterns, ignore_patterns = _extract_name_matching_pattern(
         session, accept="env_vars", reject="ignore_env_vars"
     )
+    print(f"Patterns: {patterns}")
+    print(f"Ignore patterns: {ignore_patterns}")
 
     session.run_install(
         "uv",
