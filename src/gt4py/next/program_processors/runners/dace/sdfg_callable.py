@@ -105,14 +105,15 @@ def get_sdfg_conn_args(
     Extracts the connectivity tables that are used in the sdfg and ensures
     that the memory buffers are allocated for the target device.
     """
-    device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
-
     connectivity_args = {}
     for offset, connectivity in offset_provider.items():
         if gtx_common.is_neighbor_table(connectivity):
             param = gtx_dace_utils.connectivity_identifier(offset)
             if param in sdfg.arrays:
-                assert field_utils.verify_device_field_type(connectivity, device)
+                assert field_utils.verify_device_field_type(
+                    connectivity,
+                    core_defs.CUPY_DEVICE_TYPE if on_gpu else core_defs.DeviceType.CPU,  # type: ignore[arg-type] # if we are `on_gpu` we expect `CUPY_DEVICE_TYPE` to be not `None`
+                )
                 connectivity_args[param] = connectivity.ndarray
 
     return connectivity_args

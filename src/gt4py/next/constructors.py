@@ -11,13 +11,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Optional, cast
 
-import gt4py._core.definitions as core_defs
 import gt4py.eve as eve
 import gt4py.eve.extended_typing as xtyping
 import gt4py.next.allocators as next_allocators
 import gt4py.next.common as common
 import gt4py.next.embedded.nd_array_field as nd_array_field
 import gt4py.storage.cartesian.utils as storage_utils
+from gt4py._core import definitions as core_defs, ndarray_utils
 
 
 @eve.utils.with_fluid_partial
@@ -350,8 +350,10 @@ def as_connectivity(
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
     buffer = next_allocators.allocate(actual_domain, dtype, allocator=allocator, device=device)
+    xp = ndarray_utils.array_namespace(buffer.ndarray)
+
     # TODO(havogt): consider adding MutableNDArrayObject
-    buffer.ndarray[...] = storage_utils.asarray(data)  # type: ignore[index]
+    buffer.ndarray[...] = xp.asarray(data)  # type: ignore[index]
     connectivity_field = common._connectivity(
         buffer.ndarray, codomain=codomain, domain=actual_domain, skip_value=skip_value
     )
