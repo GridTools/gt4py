@@ -8,7 +8,7 @@
 
 """Fast access to the auto optimization on DaCe."""
 
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Optional, Sequence
 
 import dace
 from dace.transformation.auto import auto_optimize as dace_aoptimize
@@ -21,9 +21,6 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 def gt_auto_optimize(
     sdfg: dace.SDFG,
     gpu: bool,
-    unit_strides_dim: Optional[
-        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
-    ] = None,
     unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
     make_persistent: bool = False,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
@@ -71,9 +68,8 @@ def gt_auto_optimize(
     Args:
         sdfg: The SDFG that should be optimized in place.
         gpu: Optimize for GPU or CPU.
-        unit_strides_dim: List of dimensions that is considered to have unit strides.
         unit_strides_kind: All dimensions of this kind are considered to have unit
-            strides.
+            strides, see `gt_set_iteration_order()` for more.
         make_persistent: Turn all transients to persistent lifetime, thus they are
             allocated over the whole lifetime of the program, even if the kernel exits.
             Thus the SDFG can not be called by different threads.
@@ -172,7 +168,6 @@ def gt_auto_optimize(
         sdfg = _gt_auto_configure_maps(
             sdfg=sdfg,
             gpu=gpu,
-            unit_strides_dim=unit_strides_dim,
             unit_strides_kind=unit_strides_kind,
             gpu_block_size=gpu_block_size,
             gpu_launch_factor=gpu_launch_factor,
@@ -367,9 +362,6 @@ def _gt_auto_process_dataflow_inside_maps(
 def _gt_auto_configure_maps(
     sdfg: dace.SDFG,
     gpu: bool,
-    unit_strides_dim: Optional[
-        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
-    ],
     unit_strides_kind: Optional[gtx_common.DimensionKind],
     gpu_block_size: Optional[Sequence[int | str] | str],
     gpu_launch_bounds: Optional[int | str],
@@ -387,14 +379,16 @@ def _gt_auto_configure_maps(
     For a description of the arguments see the `gt_auto_optimize()` function.
     """
 
-    if unit_strides_dim is None and unit_strides_kind is None:
+    if unit_strides_kind is None:
         unit_strides_kind = (
             gtx_common.DimensionKind.HORIZONTAL if gpu else gtx_common.DimensionKind.VERTICAL
         )
-    if unit_strides_dim is not None or unit_strides_kind is not None:
+    if unit_strides_kind is not None:
+        # NOTE: We can not use `unit_strides_dim` here, because the loop blocking
+        #   modifies the names of the outer Map parameter. However, since the kind
+        #   is at the end it can still be identified.
         gtx_transformations.gt_set_iteration_order(
             sdfg=sdfg,
-            unit_strides_dim=unit_strides_dim,
             unit_strides_kind=unit_strides_kind,
             validate=validate,
             validate_all=validate_all,
