@@ -10,10 +10,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Sequence, TypeVar, Union
+from typing import Any, Optional, Sequence, TypeVar, Union
 
 import gt4py.eve as eve
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
+from gt4py.next import common, config
 from gt4py.next.otf import cpp_utils, languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.type_system import type_specifications as ts
@@ -26,16 +27,15 @@ class Expr(eve.Node):
     pass
 
 
-class DimensionType(Expr):
+class DimensionSpec(Expr):
     name: str
+    static_stride: Optional[int]
 
 
 class BufferSID(Expr):
     source_buffer: str
-    dimensions: Sequence[DimensionType]
+    dimensions: Sequence[DimensionSpec]
     scalar_type: ts.ScalarType
-    # TODO(havogt): implement `strides_kind: int` once we have the "frozen stencil" mechanism
-    # TODO(havogt): we can fix the dimension with `unit_stride_dim: int` once we have the "frozen stencil" mechanism
 
 
 class Tuple(Expr):
@@ -148,15 +148,24 @@ class BindingCodeGenerator(TemplatedGenerator):
         pybuffer = f"{sid.source_buffer}.first"
         dims = [self.visit(dim) for dim in sid.dimensions]
         origin = f"{sid.source_buffer}.second"
+        stride_spec = [
+            "gridtools::nanobind::dynamic_size"
+            if dim.static_stride is None
+            else str(dim.static_stride)
+            for dim in sid.dimensions
+        ]
+        stride_spec_string = (
+            f"gridtools::nanobind::stride_spec<{', '.join(str(s) for s in stride_spec)}>{{}}"
+        )
 
-        as_sid = f"gridtools::nanobind::as_sid({pybuffer})"
+        as_sid = f"gridtools::nanobind::as_sid({pybuffer}, {stride_spec_string})"
         shifted = f"gridtools::sid::shift_sid_origin({as_sid}, {origin})"
         renamed = f"gridtools::sid::rename_numbered_dimensions<{', '.join(dims)}>({shifted})"
         return renamed
 
     Tuple = as_jinja("""gridtools::tuple({{','.join(elems)}})""")
 
-    DimensionType = as_jinja("""generated::{{name}}_t""")
+    DimensionSpec = as_jinja("""generated::{{name}}_t""")
 
 
 def _tuple_get(index: int, var: str) -> str:
@@ -167,7 +176,18 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
     if isinstance(type_, ts.FieldType):
         return BufferSID(
             source_buffer=name,
-            dimensions=[DimensionType(name=dim.value) for dim in type_.dims],
+            dimensions=[
+                DimensionSpec(
+                    name=dim.value,
+                    static_stride=1
+                    if (
+                        config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+                        and dim.kind == common.DimensionKind.HORIZONTAL
+                    )
+                    else None,
+                )
+                for dim in type_.dims
+            ],
             scalar_type=type_.dtype,
         )
     elif isinstance(type_, ts.TupleType):

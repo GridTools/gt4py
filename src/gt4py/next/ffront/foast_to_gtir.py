@@ -31,7 +31,7 @@ from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
+def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.FunctionDefinition:
     """
     Lower a FOAST field operator node to GTIR.
 
@@ -40,7 +40,7 @@ def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
     return FieldOperatorLowering.apply(inp.foast_node)
 
 
-def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Expr]:
+def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.FunctionDefinition]:
     """Wrap `foast_to_gtir` into a chainable and, optionally, cached workflow step."""
     wf = foast_to_gtir
     if cached:
@@ -48,7 +48,9 @@ def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Ex
     return wf
 
 
-def adapted_foast_to_gtir_factory(**kwargs: Any) -> workflow.Workflow[AOT_FOP, itir.Expr]:
+def adapted_foast_to_gtir_factory(
+    **kwargs: Any,
+) -> workflow.Workflow[AOT_FOP, itir.FunctionDefinition]:
     """Wrap the `foast_to_gtir` workflow step into an adapter to fit into backend transform workflows."""
     return toolchain.StripArgsAdapter(foast_to_gtir_factory(**kwargs))
 
@@ -93,8 +95,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     )
 
     @classmethod
-    def apply(cls, node: foast.LocatedNode) -> itir.Expr:
-        return cls().visit(node)
+    def apply(cls, node: foast.LocatedNode) -> itir.FunctionDefinition:
+        result = cls().visit(node)
+        assert isinstance(result, itir.FunctionDefinition)
+        return result
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs: Any
