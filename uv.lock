@@ -663,7 +663,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.0"
-source = { git = "https://github.com/spcl/dace?branch=main#4245396e46b04abb09a4bdc7c98c9f0f415726d9" }
+source = { git = "https://github.com/spcl/dace?branch=main#9c67b4c6fe02a3248fcc25c6686715988e9db015" }
 resolution-markers = [
     "python_full_version >= '3.11'",
     "python_full_version < '3.11'",
@@ -1081,7 +1081,7 @@ dace = [
     { name = "dace", version = "1.0.2", source = { registry = "https://pypi.org/simple" } },
 ]
 dace-next = [
-    { name = "dace", version = "1.0.0", source = { git = "https://github.com/spcl/dace?branch=main#4245396e46b04abb09a4bdc7c98c9f0f415726d9" } },
+    { name = "dace", version = "1.0.0", source = { git = "https://github.com/spcl/dace?branch=main#9c67b4c6fe02a3248fcc25c6686715988e9db015" } },
 ]
 formatting = [
     { name = "clang-format" },
