@@ -11,7 +11,7 @@ import copy
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union, cast, overload
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union, overload
 
 import pybind11
 import setuptools
@@ -172,6 +172,25 @@ def get_gt_pyext_build_opts(
     return build_opts
 
 
+def setuptools_setup(*, build_ext_class: type[build_ext] | None, **kwargs) -> None:
+    """
+    Calls setuptools.setup() with 'cmdclass' set to 'build_ext_class'.
+
+    This is a workaround because any config file that sets an element of
+    'cmdclass' will override (instead of extend) the 'cmdclass' dict passed
+    as argument to 'setuptools.setup()'.
+
+    Note: This is NOT thread-safe.
+    """
+    old_setup_stop_after = setuptools.distutils.core._setup_stop_after
+    setuptools.distutils.core._setup_stop_after = "commandline"
+    dist = setuptools.setup(**kwargs)
+    if build_ext_class is not None:
+        dist.cmdclass.update({"build_ext": build_ext_class})
+    setuptools.distutils.core._setup_stop_after = old_setup_stop_after
+    setuptools.distutils.core.run_commands(dist)
+
+
 # The following tells mypy to accept unpacking kwargs
 @overload
 def build_pybind_ext(
@@ -248,18 +267,15 @@ def build_pybind_ext(
             "--force",
         ],
     )
-    if build_ext_class is not None:
-        setuptools_args["cmdclass"] = {"build_ext": build_ext_class}
 
     if verbose:
-        script_args = cast(List[str], setuptools_args["script_args"])
-        script_args.append("-v")
-        setuptools.setup(**setuptools_args)
+        setuptools_args["script_args"].append("-v")
+        setuptools_setup(**setuptools_args, build_ext_class=build_ext_class)
     else:
         setuptools_args["script_args"].append("-q")
         io_out, io_err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(io_out), contextlib.redirect_stderr(io_err):
-            setuptools.setup(**setuptools_args)
+            setuptools_setup(**setuptools_args, build_ext_class=build_ext_class)
 
     # Copy extension in target path
     module_name = py_extension._full_name
