@@ -17,9 +17,6 @@ from gt4py._core import definitions as core_defs
 
 GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
 
-# Default paths (taken from user's environment vars when possible)
-BOOST_ROOT: str = "DEPRECATED: NOT USED ANYMORE"
-
 CUDA_ROOT: str = os.environ.get(
     "CUDA_HOME", os.environ.get("CUDA_PATH", os.path.abspath("/usr/local/cuda"))
 )
