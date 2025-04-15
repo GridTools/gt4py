@@ -42,7 +42,7 @@ nox.options.sessions = [
     "test_storage-3.11(cpu)",
 ]
 
-VERBOSE_MODE = int(os.environ("GT4PY_CI_NOX_VERBOSE", "0"))
+VERBOSE_MODE = int(os.environ.get("GT4PY_CI_NOX_VERBOSE_MODE", "0"))
 
 # -- Parameter sets --
 DeviceOption: TypeAlias = Literal["cpu", "cuda11", "cuda12", "rocm4_3", "rocm5_0"]
@@ -113,7 +113,7 @@ def test_cartesian(
 ) -> None:
     """Run selected 'gt4py.cartesian' tests."""
 
-    if _should_session_run(session):
+    if not _should_session_run(session):
         print(f"[{session.name}]: Skipping. No relevant changes detected.")
         return
 
@@ -150,14 +150,13 @@ def test_cartesian(
         "*.lock",
         "*.toml",
         "*.yml",
-        "noxfile.py",
     ],
 )
 @nox.session(python=["3.10", "3.11"], tags=["cartesian", "next", "cpu"])
 def test_eve(session: nox.Session) -> None:
     """Run 'gt4py.eve' tests."""
 
-    if _should_session_run(session):
+    if not _should_session_run(session):
         print(f"[{session.name}]: Skipping. No relevant changes detected.")
         return
 
@@ -226,7 +225,7 @@ def test_next(
 ) -> None:
     """Run selected 'gt4py.next' tests."""
 
-    if _should_session_run(session):
+    if not _should_session_run(session):
         print(f"[{session.name}]: Skipping. No relevant changes detected.")
         return
 
@@ -305,7 +304,7 @@ def test_storage(
 ) -> None:
     """Run selected 'gt4py.storage' tests."""
 
-    if _should_session_run(session):
+    if not _should_session_run(session):
         print(f"[{session.name}]: Skipping. No relevant changes detected.")
         return
 
@@ -410,7 +409,7 @@ def _install_session_venv(
         *(f"--group={g}" for g in groups),
         env={
             key: os.environ.get(key)
-            for key in _filter_names(os.environ.items(), patterns, ignore_patterns)
+            for key in _filter_names(os.environ.keys(), patterns, ignore_patterns)
         }
         | {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
     )
@@ -425,7 +424,7 @@ def _install_session_venv(
 
 
 def _should_session_run(session: nox.Session) -> None:
-    if not (commit_spec := os.environ("GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM", "")):
+    if not (commit_spec := os.environ.get("GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM", "")):
         return True
 
     out = session.run(*f"git diff --name-only {commit_spec}".split(), external=True, silent=True)
