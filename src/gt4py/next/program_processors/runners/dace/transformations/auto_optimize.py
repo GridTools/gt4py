@@ -195,7 +195,6 @@ def gt_auto_optimize(
         # After we have created large kernels we run `dace_dataflow.MapReduceFusion`.
 
         # Phase 3: Optimizing the kernels, i.e. the larger maps, themselves.
-        #   Currently this only applies fusion inside Maps.
         gtx_transformations.gt_simplify(sdfg)
         while True:
             nb_applied = sdfg.apply_transformations_repeated(
@@ -214,6 +213,18 @@ def gt_auto_optimize(
             if not nb_applied:
                 break
             gtx_transformations.gt_simplify(sdfg)
+
+        # Move as much dataflow as possible inside the branches of the `if`.
+        # TODO(phimuell): This transformation belongs to phase 3, but I am not sure
+        #   where exactly. It might be that parallel map fusion is limiting what
+        #   can be moved inside by creating dependencies.
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.MoveDataflowIntoIfBody(
+                ignore_upstream_blocks=False,
+            ),
+            validate=validate,
+            validate_all=validate_all,
+        )
 
         # Phase 4: Iteration Space
         #   This essentially ensures that the stride 1 dimensions are handled

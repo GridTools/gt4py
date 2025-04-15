@@ -282,7 +282,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         while True:
             # Find all the nodes that we have to classify in this iteration.
-            #  - All nodes adjacent to `outer_entry`
+            #  - All nodes adjacent to `outer_entry` (which is
+            #       independent by definition).
             #  - All nodes adjacent to independent nodes.
             nodes_to_classify: set[dace_nodes.Node] = {
                 edge.dst for edge in state.out_edges(self.outer_entry)
@@ -343,9 +344,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         - All incoming edges must start either at `self.outer_entry` or at dependent nodes.
         - All output Memlets are non empty.
 
+        It is important that to realize that the function will add the node to
+        classify to `self._independent_nodes` on its own. It is also important that
+        the function might add other nodes beside `node_to_classify`.
+
         Returns:
             The function returns `True` if `node_to_classify` is considered independent.
-            In this case the function will add the node to `self._independent_nodes`.
             If the function returns `False` the node was classified as a dependent node.
             The function will return `None` if the node can not be classified, in this
             case the partition does not exist.
@@ -363,6 +367,25 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         if state.in_degree(node_to_classify) == 0 or state.out_degree(node_to_classify) == 0:
             return None
 
+        # To fully understand what is going on we have to look at the input and output
+        #  edges of the node. We define them here to allow to modify them in certain
+        #  cases.
+        in_edges: list[dace_graph.MultiConnectorEdge[dace.Memlet]] = list(
+            state.in_edges(node_to_classify)
+        )
+        out_edges: list[dace_graph.MultiConnectorEdge[dace.Memlet]] = list(
+            state.out_edges(node_to_classify)
+        )
+
+        # Despite its type the node's free symbols can not contain the blocking
+        #  parameter. In case of a Tasklet this would be the body of the Tasklet.
+        if self.blocking_parameter in node_to_classify.free_symbols:
+            return False
+
+        # If the test succeed then these are the nodes we additionally consider
+        #  as independent.
+        new_independent_nodes: set[dace_nodes.Node] = {node_to_classify}
+
         # We are only able to handle certain kind of nodes, so screening them.
         if isinstance(node_to_classify, dace_nodes.Tasklet):
             if node_to_classify.side_effects:
@@ -378,10 +401,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 for out_edge in state.out_edges(node_to_classify)
                 if not out_edge.data.is_empty()
             ):
-                return False
-
-            # Test if the body of the Tasklet depends on the block variable.
-            if self.blocking_parameter in node_to_classify.free_symbols:
                 return False
 
         elif isinstance(node_to_classify, dace.nodes.NestedSDFG):
@@ -412,21 +431,28 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 return None
 
         elif isinstance(node_to_classify, dace_nodes.MapEntry):
-            # We classify `MapEntries` as dependent nodes, we could now start
-            #  looking if the whole map is independent, but it is currently an
-            #  overkill.
-            return False
+            # We check a Map as a whole, thus we must modify the output edges,
+            #  because these are not the output edges of the MapEntry, but the one
+            #  of the associated MapExit. Furthermore, we have to add all nodes
+            #  of the scope to the independent nodes.
+            map_exit = state.exit_node(node_to_classify)
+            out_edges = list(state.out_edges(map_exit))
+
+            map_scope = state.scope_subgraph(node_to_classify)
+            if self.blocking_parameter in map_scope.free_symbols:
+                return False
+
+            new_independent_nodes.update(map_scope.nodes())
+
+        elif isinstance(node_to_classify, dace.libraries.standard.nodes.Reduce):
+            # The only checks we impose on them is the free symbols check and the
+            #  input output checks.
+            pass
 
         else:
             # Any other node type we can not handle, so the partition can not exist.
             # TODO(phimuell): Try to handle certain kind of library nodes.
             return None
-
-        # Now we have to understand how the node generates its data. For this we have
-        #  to look at all the incoming edges.
-        in_edges: list[dace_graph.MultiConnectorEdge[dace.Memlet]] = list(
-            state.in_edges(node_to_classify)
-        )
 
         # In a first phase we will only look if the partition exists or not.
         #  We will therefore not check if the node is independent or not, since
@@ -434,7 +460,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         #  first place.
 
         # There are some very small requirements that we impose on the output edges.
-        for out_edge in state.out_edges(node_to_classify):
+        for out_edge in out_edges:
             # We consider nodes that are directly connected to the outer map exit as
             #  dependent. This is an implementation detail to avoid some hard cases.
             if out_edge.dst is outer_exit:
@@ -469,8 +495,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             if not (in_edge.src is outer_entry or in_edge.src in self._independent_nodes):
                 return False
 
-        # Loop ended normally, thus we classify the node as independent.
-        self._independent_nodes.add(node_to_classify)
+        # Loop ended normally, thus we update the list of independent nodes.
+        self._independent_nodes.update(new_independent_nodes)
         return True
 
     def _rewire_map_scope(
