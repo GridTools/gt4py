@@ -52,11 +52,10 @@ def convert_args(
             for i, (arg_name, arg_desc) in enumerate(inp.sdfg_arglist):
                 arg = kwargs.get(arg_name, None)
                 if arg is None:
-                    # Shape and strides of arrays are supposed not to change, and can therefore
-                    # be omitted. Same for connectivity tables.
-                    assert gtx_dace_utils.is_field_symbol(
-                        arg_name
-                    ) or gtx_dace_utils.is_connectivity_identifier(
+                    # connectivities are supposed not to change, and can therefore be omitted
+                    assert gtx_dace_utils.is_connectivity_identifier(
+                        arg_name, common.offset_provider_to_type(offset_provider)
+                    ) or gtx_dace_utils.is_connectivity_symbol(
                         arg_name, common.offset_provider_to_type(offset_provider)
                     ), f"argument '{arg_name}' not found."
                 elif (ndarray := getattr(arg, "ndarray", None)) is not None:
