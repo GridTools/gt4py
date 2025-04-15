@@ -90,15 +90,14 @@ class CMakeFactory(
         cmake_languages = [cmake_lists.Language(name="CXX")]
         if (src_lang := source.program_source.language) in [languages.CUDA, languages.HIP]:
             cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang.__name__)]
+            if device_arch_flag := get_cmake_device_arch_option():
+                self.cmake_extra_flags.append(device_arch_flag)
         cmake_lists_src = cmake_lists.generate_cmakelists_source(
             name,
             source.library_deps,
             [header_name, bindings_name],
             languages=cmake_languages,
         )
-
-        if device_arch_flag := get_cmake_device_arch_option():
-            self.cmake_extra_flags.append(device_arch_flag)
 
         return CMakeProject(
             root_path=cache.get_cache_folder(source, cache_lifetime),
