@@ -523,38 +523,33 @@ def promote_scalars(val: CompositeOfScalarOrField):
         )
 
 
+_python_builtins: dict[str, Callable] = {
+    "bool": bool,
+    "str": str,
+    "plus": operator.add,
+    "minus": operator.sub,
+    "multiplies": operator.mul,
+    "divides": operator.truediv,
+    "mod": operator.mod,
+    "floordiv": operator.floordiv,
+    "eq": operator.eq,
+    "less": operator.lt,
+    "greater": operator.gt,
+    "greater_equal": operator.ge,
+    "less_equal": operator.le,
+    "not_eq": operator.ne,
+    "and_": operator.and_,
+    "or_": operator.or_,
+    "xor_": operator.xor,
+    "neg": operator.neg,
+}
 for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
-    python_builtins: dict[str, Callable] = {
-        "int": int,
-        "float": float,
-        "bool": bool,
-        "str": str,
-        "plus": operator.add,
-        "minus": operator.sub,
-        "multiplies": operator.mul,
-        "divides": operator.truediv,
-        "mod": operator.mod,
-        "floordiv": operator.floordiv,
-        "eq": operator.eq,
-        "less": operator.lt,
-        "greater": operator.gt,
-        "greater_equal": operator.ge,
-        "less_equal": operator.le,
-        "not_eq": operator.ne,
-        "and_": operator.and_,
-        "or_": operator.or_,
-        "xor_": operator.xor,
-        "neg": operator.neg,
-    }
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     impl: Callable
     if math_builtin_name in ["gamma", "not_"]:
         continue  # treated explicitly
-    elif math_builtin_name in python_builtins:
-        # TODO: Should potentially use numpy fixed size types to be consistent
-        #   with compiled backends. Currently using Python types to preserve
-        #   existing behaviour.
-        impl = python_builtins[math_builtin_name]
+    elif math_builtin_name in _python_builtins:
+        impl = _python_builtins[math_builtin_name]
     else:
         impl = getattr(np, math_builtin_name)
 

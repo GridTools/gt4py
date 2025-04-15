@@ -18,11 +18,11 @@ from typing import Optional, TypeVar
 
 from flufl import lock
 
-from gt4py.next import config
+from gt4py.next import config, errors
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler
-from gt4py.next.otf.compilation.build_systems import cmake, cmake_lists
+from gt4py.next.otf.compilation.build_systems import cmake
 
 
 SrcL = TypeVar("SrcL", bound=languages.NanobindSrcL)
@@ -38,7 +38,8 @@ class CompiledbFactory(
     Create a CompiledbProject from a ``CompilableSource`` stage object with given CMake settings.
 
     Use CMake to generate a compiledb with the required sequence of build commands.
-    Generate a compiledb only if there isn't one for the given combination of cmake configuration and library dependencies.
+    Generate a compiledb only if there isn't one for the given combination of cmake configuration
+    and library dependencies.
     """
 
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
@@ -125,17 +126,24 @@ class CompiledbProject(
             self._run_build()
 
     def _write_files(self) -> None:
-        def ignore_not_libraries(folder: str, children: list[str]) -> list[str]:
+        def ignore_function(folder: str, children: list[str]) -> list[str]:
             pattern = r"((lib.*\.a)|(.*\.lib))"
-            libraries = [child for child in children if re.match(pattern, child)]
-            folders = [child for child in children if (pathlib.Path(folder) / child).is_dir()]
-            ignored = list(set(children) - set(libraries) - set(folders))
+            folder_path = pathlib.Path(folder)
+
+            ignored = []
+            for child in children:
+                if re.match(pattern, child):  # static library -> keep
+                    continue
+                if (folder_path / child).is_dir():  # folder -> keep
+                    continue
+                ignored.append(child)
+
             return ignored
 
         shutil.copytree(
             self.compile_commands_cache.parent,
             self.root_path,
-            ignore=ignore_not_libraries,
+            ignore=ignore_function,
             dirs_exist_ok=True,
         )
 
@@ -167,6 +175,15 @@ class CompiledbProject(
 
         (self.root_path / "compile_commands.json").write_text(json.dumps(compile_db))
 
+        (build_script_path := self.root_path / "build.sh").write_text(
+            "\n".join(["#!/bin/sh", "cd build", *(entry["command"] for entry in compile_db)])
+        )
+        try:
+            build_script_path.chmod(0o755)
+        except OSError:
+            # if setting permissions fails, it's not a problem
+            pass
+
         build_data.write_data(
             build_data.BuildData(
                 status=build_data.BuildStatus.CONFIGURED,
@@ -184,6 +201,7 @@ class CompiledbProject(
             with logfile.open(mode="w") as log_file_pointer:
                 for entry in compile_db:
                     log_file_pointer.write(entry["command"] + "\n")
+                    log_file_pointer.flush()
                     subprocess.check_call(
                         entry["command"],
                         cwd=entry["directory"],
@@ -193,8 +211,8 @@ class CompiledbProject(
                     )
         except subprocess.CalledProcessError as e:
             with logfile.open(mode="r") as log_file_pointer:
-                print(log_file_pointer.read())
-            raise e
+                log = log_file_pointer.read()
+            raise errors.CompilationError(log) from e
 
         build_data.update_status(new_status=build_data.BuildStatus.COMPILED, path=self.root_path)
 
@@ -243,11 +261,13 @@ def _cc_get_compiledb(
     with lock.Lock(str(cache_path / "compiledb.lock"), lifetime=120):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
         if renew_compiledb or not (compiled_db := _cc_find_compiledb(path=cache_path)):
             compiled_db = _cc_create_compiledb(
-                path=cache_path,
                 prototype_program_source=prototype_program_source,
                 build_type=build_type,
                 cmake_flags=cmake_flags,
+                cache_lifetime=cache_lifetime,
             )
+
+            assert compiled_db.parent == cache_path
 
         return compiled_db
 
@@ -260,35 +280,28 @@ def _cc_find_compiledb(path: pathlib.Path) -> Optional[pathlib.Path]:
 
 
 def _cc_create_compiledb(
-    path: pathlib.Path,
     prototype_program_source: stages.ProgramSource,
     build_type: config.CMakeBuildType,
     cmake_flags: list[str],
+    cache_lifetime: config.BuildCacheLifetime,
 ) -> pathlib.Path:
-    name = prototype_program_source.entry_point.name
-    header_ext = prototype_program_source.language_settings.header_extension
-    src_ext = prototype_program_source.language_settings.file_extension
-    prog_src_name = f"{name}.{header_ext}"
-    binding_src_name = f"{name}.{src_ext}"
-    cmake_languages = [cmake_lists.Language(name="CXX")]
-    if (src_lang := prototype_program_source.language) in [languages.CUDA, languages.HIP]:
-        cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang.__name__)]
+    prototype_project = cmake.CMakeFactory(
+        cmake_generator_name="Ninja",
+        cmake_build_type=build_type,
+        cmake_extra_flags=cmake_flags,
+    )(
+        stages.CompilableSource(
+            prototype_program_source, stages.BindingSource(source_code="", library_deps=())
+        ),
+        cache_lifetime,
+    )
 
-    prototype_project = cmake.CMakeProject(
-        generator_name="Ninja",
-        build_type=build_type,
-        extra_cmake_flags=cmake_flags,
-        root_path=path,
-        source_files={
-            **{name: "" for name in [binding_src_name, prog_src_name]},
-            "CMakeLists.txt": cmake_lists.generate_cmakelists_source(
-                name,
-                prototype_program_source.library_deps,
-                [binding_src_name, prog_src_name],
-                cmake_languages,
-            ),
-        },
-        program_name=name,
+    path = prototype_project.root_path
+    name = prototype_project.program_name
+    binding_src_name = next(
+        name
+        for name in prototype_project.source_files.keys()
+        if name.endswith(f"_bindings.{prototype_program_source.language_settings.file_extension}")
     )
 
     prototype_project.build()
@@ -332,4 +345,5 @@ def _cc_create_compiledb(
 
     compile_db_path = path / "compile_commands.json"
     compile_db_path.write_text(json.dumps(compile_db))
+
     return compile_db_path
