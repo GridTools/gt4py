@@ -222,3 +222,62 @@ def test_nested_if():
 
     actual = global_tmps.create_global_tmps(testee, offset_provider)
     assert actual == expected
+
+
+def test_tuple_different_domain():
+    domain1 = im.domain("cartesian_domain", {IDim: (0, 1)})
+    domain2 = im.domain("cartesian_domain", {IDim: (0, 2)})
+    offset_provider = {"I": IDim}
+    testee = program_factory(
+        params=[
+            im.sym("cond", ts.ScalarType(kind=ts.ScalarKind.BOOL)),
+            im.sym("inp1", i_field_type),
+            im.sym("inp2", i_field_type),
+            im.sym("out", i_field_type),
+        ],
+        body=[
+            itir.SetAt(
+                # val = if_(cond, make_tuple(as_fieldop(...), as_fieldop(...)), make_tuple())
+                # val1 = if_(cond, as_fieldop(...), as_fieldop(...))
+                # val2 = if_(cond, as_fieldop(...), as_fieldop(...))
+                # materialize_into(out, make_tuple(as_fieldop(...), ...))
+                target=im.ref("out"),
+                expr=im.let(
+                    "val",
+                    im.if_(
+                        "cond", im.make_tuple("inp1", "inp2"), im.make_tuple("inp2", "inp1")
+                    ),  # todo: fix, the domain is strange
+                )(
+                    im.as_fieldop(
+                        im.lambda_("it1", "it2")(
+                            im.plus(im.deref("it1"), im.deref(im.shift("I", 1)("it2")))
+                        )
+                    )(im.tuple_get(0, "val"), im.tuple_get(1, "val"))
+                ),
+                domain=domain1,
+            )
+        ],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
+
+    # TODO:
+    expected = program_factory(
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
+        declarations=[itir.Temporary(id="__tmp_1", domain=domain1, dtype=float_type)],
+        body=[
+            itir.SetAt(
+                target=im.ref("__tmp_1"),
+                expr=im.as_fieldop("deref", domain1)("inp"),
+                domain=domain1,
+            ),
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.as_fieldop("deref", domain1)("__tmp_1"),
+                domain=domain1,
+            ),
+        ],
+    )
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider)
+    assert actual == expected

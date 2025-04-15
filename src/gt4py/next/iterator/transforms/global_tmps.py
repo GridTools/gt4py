@@ -19,9 +19,71 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
+from gt4py.next.iterator.ir_utils.domain_utils import SymbolicDomain
 from gt4py.next.iterator.transforms import cse, infer_domain, inline_lambdas
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
+
+
+def _filter_setat_by_domain(stmt: itir.SetAt, domain: SymbolicDomain) -> itir.SetAt:
+    assert cpm.is_call_to(stmt.expr, "make_tuple")
+
+    new_targets = []
+    new_els = []
+    # we cannot use `el.annex.domain` since while it might be semantically equivalent, it does
+    # not necessarily be equal.
+    # can be reproduced in icon4py `dycore_tests/test_solve_nonhydro.py::test_nonhydro_predictor_step`
+    # compute_theta_rho_face_values_and_pressure_gradient_and_update_vn
+    assert isinstance(stmt.expr.annex.domain, tuple)
+    assert domain in stmt.expr.annex.domain
+    for i, (el, el_domain) in enumerate(zip(stmt.expr.args, stmt.expr.annex.domain)):
+        assert not isinstance(el_domain, tuple), "Nested tuples not supported."
+        assert isinstance(el_domain, SymbolicDomain)
+        if el_domain == domain:
+            new_targets.append(im.tuple_get(i, stmt.target))
+            new_els.append(el)
+
+    if len(new_els) == 0:
+        breakpoint()
+
+    new_expr = im.make_tuple(*new_els)
+    new_expr.annex.domain = domain
+
+    return itir.SetAt(expr=new_expr, domain=domain.as_expr(), target=im.make_tuple(*new_targets))
+
+
+def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
+    new_stmts = []
+    for stmt in stmts:
+        if isinstance(stmt, itir.SetAt):
+            assert hasattr(stmt.expr.annex, "domain")
+            distinct_domains: set[domain_utils.SymbolicDomain] = set(
+                # TODO: is flatten the right thing to do here? we don't supported nested tuples right?
+                next_utils.flatten_nested_tuple(stmt.expr.annex.domain)  # type: ignore[assignment]  # mypy not smart enough
+            )
+            if len(distinct_domains) > 1:
+                for domain in distinct_domains:
+                    new_stmts.append(_filter_setat_by_domain(stmt, domain))
+            else:
+                new_stmts.append(
+                    itir.SetAt(
+                        expr=stmt.expr,
+                        domain=next(iter(distinct_domains)).as_expr(),
+                        target=stmt.target,
+                    )
+                )
+        elif isinstance(stmt, itir.IfStmt):
+            new_stmts.append(
+                itir.IfStmt(
+                    cond=stmt.cond,
+                    true_branch=_populate_and_homogenize_domains(stmt.true_branch),
+                    false_branch=_populate_and_homogenize_domains(stmt.false_branch),
+                )
+            )
+        else:
+            raise ValueError("Expected `itir.SetAt` or `itir.IfStmt`.")
+
+    return new_stmts
 
 
 def _transform_if(
@@ -74,24 +136,6 @@ def _transform_by_pattern(
         #    or a tuple thereof)
         #  - one `SetAt` statement that materializes the expression into the temporary
         for tmp_sym, tmp_expr in extracted_fields.items():
-            domain: infer_domain.DomainAccess = tmp_expr.annex.domain
-
-            # TODO(tehrengruber): Implement. This happens when the expression is a combination
-            #  of an `if_` call with a tuple, e.g., `if_(cond, {a, b}, {c, d})`. As long as we are
-            #  able to eliminate all tuples, e.g., by propagating the scalar ifs to the top-level
-            #  of a SetAt, the CollapseTuple pass will eliminate most of this cases.
-            if isinstance(domain, tuple):
-                flattened_domains: tuple[domain_utils.SymbolicDomain] = (
-                    next_utils.flatten_nested_tuple(domain)  # type: ignore[assignment]  # mypy not smart enough
-                )
-                if not all(d == flattened_domains[0] for d in flattened_domains):
-                    raise NotImplementedError(
-                        "Tuple expressions with different domains is not supported yet."
-                    )
-                domain = flattened_domains[0]
-            assert isinstance(domain, domain_utils.SymbolicDomain)
-            domain_expr = domain.as_expr()
-
             assert isinstance(tmp_expr.type, ts.TypeSpec)
             tmp_names: str | tuple[str | tuple, ...] = type_info.apply_to_primitive_constituents(
                 lambda x: uids.sequential_id(),
@@ -106,17 +150,50 @@ def _transform_by_pattern(
                 tuple_constructor=lambda *elements: tuple(elements),
             )
 
-            # allocate temporary for all tuple elements
-            def allocate_temporary(tmp_name: str, dtype: ts.ScalarType):
-                declarations.append(itir.Temporary(id=tmp_name, domain=domain_expr, dtype=dtype))  # noqa: B023 # function only used inside loop
+            if not hasattr(tmp_expr.annex, "domain"):
+                breakpoint()
 
-            next_utils.tree_map(allocate_temporary)(tmp_names, tmp_dtypes)
+            def get_domain(
+                _, path: tuple[int, ...]
+            ) -> domain_utils.SymbolicDomain:  # function only used inside loop
+                domain = functools.reduce(
+                    lambda var, idx: var[idx] if isinstance(var, tuple) else var,
+                    path,
+                    tmp_expr.annex.domain,
+                )
+                assert isinstance(domain, domain_utils.SymbolicDomain)
+                return domain
+
+            tmp_domains: (
+                domain_utils.SymbolicDomain | tuple[domain_utils.SymbolicDomain | tuple, ...]
+            ) = type_info.apply_to_primitive_constituents(
+                get_domain,
+                tmp_expr.type,
+                with_path_arg=True,
+                tuple_constructor=lambda *elements: tuple(elements),
+            )
+
+            # allocate temporary for all tuple elements
+            def allocate_temporary(
+                tmp_name: str, domain: domain_utils.SymbolicDomain, dtype: ts.ScalarType
+            ):
+                declarations.append(
+                    itir.Temporary(id=tmp_name, domain=domain.as_expr(), dtype=dtype)
+                )  # function only used inside loop
+
+            next_utils.tree_map(allocate_temporary)(tmp_names, tmp_domains, tmp_dtypes)
 
             # if the expr is a field this just gives a simple `itir.SymRef`, otherwise we generate a
             #  `make_tuple` expression.
+            def ref_with_domain(name: str, domain: domain_utils.SymbolicDomain) -> itir.SymRef:
+                expr = im.ref(name)
+                expr.annex.domain = domain
+                return expr
+
             target_expr: itir.Expr = next_utils.tree_map(
-                lambda x: im.ref(x), result_collection_constructor=lambda els: im.make_tuple(*els)
-            )(tmp_names)  # type: ignore[assignment]  # typing of tree_map does not reflect action of `result_collection_constructor` yet
+                lambda name, domain: ref_with_domain(name, domain),
+                result_collection_constructor=lambda els: im.make_tuple(*els),
+            )(tmp_names, tmp_domains)  # type: ignore[assignment]  # typing of tree_map does not reflect action of `result_collection_constructor` yet
 
             # note: the let would be removed automatically by the `cse.extract_subexpression`, but
             # we remove it here for readability & debuggability.
@@ -127,7 +204,12 @@ def _transform_by_pattern(
             # TODO(tehrengruber): _transform_stmt not needed if deepest_expr_first=True
             tmp_stmts.extend(
                 _transform_stmt(
-                    itir.SetAt(target=target_expr, domain=domain_expr, expr=tmp_expr),
+                    itir.SetAt(
+                        target=target_expr,
+                        # the domain is populated later in `_populate_and_homogenize_domains`
+                        domain=im.ref("UNPOPULATED"),
+                        expr=tmp_expr,
+                    ),
                     declarations,
                     uids,
                 )
@@ -170,6 +252,8 @@ def _transform_stmt(
         # no transformation occurred
         if not did_transform:
             stmts.append(stmt)
+
+    stmts = _populate_and_homogenize_domains(stmts)
 
     return stmts
 
