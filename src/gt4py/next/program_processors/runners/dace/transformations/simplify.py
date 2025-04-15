@@ -285,6 +285,7 @@ def gt_inline_nested_sdfg(
 def gt_substitute_compiletime_symbols(
     sdfg: dace.SDFG,
     repl: dict[str, Any],
+    simplify_afterwards: bool = False,
     validate: bool = False,
     validate_all: bool = False,
 ) -> None:
@@ -297,6 +298,8 @@ def gt_substitute_compiletime_symbols(
     Args:
         sdfg: The SDFG to process.
         repl: Maps the name of the symbol to the value it should be replaced with.
+        simplify_afterwards: If `False` do not call `gt_simplify()` after the
+            substitution.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
 
@@ -317,11 +320,12 @@ def gt_substitute_compiletime_symbols(
         initial_symbols=repl,
         _=None,
     )
-    gt_simplify(
-        sdfg=sdfg,
-        validate=validate,
-        validate_all=validate_all,
-    )
+    if simplify_afterwards:
+        gt_simplify(
+            sdfg=sdfg,
+            validate=validate,
+            validate_all=validate_all,
+        )
     dace.sdfg.propagation.propagate_memlets_sdfg(sdfg)
 
 
