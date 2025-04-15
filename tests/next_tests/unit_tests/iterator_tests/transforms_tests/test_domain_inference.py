@@ -224,8 +224,8 @@ def test_laplace(offset_provider):
             im.deref(im.shift("Joff", -1)("arg0")),
         )
     )
-    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (0, 7)})
-    expected_domains = {"in_field1": {IDim: (-1, 12), JDim: (-1, 8)}}
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (1, 11), JDim: (1, 7)})
+    expected_domains = {"in_field1": {IDim: (0, 12), JDim: (0, 8)}}
 
     testee, expected = setup_test_as_fieldop(stencil, domain)
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
@@ -238,10 +238,10 @@ def test_shift_x_y_two_inputs(offset_provider):
             im.deref(im.shift("Joff", 1)("arg1")),
         )
     )
-    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (0, 7)})
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (1, 11), JDim: (0, 7)})
     expected_domains = {
-        "in_field1": {IDim: (-1, 10), JDim: (0, 7)},
-        "in_field2": {IDim: (0, 11), JDim: (1, 8)},
+        "in_field1": {IDim: (0, 10), JDim: (0, 7)},
+        "in_field2": {IDim: (1, 11), JDim: (1, 8)},
     }
     testee, expected = setup_test_as_fieldop(
         stencil,
@@ -257,9 +257,9 @@ def test_shift_x_y_two_inputs_literal(offset_provider):
             im.deref(im.shift("Joff", 1)("arg1")),
         )
     )
-    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (0, 7)})
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (1, 11), JDim: (0, 7)})
     expected_domains = {
-        "in_field1": {IDim: (-1, 10), JDim: (0, 7)},
+        "in_field1": {IDim: (0, 10), JDim: (0, 7)},
     }
     testee, expected = setup_test_as_fieldop(
         stencil,
@@ -279,11 +279,11 @@ def test_shift_x_y_z_three_inputs(offset_provider):
             im.deref(im.shift("Koff", -1)("arg2")),
         )
     )
-    domain_dict = {IDim: (0, 11), JDim: (0, 7), KDim: (0, 3)}
+    domain_dict = {IDim: (0, 11), JDim: (0, 7), KDim: (1, 3)}
     expected_domains = {
-        "in_field1": {IDim: (1, 12), JDim: (0, 7), KDim: (0, 3)},
-        "in_field2": {IDim: (0, 11), JDim: (1, 8), KDim: (0, 3)},
-        "in_field3": {IDim: (0, 11), JDim: (0, 7), KDim: (-1, 2)},
+        "in_field1": {IDim: (1, 12), JDim: (0, 7), KDim: (1, 3)},
+        "in_field2": {IDim: (0, 11), JDim: (1, 8), KDim: (1, 3)},
+        "in_field3": {IDim: (0, 11), JDim: (0, 7), KDim: (0, 2)},
     }
     testee, expected = setup_test_as_fieldop(
         stencil,
@@ -329,7 +329,7 @@ def test_nested_stencils(offset_provider):
     tmp = im.as_fieldop(inner_stencil)(im.ref("in_field1"), im.ref("in_field2"))
     testee = im.as_fieldop(stencil)(im.ref("in_field1"), tmp)
 
-    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (0, 7)})
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (1, 7)})
     domain_inner = translate_domain(domain, {"Ioff": 0, "Joff": -1}, offset_provider)
 
     expected_inner = im.as_fieldop(inner_stencil, domain_inner)(
@@ -338,7 +338,7 @@ def test_nested_stencils(offset_provider):
     expected = im.as_fieldop(stencil, domain)(im.ref("in_field1"), expected_inner)
 
     expected_domains = {
-        "in_field1": im.domain(common.GridType.CARTESIAN, {IDim: (1, 12), JDim: (-1, 7)}),
+        "in_field1": im.domain(common.GridType.CARTESIAN, {IDim: (1, 12), JDim: (0, 7)}),
         "in_field2": translate_domain(domain, {"Ioff": 0, "Joff": -2}, offset_provider),
     }
     actual_call, actual_domains = infer_domain.infer_expr(
@@ -515,9 +515,9 @@ def test_cond(offset_provider):
 
     testee = im.if_(cond, field_1, field_2)
 
-    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (2, 13)})
     domain_tmp = translate_domain(domain, {"Ioff": -1}, offset_provider)
-    expected_domains_dict = {"in_field1": {IDim: (0, 12)}, "in_field2": {IDim: (-2, 12)}}
+    expected_domains_dict = {"in_field1": {IDim: (2, 14)}, "in_field2": {IDim: (0, 14)}}
     expected_tmp2 = im.as_fieldop(tmp_stencil2, domain_tmp)(
         im.ref("in_field1"), im.ref("in_field2")
     )
@@ -731,7 +731,7 @@ def test_nested_let_args(offset_provider):
         ),
     )(premap_field("inner", "Ioff", -1))
 
-    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (2, 11)})
     domain_m1 = translate_domain(domain, {"Ioff": -1}, offset_provider)
     domain_m2 = translate_domain(domain, {"Ioff": -2}, offset_provider)
 
@@ -754,9 +754,9 @@ def test_program_let(offset_provider):
     let_tmp = im.let("inner", premap_field("outer", "Ioff", -1))(premap_field("inner", "Ioff", -1))
     as_fieldop = im.as_fieldop(stencil_tmp)(im.ref("tmp"))
 
-    domain_lm2_rm1 = im.domain(common.GridType.CARTESIAN, {IDim: (-2, 10)})
-    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    domain_lm1 = im.domain(common.GridType.CARTESIAN, {IDim: (-1, 11)})
+    domain_lm2_rm1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10)})
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (2, 11)})
+    domain_lm1 = im.domain(common.GridType.CARTESIAN, {IDim: (1, 11)})
 
     params = [im.sym(name) for name in ["in_field", "out_field", "outer"]]
 
