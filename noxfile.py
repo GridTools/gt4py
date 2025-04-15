@@ -42,6 +42,8 @@ nox.options.sessions = [
     "test_storage-3.11(cpu)",
 ]
 
+VERBOSE_MODE = int(os.environ("GT4PY_CI_NOX_VERBOSE", "0"))
+
 # -- Parameter sets --
 DeviceOption: TypeAlias = Literal["cpu", "cuda11", "cuda12", "rocm4_3", "rocm5_0"]
 DeviceNoxParam: Final = types.SimpleNamespace(
@@ -330,34 +332,6 @@ def test_storage(
 
 
 # -- Internal implementation utilities --
-@nox.session(tags=["ci"])
-def _should_session_run(session: nox.Session) -> None:
-    if not (commit_spec := os.environ("GT4PY_CI_RUN_ONLY_IF_CHANGED_FROM_COMMIT", "")):
-        return True
-
-    verbose = int(os.environ("GT4PY_CI_RUN_ONLY_IF_CHANGED_FROM_COMMIT_VERBOSE", "0"))
-
-    out = session.run(*f"git diff --name-only {commit_spec}".split(), external=True, silent=True)
-    changed_files = out.strip().split("\n")
-    if verbose:
-        print(f"Modified files from '{commit_spec}': {changed_files}")
-
-    paths, ignore_paths = _extract_name_matching_pattern(
-        session, accept="paths", reject="ignore_paths"
-    )
-
-    relevant_files = _filter_names(changed_files, paths, ignore_paths)
-    if verbose:
-        print(
-            f"\n[{session.name}]:\n"
-            f"  - Include patterns: {paths}\n"
-            f"  - Exclude patterns: {ignore_paths}\n"
-            f"  - Relevant files: {list(relevant_files)}\n"
-        )
-
-    return bool(relevant_files)
-
-
 def _extract_name_matching_pattern(
     session: nox.Session, accept: str, reject: str
 ) -> tuple[list[str], list[str]]:
@@ -420,8 +394,12 @@ def _install_session_venv(
     patterns, ignore_patterns = _extract_name_matching_pattern(
         session, accept="env_vars", reject="ignore_env_vars"
     )
-    print(f"Patterns: {patterns}")
-    print(f"Ignore patterns: {ignore_patterns}")
+    if VERBOSE_MODE:
+        print(
+            f"\n[{session.name}]:\n"
+            f"  - Patterns: {patterns}\n"
+            f"  - Ignore patterns: {ignore_patterns}\n"
+        )
 
     session.run_install(
         "uv",
@@ -444,3 +422,28 @@ def _install_session_venv(
             *((item,) if isinstance(item, str) else item),
             env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
         )
+
+
+def _should_session_run(session: nox.Session) -> None:
+    if not (commit_spec := os.environ("GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM", "")):
+        return True
+
+    out = session.run(*f"git diff --name-only {commit_spec}".split(), external=True, silent=True)
+    changed_files = out.strip().split("\n")
+    if VERBOSE_MODE:
+        print(f"Modified files from '{commit_spec}': {changed_files}")
+
+    paths, ignore_paths = _extract_name_matching_pattern(
+        session, accept="paths", reject="ignore_paths"
+    )
+
+    relevant_files = _filter_names(changed_files, paths, ignore_paths)
+    if VERBOSE_MODE:
+        print(
+            f"\n[{session.name}]:\n"
+            f"  - Include patterns: {paths}\n"
+            f"  - Exclude patterns: {ignore_paths}\n"
+            f"  - Relevant files: {list(relevant_files)}\n"
+        )
+
+    return bool(relevant_files)
