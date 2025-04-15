@@ -64,7 +64,7 @@ class WrapperFunction(eve.Node):
     name: str
     parameters: Sequence[FunctionParameter]
     body: ExprStmt
-    sync: bool = False
+    device: bool = False
 
 
 class BindingFunction(eve.Node):
@@ -132,10 +132,8 @@ class BindingCodeGenerator(TemplatedGenerator):
                             std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
             }
             {{body}}
-            {% if sync %}
-            cudaDeviceSynchronize();
-            {% endif %}
             if (exec_info.has_value()) {
+                {% if _this_node.device %}cudaDeviceSynchronize();{% endif %}
                 exec_info->operator[]("run_cpp_end_time") = static_cast<double>(
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
@@ -273,7 +271,7 @@ def create_bindings(
                     ],
                 )
             ),
-            sync=program_source.language == languages.CUDA,
+            device=(program_source.language in [languages.CUDA, languages.HIP]),
         ),
         binding_module=BindingModule(
             name=program_source.entry_point.name,

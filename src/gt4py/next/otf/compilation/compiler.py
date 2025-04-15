@@ -90,6 +90,7 @@ class Compiler(
         @dataclasses.dataclass(frozen=True)
         class Wrapper(stages.ExtendedCompiledProgram):
             implicit_domain: bool = inp.program_source.implicit_domain
+            name: str = inp.program_source.entry_point.name
             __call__: stages.CompiledProgram = compiled_prog
 
         return Wrapper()

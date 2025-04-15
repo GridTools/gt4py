@@ -59,21 +59,17 @@ def convert_args(
         converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
-        local_exec_info = {} if "exec_info" in offset_provider else None
-        res = inp(
+        exec_info: dict[str, float] | None = {} if config.COLLECT_METRICS else None
+        inp(
             *converted_args,
             *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
             *conn_args,
-            local_exec_info,
+            exec_info,
         )
-        if local_exec_info is not None:
-            exec_info: metrics.RuntimeMetric = (
-                offset_provider["exec_info"] if "exec_info" in offset_provider else None
-            )
-            start = local_exec_info["run_cpp_start_time"]
-            end = local_exec_info["run_cpp_end_time"]
-            exec_info.cpp_time.append(end - start)
-        return res
+        if exec_info is not None:
+            start = exec_info["run_cpp_start_time"]
+            end = exec_info["run_cpp_end_time"]
+            metrics.global_metric_container[inp.name].cpp_time.append(end - start)
 
     return decorated_program
 

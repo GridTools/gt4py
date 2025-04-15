@@ -16,6 +16,7 @@ import concurrent
 import concurrent.futures
 import dataclasses
 import functools
+import time
 import types
 import typing
 import warnings
@@ -243,8 +244,6 @@ class Program:
 
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         if config.COLLECT_METRICS:
-            import time
-
             start = time.time()
         offset_provider = {**offset_provider, **self._implicit_offset_provider}
         if self.backend is None:
@@ -263,9 +262,6 @@ class Program:
                 )
                 ctx.run(self.definition_stage.definition, *args, **kwargs)
             return
-
-        if config.COLLECT_METRICS:
-            offset_provider["exec_info"] = metrics.global_metric_container[self.__name__]
 
         if self._compiled_program is not None:
             # TODO(havogt): make offset_provider_type part of the compiled program hash once we have variants
@@ -287,8 +283,6 @@ class Program:
                 *args,
                 **(kwargs | {"offset_provider": offset_provider}),
             )
-        offset_provider.pop("exec_info", None)
-
         if config.COLLECT_METRICS:
             end = time.time()
             metrics.global_metric_container[self.__name__].total_time.append(end - start)
