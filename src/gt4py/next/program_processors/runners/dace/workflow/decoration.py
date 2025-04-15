@@ -69,7 +69,7 @@ def convert_args(
                         else ndarray.__array_interface__["data"][0]
                     )
                     # backfill dictionary of arguments with field shape and stride symbols
-                    kwargs.update(sdfg_callable.get_field_shape_symbols(arg_name, arg.domain))
+                    kwargs.update(sdfg_callable.get_field_domain_symbols(arg_name, arg.domain))
                     kwargs.update(sdfg_callable.get_field_stride_symbols(arg_desc, ndarray))
                 else:
                     assert isinstance(arg_desc, dace.data.Scalar)

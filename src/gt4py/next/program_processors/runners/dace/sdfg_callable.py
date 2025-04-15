@@ -23,7 +23,7 @@ except ImportError:
     cp = None
 
 
-def get_field_shape_symbols(field_name: str, field_domain: gtx_common.Domain) -> dict[str, Any]:
+def get_field_domain_symbols(field_name: str, field_domain: gtx_common.Domain) -> dict[str, Any]:
     assert gtx_common.Domain.is_finite(field_domain)
     if len(field_domain.dims) == 0:
         return {}
@@ -68,7 +68,7 @@ def _get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
         sdfg_arg, domain = _convert_arg(arg)
         sdfg_arguments[sdfg_param] = sdfg_arg
         if domain:
-            range_symbols |= get_field_shape_symbols(sdfg_param, domain)
+            range_symbols |= get_field_domain_symbols(sdfg_param, domain)
     # sanity check in case range symbols are passed as explicit program arguments
     for range_symbol, value in range_symbols.items():
         if (sdfg_arg := sdfg_arguments.get(range_symbol, None)) is not None:
