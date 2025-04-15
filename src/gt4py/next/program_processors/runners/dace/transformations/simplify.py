@@ -306,6 +306,17 @@ def gt_substitute_compiletime_symbols(
     Todo: This function needs improvement.
     """
 
+    # NOTE: If a symbol, that should be replaced with a constant, is a data, i.e. has
+    #   an entry in `sdfg.arrays` _and_ an AccessNode, then constant substitution
+    #   fails. Furthermore, there is [DaCe issue 1817](https://github.com/spcl/dace/issues/1817),
+    #   causing problems if there are two states in a nested SDFG. To avoid them
+    #   we initially call simplify and hope for the best.
+    gtx_transformations.gt_simplify(
+        sdfg=sdfg,
+        validate=validate,
+        validate_all=validate_all,
+    )
+
     # We will use the `replace` function of the top SDFG, however, lower levels
     #  are handled using ConstantPropagation.
     sdfg.replace_dict(repl)
