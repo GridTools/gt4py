@@ -1021,10 +1021,10 @@ wheels = [
 
 [[package]]
 name = "gridtools-cpp"
-version = "2.3.8"
+version = "2.3.9"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b8/b8/352120417da7a3e16cc822e95668e1843d0cd9ee7f0269b9a098893471cc/gridtools_cpp-2.3.8-py3-none-any.whl", hash = "sha256:d9cb8aadc5dca7e864677072de15596feb883844eee2158ab108d04f2f17f355", size = 420716 },
+    { url = "https://files.pythonhosted.org/packages/b6/8f/08ae062f2b7714c2753faeeead091fc5aa6344ec919ff63d242b95990573/gridtools_cpp-2.3.9-py3-none-any.whl", hash = "sha256:e4deefd804670e101083df9eb27d6b454e3d39ae903b4f7b043846a181452286", size = 1044245 },
 ]
 
 [[package]]
@@ -1211,7 +1211,7 @@ requires-dist = [
     { name = "factory-boy", specifier = ">=3.3.0" },
     { name = "flufl-lock", specifier = ">=8.1.0" },
     { name = "frozendict", specifier = ">=2.3" },
-    { name = "gridtools-cpp", specifier = "==2.*,>=2.3.8" },
+    { name = "gridtools-cpp", specifier = "==2.*,>=2.3.9" },
     { name = "gt4py", extras = ["cuda12"], marker = "extra == 'jax-cuda12'" },
     { name = "gt4py", extras = ["dace", "formatting", "jax", "performance", "testing"], marker = "extra == 'all'" },
     { name = "hypothesis", marker = "extra == 'testing'", specifier = ">=6.0.0" },

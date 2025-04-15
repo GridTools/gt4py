@@ -41,14 +41,7 @@ The following backends are supported:
 
 GT4Py can be installed as a regular Python package using [uv](https://docs.astral.sh/uv/), [pip](https://pip.pypa.io/en/stable/) or any other PEP-517 compatible frontend. We strongly recommended to use`uv` to create and manage virtual environments for your own projects.
 
-The performance backends also require the [Boost](https://www.boost.org) library, a dependency of [GridTools C++](https://github.com/GridTools/gridtools), which needs to be installed by the user.
-
 ## ⚙ Configuration
-
-To explicitly set the [GridTools-C++](https://gridtools.github.io/gridtools) or [Boost](https://www.boost.org) versions used by the code generation backends, the following environment variables can be used:
-
-- `GT_INCLUDE_PATH`: Path to the GridTools installation.
-- `BOOST_ROOT`: Path to a boost installation.
 
 Other useful available environment variables are:
 
