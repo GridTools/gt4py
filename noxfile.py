@@ -125,17 +125,12 @@ def ci_against_commit(session: nox.Session) -> None:
 
     for bare_session_name in args:
         test_session = globals()[bare_session_name]
-        paths = []
-        ignore_paths = []
-        if hasattr(test_session, "_metadata_"):
-            assert (
-                len({"paths", "ignore_paths"}.intersection(test_session._metadata_.keys())) < 2
-            ), "Only one of 'include_paths' or 'exclude_paths' can be specified."
-            paths = test_session._metadata_.get("paths", [])
-            ignore_paths = test_session._metadata_.get("ignore_paths", [])
+        paths, ignore_paths = _extract_name_matching_pattern(
+            test_session, accept="paths", reject="ignore_paths"
+        )
 
         session_name = f"{bare_session_name}-{session.python}"
-        relevant_files = _filter_filenames(changed_files, paths, ignore_paths)
+        relevant_files = _filter_names(changed_files, paths, ignore_paths)
         if options.verbose:
             print(
                 f"\n'{session_name}':\n"
@@ -151,7 +146,8 @@ def ci_against_commit(session: nox.Session) -> None:
 
 
 @session_metadata(
-    ignore_paths=["src/gt4py/next/*", "tests/next_tests/**", "examples/**", "*.md", "*.rst"]
+    env_vars=["NUM_PROCESSES"],
+    ignore_paths=["src/gt4py/next/*", "tests/next_tests/**", "examples/**", "*.md", "*.rst"],
 )
 @nox.session(python=["3.10", "3.11"], tags=["cartesian"])
 @nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
@@ -172,7 +168,7 @@ def test_cartesian(
         groups=["test"],
     )
 
-    num_processes = os.environ.get("NUM_PROCESSES", "auto")
+    num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
     session.run(
@@ -187,8 +183,9 @@ def test_cartesian(
     )
 
 
-@session_metadata(  # Run when gt4py.eve files (or package settings) are changed
-    paths=[
+@session_metadata(
+    env_vars=["NUM_PROCESSES"],
+    paths=[  # Run when gt4py.eve files (or package settings) are changed
         "src/gt4py/eve/*",
         "tests/eve_tests/*",
         ".github/workflows/*",
@@ -196,7 +193,7 @@ def test_cartesian(
         "*.toml",
         "*.yml",
         "noxfile.py",
-    ]
+    ],
 )
 @nox.session(python=["3.10", "3.11"], tags=["cartesian", "next", "cpu"])
 def test_eve(session: nox.Session) -> None:
@@ -204,7 +201,7 @@ def test_eve(session: nox.Session) -> None:
 
     _install_session_venv(session, groups=["test"])
 
-    num_processes = os.environ.get("NUM_PROCESSES", "auto")
+    num_processes = session.env.get("NUM_PROCESSES", "auto")
 
     session.run(
         *f"pytest --cache-clear -sv -n {num_processes}".split(),
@@ -239,14 +236,15 @@ def test_examples(session: nox.Session) -> None:
         )
 
 
-@session_metadata(  # Skip when only gt4py.cartesian or doc files have been updated
-    ignore_paths=[
+@session_metadata(
+    env_vars=["NUM_PROCESSES"],
+    ignore_paths=[  # Skip when only gt4py.cartesian or doc files have been updated
         "src/gt4py/cartesian/**",
         "tests/cartesian_tests/**",
         "examples/**",
         "*.md",
         "*.rst",
-    ]
+    ],
 )
 @nox.session(python=["3.10", "3.11"], tags=["next"])
 @nox.parametrize(
@@ -284,7 +282,7 @@ def test_next(
         groups=groups,
     )
 
-    num_processes = os.environ.get("NUM_PROCESSES", "auto")
+    num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
 
     session.run(
@@ -321,8 +319,9 @@ def test_package(session: nox.Session) -> None:
     )
 
 
-@session_metadata(  # Run when gt4py.storage files (or package settings) are changed
-    paths=[
+@session_metadata(
+    env_vars=["NUM_PROCESSES"],
+    paths=[  # Run when gt4py.storage files (or package settings) are changed
         "src/gt4py/storage/**",
         "src/gt4py/cartesian/backend/**",  # For DaCe storages
         "tests/storage_tests/**",
@@ -330,7 +329,7 @@ def test_package(session: nox.Session) -> None:
         "*.lock" "*.toml",
         "*.yml",
         "noxfile.py",
-    ]
+    ],
 )
 @nox.session(python=["3.10", "3.11"], tags=["cartesian", "next"])
 @nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
@@ -346,7 +345,7 @@ def test_storage(
         session, extras=["performance", "testing", *device_settings["extras"]], groups=["test"]
     )
 
-    num_processes = os.environ.get("NUM_PROCESSES", "auto")
+    num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(device_settings["markers"])
 
     session.run(
@@ -363,30 +362,47 @@ def test_storage(
 
 
 # -- Internal implementation utilities --
-def _filter_filenames(
-    filenames: list[str], include_patterns: list[str], exclude_patterns: list[str]
+def _extract_name_matching_pattern(
+    session: nox.Session, accept: str, reject: str
+) -> tuple[list[str], list[str]]:
+    """Extract name matching patterns from the session."""
+    patterns = []
+    ignore_patterns = []
+
+    if hasattr(session, "_metadata_"):
+        assert (
+            len({accept, reject}.intersection(session._metadata_.keys())) < 2
+        ), "Only one of '{accept}' or '{reject}' patterns can be specified."
+
+        metadata = session._metadata_
+        patterns.extend(metadata.get(accept, []))
+        ignore_patterns.extend(metadata.get(reject, []))
+
+    return patterns, ignore_patterns
+
+
+def _filter_names(
+    names: list[str], include_patterns: list[str], exclude_patterns: list[str]
 ) -> str:
     """
-    Filter filenames based on include and exclude patterns.
+    Filter names based on include and exclude patterns.
 
     Args:
-        filenames: List of filenames to filter.
+        names: List of names to filter.
         include_patterns: List of `fnmatch`-style patterns to include files.
         exclude_patterns: List of `fnmatch`-style patterns to exclude files.
     Returns:
-        A set of filenames that match the include patterns but not the exclude patterns.
+        A set of names that match the include patterns but not the exclude patterns.
     """
-    if include_patterns:
-        candidates = set(
+    candidates = (
+        set(
             itertools.chain(
-                *(
-                    fnmatch.filter(filenames, include_pattern)
-                    for include_pattern in include_patterns
-                )
+                *(fnmatch.filter(names, include_pattern) for include_pattern in include_patterns)
             )
         )
-    else:
-        candidates = set(filenames)
+        if include_patterns
+        else set(names)
+    )
 
     excluded = set(
         itertools.chain(
@@ -404,6 +420,11 @@ def _install_session_venv(
     groups: Sequence[str] = (),
 ) -> None:
     """Install session packages using uv."""
+
+    patterns, ignore_patterns = _extract_name_matching_pattern(
+        session, accept="env_vars", reject="ignore_env_vars"
+    )
+
     session.run_install(
         "uv",
         "sync",
@@ -411,7 +432,10 @@ def _install_session_venv(
         "--no-dev",
         *(f"--extra={e}" for e in extras),
         *(f"--group={g}" for g in groups),
-        env={key: value for key, value in os.environ.items()}
+        env={
+            key: os.environ.get(key)
+            for key in _filter_names(os.environ.items(), patterns, ignore_patterns)
+        }
         | {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
     )
     for item in args:
