@@ -227,7 +227,7 @@ def expression_test_cases():
 
 @pytest.mark.parametrize("test_case", expression_test_cases())
 def test_expression_type(test_case):
-    mesh = simple_mesh()
+    mesh = simple_mesh(None)
     offset_provider_type = {**mesh.offset_provider_type, "Ioff": IDim, "Joff": JDim, "Koff": KDim}
 
     testee, expected_type = test_case
@@ -280,7 +280,7 @@ def test_aliased_function():
 
 
 def test_late_offset_axis():
-    mesh = simple_mesh()
+    mesh = simple_mesh(None)
 
     func = im.lambda_("dim")(im.shift(im.ref("dim"), 1)(im.ref("it", it_on_v_of_e_type)))
     testee = im.call(func)(im.ensure_offset("V2E"))
@@ -334,7 +334,7 @@ def test_cartesian_fencil_definition():
 
 
 def test_unstructured_fencil_definition():
-    mesh = simple_mesh()
+    mesh = simple_mesh(None)
     unstructured_domain = im.call("unstructured_domain")(
         im.call("named_range")(
             itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
@@ -403,7 +403,7 @@ def test_function_definition():
 
 
 def test_fencil_with_nb_field_input():
-    mesh = simple_mesh()
+    mesh = simple_mesh(None)
     unstructured_domain = im.call("unstructured_domain")(
         im.call("named_range")(
             itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1

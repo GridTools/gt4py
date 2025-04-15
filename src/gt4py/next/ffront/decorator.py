@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import concurrent
+import concurrent.futures
 import dataclasses
 import functools
 import types
@@ -27,6 +29,7 @@ from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
     common,
+    config,
     embedded as next_embedded,
     errors,
 )
@@ -47,6 +50,9 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
+
+# TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
+_async_compilation_pool = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -75,8 +81,13 @@ class Program:
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
     connectivities: Optional[
-        common.OffsetProvider  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
-    ]
+        common.OffsetProvider
+    ]  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
+
+    # TODO(havogt): pattern will be changed in the compile with variants PR, this pattern is used because a subclass is adding a new field without default
+    _compiled_program: (
+        concurrent.futures.Future[stages.CompiledProgram] | stages.CompiledProgram | None
+    ) = dataclasses.field(init=False, default=None, hash=False, repr=False)
 
     @classmethod
     def from_function(
@@ -178,7 +189,11 @@ class Program:
 
         return ProgramWithBoundArgs(
             bound_args=kwargs,
-            **{field.name: getattr(self, field.name) for field in dataclasses.fields(self)},
+            **{
+                field.name: getattr(self, field.name)
+                for field in dataclasses.fields(self)
+                if field.init
+            },
         )
 
     @functools.cached_property
@@ -244,11 +259,68 @@ class Program:
                 ctx.run(self.definition_stage.definition, *args, **kwargs)
             return
 
-        self.backend(
-            self.definition_stage,
-            *args,
-            **(kwargs | {"offset_provider": offset_provider}),
+        if self._compiled_program is not None:
+            # TODO(havogt): make offset_provider_type part of the compiled program hash once we have variants
+            # TODO(havogt): measure overhead of canonicalize_arguments
+            program_type = self.past_stage.past_node.type
+            assert isinstance(program_type, ts_ffront.ProgramType)
+            args, kwargs = type_info.canonicalize_arguments(program_type, args, kwargs)
+            try:
+                # if this call works, the future was already resolved
+                self._compiled_program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # `Future` not callable, but that's why we are in `try`
+            except TypeError:  # 'Future' object is not callable
+                # otherwise we resolve the future and call again
+                assert isinstance(self._compiled_program, concurrent.futures.Future)
+                object.__setattr__(self, "_compiled_program", self._compiled_program.result())
+                self._compiled_program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # here it is a `CompiledProgram`
+        else:
+            self.backend(
+                self.definition_stage,
+                *args,
+                **(kwargs | {"offset_provider": offset_provider}),
+            )
+
+    def compile(
+        self, offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None
+    ) -> Program:
+        if self._compiled_program is not None:
+            raise RuntimeError("Program is already compiled.")
+        if self.backend is None or self.backend == eve.NOTHING:
+            raise ValueError("Cannot compile a program without backend.")
+        if self.connectivities is None and offset_provider_type is None:
+            raise ValueError(
+                "Cannot compile a program without connectivities / OffsetProviderType."
+            )
+        offset_provider_type = (
+            self.connectivities if offset_provider_type is None else offset_provider_type
         )
+        assert common.is_offset_provider(offset_provider_type) or common.is_offset_provider_type(
+            offset_provider_type
+        )
+        past_node_type = self.past_stage.past_node.type
+        assert isinstance(past_node_type, ts_ffront.ProgramType)
+        arg_types_dict = past_node_type.definition.pos_or_kw_args
+
+        # TODO(havogt): we currently don't support pos_only or kw_only args at the program level
+        assert not past_node_type.definition.kw_only_args
+        assert not past_node_type.definition.pos_only_args
+
+        args = tuple(arg_types_dict.values())
+
+        compile_time_args = arguments.CompileTimeArgs(
+            offset_provider=offset_provider_type,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
+            column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
+            args=args,
+            kwargs={},
+        )
+        object.__setattr__(
+            self,
+            "_compiled_program",
+            _async_compilation_pool.submit(
+                self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
+            ),
+        )
+        return self
 
     def freeze(self) -> FrozenProgram:
         if self.backend is None:
@@ -401,6 +473,12 @@ class ProgramWithBoundArgs(Program):
                     full_kwargs[str(param.id)] = self.bound_args[param.id]
 
         return super().__call__(*tuple(full_args), offset_provider=offset_provider, **full_kwargs)
+
+    @xtyping.override
+    def compile(
+        self, offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None
+    ) -> Program:
+        raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
 
 
 @typing.overload

@@ -25,6 +25,7 @@ from .loop_blocking import LoopBlocking
 from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
+from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
 from .redundant_array_removers import (
     CopyChainRemover,
     MultiStateGlobalSelfCopyElimination,
@@ -42,6 +43,7 @@ from .simplify import (
     gt_simplify,
     gt_substitute_compiletime_symbols,
 )
+from .split_access_nodes import SplitAccessNode, gt_split_access_nodes
 from .state_fusion import GT4PyStateFusion
 from .strides import (
     gt_change_transient_strides,
@@ -65,11 +67,13 @@ __all__ = [
     "MapFusionParallel",
     "MapFusionSerial",
     "MapIterationOrder",
+    "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
+    "SplitAccessNode",
     "gt_auto_optimize",
     "gt_change_transient_strides",
     "gt_create_local_double_buffering",
@@ -89,5 +93,6 @@ __all__ = [
     "gt_set_gpu_blocksize",
     "gt_set_iteration_order",
     "gt_simplify",
+    "gt_split_access_nodes",
     "gt_substitute_compiletime_symbols",
 ]

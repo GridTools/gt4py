@@ -149,7 +149,10 @@ class BindingCodeGenerator(TemplatedGenerator):
         dims = [self.visit(dim) for dim in sid.dimensions]
         origin = f"{sid.source_buffer}.second"
         stride_spec = [
-            dim.static_stride if dim.static_stride is not None else -1 for dim in sid.dimensions
+            "gridtools::nanobind::dynamic_size"
+            if dim.static_stride is None
+            else str(dim.static_stride)
+            for dim in sid.dimensions
         ]
         stride_spec_string = (
             f"gridtools::nanobind::stride_spec<{', '.join(str(s) for s in stride_spec)}>{{}}"

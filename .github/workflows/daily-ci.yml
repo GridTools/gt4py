@@ -20,6 +20,8 @@ jobs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Use a deep clone to get the correct version from tags
     - id: get-versions
       uses: ./.github/actions/get-python-versions
 
@@ -39,16 +41,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
-
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'macos-latest' }}
-      shell: bash
-      run: brew install boost
-
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-      shell: bash
-      run: sudo apt install libboost-dev
+      with:
+        fetch-depth: 0  # Use a deep clone to get the correct version from tags
 
     - name: Install uv and set the python version
       uses: astral-sh/setup-uv@v5

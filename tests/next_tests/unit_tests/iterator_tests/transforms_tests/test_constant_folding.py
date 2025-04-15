@@ -6,19 +6,59 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
-
 import pytest
+
+from gt4py import next as gtx
+from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
+from gt4py.next.iterator.transforms import constant_folding
+from gt4py.next.type_system import type_specifications as ts
 
 
-def test_cases():
-    return (
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (itir.Literal(value="True", type=ts.ScalarType(kind=ts.ScalarKind.BOOL)), True),
+        (itir.Literal(value="False", type=ts.ScalarType(kind=ts.ScalarKind.BOOL)), False),
+        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.INT8)), gtx.int8(1)),
+        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.UINT8)), gtx.uint8(1)),
+        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.INT16)), gtx.int16(1)),
+        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.UINT16)), gtx.uint16(1)),
+        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.INT32)), gtx.int32(1)),
+        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.UINT32)), gtx.uint32(1)),
+        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.INT64)), gtx.int64(1)),
+        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.UINT64)), gtx.uint64(1)),
+        (
+            itir.Literal(value="0.1", type=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+            gtx.float32("0.1"),
+        ),
+        (
+            itir.Literal(value="0.1", type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+            gtx.float64("0.1"),
+        ),
+        (
+            itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+            gtx.float64("1.0"),
+        ),
+    ],
+    ids=lambda param: f"Literal[{param.value}, {param.type}]"
+    if isinstance(param, itir.Literal)
+    else str(param),
+)
+def test_value_from_literal(value, expected):
+    result = constant_folding._value_from_literal(value)
+
+    assert result == expected
+    assert type(result) is type(expected)
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    (
         # expr, simplified expr
         (im.plus(1, 1), 2),
         (im.not_(True), False),
+        (im.not_(False), True),
         (im.plus(4, im.plus(7, im.minus(7, 5))), 13),
         (im.if_(True, im.plus(im.ref("a"), 2), im.minus(9, 5)), im.plus("a", 2)),
         (im.minimum("a", "a"), "a"),
@@ -153,11 +193,10 @@ def test_cases():
                 im.plus(im.maximum(im.minus(1, "a"), im.plus("a", 1)), im.minus(1, "a")),
             ),
         ),
-    )
-
-
-@pytest.mark.parametrize("test_case", test_cases())
+    ),
+    ids=lambda x: str(x[0]),
+)
 def test_constant_folding(test_case):
     testee, expected = test_case
-    actual = ConstantFolding.apply(testee)
+    actual = constant_folding.ConstantFolding.apply(testee)
     assert actual == im.ensure_expr(expected)
