@@ -12,10 +12,9 @@ import ctypes
 from typing import Any, Sequence
 
 import dace
-from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interface_ptr
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, utils as gtx_utils
+from gt4py.next import common, field_utils, utils as gtx_utils
 from gt4py.next.otf import arguments, stages
 from gt4py.next.program_processors.runners.dace import (
     sdfg_callable,
@@ -49,7 +48,6 @@ def convert_args(
 
         if sdfg_program._lastargs:
             kwargs = dict(zip(sdfg.arg_names, flat_args, strict=True))
-            kwargs.update(sdfg_callable.get_sdfg_conn_args(sdfg, offset_provider, on_gpu))
 
             use_fast_call = True
             last_call_args = sdfg_program._lastargs[0]
@@ -57,25 +55,32 @@ def convert_args(
             # the data pointer should remain the same otherwise fast_call cannot be used and
             # the arguments list has to be reconstructed.
             for i, (arg_name, arg_type) in enumerate(inp.sdfg_arglist):
-                if isinstance(arg_type, dace.data.Array):
-                    assert arg_name in kwargs, f"argument '{arg_name}' not found."
-                    data_ptr = get_array_interface_ptr(kwargs[arg_name], arg_type.storage)
+                arg = kwargs.get(arg_name, None)
+                if arg is None:
+                    # Shape and strides of arrays are supposed not to change, and can therefore
+                    # be omitted. Same for connectivity tables.
+                    assert gtx_dace_utils.is_field_symbol(
+                        arg_name
+                    ) or gtx_dace_utils.is_connectivity_identifier(
+                        arg_name, common.offset_provider_to_type(offset_provider)
+                    ), f"argument '{arg_name}' not found."
+                elif (ndarray := getattr(arg, "ndarray", None)) is not None:
+                    assert isinstance(arg_type, dace.data.Array)
                     assert isinstance(last_call_args[i], ctypes.c_void_p)
+                    assert field_utils.verify_device_field_type(arg, device)
+                    data_ptr = (
+                        ndarray.__cuda_array_interface__["data"][0]
+                        if on_gpu
+                        else ndarray.__array_interface__["data"][0]
+                    )
                     if last_call_args[i].value != data_ptr:
                         use_fast_call = False
                         break
                 else:
                     assert isinstance(arg_type, dace.data.Scalar)
                     assert isinstance(last_call_args[i], ctypes._SimpleCData)
-                    if arg_name in kwargs:
-                        # override the scalar value used in previous program call
-                        actype = arg_type.dtype.as_ctypes()
-                        last_call_args[i] = actype(kwargs[arg_name])
-                    else:
-                        # shape and strides of arrays are supposed not to change, and can therefore be omitted
-                        assert gtx_dace_utils.is_field_symbol(
-                            arg_name
-                        ), f"argument '{arg_name}' not found."
+                    actype = arg_type.dtype.as_ctypes()
+                    last_call_args[i] = actype(arg)
 
             if use_fast_call:
                 return inp.fast_call()
