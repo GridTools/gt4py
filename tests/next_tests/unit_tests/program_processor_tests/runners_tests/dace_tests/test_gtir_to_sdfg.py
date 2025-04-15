@@ -50,7 +50,9 @@ def allow_view_arguments():
     dace.Config.set(*path, value=old_value)
 
 
-pytestmark = pytest.mark.usefixtures("allow_view_arguments")  # use the fixture for all tests in this module
+pytestmark = pytest.mark.usefixtures(
+    "allow_view_arguments"
+)  # use the fixture for all tests in this module
 
 N = 10
 FLOAT_TYPE = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
