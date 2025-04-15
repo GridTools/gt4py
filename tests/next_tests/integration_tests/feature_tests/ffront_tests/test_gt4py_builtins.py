@@ -53,7 +53,7 @@ def test_maxover_execution_(unstructured_case, strategy):
     inp = cases.allocate(unstructured_case, testee, "edge_f", strategy=strategy)()
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
-    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
     ref = np.max(
         inp.asnumpy()[v2e_table],
         axis=1,
@@ -70,7 +70,7 @@ def test_minover_execution(unstructured_case):
         out = min_over(edge_f(V2E), axis=V2EDim)
         return out
 
-    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
     cases.verify_with_default_data(
         unstructured_case,
         minover,
@@ -100,7 +100,7 @@ def reduction_ek_field(
     "fop", [reduction_e_field, reduction_ek_field], ids=lambda fop: fop.__name__
 )
 def test_neighbor_sum(unstructured_case_3d, fop):
-    v2e_table = unstructured_case_3d.offset_provider["V2E"].ndarray
+    v2e_table = unstructured_case_3d.offset_provider["V2E"].asnumpy()
 
     edge_f = cases.allocate(unstructured_case_3d, fop, "edge_f")()
 
@@ -151,7 +151,7 @@ def test_reduction_execution_with_offset(unstructured_case):
     def fencil(edge_f: EKField, out: VKField):
         fencil_op(edge_f, out=out)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
     field = cases.allocate(unstructured_case, fencil, "edge_f", sizes={KDim: 2})()
     out = cases.allocate(unstructured_case, fencil_op, cases.RETURN, sizes={KDim: 1})()
 
@@ -184,7 +184,7 @@ def test_reduction_expression_in_call(unstructured_case):
     def fencil(edge_f: cases.EField, out: cases.VField):
         reduce_expr(edge_f, out=out)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
     cases.verify_with_default_data(
         unstructured_case,
         fencil,
@@ -204,7 +204,7 @@ def test_reduction_with_common_expression(unstructured_case):
     def testee(flux: cases.EField) -> cases.VField:
         return neighbor_sum(flux(V2E) + flux(V2E), axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
     cases.verify_with_default_data(
         unstructured_case,
         testee,
@@ -220,7 +220,7 @@ def test_reduction_expression_with_where(unstructured_case):
     def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
         return neighbor_sum(where(mask, inp(V2E), inp(V2E)), axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
 
     mask = unstructured_case.as_field(
         [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
@@ -249,7 +249,7 @@ def test_reduction_expression_with_where_and_tuples(unstructured_case):
     def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
         return neighbor_sum(where(mask, (inp(V2E), inp(V2E)), (inp(V2E), inp(V2E)))[1], axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
 
     mask = unstructured_case.as_field(
         [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
@@ -278,7 +278,7 @@ def test_reduction_expression_with_where_and_scalar(unstructured_case):
     def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
         return neighbor_sum(inp(V2E) + where(mask, inp(V2E), 1), axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
 
     mask = unstructured_case.as_field(
         [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
