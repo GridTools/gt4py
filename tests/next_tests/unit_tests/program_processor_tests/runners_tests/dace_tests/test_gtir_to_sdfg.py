@@ -41,6 +41,7 @@ dace_backend = pytest.importorskip("gt4py.next.program_processors.runners.dace")
 
 @pytest.fixture
 def allow_view_arguments():
+    """Allows arrays with non-default layout."""
     path = ["compiler", "allow_view_arguments"]
     value = True
     old_value = dace.Config.get(*path)
@@ -49,7 +50,7 @@ def allow_view_arguments():
     dace.Config.set(*path, value=old_value)
 
 
-pytestmark = pytest.mark.usefixtures("allow_view_arguments")
+pytestmark = pytest.mark.usefixtures("allow_view_arguments")  # use the fixture for all tests in this module
 
 N = 10
 FLOAT_TYPE = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
