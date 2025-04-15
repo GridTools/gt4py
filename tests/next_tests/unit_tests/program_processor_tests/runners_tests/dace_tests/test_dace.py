@@ -19,6 +19,7 @@ import gt4py._core.definitions as core_defs
 import gt4py.next as gtx
 import gt4py.next.common as gtx_common
 from gt4py.next.ffront.fbuiltins import where
+from gt4py._core import ndarray_utils
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import E2V
@@ -34,6 +35,8 @@ dace = pytest.importorskip("dace")
 from gt4py.next.program_processors.runners import dace as dace_backends
 
 
+# Override the exec_alloc_descriptor with a custom Backend,
+# see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture(
     params=[
         pytest.param(dace_backends.run_dace_cpu_cached, marks=pytest.mark.requires_dace),
@@ -43,7 +46,7 @@ from gt4py.next.program_processors.runners import dace as dace_backends
         ),
     ]
 )
-def cached_dace_backend(request):
+def exec_alloc_descriptor(request):
     """
     Test fixture to select the dace backends only. In order to trigger `fast_call`,
     we have to use the cached backend so that the same `CompiledSDFG` object is
@@ -53,27 +56,27 @@ def cached_dace_backend(request):
 
 
 @pytest.fixture
-def cartesian_case(request, cached_dace_backend):
+def cartesian_case(request, exec_alloc_descriptor):
     yield cases.Case(
-        backend=cached_dace_backend,
+        backend=exec_alloc_descriptor,
         offset_provider={"Ioff": IDim},
         default_sizes={IDim: 10},
         grid_type=gtx_common.GridType.CARTESIAN,
-        allocator=cached_dace_backend.allocator,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
 
 @pytest.fixture
-def unstructured_case(request, cached_dace_backend, mesh_descriptor):
+def unstructured_case(request, exec_alloc_descriptor, mesh_descriptor):
     yield cases.Case(
-        backend=cached_dace_backend,
+        backend=exec_alloc_descriptor,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
             Edge: mesh_descriptor.num_edges,
         },
         grid_type=gtx_common.GridType.UNSTRUCTURED,
-        allocator=cached_dace_backend.allocator,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
 
@@ -181,24 +184,19 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
-    connectivity_E2V = unstructured_case.offset_provider["E2V"]
-    assert isinstance(connectivity_E2V, gtx.common.NeighborTable)
-
-    # check that test connectivities are allocated on host memory
-    # this is an assumption to test that fast_call cannot be used for gpu tests
-    assert isinstance(connectivity_E2V.ndarray, np.ndarray)
+    connectivity_E2V = unstructured_case.offset_provider["E2V"].asnumpy()
 
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
         return a(E2V[0])
 
     (a,), kwfields = cases.get_default_data(unstructured_case, testee)
-    numpy_ref = lambda a: a[connectivity_E2V.ndarray[:, 0]]
+    numpy_ref = lambda a: a[connectivity_E2V[:, 0]]
 
     mock_fast_call, mock_construct_args = make_mocks(monkeypatch)
 
     # Reset mock objects and run/verify GT4Py program
-    def verify_testee(offset_provider):
+    def verify_testee():
         mock_construct_args.reset_mock()
         mock_fast_call.reset_mock()
         cases.verify(
@@ -206,37 +204,11 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
             testee,
             a,
             **kwfields,
-            offset_provider=offset_provider,
+            offset_provider=unstructured_case.offset_provider,
             ref=numpy_ref(a.asnumpy()),
         )
         mock_fast_call.assert_called_once()
 
-    if gtx.allocators.is_field_allocator_for(
-        unstructured_case.backend.allocator, core_defs.DeviceType.CPU
-    ):
-        offset_provider = unstructured_case.offset_provider
-    else:
-        assert gtx.allocators.is_field_allocator_for(
-            unstructured_case.backend.allocator, core_defs.CUPY_DEVICE_TYPE
-        )
-
-        import cupy as cp
-
-        # The test connectivities are numpy arrays, by default, and they are copied
-        # to gpu memory at each program call (see `dace_backend._ensure_is_on_device`),
-        # therefore fast_call cannot be used (unless cupy reuses the same cupy array
-        # from the its memory pool, but this behavior is random and unpredictable).
-        # Here we copy the connectivity to gpu memory, and reuse the same cupy array
-        # on multiple program calls, in order to ensure that fast_call is used.
-        offset_provider = {
-            "E2V": gtx.as_connectivity(
-                domain=connectivity_E2V.domain,
-                codomain=connectivity_E2V.codomain,
-                data=cp.asarray(connectivity_E2V.ndarray),
-                skip_value=connectivity_E2V.skip_value,
-            )
-        }
-
-    verify_testee(offset_provider)
-    verify_testee(offset_provider)
+    verify_testee()
+    verify_testee()
     mock_construct_args.assert_not_called()

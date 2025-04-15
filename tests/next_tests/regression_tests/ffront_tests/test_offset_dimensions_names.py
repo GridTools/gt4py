@@ -9,7 +9,7 @@
 import pytest
 
 from gt4py import next as gtx
-from gt4py.next import Dims, Field, common
+from gt4py.next import Dims, Field, common, constructors
 
 from next_tests import definitions as test_defs
 from next_tests.integration_tests import cases
@@ -24,17 +24,18 @@ Off = gtx.FieldOffset("Off", source=E, target=(V, Neigh))
 
 @pytest.fixture
 def case():
-    mesh = ffront_test_utils.simple_mesh()
     exec_alloc_descriptor = test_defs.ProgramBackendId.GTFN_CPU.load()
+    mesh = ffront_test_utils.simple_mesh(exec_alloc_descriptor.allocator)
     v2e_arr = mesh.offset_provider["V2E"].ndarray
     return cases.Case(
         exec_alloc_descriptor,
         offset_provider={
-            "Off": common._connectivity(
-                v2e_arr,
-                codomain=E,
+            "Off": constructors.as_connectivity(
                 domain={V: v2e_arr.shape[0], Neigh: 4},
+                codomain=E,
+                data=v2e_arr,
                 skip_value=None,
+                allocator=exec_alloc_descriptor.allocator,
             ),
         },
         default_sizes={
