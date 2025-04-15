@@ -47,14 +47,9 @@ def convert_args(
             flat_args = (*flat_args, *flat_size_args)
 
         if sdfg_program._lastargs:
-            kwargs = dict(zip(sdfg.arg_names, flat_args, strict=True))
-
-            use_fast_call = True
             last_call_args = sdfg_program._lastargs[0]
-            # The scalar arguments should be overridden with the new value; for field arguments,
-            # the data pointer should remain the same otherwise fast_call cannot be used and
-            # the arguments list has to be reconstructed.
-            for i, (arg_name, arg_type) in enumerate(inp.sdfg_arglist):
+            kwargs = dict(zip(sdfg.arg_names, flat_args, strict=True))
+            for i, (arg_name, arg_desc) in enumerate(inp.sdfg_arglist):
                 arg = kwargs.get(arg_name, None)
                 if arg is None:
                     # Shape and strides of arrays are supposed not to change, and can therefore
@@ -65,31 +60,30 @@ def convert_args(
                         arg_name, common.offset_provider_to_type(offset_provider)
                     ), f"argument '{arg_name}' not found."
                 elif (ndarray := getattr(arg, "ndarray", None)) is not None:
-                    assert isinstance(arg_type, dace.data.Array)
+                    assert isinstance(arg_desc, dace.data.Array)
                     assert isinstance(last_call_args[i], ctypes.c_void_p)
                     assert field_utils.verify_device_field_type(arg, device)
-                    data_ptr = (
+                    last_call_args[i].value = (
                         ndarray.__cuda_array_interface__["data"][0]
                         if on_gpu
                         else ndarray.__array_interface__["data"][0]
                     )
-                    if last_call_args[i].value != data_ptr:
-                        use_fast_call = False
-                        break
+                    # backfill dictionary of arguments with field shape and stride symbols
+                    kwargs.update(sdfg_callable.get_field_shape_symbols(arg_name, arg.domain))
+                    kwargs.update(sdfg_callable.get_field_stride_symbols(arg_desc, ndarray))
                 else:
-                    assert isinstance(arg_type, dace.data.Scalar)
+                    assert isinstance(arg_desc, dace.data.Scalar)
                     assert isinstance(last_call_args[i], ctypes._SimpleCData)
-                    actype = arg_type.dtype.as_ctypes()
+                    actype = arg_desc.dtype.as_ctypes()
                     last_call_args[i] = actype(arg)
 
-            if use_fast_call:
-                return inp.fast_call()
+            return inp.fast_call()
 
         sdfg_args = sdfg_callable.get_sdfg_args(
             sdfg,
             offset_provider,
             *flat_args,
-            check_args=False,
+            filter_args=False,
             on_gpu=on_gpu,
         )
 
