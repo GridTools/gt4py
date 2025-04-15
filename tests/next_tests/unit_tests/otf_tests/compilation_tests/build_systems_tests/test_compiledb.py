@@ -6,10 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import pathlib
-
 from gt4py.next import config
-from gt4py.next.otf.compilation import build_data, cache, importer
+from gt4py.next.otf.compilation import build_data, importer
 from gt4py.next.otf.compilation.build_systems import compiledb
 
 
@@ -25,7 +23,9 @@ def test_default_compiledb_factory(compilable_source_example, clean_example_sess
     data = build_data.read_data(otf_builder.root_path)
 
     assert data.status == build_data.BuildStatus.COMPILED
-    assert pathlib.Path(otf_builder.root_path / data.module).exists()
+    assert (otf_builder.root_path / data.module).exists()
     assert hasattr(
         importer.import_from_path(otf_builder.root_path / data.module), data.entry_point_name
     )
+
+    assert (otf_builder.root_path / "build.sh").exists()

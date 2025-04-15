@@ -1,58 +1,51 @@
----
-tags: []
----
-
-# [Title]
+# Title, e.g. name of the feature
 
 - **Status**: valid | superseded | deprecated
 - **Authors**: Someone Foo (@github_handle)
 - **Created**: YYYY-MM-DD
 - **Updated**: YYYY-MM-DD
 
-(Wh)Y-statement: In the context of [use case/user story u], facing [concern c] we decided for [option o] and neglected [other options], to achieve [system qualities/desired consequences], accepting [downside/undesired consequences].
+Why-statement: In the context of [use case/user story], facing [concern], we decided to [do thing X] to achieve [system qualities/desired consequences]. We considered [thing Y] and accept [downsides / undesired consequences].
 
 ## Context
 
-[ What is the issue that we're seeing that is motivating this decision or change? Describe the context and problem statement, in free form.
+What is motivating this decision or change? Describe the context and problem statement, in free form.
 
-A list of **Concerns**
+You might want to add a list of drivers, forces, concerns
 
 - [driver 1, e.g., a force, facing concern, ...]
 - [driver 2, e.g., a force, facing concern, ...]
 
-]
-
 ## Decision
 
-[ What is the change that we're proposing and/or doing?
+What is the change that we're proposing and/or doing?
 
-It has been Chosen option X because "[justification. e.g., only option, which meets k.o. criterion decision driver | which resolves force force | ... | comes out best (see below)]. ]
+We chose option X because [justification. e.g., only option, which meets k.o. criterion or decision driver | which resolves force | ... | comes out best (see below)].
 
 ## Consequences
 
-[ What becomes easier or more difficult to do because of this change?
+What it now easier to do? What becomes more difficult with this change?
 
-Describe both the positive (e.g., improvement of quality attribute satisfaction, follow-up decisions required, ...) and negative (e.g., compromising quality attribute, follow-up decisions required, ...)] outcomes of this decision. ]
+Describe the positive (e.g., improvement of quality attribute satisfaction, follow-up decisions required, ...) as well as the negative (e.g., compromising quality attribute, follow-up decisions required, ...) outcomes of this decision.
 
-## Alternatives Considered
+## Alternatives considered
 
-### [option 1]
+### Alternative 1
 
-[example | description | pointer to more information | ...] <!-- optional -->
+example | description | pointer to more information
 
-- Good, because [argument a]
-- Bad, because [argument c]
+- Good, because ...
+- Bad, because ...
 - ...
 
-### [option 2]
+### Alternative 2
 
-[example | description | pointer to more information | ...] <!-- optional -->
+example | description | pointer to more information
 
-- Good, because [argument a]
-- Bad, because [argument c]
+- Good, because ...
+- Bad, because ...
 - ...
 
-## References <!-- optional -->
+## References
 
-- [Someone - Something](https://someone.com/a-title-about-something)
-- ...
+If it helps, add references e.g. to issues and/or other planning documents.
