@@ -43,9 +43,6 @@ def _filter_setat_by_domain(stmt: itir.SetAt, domain: SymbolicDomain) -> itir.Se
             new_targets.append(im.tuple_get(i, stmt.target))
             new_els.append(el)
 
-    if len(new_els) == 0:
-        breakpoint()
-
     new_expr = im.make_tuple(*new_els)
     new_expr.annex.domain = domain
 
@@ -53,13 +50,13 @@ def _filter_setat_by_domain(stmt: itir.SetAt, domain: SymbolicDomain) -> itir.Se
 
 
 def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
-    new_stmts = []
+    new_stmts: list[itir.Stmt] = []
     for stmt in stmts:
         if isinstance(stmt, itir.SetAt):
             assert hasattr(stmt.expr.annex, "domain")
             distinct_domains: set[domain_utils.SymbolicDomain] = set(
                 # TODO: is flatten the right thing to do here? we don't supported nested tuples right?
-                next_utils.flatten_nested_tuple(stmt.expr.annex.domain)  # type: ignore[assignment]  # mypy not smart enough
+                next_utils.flatten_nested_tuple(stmt.expr.annex.domain)
             )
             if len(distinct_domains) > 1:
                 for domain in distinct_domains:
@@ -149,9 +146,6 @@ def _transform_by_pattern(
                 tmp_expr.type,
                 tuple_constructor=lambda *elements: tuple(elements),
             )
-
-            if not hasattr(tmp_expr.annex, "domain"):
-                breakpoint()
 
             def get_domain(
                 _, path: tuple[int, ...]

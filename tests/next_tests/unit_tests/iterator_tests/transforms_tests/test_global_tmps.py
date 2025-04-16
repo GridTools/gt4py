@@ -225,16 +225,24 @@ def test_nested_if():
 
 
 def test_tuple_different_domain():
-    domain1 = im.domain("cartesian_domain", {IDim: (0, 1)})
-    domain2 = im.domain("cartesian_domain", {IDim: (0, 2)})
+    domain01 = im.domain("cartesian_domain", {IDim: (0, 1)})
+    domain12 = im.domain("cartesian_domain", {IDim: (1, 2)})
     offset_provider = {"I": IDim}
+
+    def add_shifted(domain: itir.FunCall | None = None):
+        return im.as_fieldop(
+            im.lambda_("it1", "it2")(im.plus(im.deref("it1"), im.deref(im.shift("I", 1)("it2")))),
+            domain,
+        )
+
+    params = [
+        im.sym("cond", ts.ScalarType(kind=ts.ScalarKind.BOOL)),
+        im.sym("inp1", i_field_type),
+        im.sym("inp2", i_field_type),
+        im.sym("out", i_field_type),
+    ]
     testee = program_factory(
-        params=[
-            im.sym("cond", ts.ScalarType(kind=ts.ScalarKind.BOOL)),
-            im.sym("inp1", i_field_type),
-            im.sym("inp2", i_field_type),
-            im.sym("out", i_field_type),
-        ],
+        params=params,
         body=[
             itir.SetAt(
                 # val = if_(cond, make_tuple(as_fieldop(...), as_fieldop(...)), make_tuple())
@@ -247,14 +255,8 @@ def test_tuple_different_domain():
                     im.if_(
                         "cond", im.make_tuple("inp1", "inp2"), im.make_tuple("inp2", "inp1")
                     ),  # todo: fix, the domain is strange
-                )(
-                    im.as_fieldop(
-                        im.lambda_("it1", "it2")(
-                            im.plus(im.deref("it1"), im.deref(im.shift("I", 1)("it2")))
-                        )
-                    )(im.tuple_get(0, "val"), im.tuple_get(1, "val"))
-                ),
-                domain=domain1,
+                )(add_shifted(None)(im.tuple_get(0, "val"), im.tuple_get(1, "val"))),
+                domain=domain01,
             )
         ],
     )
@@ -262,22 +264,54 @@ def test_tuple_different_domain():
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     # TODO:
+    tup_tmp12 = im.make_tuple(im.ref("__tmp_1"), im.ref("__tmp_2"))
     expected = program_factory(
-        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
-        declarations=[itir.Temporary(id="__tmp_1", domain=domain1, dtype=float_type)],
+        params=params,
+        declarations=[
+            itir.Temporary(id="__tmp_1", domain=domain01, dtype=float_type),
+            itir.Temporary(id="__tmp_2", domain=domain12, dtype=float_type),
+        ],
         body=[
-            itir.SetAt(
-                target=im.ref("__tmp_1"),
-                expr=im.as_fieldop("deref", domain1)("inp"),
-                domain=domain1,
+            itir.IfStmt(
+                cond=im.ref("cond"),
+                true_branch=[
+                    itir.SetAt(
+                        target=im.make_tuple(im.tuple_get(1, tup_tmp12)),
+                        expr=im.make_tuple(im.ref("inp1")),
+                        domain=domain01,
+                    ),
+                    itir.SetAt(
+                        target=im.make_tuple(im.tuple_get(0, tup_tmp12)),
+                        expr=im.make_tuple(im.ref("inp2")),
+                        domain=domain12,
+                    ),
+                ],
+                false_branch=[
+                    itir.SetAt(
+                        target=im.make_tuple(im.tuple_get(1, tup_tmp12)),
+                        expr=im.make_tuple(im.ref("inp2")),
+                        domain=domain01,
+                    ),
+                    itir.SetAt(
+                        target=im.make_tuple(im.tuple_get(0, tup_tmp12)),
+                        expr=im.make_tuple(im.ref("inp1")),
+                        domain=domain12,
+                    ),
+                ],
             ),
             itir.SetAt(
                 target=im.ref("out"),
-                expr=im.as_fieldop("deref", domain1)("__tmp_1"),
-                domain=domain1,
+                expr=add_shifted(domain01)(
+                    im.tuple_get(0, tup_tmp12),
+                    im.tuple_get(1, tup_tmp12),
+                ),
+                domain=domain01,
             ),
         ],
     )
 
     actual = global_tmps.create_global_tmps(testee, offset_provider)
+    # TODO: the order of SetAt in the IfStmt is not stable
+    print(actual)
+    print(expected)
     assert actual == expected
