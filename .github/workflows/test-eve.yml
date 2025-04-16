@@ -15,6 +15,7 @@ jobs:
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
+    - uses: actions/checkout@v4
     - id: get-versions
       uses: ./.github/actions/get-python-versions
 
@@ -30,7 +31,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Use a deep clone to get target PR branch
+        fetch-depth: 0  # Use a deep clone to get target PR zbranch
 
     - name: Install uv and set the python version
       uses: astral-sh/setup-uv@v5
