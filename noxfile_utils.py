@@ -193,7 +193,7 @@ def _filter_names(
     return included - excluded
 
 
-def _is_skippable_session(session: nox.Session) -> None:
+def _is_skippable_session(session: nox.Session) -> bool:
     """Determine if a session can be skipped based on changed files from a specific commit.
 
     This function checks if a session can be skipped by analyzing which files have changed
