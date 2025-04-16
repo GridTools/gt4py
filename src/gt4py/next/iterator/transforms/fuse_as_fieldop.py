@@ -134,6 +134,8 @@ def fuse_as_fieldop(
             type_inference.reinfer(arg)
             if arg.type and not isinstance(arg.type, ts.DeferredType):
                 assert isinstance(arg.type, ts.TypeSpec)
+                dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
+                assert not isinstance(dtype, ts.ListType)
             new_param: str
             if isinstance(
                 arg, itir.SymRef
