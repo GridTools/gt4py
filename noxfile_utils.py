@@ -50,9 +50,9 @@ def customize_session(
         raise ValueError("Cannot use both `paths` and `ignore_paths` at the same time.")
 
     def decorator(session_function: AnyCallable) -> nox.registry.Func:
-        assert session_function.__name__ not in _metadata_registry, (
-            f"Session function '{session_function.__name__}' already has metadata."
-        )
+        assert (
+            session_function.__name__ not in _metadata_registry
+        ), f"Session function '{session_function.__name__}' already has metadata."
         _metadata_registry[kwargs.get("name", session_function.__name__)] = types.SimpleNamespace(
             env_vars=env_vars,
             ignore_env_vars=ignore_env_vars,
