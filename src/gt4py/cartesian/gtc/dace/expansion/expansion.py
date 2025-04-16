@@ -17,7 +17,7 @@ import dace.library
 import dace.subsets
 import sympy
 
-from gt4py.cartesian.gtc.dace import daceir as dcir
+from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
 from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gt4py.cartesian.gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
 
@@ -74,15 +74,14 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         * change connector names to match inner array name (before expansion prefixed to satisfy uniqueness)
         * change in- and out-edges' subsets so that they have the same shape as the corresponding array inside
         * determine the domain size based on edges to StencilComputation
-
         """
         # change connector names
         for in_edge in parent_state.in_edges(node):
-            assert in_edge.dst_conn.startswith("__in_")
-            in_edge.dst_conn = in_edge.dst_conn[len("__in_") :]
+            assert in_edge.dst_conn.startswith(prefix.CONNECTOR_IN)
+            in_edge.dst_conn = in_edge.dst_conn.removeprefix(prefix.CONNECTOR_IN)
         for out_edge in parent_state.out_edges(node):
-            assert out_edge.src_conn.startswith("__out_")
-            out_edge.src_conn = out_edge.src_conn[len("__out_") :]
+            assert out_edge.src_conn.startswith(prefix.CONNECTOR_OUT)
+            out_edge.src_conn = out_edge.src_conn.removeprefix(prefix.CONNECTOR_OUT)
 
         # union input and output subsets
         subsets = {}
@@ -120,15 +119,27 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
             if key in nsdfg.symbol_mapping:
                 del nsdfg.symbol_mapping[key]
 
+        for edge in parent_state.in_edges(node):
+            if edge.dst_conn not in nsdfg.in_connectors:
+                # Drop connection if connector is not found in the expansion of the library node
+                parent_state.remove_edge(edge)
+                if parent_state.in_degree(edge.src) + parent_state.out_degree(edge.src) == 0:
+                    # Remove node if it is now isolated
+                    parent_state.remove_node(edge.src)
+
     @staticmethod
     def _get_parent_arrays(
         node: StencilComputation, parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> Dict[str, dace.data.Data]:
         parent_arrays: Dict[str, dace.data.Data] = {}
         for edge in (e for e in parent_state.in_edges(node) if e.dst_conn is not None):
-            parent_arrays[edge.dst_conn[len("__in_") :]] = parent_sdfg.arrays[edge.data.data]
+            parent_arrays[edge.dst_conn.removeprefix(prefix.CONNECTOR_IN)] = parent_sdfg.arrays[
+                edge.data.data
+            ]
         for edge in (e for e in parent_state.out_edges(node) if e.src_conn is not None):
-            parent_arrays[edge.src_conn[len("__out_") :]] = parent_sdfg.arrays[edge.data.data]
+            parent_arrays[edge.src_conn.removeprefix(prefix.CONNECTOR_OUT)] = parent_sdfg.arrays[
+                edge.data.data
+            ]
         return parent_arrays
 
     @staticmethod

@@ -30,20 +30,12 @@ from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacia
 )
 
 
-try:
-    import dace
-except ImportError:
-    dace: Optional[ModuleType] = None  # type:ignore[no-redef]
-
-pytestmark = pytest.mark.requires_dace
+dace = pytest.importorskip("dace")
 
 
 def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
     if not cartesian_case.backend or "dace" not in cartesian_case.backend.name:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
-
-    # TODO(edopao): add support for range symbols in field domain and re-enable this test
-    pytest.skip("Requires support for field domain range.")
 
     backend = cartesian_case.backend
 
@@ -67,7 +59,9 @@ def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
             tmp_field, out_field
         )
 
-    sdfg()
+    # use unique cache name based on process id to avoid clashes between parallel pytest workers
+    with dace.config.set_temporary("cache", value="unique"):
+        sdfg()
 
     assert np.allclose(
         gtx.field_utils.asnumpy(out_field)[2:-2, 2:-2],
@@ -90,12 +84,9 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
     if not unstructured_case.backend or "dace" not in unstructured_case.backend.name:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
-    # TODO(edopao): add support for range symbols in field domain and re-enable this test
-    pytest.skip("Requires support for field domain range.")
-
     allocator, backend = unstructured_case.allocator, unstructured_case.backend
 
-    if gtx_allocators.is_field_allocator_for(allocator, gtx_allocators.CUPY_DEVICE):
+    if gtx_allocators.is_field_allocator_for(allocator, core_defs.CUPY_DEVICE_TYPE):
         import cupy as xp
 
         dace_storage_type = dace.StorageType.GPU_Global
@@ -144,16 +135,18 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         # DaCe strides: number of elements to jump
         return arg.strides[axis] // arg.itemsize
 
-    cSDFG(
-        a,
-        out,
-        offset_provider,
-        rows=3,
-        cols=2,
-        connectivity_E2V=e2v,
-        __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
-        __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
-    )
+    # use unique cache name based on process id to avoid clashes between parallel pytest workers
+    with dace.config.set_temporary("cache", value="unique"):
+        cSDFG(
+            a,
+            out,
+            offset_provider,
+            rows=3,
+            cols=2,
+            connectivity_E2V=e2v,
+            __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
+            __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
+        )
 
     e2v_np = e2v.asnumpy()
     assert np.allclose(out.asnumpy(), a.asnumpy()[e2v_np[:, 0]])
@@ -165,8 +158,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         allocator=allocator,
     )
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
-    with dace.config.temporary_config():
-        dace.config.Config.set("compiler", "allow_view_arguments", value=True)
+    # use unique cache name based on process id to avoid clashes between parallel pytest workers
+    with dace.config.set_temporary("cache", value="unique"):
         cSDFG(
             a,
             out,

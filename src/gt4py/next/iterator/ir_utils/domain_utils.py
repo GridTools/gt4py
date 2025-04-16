@@ -13,7 +13,7 @@ import functools
 from typing import Any, Literal, Mapping, Optional
 
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
@@ -79,7 +79,7 @@ class SymbolicDomain:
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self) -> itir.FunCall:
-        converted_ranges: dict[common.Dimension | str, tuple[itir.Expr, itir.Expr]] = {
+        converted_ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] = {
             key: (value.start, value.stop) for key, value in self.ranges.items()
         }
         return im.domain(self.grid_type, converted_ranges)
@@ -127,7 +127,7 @@ class SymbolicDomain:
                 else:
                     # note: ugly but cheap re-computation, but should disappear
                     horizontal_sizes = {
-                        k: im.literal(str(v), itir.INTEGER_INDEX_BUILTIN)
+                        k: im.literal(str(v), builtins.INTEGER_INDEX_BUILTIN)
                         for k, v in _max_domain_sizes_by_location_type(offset_provider).items()
                     }
 
@@ -137,7 +137,7 @@ class SymbolicDomain:
                 assert new_dim not in new_ranges or old_dim == new_dim
 
                 new_range = SymbolicRange(
-                    im.literal("0", itir.INTEGER_INDEX_BUILTIN),
+                    im.literal("0", builtins.INTEGER_INDEX_BUILTIN),
                     horizontal_sizes[new_dim.value],
                 )
                 new_ranges = dict(
@@ -162,11 +162,11 @@ def domain_union(*domains: SymbolicDomain) -> SymbolicDomain:
     assert all(domain.ranges.keys() == domains[0].ranges.keys() for domain in domains)
     for dim in domains[0].ranges.keys():
         start = functools.reduce(
-            lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
+            lambda current_expr, el_expr: im.minimum(current_expr, el_expr),
             [domain.ranges[dim].start for domain in domains],
         )
         stop = functools.reduce(
-            lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
+            lambda current_expr, el_expr: im.maximum(current_expr, el_expr),
             [domain.ranges[dim].stop for domain in domains],
         )
         # constant fold expression to keep the tree small

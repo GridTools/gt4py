@@ -1,15 +1,17 @@
 name: "Fallback: Test Eve"
 
 on:
+  push:
+    branches:
+    - main
   pull_request:
     branches:
     - main
     paths-ignore:  # Inverse of corresponding workflow
     - "src/gt4py/eve/**"
     - "tests/eve_tests/**"
-    - "workflows/**"
-    - "*.cfg"
-    - "*.ini"
+    - ".github/workflows/**"
+    - "*.lock"
     - "*.toml"
     - "*.yml"
 
@@ -17,8 +19,8 @@ jobs:
   test-eve:
     strategy:
       matrix:
-        python-version: ["3.10", "3.11"]
         os: ["ubuntu-latest"]
+        python-version: ["3.10", "3.11"]
 
     runs-on: ${{ matrix.os }}
     steps:

@@ -17,11 +17,13 @@ dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import dataflow as dace_dataflow
 
-from gt4py.next.program_processors.runners.dace_fieldview import (
+from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
 
-from . import pytestmark
+import dace
+
+
 from . import util
 
 
@@ -64,11 +66,11 @@ def _make_serial_sdfg_1(
 
     state.add_mapped_tasklet(
         name="second_computation",
-        map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{N}")],
+        map_ranges=[("__i4", f"0:{N}"), ("__i6", f"0:{N}")],
         input_nodes={tmp},
-        inputs={"__in0": dace.Memlet("tmp[__i0, __i1]")},
+        inputs={"__in0": dace.Memlet("tmp[__i4, __i6]")},
         code="__out = __in0 + 3.0",
-        outputs={"__out": dace.Memlet("b[__i0, __i1]")},
+        outputs={"__out": dace.Memlet("b[__i4, __i6]")},
         external_edges=True,
     )
 
@@ -133,11 +135,11 @@ def _make_serial_sdfg_2(
     )
     state.add_mapped_tasklet(
         name="second_computation",
-        map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{N}")],
+        map_ranges=[("__i3", f"0:{N}"), ("__i6", f"0:{N}")],
         input_nodes={tmp_2},
-        inputs={"__in0": dace.Memlet("tmp_2[__i0, __i1]")},
+        inputs={"__in0": dace.Memlet("tmp_2[__i3, __i6]")},
         code="__out = __in0 - 3.0",
-        outputs={"__out": dace.Memlet("c[__i0, __i1]")},
+        outputs={"__out": dace.Memlet("c[__i3, __i6]")},
         external_edges=True,
     )
 
@@ -197,18 +199,66 @@ def _make_serial_sdfg_3(
 
     state.add_mapped_tasklet(
         name="indirect_access",
-        map_ranges=[("__i0", f"0:{N_output}")],
+        map_ranges=[("__i1", f"0:{N_output}")],
         input_nodes={tmp},
         inputs={
-            "__index": dace.Memlet("idx[__i0]"),
+            "__index": dace.Memlet("idx[__i1]"),
             "__array": dace.Memlet.simple("tmp", subset_str=f"0:{N_input}", num_accesses=1),
         },
         code="__out = __array[__index]",
-        outputs={"__out": dace.Memlet("c[__i0]")},
+        outputs={"__out": dace.Memlet("c[__i1]")},
         external_edges=True,
     )
 
     return sdfg
+
+
+def _make_parallel_sdfg_1(
+    single_input_node: bool,
+) -> tuple[dace.SDFG, dace.SDFGState]:
+    """Make a parallel SDFG.
+
+    The maps access both the same Data but uses different AccessNodes for that.
+    If `single_input_node` is `True` then there will only one AccessNode for `a`
+    be created, otherwise each map has its own.
+    """
+    sdfg = dace.SDFG(util.unique_name("parallel_sdfg_1"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "abc":
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
+
+    a1, b, c = (state.add_access(name) for name in "abc")
+    a2 = a1 if single_input_node else state.add_access("a")
+
+    state.add_mapped_tasklet(
+        "map1",
+        map_ranges={"__i0": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i0]")},
+        code="__out = __in + 10.",
+        outputs={"__out": dace.Memlet("b[__i0]")},
+        input_nodes={a1},
+        output_nodes={b},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "map2",
+        map_ranges={"__i1": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i1]")},
+        code="__out = __in - 10.",
+        outputs={"__out": dace.Memlet("c[__i1]")},
+        input_nodes={a2},
+        output_nodes={c},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    return sdfg, state
 
 
 def test_exclusive_itermediate():
@@ -507,3 +557,52 @@ def test_indirect_access_2():
         validate_all=True,
     )
     assert count == 0
+
+
+def test_parallel_1():
+    sdfg, state = _make_parallel_sdfg_1(single_input_node=False)
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 4
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 2
+
+    # Because we request a common ancestor it will not apply.
+    #  NOTE: We might have to change that if the implementation changes.
+    nb_applies = sdfg.apply_transformations_repeated(
+        [gtx_transformations.MapFusionParallel(only_if_common_ancestor=True)]
+    )
+    assert nb_applies == 0
+
+    # If we do not restrict common ancestor then it will work.
+    nb_applies = sdfg.apply_transformations_repeated(
+        [gtx_transformations.MapFusionParallel(only_if_common_ancestor=False)]
+    )
+
+    assert nb_applies == 1
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 4
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 1
+
+
+def test_parallel_2():
+    sdfg, state = _make_parallel_sdfg_1(single_input_node=True)
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 3
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 2
+
+    nb_applies = sdfg.apply_transformations_repeated([gtx_transformations.MapFusionParallel()])
+
+    assert nb_applies == 1
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 3
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 1
+
+
+def test_parallel_3():
+    """Test that the parallel map fusion does not apply for serial maps."""
+    sdfg = _make_serial_sdfg_1(20)
+    assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 3
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+
+    # Because the maps are fully serial, parallel map fusion should never apply.
+    nb_applies = sdfg.apply_transformations_repeated(
+        [gtx_transformations.MapFusionParallel(only_if_common_ancestor=False)]
+    )
+    assert nb_applies == 0
+    assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 3
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2

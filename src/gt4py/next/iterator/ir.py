@@ -14,6 +14,7 @@ from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
 from gt4py.next import common
+from gt4py.next.iterator.builtins import BUILTINS
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -91,87 +92,6 @@ class FunctionDefinition(Node, SymbolTableTrait):
     id: Coerced[SymbolName]
     params: List[Sym]
     expr: Expr
-
-
-UNARY_MATH_NUMBER_BUILTINS = {"abs"}
-UNARY_LOGICAL_BUILTINS = {"not_"}
-UNARY_MATH_FP_BUILTINS = {
-    "sin",
-    "cos",
-    "tan",
-    "arcsin",
-    "arccos",
-    "arctan",
-    "sinh",
-    "cosh",
-    "tanh",
-    "arcsinh",
-    "arccosh",
-    "arctanh",
-    "sqrt",
-    "exp",
-    "log",
-    "gamma",
-    "cbrt",
-    "floor",
-    "ceil",
-    "trunc",
-}
-UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
-BINARY_MATH_NUMBER_BUILTINS = {
-    "minimum",
-    "maximum",
-    "fmod",
-    "plus",
-    "minus",
-    "multiplies",
-    "divides",
-    "mod",
-    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
-}
-BINARY_MATH_COMPARISON_BUILTINS = {"eq", "less", "greater", "greater_equal", "less_equal", "not_eq"}
-BINARY_LOGICAL_BUILTINS = {"and_", "or_", "xor_"}
-
-ARITHMETIC_BUILTINS = {
-    *UNARY_MATH_NUMBER_BUILTINS,
-    *UNARY_LOGICAL_BUILTINS,
-    *UNARY_MATH_FP_BUILTINS,
-    *UNARY_MATH_FP_PREDICATE_BUILTINS,
-    *BINARY_MATH_NUMBER_BUILTINS,
-    "power",
-    *BINARY_MATH_COMPARISON_BUILTINS,
-    *BINARY_LOGICAL_BUILTINS,
-}
-
-#: builtin / dtype used to construct integer indices, like domain bounds
-INTEGER_INDEX_BUILTIN = "int32"
-INTEGER_BUILTINS = {"int32", "int64"}
-FLOATING_POINT_BUILTINS = {"float32", "float64"}
-TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
-
-BUILTINS = {
-    "tuple_get",
-    "cast_",
-    "cartesian_domain",
-    "unstructured_domain",
-    "make_tuple",
-    "shift",
-    "neighbors",
-    "named_range",
-    "list_get",
-    "map_",
-    "make_const_list",
-    "lift",
-    "reduce",
-    "deref",
-    "can_deref",
-    "scan",
-    "if_",
-    "index",  # `index(dim)` creates a dim-field that has the current index at each point
-    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
-    *ARITHMETIC_BUILTINS,
-    *TYPEBUILTINS,
-}
 
 
 class Stmt(Node): ...

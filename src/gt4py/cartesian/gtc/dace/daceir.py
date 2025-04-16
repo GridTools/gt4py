@@ -17,6 +17,7 @@ import gt4py.cartesian.gtc.definitions
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.common import LocNode
+from gt4py.cartesian.gtc.dace import prefix
 from gt4py.cartesian.gtc.dace.symbol_utils import (
     get_axis_bound_dace_symbol,
     get_axis_bound_diff_str,
@@ -51,11 +52,11 @@ class Axis(eve.StrEnum):
         return eve.SymbolRef("__tile_" + self.lower())
 
     @staticmethod
-    def dims_3d() -> Generator["Axis", None, None]:
+    def dims_3d() -> Generator[Axis, None, None]:
         yield from [Axis.I, Axis.J, Axis.K]
 
     @staticmethod
-    def dims_horizontal() -> Generator["Axis", None, None]:
+    def dims_horizontal() -> Generator[Axis, None, None]:
         yield from [Axis.I, Axis.J]
 
     def to_idx(self) -> int:
@@ -357,7 +358,7 @@ class Range(eve.Node):
 
 
 class GridSubset(eve.Node):
-    intervals: Dict[Axis, Union[DomainInterval, TileInterval, IndexWithExtent]]
+    intervals: Dict[Axis, Union[DomainInterval, IndexWithExtent, TileInterval]]
 
     def __iter__(self):
         for axis in Axis.dims_3d():
@@ -429,10 +430,10 @@ class GridSubset(eve.Node):
     @classmethod
     def from_interval(
         cls,
-        interval: Union[oir.Interval, TileInterval, DomainInterval, IndexWithExtent],
+        interval: Union[DomainInterval, IndexWithExtent, oir.Interval, TileInterval],
         axis: Axis,
     ):
-        res_interval: Union[IndexWithExtent, TileInterval, DomainInterval]
+        res_interval: Union[DomainInterval, IndexWithExtent, TileInterval]
         if isinstance(interval, (DomainInterval, oir.Interval)):
             res_interval = DomainInterval(
                 start=AxisBound(
@@ -441,7 +442,7 @@ class GridSubset(eve.Node):
                 end=AxisBound(level=interval.end.level, offset=interval.end.offset, axis=Axis.K),
             )
         else:
-            assert isinstance(interval, (TileInterval, IndexWithExtent))
+            assert isinstance(interval, (IndexWithExtent, TileInterval))
             res_interval = interval
 
         return cls(intervals={axis: res_interval})
@@ -464,7 +465,7 @@ class GridSubset(eve.Node):
         return GridSubset(intervals=res_subsets)
 
     def tile(self, tile_sizes: Dict[Axis, int]):
-        res_intervals: Dict[Axis, Union[DomainInterval, TileInterval, IndexWithExtent]] = {}
+        res_intervals: Dict[Axis, Union[DomainInterval, IndexWithExtent, TileInterval]] = {}
         for axis, interval in self.intervals.items():
             if isinstance(interval, DomainInterval) and axis in tile_sizes:
                 if axis == Axis.K:
@@ -505,15 +506,15 @@ class GridSubset(eve.Node):
                 intervals[axis] = interval1.union(interval2)
             else:
                 assert (
-                    isinstance(interval2, (TileInterval, DomainInterval))
-                    and isinstance(interval1, (IndexWithExtent, DomainInterval))
+                    isinstance(interval2, (DomainInterval, TileInterval))
+                    and isinstance(interval1, (DomainInterval, IndexWithExtent))
                 ) or (
-                    isinstance(interval1, (TileInterval, DomainInterval))
+                    isinstance(interval1, (DomainInterval, TileInterval))
                     and isinstance(interval2, IndexWithExtent)
                 )
                 intervals[axis] = (
                     interval1
-                    if isinstance(interval1, (TileInterval, DomainInterval))
+                    if isinstance(interval1, (DomainInterval, TileInterval))
                     else interval2
                 )
         return GridSubset(intervals=intervals)
@@ -524,10 +525,6 @@ class FieldAccessInfo(eve.Node):
     global_grid_subset: GridSubset
     dynamic_access: bool = False
     variable_offset_axes: List[Axis] = eve.field(default_factory=list)
-
-    @property
-    def is_dynamic(self) -> bool:
-        return self.dynamic_access or len(self.variable_offset_axes) > 0
 
     def axes(self):
         yield from self.grid_subset.axes()
@@ -713,7 +710,7 @@ class FieldDecl(Decl):
 
     @property
     def is_dynamic(self) -> bool:
-        return self.access_info.is_dynamic
+        return self.access_info.dynamic_access
 
     def with_set_access_info(self, access_info: FieldAccessInfo) -> FieldDecl:
         return FieldDecl(
@@ -730,18 +727,30 @@ class Literal(common.Literal, Expr):
 
 
 class ScalarAccess(common.ScalarAccess, Expr):
-    pass
+    is_target: bool
+    original_name: Optional[str] = None
 
 
 class VariableKOffset(common.VariableKOffset[Expr]):
-    pass
+    @datamodels.validator("k")
+    def no_casts_in_offset_expression(self, _: datamodels.Attribute, expression: Expr) -> None:
+        for part in expression.walk_values():
+            if isinstance(part, Cast):
+                raise ValueError(
+                    "DaCe backends are currently missing support for casts in variable k offsets. See issue https://github.com/GridTools/gt4py/issues/1881."
+                )
 
 
 class IndexAccess(common.FieldAccess, Expr):
-    offset: Optional[Union[common.CartesianOffset, VariableKOffset]]
+    # ScalarAccess used for indirect addressing
+    offset: Optional[common.CartesianOffset | Literal | ScalarAccess | VariableKOffset]
+    is_target: bool
+
+    explicit_indices: Optional[list[Literal | ScalarAccess | VariableKOffset]] = None
+    """Used to access as a full field with explicit indices"""
 
 
-class AssignStmt(common.AssignStmt[Union[ScalarAccess, IndexAccess], Expr], Stmt):
+class AssignStmt(common.AssignStmt[Union[IndexAccess, ScalarAccess], Expr], Stmt):
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
@@ -771,7 +780,7 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
 
 
-class Cast(common.Cast[Expr], Expr):  # type: ignore
+class Cast(common.Cast[Expr], Expr):
     pass
 
 
@@ -836,10 +845,102 @@ class IterationNode(eve.Node):
     grid_subset: GridSubset
 
 
+class Condition(eve.Node):
+    condition: Tasklet
+    true_states: list[ComputationState | Condition | WhileLoop]
+
+    # Currently unused due to how `if` statements are parsed in `gtir_to_oir`, see
+    # https://github.com/GridTools/gt4py/issues/1898
+    false_states: list[ComputationState | Condition | WhileLoop] = eve.field(default_factory=list)
+
+    @datamodels.validator("condition")
+    def condition_has_boolean_expression(
+        self, attribute: datamodels.Attribute, tasklet: Tasklet
+    ) -> None:
+        assert isinstance(tasklet, Tasklet)
+        assert len(tasklet.stmts) == 1
+        assert isinstance(tasklet.stmts[0], AssignStmt)
+        assert isinstance(tasklet.stmts[0].left, ScalarAccess)
+        if tasklet.stmts[0].left.original_name is None:
+            raise ValueError(
+                f"Original node name not found for {tasklet.stmts[0].left.name}. DaCe IR error."
+            )
+        assert isinstance(tasklet.stmts[0].right, Expr)
+        if tasklet.stmts[0].right.dtype != common.DataType.BOOL:
+            raise ValueError("Condition must be a boolean expression.")
+
+
 class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
-    decls: List[LocalScalarDecl]
+    label: str
     stmts: List[Stmt]
     grid_subset: GridSubset = GridSubset.single_gridpoint()
+
+    @datamodels.validator("stmts")
+    def non_empty_list(self, attribute: datamodels.Attribute, v: list[Stmt]) -> None:
+        if len(v) < 1:
+            raise ValueError("Tasklet must contain at least one statement.")
+
+    @datamodels.validator("stmts")
+    def read_after_write(self, attribute: datamodels.Attribute, statements: list[Stmt]) -> None:
+        def _remove_prefix(name: eve.SymbolRef) -> str:
+            return name.removeprefix(prefix.TASKLET_OUT).removeprefix(prefix.TASKLET_IN)
+
+        class ReadAfterWriteChecker(eve.NodeVisitor):
+            def visit_IndexAccess(self, node: IndexAccess, writes: set[str]) -> None:
+                if node.is_target:
+                    # Keep track of writes
+                    writes.add(_remove_prefix(node.name))
+                    return
+
+                # Check reads
+                if (
+                    node.name.startswith(prefix.TASKLET_OUT)
+                    and _remove_prefix(node.name) not in writes
+                ):
+                    raise ValueError(f"Reading undefined '{node.name}'. DaCe IR error.")
+
+                if _remove_prefix(node.name) in writes and not node.name.startswith(
+                    prefix.TASKLET_OUT
+                ):
+                    raise ValueError(
+                        f"Read after write of '{node.name}' not connected to out connector. DaCe IR error."
+                    )
+
+            def visit_ScalarAccess(self, node: ScalarAccess, writes: set[str]) -> None:
+                # Handle stencil parameters differently because they are always available
+                if not node.name.startswith(prefix.TASKLET_IN) and not node.name.startswith(
+                    prefix.TASKLET_OUT
+                ):
+                    return
+
+                # Keep track of writes
+                if node.is_target:
+                    writes.add(_remove_prefix(node.name))
+                    return
+
+                # Make sure we don't read uninitialized memory
+                if (
+                    node.name.startswith(prefix.TASKLET_OUT)
+                    and _remove_prefix(node.name) not in writes
+                ):
+                    raise ValueError(f"Reading undefined '{node.name}'. DaCe IR error.")
+
+                if _remove_prefix(node.name) in writes and not node.name.startswith(
+                    prefix.TASKLET_OUT
+                ):
+                    raise ValueError(
+                        f"Read after write of '{node.name}' not connected to out connector. DaCe IR error."
+                    )
+
+            def visit_AssignStmt(self, node: AssignStmt, writes: Set[eve.SymbolRef]) -> None:
+                # Visiting order matters because `writes` must not contain the symbols from the left visit
+                self.visit(node.right, writes=writes)
+                self.visit(node.left, writes=writes)
+
+        writes: set[str] = set()
+        checker = ReadAfterWriteChecker()
+        for statement in statements:
+            checker.visit(statement, writes=writes)
 
 
 class DomainMap(ComputationNode, IterationNode):
@@ -852,17 +953,38 @@ class ComputationState(IterationNode):
     computations: List[Union[Tasklet, DomainMap]]
 
 
-class DomainLoop(IterationNode, ComputationNode):
+class DomainLoop(ComputationNode, IterationNode):
     axis: Axis
     index_range: Range
-    loop_states: List[Union[ComputationState, DomainLoop]]
+    loop_states: list[ComputationState | Condition | DomainLoop | WhileLoop]
+
+
+class WhileLoop(eve.Node):
+    condition: Tasklet
+    body: list[ComputationState | Condition | WhileLoop]
+
+    @datamodels.validator("condition")
+    def condition_has_boolean_expression(
+        self, attribute: datamodels.Attribute, tasklet: Tasklet
+    ) -> None:
+        assert isinstance(tasklet, Tasklet)
+        assert len(tasklet.stmts) == 1
+        assert isinstance(tasklet.stmts[0], AssignStmt)
+        assert isinstance(tasklet.stmts[0].left, ScalarAccess)
+        if tasklet.stmts[0].left.original_name is None:
+            raise ValueError(
+                f"Original node name not found for {tasklet.stmts[0].left.name}. DaCe IR error."
+            )
+        assert isinstance(tasklet.stmts[0].right, Expr)
+        if tasklet.stmts[0].right.dtype != common.DataType.BOOL:
+            raise ValueError("Condition must be a boolean expression.")
 
 
 class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
     label: eve.Coerced[eve.SymbolRef]
     field_decls: List[FieldDecl]
     symbol_decls: List[SymbolDecl]
-    states: List[Union[DomainLoop, ComputationState]]
+    states: list[ComputationState | Condition | DomainLoop | WhileLoop]
 
 
 # There are circular type references with string placeholders. These statements let datamodels resolve those.

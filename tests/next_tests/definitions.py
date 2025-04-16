@@ -11,6 +11,7 @@
 import dataclasses
 import enum
 import importlib
+from typing import Final
 
 import pytest
 
@@ -53,11 +54,17 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 
 @dataclasses.dataclass(frozen=True)
 class EmbeddedDummyBackend:
+    name: str
     allocator: next_allocators.FieldBufferAllocatorProtocol
+    executor: Final = None
 
 
-numpy_execution = EmbeddedDummyBackend(next_allocators.StandardCPUFieldBufferAllocator())
-cupy_execution = EmbeddedDummyBackend(next_allocators.StandardGPUFieldBufferAllocator())
+numpy_execution = EmbeddedDummyBackend(
+    "EmbeddedNumPy", next_allocators.StandardCPUFieldBufferAllocator()
+)
+cupy_execution = EmbeddedDummyBackend(
+    "EmbeddedCuPy", next_allocators.StandardGPUFieldBufferAllocator()
+)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
@@ -104,12 +111,14 @@ USES_SCAN_IN_STENCIL = "uses_scan_in_stencil"
 USES_SCAN_WITHOUT_FIELD_ARGS = "uses_scan_without_field_args"
 USES_SCAN_NESTED = "uses_scan_nested"
 USES_SCAN_REQUIRING_PROJECTOR = "uses_scan_requiring_projector"
-USES_SCAN_1D_FIELD = "uses_scan_1d_field"
 USES_SPARSE_FIELDS = "uses_sparse_fields"
 USES_SPARSE_FIELDS_AS_OUTPUT = "uses_sparse_fields_as_output"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
 USES_STRIDED_NEIGHBOR_OFFSET = "uses_strided_neighbor_offset"
 USES_TUPLE_ARGS = "uses_tuple_args"
+USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS = (
+    "uses_tuple_args_with_different_but_promotable_dims"
+)
 USES_TUPLE_ITERATOR = "uses_tuple_iterator"
 USES_TUPLE_RETURNS = "uses_tuple_returns"
 USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
@@ -133,6 +142,7 @@ COMMON_SKIP_TEST_LIST = [
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 # Markers to skip because of missing features in the domain inference
 DOMAIN_INFERENCE_SKIP_LIST = [
@@ -145,7 +155,6 @@ DACE_SKIP_TEST_LIST = (
         (USES_CAN_DEREF, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_COMPOSITE_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_LIFT, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_ORIGIN, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_REDUCE_WITH_LAMBDA, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -163,6 +172,7 @@ EMBEDDED_SKIP_LIST = [
 ]
 ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 GTFN_SKIP_TEST_LIST = (
     COMMON_SKIP_TEST_LIST
@@ -184,17 +194,9 @@ BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
-    + [
-        # dace issue https://github.com/spcl/dace/issues/1773
-        (USES_SCAN_1D_FIELD, XFAIL, UNSUPPORTED_MESSAGE),
-    ],
+    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.DACE_GPU_NO_OPT: DACE_SKIP_TEST_LIST
-    + [
-        # dace issue https://github.com/spcl/dace/issues/1773
-        (USES_SCAN_1D_FIELD, XFAIL, UNSUPPORTED_MESSAGE),
-    ],
+    OptionalProgramBackendId.DACE_GPU_NO_OPT: DACE_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST

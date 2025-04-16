@@ -16,10 +16,10 @@ from gt4py.next.type_system import type_specifications as ts
 def test_prune_casts_simple():
     x_ref = im.ref("x", ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     y_ref = im.ref("y", ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-    testee = im.call("plus")(im.call("cast_")(x_ref, "float64"), im.call("cast_")(y_ref, "float64"))
+    testee = im.plus(im.cast_(x_ref, "float64"), im.cast_(y_ref, "float64"))
     testee = type_inference.infer(testee, offset_provider_type={}, allow_undeclared_symbols=True)
 
-    expected = im.call("plus")(im.call("cast_")(x_ref, "float64"), y_ref)
+    expected = im.plus(im.cast_(x_ref, "float64"), y_ref)
     actual = PruneCasts.apply(testee)
     assert actual == expected
 

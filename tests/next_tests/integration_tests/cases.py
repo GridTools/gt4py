@@ -60,6 +60,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 # mypy does not accept [IDim, ...] as a type
 
 IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
+JField: TypeAlias = gtx.Field[[JDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
 IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
 KField: TypeAlias = gtx.Field[[KDim], np.int32]  # type: ignore [valid-type]
@@ -192,13 +193,13 @@ class UniqueInitializer(DataInitializer):
     data containers.
     """
 
-    start: int = 0
+    start: int = 1
 
     @property
     def scalar_value(self) -> ScalarValue:
         start = self.start
         self.start += 1
-        return np.int64(start)
+        return start
 
     def field(
         self,

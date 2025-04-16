@@ -515,7 +515,7 @@ def test_cond(offset_provider):
 
     testee = im.if_(cond, field_1, field_2)
 
-    domain = im.domain(common.GridType.CARTESIAN, {"IDim": (0, 11)})
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain_tmp = translate_domain(domain, {"Ioff": -1}, offset_provider)
     expected_domains_dict = {"in_field1": {IDim: (0, 12)}, "in_field2": {IDim: (-2, 12)}}
     expected_tmp2 = im.as_fieldop(tmp_stencil2, domain_tmp)(
@@ -1028,10 +1028,10 @@ def test_arithmetic_builtin(offset_provider):
 def test_scan(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     testee = im.as_fieldop(
-        im.call("scan")(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0)
+        im.scan(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0)
     )("a")
     expected = im.as_fieldop(
-        im.call("scan")(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0),
+        im.scan(im.lambda_("init", "it")(im.deref(im.shift("Ioff", 1)("it"))), True, 0.0),
         domain,
     )("a")
 

@@ -14,7 +14,7 @@ import inspect
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -81,7 +81,7 @@ def _register_builtin_type_synthesizer(
 
 
 @_register_builtin_type_synthesizer(
-    fun_names=itir.UNARY_MATH_NUMBER_BUILTINS | itir.UNARY_MATH_FP_BUILTINS
+    fun_names=builtins.UNARY_MATH_NUMBER_BUILTINS | builtins.UNARY_MATH_FP_BUILTINS
 )
 def _(val: ts.ScalarType) -> ts.ScalarType:
     return val
@@ -92,7 +92,7 @@ def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
     return base
 
 
-@_register_builtin_type_synthesizer(fun_names=itir.BINARY_MATH_NUMBER_BUILTINS)
+@_register_builtin_type_synthesizer(fun_names=builtins.BINARY_MATH_NUMBER_BUILTINS)
 def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType:
     if isinstance(lhs, ts.DeferredType):
         return rhs
@@ -103,14 +103,14 @@ def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType:
 
 
 @_register_builtin_type_synthesizer(
-    fun_names=itir.UNARY_MATH_FP_PREDICATE_BUILTINS | itir.UNARY_LOGICAL_BUILTINS
+    fun_names=builtins.UNARY_MATH_FP_PREDICATE_BUILTINS | builtins.UNARY_LOGICAL_BUILTINS
 )
 def _(arg: ts.ScalarType) -> ts.ScalarType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
 @_register_builtin_type_synthesizer(
-    fun_names=itir.BINARY_MATH_COMPARISON_BUILTINS | itir.BINARY_LOGICAL_BUILTINS
+    fun_names=builtins.BINARY_MATH_COMPARISON_BUILTINS | builtins.BINARY_LOGICAL_BUILTINS
 )
 def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
@@ -141,7 +141,9 @@ def can_deref(it: it_ts.IteratorType | ts.DeferredType) -> ts.ScalarType:
 
 
 @_register_builtin_type_synthesizer
-def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
+def if_(
+    pred: ts.ScalarType | ts.DeferredType, true_branch: ts.DataType, false_branch: ts.DataType
+) -> ts.DataType:
     if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
         return tree_map(
             collection_type=ts.TupleType,
@@ -149,7 +151,9 @@ def if_(pred: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType
         )(functools.partial(if_, pred))(true_branch, false_branch)
 
     assert not isinstance(true_branch, ts.TupleType) and not isinstance(false_branch, ts.TupleType)
-    assert isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
+    assert isinstance(pred, ts.DeferredType) or (
+        isinstance(pred, ts.ScalarType) and pred.kind == ts.ScalarKind.BOOL
+    )
     # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
     #  iterators defined on different positions this fails. For the GTFN backend we also don't
     #  want this, but for roundtrip it is totally fine.
@@ -197,7 +201,7 @@ def make_tuple(*args: ts.DataType) -> ts.TupleType:
 def index(arg: ts.DimensionType) -> ts.FieldType:
     return ts.FieldType(
         dims=[arg.dim],
-        dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())),
+        dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())),
     )
 
 
@@ -381,25 +385,30 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
         assert isinstance(it, it_ts.IteratorType)
         if it.position_dims == "unknown":  # nothing to do here
             return it
-        new_position_dims = [*it.position_dims]
-        assert len(offset_literals) % 2 == 0
-        for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
-            assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
-                offset_axis.value, common.Dimension
-            )
-            type_ = offset_provider_type[offset_axis.value.value]
-            if isinstance(type_, common.Dimension):
-                pass
-            elif isinstance(type_, common.NeighborConnectivityType):
-                found = False
-                for i, dim in enumerate(new_position_dims):
-                    if dim.value == type_.source_dim.value:
-                        assert not found
-                        new_position_dims[i] = type_.codomain
-                        found = True
-                assert found
-            else:
-                raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
+        new_position_dims: list[common.Dimension] | str
+        if offset_provider_type:
+            new_position_dims = [*it.position_dims]
+            assert len(offset_literals) % 2 == 0
+            for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
+                assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
+                    offset_axis.value, common.Dimension
+                )
+                type_ = offset_provider_type[offset_axis.value.value]
+                if isinstance(type_, common.Dimension):
+                    pass
+                elif isinstance(type_, common.NeighborConnectivityType):
+                    found = False
+                    for i, dim in enumerate(new_position_dims):
+                        if dim.value == type_.source_dim.value:
+                            assert not found
+                            new_position_dims[i] = type_.codomain
+                            found = True
+                    assert found
+                else:
+                    raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
+        else:
+            # during re-inference we don't have an offset provider type
+            new_position_dims = "unknown"
         return it_ts.IteratorType(
             position_dims=new_position_dims,
             defined_dims=it.defined_dims,
