@@ -127,17 +127,20 @@ def install_session_venv(
     """Install session packages using uv."""
 
     unversioned_session_name = session.name.split("-")[0]
-    metadata = _metadata_registry[unversioned_session_name]
+    metadata = _metadata_registry.get(unversioned_session_name, None)
+    env_vars = metadata.env_vars if metadata else ()
+    ignore_env_vars = metadata.ignore_env_vars if metadata else ()
+
     env = {
         key: os.environ.get(key)
-        for key in _filter_names(os.environ.keys(), metadata.env_vars, metadata.ignore_env_vars)
+        for key in _filter_names(os.environ.keys(), env_vars, ignore_env_vars)
     } | {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location}
 
     if VERBOSE_MODE:
         print(
             f"\n[{session.name}]:\n"
-            f"  - Allow env variables patterns: {metadata.env_vars}\n"
-            f"  - Ignore env variables patterns: {metadata.ignore_env_vars}\n"
+            f"  - Allow env variables patterns: {env_vars}\n"
+            f"  - Ignore env variables patterns: {ignore_env_vars}\n"
             f"\n[{session.name}]:\n"
             f"  - Environment: {env}\n",
             file=sys.stderr,
@@ -216,14 +219,16 @@ def _is_skippable_session(session: nox.Session) -> None:
         print(f"Modified files from '{commit_spec}': {changed_files}", file=sys.stderr)
 
     unversioned_session_name = session.name.split("-")[0]
-    metadata = _metadata_registry[unversioned_session_name]
+    metadata = _metadata_registry.get(unversioned_session_name, None)
+    paths = metadata.paths if metadata else ()
+    ignore_paths = metadata.ignore_paths if metadata else ()
 
-    relevant_files = _filter_names(changed_files, metadata.paths, metadata.ignore_paths)
+    relevant_files = _filter_names(changed_files, paths, ignore_paths)
     if VERBOSE_MODE:
         print(
             f"\n[{session.name}]:\n"
-            f"  - File include patterns: {metadata.paths}\n"
-            f"  - File exclude patterns: {metadata.ignore_paths}\n"
+            f"  - File include patterns: {paths}\n"
+            f"  - File exclude patterns: {ignore_paths}\n"
             f"  - Changed files: {list(changed_files)}\n"
             f"  - Relevant files: {list(relevant_files)}\n"
             f"\n[{session.name}]: \n",
