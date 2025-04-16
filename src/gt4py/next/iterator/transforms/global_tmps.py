@@ -54,9 +54,12 @@ def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
     for stmt in stmts:
         if isinstance(stmt, itir.SetAt):
             assert hasattr(stmt.expr.annex, "domain")
-            distinct_domains: set[domain_utils.SymbolicDomain] = set(
-                # TODO: is flatten the right thing to do here? we don't supported nested tuples right?
-                next_utils.flatten_nested_tuple(stmt.expr.annex.domain)
+            distinct_domains: list[domain_utils.SymbolicDomain] = list(
+                # ordered set
+                dict.fromkeys(
+                    # TODO: is flatten the right thing to do here? we don't supported nested tuples right?
+                    next_utils.flatten_nested_tuple(stmt.expr.annex.domain)
+                )
             )
             if len(distinct_domains) > 1:
                 for domain in distinct_domains:

@@ -276,24 +276,24 @@ def test_tuple_different_domain():
                 cond=im.ref("cond"),
                 true_branch=[
                     itir.SetAt(
-                        target=im.make_tuple(im.tuple_get(1, tup_tmp12)),
+                        target=im.make_tuple(im.tuple_get(0, tup_tmp12)),
                         expr=im.make_tuple(im.ref("inp1")),
                         domain=domain01,
                     ),
                     itir.SetAt(
-                        target=im.make_tuple(im.tuple_get(0, tup_tmp12)),
+                        target=im.make_tuple(im.tuple_get(1, tup_tmp12)),
                         expr=im.make_tuple(im.ref("inp2")),
                         domain=domain12,
                     ),
                 ],
                 false_branch=[
                     itir.SetAt(
-                        target=im.make_tuple(im.tuple_get(1, tup_tmp12)),
+                        target=im.make_tuple(im.tuple_get(0, tup_tmp12)),
                         expr=im.make_tuple(im.ref("inp2")),
                         domain=domain01,
                     ),
                     itir.SetAt(
-                        target=im.make_tuple(im.tuple_get(0, tup_tmp12)),
+                        target=im.make_tuple(im.tuple_get(1, tup_tmp12)),
                         expr=im.make_tuple(im.ref("inp1")),
                         domain=domain12,
                     ),
@@ -311,7 +311,4 @@ def test_tuple_different_domain():
     )
 
     actual = global_tmps.create_global_tmps(testee, offset_provider)
-    # TODO: the order of SetAt in the IfStmt is not stable
-    print(actual)
-    print(expected)
     assert actual == expected
