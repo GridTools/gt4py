@@ -25,26 +25,42 @@ from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
+def foo(
+    select_domain: SymbolicDomain,
+    target: itir.Expr,
+    args: tuple[itir.Expr],
+    domains: tuple[SymbolicDomain],
+):
+    new_targets = []
+    new_els = []
+    for i, (el, el_domain) in enumerate(zip(args, domains)):
+        current_target = im.tuple_get(i, target)
+        if isinstance(el_domain, tuple):
+            assert cpm.is_call_to(el, "make_tuple")
+            more_els, more_targets = foo(select_domain, current_target, tuple(el.args), el_domain)
+            new_els.extend(more_els)
+            new_targets.extend(more_targets)
+        else:
+            assert isinstance(el_domain, SymbolicDomain)
+            if el_domain == select_domain:
+                new_targets.append(current_target)
+                new_els.append(el)
+    return new_els, new_targets
+
+
 def _select_setat_by_domain(stmt: itir.SetAt, domain: SymbolicDomain) -> itir.SetAt:
     """
     Extract a new 'SetAt' statement with targets for the given domain.
     """
     assert cpm.is_call_to(stmt.expr, "make_tuple")
     assert isinstance(stmt.expr.annex.domain, tuple)
-    assert domain in stmt.expr.annex.domain
+    # assert domain in stmt.expr.annex.domain
     # we cannot use `el.annex.domain` since while it might be semantically equivalent, it does
     # not necessarily be equal.
     # can be reproduced in icon4py `dycore_tests/test_solve_nonhydro.py::test_nonhydro_predictor_step`
     # compute_theta_rho_face_values_and_pressure_gradient_and_update_vn
 
-    new_targets = []
-    new_els = []
-    for i, (el, el_domain) in enumerate(zip(stmt.expr.args, stmt.expr.annex.domain)):
-        assert not isinstance(el_domain, tuple), "Nested tuples not supported."
-        assert isinstance(el_domain, SymbolicDomain)
-        if el_domain == domain:
-            new_targets.append(im.tuple_get(i, stmt.target))
-            new_els.append(el)
+    new_els, new_targets = foo(domain, stmt.target, stmt.expr.args, stmt.expr.annex.domain)
 
     new_expr = im.make_tuple(*new_els)
     new_expr.annex.domain = domain
@@ -57,6 +73,7 @@ def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
     Splits `SetAt` statements with multiple domains into multiple statements.
 
     `SetAt`s have a single domain therefore the target domains have to be the same.
+    We support nested tuples by flattening them and recombining them into non-nested tuples.
     """
     new_stmts: list[itir.Stmt] = []
     for stmt in stmts:
@@ -64,10 +81,7 @@ def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
             assert hasattr(stmt.expr.annex, "domain")
             distinct_domains: list[domain_utils.SymbolicDomain] = list(
                 # ordered set
-                dict.fromkeys(
-                    # TODO: is flatten the right thing to do here? we don't supported nested tuples right?
-                    next_utils.flatten_nested_tuple(stmt.expr.annex.domain)
-                )
+                dict.fromkeys(next_utils.flatten_nested_tuple(stmt.expr.annex.domain))
             )
             if len(distinct_domains) > 1:
                 for domain in distinct_domains:
