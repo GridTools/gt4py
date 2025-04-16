@@ -19,12 +19,6 @@ from gt4py.next import common as gtx_common, field_utils
 from . import utils as gtx_dace_utils
 
 
-try:
-    import cupy as cp
-except ImportError:
-    cp = None
-
-
 def get_field_domain_symbols(name: str, domain: gtx_common.Domain) -> dict[str, int]:
     assert gtx_common.Domain.is_finite(domain)
     if len(domain.dims) == 0:
@@ -102,14 +96,14 @@ def get_sdfg_conn_args(
     """
     connectivity_args = {}
     for offset, connectivity in offset_provider.items():
-        param = gtx_dace_utils.connectivity_identifier(offset)
-        if param in sdfg.arrays:
+        name = gtx_dace_utils.connectivity_identifier(offset)
+        if name in sdfg.arrays:
             assert gtx_common.is_neighbor_connectivity(connectivity)
             assert field_utils.verify_device_field_type(
                 connectivity,
                 core_defs.CUPY_DEVICE_TYPE if on_gpu else core_defs.DeviceType.CPU,  # type: ignore[arg-type] # if we are `on_gpu` we expect `CUPY_DEVICE_TYPE` to be not `None`
             )
-            connectivity_args[param] = connectivity.ndarray
+            connectivity_args[name] = connectivity.ndarray
 
     return connectivity_args
 
