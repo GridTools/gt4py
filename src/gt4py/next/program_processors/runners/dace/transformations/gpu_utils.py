@@ -61,14 +61,13 @@ def gt_gpu_transformation(
         validate_all: Perform extensive validation.
 
     Notes:
-        The function might modify the order of the iteration variables of some
-        maps.
-        In addition it might fuse Maps together that should not be fused. To prevent
-        that you should set `try_removing_trivial_maps` to `False`.
+        - In addition it might fuse Maps together that should not be fused. To prevent
+            that you should set `try_removing_trivial_maps` to `False`.
 
     Todo:
-        - Solve the fusing problem.
         - Currently only one block size for all maps is given, add more options.
+        - Investigate if the order of iteration is not changed (it should not).
+        - Investigate if the trivial GPU map remover is still needed.
     """
     assert (
         len(kwargs) == 0
@@ -92,6 +91,8 @@ def gt_gpu_transformation(
     gtx_transformations.gt_simplify(sdfg)
 
     if try_removing_trivial_maps:
+        # TODO(phimuell): Figuring out if it is still important/needed to do or if
+        #   it can be removed, it should definitely be reworked.
         gt_remove_trivial_gpu_maps(
             sdfg=sdfg,
             validate=validate,
@@ -99,7 +100,7 @@ def gt_gpu_transformation(
         )
         gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
 
-    # TODO(phimuell): Fixing the stride problem.
+    # TODO(phimuell): Fixing the stride problem in DaCe.
     sdfg = gt_gpu_transform_non_standard_memlet(
         sdfg=sdfg,
         map_postprocess=True,
