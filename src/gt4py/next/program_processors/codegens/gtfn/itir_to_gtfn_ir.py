@@ -485,6 +485,14 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             tagged_sizes=sizes, tagged_offsets=domain_offsets, connectivities=connectivities
         )
 
+    def _visit_get_domain(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        field, dim = node.args
+
+        return FunCall(
+            fun=SymRef(id="get_domain"),
+            args=[self.visit(field, **kwargs), self.visit(dim, **kwargs)],
+        )
+
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Node:
         if isinstance(node.fun, itir.SymRef):
             if node.fun.id in self._unary_op_map:
