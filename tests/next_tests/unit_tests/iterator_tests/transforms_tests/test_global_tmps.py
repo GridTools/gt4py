@@ -263,7 +263,6 @@ def test_tuple_different_domain():
     testee = type_inference.infer(testee, offset_provider_type=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
-    # TODO:
     tup_tmp12 = im.make_tuple(im.ref("__tmp_1"), im.ref("__tmp_2"))
     expected = program_factory(
         params=params,
