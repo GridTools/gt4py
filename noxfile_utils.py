@@ -166,7 +166,7 @@ def _is_skippable_session(session: nox.Session) -> None:
 
     if commit_spec not in _changed_files_from_commit:
         out = session.run(
-            *f"git diff --name-only {commit_spec}".split(), external=True, silent=True
+            *f"git diff --name-only {commit_spec} --".split(), external=True, silent=True
         )
         _changed_files_from_commit[commit_spec] = out.strip().split("\n")
 
