@@ -62,10 +62,10 @@ def customize_session(
 
         @functools.wraps(session_function)
         def new_session_function(*args, **kwargs) -> Any:
-            if _is_skippable_session(session_function):
+            session = kwargs.get("session", None) or args[0]
+            if _is_skippable_session(session):
                 print(
-                    f"Skipping session '{session_function.__name__}'"
-                    "because it is not relevant for the current changes."
+                    f"Skipping session '{session.name}' because it is not relevant for the current changes."
                 )
             else:
                 session_function(*args, **kwargs)
@@ -86,15 +86,12 @@ def install_session_venv(
 ) -> None:
     """Install session packages using uv."""
 
-    name = session.name
-    metadata = _metadata_registry[name]
-    env = (
-        {
-            key: os.environ.get(key)
-            for key in _filter_names(os.environ.keys(), metadata.env_vars, metadata.ignore_env_vars)
-        }
-        | {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
-    )
+    unversioned_session_name = session.name.split("-")[0]
+    metadata = _metadata_registry[unversioned_session_name]
+    env = {
+        key: os.environ.get(key)
+        for key in _filter_names(os.environ.keys(), metadata.env_vars, metadata.ignore_env_vars)
+    } | {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location}
 
     if VERBOSE_MODE:
         print(
@@ -177,8 +174,8 @@ def _is_skippable_session(session: nox.Session) -> None:
     if VERBOSE_MODE:
         print(f"Modified files from '{commit_spec}': {changed_files}")
 
-    normalized_session_name = session.name.split("-")[0]
-    metadata = _metadata_registry[normalized_session_name]
+    unversioned_session_name = session.name.split("-")[0]
+    metadata = _metadata_registry[unversioned_session_name]
 
     relevant_files = _filter_names(changed_files, metadata.paths, metadata.ignore_paths)
     if VERBOSE_MODE:
@@ -191,4 +188,4 @@ def _is_skippable_session(session: nox.Session) -> None:
             f"\n[{session.name}]: \n"
         )
 
-    return bool(relevant_files)
+    return len(relevant_files) == 0
