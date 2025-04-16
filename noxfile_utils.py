@@ -6,6 +6,18 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+"""
+Utility functions and decorators for managing and customizing Nox sessions
+in the GT4Py project. It includes functionality for filtering environment
+variables, handling session-specific metadata, and determining whether a
+session should be skipped based on changes in the repository.
+
+Environment Variables:
+- `{PROJECT_PREFIX}_CI_NOX_RUN_ONLY_IF_CHANGED_FROM`: Specifies the commit to compare changes against.
+- `{PROJECT_PREFIX}_CI_NOX_VERBOSE`: Enables verbose mode for debugging session behavior.
+
+"""
+
 from __future__ import annotations
 
 import fnmatch
@@ -24,7 +36,7 @@ PROJECT_PREFIX: Final = "GT4PY"
 
 CI_SOURCE_COMMIT_ENV_VAR_NAME: Final = f"{PROJECT_PREFIX}_CI_NOX_RUN_ONLY_IF_CHANGED_FROM"
 
-VERBOSE_MODE: Final = os.environ.get(f"{PROJECT_PREFIX}_CI_NOX_VERBOSE", "").lower() not in [
+VERBOSE_MODE: Final = os.environ.get(f"{PROJECT_PREFIX}_CI_NOX_VERBOSE", "").lower() in [
     "1",
     "on",
     "true",
@@ -45,6 +57,31 @@ def customize_session(
     ignore_paths: Sequence[str] = (),
     **kwargs: Any,
 ) -> Callable[[AnyCallable], nox.registry.Func]:
+    """Customize a Nox session with path or environment-based filtering.
+
+    This decorator function enhances a standard Nox session by adding the ability to
+    conditionally skip the session based on file paths.
+
+    Args:
+        env_vars: A sequence of environment variable names that will be passed
+            from the outer environment to the test environment.
+        ignore_env_vars: A sequence of environment variable names that should be
+            removed from the outer environment before passing to the test environment.
+        paths: A sequence of file paths or patterns that when changed will trigger the session.
+        ignore_paths: A sequence of file paths or patterns that when changed will cause the session to be skipped.
+        **kwargs: Additional keyword arguments passed to `nox.session` decorator.
+
+    Note:
+        Only of the accept/ignore argument pairs can be used at the same time.
+
+    Example:
+        ```python
+        @customize_session(paths=["src/", "tests/"], name="test")
+        def run_tests(session):
+            session.run("pytest")
+        ```
+    """
+
     if env_vars and ignore_env_vars:
         raise ValueError("Cannot use both `env_vars` and `ignore_env_vars` at the same time.")
     if paths and ignore_paths:
@@ -163,6 +200,22 @@ def _filter_names(
 
 
 def _is_skippable_session(session: nox.Session) -> None:
+    """Determine if a session can be skipped based on changed files.
+
+    This function checks if a session can be skipped by analyzing which files have changed
+    from a specific commit and comparing them against the session's relevant paths.
+
+    Args:
+        session: The nox session to check.
+
+    Returns:
+        bool: True if the session can be skipped (no relevant files changed), False otherwise.
+
+    Notes:
+        - Uses environment variables to get the commit target and the verbose mode.
+        - Uses git diff to find changed files from the commit specified in the environment variable.
+        - When VERBOSE_MODE is enabled, prints detailed information about the decision process.
+    """
     commit_spec = os.environ.get(CI_SOURCE_COMMIT_ENV_VAR_NAME, "")
     if not commit_spec:
         return False
