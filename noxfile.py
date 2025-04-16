@@ -8,16 +8,18 @@
 
 from __future__ import annotations
 
-import fnmatch
-import functools
-import itertools
 import os
 import pathlib
+import sys
 import types
 from collections.abc import Callable, Sequence
+from unittest import mock
 from typing import Any, Final, Literal, TypeAlias, TypeVar
 
 import nox
+
+with mock.patch("sys.path", [".", *sys.path]):
+    import noxfile_utils as nox_utils
 
 #: This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
 #: is not guaranteed to be available in the venv where `nox` is running.
@@ -73,37 +75,14 @@ CodeGenNextTestSettings = CodeGenTestSettings | {
     "dace": {"extras": ["dace-next"], "markers": ["requires_dace"]},
 }
 
-# -- Extra utilities to define test sessions --
-T = TypeVar("T")
-
-
-def session_metadata(**kwargs: Any) -> Callable[[T], T]:
-    """Decorator to add metadata to a nox session.
-
-    This decorator attaches a `_metadata_` attribute to a nox session function
-    with the provided keyword arguments.
-
-    Args:
-        **kwargs: Arbitrary keyword arguments that will be stored as metadata.
-            At least one keyword argument must be provided.
-
-    """
-    assert kwargs
-
-    def decorator(session_object: T) -> T:
-        assert not hasattr(session_object, "_metadata_")
-        session_object._metadata_ = kwargs
-        return session_object
-
-    return decorator
-
 
 # -- Sessions --
-@session_metadata(
+@nox_utils.customize_session(
+    python=["3.10", "3.11"],
+    tags=["cartesian"],
     env_vars=["NUM_PROCESSES"],
     ignore_paths=["src/gt4py/next/*", "tests/next_tests/**", "examples/**", "*.md", "*.rst"],
 )
-@nox.session(python=["3.10", "3.11"], tags=["cartesian"])
 @nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
 @nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace])
 def test_cartesian(
@@ -113,14 +92,10 @@ def test_cartesian(
 ) -> None:
     """Run selected 'gt4py.cartesian' tests."""
 
-    if not _should_session_run(session):
-        print(f"[{session.name}]: Skipping. No relevant changes detected.")
-        return
-
     codegen_settings = CodeGenTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
 
-    _install_session_venv(
+    nox_utils.install_session_venv(
         session,
         extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
         groups=["test"],
@@ -141,7 +116,9 @@ def test_cartesian(
     )
 
 
-@session_metadata(
+@nox_utils.customize_session(
+    python=["3.10", "3.11"],
+    tags=["cartesian", "next", "cpu"],
     env_vars=["NUM_PROCESSES"],
     paths=[  # Run when gt4py.eve files (or package settings) are changed
         "src/gt4py/eve/*",
@@ -150,17 +127,13 @@ def test_cartesian(
         "*.lock",
         "*.toml",
         "*.yml",
+        "noxfile.py",
     ],
 )
-@nox.session(python=["3.10", "3.11"], tags=["cartesian", "next", "cpu"])
 def test_eve(session: nox.Session) -> None:
     """Run 'gt4py.eve' tests."""
 
-    if not _should_session_run(session):
-        print(f"[{session.name}]: Skipping. No relevant changes detected.")
-        return
-
-    _install_session_venv(session, groups=["test"])
+    nox_utils.install_session_venv(session, groups=["test"])
 
     num_processes = session.env.get("NUM_PROCESSES", "auto")
 
@@ -179,7 +152,7 @@ def test_eve(session: nox.Session) -> None:
 def test_examples(session: nox.Session) -> None:
     """Run and test documentation workflows."""
 
-    _install_session_venv(session, extras=["testing"], groups=["docs", "test"])
+    nox_utils.install_session_venv(session, extras=["testing"], groups=["docs", "test"])
 
     session.run(*"jupytext docs/user/next/QuickstartGuide.md --to .ipynb".split())
     session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split())
@@ -197,7 +170,9 @@ def test_examples(session: nox.Session) -> None:
         )
 
 
-@session_metadata(
+@nox_utils.customize_session(
+    python=["3.10", "3.11"],
+    tags=["next"],
     env_vars=["NUM_PROCESSES"],
     ignore_paths=[  # Skip when only gt4py.cartesian or doc files have been updated
         "src/gt4py/cartesian/**",
@@ -207,7 +182,6 @@ def test_examples(session: nox.Session) -> None:
         "*.rst",
     ],
 )
-@nox.session(python=["3.10", "3.11"], tags=["next"])
 @nox.parametrize(
     "meshlib",
     [
@@ -225,10 +199,6 @@ def test_next(
 ) -> None:
     """Run selected 'gt4py.next' tests."""
 
-    if not _should_session_run(session):
-        print(f"[{session.name}]: Skipping. No relevant changes detected.")
-        return
-
     codegen_settings = CodeGenNextTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
     groups: list[str] = ["test"]
@@ -241,7 +211,7 @@ def test_next(
             mesh_markers.append("requires_atlas")
             groups.append("frameworks")
 
-    _install_session_venv(
+    nox_utils.install_session_venv(
         session,
         extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
         groups=groups,
@@ -268,7 +238,7 @@ def test_next(
 def test_package(session: nox.Session) -> None:
     """Run 'gt4py' package level tests."""
 
-    _install_session_venv(session, groups=["test"])
+    nox_utils.install_session_venv(session, groups=["test"])
 
     session.run(
         *"pytest --cache-clear -sv".split(),
@@ -284,7 +254,9 @@ def test_package(session: nox.Session) -> None:
     )
 
 
-@session_metadata(
+@nox_utils.customize_session(
+    python=["3.10", "3.11"],
+    tags=["cartesian", "next"],
     env_vars=["NUM_PROCESSES"],
     paths=[  # Run when gt4py.storage files (or package settings) are changed
         "src/gt4py/storage/**",
@@ -296,7 +268,6 @@ def test_package(session: nox.Session) -> None:
         "noxfile.py",
     ],
 )
-@nox.session(python=["3.10", "3.11"], tags=["cartesian", "next"])
 @nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
 def test_storage(
     session: nox.Session,
@@ -304,13 +275,9 @@ def test_storage(
 ) -> None:
     """Run selected 'gt4py.storage' tests."""
 
-    if not _should_session_run(session):
-        print(f"[{session.name}]: Skipping. No relevant changes detected.")
-        return
-
     device_settings = DeviceTestSettings[device]
 
-    _install_session_venv(
+    nox_utils.install_session_venv(
         session, extras=["performance", "testing", *device_settings["extras"]], groups=["test"]
     )
 
@@ -328,121 +295,3 @@ def test_storage(
         str(pathlib.Path("src") / "gt4py" / "storage"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
-
-
-# -- Internal implementation utilities --
-def _extract_name_matching_pattern(
-    session: nox.Session, accept: str, reject: str
-) -> tuple[list[str], list[str]]:
-    """Extract name matching patterns from the session."""
-    patterns = []
-    ignore_patterns = []
-
-    if hasattr(session, "_metadata_"):
-        assert (
-            len({accept, reject}.intersection(session._metadata_.keys())) < 2
-        ), "Only one of '{accept}' or '{reject}' patterns can be specified."
-
-        metadata = session._metadata_
-        patterns = metadata.get(accept, [])
-        ignore_patterns = metadata.get(reject, [])
-
-    return patterns, ignore_patterns
-
-
-def _filter_names(
-    names: list[str], include_patterns: list[str], exclude_patterns: list[str]
-) -> str:
-    """
-    Filter names based on include and exclude patterns.
-
-    Args:
-        names: List of names to filter.
-        include_patterns: List of `fnmatch`-style patterns to include files.
-        exclude_patterns: List of `fnmatch`-style patterns to exclude files.
-    Returns:
-        A set of names that match the include patterns but not the exclude patterns.
-    """
-    candidates = (
-        set(
-            itertools.chain(
-                *(fnmatch.filter(names, include_pattern) for include_pattern in include_patterns)
-            )
-        )
-        if include_patterns
-        else set(names)
-    )
-
-    excluded = set(
-        itertools.chain(
-            *(fnmatch.filter(candidates, exclude_pattern) for exclude_pattern in exclude_patterns)
-        )
-    )
-
-    return candidates - excluded
-
-
-def _install_session_venv(
-    session: nox.Session,
-    *args: str | Sequence[str],
-    extras: Sequence[str] = (),
-    groups: Sequence[str] = (),
-) -> None:
-    """Install session packages using uv."""
-
-    patterns, ignore_patterns = _extract_name_matching_pattern(
-        session, accept="env_vars", reject="ignore_env_vars"
-    )
-    if VERBOSE_MODE:
-        print(
-            f"\n[{session.name}]:\n"
-            f"  - Patterns: {patterns}\n"
-            f"  - Ignore patterns: {ignore_patterns}\n"
-        )
-
-    session.run_install(
-        "uv",
-        "sync",
-        *("--python", session.python),
-        "--no-dev",
-        *(f"--extra={e}" for e in extras),
-        *(f"--group={g}" for g in groups),
-        env={
-            key: os.environ.get(key)
-            for key in _filter_names(os.environ.keys(), patterns, ignore_patterns)
-        }
-        | {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
-    )
-    for item in args:
-        session.run_install(
-            "uv",
-            "pip",
-            "install",
-            *((item,) if isinstance(item, str) else item),
-            env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
-        )
-
-
-def _should_session_run(session: nox.Session) -> None:
-    if not (commit_spec := os.environ.get("GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM", "")):
-        return True
-
-    out = session.run(*f"git diff --name-only {commit_spec}".split(), external=True, silent=True)
-    changed_files = out.strip().split("\n")
-    if VERBOSE_MODE:
-        print(f"Modified files from '{commit_spec}': {changed_files}")
-
-    paths, ignore_paths = _extract_name_matching_pattern(
-        session, accept="paths", reject="ignore_paths"
-    )
-
-    relevant_files = _filter_names(changed_files, paths, ignore_paths)
-    if VERBOSE_MODE:
-        print(
-            f"\n[{session.name}]:\n"
-            f"  - Include patterns: {paths}\n"
-            f"  - Exclude patterns: {ignore_paths}\n"
-            f"  - Relevant files: {list(relevant_files)}\n"
-        )
-
-    return bool(relevant_files)
