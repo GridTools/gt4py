@@ -59,8 +59,9 @@ def customize_session(
 ) -> Callable[[AnyCallable], nox.registry.Func]:
     """Customize a Nox session with path or environment-based filtering.
 
-    This decorator function enhances a standard Nox session by adding the ability to
-    conditionally skip the session based on file paths.
+    Define a Nox session with the ability to sandbox the environment variables
+    that are passed to the test environment and to conditionally skip the session
+    based on the paths of the modified files.
 
     Args:
         env_vars: A sequence of environment variable names that will be passed
@@ -69,10 +70,10 @@ def customize_session(
             removed from the outer environment before passing to the test environment.
         paths: A sequence of file paths or patterns that when changed will trigger the session.
         ignore_paths: A sequence of file paths or patterns that when changed will cause the session to be skipped.
-        **kwargs: Additional keyword arguments passed to `nox.session` decorator.
+            **kwargs: Additional keyword arguments passed to `nox.session` decorator.
 
     Note:
-        Only of the accept/ignore argument pairs can be used at the same time.
+        Only one of the accept/ignore argument pairs can be used at the same time.
 
     Example:
         ```python
@@ -165,17 +166,7 @@ def install_session_venv(
 def _filter_names(
     names: list[str], include_patterns: list[str], exclude_patterns: list[str]
 ) -> str:
-    """
-    Filter names based on include and exclude `fnmatch`-style patterns.
-
-    Args:
-        names: List of names to filter.
-        include_patterns: List of patterns to include names.
-        exclude_patterns: List of patterns to exclude names.
-    Returns:
-        A set of names that either match the include patterns and don't match
-        the exclude patterns (checked in that order).
-    """
+    """Filter names based on include and exclude `fnmatch`-style patterns."""
     included = (
         set(
             itertools.chain(
@@ -200,16 +191,10 @@ def _filter_names(
 
 
 def _is_skippable_session(session: nox.Session) -> None:
-    """Determine if a session can be skipped based on changed files.
+    """Determine if a session can be skipped based on changed files from a specific commit.
 
     This function checks if a session can be skipped by analyzing which files have changed
     from a specific commit and comparing them against the session's relevant paths.
-
-    Args:
-        session: The nox session to check.
-
-    Returns:
-        bool: True if the session can be skipped (no relevant files changed), False otherwise.
 
     Notes:
         - Uses environment variables to get the commit target and the verbose mode.
