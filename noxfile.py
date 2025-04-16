@@ -44,7 +44,8 @@ nox.options.sessions = [
     "test_storage-3.11(cpu)",
 ]
 
-VERBOSE_MODE = int(os.environ.get("GT4PY_CI_NOX_VERBOSE_MODE", "0"))
+
+PYTHON_VERSIONS: Final[list[str]] = pathlib.Path(".python-versions").read_text().splitlines()
 
 # -- Parameter sets --
 DeviceOption: TypeAlias = Literal["cpu", "cuda11", "cuda12", "rocm4_3", "rocm5_0"]
@@ -78,7 +79,7 @@ CodeGenNextTestSettings = CodeGenTestSettings | {
 
 # -- Sessions --
 @nox_utils.customize_session(
-    python=["3.10", "3.11"],
+    python=PYTHON_VERSIONS,
     tags=["cartesian"],
     env_vars=["NUM_PROCESSES"],
     ignore_paths=["src/gt4py/next/*", "tests/next_tests/**", "examples/**", "*.md", "*.rst"],
@@ -117,7 +118,7 @@ def test_cartesian(
 
 
 @nox_utils.customize_session(
-    python=["3.10", "3.11"],
+    python=PYTHON_VERSIONS,
     tags=["cartesian", "next", "cpu"],
     env_vars=["NUM_PROCESSES"],
     paths=[  # Run when gt4py.eve files (or package settings) are changed
@@ -148,7 +149,7 @@ def test_eve(session: nox.Session) -> None:
     )
 
 
-@nox.session(python=["3.10", "3.11"])
+@nox.session(python=PYTHON_VERSIONS)
 def test_examples(session: nox.Session) -> None:
     """Run and test documentation workflows."""
 
@@ -171,7 +172,7 @@ def test_examples(session: nox.Session) -> None:
 
 
 @nox_utils.customize_session(
-    python=["3.10", "3.11"],
+    python=PYTHON_VERSIONS,
     tags=["next"],
     env_vars=["NUM_PROCESSES"],
     ignore_paths=[  # Skip when only gt4py.cartesian or doc files have been updated
@@ -234,7 +235,7 @@ def test_next(
     )
 
 
-@nox.session(python=["3.10", "3.11"], tags=["cartesian", "next", "cpu"])
+@nox.session(python=PYTHON_VERSIONS, tags=["cartesian", "next", "cpu"])
 def test_package(session: nox.Session) -> None:
     """Run 'gt4py' package level tests."""
 
@@ -255,7 +256,7 @@ def test_package(session: nox.Session) -> None:
 
 
 @nox_utils.customize_session(
-    python=["3.10", "3.11"],
+    python=PYTHON_VERSIONS,
     tags=["cartesian", "next"],
     env_vars=["NUM_PROCESSES"],
     paths=[  # Run when gt4py.storage files (or package settings) are changed
