@@ -12,6 +12,7 @@ import ctypes
 from typing import Any, Sequence
 
 import dace
+from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interface_ptr
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, field_utils, utils as gtx_utils
@@ -41,7 +42,7 @@ def convert_args(
             args = (*args, out)
         flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
         if inp.implicit_domain:
-            # generate implicit domain size arguments only if necessary
+            # Generate implicit domain size arguments only if necessary
             size_args = arguments.iter_size_args(args)
             flat_size_args: Sequence[int] = gtx_utils.flatten_nested_tuple(tuple(size_args))
             flat_args = (*flat_args, *flat_size_args)
@@ -62,7 +63,8 @@ def convert_args(
                 return inp(**this_call_args)
 
         else:
-            # Initialization of `_lastargs` was done by the `CompiledSDFG` object.
+            # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
+            #  so we just update it with the current call arguments.
             last_call_args = sdfg_program._lastargs[0]
             this_call_args = dict(zip(sdfg.arg_names, flat_args, strict=True))
             if not assume_immutable_offset_provider:
@@ -77,42 +79,48 @@ def convert_args(
             for i, (arg_name, arg_desc) in enumerate(inp.sdfg_arglist):
                 arg = this_call_args.get(arg_name, None)
                 if arg is None:
-                    # In case of immutable offset provider, the connectivity arrays
-                    # and the associate shape and stride symbols can be omitted.
-                    assert assume_immutable_offset_provider and (
+                    if assume_immutable_offset_provider and (
                         gtx_dace_utils.is_connectivity_identifier(
                             arg_name, common.offset_provider_to_type(offset_provider)
                         )
                         or gtx_dace_utils.is_connectivity_symbol(
                             arg_name, common.offset_provider_to_type(offset_provider)
                         )
-                    ), f"argument '{arg_name}' not found."
-                elif (ndarray := getattr(arg, "ndarray", None)) is None:
-                    assert isinstance(arg_desc, dace.data.Scalar)
-                    assert isinstance(last_call_args[i], ctypes._SimpleCData)
-                    actype = arg_desc.dtype.as_ctypes()
-                    last_call_args[i] = actype(arg)
-                else:
+                    ):
+                        # In case of immutable offset provider, the connectivity arrays
+                        # and the associate shape and stride symbols can be omitted.
+                        pass
+                    else:
+                        raise ValueError("argument '{arg_name}' not found.")
+
+                elif (ndarray := getattr(arg, "ndarray", None)) is not None:
                     assert isinstance(arg_desc, dace.data.Array)
                     assert isinstance(last_call_args[i], ctypes.c_void_p)
                     assert field_utils.verify_device_field_type(arg, device)
-                    last_call_args[i].value = (
-                        ndarray.__cuda_array_interface__["data"][0]
-                        if on_gpu
-                        else ndarray.__array_interface__["data"][0]
-                    )
-                    # When we find an array we update the `this_call_args` map
-                    # with the shape and stride symbols that are associated to it.
-                    # Note that `inp.sdfg_arglist` was constructed from an ordered
+                    last_call_args[i].value = get_array_interface_ptr(ndarray, arg_desc.storage)
+                    # When we find an array we update `this_call_args` with the
+                    # shape and stride symbols that are associated to it.
+                    # Note that `sdfg_arglist` was constructed from an ordered
                     # dictionary whose order reflects the DaCe calling convention:
                     # first the array arguments, then the scalar arguments.
-                    # Thus, when we enter the branch above for scalar arguments
+                    # Thus, when we enter the branch below for scalar arguments
                     # we know that all arrays have been processed and all their
                     # associated symbols have been added to `this_call_args`.
                     this_call_args.update(
                         sdfg_callable.get_field_domain_symbols(arg_name, arg.domain)
                     )
                     this_call_args.update(sdfg_callable.get_array_stride_symbols(arg_desc, ndarray))
+
+                else:
+                    # As outlined above, because of how `sdfg_arglist` is constructed,
+                    # all arrays will be visited first, thus all scalars that are
+                    # associated with the shape and stride symbols have been updated
+                    # in `this_call_args` and it is thus safe to use them.
+                    assert isinstance(arg_desc, dace.data.Scalar)
+                    assert isinstance(last_call_args[i], ctypes._SimpleCData)
+                    actype = arg_desc.dtype.as_ctypes()
+                    last_call_args[i] = actype(arg)
+
             else:
                 return inp.fast_call()
 
