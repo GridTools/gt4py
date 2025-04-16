@@ -36,7 +36,7 @@ def test_program_gtir_regression(cartesian_case):
 
 def test_frozen(cartesian_case):
     if cartesian_case.backend is None:
-        pytest.xfail("Frozen Program with embedded execution is not possible.")
+        pytest.skip("Frozen Program with embedded execution is not possible.")
 
     @gtx.field_operator
     def testee_op(a: cases.IField) -> cases.IField:
@@ -64,3 +64,97 @@ def test_frozen(cartesian_case):
 
     # with_grid_type returns a new instance, which is frozen but not compiled yet
     assert testee.with_grid_type(cartesian_case.grid_type)._compiled_program is None
+
+
+def _always_raise_callable(*args, **kwargs) -> None:
+    raise AssertionError("This function should never be called.")
+
+
+@pytest.fixture
+def compile_testee(cartesian_case):
+    @gtx.field_operator
+    def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
+        return a + b
+
+    @gtx.program(backend=cartesian_case.backend)
+    def testee(a: cases.IField, b: cases.IField, out: cases.IField):
+        testee_op(a, b, out=out)
+
+    return testee
+
+
+@pytest.fixture
+def compile_testee_scan(cartesian_case):
+    @gtx.scan_operator(axis=cases.KDim, forward=True, init=0)
+    def testee_op(carry: gtx.int32, inp: gtx.int32) -> gtx.int32:
+        return carry + inp
+
+    @gtx.program(backend=cartesian_case.backend)
+    def testee(a: cases.KField, out: cases.KField):
+        testee_op(a, out=out)
+
+    return testee
+
+
+def test_compile(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    assert compile_testee._compiled_program is None
+    compile_testee.compile(offset_provider_type=cartesian_case.offset_provider)
+    assert compile_testee._compiled_program is not None
+
+    args, kwargs = cases.get_default_data(cartesian_case, compile_testee)
+
+    # make sure the backend is never called
+    object.__setattr__(compile_testee, "backend", _always_raise_callable)
+
+    compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+    assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
+
+    # run a second time to check if it still works after the future is resolved
+    compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+    assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
+
+
+def test_compile_twice_errors(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+    with pytest.raises(RuntimeError):
+        compile_testee.compile(offset_provider_type=cartesian_case.offset_provider).compile(
+            offset_provider_type=cartesian_case.offset_provider
+        )
+
+
+def test_compile_kwargs(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    assert compile_testee._compiled_program is None
+    compile_testee.compile(offset_provider_type=cartesian_case.offset_provider)
+    assert compile_testee._compiled_program is not None
+
+    (a, b), kwargs = cases.get_default_data(cartesian_case, compile_testee)
+
+    # make sure the backend is never called
+    object.__setattr__(compile_testee, "backend", _always_raise_callable)
+
+    compile_testee(offset_provider=cartesian_case.offset_provider, b=b, a=a, **kwargs)
+    assert np.allclose(kwargs["out"].ndarray, a.ndarray + b.ndarray)
+
+
+def test_compile_scan(cartesian_case, compile_testee_scan):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    assert compile_testee_scan._compiled_program is None
+    compile_testee_scan.compile(offset_provider_type=cartesian_case.offset_provider)
+    assert compile_testee_scan._compiled_program is not None
+
+    args, kwargs = cases.get_default_data(cartesian_case, compile_testee_scan)
+
+    # make sure the backend is never called
+    object.__setattr__(compile_testee_scan, "backend", _always_raise_callable)
+
+    compile_testee_scan(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+    assert np.allclose(kwargs["out"].ndarray, np.cumsum(args[0].ndarray))

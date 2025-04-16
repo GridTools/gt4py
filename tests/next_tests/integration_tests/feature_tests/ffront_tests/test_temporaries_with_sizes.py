@@ -5,10 +5,8 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-import platform
-
 import pytest
-from numpy import int32, int64
+from numpy import int32
 
 from gt4py import next as gtx
 from gt4py.next import backend, common
@@ -21,8 +19,6 @@ from next_tests.integration_tests.cases import (
     Case,
     KDim,
     Vertex,
-    cartesian_case,
-    unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     mesh_descriptor,
@@ -30,8 +26,10 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 from next_tests.toy_connectivity import Cell, Edge
 
 
+# Override the exec_alloc_descriptor with a custom Backend,
+# see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture
-def run_gtfn_with_temporaries_and_symbolic_sizes():
+def exec_alloc_descriptor():
     return backend.Backend(
         name="run_gtfn_with_temporaries_and_sizes",
         transforms=backend.DEFAULT_TRANSFORMS,
@@ -64,18 +62,10 @@ def testee():
     return prog
 
 
-def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh_descriptor):
-    if platform.machine() == "x86_64":
-        pytest.xfail(
-            reason="The C++ code generated in this test contains unicode characters "
-            "(coming from the ssa pass) which is not supported by gcc 9 used"
-            "in the CI. Bumping the container version sadly did not work for"
-            "unrelated and unclear reasons. Since the issue is not present"
-            "on Alps we just skip the test for now before investing more time."
-        )
-
+# @pytest.mark.parametrize("exec_alloc_descriptor", [run_gtfn_with_temporaries_and_symbolic_sizes])
+def test_verification(testee, exec_alloc_descriptor, mesh_descriptor):
     unstructured_case = Case(
-        run_gtfn_with_temporaries_and_symbolic_sizes,
+        exec_alloc_descriptor,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
@@ -84,13 +74,13 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh
             KDim: 10,
         },
         grid_type=common.GridType.UNSTRUCTURED,
-        allocator=run_gtfn_with_temporaries_and_symbolic_sizes.allocator,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
     a = cases.allocate(unstructured_case, testee, "a")()
     out = cases.allocate(unstructured_case, testee, "out")()
 
-    first_nbs, second_nbs = (mesh_descriptor.offset_provider["E2V"].ndarray[:, i] for i in [0, 1])
+    first_nbs, second_nbs = (mesh_descriptor.offset_provider["E2V"].asnumpy()[:, i] for i in [0, 1])
     ref = (a.ndarray * 2)[first_nbs] + (a.ndarray * 2)[second_nbs]
 
     cases.verify(

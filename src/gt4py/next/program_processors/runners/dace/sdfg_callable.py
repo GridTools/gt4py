@@ -5,7 +5,6 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-import warnings
 from collections.abc import Mapping, Sequence
 from typing import Any, Optional
 
@@ -13,7 +12,7 @@ import dace
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, field_utils
 
 from . import utils as gtx_dace_utils
 
@@ -58,19 +57,6 @@ def _get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
                     f"Received program argument {range_symbol} with value {sdfg_arg}, expected {value}."
                 )
     return sdfg_arguments | range_symbols
-
-
-def _ensure_is_on_device(
-    connectivity_arg: core_defs.NDArrayObject, device: dace.dtypes.DeviceType
-) -> core_defs.NDArrayObject:
-    if device == dace.dtypes.DeviceType.GPU:
-        if not isinstance(connectivity_arg, cp.ndarray):
-            warnings.warn(
-                "Copying connectivity to device. For performance make sure connectivity is provided on device.",
-                stacklevel=2,
-            )
-            return cp.asarray(connectivity_arg)
-    return connectivity_arg
 
 
 def _get_shape_args(
@@ -119,14 +105,16 @@ def get_sdfg_conn_args(
     Extracts the connectivity tables that are used in the sdfg and ensures
     that the memory buffers are allocated for the target device.
     """
-    device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
-
     connectivity_args = {}
     for offset, connectivity in offset_provider.items():
         if gtx_common.is_neighbor_table(connectivity):
             param = gtx_dace_utils.connectivity_identifier(offset)
             if param in sdfg.arrays:
-                connectivity_args[param] = _ensure_is_on_device(connectivity.ndarray, device)
+                assert field_utils.verify_device_field_type(
+                    connectivity,
+                    core_defs.CUPY_DEVICE_TYPE if on_gpu else core_defs.DeviceType.CPU,  # type: ignore[arg-type] # if we are `on_gpu` we expect `CUPY_DEVICE_TYPE` to be not `None`
+                )
+                connectivity_args[param] = connectivity.ndarray
 
     return connectivity_args
 
