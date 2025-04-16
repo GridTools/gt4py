@@ -264,7 +264,7 @@ def test_package(session: nox.Session) -> None:
         "src/gt4py/cartesian/backend/**",  # For DaCe storages
         "tests/storage_tests/**",
         ".github/workflows/**",
-        "*.lock" "*.toml",
+        "*.lock", "*.toml",
         "*.yml",
         "noxfile.py",
     ],
