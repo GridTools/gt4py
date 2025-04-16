@@ -196,7 +196,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         # This is the name of the iterator that we use in the outer map for the
         #  blocked dimension
-        # NOTE: The way how we create the mangled name is important such that it
+        # NOTE: The way we create the new parameter name is important such that it
         #   could be matched through the `unit_strides_kind` argument, which is
         #   the case with this approach. But it makes the `unit_strides_dim`
         #   argument `gt_set_iteration_order()` inapplicable.

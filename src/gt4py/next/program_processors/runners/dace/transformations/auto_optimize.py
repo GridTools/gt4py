@@ -94,9 +94,9 @@ def gt_auto_optimize(
     Note:
         - For identifying symbols that can be treated as compile time constants
             `gt_find_constant_arguments()` function can be used.
-        - If both `unit_strides_dim` and `unit_strides_kind` are `None` then the
-            function assumes that on GPU the horizontal has unit strides and on
-            CPU the vertical dimension has unit strides.
+        - `unit_strides_kind` is `None` then the function assumes that on GPU the
+            horizontal has unit strides and on CPU the vertical dimension has
+            unit strides.
         - In case GPU optimizations are enabled, the function assumes that all
             global fields are already on the GPU.
 
@@ -120,16 +120,12 @@ def gt_auto_optimize(
         dace.Config.set("optimizer", "match_exception", value=True)
         dace.Config.set("store_history", value=False)
 
-        # TODO(phimuell): Should there be a phase, in which we generate a
-        #   canonical form of the SDFG, for example move all local maps to
-        #   internal serial maps, such that they do not block fusion?
-
         # Initial Cleanup
         if constant_symbols:
             gtx_transformations.gt_substitute_compiletime_symbols(
                 sdfg=sdfg,
                 repl=constant_symbols,
-                simplify_afterwards=False,
+                simplify=False,
                 validate=validate,
                 validate_all=validate_all,
             )
@@ -147,7 +143,7 @@ def gt_auto_optimize(
         # We now ensure that point wise computations are properly double buffered,
         #  this ensures that rule 3 of ADR-18 is maintained.
         # TODO(phimuell): Figuring out if it is important to do it before the inner
-        #   Map optimization, I think it is, especially because when we do blocking.
+        #   Map optimization. I think it is, especially because when we do blocking.
         gtx_transformations.gt_create_local_double_buffering(sdfg)
 
         # Optimize the interior of the Maps:
@@ -251,7 +247,7 @@ def _gt_auto_process_top_level_maps(
 
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.
-        phase2_cleanup = [
+        cleanup_stages = [
             gtx_transformations.SplitAccessNode(
                 single_use_data=single_use_data,
             ),
@@ -270,7 +266,7 @@ def _gt_auto_process_top_level_maps(
         # Perform the clean up.
         gtx_transformations.gt_reduce_distributed_buffering(sdfg)
         sdfg.apply_transformations_repeated(
-            phase2_cleanup,
+            cleanup_stages,
             validate=validate,
             validate_all=validate_all,
         )

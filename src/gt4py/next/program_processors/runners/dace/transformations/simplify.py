@@ -285,7 +285,7 @@ def gt_inline_nested_sdfg(
 def gt_substitute_compiletime_symbols(
     sdfg: dace.SDFG,
     repl: dict[str, Any],
-    simplify_afterwards: bool = False,
+    simplify: bool = False,
     validate: bool = False,
     validate_all: bool = False,
     **kwargs: Any,
@@ -299,8 +299,7 @@ def gt_substitute_compiletime_symbols(
     Args:
         sdfg: The SDFG to process.
         repl: Maps the name of the symbol to the value it should be replaced with.
-        simplify_afterwards: If `False` do not call `gt_simplify()` after the
-            substitution.
+        simplify: If `False` do not call `gt_simplify()` after the substitution.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
 
@@ -314,7 +313,7 @@ def gt_substitute_compiletime_symbols(
     #   we initially call simplify and hope for the best.
     # For testing purposes we need to be able to disable this initial simplify.
     #  This is an implementation detail that we should get rid of.
-    if not kwargs.get("no_initial_simplification", False):
+    if not kwargs.get("simplify_at_entry", False):
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
             validate=validate,
@@ -335,7 +334,7 @@ def gt_substitute_compiletime_symbols(
         initial_symbols=repl,
         _=None,
     )
-    if simplify_afterwards:
+    if simplify:
         gt_simplify(
             sdfg=sdfg,
             validate=validate,
