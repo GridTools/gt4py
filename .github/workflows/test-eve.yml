@@ -7,13 +7,6 @@ on:
   pull_request:
     branches:
     - main
-    paths:  # Run when gt4py.eve files (or package settings) are changed
-    - "src/gt4py/eve/**"
-    - "tests/eve_tests/**"
-    - ".github/workflows/**"
-    - "*.lock"
-    - "*.toml"
-    - "*.yml"
 
 jobs:
   # First job to read Python versions from .python-versions file
@@ -48,5 +41,7 @@ jobs:
     - name: Run 'eve' tests with nox
       env:
         NUM_PROCESSES: auto
+        GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "${{ github.base_ref }}"
+        GT4PY_CI_NOX_VERBOSE: 1
       shell: bash
       run: uv run nox -s test_eve-${{ matrix.python-version }}
