@@ -301,8 +301,6 @@ class Program:
             raise ValueError(
                 "Cannot compile a program without connectivities / OffsetProviderType."
             )
-        if self._compiled_programs:
-            raise RuntimeError("Program is already compiled.")
         if not all(isinstance(v, list) for v in static_args.values()):
             raise TypeError(
                 "Please provide the static arguments as lists. This is to avoid confusion with tuple arguments."
