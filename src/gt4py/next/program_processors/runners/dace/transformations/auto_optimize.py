@@ -178,7 +178,10 @@ def gt_auto_optimize(
             sdfg=sdfg,
             gpu=gpu,
             make_persistent=make_persistent,
-            reuse_transients=True,
+            # TODO(phimuell): In general TU is a good idea, but it also reuses
+            #   transients scalars inside a Map scope, which I do not like. Thus
+            #   we should fix the transformation to avoid that.
+            reuse_transients=reuse_transients,
             validate=validate,
             validate_all=validate_all,
         )
