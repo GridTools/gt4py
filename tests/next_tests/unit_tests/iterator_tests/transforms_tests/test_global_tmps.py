@@ -11,7 +11,7 @@ from typing import Optional
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms import global_tmps, infer_domain
+from gt4py.next.iterator.transforms import global_tmps, infer_domain, collapse_tuple
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_specifications as ts
 
@@ -262,7 +262,6 @@ def test_tuple_different_domain():
     )
     testee = type_inference.infer(testee, offset_provider_type=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
-    # print(testee)
 
     tup_tmp12 = im.make_tuple(im.ref("__tmp_1"), im.ref("__tmp_2"))
     expected = program_factory(
@@ -366,10 +365,8 @@ def test_tuple_different_domain_nested():
             )
         ],
     )
-    print(testee)
     testee = type_inference.infer(testee, offset_provider_type=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
-    print(testee)
 
     # tup_tmp12 = im.make_tuple(im.ref("__tmp_1"), im.ref("__tmp_2"))
     # expected = program_factory(
@@ -416,7 +413,8 @@ def test_tuple_different_domain_nested():
     #         ),
     #     ],
     # )
+    expected = None  # TODO
 
     actual = global_tmps.create_global_tmps(testee, offset_provider)
-    print(actual)
-    # assert actual == expected
+    actual = collapse_tuple.CollapseTuple.apply(actual)
+    assert actual == expected

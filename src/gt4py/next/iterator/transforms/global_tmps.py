@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import functools
+from collections.abc import Sequence
 from typing import Callable, Optional
 
 from gt4py.eve import utils as eve_utils
@@ -25,19 +26,26 @@ from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def foo(
+def select_elems_by_domain(
     select_domain: SymbolicDomain,
     target: itir.Expr,
-    args: tuple[itir.Expr],
-    domains: tuple[SymbolicDomain],
+    args: Sequence[itir.Expr],
+    domains: tuple[SymbolicDomain, ...],
 ):
+    """
+    Select all elements of possibly nested tuples for the given domain.
+
+    Returns (non-nested) tuples of the selected elements and the corresponding targets.
+    """
     new_targets = []
     new_els = []
     for i, (el, el_domain) in enumerate(zip(args, domains)):
         current_target = im.tuple_get(i, target)
         if isinstance(el_domain, tuple):
             assert cpm.is_call_to(el, "make_tuple")
-            more_els, more_targets = foo(select_domain, current_target, tuple(el.args), el_domain)
+            more_targets, more_els = select_elems_by_domain(
+                select_domain, current_target, el.args, el_domain
+            )
             new_els.extend(more_els)
             new_targets.extend(more_targets)
         else:
@@ -45,27 +53,20 @@ def foo(
             if el_domain == select_domain:
                 new_targets.append(current_target)
                 new_els.append(el)
-    return new_els, new_targets
+    return new_targets, new_els
 
 
-def _select_setat_by_domain(stmt: itir.SetAt, domain: SymbolicDomain) -> itir.SetAt:
-    """
-    Extract a new 'SetAt' statement with targets for the given domain.
-    """
-    assert cpm.is_call_to(stmt.expr, "make_tuple")
-    assert isinstance(stmt.expr.annex.domain, tuple)
-    # assert domain in stmt.expr.annex.domain
-    # we cannot use `el.annex.domain` since while it might be semantically equivalent, it does
-    # not necessarily be equal.
-    # can be reproduced in icon4py `dycore_tests/test_solve_nonhydro.py::test_nonhydro_predictor_step`
-    # compute_theta_rho_face_values_and_pressure_gradient_and_update_vn
-
-    new_els, new_targets = foo(domain, stmt.target, stmt.expr.args, stmt.expr.annex.domain)
-
-    new_expr = im.make_tuple(*new_els)
+def _set_at_for_domain(stmt: itir.SetAt, domain: SymbolicDomain) -> itir.SetAt:
+    """Extract all elements with given domain into a new `SetAt` statement."""
+    tuple_expr = stmt.expr
+    assert cpm.is_call_to(tuple_expr, "make_tuple")
+    targets, expr_els = select_elems_by_domain(
+        domain, stmt.target, tuple_expr.args, stmt.expr.annex.domain
+    )
+    new_expr = im.make_tuple(*expr_els)
     new_expr.annex.domain = domain
 
-    return itir.SetAt(expr=new_expr, domain=domain.as_expr(), target=im.make_tuple(*new_targets))
+    return itir.SetAt(expr=new_expr, domain=domain.as_expr(), target=im.make_tuple(*targets))
 
 
 def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
@@ -80,20 +81,19 @@ def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
         if isinstance(stmt, itir.SetAt):
             assert hasattr(stmt.expr.annex, "domain")
             distinct_domains: list[domain_utils.SymbolicDomain] = list(
-                # ordered set
+                # ordered set for reproducibility
                 dict.fromkeys(next_utils.flatten_nested_tuple(stmt.expr.annex.domain))
             )
-            if len(distinct_domains) > 1:
-                for domain in distinct_domains:
-                    new_stmts.append(_select_setat_by_domain(stmt, domain))
-            else:
+            if len(distinct_domains) == 1:
                 new_stmts.append(
                     itir.SetAt(
                         expr=stmt.expr,
-                        domain=distinct_domains[0].as_expr(),
+                        domain=distinct_domains[0].as_expr(),  # insert concrete domain
                         target=stmt.target,
                     )
                 )
+            else:
+                new_stmts.extend(_set_at_for_domain(stmt, domain) for domain in distinct_domains)
         elif isinstance(stmt, itir.IfStmt):
             new_stmts.append(
                 itir.IfStmt(
@@ -172,14 +172,14 @@ def _transform_by_pattern(
                 tuple_constructor=lambda *elements: elements,
             )
 
-            tmp_domains = tmp_expr.annex.domain
+            tmp_domains: SymbolicDomain | tuple[SymbolicDomain, ...] = tmp_expr.annex.domain
 
             declarations.extend(
                 itir.Temporary(id=tmp_name, domain=domain.as_expr(), dtype=dtype)
                 for tmp_name, domain, dtype in zip(
-                    next_utils.flatten_nested_tuple(tmp_names),
-                    next_utils.flatten_nested_tuple(tmp_domains),
-                    next_utils.flatten_nested_tuple(tmp_dtypes),
+                    next_utils.flatten_nested_tuple((tmp_names,)),
+                    next_utils.flatten_nested_tuple((tmp_domains,)),
+                    next_utils.flatten_nested_tuple((tmp_dtypes,)),
                 )
             )
 
