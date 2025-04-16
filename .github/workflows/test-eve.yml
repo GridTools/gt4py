@@ -43,7 +43,7 @@ jobs:
     - name: Run 'eve' tests with nox
       env:
         NUM_PROCESSES: auto
-        GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "origin/${{ github.base_ref }}"
+        GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "${{ github.base_ref }}"
         GT4PY_CI_NOX_VERBOSE: 1
       shell: bash
       run: uv run nox -s test_eve-${{ matrix.python-version }}

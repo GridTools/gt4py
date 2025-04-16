@@ -12,9 +12,10 @@ import fnmatch
 import functools
 import itertools
 import os
+import sys
 import types
 from collections.abc import Callable, Sequence
-from typing import Any, Final, Literal, TypeAlias, TypeVar
+from typing import Any, Final, TypeAlias
 
 import nox
 import nox.registry
@@ -65,7 +66,8 @@ def customize_session(
             session = kwargs.get("session", None) or args[0]
             if _is_skippable_session(session):
                 print(
-                    f"Skipping session '{session.name}' because it is not relevant for the current changes."
+                    f"Skipping session '{session.name}' because it is not relevant for the current changes.",
+                    file=sys.stderr,
                 )
             else:
                 session_function(*args, **kwargs)
@@ -99,7 +101,8 @@ def install_session_venv(
             f"  - Allow env variables patterns: {metadata.env_vars}\n"
             f"  - Ignore env variables patterns: {metadata.ignore_env_vars}\n"
             f"\n[{session.name}]:\n"
-            f"  - Environment: {env}\n"
+            f"  - Environment: {env}\n",
+            file=sys.stderr,
         )
 
     session.run_install(
@@ -172,7 +175,7 @@ def _is_skippable_session(session: nox.Session) -> None:
 
     changed_files = _changed_files_from_commit[commit_spec]
     if VERBOSE_MODE:
-        print(f"Modified files from '{commit_spec}': {changed_files}")
+        print(f"Modified files from '{commit_spec}': {changed_files}", file=sys.stderr)
 
     unversioned_session_name = session.name.split("-")[0]
     metadata = _metadata_registry[unversioned_session_name]
@@ -185,7 +188,8 @@ def _is_skippable_session(session: nox.Session) -> None:
             f"  - File exclude patterns: {metadata.ignore_paths}\n"
             f"  - Changed files: {list(changed_files)}\n"
             f"  - Relevant files: {list(relevant_files)}\n"
-            f"\n[{session.name}]: \n"
+            f"\n[{session.name}]: \n",
+            file=sys.stderr,
         )
 
     return len(relevant_files) == 0
