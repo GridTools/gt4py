@@ -533,3 +533,41 @@ def reconfigure_dataflow_after_rerouting(
         raise NotImplementedError(
             f"The case for '{type(other_node).__name__}' has not been implemented."
         )
+
+
+def find_upstream_nodes(
+    start: dace_nodes.Node,
+    state: dace.SDFGState,
+    start_connector: Optional[str] = None,
+    limit_node: Optional[dace_nodes.Node] = None,
+) -> set[dace_nodes.Node]:
+    """Finds all upstream nodes, i.e. all producers, of `start`.
+
+    Args:
+        start: Start the exploring from this node.
+        state: The state in which it should be explored.
+        start_connector: If given then only consider edges that terminate
+            in this connector, otherwise consider all incoming edges.
+        limit_node: Consider this node as "limiting wall", i.e. do not explore
+            beyond it.
+    """
+    seen: set[dace_nodes.Node] = set()
+
+    to_visit = [
+        iedge.src
+        for iedge in (
+            state.in_edges(start)
+            if start_connector is None
+            else state.in_edges_by_connector(start, start_connector)
+        )
+        if iedge.src is not limit_node
+    ]
+
+    while len(to_visit) != 0:
+        node = to_visit.pop()
+        if node in seen:
+            continue
+        seen.add(node)
+        to_visit.extend(iedge.src for iedge in state.in_edges(node) if iedge.src is not limit_node)
+
+    return seen

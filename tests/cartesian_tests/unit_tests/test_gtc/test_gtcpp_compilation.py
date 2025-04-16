@@ -12,7 +12,7 @@ import gridtools_cpp
 import pytest
 import setuptools
 
-from gt4py.cartesian import config  # TODO required for getting boost path
+from gt4py.cartesian.backend import pyext_builder
 from gt4py.cartesian.gtc.gtcpp.gtcpp import GTApplyMethod, Intent, Program
 from gt4py.cartesian.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
@@ -39,7 +39,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],
-        include_dirs=[gridtools_cpp.get_include_dir(), config.build_settings["boost_include_path"]],
+        include_dirs=[gridtools_cpp.get_include_dir()],
         language="c++",
         extra_compile_args=extra_compile_args,
     )
@@ -49,7 +49,9 @@ def build_gridtools_test(tmp_path: Path, code: str):
         "--build-lib=" + str(tmp_src.parent),
         "--force",
     ]
-    setuptools.setup(name="test", ext_modules=[ext_module], script_args=args)
+    pyext_builder.setuptools_setup(
+        name="test", ext_modules=[ext_module], script_args=args, build_ext_class=None
+    )
 
 
 def make_compilation_input_and_expected():

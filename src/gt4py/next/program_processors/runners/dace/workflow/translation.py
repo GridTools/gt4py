@@ -15,7 +15,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
+from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
@@ -23,7 +23,41 @@ from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
     gtir_sdfg,
     transformations as gtx_transformations,
+    utils as gtx_dace_utils,
 )
+from gt4py.next.type_system import type_specifications as ts
+
+
+def _find_constant_symbols(
+    ir: itir.Program,
+    sdfg: dace.SDFG,
+    offset_provider_type: common.OffsetProviderType,
+) -> dict[str, int]:
+    """Helper function to find symbols to replace with constant values."""
+    constant_symbols: dict[str, int] = {}
+    if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE:
+        # Search the stride symbols corresponding to the horizontal dimension
+        for p in ir.params:
+            if isinstance(p.type, ts.FieldType):
+                dims = p.type.dims
+                if len(dims) == 0:
+                    continue
+                elif len(dims) == 1:
+                    dim_index = 0
+                elif len(dims) == 2:
+                    dim_index = 0 if dims[0].kind == common.DimensionKind.HORIZONTAL else 1
+                else:
+                    raise ValueError(f"Unsupported field with dims={dims}.")
+                stride_name = gtx_dace_utils.field_stride_symbol_name(p.id, dim_index)
+                constant_symbols[stride_name] = 1
+        # Same for connectivity tables, for which the first dimension is always horizontal
+        for conn, desc in sdfg.arrays.items():
+            if gtx_dace_utils.is_connectivity_identifier(conn, offset_provider_type):
+                assert not desc.transient
+                stride_name = gtx_dace_utils.field_stride_symbol_name(conn, 0)
+                constant_symbols[stride_name] = 1
+
+    return constant_symbols
 
 
 @dataclasses.dataclass(frozen=True)
@@ -53,17 +87,28 @@ class DaCeTranslator(
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
             ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+        offset_provider_type = common.offset_provider_to_type(offset_provider)
         sdfg = gtir_sdfg.build_sdfg_from_gtir(
             ir,
-            common.offset_provider_to_type(offset_provider),
+            offset_provider_type,
             column_axis,
             disable_field_origin_on_program_arguments=self.disable_field_origin_on_program_arguments,
         )
 
         if auto_opt:
+            unit_strides_kind = (
+                common.DimensionKind.HORIZONTAL
+                if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+                else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
+            )
+            constant_symbols = _find_constant_symbols(ir, sdfg, offset_provider_type)
             gtx_transformations.gt_auto_optimize(
                 sdfg,
                 gpu=on_gpu,
+                gpu_block_size=None,  # TODO: set optimal block size
+                unit_strides_kind=unit_strides_kind,
+                constant_symbols=constant_symbols,
+                assume_pointwise=True,
                 make_persistent=False,
             )
         elif on_gpu:

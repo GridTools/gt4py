@@ -339,7 +339,6 @@ Compilation settings for GT4Py backends generating C++ or CUDA code can be modif
 the default values in the `gt4py.cartesian.config <https://github.com/GridTools/gt4py/blob/main/src/gt4py/cartesian/config.py>`_ module.
 Note that most of the system dependent settings can also be modified using the following environment variables:
 
-* ``BOOST_ROOT`` or ``BOOST_HOME``: root of the boost library headers.
 * ``CUDA_ROOT`` or ``CUDA_HOME``: installation prefix of the CUDA toolkit.
 * ``GT_INCLUDE_PATH``: path prefix to an alternative installation of GridTools header files.
 * ``OPENMP_CPPFLAGS``: preprocessor arguments for OpenMP support.
@@ -357,9 +356,3 @@ support for OpenMP in the C preprocessor and can link with OpenMP support if the
 
     export OPENMP_CPPFLAGS="-Xpreprocessor -fopenmp"
     export OPENMP_LDFLAGS="$(brew --prefix libomp)/lib/libomp.a"
-
-Similarly, boost headers are most easily installed using ``homebrew``. Then set the corresponding environment variable:
-
-.. code:: bash
-
-    export BOOST_ROOT=/usr/local/opt/boost
