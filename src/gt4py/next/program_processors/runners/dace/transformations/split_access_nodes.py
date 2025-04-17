@@ -671,11 +671,9 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
     def __init__(
         self,
         *args: Any,
-        single_use_data: dict[dace.SDFG, set[str]],
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self._single_use_data = single_use_data
 
     @classmethod
     def expressions(cls) -> Any:
@@ -692,13 +690,16 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
     ) -> bool:
         src_node: dace_nodes.AccessNode = self.source_node
         tmp_node: dace_nodes.AccessNode = self.intermediate_node
+        tmp_desc: dace_data.Data = tmp_node.desc(sdfg)
 
-        # Test if the splitting is needed at all.
-        if SplitAccessNode.can_be_applied_to(sdfg=sdfg, access_node=tmp_node):
+        # If there is less than one incoming connection then it is useless to
+        #  split the edges. Furthermore, `SplitAccessNode` must be able to get
+        #  rid of `tmp_node`.
+        if graph.in_degree(tmp_node) <= 1:
             return False
-
-        # This is needed that applying the splitter makes sense.
-        if graph.out_degree(tmp_node) <= 1 or graph.in_degree(tmp_node) <= 1:
+        if not tmp_desc.transient:
+            return False
+        if gtx_transformations.utils.is_view(tmp_desc, sdfg):
             return False
 
         # There can only be one connection between the source and the intermediate.
@@ -840,7 +841,7 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
 
             # Compute the new subset at the destination of the edge.
             new_consumer_dest_start = [
-                dace_sym.pystr_to_symbolic(f"({dstart}) +  (({ocstart}) - ({ncstart}))")
+                dace_sym.pystr_to_symbolic(f"({dstart}) + (({ncstart}) - ({ocstart}))")
                 for dstart, ocstart, ncstart in zip(
                     consumer_dest_start, old_consumer_start, new_consumer_start
                 )
