@@ -251,14 +251,15 @@ class NoxUtilsTestCase(unittest.TestCase):
         self.assertEqual(_filter_names(names, include_patterns, exclude_patterns), ["bar", "baz"])
 
     def test_is_skippable_session(self):
-        session = unittest.mock.Mock()
-        session.name = "test_session-3.10(param1=foo,param2=bar)"
         _metadata_registry["test_session"] = types.SimpleNamespace(
             paths=["src/*"], ignore_paths=["tests/*"]
         )
 
         # Source commit defined, `git diff` already cached
         with unittest.mock.patch.dict(os.environ, {CI_SOURCE_COMMIT_ENV_VAR_NAME: "main"}):
+            session = unittest.mock.Mock()
+            session.name = "test_session-3.10(param1=foo,param2=bar)"
+
             # Only included paths
             _changed_files_from_commit["main"] = ["src/foo.py"]
             self.assertFalse(_is_skippable_session(session))
@@ -278,8 +279,23 @@ class NoxUtilsTestCase(unittest.TestCase):
             # Already cached: no need to run `git diff`
             session.run.assert_not_called()
 
+        # Source commit defined, `git diff` not cached
+        with unittest.mock.patch.dict(
+            os.environ, {CI_SOURCE_COMMIT_ENV_VAR_NAME: "not_cached_commit"}
+        ):
+            session = unittest.mock.Mock(run=lambda *args, **kwargs: "src/bar.py\nsrc/baz.py")
+            session.name = "test_session-3.10(param1=foo,param2=bar)"
+
+            self.assertFalse(_is_skippable_session(session))
+            self.assertEqual(
+                _changed_files_from_commit["not_cached_commit"], ["src/bar.py", "src/baz.py"]
+            )
+
         # Undefined source commit
         with unittest.mock.patch.dict(os.environ, {}):
+            session = unittest.mock.Mock()
+            session.name = "test_session-3.10(param1=foo,param2=bar)"
+
             self.assertFalse(_is_skippable_session(session))
             session.run.assert_not_called()
 
