@@ -7,7 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import uuid
-from typing import Literal, Union, overload
+from typing import Literal, Union, overload, Any
+
+import numpy as np
+import copy
 
 import dace
 from dace.sdfg import nodes as dace_nodes
@@ -58,3 +61,37 @@ def count_nodes(
 def unique_name(name: str) -> str:
     """Adds a unique string to `name`."""
     return f"{name}_{str(uuid.uuid1()).replace('-', '_')}"
+
+
+def make_sdfg_args(
+    sdfg: dace.SDFG,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Generates the arguments to call the SDFG.
+
+    The function returns data for the reference and the result call.
+    You can compare the two using `compar_sdfg_res()`.
+    """
+    ref = {
+        name: np.array(np.random.rand(*desc.shape), copy=True, dtype=desc.dtype.as_numpy_dtype())
+        for name, desc in sdfg.arrays.items()
+        if not desc.transient
+    }
+    res = copy.deepcopy(ref)
+    return ref, res
+
+
+def evaluate_sdfg(
+    sdfg: dace.SDFG,
+    args: dict[str, Any],
+) -> Any:
+    """Compile and evaluate the SDFG."""
+    csdfg = sdfg.compile()
+    return csdfg(**args)
+
+
+def compare_sdfg_res(
+    ref: dict[str, Any],
+    res: dict[str, Any],
+) -> bool:
+    """Compares if `res` and  `ref` are the same."""
+    return all(np.allclose(ref[name], res[name]) for name in ref.keys())
