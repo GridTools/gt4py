@@ -129,7 +129,7 @@ def gt_gpu_transform_non_standard_memlet(
     validate: bool = True,
     validate_all: bool = False,
 ) -> dace.SDFG:
-    """Transform some non standard Melets to Maps.
+    """Transform some non-standard Melets to Maps.
 
     The GPU code generator is not able to handle certain sets of Memlets. To
     handle them, the code generator transforms them into copy Maps. The main
@@ -157,7 +157,7 @@ def gt_gpu_transform_non_standard_memlet(
         - This function should be called after `gt_set_iteration_order()` has run.
     """
 
-    # Expand all non standard memlets and get the new MapEntries.
+    # Expand all non-standard memlets and get the new MapEntries.
     new_maps: set[dace_nodes.MapEntry] = _gt_expand_non_standard_memlets(sdfg)
 
     # If there are no Memlets that are translated to copy-Maps, then we have nothing to do.
@@ -229,7 +229,7 @@ def gt_gpu_transform_non_standard_memlet(
 def _gt_expand_non_standard_memlets(
     sdfg: dace.SDFG,
 ) -> set[dace_nodes.MapEntry]:
-    """Finds all non standard Memlet in the SDFG and expand them.
+    """Finds all non-standard Memlet in the SDFG and expand them.
 
     The function is used by `gt_gpu_transform_non_standard_memlet()` and performs
     the actual expansion of the Memlet, i.e. turning all Memlets that can not be

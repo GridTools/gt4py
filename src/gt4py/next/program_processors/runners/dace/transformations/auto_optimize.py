@@ -94,9 +94,9 @@ def gt_auto_optimize(
     Note:
         - For identifying symbols that can be treated as compile time constants
             `gt_find_constant_arguments()` function can be used.
-        - `unit_strides_kind` is `None` then the function assumes that on GPU the
-            horizontal has unit strides and on CPU the vertical dimension has
-            unit strides.
+        - When `unit_strides_kind` is `None` the function assumes that on GPU the
+            horizontal dimension has unit strides, while on CPU the vertical dimension
+            has unit strides.
         - In case GPU optimizations are enabled, the function assumes that all
             global fields are already on the GPU.
 
@@ -143,7 +143,7 @@ def gt_auto_optimize(
         # We now ensure that point wise computations are properly double buffered,
         #  this ensures that rule 3 of ADR-18 is maintained.
         # TODO(phimuell): Figuring out if it is important to do it before the inner
-        #   Map optimization. I think it is, especially because when we do blocking.
+        #   Map optimization. I think it is, especially when we apply `LoopBlocking`.
         gtx_transformations.gt_create_local_double_buffering(sdfg)
 
         # Optimize the interior of the Maps:
@@ -174,9 +174,10 @@ def gt_auto_optimize(
             sdfg=sdfg,
             gpu=gpu,
             make_persistent=make_persistent,
-            # TODO(phimuell): In general TU is a good idea, but it also reuses
-            #   transients scalars inside a Map scope, which I do not like. Thus
-            #   we should fix the transformation to avoid that.
+            # TODO(phimuell): In general `TransientReuse` is a good idea, but the
+            #   current implementation also reuses transients scalars inside Map
+            #   scopes, which I do not like. Thus we should fix the transformation
+            #   to avoid that.
             reuse_transients=reuse_transients,
             validate=validate,
             validate_all=validate_all,
@@ -381,9 +382,9 @@ def _gt_auto_configure_maps_and_strides(
             gtx_common.DimensionKind.HORIZONTAL if gpu else gtx_common.DimensionKind.VERTICAL
         )
     if unit_strides_kind is not None:
-        # It is not possible to support the `unit_strides_dim` argument of the
+        # It is not possible to use the `unit_strides_dim` argument of the
         #  function, because `LoopBlocking` will change the name of the parameter
-        #  but it can still be identified by "kind".
+        #  but the dimension can still be identified by its "kind".
         gtx_transformations.gt_set_iteration_order(
             sdfg=sdfg,
             unit_strides_kind=unit_strides_kind,
@@ -391,11 +392,11 @@ def _gt_auto_configure_maps_and_strides(
             validate_all=validate_all,
         )
 
-    # NOTE: We have to set the strides of transients before the non standard Memlets
+    # NOTE: We have to set the strides of transients before the non-standard Memlets
     #   get expanded, i.e. turned into Maps because no `cudaMemcpy*()` call exists,
     #   which requires that the final strides are there. Furthermore, Memlet expansion
     #   has to happen before the GPU block size is set. There are several possible
-    #   solution for that, of which none is really good. The one that is the least
+    #   solutions for that, of which none is really good. The one that is the least
     #   bad thing is to set the strides of the transients here. The main downside
     #   is that this and the `_gt_auto_post_processing()` function has these weird
     #   names.
