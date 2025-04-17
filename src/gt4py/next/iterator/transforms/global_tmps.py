@@ -211,6 +211,7 @@ def _transform_by_pattern(
                     next_utils.flatten_nested_tuple((tmp_names,)),
                     next_utils.flatten_nested_tuple((tmp_domains,)),
                     next_utils.flatten_nested_tuple((tmp_dtypes,)),
+                    strict=True,
                 )
             )
 
