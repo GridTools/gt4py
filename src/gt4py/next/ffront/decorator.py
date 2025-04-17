@@ -16,6 +16,7 @@ import concurrent
 import concurrent.futures
 import dataclasses
 import functools
+import itertools
 import types
 import typing
 import warnings
@@ -84,10 +85,13 @@ class Program:
         common.OffsetProvider
     ]  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
 
-    # TODO(havogt): pattern will be changed in the compile with variants PR, this pattern is used because a subclass is adding a new field without default
-    _compiled_program: (
-        concurrent.futures.Future[stages.CompiledProgram] | stages.CompiledProgram | None
-    ) = dataclasses.field(init=False, default=None, hash=False, repr=False)
+    # TODO improve pattern
+    _compiled_programs: dict[
+        tuple[Any, ...], concurrent.futures.Future[stages.CompiledProgram] | stages.CompiledProgram
+    ] = dataclasses.field(default_factory=dict, init=False, hash=False, repr=False)
+    _static_arg_indices: tuple[int, ...] | None = dataclasses.field(
+        default=None, init=False, hash=False, repr=False
+    )
 
     @classmethod
     def from_function(
@@ -259,20 +263,23 @@ class Program:
                 ctx.run(self.definition_stage.definition, *args, **kwargs)
             return
 
-        if self._compiled_program is not None:
+        if self._compiled_programs:
             # TODO(havogt): make offset_provider_type part of the compiled program hash once we have variants
             # TODO(havogt): measure overhead of canonicalize_arguments
             program_type = self.past_stage.past_node.type
             assert isinstance(program_type, ts_ffront.ProgramType)
             args, kwargs = type_info.canonicalize_arguments(program_type, args, kwargs)
+            assert self._static_arg_indices is not None
+            key = tuple(args[i] for i in self._static_arg_indices)
             try:
                 # if this call works, the future was already resolved
-                self._compiled_program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # `Future` not callable, but that's why we are in `try`
+                self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # `Future` not callable, but that's why we are in `try`
             except TypeError:  # 'Future' object is not callable
                 # otherwise we resolve the future and call again
-                assert isinstance(self._compiled_program, concurrent.futures.Future)
-                object.__setattr__(self, "_compiled_program", self._compiled_program.result())
-                self._compiled_program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # here it is a `CompiledProgram`
+                future = self._compiled_programs[key]
+                assert isinstance(future, concurrent.futures.Future)
+                self._compiled_programs[key] = future.result()
+                self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # here it is a `CompiledProgram`
         else:
             self.backend(
                 self.definition_stage,
@@ -281,16 +288,24 @@ class Program:
             )
 
     def compile(
-        self, offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None
+        self,
+        offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
+        **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
     ) -> Program:
-        if self._compiled_program is not None:
-            raise RuntimeError("Program is already compiled.")
+        if len(self._compiled_programs) > 0:
+            # TODO discuss this behavior
+            raise RuntimeError("Program variants were already compiled.")
         if self.backend is None or self.backend == eve.NOTHING:
             raise ValueError("Cannot compile a program without backend.")
         if self.connectivities is None and offset_provider_type is None:
             raise ValueError(
                 "Cannot compile a program without connectivities / OffsetProviderType."
             )
+        if not all(isinstance(v, list) for v in static_args.values()):
+            raise TypeError(
+                "Please provide the static arguments as lists. This is to avoid confusion with tuple arguments."
+            )
+
         offset_provider_type = (
             self.connectivities if offset_provider_type is None else offset_provider_type
         )
@@ -305,21 +320,28 @@ class Program:
         assert not past_node_type.definition.kw_only_args
         assert not past_node_type.definition.pos_only_args
 
-        args = tuple(arg_types_dict.values())
+        static_args_indices = tuple(
+            sorted(list(arg_types_dict.keys()).index(k) for k in static_args.keys())
+        )
+        object.__setattr__(self, "_static_arg_indices", static_args_indices)
+        for static_values in itertools.product(*static_args.values()):
+            variant = dict(zip(static_args.keys(), static_values))
+            args = tuple(
+                type_
+                if name not in variant
+                else arguments.StaticArg(value=variant[name], type_=type_)
+                for name, type_ in arg_types_dict.items()
+            )
 
-        compile_time_args = arguments.CompileTimeArgs(
-            offset_provider=offset_provider_type,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
-            column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
-            args=args,
-            kwargs={},
-        )
-        object.__setattr__(
-            self,
-            "_compiled_program",
-            _async_compilation_pool.submit(
+            compile_time_args = arguments.CompileTimeArgs(
+                offset_provider=offset_provider_type,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
+                column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
+                args=args,
+                kwargs={},
+            )
+            self._compiled_programs[static_values] = _async_compilation_pool.submit(
                 self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
-            ),
-        )
+            )
         return self
 
     def freeze(self) -> FrozenProgram:
@@ -476,7 +498,9 @@ class ProgramWithBoundArgs(Program):
 
     @xtyping.override
     def compile(
-        self, offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None
+        self,
+        offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
+        **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
     ) -> Program:
         raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
 
