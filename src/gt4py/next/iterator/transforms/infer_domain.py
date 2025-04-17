@@ -209,6 +209,7 @@ def _filter_domain_dimensions(
 def _extract_vertical_dims(
     domain: domain_utils.SymbolicDomain,
 ) -> dict[common.Dimension, domain_utils.SymbolicRange]:
+    assert isinstance(domain, domain_utils.SymbolicDomain)
     return {
         dim: range_
         for dim, range_ in domain.ranges.items()
@@ -474,7 +475,11 @@ def infer_expr(
     )
 
     if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):
-        additional_dims = gtx_utils.tree_map(lambda d: _extract_vertical_dims(d))(domain)
+        additional_dims = gtx_utils.tree_map(
+            lambda d: _extract_vertical_dims(d)
+            if isinstance(d, domain_utils.SymbolicDomain)
+            else {}
+        )(domain)
     else:
         additional_dims = gtx_utils.tree_map(lambda d: {})(domain)
 
