@@ -116,10 +116,6 @@ class SymbolicDomain:
                 assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
                 current_dim = connectivity_type
                 # cartesian offset
-                if current_dim in new_ranges.keys():  # TODO: temporary solution
-                    new_ranges[current_dim] = SymbolicRange.translate(
-                        self.ranges[current_dim], val.value
-                    )
                 new_ranges[current_dim] = SymbolicRange.translate(
                     self.ranges[current_dim], val.value
                 )
