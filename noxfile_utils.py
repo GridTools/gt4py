@@ -34,8 +34,10 @@ import nox.registry
 
 PROJECT_PREFIX: Final = "GT4PY"
 
+# GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM
 CI_SOURCE_COMMIT_ENV_VAR_NAME: Final = f"{PROJECT_PREFIX}_CI_NOX_RUN_ONLY_IF_CHANGED_FROM"
 
+# GT4PY_CI_NOX_VERBOSE
 VERBOSE_MODE: Final = os.environ.get(f"{PROJECT_PREFIX}_CI_NOX_VERBOSE", "").lower() in [
     "1",
     "on",
@@ -168,7 +170,7 @@ def install_session_venv(
 # -- Internal implementation utilities --
 def _filter_names(
     names: list[str], include_patterns: list[str], exclude_patterns: list[str]
-) -> str:
+) -> list[str]:
     """Filter names based on include and exclude `fnmatch`-style patterns."""
     included = (
         set(
@@ -190,7 +192,7 @@ def _filter_names(
         else set()
     )
 
-    return included - excluded
+    return list(sorted(included - excluded))
 
 
 def _is_skippable_session(session: nox.Session) -> bool:

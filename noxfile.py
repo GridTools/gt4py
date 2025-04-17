@@ -8,17 +8,16 @@
 
 from __future__ import annotations
 
-import os
 import pathlib
 import sys
 import types
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from unittest import mock
-from typing import Any, Final, Literal, TypeAlias, TypeVar
+from typing import Any, Final, Literal, TypeAlias
 
 import nox
 
-with mock.patch("sys.path", [".", *sys.path]):
+with mock.patch("sys.path", [f"{pathlib.Path(__file__).parent!s}", *sys.path]):
     import noxfile_utils as nox_utils
 
 #: This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
