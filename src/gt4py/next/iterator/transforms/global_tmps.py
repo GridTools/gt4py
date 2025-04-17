@@ -172,7 +172,38 @@ def _transform_by_pattern(
                 tuple_constructor=lambda *elements: elements,
             )
 
-            tmp_domains: SymbolicDomain | tuple[SymbolicDomain, ...] = tmp_expr.annex.domain
+            tmp_domains: SymbolicDomain | tuple[SymbolicDomain | tuple, ...] = tmp_expr.annex.domain
+
+            if cpm.is_applied_as_fieldop(tmp_expr):
+                # In this case all tuple elements have the same size (or will be `NEVER`).
+                # Create the tuple structure with that domain.
+                domains = list(
+                    set(next_utils.flatten_nested_tuple((tmp_domains,)))
+                    - set([infer_domain.DomainAccessDescriptor.NEVER])  # type: ignore[list-item] # type should always be `SymbolicDomain`
+                )
+                assert len(domains) == 1
+                # this is the domain used as initial value in the tuple construction below
+                tmp_domains = domains[0]
+
+            def get_domain(
+                _, path: tuple[int, ...]
+            ) -> domain_utils.SymbolicDomain:  # function only used inside loop
+                domain = functools.reduce(
+                    lambda var, idx: var[idx] if isinstance(var, tuple) else var,
+                    path,
+                    tmp_domains,  # noqa: B023
+                )
+                assert isinstance(domain, domain_utils.SymbolicDomain)
+                return domain
+
+            # The following propagates the domains to the tuple structure of `tmp_expr.type`.
+            # `tmp_domains` might not have this structure because domain inference was not able to infer the tuple structure.
+            tmp_domains = type_info.apply_to_primitive_constituents(
+                get_domain,
+                tmp_expr.type,
+                with_path_arg=True,
+                tuple_constructor=lambda *elements: tuple(elements),
+            )
 
             declarations.extend(
                 itir.Temporary(id=tmp_name, domain=domain.as_expr(), dtype=dtype)

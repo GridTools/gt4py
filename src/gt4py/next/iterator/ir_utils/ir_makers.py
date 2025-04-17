@@ -59,6 +59,7 @@ def ref(
     """
     if isinstance(ref_or_name, itir.SymRef):
         assert not type_
+        assert not annex
         return ref_or_name
     ref = itir.SymRef(id=ref_or_name, type=ensure_type(type_))
     if annex is not None:
