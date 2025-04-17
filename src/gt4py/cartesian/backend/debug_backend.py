@@ -32,7 +32,7 @@ class DebugBackend(backend_base.BaseBackend, backend_base.CLIBackendMixin):
         "ignore_np_errstate": {"versioning": True, "type": bool},
     }
     storage_info = storage.layout.NaiveCPULayout
-    languages = {"computation": "python", "bindings": ["python"]}
+    languages: ClassVar[dict[str, Any]] = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = numpy_backend.ModuleGenerator
 
     def generate_computation(self) -> dict[str, Union[str, dict]]:
