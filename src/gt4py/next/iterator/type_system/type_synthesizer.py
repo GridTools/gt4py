@@ -310,12 +310,25 @@ def _convert_as_fieldop_input_to_iterator(
     )
 
 
-def _handle_sparse_fields(input_: ts.FieldType | ts.TupleType | tuple[ts.FieldType, ts.TupleType]):
+def _canonicalize_nb_fields(
+    input_: ts.FieldType | ts.TupleType | tuple[ts.FieldType, ts.TupleType],
+):
     """
-    Processes sparse field inputs by removing LOCAL dimensions and converting the data type to ListType.
+    Transform neighbor / sparse field type by removal of local dimension and addition of corresponding `ListType` dtype.
+
+    Examples:
+    >>> input_field = ts.FieldType(
+    ...     dims=[
+    ...         common.Dimension(value="Vertex"),
+    ...         common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL),
+    ...     ],
+    ...     dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+    ... )
+    >>> _canonicalize_nb_fields(input_field)
+    FieldType(dims=[Dimension(value='Vertex', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ListType(element_type=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None), offset_type=Dimension(value='V2E', kind=<DimensionKind.LOCAL: 'local'>)))
     """
     if isinstance(input_, (tuple, ts.TupleType)):
-        return ts.TupleType(types=[_handle_sparse_fields(field) for field in input_])
+        return ts.TupleType(types=[_canonicalize_nb_fields(field) for field in input_])
     elif isinstance(input_, ts.FieldType):
         input_dims = _collect_and_check_dimensions(input_)
         element_type: ts.DataType = type_info.apply_to_primitive_constituents(
@@ -379,7 +392,10 @@ def as_fieldop(
         return final_target
 
     @TypeSynthesizer
-    def applied_as_fieldop(*fields, shift_results) -> ts.FieldType | ts.DeferredType:
+    def applied_as_fieldop(
+        *fields: ts.TupleType,
+        shift_results: list[set[tuple[itir.OffsetLiteral, ...]]],
+    ) -> ts.FieldType | ts.DeferredType:
         if any(
             isinstance(el, ts.DeferredType)
             for f in fields
@@ -388,7 +404,7 @@ def as_fieldop(
             return ts.DeferredType(constraint=None)
         nonlocal domain
 
-        new_fields = _handle_sparse_fields(fields)
+        new_fields = _canonicalize_nb_fields(fields)
 
         deduced_domain = None
         if offset_provider_type is not None:
@@ -403,10 +419,7 @@ def as_fieldop(
                             for input_dim in input_dims:
                                 output_dims.add(_resolve_shift(input_dim, shift_tuple))
 
-                        output_dims_sorted = common.ordered_dims(
-                            output_dims
-                        )  # TODO: use promote_dims
-                        deduced_domain = it_ts.DomainType(dims=list(output_dims_sorted))
+                        deduced_domain = it_ts.DomainType(dims=list(output_dims))
 
         if deduced_domain:
             if domain:
