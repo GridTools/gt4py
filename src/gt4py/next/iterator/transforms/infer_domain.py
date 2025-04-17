@@ -194,45 +194,26 @@ def _extract_accessed_domains(
     return accessed_domains
 
 
-def _restrict_domain(
-    in_field_domain: NonTupleDomainAccess,
-    dims: list[common.Dimension],
-    keep_dims: Optional[dict[common.Dimension, domain_utils.SymbolicRange]] = None,
-) -> NonTupleDomainAccess:
-    if isinstance(in_field_domain, domain_utils.SymbolicDomain):
-        cleaned_dims = {}
-        for dim, range_ in in_field_domain.ranges.items():
-            if dim in dims:
-                cleaned_dims[dim] = range_
-        if keep_dims:
-            for dim, range_ in keep_dims.items():
-                cleaned_dims[dim] = range_
-        return domain_utils.SymbolicDomain(grid_type=in_field_domain.grid_type, ranges=cleaned_dims)
-    return in_field_domain
-
-
-def _add_domains(
-    in_field_domain: domain_utils.SymbolicDomain,
+def _filter_domain_dimensions(
     domain: domain_utils.SymbolicDomain,
+    dims: list[common.Dimension],
+    additional_dims: Optional[dict[common.Dimension, domain_utils.SymbolicRange]] = None,
 ) -> domain_utils.SymbolicDomain:
-    ranges = in_field_domain.ranges
-    for dim, range_ in domain.ranges.items():
-        if dim in ranges.keys():
-            assert ranges[dim] == range_
-        else:
-            ranges[dim] = range_
-    return domain_utils.SymbolicDomain(grid_type=in_field_domain.grid_type, ranges=ranges)
+    assert isinstance(domain, domain_utils.SymbolicDomain)
+    retained = {dim: domain.ranges[dim] for dim in dims if dim in domain.ranges}
+    if additional_dims:
+        retained.update(additional_dims)
+    return domain_utils.SymbolicDomain(grid_type=domain.grid_type, ranges=retained)
 
 
-def _gather_keep_dims(
-    domain: domain_utils.SymbolicDomain | DomainAccessDescriptor,
+def _extract_vertical_dims(
+    domain: domain_utils.SymbolicDomain,
 ) -> dict[common.Dimension, domain_utils.SymbolicRange]:
-    keep_dims = {}
-    if isinstance(domain, domain_utils.SymbolicDomain):
-        for dim, range_ in domain.ranges.items():
-            if dim.kind == common.DimensionKind.VERTICAL:
-                keep_dims[dim] = range_
-    return keep_dims
+    return {
+        dim: range_
+        for dim, range_ in domain.ranges.items()
+        if dim.kind == common.DimensionKind.VERTICAL
+    }
 
 
 def _infer_as_fieldop(
@@ -493,19 +474,19 @@ def infer_expr(
     )
 
     if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):
-        keep_dims = gtx_utils.tree_map(lambda d: _gather_keep_dims(d))(domain)
+        additional_dims = gtx_utils.tree_map(lambda d: _extract_vertical_dims(d))(domain)
     else:
-        keep_dims = gtx_utils.tree_map(lambda d: {})(domain)
+        additional_dims = gtx_utils.tree_map(lambda d: {})(domain)
 
     domain = gtx_utils.tree_map(
-        lambda d, t, k: _restrict_domain(
+        lambda d, t, a: _filter_domain_dimensions(
             d,
             t.dims if not isinstance(t, ts.ScalarType) else [],
-            keep_dims=k,
+            additional_dims=a,
         )
-        if not isinstance(t, ts.DeferredType)
+        if not isinstance(t, ts.DeferredType) and isinstance(d, domain_utils.SymbolicDomain)
         else d
-    )(domain, el_types, keep_dims)
+    )(domain, el_types, additional_dims)
 
     expr, accessed_domains = _infer_expr(
         expr,

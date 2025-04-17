@@ -26,12 +26,18 @@ class RemoveBroadcast(PreserveLocationVisitor, NodeTranslator):
     >>> IDim = Dimension("IDim")
     >>> JDim = Dimension("JDim")
     >>> domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 10)})
-    >>> call = im.call("broadcast")(im.ref("inp"),im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (IDim, JDim))))
+    >>> call = im.call("broadcast")(
+    ...     im.ref("inp"),
+    ...     im.make_tuple(
+    ...         *(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (IDim, JDim))
+    ...     ),
+    ... )
     >>> call.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)
     >>> transformed = RemoveBroadcast.apply(call)
     >>> print(transformed)
     as_fieldop(deref, c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 10[ ⟩)(inp)
     """
+
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
     @classmethod
