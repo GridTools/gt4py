@@ -303,3 +303,11 @@ def test_storage(
         str(pathlib.Path("src") / "gt4py" / "storage"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
+
+
+if __name__ == "__main__":
+    print(
+        "This file is not meant to be run directly."
+        "Use `nox` to run the sessions defined in this file."
+    )
+    sys.exit(1)

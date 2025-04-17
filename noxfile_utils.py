@@ -26,8 +26,10 @@ import itertools
 import os
 import sys
 import types
+import unittest
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, Final, TypeAlias
+import unittest.mock
 
 import nox
 import nox.registry
@@ -169,28 +171,15 @@ def install_session_venv(
 
 # -- Internal implementation utilities --
 def _filter_names(
-    names: Iterable[str], include_patterns: Iterable[str], exclude_patterns: Iterable[str]
+    names: Iterable[str], include_patterns: Sequence[str], exclude_patterns: Sequence[str]
 ) -> list[str]:
     """Filter names based on include and exclude `fnmatch`-style patterns."""
-    included = (
-        set(
-            itertools.chain(
-                *(fnmatch.filter(names, include_pattern) for include_pattern in include_patterns)
-            )
-        )
-        if include_patterns
-        else set(names)
-    )
 
-    excluded = (
-        set(
-            itertools.chain(
-                *(fnmatch.filter(included, exclude_pattern) for exclude_pattern in exclude_patterns)
-            )
-        )
-        if exclude_patterns
-        else set()
-    )
+    def _filter(names: Iterable[str], patterns: Iterable[str]) -> set[str]:
+        return itertools.chain(*(fnmatch.filter(names, pattern) for pattern in patterns))
+
+    included = set(_filter(names, include_patterns) if include_patterns else names)
+    excluded = set(_filter(included, exclude_patterns) if exclude_patterns else [])
 
     return list(sorted(included - excluded))
 
@@ -238,3 +227,63 @@ def _is_skippable_session(session: nox.Session) -> bool:
         )
 
     return len(relevant_files) == 0
+
+
+# -- Self unit tests --
+class NoxUtilsTestCase(unittest.TestCase):
+    def test_filter_names(self):
+        names = ["foo", "bar", "baz"]
+
+        include_patterns = ["f*", "b*"]
+        exclude_patterns = ["b*"]
+        self.assertEqual(_filter_names(names, include_patterns, exclude_patterns), ["foo"])
+
+        include_patterns = ["*a*"]
+        exclude_patterns = ["*r"]
+        self.assertEqual(_filter_names(names, include_patterns, exclude_patterns), ["baz"])
+
+        include_patterns = None
+        exclude_patterns = ["*o"]
+        self.assertEqual(_filter_names(names, include_patterns, exclude_patterns), ["bar", "baz"])
+
+        include_patterns = ["b*"]
+        exclude_patterns = None
+        self.assertEqual(_filter_names(names, include_patterns, exclude_patterns), ["bar", "baz"])
+
+    def test_is_skippable_session(self):
+        session = unittest.mock.Mock()
+        session.name = "test_session-3.10(param1=foo,param2=bar)"
+        _metadata_registry["test_session"] = types.SimpleNamespace(
+            paths=["src/*"], ignore_paths=["tests/*"]
+        )
+
+        # Git diff already cached
+        with unittest.mock.patch.dict(os.environ, {CI_SOURCE_COMMIT_ENV_VAR_NAME: "main"}):
+            # Only included paths
+            _changed_files_from_commit["main"] = ["src/foo.py"]
+            is_skippable = _is_skippable_session(session)
+            session.run.assert_not_called()
+            self.assertFalse(is_skippable)
+
+            # Included and excluded paths
+            _changed_files_from_commit["main"] = ["src/foo.py", "tests/test_foo.py"]
+            is_skippable = _is_skippable_session(session)
+            session.run.assert_not_called()
+            self.assertFalse(is_skippable)
+
+            # Only excluded paths
+            _changed_files_from_commit["main"] = ["tests/test_foo.py"]
+            is_skippable = _is_skippable_session(session)
+            session.run.assert_not_called()
+            self.assertTrue(is_skippable)
+
+            # Not included or excluded
+            _changed_files_from_commit["main"] = ["docs/readme.md"]
+            is_skippable = _is_skippable_session(session)
+            session.run.assert_not_called()
+            self.assertTrue(is_skippable)
+
+
+# Run this file as a script to execute the tests.
+if __name__ == "__main__":
+    unittest.main()
