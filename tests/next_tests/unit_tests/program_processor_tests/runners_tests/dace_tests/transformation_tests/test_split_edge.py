@@ -64,6 +64,11 @@ def test_split_edge_two_ac_producer_one_ac_consumer_1d():
 
     tmp = next(ac for ac in ac_nodes if ac.data == "tmp")
     assert state.out_degree(tmp) == 2
+    reads_to_tmp = {
+        (oedge.data.src_subset.min_element()[0], oedge.data.src_subset.size()[0])
+        for oedge in state.out_edges(tmp)
+    }
+    assert {(0, 10), (10, 10)} == reads_to_tmp
 
     util.evaluate_sdfg(sdfg, res)
     assert util.compare_sdfg_res(ref, res)
