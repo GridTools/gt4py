@@ -61,18 +61,27 @@ def gt_split_access_nodes(
 class SplitAccessNode(dace_transformation.SingleStateTransformation):
     """The transformation will split an AccessNode into multiple ones.
 
-    If there is no interesection between a write and different reads,
-    i.e. if every read to the AccessNode can be satisfied by a single write
-    to the AccessNode and the AccessNode is only used at one location,
-    then the node is split.
-    This means that the reads will be satisfied directly and the node
-    does not have to materialize.
+    It is tuned towards the following situations:
+    ```python
+    tmp = concat_where(condition, foo(...), bar(...))
+    tmp2 = concat_where(condition, foo2(tmp, ...), bar2(tmp, ...))
+    ```
+    I.e. two consecutive `concat_where()` with the same condition.
+    The transformation will essentially rewrite it to:
+    ```python
+    tmp2 = concat_where(condition, foo2(foo(...), ...), bar2(bar(...), ...))
+    ```
+
+    The transformation matches AccessNodes and checks if every read from the
+    matched node can be satisfied by a single write to it. In that case the
+    transformation will split the nodes and each producer will write into its
+    own independent transients, the consumer nodes will be modified accordingly.
 
     Args:
         single_use_data: The list of data that is used only once.
 
     Todo:
-        Currently for every consumer there can only be one producer. In case the
+        Currently for every consumer there can only have one producer. In case the
         consumer is a Map, this makes sense, but in case the consumer is an
         AccessNode one could split the consumer.
     """
@@ -134,6 +143,9 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
         # Furthermore, they must also be different distinct consumers.
         # NOTE: This is for simplifying the implementation.
+        print(
+            "FOR the helper splitter below this must be lifted, I am not sure if it is really important."
+        )
         if number_of_consumers != len({consumer for consumer in graph.out_edges(access_node)}):
             return False
 
@@ -622,3 +634,316 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
             state=state,
             outer_node=tmp_node,
         )
+
+
+@dace_properties.make_properties
+class SplitMemlet(dace_transformation.SingleStateTransformation):
+    """Preparation stage for the `SplitAccessNode`.
+
+    Essentially splits consumer edges, such that `SplitAccessNode` become applicable.
+    The function matches the following situations: `(S) -> (i) -> (D)`.
+    Where `i` is the node that would be split by the `SplitAccessNode` transformation.
+
+    The transformation essentially targets the following situation:
+    ```python
+    tmp = concat_where(cond1, foo(...), a)
+    tmp2 = concat_where(cond1 & cond2, foo2(tmp, ...), tmp)
+    ```
+    It essentially rewrites it into:
+    tmp = concat_where(cond1 & cond2, foo(...), a)
+    tmp2_1 = concat_where(cond1 & cond2, foo2(tmp, ...), tmp)
+    tmp2 = concat_where(cond1 & !cond2, foo(...), tmp2_1)
+    ```
+    """
+
+    source_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    intermediate_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    target_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+
+    def __init__(
+        self,
+        *args: Any,
+        single_use_data: dict[dace.SDFG, set[str]],
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._single_use_data = single_use_data
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [
+            dace.sdfg.utils.node_path_graph(cls.source_node, cls.intermediate_node, cls.target_node)
+        ]
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState,
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        src_node: dace_nodes.AccessNode = self.source_node
+        tmp_node: dace_nodes.AccessNode = self.intermediate_node
+
+        # Test if the splitting is needed at all.
+        if SplitAccessNode.can_be_applied_to(sdfg=sdfg, access_node=tmp_node):
+            return False
+
+        # This is needed that applying the splitter makes sense.
+        if graph.out_degree(tmp_node) <= 1 or graph.in_degree(tmp_node) <= 1:
+            return False
+
+        # There can only be one connection between the source and the intermediate.
+        #  This is to simplify implementation and also a restriction from the
+        #  actual `SplitAccessNode`.
+        src_tmp_edges = [oedge for oedge in graph.out_edges(src_node) if oedge.dst is tmp_node]
+        if len(src_tmp_edges) != 1:
+            return False
+        src_tmp_edge: dace_graph.MultiConnectorEdge = src_tmp_edges[0]
+
+        # We require that the producer of `tmp_node` are all distinct, these is a
+        #  requirement from the splitter.
+        if graph.in_degree(tmp_node) != len({iedge.src for iedge in graph.in_edges(tmp_node)}):
+            return False
+
+        tmp_subset: dace_sbs.Subset = src_tmp_edge.data.dst_subset
+        if tmp_subset is None:
+            return False
+
+        # The splitting is only possible if the data, that comes from `src_node` can
+        #  really be separated. For that we have to make sure that no map consumes
+        #  what we write. However it is fully allowed that the Map consumes everything.
+        found_edge_to_split = False
+        for oedge in graph.out_edges(tmp_node):
+            consumer = oedge.dst
+            consumer_read = oedge.data.src_subset
+            if consumer_read is None:
+                return False
+            elif isinstance(consumer, dace_nodes.AccessNode):
+                # This transformation only makes sense if we can split some reads,
+                #  thus there must be an intersection.
+                if any((rs == 1) == False for _, _, rs in consumer_read):  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                    continue
+                elif (
+                    self._split_consumer_subset(producer=tmp_subset, consumer=consumer_read)
+                    is not None
+                ):
+                    # TODO: extend this to see that all edges could be split, also see note
+                    #   At the end of this function.
+                    found_edge_to_split = True
+                continue
+            elif isinstance(consumer, dace_nodes.MapEntry):
+                if tmp_subset.intersects(consumer_read) and (not tmp_subset.covers(consumer_read)):
+                    return False
+                continue
+            else:
+                # TODO(phimuell): Implement these case.
+                return False
+
+        if not found_edge_to_split:
+            return False
+
+        # TODO(phimuell): These tests might not be enough, meaning this transformation
+        #   might apply, but there are other things that prevent `SplitAccessNode`
+        #   from applying. I guess the best thing would be to apply some collapsing
+        #   pass that merges the edges together.
+        return True
+
+    def apply(
+        self,
+        graph: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> None:
+        src_node: dace_nodes.AccessNode = self.source_node
+        tmp_node: dace_nodes.AccessNode = self.intermediate_node
+        src_tmp_edge: dace_graph.MultiConnectorEdge = next(
+            oedge for oedge in graph.out_edges(src_node) if oedge.dst is tmp_node
+        )
+
+        edges_to_split = self._find_edges_to_split(state=graph, src_tmp_edge=src_tmp_edge)
+        self._split_consumer_edges(
+            sdfg=sdfg,
+            state=graph,
+            src_tmp_edge=src_tmp_edge,
+            edges_to_split=edges_to_split,
+        )
+
+    def _find_edges_to_split(
+        self,
+        state: dace.SDFGState,
+        src_tmp_edge: dace_graph.MultiConnectorEdge,
+    ) -> list[dace_graph.MultiConnectorEdge]:
+        tmp_subset: dace_sbs.Subset = src_tmp_edge.data.dst_subset
+        edges_to_split: list[dace_graph.OrderedMultiDiGraph] = []
+        for oedge in state.out_edges(src_tmp_edge.dst):
+            consumer = oedge.dst
+            consumer_read = oedge.data.src_subset
+            if isinstance(consumer, dace_nodes.AccessNode) and consumer_read is not None:
+                if (
+                    self._split_consumer_subset(producer=tmp_subset, consumer=consumer_read)
+                    is not None
+                ):
+                    edges_to_split.append(oedge)
+        return edges_to_split
+
+    def _split_consumer_edges(
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+        src_tmp_edge: dace_graph.MultiConnectorEdge,
+        edges_to_split: list[dace_graph.MultiConnectorEdge],
+    ) -> None:
+        for edge_to_split in edges_to_split:
+            self._split_consumer_edge(
+                sdfg=sdfg,
+                state=state,
+                src_tmp_edge=src_tmp_edge,
+                edge_to_split=edge_to_split,
+            )
+            state.remove_edge(edge_to_split)
+
+    def _split_consumer_edge(
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+        src_tmp_edge: dace_graph.MultiConnectorEdge,
+        edge_to_split: dace_graph.MultiConnectorEdge,
+    ) -> None:
+        producer_subset = src_tmp_edge.data.dst_subset
+        consumer_subset = edge_to_split.data.src_subset
+        assert isinstance(edge_to_split.dst, dace_nodes.AccessNode)
+
+        # If the subset is not given assume that it starts at zero.
+        consumer_destination_subset = edge_to_split.data.dst_subset
+        if consumer_destination_subset is None:
+            consumer_destination_subset = dace_sbs.Range.from_array(edge_to_split.dst.desc(sdfg))
+
+        new_consumer_subsets = self._split_consumer_subset(
+            producer=producer_subset, consumer=consumer_subset
+        )
+        assert new_consumer_subsets is not None
+        old_consumer_start = consumer_subset.min_element()
+        consumer_dest_start = consumer_destination_subset.min_element()
+
+        new_edges = []
+        for new_consumer_subset in new_consumer_subsets:
+            new_subset_size = new_consumer_subset.size()
+            new_consumer_start = new_consumer_subset.min_element()
+
+            # Compute the new subset at the destination of the edge.
+            new_consumer_dest_start = [
+                dace_sym.pystr_to_symbolic(f"({dstart}) +  (({ocstart}) - ({ncstart}))")
+                for dstart, ocstart, ncstart in zip(
+                    consumer_dest_start, old_consumer_start, new_consumer_start
+                )
+            ]
+            new_consumer_dest_end = [
+                dace_sym.pystr_to_symbolic(f"({ncdstart}) + ({ss} - 1)")
+                for ncdstart, ss in zip(new_consumer_dest_start, new_subset_size)
+            ]
+            new_consumer_dest_subset = dace_sbs.Range(
+                [
+                    (start, end, 1)
+                    for start, end in zip(new_consumer_dest_start, new_consumer_dest_end)
+                ]
+            )
+
+            new_edges.append(
+                state.add_edge(
+                    edge_to_split.src,
+                    edge_to_split.src_conn,
+                    edge_to_split.dst,
+                    edge_to_split.dst_conn,
+                    dace.Memlet.from_memlet(edge_to_split.data),
+                )
+            )
+            new_edges[-1].data.src_subset = new_consumer_subset
+            new_edges[-1].data.dst_subset = new_consumer_dest_subset
+
+    def _split_consumer_subset(
+        self,
+        producer: dace_sbs.Range,
+        consumer: dace_sbs.Range,
+    ) -> Optional[list[dace_sbs.Range]]:
+        assert producer.dims() == consumer.dims()
+
+        # Currently we require that we have to split only along one dimension.
+        dimension_in_which_to_split: Optional[int] = None
+        splitted_subsets_in_dim: list[tuple[Any, ...]] = []
+        for dim in range(producer.dims()):
+            prod_low = producer[dim][0]
+            prod_high = producer[dim][1]
+            consu_low = consumer[dim][0]
+            consu_high = consumer[dim][1]
+
+            # In this dimension the consumer consumes everything the producer
+            #  generates. Therefore no splitting is needed.
+            embedded_cond1 = (prod_low <= consu_low) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            embedded_cond2 = (consu_high <= prod_high) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            if embedded_cond1 and embedded_cond2:
+                continue
+
+            # Check if there is an intersection at all.
+            #  I am pretty sure that there is no strange `-1` correction needed.
+            intersec_cond1 = (consu_low <= prod_high) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            intersec_cond2 = (prod_low <= consu_high) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            if not (intersec_cond1 or intersec_cond2):
+                # TODO(phimuell): Figuring out what this case means.
+                return None
+
+            # The consumer is not fully embedded in the producer, so this dimension
+            #  we must split. If we found before ignore it.
+            # Idea to generalize: Only handle the first one found.
+            if dimension_in_which_to_split is not None:
+                return None
+            dimension_in_which_to_split = dim
+
+            # Determine the splitting case that we have.
+            #  I am pretty sure about the `<` here.
+            read_right = (prod_high < consu_high) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            read_left = (consu_low < prod_low) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            assert read_right or read_left
+
+            # Now we determine the split mode. There are three cases.
+            if read_right and read_left:
+                # The consumer starts reading before the producer starts to write
+                #  and also reads more than the producer writes to, so it is split
+                #  into three parts.
+                splitted_subsets_in_dim = [
+                    (consu_low, prod_low - 1, 1),
+                    (prod_low, prod_high, 1),
+                    (prod_high + 1, consu_high, 1),
+                ]
+            elif read_left:
+                # The consumer starts reading before the producer starts writing.
+                #  Thus there are two parts.
+                splitted_subsets_in_dim = [(consu_low, prod_low - 1, 1), (prod_low, consu_high, 1)]
+            elif read_right:
+                # The consumer starts reading inside the range the producer writes to
+                #  but reads more, so again two splits.
+                splitted_subsets_in_dim = [
+                    (consu_low, prod_high, 1),
+                    (prod_high + 1, consu_high, 1),
+                ]
+
+        if dimension_in_which_to_split is None:
+            return None
+        assert len(splitted_subsets_in_dim) > 0
+        assert not any(((e - s) <= 0) == False for e, s, _ in splitted_subsets_in_dim)  # noqa: E712 [true-false-comparison]  # SymPy comparison
+
+        splitted_subsets: list[dace_sbs.Range] = []
+        for splitted_subset_in_dim in splitted_subsets_in_dim:
+            splitted_subsets.append(
+                dace_sbs.Range(
+                    [
+                        (
+                            splitted_subset_in_dim
+                            if dim == dimension_in_which_to_split
+                            else org_consumer_sbs
+                        )
+                        for dim, org_consumer_sbs in enumerate(consumer)
+                    ]
+                )
+            )
+
+        return splitted_subsets
