@@ -154,7 +154,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         print(
             "FOR the helper splitter below this must be lifted, I am not sure if it is really important."
         )
-        if number_of_consumers != len({consumer for consumer in graph.out_edges(access_node)}):
+        if number_of_consumers != len({oedge.dst for oedge in graph.out_edges(access_node)}):
             return False
 
         # Now check if a decomposition exist.
