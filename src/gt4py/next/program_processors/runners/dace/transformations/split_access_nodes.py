@@ -894,10 +894,11 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
 
             # Check if there is an intersection at all.
             #  I am pretty sure that there is no strange `-1` correction needed.
-            intersec_cond1 = (consu_low <= prod_high) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            intersec_cond2 = (prod_low <= consu_high) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            if not (intersec_cond1 or intersec_cond2):
-                # TODO(phimuell): Figuring out what this case means.
+            intersec_cond1 = consu_low <= prod_high
+            intersec_cond2 = prod_low <= consu_high
+            if intersec_cond1 == False or intersec_cond2 == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                return None
+            if not (intersec_cond1 == True and intersec_cond2 == True):  # noqa: E712 [true-false-comparison]  # SymPy comparison
                 return None
 
             # The consumer is not fully embedded in the producer, so this dimension
@@ -938,7 +939,7 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
         if dimension_in_which_to_split is None:
             return None
         assert len(splitted_subsets_in_dim) > 0
-        assert not any(((e - s) <= 0) == False for e, s, _ in splitted_subsets_in_dim)  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        assert all(((e - s) > 0) == True for s, e, _ in splitted_subsets_in_dim)  # noqa: E712 [true-false-comparison]  # SymPy comparison
 
         splitted_subsets: list[dace_sbs.Range] = []
         for splitted_subset_in_dim in splitted_subsets_in_dim:
