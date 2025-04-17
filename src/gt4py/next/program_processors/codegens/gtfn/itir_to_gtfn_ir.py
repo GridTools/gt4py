@@ -604,7 +604,31 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if _is_tuple_of_ref_or_literal(node.expr):
             node.expr = im.as_fieldop("deref", node.domain)(node.expr)
 
-        assert cpm.is_applied_as_fieldop(node.expr)
+        projector = self.visit(self.visit(im.lambda_("_proj")(im.ref("_proj"))))
+        if cpm.is_call_to(node.expr, "make_tuple") and all(
+            cpm.is_call_to(arg, "tuple_get") for arg in node.expr.args
+        ):
+            elems = [arg.args[1] for arg in node.expr.args]  # type: ignore[attr-defined] # checked in condition
+            assert all(elems[0] == elem for elem in elems), elems
+            assert cpm.is_applied_as_fieldop(elems[0]), node.expr
+            select = [arg.args[0] for arg in node.expr.args]  # type: ignore[attr-defined] # checked in condition
+            node.expr = elems[0]
+            print(select)
+            assert _is_scan(node.expr.fun.args[0])  # type: ignore[attr-defined] # checked in condition
+            projector = self.visit(
+                im.lambda_("_proj")(
+                    im.make_tuple(*(im.tuple_get(i, im.ref("_proj")) for i in select))
+                )
+            )
+        if cpm.is_call_to(node.expr, "tuple_get"):
+            expr = node.expr
+            assert isinstance(expr, itir.FunCall)
+            select = [expr.args[0]]
+            assert _is_scan(expr.fun.args[0])  # type: ignore[attr-defined]
+            node.expr = expr.args[1]
+            projector = self.visit(im.lambda_("_proj")(im.tuple_get(select[0], im.ref("_proj"))))
+
+        assert cpm.is_applied_as_fieldop(node.expr), node.expr
         stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
         domain = node.domain
         inputs = node.expr.args
@@ -636,7 +660,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             scan_lambda = self.visit(stencil.args[0], **kwargs)
             forward = _bool_from_literal(stencil.args[1])
             scan_def = ScanPassDefinition(
-                id=scan_id, params=scan_lambda.params, expr=scan_lambda.expr, forward=forward
+                id=scan_id,
+                params=scan_lambda.params,
+                expr=scan_lambda.expr,
+                forward=forward,
+                projector=projector,
             )
             extracted_functions.append(scan_def)
             scan = Scan(
