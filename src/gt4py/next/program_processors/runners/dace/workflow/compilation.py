@@ -88,6 +88,10 @@ class DaCeCompiler(
                     compiler_args.replace("-ffinite-math-only", "")
 
                 dace.config.Config.set("compiler", "cpu", "args", value=compiler_args)
+
+            elif self.device_type == core_defs.DeviceType.ROCM:
+                dace.config.Config.set("compiler", "cuda", "backend", value="hip")
+
             sdfg_program = sdfg.compile(validate=False)
 
         return CompiledDaceProgram(sdfg_program, inp.program_source.implicit_domain)
