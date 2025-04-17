@@ -120,7 +120,7 @@ def convert_args(
                     actype = arg_desc.dtype.as_ctypes()
                     last_call_args[i] = actype(arg)
 
-            else:
-                return inp.fast_call()
+            # End looping over `sdfg_arglist`: the arguments have been updated on `CompiledSDFG` object.
+            return inp.fast_call()
 
     return decorated_program
