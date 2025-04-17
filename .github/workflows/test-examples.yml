@@ -42,4 +42,4 @@ jobs:
       env:
         NUM_PROCESSES: auto
       shell: bash
-      run: uv run nox -s 'test_examples-${{ matrix.python-version }}'
+      run: uvx nox -s 'test_examples-${{ matrix.python-version }}'

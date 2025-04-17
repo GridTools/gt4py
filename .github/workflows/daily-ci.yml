@@ -55,7 +55,7 @@ jobs:
       env:
         NUM_PROCESSES: auto
         UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
-      run: uv run nox -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
+      run: uvx nox -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
     - name: Notify slack
       if: ${{ failure() }}
