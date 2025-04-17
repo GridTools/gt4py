@@ -91,16 +91,18 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
     #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
-    _single_use_data: dict[dace.SDFG, set[str]]
+    _single_use_data: Optional[dict[dace.SDFG, set[str]]]
 
     def __init__(
         self,
         *args: Any,
-        single_use_data: dict[dace.SDFG, set[str]],
+        single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self._single_use_data = single_use_data
+        self._single_use_data = None
+        if single_use_data is not None:
+            self._single_use_data = single_use_data
 
     @classmethod
     def expressions(cls) -> Any:
@@ -118,11 +120,17 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
         # The intermediate access node must be a single use data, because we will
         #  get rid of it, and it must be a transient and a non-view element.
-        if access_node.data not in self._single_use_data[sdfg]:
-            return False
         if not desc.transient:
             return False
         if gtx_transformations.utils.is_view(desc, sdfg):
+            return False
+
+        if self._single_use_data is None:
+            find_single_use_data = dace_analysis.FindSingleUseData()
+            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+        else:
+            single_use_data = self._single_use_data
+        if access_node.data not in single_use_data[sdfg]:
             return False
 
         # There must be multiple producers, otherwise this transformation
