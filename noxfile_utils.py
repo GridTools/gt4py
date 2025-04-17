@@ -26,7 +26,7 @@ import itertools
 import os
 import sys
 import types
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import Any, Final, TypeAlias
 
 import nox
@@ -169,7 +169,7 @@ def install_session_venv(
 
 # -- Internal implementation utilities --
 def _filter_names(
-    names: list[str], include_patterns: list[str], exclude_patterns: list[str]
+    names: Iterable[str], include_patterns: Iterable[str], exclude_patterns: Iterable[str]
 ) -> list[str]:
     """Filter names based on include and exclude `fnmatch`-style patterns."""
     included = (

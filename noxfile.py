@@ -17,11 +17,12 @@ from typing import Any, Final, Literal, TypeAlias
 
 import nox
 
+# Load companion `noxfile_utils`` from the same directory as this file
 with mock.patch("sys.path", [f"{pathlib.Path(__file__).parent!s}", *sys.path]):
     import noxfile_utils as nox_utils
 
-#: This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
-#: is not guaranteed to be available in the venv where `nox` is running.
+# This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
+# is not guaranteed to be available in the venv where `nox` is running.
 NO_TESTS_COLLECTED_EXIT_CODE: Final = 5
 
 # -- nox configuration --
@@ -81,7 +82,13 @@ CodeGenNextTestSettings = CodeGenTestSettings | {
     python=PYTHON_VERSIONS,
     tags=["cartesian"],
     env_vars=["NUM_PROCESSES"],
-    ignore_paths=["src/gt4py/next/*", "tests/next_tests/**", "examples/**", "*.md", "*.rst"],
+    ignore_paths=[  # Skip when only gt4py.next or doc files have been updated
+        "src/gt4py/next/*",
+        "tests/next_tests/**",
+        "examples/**",
+        "*.md",
+        "*.rst",
+    ],
 )
 @nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
 @nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace])
@@ -148,7 +155,7 @@ def test_eve(session: nox.Session) -> None:
     )
 
 
-@nox.session(python=PYTHON_VERSIONS)
+@nox.session(python=PYTHON_VERSIONS, tags=["next"])
 def test_examples(session: nox.Session) -> None:
     """Run and test documentation workflows."""
 
@@ -263,7 +270,8 @@ def test_package(session: nox.Session) -> None:
         "src/gt4py/cartesian/backend/**",  # For DaCe storages
         "tests/storage_tests/**",
         ".github/workflows/**",
-        "*.lock", "*.toml",
+        "*.lock",
+        "*.toml",
         "*.yml",
         "noxfile.py",
     ],
