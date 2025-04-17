@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import typing
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
@@ -38,7 +38,9 @@ def sym(sym_or_name: Union[str, itir.Sym], type_: str | ts.TypeSpec | None = Non
 
 
 def ref(
-    ref_or_name: Union[str, itir.SymRef], type_: str | ts.TypeSpec | None = None
+    ref_or_name: Union[str, itir.SymRef],
+    type_: str | ts.TypeSpec | None = None,
+    annex: dict[str, Any] | None = None,
 ) -> itir.SymRef:
     """
     Convert to SymRef if necessary.
@@ -57,8 +59,13 @@ def ref(
     """
     if isinstance(ref_or_name, itir.SymRef):
         assert not type_
+        assert not annex
         return ref_or_name
-    return itir.SymRef(id=ref_or_name, type=ensure_type(type_))
+    ref = itir.SymRef(id=ref_or_name, type=ensure_type(type_))
+    if annex is not None:
+        for key, value in annex.items():
+            setattr(ref.annex, key, value)
+    return ref
 
 
 def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> itir.Expr:
