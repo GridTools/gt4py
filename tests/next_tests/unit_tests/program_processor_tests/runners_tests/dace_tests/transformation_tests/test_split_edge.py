@@ -72,3 +72,60 @@ def test_split_edge_two_ac_producer_one_ac_consumer_1d():
 
     util.evaluate_sdfg(sdfg, res)
     assert util.compare_sdfg_res(ref, res)
+
+
+def _make_split_edge_mock_apply_diffusion_to_w_sdfg() -> (
+    tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode]
+):
+    # Test is roughly equivalent to what we see in `apply_diffusion_to_w`
+    #  Although instead of Maps we sometimes use direct edges.
+    sdfg = dace.SDFG(util.unique_name("split_edge_mock_apply_diffusion_to_w"))
+
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array("s1", shape=(30, 80), dtype=dace.float64, transient=False)
+    sdfg.add_array("s2", shape=(70, 80), dtype=dace.float64, transient=False)
+    sdfg.add_array("tmp", shape=(100, 80), dtype=dace.float64, transient=True)
+    sdfg.add_array("dst", shape=(100, 80), dtype=dace.float64, transient=False)
+
+    tmp = state.add_access("tmp")
+    dst = state.add_access("dst")
+
+    state.add_nedge(state.add_access("s1"), tmp, dace.Memlet("s1[0:30, 0:80] -> [0:30, 0:80]"))
+    # In the original case this is a Map.
+    state.add_nedge(state.add_access("s2"), tmp, dace.Memlet("s2[0:70, 0:80] -> [30:100, 0:80]"))
+
+    state.add_nedge(tmp, dst, dace.Memlet("tmp[0:100, 0] -> [0:100, 0]"))
+    state.add_nedge(tmp, dst, dace.Memlet("tmp[0:100, 13:80] -> [0:100, 13:80]"))
+    state.add_nedge(tmp, dst, dace.Memlet("tmp[0:30, 1:13] -> [0:30, 1:13]"))
+    # In the original case this is a Map.
+    state.add_nedge(tmp, dst, dace.Memlet("tmp[30:100, 1:13] -> [30:100, 1:13]"))
+    sdfg.validate()
+
+    return sdfg, state, tmp
+
+
+def test_split_edge_mock_apply_diffusion_to_w():
+    sdfg, state, tmp_ac = _make_split_edge_mock_apply_diffusion_to_w_sdfg()
+    assert not gtx_transformations.SplitAccessNode.can_be_applied_to(sdfg=sdfg, access_node=tmp_ac)
+
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 4
+    assert state.out_degree(tmp_ac) == 4
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.evaluate_sdfg(sdfg, ref)
+
+    nb_apply = sdfg.apply_transformations_repeated(
+        gtx_transformations.SplitMemlet,
+        validate=True,
+        validate_all=True,
+    )
+    assert nb_apply == 1
+
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 4
+    assert state.out_degree(tmp_ac) == 6
+
+    assert gtx_transformations.SplitAccessNode.can_be_applied_to(sdfg=sdfg, access_node=tmp_ac)
+
+    util.evaluate_sdfg(sdfg, res)
+    assert util.compare_sdfg_res(ref, res)
