@@ -202,7 +202,7 @@ def _transform_by_pattern(
                     itir.SetAt(
                         target=target_expr,
                         # The domain is populated later in `_populate_and_homogenize_domains`
-                        # at this point the `SetAt` contains possibly expressions no different domains.
+                        # at this point the `SetAt` contains possibly expressions on different domains.
                         domain=im.ref("UNPOPULATED"),
                         expr=tmp_expr,
                     ),
