@@ -12,7 +12,6 @@ import ctypes
 from typing import Any, Sequence
 
 import dace
-from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interface_ptr
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, field_utils, utils as gtx_utils
@@ -97,7 +96,11 @@ def convert_args(
                     assert isinstance(arg_desc, dace.data.Array)
                     assert isinstance(last_call_args[i], ctypes.c_void_p)
                     assert field_utils.verify_device_field_type(arg, device)
-                    last_call_args[i].value = get_array_interface_ptr(ndarray, arg_desc.storage)
+                    last_call_args[i].value = (  # different location of `byte_bounds` in cupy/numpy
+                        arg.array_ns.byte_bounds(ndarray)[0]
+                        if on_gpu
+                        else arg.array_ns.lib.array_utils.byte_bounds(ndarray)[0]
+                    )
                     # When we find an array we update `this_call_args` with the
                     # shape and stride symbols that are associated to it.
                     # Note that `sdfg_arglist` was constructed from an ordered
