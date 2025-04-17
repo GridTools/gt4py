@@ -96,11 +96,7 @@ def convert_args(
                     assert isinstance(arg_desc, dace.data.Array)
                     assert isinstance(last_call_args[i], ctypes.c_void_p)
                     assert field_utils.verify_device_field_type(arg, device)
-                    last_call_args[i].value = (  # different location of `byte_bounds` in cupy/numpy
-                        arg.array_ns.byte_bounds(ndarray)[0]
-                        if on_gpu
-                        else arg.array_ns.lib.array_utils.byte_bounds(ndarray)[0]
-                    )
+                    last_call_args[i].value = arg.data_ptr()
                     # When we find an array we update `this_call_args` with the
                     # shape and stride symbols that are associated to it.
                     # Note that `sdfg_arglist` was constructed from an ordered
