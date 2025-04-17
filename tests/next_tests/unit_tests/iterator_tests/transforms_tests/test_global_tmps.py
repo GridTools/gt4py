@@ -245,16 +245,12 @@ def test_tuple_different_domain():
         params=params,
         body=[
             itir.SetAt(
-                # val = if_(cond, make_tuple(as_fieldop(...), as_fieldop(...)), make_tuple())
-                # val1 = if_(cond, as_fieldop(...), as_fieldop(...))
-                # val2 = if_(cond, as_fieldop(...), as_fieldop(...))
-                # materialize_into(out, make_tuple(as_fieldop(...), ...))
                 target=im.ref("out"),
                 expr=im.let(
                     "val",
                     im.if_(
                         "cond", im.make_tuple("inp1", "inp2"), im.make_tuple("inp2", "inp1")
-                    ),  # todo: fix, the domain is strange
+                    ),
                 )(add_shifted(None)(im.tuple_get(0, "val"), im.tuple_get(1, "val"))),
                 domain=domain01,
             )
