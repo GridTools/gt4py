@@ -88,9 +88,9 @@ def customize_session(
     """
 
     if env_vars and ignore_env_vars:
-        raise ValueError("Cannot use both `env_vars` and `ignore_env_vars` at the same time.")
+        raise ValueError("Cannot use both 'env_vars' and 'ignore_env_vars' at the same time.")
     if paths and ignore_paths:
-        raise ValueError("Cannot use both `paths` and `ignore_paths` at the same time.")
+        raise ValueError("Cannot use both 'paths' and 'ignore_paths' at the same time.")
 
     def decorator(session_function: AnyCallable) -> nox.registry.Func:
         assert (
@@ -257,31 +257,31 @@ class NoxUtilsTestCase(unittest.TestCase):
             paths=["src/*"], ignore_paths=["tests/*"]
         )
 
-        # Git diff already cached
+        # Source commit defined, `git diff` already cached
         with unittest.mock.patch.dict(os.environ, {CI_SOURCE_COMMIT_ENV_VAR_NAME: "main"}):
             # Only included paths
             _changed_files_from_commit["main"] = ["src/foo.py"]
-            is_skippable = _is_skippable_session(session)
-            session.run.assert_not_called()
-            self.assertFalse(is_skippable)
+            self.assertFalse(_is_skippable_session(session))
 
             # Included and excluded paths
             _changed_files_from_commit["main"] = ["src/foo.py", "tests/test_foo.py"]
-            is_skippable = _is_skippable_session(session)
-            session.run.assert_not_called()
-            self.assertFalse(is_skippable)
+            self.assertFalse(_is_skippable_session(session))
 
             # Only excluded paths
             _changed_files_from_commit["main"] = ["tests/test_foo.py"]
-            is_skippable = _is_skippable_session(session)
-            session.run.assert_not_called()
-            self.assertTrue(is_skippable)
+            self.assertTrue(_is_skippable_session(session))
 
             # Not included or excluded
             _changed_files_from_commit["main"] = ["docs/readme.md"]
-            is_skippable = _is_skippable_session(session)
+            self.assertTrue(_is_skippable_session(session))
+
+            # Already cached: no need to run `git diff`
             session.run.assert_not_called()
-            self.assertTrue(is_skippable)
+
+        # Undefined source commit
+        with unittest.mock.patch.dict(os.environ, {}):
+            self.assertFalse(_is_skippable_session(session))
+            session.run.assert_not_called()
 
 
 # Run this file as a script to execute the tests.

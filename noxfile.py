@@ -17,7 +17,8 @@ from typing import Any, Final, Literal, TypeAlias
 
 import nox
 
-# Load companion `noxfile_utils`` from the same directory as this file
+# Hack to load companion `noxfile_utils.py` from the same directory as this file
+# without modifying `sys.path` in the global scope.
 with mock.patch("sys.path", [f"{pathlib.Path(__file__).parent!s}", *sys.path]):
     import noxfile_utils as nox_utils
 
