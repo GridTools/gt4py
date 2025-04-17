@@ -273,14 +273,18 @@ def broadcast(
 
 
 @_register_builtin_type_synthesizer
-def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> ts.ListType:
-    assert (
-        isinstance(offset_literal, it_ts.OffsetLiteralType)
-        and isinstance(offset_literal.value, common.Dimension)
-        and offset_literal.value.kind == common.DimensionKind.LOCAL
+def neighbors(
+    offset_literal: it_ts.OffsetLiteralType,
+    it: it_ts.IteratorType,
+    offset_provider_type: common.OffsetProviderType,
+) -> ts.ListType:
+    assert isinstance(offset_literal, it_ts.OffsetLiteralType) and isinstance(
+        offset_literal.value, str
     )
     assert isinstance(it, it_ts.IteratorType)
-    return ts.ListType(element_type=it.element_type)
+    conn_type = offset_provider_type[offset_literal.value]
+    assert isinstance(conn_type, common.NeighborConnectivityType)
+    return ts.ListType(element_type=it.element_type, offset_type=conn_type.neighbor_dim)
 
 
 @_register_builtin_type_synthesizer
@@ -337,15 +341,15 @@ def _convert_as_fieldop_input_to_iterator(
 
     # handle neighbor / sparse input fields
     defined_dims = []
-    is_nb_field = False
+    neighbor_dim = None
     for dim in input_dims:
         if dim.kind == common.DimensionKind.LOCAL:
-            assert not is_nb_field
-            is_nb_field = True
+            assert neighbor_dim is None
+            neighbor_dim = dim
         else:
             defined_dims.append(dim)
-    if is_nb_field:
-        element_type = ts.ListType(element_type=element_type)
+    if neighbor_dim:
+        element_type = ts.ListType(element_type=element_type, offset_type=neighbor_dim)
 
     return it_ts.IteratorType(
         position_dims=domain.dims, defined_dims=defined_dims, element_type=element_type
@@ -424,7 +428,10 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
         arg_el_types = [arg.element_type for arg in args]
         el_type = op(*arg_el_types, offset_provider_type=offset_provider_type)
         assert isinstance(el_type, ts.DataType)
-        return ts.ListType(element_type=el_type)
+        offset_types = [arg.offset_type for arg in args if arg.offset_type]
+        offset_type = offset_types[0] if offset_types else None
+        assert all(offset_type == arg for arg in offset_types)
+        return ts.ListType(element_type=el_type, offset_type=offset_type)
 
     return applied_map
 
@@ -458,9 +465,9 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
             assert len(offset_literals) % 2 == 0
             for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
                 assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
-                    offset_axis.value, common.Dimension
+                    offset_axis.value, str
                 )
-                type_ = offset_provider_type[offset_axis.value.value]
+                type_ = offset_provider_type[offset_axis.value]
                 if isinstance(type_, common.Dimension):
                     pass
                 elif isinstance(type_, common.NeighborConnectivityType):

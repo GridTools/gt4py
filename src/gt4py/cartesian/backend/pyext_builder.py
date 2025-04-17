@@ -49,7 +49,7 @@ def get_gt_pyext_build_opts(
     uses_openmp: bool = True,
     uses_cuda: bool = False,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
-    include_dirs = [gt_config.build_settings["boost_include_path"]]
+    include_dirs: list[str] = []
     extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
     is_rocm_gpu = core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
 
@@ -79,30 +79,23 @@ def get_gt_pyext_build_opts(
             # because `char` is used to represent the `int8` type in GT4Py programs.
             "-fsigned-char",
             "-isystem{}".format(gt_include_path),
-            "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
-            "-DBOOST_PP_VARIADICS",
             *extra_compile_args_from_config["cxx"],
         ]
     )
     extra_compile_args["cuda"] = [
         "-std=c++17",
         "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
-        "-DBOOST_PP_VARIADICS",
-        "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
-        "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
         *extra_compile_args_from_config["cuda"],
     ]
     if is_rocm_gpu:
         extra_compile_args["cuda"] += [
             "-isystem{}".format(gt_include_path),
-            "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
             "-fvisibility=hidden",
             "-fPIC",
         ]
     else:
         extra_compile_args["cuda"] += [
             "-isystem={}".format(gt_include_path),
-            "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
             "-arch=sm_{}".format(cuda_arch),
             "--expt-relaxed-constexpr",
             "--compiler-options",

@@ -23,7 +23,7 @@ CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^connectivity_(.+)
 
 
 # regex to match the symbols for field shape and strides
-FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__.+_((\d+_range_[01])|((size|stride)_\d+))$")
+FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(.+)_((\d+_range_[01])|((size|stride)_\d+))$")
 
 
 def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
@@ -56,6 +56,16 @@ def is_connectivity_identifier(
     name: str, offset_provider_type: gtx_common.OffsetProviderType
 ) -> bool:
     m = CONNECTIVITY_INDENTIFIER_RE.match(name)
+    if m is None:
+        return False
+    return m[1] in offset_provider_type
+
+
+def is_connectivity_symbol(name: str, offset_provider_type: gtx_common.OffsetProviderType) -> bool:
+    m = FIELD_SYMBOL_RE.match(name)
+    if m is None:
+        return False
+    m = CONNECTIVITY_INDENTIFIER_RE.match(m[1])
     if m is None:
         return False
     return m[1] in offset_provider_type
