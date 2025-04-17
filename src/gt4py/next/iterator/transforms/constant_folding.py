@@ -98,6 +98,8 @@ class ConstantFolding(
         # `if_(True, true_branch, false_branch)` -> `true_branch`
         FOLD_IF = enum.auto()
 
+        FOLD_INFINITY_ARITHMETIC = enum.auto()
+
         @classmethod
         def all(self) -> ConstantFolding.Transformation:
             return functools.reduce(operator.or_, self.__members__.values())
@@ -234,4 +236,58 @@ class ConstantFolding(
             else:
                 assert node.args[0].value == "False"
                 return node.args[2]
+        return None
+
+    def transform_fold_infinity_arithmetic(self, node: ir.FunCall) -> Optional[ir.Node]:
+        if cpm.is_call_to(node, "plus"):
+            for arg in node.args:
+                # `a + inf` -> `inf`
+                if arg == ir.InfinityLiteral.POSITIVE:
+                    return ir.InfinityLiteral.POSITIVE
+                # `a + (-inf)` -> `-inf`
+                if arg == ir.InfinityLiteral.NEGATIVE:
+                    return ir.InfinityLiteral.NEGATIVE
+
+        if cpm.is_call_to(node, "minimum"):
+            a, b = node.args
+            for arg, other_arg in ((a, b), (b, a)):
+                # `minimum(inf, a)` -> `a`
+                if arg == ir.InfinityLiteral.POSITIVE:
+                    return other_arg
+                # `minimum(-inf, a)` -> `-inf`
+                if arg == ir.InfinityLiteral.NEGATIVE:
+                    return ir.InfinityLiteral.NEGATIVE
+
+        if cpm.is_call_to(node, "maximum"):
+            a, b = node.args
+            for arg, other_arg in ((a, b), (b, a)):
+                # `maximum(inf, a)` -> `inf`
+                if arg == ir.InfinityLiteral.POSITIVE:
+                    return ir.InfinityLiteral.POSITIVE
+                # `maximum(-inf, a)` -> `a`
+                if arg == ir.InfinityLiteral.NEGATIVE:
+                    return other_arg
+
+        if cpm.is_call_to(node, ("less", "less_equal")):
+            a, b = node.args
+            # `-inf < v` -> `True`
+            # `v < inf` -> `True`
+            if a == ir.InfinityLiteral.NEGATIVE or b == ir.InfinityLiteral.POSITIVE:
+                return im.literal_from_value(True)
+            # `inf < v` -> `False`
+            # `v < -inf ` -> `False`
+            if a == ir.InfinityLiteral.POSITIVE or b == ir.InfinityLiteral.NEGATIVE:
+                return im.literal_from_value(False)
+
+        if cpm.is_call_to(node, ("greater", "greater_equal")):
+            a, b = node.args
+            # `inf > v` -> `True`
+            # `v > -inf ` -> `True`
+            if a == ir.InfinityLiteral.POSITIVE or b == ir.InfinityLiteral.NEGATIVE:
+                return im.literal_from_value(True)
+            # `-inf > v` -> `False`
+            # `v > inf` -> `False`
+            if a == ir.InfinityLiteral.NEGATIVE or b == ir.InfinityLiteral.POSITIVE:
+                return im.literal_from_value(False)
+
         return None
