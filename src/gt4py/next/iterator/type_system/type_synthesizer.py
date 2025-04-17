@@ -419,7 +419,11 @@ def as_fieldop(
                             for input_dim in input_dims:
                                 output_dims.add(_resolve_shift(input_dim, shift_tuple))
 
-                        deduced_domain = it_ts.DomainType(dims=list(output_dims))
+                        assert all(isinstance(dim, common.Dimension) for dim in output_dims)
+                        output_dims_sorted = common.ordered_dims(
+                            output_dims  # type:ignore[arg-type] # assured by assert above
+                        )
+                        deduced_domain = it_ts.DomainType(dims=list(output_dims_sorted))
 
         if deduced_domain:
             if domain:
