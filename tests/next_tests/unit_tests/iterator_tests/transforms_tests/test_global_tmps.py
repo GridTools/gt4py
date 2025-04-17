@@ -248,9 +248,7 @@ def test_tuple_different_domain():
                 target=im.ref("out"),
                 expr=im.let(
                     "val",
-                    im.if_(
-                        "cond", im.make_tuple("inp1", "inp2"), im.make_tuple("inp2", "inp1")
-                    ),
+                    im.if_("cond", im.make_tuple("inp1", "inp2"), im.make_tuple("inp2", "inp1")),
                 )(add_shifted(None)(im.tuple_get(0, "val"), im.tuple_get(1, "val"))),
                 domain=domain01,
             )
