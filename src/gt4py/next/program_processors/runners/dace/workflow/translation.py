@@ -105,7 +105,7 @@ class DaCeTranslator(
             gtx_transformations.gt_auto_optimize(
                 sdfg,
                 gpu=on_gpu,
-                gpu_block_size=None,  # TODO: set optimal block size
+                gpu_block_size=(32, 8, 1),  # TODO: make block size configurable
                 unit_strides_kind=unit_strides_kind,
                 constant_symbols=constant_symbols,
                 assume_pointwise=True,
