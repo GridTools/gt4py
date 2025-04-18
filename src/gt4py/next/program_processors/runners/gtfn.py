@@ -57,7 +57,7 @@ def inject_timer(name: str) -> Callable[[stages.CompiledProgram], stages.Compile
 
             start = exec_info["run_cpp_start_time"]
             end = exec_info["run_cpp_end_time"]
-            metrics.global_metric_container[name].cpp_time.append(end - start)
+            metrics.global_metric_container[name].cpp.append(end - start)
 
         return inner
 

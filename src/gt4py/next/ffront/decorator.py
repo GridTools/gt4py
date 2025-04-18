@@ -285,7 +285,7 @@ class Program:
             )
         if config.COLLECT_METRICS:
             end = time.time()
-            metrics.global_metric_container[self.__name__].total_time.append(end - start)
+            metrics.global_metric_container[self.__name__].total.append(end - start)
 
     def compile(
         self, offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None
