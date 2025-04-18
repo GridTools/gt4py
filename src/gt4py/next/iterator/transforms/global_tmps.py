@@ -80,10 +80,11 @@ def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
     for stmt in stmts:
         if isinstance(stmt, itir.SetAt):
             assert hasattr(stmt.expr.annex, "domain")
-            distinct_domains: list[domain_utils.SymbolicDomain] = list(
-                # ordered set for reproducibility
-                dict.fromkeys(next_utils.flatten_nested_tuple(stmt.expr.annex.domain))
-            )
+            # ordered set for reproducibility
+            domains = dict.fromkeys(next_utils.flatten_nested_tuple(stmt.expr.annex.domain))
+            # don't count NEVER as a different domain
+            domains.pop(infer_domain.DomainAccessDescriptor.NEVER, None)
+            distinct_domains: list[domain_utils.SymbolicDomain] = list(domains)
             if len(distinct_domains) == 1:
                 new_stmts.append(
                     itir.SetAt(
@@ -131,6 +132,15 @@ def _transform_if(
     return None
 
 
+def _is_projector(expr: itir.Expr) -> bool:
+    return (
+        cpm.is_let(expr)
+        and len(expr.fun.params) == 1
+        and cpm.is_call_to(expr.fun.expr, "make_tuple")
+        and all(cpm.is_call_to(arg, "tuple_get") for arg in expr.fun.expr.args)
+    )
+
+
 def _transform_by_pattern(
     stmt: itir.Stmt,
     predicate: Callable[[itir.Expr, int], bool],
@@ -140,8 +150,16 @@ def _transform_by_pattern(
     if not isinstance(stmt, itir.SetAt):
         return None
 
+    # hide projector from extraction
+    # a projector is a let statement with a single argument containing only tuple operations
+    expr = stmt.expr
+    projector = None
+    if _is_projector(expr):
+        projector = expr.fun
+        expr = expr.args[0]
+
     new_expr, extracted_fields, _ = cse.extract_subexpression(
-        stmt.expr,
+        expr,
         predicate=predicate,
         uid_generator=eve_utils.UIDGenerator(prefix="__tmp_subexpr"),
         # TODO(tehrengruber): extracting the deepest expression first would allow us to fuse
@@ -242,6 +260,12 @@ def _transform_by_pattern(
                     uids,
                 )
             )
+
+        if projector is not None:
+            # add the projector back
+            domain = new_expr.annex.domain
+            new_expr = im.call(projector)(new_expr)
+            new_expr.annex.domain = domain
 
         return [*tmp_stmts, itir.SetAt(target=stmt.target, domain=stmt.domain, expr=new_expr)]
     return None

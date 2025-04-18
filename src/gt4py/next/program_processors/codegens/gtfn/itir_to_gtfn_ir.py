@@ -604,29 +604,20 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if _is_tuple_of_ref_or_literal(node.expr):
             node.expr = im.as_fieldop("deref", node.domain)(node.expr)
 
-        projector = self.visit(self.visit(im.lambda_("_proj")(im.ref("_proj"))))
-        if cpm.is_call_to(node.expr, "make_tuple") and all(
-            cpm.is_call_to(arg, "tuple_get") for arg in node.expr.args
-        ):
-            elems = [arg.args[1] for arg in node.expr.args]  # type: ignore[attr-defined] # checked in condition
-            assert all(elems[0] == elem for elem in elems), elems
-            assert cpm.is_applied_as_fieldop(elems[0]), node.expr
-            select = [arg.args[0] for arg in node.expr.args]  # type: ignore[attr-defined] # checked in condition
-            node.expr = elems[0]
-            print(select)
-            assert _is_scan(node.expr.fun.args[0])  # type: ignore[attr-defined] # checked in condition
-            projector = self.visit(
-                im.lambda_("_proj")(
-                    im.make_tuple(*(im.tuple_get(i, im.ref("_proj")) for i in select))
-                )
+        def _is_projector(expr: itir.Expr) -> bool:
+            return (
+                cpm.is_let(expr)
+                and len(expr.fun.params) == 1
+                and cpm.is_call_to(expr.fun.expr, "make_tuple")
+                and all(cpm.is_call_to(arg, "tuple_get") for arg in expr.fun.expr.args)
             )
-        if cpm.is_call_to(node.expr, "tuple_get"):
-            expr = node.expr
-            assert isinstance(expr, itir.FunCall)
-            select = [expr.args[0]]
-            assert _is_scan(expr.fun.args[0])  # type: ignore[attr-defined]
-            node.expr = expr.args[1]
-            projector = self.visit(im.lambda_("_proj")(im.tuple_get(select[0], im.ref("_proj"))))
+
+        projector = self.visit(self.visit(im.lambda_("_proj")(im.ref("_proj"))))  # identity
+        if _is_projector(node.expr):
+            projector = self.visit(node.expr.fun)
+            node.expr = node.expr.args[0]
+            # only scans have projector (in other cases we should have collapsed the tuples)
+            assert _is_scan(node.expr.fun.args[0])
 
         assert cpm.is_applied_as_fieldop(node.expr), node.expr
         stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
