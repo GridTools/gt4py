@@ -158,6 +158,27 @@ def _transform_by_pattern(
         #    or a tuple thereof)
         #  - one `SetAt` statement that materializes the expression into the temporary
         for tmp_sym, tmp_expr in extracted_fields.items():
+            domain: infer_domain.DomainAccess = tmp_expr.annex.domain
+
+            # TODO(tehrengruber): Implement. This happens when the expression is a combination
+            #  of an `if_` call with a tuple, e.g., `if_(cond, {a, b}, {c, d})`. As long as we are
+            #  able to eliminate all tuples, e.g., by propagating the scalar ifs to the top-level
+            #  of a SetAt, the CollapseTuple pass will eliminate most of this cases.
+            if isinstance(domain, tuple):
+                flattened_domains: tuple[domain_utils.SymbolicDomain] = tuple(
+                    domain
+                    for domain in next_utils.flatten_nested_tuple(domain)
+                    if domain is not infer_domain.DomainAccessDescriptor.NEVER
+                    # type: ignore[assignment]  # mypy not smart enough
+                )
+                if not all(d == flattened_domains[0] for d in flattened_domains):
+                    raise NotImplementedError(
+                        "Tuple expressions with different domains is not supported yet."
+                    )
+                domain = flattened_domains[0]
+            assert isinstance(domain, domain_utils.SymbolicDomain)
+            domain_expr = domain.as_expr()
+
             assert isinstance(tmp_expr.type, ts.TypeSpec)
             tmp_names: str | tuple[str | tuple, ...] = type_info.apply_to_primitive_constituents(
                 lambda x: uids.sequential_id(),

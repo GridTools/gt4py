@@ -321,8 +321,8 @@ def test_if_make_tuple_reorder_cps_external():
 
 def test_flatten_as_fieldop_args():
     it_type = it_ts.IteratorType(
-        position_dims=[Vertex],
-        defined_dims=[Vertex],
+        position_dims=[],
+        defined_dims=[],
         element_type=ts.TupleType(types=[int_type, int_type]),
     )
     testee = im.as_fieldop(im.lambda_(im.sym("it", it_type))(im.tuple_get(1, im.deref("it"))))(
@@ -342,8 +342,8 @@ def test_flatten_as_fieldop_args():
 
 def test_flatten_as_fieldop_args_nested():
     it_type = it_ts.IteratorType(
-        position_dims=[Vertex],
-        defined_dims=[Vertex],
+        position_dims=[],
+        defined_dims=[],
         element_type=ts.TupleType(
             types=[
                 int_type,
@@ -370,8 +370,8 @@ def test_flatten_as_fieldop_args_nested():
 
 def test_flatten_as_fieldop_args_scan():
     it_type = it_ts.IteratorType(
-        position_dims=[Vertex],
-        defined_dims=[Vertex],
+        position_dims=[],
+        defined_dims=[],
         element_type=ts.TupleType(types=[int_type, int_type]),
     )
     testee = im.as_fieldop(
