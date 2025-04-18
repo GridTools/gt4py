@@ -93,3 +93,8 @@ UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
 #: - if os.cpu_count() is None we are conservative and use 1 job,
 #: - if the number is huge (e.g. HPC system) we limit to a smaller number
 BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1, 32)))
+
+
+#: Whether GT4Py should collect metrics. Enabling metrics collection will do extra synchronization
+#: and will have impact on runtime performance.
+COLLECT_METRICS: bool = env_flag_to_bool("GT4PY_COLLECT_METRICS", default=False)
