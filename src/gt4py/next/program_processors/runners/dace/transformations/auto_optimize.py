@@ -249,6 +249,7 @@ def _gt_auto_process_top_level_maps(
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.
         cleanup_stages = [
+            gtx_transformations.SplitMemlet(),
             gtx_transformations.SplitAccessNode(
                 single_use_data=single_use_data,
             ),
