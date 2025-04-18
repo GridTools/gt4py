@@ -122,6 +122,8 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         #  get rid of it, and it must be a transient and a non-view element.
         if not desc.transient:
             return False
+        if isinstance(desc, dace_data.Scalar):
+            return False
         if gtx_transformations.utils.is_view(desc, sdfg):
             return False
 
@@ -321,15 +323,18 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
             elif isinstance(data_source, dace_nodes.MapExit):
                 # The source is a Map, in this case we just generate a new transient
-                #  output and then perform some reconnection. However, we require that
-                #  all consumer read exactly what is is written by the map. This
-                #  is to ensure some tightness of the domains.
-                if not all(
-                    consumer_edge.data.src_subset.covers(producer_edge.data.dst_subset)
-                    for consumer_edge in consumer_edges
-                ):
-                    return False
-
+                #  output and then perform some reconnection. Similar to case of
+                #  AccessNodes we require that if there is only one consumer that
+                #  the consumer really consumes everything, this is done to ensure
+                #  the tightness of the bounds, i.e. that everything that is consumed
+                #  is used somewhere. If there are multiple consumer, then we assume
+                #  that this is the case.
+                # TODO(phimuell): Fuse that with the AccessNode check.
+                if len(consumer_edges) == 1:
+                    if not next(iter(consumer_edges)).data.src_subset.covers(
+                        producer_edge.data.dst_subset
+                    ):
+                        return False
             else:
                 return False
         return True
