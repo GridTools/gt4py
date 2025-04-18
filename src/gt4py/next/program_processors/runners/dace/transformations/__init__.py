@@ -53,6 +53,7 @@ from .strides import (
     gt_propagate_strides_of,
 )
 from .utils import gt_find_constant_arguments, gt_make_transients_persistent
+from .vertical_map_fusion import gt_vertical_map_fusion
 
 
 __all__ = [
@@ -95,4 +96,5 @@ __all__ = [
     "gt_simplify",
     "gt_split_access_nodes",
     "gt_substitute_compiletime_symbols",
+    "gt_vertical_map_fusion",
 ]
