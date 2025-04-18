@@ -21,8 +21,6 @@ from gt4py.next.program_processors.runners.dace import (
 
 from . import util
 
-import dace
-
 
 def _perform_test(
     sdfg: dace.SDFG,
