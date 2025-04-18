@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Literal, Optional, Union, overload
 
 import dace
 from dace import (
@@ -733,9 +733,10 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
                 #  thus there must be an intersection.
                 if any((rs == 1) == False for _, _, rs in consumer_read):  # noqa: E712 [true-false-comparison]  # SymPy comparison
                     continue
-                elif (
-                    self._split_consumer_subset(producer=tmp_subset, consumer=consumer_read)
-                    is not None
+                elif self._split_consumer_subset(
+                    producer=tmp_subset,
+                    consumer=consumer_read,
+                    for_check=True,
                 ):
                     # TODO: extend this to see that all edges could be split, also see note
                     #   At the end of this function.
@@ -788,9 +789,10 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
             consumer = oedge.dst
             consumer_read = oedge.data.src_subset
             if isinstance(consumer, dace_nodes.AccessNode) and consumer_read is not None:
-                if (
-                    self._split_consumer_subset(producer=tmp_subset, consumer=consumer_read)
-                    is not None
+                if self._split_consumer_subset(
+                    producer=tmp_subset,
+                    consumer=consumer_read,
+                    for_check=True,
                 ):
                     edges_to_split.append(oedge)
         return edges_to_split
@@ -843,9 +845,10 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
 
         # Perform the actual splitting.
         new_consumer_subsets = self._split_consumer_subset(
-            producer=producer_subset, consumer=consumer_subset
+            producer=producer_subset,
+            consumer=consumer_subset,
+            for_check=False,
         )
-        assert new_consumer_subsets is not None
 
         old_consumer_start = consumer_subset.min_element()
         consumer_dest_start = consumer_destination_subset.min_element()
@@ -895,20 +898,40 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
             new_edges[-1].data.src_subset = new_consumer_subset
             new_edges[-1].data.dst_subset = new_consumer_dest_subset
 
+    @overload
     def _split_consumer_subset(
         self,
         producer: dace_sbs.Range,
         consumer: dace_sbs.Range,
-    ) -> Optional[list[dace_sbs.Range]]:
+        for_check: Literal[True],
+    ) -> bool: ...
+
+    @overload
+    def _split_consumer_subset(
+        self,
+        producer: dace_sbs.Range,
+        consumer: dace_sbs.Range,
+        for_check: Literal[False],
+    ) -> list[dace_sbs.Range]: ...
+
+    def _split_consumer_subset(
+        self,
+        producer: dace_sbs.Range,
+        consumer: dace_sbs.Range,
+        for_check: bool,
+    ) -> Union[list[dace_sbs.Range], bool]:
         """Splits the `consumer` subset.
 
         The resulting subsets are either fully covered by `producer` or have no
-        intersection with it. If there is nothing to split or the function is
-        unable to perform the split then `None` is returned.
+        intersection with it. If `for_check` is `True` the function will return
+        a boolean to indicate if the subset can be split or not (for any reason).
+        It is an error to call the function with `for_check` set to `False`
+        but the subset can not be split.
 
         Args:
             producer: The subset describing the producer.
             consumer: The subset describing what the consumer reads.
+            for_check: Only check if the subset can be split.
 
         Todo:
             The current implementation is only able to handle the case where
@@ -938,9 +961,11 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
             intersec_cond1 = consu_low <= prod_high
             intersec_cond2 = prod_low <= consu_high
             if intersec_cond1 == False or intersec_cond2 == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-                return None
+                assert for_check
+                return False
             if not (intersec_cond1 == True and intersec_cond2 == True):  # noqa: E712 [true-false-comparison]  # SymPy comparison
-                return None
+                assert for_check
+                return False
 
             # The consumer is not fully embedded in the producer, so this dimension
             #  we must split. If we found before ignore it.
@@ -948,7 +973,8 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
             #   was needed", we could handle that and then recursively handle the
             #   rest.
             if dimension_in_which_to_split is not None:
-                return None
+                assert for_check
+                return False
             dimension_in_which_to_split = dim
 
             # Determine the splitting case that we have.
@@ -956,6 +982,10 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
             read_right = (prod_high < consu_high) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
             read_left = (consu_low < prod_low) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
             assert read_right or read_left
+
+            # If we only want to check then we do not need the exact splitting.
+            if for_check:
+                continue
 
             # Now we determine the split mode. There are three cases.
             if read_right and read_left:
@@ -979,8 +1009,11 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
                     (prod_high + 1, consu_high, 1),
                 ]
 
-        if dimension_in_which_to_split is None:
-            return None
+        # In check mode we are done.
+        if for_check:
+            return dimension_in_which_to_split is not None
+
+        assert dimension_in_which_to_split is not None
         assert len(splitted_subsets_in_dim) > 0
         assert all(((e - s) > 0) == True for s, e, _ in splitted_subsets_in_dim)  # noqa: E712 [true-false-comparison]  # SymPy comparison
 
