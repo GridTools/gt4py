@@ -74,22 +74,18 @@ class DaCeCompiler(
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "build_type", value=self.cmake_build_type.value)
             dace.config.Config.set("compiler", "use_cache", value=False)  # we use the gt4py cache
+
+            # dace dafault setting use fast-math in both cpu and gpu compilation, we disable it
+            dace.config.Config.set("compiler", "cpu", "args", value="-std=c++14 -fPIC -Wall -Wextra -O3 -march=native -Wno-unused-parameter -Wno-unused-label")
+            dace.config.Config.set("compiler", "cuda", "args", value="-Xcompiler -march=native -Xcompiler -Wno-unused-parameter")
+            dace.config.Config.set("compiler", "cuda", "hip_args", value="-std=c++17 -fPIC -O3 -Wno-unused-parameter")
+
             # In some stencils, mostly in `apply_diffusion_to_w` the cuda codegen messes
             #  up with the cuda streams, i.e. it allocates N streams but uses N+1.
             #  This is a workaround until this issue if fixed in DaCe.
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=1)
 
-            if self.device_type == core_defs.DeviceType.CPU:
-                compiler_args = dace.config.Config.get("compiler", "cpu", "args")
-                # disable finite-math-only in order to support isfinite/isinf/isnan builtins
-                if "-ffast-math" in compiler_args:
-                    compiler_args += " -fno-finite-math-only"
-                if "-ffinite-math-only" in compiler_args:
-                    compiler_args.replace("-ffinite-math-only", "")
-
-                dace.config.Config.set("compiler", "cpu", "args", value=compiler_args)
-
-            elif self.device_type == core_defs.DeviceType.ROCM:
+            if self.device_type == core_defs.DeviceType.ROCM:
                 dace.config.Config.set("compiler", "cuda", "backend", value="hip")
 
             sdfg_program = sdfg.compile(validate=False)

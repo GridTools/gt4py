@@ -88,6 +88,11 @@ class DaCeTranslator(
         if not self.disable_itir_transforms:
             ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
         offset_provider_type = common.offset_provider_to_type(offset_provider)
+
+        # do not store transformation history in SDFG
+        dace_config_store_history = dace.Config.get("store_history")
+        dace.Config.set("store_history", value=False)
+
         sdfg = gtir_sdfg.build_sdfg_from_gtir(
             ir,
             offset_provider_type,
@@ -118,6 +123,9 @@ class DaCeTranslator(
             # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
             gtx_transformations.gt_simplify(sdfg)
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+
+        # restore old value in dace config
+        dace.Config.set("store_history", value=dace_config_store_history)
 
         return sdfg
 
