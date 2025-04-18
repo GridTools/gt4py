@@ -802,6 +802,19 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
         src_tmp_edge: dace_graph.MultiConnectorEdge,
         edges_to_split: list[dace_graph.MultiConnectorEdge],
     ) -> None:
+        """Split all edges in `edges_to_split` into multiple edges.
+
+        The edges will be split such that the source subset of the new edges
+        are either fully convered by the destination subset of `src_tmp_edge`
+        edge or have no intersection with it at all.
+        The old edges will also be removed.
+
+        Args:
+            sdfg: The SDFG on which we operate.
+            state: The state in which we operate.
+            src_tmp_edges: The producing source edge.
+            edges_to_split: The list of edges that should be split.
+        """
         for edge_to_split in edges_to_split:
             self._split_consumer_edge(
                 sdfg=sdfg,
@@ -818,6 +831,7 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
         src_tmp_edge: dace_graph.MultiConnectorEdge,
         edge_to_split: dace_graph.MultiConnectorEdge,
     ) -> None:
+        """Split a single edge, see `_split_consumer_edges()`  for more."""
         producer_subset = src_tmp_edge.data.dst_subset
         consumer_subset = edge_to_split.data.src_subset
         assert isinstance(edge_to_split.dst, dace_nodes.AccessNode)
@@ -827,10 +841,12 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
         if consumer_destination_subset is None:
             consumer_destination_subset = dace_sbs.Range.from_array(edge_to_split.dst.desc(sdfg))
 
+        # Perform the actual splitting.
         new_consumer_subsets = self._split_consumer_subset(
             producer=producer_subset, consumer=consumer_subset
         )
         assert new_consumer_subsets is not None
+
         old_consumer_start = consumer_subset.min_element()
         consumer_dest_start = consumer_destination_subset.min_element()
 
@@ -839,7 +855,12 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
             new_subset_size = new_consumer_subset.size()
             new_consumer_start = new_consumer_subset.min_element()
 
-            # Compute the new subset at the destination of the edge.
+            # The subset at the source was computed by `_split_consumer_subset()`,
+            #  but we also need the subset at the destination, i.e. where do we
+            #  write to. For this we assume that we always write into some hypercube.
+            #  We then compute the offset of the now source subset, compared to the
+            #  original origin of the source subset and apply the same shift also
+            #  to the original destination subset.
             new_consumer_dest_start = [
                 dace_sym.pystr_to_symbolic(f"({dstart}) + (({ncstart}) - ({ocstart}))")
                 for dstart, ocstart, ncstart in zip(
@@ -857,6 +878,11 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
                 ]
             )
 
+            # Create the new edge, and copy the Memlet, afterwards set the subsets
+            #  accordingly.
+            # NOTE: The volume is not updated, but we do not care about that.
+            # NOTE: Because the consumer are only AccessNodes, and the data has not
+            #   changed, there is no need to propagate or update anything.
             new_edges.append(
                 state.add_edge(
                     edge_to_split.src,
@@ -874,6 +900,21 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
         producer: dace_sbs.Range,
         consumer: dace_sbs.Range,
     ) -> Optional[list[dace_sbs.Range]]:
+        """Splits the `consumer` subset.
+
+        The resulting subsets are either fully covered by `producer` or have no
+        intersection with it. If there is nothing to split or the function is
+        unable to perform the split then `None` is returned.
+
+        Args:
+            producer: The subset describing the producer.
+            consumer: The subset describing what the consumer reads.
+
+        Todo:
+            The current implementation is only able to handle the case where
+            the consumer subset must only be split in one dimension. This
+            restriction must be solved.
+        """
         assert producer.dims() == consumer.dims()
 
         # Currently we require that we have to split only along one dimension.
@@ -903,7 +944,9 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
 
             # The consumer is not fully embedded in the producer, so this dimension
             #  we must split. If we found before ignore it.
-            # Idea to generalize: Only handle the first one found.
+            # TODO(phimuell): By ignoring this case here, i.e. "pretend that no split
+            #   was needed", we could handle that and then recursively handle the
+            #   rest.
             if dimension_in_which_to_split is not None:
                 return None
             dimension_in_which_to_split = dim
