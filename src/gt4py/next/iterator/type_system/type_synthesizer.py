@@ -407,8 +407,8 @@ def as_fieldop(
         new_fields = _canonicalize_nb_fields(fields)
 
         deduced_domain = None
+        output_dims = set()
         if offset_provider_type is not None:
-            output_dims = set()
             for i, field in enumerate(new_fields):
                 for el in type_info.primitive_constituents(field):
                     input_dims = el.dims if isinstance(el, ts.FieldType) else []
@@ -427,8 +427,7 @@ def as_fieldop(
 
         if deduced_domain:
             if domain:
-                # assert list(output_dims_) == domain.dims TODO: add some check to compare with domain
-                pass
+                assert deduced_domain.dims == domain.dims
             else:
                 domain = deduced_domain
 
