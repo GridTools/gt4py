@@ -157,6 +157,10 @@ def _transform_by_pattern(
     if _is_projector(expr):
         projector = expr.fun
         expr = expr.args[0]
+    # TODO make a single extract_projector function
+    if cpm.is_call_to(expr, "tuple_get"):
+        projector = im.lambda_("_proj")(im.tuple_get(expr.args[0], "__proj"))
+        expr = expr.args[1]
 
     new_expr, extracted_fields, _ = cse.extract_subexpression(
         expr,

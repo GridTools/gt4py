@@ -619,6 +619,10 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             # only scans have projector (in other cases we should have collapsed the tuples)
             assert _is_scan(node.expr.fun.args[0])
 
+        if cpm.is_call_to(node.expr, "tuple_get"):
+            projector = self.visit(im.lambda_("_proj")(im.tuple_get(node.expr.args[0], "_proj")))
+            node.expr = node.expr.args[1]
+
         assert cpm.is_applied_as_fieldop(node.expr), node.expr
         stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
         domain = node.domain
