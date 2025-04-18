@@ -303,7 +303,10 @@ def create_global_tmps(
     """
     offset_provider_type = common.offset_provider_to_type(offset_provider)
     program = infer_domain.infer_program(
-        program, offset_provider=offset_provider, symbolic_domain_sizes=symbolic_domain_sizes
+        program,
+        offset_provider=offset_provider,
+        symbolic_domain_sizes=symbolic_domain_sizes,
+        keep_existing_domains=True,
     )
     program = type_inference.infer(program, offset_provider_type=offset_provider_type)
 
