@@ -231,9 +231,11 @@ def make_tuple(*args):
     return call("make_tuple")(*args)
 
 
-def tuple_get(index: str | int, tuple_expr):
+def tuple_get(index: str | int | itir.Literal, tuple_expr):
     """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(index, tuple_expr)``."""
-    return call("tuple_get")(literal(str(index), builtins.INTEGER_INDEX_BUILTIN), tuple_expr)
+    if not isinstance(index, itir.Literal):
+        index = literal(str(index), builtins.INTEGER_INDEX_BUILTIN)
+    return call("tuple_get")(index, tuple_expr)
 
 
 def if_(cond, true_val, false_val):

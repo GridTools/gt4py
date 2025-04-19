@@ -15,7 +15,11 @@ from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    ir_makers as im,
+    misc as ir_utils_misc,
+)
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.otf import cpp_utils
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
@@ -604,24 +608,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if _is_tuple_of_ref_or_literal(node.expr):
             node.expr = im.as_fieldop("deref", node.domain)(node.expr)
 
-        def _is_projector(expr: itir.Expr) -> bool:
-            return (
-                cpm.is_let(expr)
-                and len(expr.fun.params) == 1
-                and cpm.is_call_to(expr.fun.expr, "make_tuple")
-                and all(cpm.is_call_to(arg, "tuple_get") for arg in expr.fun.expr.args)
-            )
-
-        projector = self.visit(self.visit(im.lambda_("_proj")(im.ref("_proj"))))  # identity
-        if _is_projector(node.expr):
-            projector = self.visit(node.expr.fun)
-            node.expr = node.expr.args[0]
-            # only scans have projector (in other cases we should have collapsed the tuples)
-            assert _is_scan(node.expr.fun.args[0])
-
-        if cpm.is_call_to(node.expr, "tuple_get"):
-            projector = self.visit(im.lambda_("_proj")(im.tuple_get(node.expr.args[0], "_proj")))
-            node.expr = node.expr.args[1]
+        itir_projector, extracted_expr = ir_utils_misc.extract_projector(node.expr)
+        projector = (
+            self.visit(itir_projector)
+            if itir_projector is not None
+            else self.visit(im.lambda_("_proj")(im.ref("_proj")))  # identity
+        )
+        node.expr = extracted_expr
 
         assert cpm.is_applied_as_fieldop(node.expr), node.expr
         stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
@@ -676,6 +669,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 args=[self._visit_output_argument(node.target), *lowered_inputs],
                 axis=SymRef(id=column_axis.value),
             )
+        assert projector is None
         return StencilExecution(
             stencil=self.visit(
                 stencil,

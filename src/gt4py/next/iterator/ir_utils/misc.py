@@ -8,6 +8,7 @@
 
 import dataclasses
 from collections import ChainMap
+from typing import TypeGuard
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
@@ -154,3 +155,51 @@ def with_altered_arg(node: itir.FunCall, arg_idx: int, new_arg: itir.Expr | str)
     return im.call(node.fun)(
         *(arg if i != arg_idx else im.ensure_expr(new_arg) for i, arg in enumerate(node.args))
     )
+
+
+def _is_let_projector(expr: itir.Expr) -> TypeGuard[itir.FunCall]:
+    """
+    Check if the expression is projector using a let statement.
+
+    In the `(λ(_expr) → {_expr[x0], _expr[x1], ...})(expr)`,
+    `λ(_expr) → {_expr[x0], _expr[x1], ...}` is the projector of `expr`.
+    """
+    if cpm.is_let(expr) and len(expr.fun.params) == 1:  # type: ignore[attr-defined] # checked in condition
+        body = expr.fun.expr  # type: ignore[attr-defined] # checked in condition
+        if (
+            cpm.is_call_to(body, "make_tuple")
+            and all(cpm.is_call_to(arg, "tuple_get") for arg in body.args)
+            and all(
+                arg.args[1] == body.args[0].args[1]  # type: ignore[attr-defined] # checked in condition
+                for arg in body.args
+            )  # tuple_get on the same expression
+        ):
+            return True
+    return False
+
+
+def extract_projector(node: itir.Expr) -> tuple[itir.Lambda | None, itir.Expr]:
+    """
+    Extract the projector from an expression (only useful for `scan`s).
+
+    A projector is an expression that consists only of `make_tuple` of `tuple_get` of the same expression,
+    possibly in a let statement.
+
+    Returns the projector and the expression it is applied to.
+
+    TODO: doctests
+    """
+    if cpm.is_call_to(node, "tuple_get"):
+        # `expr[x]` -> `λ(_proj) → _proj[x]`, `expr`
+        index = node.args[0]
+        assert isinstance(index, itir.Literal), index
+        projector = im.lambda_("_proj")(im.tuple_get(index, "_proj"))
+        expr = node.args[1]
+        return projector, expr
+    if _is_let_projector(node):
+        projector = node.fun
+        expr = node.args[0]
+        return projector, expr
+    # Possibly there could be a projector of the form {expr[x0], expr[x1], ...},
+    # however for any non-trivial `expr`, CSE would have converted it to a let projector.
+    return None, node

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Sequence
-from typing import Callable, Optional
+from typing import Callable, Literal, Optional, cast
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common, utils as next_utils
@@ -19,6 +19,7 @@ from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
     domain_utils,
     ir_makers as im,
+    misc as ir_utils_misc,
 )
 from gt4py.next.iterator.ir_utils.domain_utils import SymbolicDomain
 from gt4py.next.iterator.transforms import cse, infer_domain, inline_lambdas
@@ -81,10 +82,14 @@ def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
         if isinstance(stmt, itir.SetAt):
             assert hasattr(stmt.expr.annex, "domain")
             # ordered set for reproducibility
-            domains = dict.fromkeys(next_utils.flatten_nested_tuple(stmt.expr.annex.domain))
+            domains: dict[
+                SymbolicDomain | Literal[infer_domain.DomainAccessDescriptor.NEVER], None
+            ] = dict.fromkeys(next_utils.flatten_nested_tuple(stmt.expr.annex.domain))
             # don't count NEVER as a different domain
             domains.pop(infer_domain.DomainAccessDescriptor.NEVER, None)
-            distinct_domains: list[domain_utils.SymbolicDomain] = list(domains)
+            distinct_domains: list[domain_utils.SymbolicDomain] = list(
+                cast(dict[SymbolicDomain, None], domains)
+            )
             if len(distinct_domains) == 1:
                 new_stmts.append(
                     itir.SetAt(
@@ -132,15 +137,6 @@ def _transform_if(
     return None
 
 
-def _is_projector(expr: itir.Expr) -> bool:
-    return (
-        cpm.is_let(expr)
-        and len(expr.fun.params) == 1
-        and cpm.is_call_to(expr.fun.expr, "make_tuple")
-        and all(cpm.is_call_to(arg, "tuple_get") for arg in expr.fun.expr.args)
-    )
-
-
 def _transform_by_pattern(
     stmt: itir.Stmt,
     predicate: Callable[[itir.Expr, int], bool],
@@ -151,16 +147,7 @@ def _transform_by_pattern(
         return None
 
     # hide projector from extraction
-    # a projector is a let statement with a single argument containing only tuple operations
-    expr = stmt.expr
-    projector = None
-    if _is_projector(expr):
-        projector = expr.fun
-        expr = expr.args[0]
-    # TODO make a single extract_projector function
-    if cpm.is_call_to(expr, "tuple_get"):
-        projector = im.lambda_("_proj")(im.tuple_get(expr.args[0], "__proj"))
-        expr = expr.args[1]
+    projector, expr = ir_utils_misc.extract_projector(stmt.expr)
 
     new_expr, extracted_fields, _ = cse.extract_subexpression(
         expr,
