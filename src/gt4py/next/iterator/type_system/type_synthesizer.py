@@ -406,33 +406,30 @@ def as_fieldop(
 
         new_fields = _canonicalize_nb_fields(fields)
 
-        deduced_domain = None
-        output_dims = set()
-        if offset_provider_type is not None:
-            for i, field in enumerate(new_fields):
-                for el in type_info.primitive_constituents(field):
-                    input_dims = el.dims if isinstance(el, ts.FieldType) else []
-                    if shift_results:
-                        for shift_tuple in shift_results[
-                            i
-                        ]:  # Use shift tuple corresponding to the input field
-                            for input_dim in input_dims:
-                                output_dims.add(_resolve_shift(input_dim, shift_tuple))
-
-                        assert all(isinstance(dim, common.Dimension) for dim in output_dims)
-                        output_dims_sorted = common.ordered_dims(
-                            output_dims  # type:ignore[arg-type] # assured by assert above
-                        )
-                        deduced_domain = it_ts.DomainType(dims=list(output_dims_sorted))
-
-        if deduced_domain:
-            if domain:
-                assert deduced_domain.dims == domain.dims
-            else:
-                domain = deduced_domain
-
         if not domain:
-            return ts.DeferredType(constraint=None)
+            deduced_domain = None
+            output_dims = set()
+            if offset_provider_type is not None:
+                for i, field in enumerate(new_fields):
+                    for el in type_info.primitive_constituents(field):
+                        input_dims = el.dims if isinstance(el, ts.FieldType) else []
+                        if shift_results:
+                            for shift_tuple in shift_results[
+                                i
+                            ]:  # Use shift tuple corresponding to the input field
+                                for input_dim in input_dims:
+                                    output_dims.add(_resolve_shift(input_dim, shift_tuple))
+
+                            assert all(isinstance(dim, common.Dimension) for dim in output_dims)
+                            output_dims_sorted = common.ordered_dims(
+                                output_dims  # type:ignore[arg-type] # assured by assert above
+                            )
+                            deduced_domain = it_ts.DomainType(dims=list(output_dims_sorted))
+
+            if deduced_domain:
+                domain = deduced_domain
+            else:
+                return ts.DeferredType(constraint=None)
 
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in new_fields),
