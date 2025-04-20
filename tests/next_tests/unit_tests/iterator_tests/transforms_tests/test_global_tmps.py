@@ -7,7 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Optional
-
+import pytest
+import functools
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -22,7 +23,17 @@ KDim = common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL)
 index_type = ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 i_field_type = ts.FieldType(dims=[IDim], dtype=float_type)
-index_field_type_factory = lambda dim: ts.FieldType(dims=[dim], dtype=index_type)
+
+
+def index_field_type_factory(dim):
+    return ts.FieldType(dims=[dim], dtype=index_type)
+
+
+def field_tuple_type_factory(field_type, n):
+    return ts.TupleType(types=[field_type] * n)
+
+
+i_field_tuple_type_factory = functools.partial(field_tuple_type_factory, i_field_type)
 
 
 def program_factory(
@@ -105,6 +116,57 @@ def test_trivial_let():
 
     actual = global_tmps.create_global_tmps(testee, offset_provider)
     assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "projector_maker, inp_type, out_type",
+    [
+        (
+            # let projector
+            lambda inp: im.let("foo", inp)(
+                im.make_tuple(im.tuple_get(1, "foo"), im.tuple_get(3, "foo"))
+            ),
+            i_field_tuple_type_factory(4),
+            i_field_tuple_type_factory(2),
+        ),
+        (
+            # tuple_get projector
+            lambda inp: im.tuple_get(2, inp),
+            i_field_tuple_type_factory(4),
+            i_field_type,
+        ),
+        (
+            # nested tuple_get projector
+            lambda inp: im.tuple_get(1, im.tuple_get(2, inp)),
+            field_tuple_type_factory(i_field_tuple_type_factory(4), 4),
+            i_field_type,
+        ),
+    ],
+)
+def test_dont_extract_projector(projector_maker, inp_type, out_type):
+    domain = im.domain("cartesian_domain", {IDim: (0, 1)})
+    expr = im.as_fieldop("deref", domain)("inp")
+
+    testee = program_factory(
+        params=[
+            im.sym("inp", inp_type),
+            im.sym("out", out_type),
+        ],
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=projector_maker(expr),
+                domain=domain,
+            )
+        ],
+    )
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider={})
+    assert actual == testee  # did not extract the projector
+
+
+def test_dont_extract_make_tuple_tuple_get_projector():
+    assert False  # TODO?
 
 
 def test_top_level_if():
