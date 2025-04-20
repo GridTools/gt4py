@@ -8,12 +8,13 @@
 
 import dataclasses
 from collections import ChainMap
-from typing import TypeGuard
+from typing import cast
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.transforms import inline_lambdas
 
 
 @dataclasses.dataclass(frozen=True)
@@ -157,27 +158,6 @@ def with_altered_arg(node: itir.FunCall, arg_idx: int, new_arg: itir.Expr | str)
     )
 
 
-def _is_let_projector(expr: itir.Expr) -> TypeGuard[itir.FunCall]:
-    """
-    Check if the expression is projector using a let statement.
-
-    In the `(λ(_expr) → {_expr[x0], _expr[x1], ...})(expr)`,
-    `λ(_expr) → {_expr[x0], _expr[x1], ...}` is the projector of `expr`.
-    """
-    if cpm.is_let(expr) and len(expr.fun.params) == 1:  # type: ignore[attr-defined] # checked in condition
-        body = expr.fun.expr  # type: ignore[attr-defined] # checked in condition
-        if (
-            cpm.is_call_to(body, "make_tuple")
-            and all(cpm.is_call_to(arg, "tuple_get") for arg in body.args)
-            and all(
-                arg.args[1] == body.args[0].args[1]  # type: ignore[attr-defined] # checked in condition
-                for arg in body.args
-            )  # tuple_get on the same expression
-        ):
-            return True
-    return False
-
-
 def extract_projector(
     node: itir.Expr, cur_projector=None, _depth=0
 ) -> tuple[itir.Lambda | None, itir.Expr]:
@@ -189,26 +169,39 @@ def extract_projector(
 
     Returns the projector and the expression it is applied to.
 
-    TODO: doctests
+    Note: Supports only unary projectors. Extend to multi-parameter projectors if needed.
     """
-    if cpm.is_call_to(node, "tuple_get"):
+    projector: itir.Lambda | None = None
+    expr = node
+    if cpm.is_let(node) and len(node.fun.params) == 1:  # type: ignore[attr-defined] # ensured by cpm.is_let
+        # a single param let, it's a projector if the let value aka `node.fun.expr` is a projector
+        is_projector, _ = extract_projector(node.fun.expr)  # type: ignore[attr-defined] # ensured by cpm.is_let
+        if is_projector is not None:
+            # we can directly use this as projector
+            projector = cast(itir.Lambda, node.fun)  # ensured by cpm.is_let
+            expr = node.args[0]
+        else:
+            projector = None
+            expr = node
+    elif cpm.is_call_to(node, "tuple_get"):
         # `expr[x]` -> `λ(_proj) → _proj[x]`, `expr`
         index = node.args[0]
         assert isinstance(index, itir.Literal), index
         projector = im.lambda_(f"_proj{_depth}")(im.tuple_get(index, f"_proj{_depth}"))
         expr = node.args[1]
-    elif _is_let_projector(node):
-        projector = node.fun
-        expr = node.args[0]
-    else:
-        projector = None
-        expr = node
-    # Possibly there could be a projector of the form {expr[x0], expr[x1], ...},
-    # however for any non-trivial `expr`, CSE would have converted it to a let projector.
+    elif cpm.is_call_to(node, "make_tuple"):
+        # `make_tuple(expr[x0], expr[x1], ...)` -> `λ(_proj) → {_proj[x0], _proj[x1], ...}`, `expr`
+        projectors, exprs = zip(*(extract_projector(arg) for arg in node.args))
+        if all(p is not None for p in projectors) and all(e == exprs[0] for e in exprs):
+            projector = im.lambda_(f"_proj{_depth}")(
+                im.call("make_tuple")(*(im.call(p)(im.ref(f"_proj{_depth}")) for p in projectors))
+            )
+            expr = exprs[0]
 
-    # nested projectors, e.g. `expr[x][y]`
     if projector is None:
         return cur_projector, expr
     else:
+        # nested projectors, e.g. `expr[x][y]`
         projector = projector if cur_projector is None else im.compose(cur_projector, projector)
+        projector = inline_lambdas.InlineLambdas.apply(projector)
         return extract_projector(expr, projector, _depth + 1)

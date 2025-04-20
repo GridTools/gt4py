@@ -141,6 +141,11 @@ def test_trivial_let():
             field_tuple_type_factory(i_field_tuple_type_factory(4), 4),
             i_field_type,
         ),
+        (
+            lambda inp: im.make_tuple(im.tuple_get(1, inp), im.tuple_get(3, inp)),
+            i_field_tuple_type_factory(4),
+            i_field_tuple_type_factory(2),
+        ),
     ],
 )
 def test_dont_extract_projector(projector_maker, inp_type, out_type):
@@ -162,11 +167,7 @@ def test_dont_extract_projector(projector_maker, inp_type, out_type):
     )
 
     actual = global_tmps.create_global_tmps(testee, offset_provider={})
-    assert actual == testee  # did not extract the projector
-
-
-def test_dont_extract_make_tuple_tuple_get_projector():
-    assert False  # TODO?
+    assert actual == testee  # did not extract from projector
 
 
 def test_top_level_if():
