@@ -178,7 +178,9 @@ def _is_let_projector(expr: itir.Expr) -> TypeGuard[itir.FunCall]:
     return False
 
 
-def extract_projector(node: itir.Expr) -> tuple[itir.Lambda | None, itir.Expr]:
+def extract_projector(
+    node: itir.Expr, cur_projector=None, _depth=0
+) -> tuple[itir.Lambda | None, itir.Expr]:
     """
     Extract the projector from an expression (only useful for `scan`s).
 
@@ -193,13 +195,20 @@ def extract_projector(node: itir.Expr) -> tuple[itir.Lambda | None, itir.Expr]:
         # `expr[x]` -> `λ(_proj) → _proj[x]`, `expr`
         index = node.args[0]
         assert isinstance(index, itir.Literal), index
-        projector = im.lambda_("_proj")(im.tuple_get(index, "_proj"))
+        projector = im.lambda_(f"_proj{_depth}")(im.tuple_get(index, f"_proj{_depth}"))
         expr = node.args[1]
-        return projector, expr
-    if _is_let_projector(node):
+    elif _is_let_projector(node):
         projector = node.fun
         expr = node.args[0]
-        return projector, expr
+    else:
+        projector = None
+        expr = node
     # Possibly there could be a projector of the form {expr[x0], expr[x1], ...},
     # however for any non-trivial `expr`, CSE would have converted it to a let projector.
-    return None, node
+
+    # nested projectors, e.g. `expr[x][y]`
+    if projector is None:
+        return cur_projector, expr
+    else:
+        projector = projector if cur_projector is None else im.compose(cur_projector, projector)
+        return extract_projector(expr, projector, _depth + 1)
