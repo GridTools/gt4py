@@ -567,15 +567,18 @@ class ITIRTypeInference(eve.NodeTranslator):
                 return ts.DeferredType(constraint=None)
             assert isinstance(tuple_.type, ts.TupleType)
             return tuple_.type.types[index]
+
+        # Collect shift_results and pass them as a kwarg to TypeSynthesizer:applied_as_fieldop.
+        # The node is available here, but not within the TypeSynthesizer, so we handle it here.
         shifts = {}
         if is_applied_as_fieldop(node):
-            stencil = node.fun.args[0]  # type: ignore[attr-defined] # assured by if above
+            stencil = node.fun.args[0]  # type: ignore[attr-defined] # Assured by if above
             referenced_fun_names = symbol_ref_utils.collect_symbol_refs(stencil)
-            if not referenced_fun_names:
-                shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(node.args))
-                shifts["shift_results"] = shifts_results
-            else:
-                shifts["shift_results"] = []
+            shifts["shift_results"] = (
+                trace_shifts.trace_stencil(stencil, num_args=len(node.args))
+                if not referenced_fun_names
+                else []
+            )
 
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)

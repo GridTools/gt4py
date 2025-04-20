@@ -177,7 +177,6 @@ def _transform_by_pattern(
                     )
                 domain = flattened_domains[0]
             assert isinstance(domain, domain_utils.SymbolicDomain)
-            domain_expr = domain.as_expr()
 
             assert isinstance(tmp_expr.type, ts.TypeSpec)
             tmp_names: str | tuple[str | tuple, ...] = type_info.apply_to_primitive_constituents(
@@ -198,13 +197,13 @@ def _transform_by_pattern(
             if cpm.is_applied_as_fieldop(tmp_expr):
                 # In this case all tuple elements have the same size (or will be `NEVER`).
                 # Create the tuple structure with that domain.
-                domain = list(
+                domain_ = list(
                     set(next_utils.flatten_nested_tuple((tmp_domains,)))
                     - {infer_domain.DomainAccessDescriptor.NEVER}  # type: ignore[arg-type] # type should always be `SymbolicDomain`
                 )
-                assert len(domain) == 1
+                assert len(domain_) == 1
                 # this is the domain used as initial value in the tuple construction below
-                tmp_domains = domain[0]
+                tmp_domains = domain_[0]
 
             def get_domain(
                 _, path: tuple[int, ...]

@@ -166,7 +166,6 @@ def _extract_accessed_domains(
     target_domain: NonTupleDomainAccess,
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]],
-    input_types: list[ts.TypeSpec],
 ) -> dict[str, NonTupleDomainAccess]:
     accessed_domains: dict[str, NonTupleDomainAccess] = {}
 
@@ -241,7 +240,6 @@ def _infer_as_fieldop(
     assert not isinstance(stencil, itir.Lambda) or len(stencil.params) == len(applied_fieldop.args)
 
     input_ids: list[str] = []
-    input_types: list[ts.TypeSpec] = []
 
     # Assign ids for all inputs to `as_fieldop`. `SymRef`s stay as is, nested `as_fieldop` get a
     # temporary id.
@@ -254,10 +252,9 @@ def _infer_as_fieldop(
         else:
             raise ValueError(f"Unsupported expression of type '{type(in_field)}'.")
         input_ids.append(id_)
-        input_types.append(in_field.type)
 
     inputs_accessed_domains: dict[str, NonTupleDomainAccess] = _extract_accessed_domains(
-        stencil, input_ids, target_domain, offset_provider, symbolic_domain_sizes, input_types
+        stencil, input_ids, target_domain, offset_provider, symbolic_domain_sizes
     )
 
     # Recursively infer domain of inputs and update domain arg of nested `as_fieldop`s
@@ -474,7 +471,7 @@ def infer_expr(
         )(expr.type),
     )
 
-    if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):
+    if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
         additional_dims = gtx_utils.tree_map(
             lambda d: _extract_vertical_dims(d)
             if isinstance(d, domain_utils.SymbolicDomain)

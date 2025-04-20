@@ -311,8 +311,8 @@ def _convert_as_fieldop_input_to_iterator(
 
 
 def _canonicalize_nb_fields(
-    input_: ts.FieldType | ts.TupleType | tuple[ts.FieldType, ts.TupleType],
-):
+    input_: ts.ScalarType | ts.FieldType | ts.TupleType | tuple[ts.FieldType, ts.TupleType],
+) -> ts.ScalarType | ts.FieldType | ts.TupleType | tuple[ts.FieldType, ts.TupleType]:
     """
     Transform neighbor / sparse field type by removal of local dimension and addition of corresponding `ListType` dtype.
 
@@ -334,7 +334,6 @@ def _canonicalize_nb_fields(
         element_type: ts.DataType = type_info.apply_to_primitive_constituents(
             type_info.extract_dtype, input_
         )
-
         defined_dims = []
         neighbor_dim = None
         for dim in input_dims:
@@ -345,7 +344,6 @@ def _canonicalize_nb_fields(
                 defined_dims.append(dim)
         if neighbor_dim:
             element_type = ts.ListType(element_type=element_type, offset_type=neighbor_dim)
-
         return ts.FieldType(dims=defined_dims, dtype=element_type)
     elif isinstance(input_, ts.ScalarType):
         return input_
