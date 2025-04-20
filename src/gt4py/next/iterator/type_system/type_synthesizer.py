@@ -360,36 +360,37 @@ def as_fieldop(
     *,
     offset_provider_type: common.OffsetProviderType,
 ) -> TypeSynthesizer:
-    def _resolve_shift(
-        input_dim: common.Dimension, shift_tuple: tuple[itir.OffsetLiteral, ...]
-    ) -> common.Dimension | ts.DeferredType:
+    def resolve_dimensions(
+        input_dims: list[common.Dimension],
+        shift_tuple: tuple[itir.OffsetLiteral, ...],
+        offset_provider_type: common.OffsetProviderType,
+    ) -> list[common.Dimension]:
         """
-        Resolves the final dimension by applying shifts from the given shift tuple.
+        Resolves the final dimensions by applying shifts from the given shift tuple.
 
-        Iterates through the shift tuple, updating `input_dim` based on matching offsets.
-
-        Parameters:
-        - input_dim (common.Dimension): The initial dimension to resolve.
-        - shift_tuple (tuple[itir.OffsetLiteral, ...]): A tuple of offset literals defining the shift.
+        Args:
+            - input_dims: A list of initial dimensions to resolve.
+            - shift_tuple: A tuple of offset literals defining the shift.
+            - offset_provider_type: Offset provider dictionary.
 
         Returns:
-        - common.Dimension: The resolved dimension or `input_dim` if no shift is applied.
+            A list of resolved dimensions after applying the shifts.
         """
-
-        final_target: common.Dimension = input_dim
-
-        for off_literal in reversed(shift_tuple[::2]):
-            offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
-            if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
-                return offset_type  # No shift applied
-            if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
-                off_source = offset_type.codomain
-                off_targets = offset_type.domain
-
-                if input_dim == off_source:  # Check if input fits to offset
-                    final_target = off_targets[0]
-                    input_dim = off_targets[0]  # Update input_dim for next iteration
-        return final_target
+        resolved_dims = []
+        for input_dim in input_dims:
+            for off_literal in reversed(
+                shift_tuple[::2]
+            ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
+                offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
+                if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
+                    continue  # No shift applied
+                if isinstance(
+                    offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)
+                ):
+                    if input_dim == offset_type.codomain:  # Check if input fits to offset
+                        input_dim = offset_type.domain[0]  # Update input_dim for next iteration
+            resolved_dims.append(input_dim)
+        return resolved_dims
 
     @TypeSynthesizer
     def applied_as_fieldop(
@@ -417,13 +418,14 @@ def as_fieldop(
                             for shift_tuple in shift_results[
                                 i
                             ]:  # Use shift tuple corresponding to the input field
-                                for input_dim in input_dims:
-                                    output_dims.add(_resolve_shift(input_dim, shift_tuple))
+                                output_dims.update(
+                                    resolve_dimensions(
+                                        input_dims, shift_tuple, offset_provider_type
+                                    )
+                                )
 
                             assert all(isinstance(dim, common.Dimension) for dim in output_dims)
-                            output_dims_sorted = common.ordered_dims(
-                                output_dims  # type:ignore[arg-type] # assured by assert above
-                            )
+                            output_dims_sorted = common.ordered_dims(output_dims)
                             deduced_domain = it_ts.DomainType(dims=list(output_dims_sorted))
 
             if deduced_domain:

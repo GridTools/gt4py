@@ -618,11 +618,7 @@ def test_as_fieldop_without_domain_K_Vertex_K():
     stencil_outer = im.lambda_("it1", "it2")(im.plus(im.deref(("it1")), im.deref(("it2"))))
 
     testee = im.as_fieldop(stencil_outer)(
-        im.as_fieldop(
-            stencil_inner
-        )(
-            im.ref("inp1", float_k_field)
-        ),
+        im.as_fieldop(stencil_inner)(im.ref("inp1", float_k_field)),
         im.ref("inp2", float_vertex_k_field),
     )
 
@@ -648,11 +644,7 @@ def test_as_fieldop_without_domain_K_Vertex():
     stencil_outer = im.lambda_("it1", "it2")(im.plus(im.deref(("it1")), im.deref(("it2"))))
 
     testee = im.as_fieldop(stencil_outer)(
-        im.as_fieldop(
-            stencil_inner
-        )(
-            im.ref("inp1", float_k_field)
-        ),
+        im.as_fieldop(stencil_inner)(im.ref("inp1", float_k_field)),
         im.ref("inp2", float_vertex_field),
     )
 
@@ -689,7 +681,9 @@ def test_as_fieldop_without_domain_V2E(mesh_descriptor):  # TODO: get rid of mes
     )
 
 
-def test_as_fieldop_without_domain_theree_shifts(mesh_descriptor):  # TODO: get rid of mesh_descriptor
+def test_as_fieldop_without_domain_theree_shifts(
+    mesh_descriptor,
+):  # TODO: get rid of mesh_descriptor
     stencil = im.lambda_("it")(
         im.deref(im.shift("V2E", 0)(im.shift("E2V", 0)(im.shift("C2E", 0)("it"))))
     )
