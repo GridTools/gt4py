@@ -7,13 +7,52 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, List, TypeAlias, TypeGuard
+from typing import TYPE_CHECKING, Any, Generic, List, TypeAlias, TypeGuard, TypeVar
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
-def is_applied_lift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
+_Fun = TypeVar("_Fun", bound=itir.Expr)
+
+
+class _IsCall(itir.FunCall, Generic[_Fun]):
+    fun: _Fun
+    args: List[itir.Expr]
+
+
+_IsCallToPattern: TypeAlias = _IsCall[itir.SymRef]
+
+
+def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_IsCallToPattern]:
+    """
+    Match call expression to a given function.
+
+    If the `node` argument is not an `itir.Node` the function does not error, but just returns
+    `False`. This is useful in visitors, where sometimes we pass a list of nodes or a leaf
+    attribute which can be anything.
+
+    >>> from gt4py.next.iterator.ir_utils import ir_makers as im
+    >>> node = im.plus(1, 2)
+    >>> is_call_to(node, "plus")
+    True
+    >>> is_call_to(node, "minus")
+    False
+    >>> is_call_to(node, ("plus", "minus"))
+    True
+    """
+    assert not isinstance(fun, itir.Node)  # to avoid accidentally passing the fun as first argument
+    if isinstance(fun, (list, tuple, set, Iterable)) and not isinstance(fun, str):
+        return any((is_call_to(node, f) for f in fun))
+    return (
+        isinstance(node, itir.FunCall) and isinstance(node.fun, itir.SymRef) and node.fun.id == fun
+    )
+
+
+_IsFunCallToFuncallToRef: TypeAlias = _IsCall[_IsCallToPattern]
+
+
+def is_applied_lift(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
     """Match expressions of the form `lift(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -23,7 +62,7 @@ def is_applied_lift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
     )
 
 
-def is_applied_map(arg: itir.Node) -> TypeGuard[itir.FunCall]:
+def is_applied_map(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
     """Match expressions of the form `map(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -33,7 +72,7 @@ def is_applied_map(arg: itir.Node) -> TypeGuard[itir.FunCall]:
     )
 
 
-def is_applied_reduce(arg: itir.Node) -> TypeGuard[itir.FunCall]:
+def is_applied_reduce(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
     """Match expressions of the form `reduce(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -43,7 +82,7 @@ def is_applied_reduce(arg: itir.Node) -> TypeGuard[itir.FunCall]:
     )
 
 
-def is_applied_shift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
+def is_applied_shift(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
     """Match expressions of the form `shift(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -52,14 +91,6 @@ def is_applied_shift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
         and arg.fun.fun.id == "shift"
     )
 
-
-if TYPE_CHECKING:
-
-    class _IsCallToPattern(itir.FunCall):
-        fun: itir.SymRef
-        args: List[itir.Expr]
-else:
-    _IsCallToPattern: TypeAlias = itir.FunCall
 
 if TYPE_CHECKING:
 
@@ -87,31 +118,6 @@ else:
 def is_let(node: itir.Node) -> TypeGuard[_LetPattern]:
     """Match expression of the form `(λ(...) → ...)(...)`."""
     return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
-
-
-def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_IsCallToPattern]:
-    """
-    Match call expression to a given function.
-
-    If the `node` argument is not an `itir.Node` the function does not error, but just returns
-    `False`. This is useful in visitors, where sometimes we pass a list of nodes or a leaf
-    attribute which can be anything.
-
-    >>> from gt4py.next.iterator.ir_utils import ir_makers as im
-    >>> node = im.plus(1, 2)
-    >>> is_call_to(node, "plus")
-    True
-    >>> is_call_to(node, "minus")
-    False
-    >>> is_call_to(node, ("plus", "minus"))
-    True
-    """
-    assert not isinstance(fun, itir.Node)  # to avoid accidentally passing the fun as first argument
-    if isinstance(fun, (list, tuple, set, Iterable)) and not isinstance(fun, str):
-        return any((is_call_to(node, f) for f in fun))
-    return (
-        isinstance(node, itir.FunCall) and isinstance(node.fun, itir.SymRef) and node.fun.id == fun
-    )
 
 
 def is_ref_to(node, ref: str) -> TypeGuard[itir.SymRef]:
