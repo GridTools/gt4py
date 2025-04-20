@@ -72,7 +72,16 @@ def is_let(node: itir.Node) -> TypeGuard[_LetPattern]:
     return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
 
 
-def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[itir.FunCall]:
+if TYPE_CHECKING:
+
+    class _IsCallToPattern(itir.FunCall):
+        fun: itir.SymRef
+        args: List[itir.Expr]
+else:
+    _IsCallToPattern: TypeAlias = itir.FunCall
+
+
+def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_IsCallToPattern]:
     """
     Match call expression to a given function.
 
