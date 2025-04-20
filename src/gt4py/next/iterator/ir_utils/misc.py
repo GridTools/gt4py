@@ -96,10 +96,10 @@ def canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
 def _remove_let_alias(let_expr: itir.FunCall):
     assert cpm.is_let(let_expr)
     is_aliased_let = True
-    for param, arg in zip(let_expr.fun.params, let_expr.args, strict=True):  # type: ignore[attr-defined]  # ensured by cpm.is_let
+    for param, arg in zip(let_expr.fun.params, let_expr.args, strict=True):
         is_aliased_let &= cpm.is_ref_to(arg, param.id)
     if is_aliased_let:
-        return let_expr.fun.expr  # type: ignore[attr-defined]  # ensured by cpm.is_let
+        return let_expr.fun.expr
     return let_expr
 
 

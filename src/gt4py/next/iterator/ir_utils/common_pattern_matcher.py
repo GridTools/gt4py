@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from collections.abc import Iterable
-from typing import Any, TypeGuard
+from typing import TYPE_CHECKING, Any, List, TypeAlias, TypeGuard
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -58,7 +58,16 @@ def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[itir.FunCall]:
     return isinstance(arg, itir.FunCall) and is_call_to(arg.fun, "as_fieldop")
 
 
-def is_let(node: itir.Node) -> TypeGuard[itir.FunCall]:
+if TYPE_CHECKING:
+
+    class _LetPattern(itir.FunCall):
+        fun: itir.Lambda
+        args: List[itir.Expr]
+else:
+    _LetPattern: TypeAlias = itir.FunCall
+
+
+def is_let(node: itir.Node) -> TypeGuard[_LetPattern]:
     """Match expression of the form `(λ(...) → ...)(...)`."""
     return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
 

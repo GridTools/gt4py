@@ -87,7 +87,7 @@ def _is_trivial_or_tuple_thereof_expr(node: itir.Node) -> bool:
     if cpm.is_call_to(node, "if_"):
         return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args[1:])
     if cpm.is_let(node):
-        return _is_trivial_or_tuple_thereof_expr(node.fun.expr) and all(  # type: ignore[attr-defined]  # ensured by is_let
+        return _is_trivial_or_tuple_thereof_expr(node.fun.expr) and all(
             _is_trivial_or_tuple_thereof_expr(arg) for arg in node.args
         )
     return False
@@ -478,14 +478,14 @@ class CollapseTuple(
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
             outer_vars = {}
             inner_vars = {}
-            original_inner_expr = node.fun.expr  # type: ignore[attr-defined]  # ensured by is_let
-            for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
+            original_inner_expr = node.fun.expr
+            for arg_sym, arg in zip(node.fun.params, node.args):
                 assert arg_sym not in inner_vars  # TODO(tehrengruber): fix collisions
                 if cpm.is_let(arg):
-                    for sym, val in zip(arg.fun.params, arg.args):  # type: ignore[attr-defined]  # ensured by is_let
+                    for sym, val in zip(arg.fun.params, arg.args):
                         assert sym not in outer_vars  # TODO(tehrengruber): fix collisions
                         outer_vars[sym] = val
-                    inner_vars[arg_sym] = arg.fun.expr  # type: ignore[attr-defined]  # ensured by is_let
+                    inner_vars[arg_sym] = arg.fun.expr
                 else:
                     inner_vars[arg_sym] = arg
             if outer_vars:
@@ -501,10 +501,10 @@ class CollapseTuple(
 
     def transform_inline_trivial_let(self, node: itir.FunCall, **kwargs) -> Optional[itir.Node]:
         if cpm.is_let(node):
-            if isinstance(node.fun.expr, itir.SymRef):  # type: ignore[attr-defined]  # ensured by is_let
+            if isinstance(node.fun.expr, itir.SymRef):
                 # `let(a, 1)(a)` -> `1`
-                for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
-                    if isinstance(node.fun.expr, itir.SymRef) and node.fun.expr.id == arg_sym.id:  # type: ignore[attr-defined]  # ensured by is_let
+                for arg_sym, arg in zip(node.fun.params, node.args):
+                    if isinstance(node.fun.expr, itir.SymRef) and node.fun.expr.id == arg_sym.id:
                         return arg
             if any(
                 trivial_args := [isinstance(arg, (itir.SymRef, itir.Literal)) for arg in node.args]
