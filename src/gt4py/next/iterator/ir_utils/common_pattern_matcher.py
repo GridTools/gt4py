@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Generic, List, TypeAlias, TypeGuard, TypeVar
+from typing import Any, Generic, List, TypeAlias, TypeGuard, TypeVar
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -49,10 +49,10 @@ def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_IsCallToPatter
     )
 
 
-_IsFunCallToFuncallToRef: TypeAlias = _IsCall[_IsCallToPattern]
+_IsFunCallToFunCallToRef: TypeAlias = _IsCall[_IsCallToPattern]
 
 
-def is_applied_lift(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
+def is_applied_lift(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
     """Match expressions of the form `lift(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -62,7 +62,7 @@ def is_applied_lift(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
     )
 
 
-def is_applied_map(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
+def is_applied_map(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
     """Match expressions of the form `map(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -72,7 +72,7 @@ def is_applied_map(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
     )
 
 
-def is_applied_reduce(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
+def is_applied_reduce(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
     """Match expressions of the form `reduce(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -82,7 +82,7 @@ def is_applied_reduce(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
     )
 
 
-def is_applied_shift(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
+def is_applied_shift(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
     """Match expressions of the form `shift(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -92,27 +92,12 @@ def is_applied_shift(arg: itir.Node) -> TypeGuard[_IsFunCallToFuncallToRef]:
     )
 
 
-if TYPE_CHECKING:
-
-    class _IsAppliedAsFieldopPattern(itir.FunCall):
-        fun: _IsCallToPattern
-        args: List[itir.Expr]
-else:
-    _IsAppliedAsFieldopPattern: TypeAlias = itir.FunCall
-
-
-def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[_IsAppliedAsFieldopPattern]:
+def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
     """Match expressions of the form `as_fieldop(stencil)(*args)`."""
     return isinstance(arg, itir.FunCall) and is_call_to(arg.fun, "as_fieldop")
 
 
-if TYPE_CHECKING:
-
-    class _LetPattern(itir.FunCall):
-        fun: itir.Lambda
-        args: List[itir.Expr]
-else:
-    _LetPattern: TypeAlias = itir.FunCall
+_LetPattern: TypeAlias = _IsCall[itir.Lambda]
 
 
 def is_let(node: itir.Node) -> TypeGuard[_LetPattern]:
@@ -124,7 +109,7 @@ def is_ref_to(node, ref: str) -> TypeGuard[itir.SymRef]:
     return isinstance(node, itir.SymRef) and node.id == ref
 
 
-def is_identity_as_fieldop(node: itir.Expr):
+def is_identity_as_fieldop(node: itir.Expr) -> TypeGuard[_IsFunCallToFunCallToRef]:
     """
     Match field operators implementing element-wise copy of a field argument,
     that is expressions of the form `as_fieldop(stencil)(*args)`
