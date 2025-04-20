@@ -82,8 +82,8 @@ def canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
     """
     assert cpm.is_applied_as_fieldop(expr)
 
-    stencil = expr.fun.args[0]  # type: ignore[attr-defined]
-    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None  # type: ignore[attr-defined]
+    stencil = expr.fun.args[0]
+    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None
     if cpm.is_ref_to(stencil, "deref"):
         stencil = im.lambda_("arg")(im.deref("arg"))
         new_expr = im.as_fieldop(stencil, domain)(*expr.args)

@@ -53,7 +53,24 @@ def is_applied_shift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
     )
 
 
-def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[itir.FunCall]:
+if TYPE_CHECKING:
+
+    class _IsCallToPattern(itir.FunCall):
+        fun: itir.SymRef
+        args: List[itir.Expr]
+else:
+    _IsCallToPattern: TypeAlias = itir.FunCall
+
+if TYPE_CHECKING:
+
+    class _IsAppliedAsFieldopPattern(itir.FunCall):
+        fun: _IsCallToPattern
+        args: List[itir.Expr]
+else:
+    _IsAppliedAsFieldopPattern: TypeAlias = itir.FunCall
+
+
+def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[_IsAppliedAsFieldopPattern]:
     """Match expressions of the form `as_fieldop(stencil)(*args)`."""
     return isinstance(arg, itir.FunCall) and is_call_to(arg.fun, "as_fieldop")
 
@@ -70,15 +87,6 @@ else:
 def is_let(node: itir.Node) -> TypeGuard[_LetPattern]:
     """Match expression of the form `(λ(...) → ...)(...)`."""
     return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
-
-
-if TYPE_CHECKING:
-
-    class _IsCallToPattern(itir.FunCall):
-        fun: itir.SymRef
-        args: List[itir.Expr]
-else:
-    _IsCallToPattern: TypeAlias = itir.FunCall
 
 
 def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_IsCallToPattern]:
@@ -106,7 +114,7 @@ def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_IsCallToPatter
     )
 
 
-def is_ref_to(node, ref: str):
+def is_ref_to(node, ref: str) -> TypeGuard[itir.SymRef]:
     return isinstance(node, itir.SymRef) and node.id == ref
 
 
@@ -125,7 +133,7 @@ def is_identity_as_fieldop(node: itir.Expr):
     """
     if not is_applied_as_fieldop(node):
         return False
-    stencil = node.fun.args[0]  # type: ignore[attr-defined]
+    stencil = node.fun.args[0]
     if (
         isinstance(stencil, itir.Lambda)
         and len(stencil.params) == 1

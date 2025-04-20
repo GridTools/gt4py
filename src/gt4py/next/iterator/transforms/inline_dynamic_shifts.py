@@ -21,7 +21,7 @@ def _dynamic_shift_args(node: itir.Expr) -> None | list[bool]:
     if not cpm.is_applied_as_fieldop(node):
         return None
     params_shifts = trace_shifts.trace_stencil(
-        node.fun.args[0],  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
+        node.fun.args[0],
         num_args=len(node.args),
         save_to_annex=True,
     )
