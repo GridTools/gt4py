@@ -146,11 +146,11 @@ def fuse_as_fieldop(
             new_args = _merge_arguments(new_args, {new_param: arg})
 
     stencil = im.lambda_(*new_args.keys())(new_stencil_body)
-    stencil = restore_scan(stencil)
+    new_stencil = restore_scan(stencil)
 
     # simplify stencil directly to keep the tree small
     new_stencil = inline_lambdas.InlineLambdas.apply(
-        stencil, opcount_preserving=True, force_inline_lift_args=False
+        new_stencil, opcount_preserving=True, force_inline_lift_args=False
     )
     new_stencil = inline_center_deref_lift_vars.InlineCenterDerefLiftVars.apply(
         new_stencil, is_stencil=True, uids=uids

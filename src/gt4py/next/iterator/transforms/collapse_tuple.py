@@ -298,18 +298,16 @@ class CollapseTuple(
             # TODO(tehrengruber): extend to general symbols as long as the tail call in the let
             #   does not capture
             # `tuple_get(i, let(...)(make_tuple()))` -> `let(...)(tuple_get(i, make_tuple()))`
-            if cpm.is_let(node.args[1]):
-                idx, let_expr = node.args
+            idx, expr = node.args
+            assert isinstance(idx, itir.Literal)
+            if cpm.is_let(expr):
                 return im.call(
-                    im.lambda_(*let_expr.fun.params)(  # type: ignore[attr-defined]  # ensured by is_let
-                        self.fp_transform(im.tuple_get(idx.value, let_expr.fun.expr), **kwargs)  # type: ignore[attr-defined]  # ensured by is_let
+                    im.lambda_(*expr.fun.params)(
+                        self.fp_transform(im.tuple_get(idx.value, expr.fun.expr), **kwargs)
                     )
-                )(
-                    *let_expr.args  # type: ignore[attr-defined]  # ensured by is_let
-                )
-            elif cpm.is_call_to(node.args[1], "if_"):
-                idx = node.args[0]
-                cond, true_branch, false_branch = node.args[1].args
+                )(*expr.args)
+            elif cpm.is_call_to(expr, "if_"):
+                cond, true_branch, false_branch = expr.args
                 return im.if_(
                     cond,
                     self.fp_transform(im.tuple_get(idx.value, true_branch), **kwargs),
@@ -548,10 +546,13 @@ class CollapseTuple(
         new_args: list[itir.Expr] = []
         for param, arg in zip(stencil.params, node.args, strict=True):
             if isinstance(arg.type, ts.TupleType):
+                assert isinstance(param.type, it_ts.IteratorType)
                 ref_to_remapped_arg = im.ref(f"__ct_flat_remapped_{len(remapped_args)}", arg.type)
                 remapped_args[im.sym(ref_to_remapped_arg.id, arg.type)] = arg
                 new_params_inner, lift_params = [], []
+                assert isinstance(param.type.element_type, ts.TupleType)
                 for i, type_ in enumerate(param.type.element_type.types):
+                    assert isinstance(type_, ts.DataType)
                     new_param = im.sym(
                         _flattened_as_fieldop_param_el_name(param.id, i),
                         _with_altered_iterator_element_type(param.type, type_),
