@@ -181,19 +181,26 @@ def split_overlapping_map_range(
     if len(common_map_params) == 0:
         return None
 
+    first_map_dict = dict(zip(first_map.params, first_map.range.ranges, strict=True))
+    second_map_dict = dict(zip(second_map.params, second_map.range.ranges, strict=True))
+
+    first_map_common_range = dace_subsets.Range(
+        [first_map_dict[param] for param in sorted(common_map_params)]
+    )
+    second_map_common_range = dace_subsets.Range(
+        [second_map_dict[param] for param in sorted(common_map_params)]
+    )
+
     try:
-        if first_map.range.intersects(second_map.range) == False:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
+        if first_map_common_range.intersects(second_map_common_range) == False:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
             # in case of disjoint ranges, we cannot find an overlapping range
             return None
     except TypeError:
         # cannot determine truth value of Relational
         return None
 
-    if (first_map.range == second_map.range) == True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
+    if (first_map_common_range == second_map_common_range) == True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
         return None
-
-    first_map_dict = dict(zip(first_map.params, first_map.range.ranges, strict=True))
-    second_map_dict = dict(zip(second_map.params, second_map.range.ranges, strict=True))
 
     first_map_splitted_dict = {}
     second_map_splitted_dict = {}
