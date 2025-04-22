@@ -596,6 +596,3 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
         offset_provider=cartesian_case.offset_provider,
     )
     assert np.allclose(out.asnumpy(), field_a.asnumpy() * 3 + field_b.asnumpy() * 4)
-
-
-# TODO add jit only test by specifying static_args
