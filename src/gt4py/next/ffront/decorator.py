@@ -27,6 +27,7 @@ from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
     common,
+    config,
     embedded as next_embedded,
     errors,
 )
@@ -91,7 +92,7 @@ class Program:
         definition: types.FunctionType,
         backend: next_backend.Backend | None,
         grid_type: common.GridType | None = None,
-        enable_jit: bool = False,
+        enable_jit: bool = config.ENABLE_JIT,
         static_params: Sequence[str] | None = None,
         connectivities: Optional[
             common.OffsetProvider
@@ -168,10 +169,15 @@ class Program:
             self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
         )
 
-    def with_static_params(self, *static_params: str) -> Program:
+    def with_static_params(self, *static_params: str | None) -> Program:
+        if len(static_params) == 0 or (len(static_params) == 1 and static_params[0] is None):
+            _static_params = None
+        else:
+            assert all(p is not None for p in static_params)
+            _static_params = typing.cast(tuple[str], static_params)
         return dataclasses.replace(
             self,
-            _static_params=static_params if static_params else None,
+            _static_params=_static_params,
         )
 
     def with_bound_args(self, **kwargs: Any) -> ProgramWithBoundArgs:
@@ -275,7 +281,7 @@ class Program:
         )
 
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
-        if self._compiled_programs is not None:  # fast path
+        if self._compiled_programs is not None:  # fast path, implict `self.backend is not None`
             offset_provider = {  # TODO(havogt) cleanup implicit_offset_provider
                 **offset_provider,
                 **self._implicit_offset_provider,
@@ -283,17 +289,14 @@ class Program:
             return self._compiled_programs(
                 *args, **kwargs, offset_provider=offset_provider, enable_jit=self.enable_jit
             )
-        elif self.static_params is not None:
+        elif self.backend is not None:
+            if self.static_params is None:
+                # Here we set that the only program we will use is the generic one,
+                # if the user wants to compile for different static parameters,
+                # they should call `.with_static_params()`.
+                object.__setattr__(self, "_static_params", ())
             self._init_compiled_programs()
             return self.__call__(*args, offset_provider=offset_provider, **kwargs)  # try again
-
-        offset_provider = {**offset_provider, **self._implicit_offset_provider}
-        if self.backend is not None:
-            return self.backend(
-                self.definition_stage,
-                *args,
-                **(kwargs | {"offset_provider": offset_provider}),
-            )
 
         # embedded
         warnings.warn(
@@ -521,7 +524,7 @@ def program(
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
-    enable_jit: bool = False,  # only relevant if static_params are set
+    enable_jit: bool = config.ENABLE_JIT,  # only relevant if static_params are set
     static_params: Sequence[str] | None = None,
     frozen: bool = False,
 ) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:

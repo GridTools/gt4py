@@ -410,6 +410,109 @@ def test_compile_variants_not_compiled(cartesian_case, compile_variants_testee):
         )
 
 
+def test_compile_variants_not_compiled_then_reset_static_params(
+    cartesian_case, compile_variants_testee
+):
+    """
+    This test ensures that after calling ".with_static_params(None)" the previously compiled programs are gone
+    and we can compile for the generic version.
+    """
+    object.__setattr__(compile_variants_testee, "enable_jit", True)
+
+    field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
+    field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
+
+    # the compile_variants_testee has static_params set and is compiled (in a previous test)
+    assert len(compile_variants_testee.static_params) > 0
+    assert compile_variants_testee._compiled_programs is not None
+
+    # but now we reset the compiled programs
+    testee_static_float_static_bool = compile_variants_testee.with_static_params(None)
+
+    # Here we jit the generic version (because not static params are set)
+    out = cases.allocate(cartesian_case, testee_static_float_static_bool, "out")()
+    testee_static_float_static_bool(
+        field_a,
+        int32(3),  # variant did not exist previously, now it's runtime
+        4.0,
+        False,
+        field_b,
+        out=out,
+        offset_provider=cartesian_case.offset_provider,
+    )
+    assert np.allclose(out[0].ndarray, field_a.ndarray - 3)
+    assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
+
+    # make sure the backend is never called form here on
+    object.__setattr__(compile_variants_testee, "backend", _always_raise_callable)
+
+    # calling it again will not recompile
+    out = cases.allocate(cartesian_case, testee_static_float_static_bool, "out")()
+    testee_static_float_static_bool(
+        field_a,
+        int32(42),
+        5.0,
+        True,
+        field_b,
+        out=out,
+        offset_provider=cartesian_case.offset_provider,
+    )
+    assert np.allclose(out[0].ndarray, field_a.ndarray + 42)
+    assert np.allclose(out[1].ndarray, field_b.ndarray + 5.0)
+
+
+def test_compile_variants_not_compiled_then_set_new_static_params(
+    cartesian_case, compile_variants_testee
+):
+    """
+    This test ensures that after calling `with_static_params("scalar_float", "scalar_bool")`
+    the previously compiled programs are gone and we can compile for the new `static_params`.
+    """
+    object.__setattr__(compile_variants_testee, "enable_jit", False)
+
+    field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
+    field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
+
+    # the compile_variants_testee has static_params set and is compiled (in a previous test)
+    assert len(compile_variants_testee.static_params) > 0
+    assert compile_variants_testee._compiled_programs is not None
+
+    # but now we reset the compiled programs and fix to other static params
+    testee_static_float_static_bool = compile_variants_testee.with_static_params(
+        "scalar_float", "scalar_bool"
+    )
+    testee_static_float_static_bool.compile(
+        scalar_float=[4.0], scalar_bool=[False], offset_provider_type=cartesian_case.offset_provider
+    )
+
+    # make sure the backend is never called form here on
+    object.__setattr__(compile_variants_testee, "backend", _always_raise_callable)
+
+    out = cases.allocate(cartesian_case, testee_static_float_static_bool, "out")()
+    testee_static_float_static_bool(
+        field_a,
+        int32(3),  # variant did not exist previously, now it's runtime
+        4.0,
+        False,
+        field_b,
+        out=out,
+        offset_provider=cartesian_case.offset_provider,
+    )
+    assert np.allclose(out[0].ndarray, field_a.ndarray - 3)
+    assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
+
+    with pytest.raises(RuntimeError):
+        compile_variants_testee(
+            field_a,
+            int32(3),
+            4.0,
+            True,  # variant does not exist
+            field_b,
+            out=out,
+            offset_provider=cartesian_case.offset_provider,
+        )
+
+
 def test_compile_variants_jit(cartesian_case, compile_variants_testee):
     object.__setattr__(compile_variants_testee, "enable_jit", True)
 
