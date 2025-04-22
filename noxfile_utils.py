@@ -120,6 +120,42 @@ def customize_session(
     return decorator
 
 
+def install_session_venv(
+    session: nox.Session,
+    *args: str | Sequence[str],
+    extras: Sequence[str] = (),
+    groups: Sequence[str] = (),
+) -> None:
+    """
+    Install session packages using the `uv` tool.
+
+    Args:
+        session: The Nox session object.
+        *args: Additional packages to install in the session (via `uv pip install`)
+        extras: Names of package's extras to install.
+        groups: Names of dependency groups to install.
+    """
+
+    env = make_session_env(session, UV_PROJECT_ENVIRONMENT=session.virtualenv.location)
+    session.run_install(
+        "uv",
+        "sync",
+        *("--python", session.python),
+        "--no-dev",
+        *(f"--extra={e}" for e in extras),
+        *(f"--group={g}" for g in groups),
+        env=env,
+    )
+    for item in args:
+        session.run_install(
+            "uv",
+            "pip",
+            "install",
+            *((item,) if isinstance(item, str) else item),
+            env=env,
+        )
+
+
 def make_session_env(session: nox.Session, **kwargs: str) -> dict[str, str]:
     """Create an environment dictionary for a nox session.
 
@@ -158,40 +194,19 @@ def make_session_env(session: nox.Session, **kwargs: str) -> dict[str, str]:
     return env
 
 
-def install_session_venv(
-    session: nox.Session,
-    *args: str | Sequence[str],
-    extras: Sequence[str] = (),
-    groups: Sequence[str] = (),
-) -> None:
-    """
-    Install session packages using the `uv` tool.
+def run_session(session: nox.Session, *args: str | Sequence[str], **kwargs: Any) -> None:
+    """Run a Nox session with the specified arguments and environment.
+
+    This function runs a Nox session with the provided arguments, using the
+    environment variables defined in the session metadata.
 
     Args:
-        session: The Nox session object.
-        *args: Additional packages to install in the session (via `uv pip install`)
-        extras: Names of package's extras to install.
-        groups: Names of dependency groups to install.
+        session: The Nox session to run.
+        *args: Additional arguments to pass to the session.
+        **kwargs: Additional keyword arguments to pass to the session.
     """
-
-    env = make_session_env(session, UV_PROJECT_ENVIRONMENT=session.virtualenv.location)
-    session.run_install(
-        "uv",
-        "sync",
-        *("--python", session.python),
-        "--no-dev",
-        *(f"--extra={e}" for e in extras),
-        *(f"--group={g}" for g in groups),
-        env=env,
-    )
-    for item in args:
-        session.run_install(
-            "uv",
-            "pip",
-            "install",
-            *((item,) if isinstance(item, str) else item),
-            env=env,
-        )
+    env = make_session_env(session)
+    return session.run(*args, **kwargs, env=env)
 
 
 # -- Internal implementation utilities --
