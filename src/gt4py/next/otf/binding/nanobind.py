@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Any, Optional, Sequence, TypeVar, Union
 
 import gt4py.eve as eve
@@ -63,7 +64,7 @@ class FunctionParameter(eve.Node):
 class WrapperFunction(eve.Node):
     name: str
     parameters: Sequence[FunctionParameter]
-    body: ExprStmt
+    body: Union[ExprStmt, ReturnStmt]
     device: bool = False
 
 
@@ -120,6 +121,12 @@ class BindingCodeGenerator(TemplatedGenerator):
         """
     )
 
+    def visit_WrapperFunction(
+        self, node: WrapperFunction, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
+        return_stmt = "return _gt4py_return;" if isinstance(node.body, ReturnStmt) else ""
+        return self.generic_visit(node, return_stmt=return_stmt)
+
     WrapperFunction = as_jinja(
         """\
         decltype(auto) {{name}}(
@@ -131,14 +138,14 @@ class BindingCodeGenerator(TemplatedGenerator):
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
             }
-            auto gt4py_res_ = {{body}}
+            {{body}}
             if (exec_info.has_value()) {
                 {% if _this_node.device %}cudaDeviceSynchronize();{% endif %}
                 exec_info->operator[]("run_cpp_end_time") = static_cast<double>(
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
             }
-            return gt4py_res_;
+            {{return_stmt}}
         }\
         """
     )
@@ -147,7 +154,7 @@ class BindingCodeGenerator(TemplatedGenerator):
 
     ExprStmt = as_jinja("""{{expr}};""")
 
-    ReturnStmt = as_jinja("""return {{expr}};""")
+    ReturnStmt = as_jinja("""auto _gt4py_return = {{expr}};""")
 
     BindingModule = as_jinja(
         """\
@@ -162,7 +169,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         """module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}", {{", ".join(["nanobind::arg()"]*_this_node.n_params + ['nanobind::arg("exec_info") = nanobind::none()'])}});"""
     )
 
-    def visit_FunctionCall(self, call: FunctionCall) -> str:
+    def visit_FunctionCall(self, call: FunctionCall, **kwargs: Any) -> str:
         args = [self.visit(arg) for arg in call.args]
         return cpp_interface.render_function_call(call.target, args)
 
@@ -238,6 +245,7 @@ def create_bindings(
         )
     wrapper_name = program_source.entry_point.name + "_wrapper"
 
+    Stmt = ReturnStmt if program_source.entry_point.returns else ExprStmt
     file_binding = BindingFile(
         callee_header_file=f"{program_source.entry_point.name}.{program_source.language_settings.header_extension}",
         header_files=[
@@ -263,7 +271,7 @@ def create_bindings(
                 FunctionParameter(name=param.name, type_=param.type_)
                 for param in program_source.entry_point.parameters
             ],
-            body=ExprStmt(
+            body=Stmt(
                 expr=FunctionCall(
                     target=program_source.entry_point,
                     args=[
