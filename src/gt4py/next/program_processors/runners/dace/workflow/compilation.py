@@ -78,14 +78,15 @@ class DaCeCompiler(
             # dace dafault setting use fast-math in both cpu and gpu compilation, don't use it here
             dace.config.Config.set(
                 "compiler.cpu.args",
-                value="-std=c++14 -fPIC -Wall -Wextra -O3 -march=native -Wno-unused-parameter -Wno-unused-label",
+                value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
             )
             dace.config.Config.set(
                 "compiler.cuda.args",
-                value="-Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
+                value="-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
             )
             dace.config.Config.set(
-                "compiler.cuda.hip_args", value="-std=c++17 -fPIC -O3 -Wno-unused-parameter"
+                "compiler.cuda.hip_args",
+                value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
             )
 
             # In some stencils, mostly in `apply_diffusion_to_w` the cuda codegen messes
