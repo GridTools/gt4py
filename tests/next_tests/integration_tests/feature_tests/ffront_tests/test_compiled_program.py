@@ -325,7 +325,7 @@ def compile_variants_testee_not_compiled(
 
 
 @pytest.fixture
-def compile_variants_testee(compile_variants_testee_not_compiled) -> Program:
+def compile_variants_testee(cartesian_case, compile_variants_testee_not_compiled) -> Program:
     return compile_variants_testee_not_compiled.compile(
         scalar_int=[1, 2],
         scalar_float=[3.0, 4.0],
