@@ -96,7 +96,10 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         arg_types = tuple(
             arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
         )
-        kwarg_types = inp.args.kwargs
+        kwarg_types = {
+            k: v.type_ if isinstance(v, arguments.StaticArg) else v
+            for k, v in inp.args.kwargs.items()
+        }
 
         loc = inp.data.foast_node.location
         # use a new UID generator to allow caching

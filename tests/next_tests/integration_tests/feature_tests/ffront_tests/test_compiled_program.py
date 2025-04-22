@@ -157,8 +157,8 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
-    out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
 
+    out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
     compile_variants_testee(
         field_a,
         int32(1),
@@ -171,6 +171,7 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
     assert np.allclose(out[0].ndarray, field_a.ndarray + 1)
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
+    out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
     compile_variants_testee(
         field_a,
         int32(1),
@@ -182,6 +183,27 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
     )
     assert np.allclose(out[0].ndarray, field_a.ndarray - 1)
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
+
+
+def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_testee):
+    # make sure the backend is never called
+    object.__setattr__(compile_variants_testee, "backend", _always_raise_callable)
+
+    field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
+    field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
+
+    out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
+    compile_variants_testee(
+        field_a,
+        int32(1),
+        scalar_float=3.0,
+        scalar_bool=True,
+        field_b=field_b,
+        out=out,
+        offset_provider=cartesian_case.offset_provider,
+    )
+    assert np.allclose(out[0].ndarray, field_a.ndarray + 1)
+    assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
 
 def test_compile_variants_not_compiled(cartesian_case, compile_variants_testee):
@@ -208,8 +230,8 @@ def test_compile_variants_jit(cartesian_case, compile_variants_testee):
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
-    out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
 
+    out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
     compile_variants_testee(
         field_a,
         int32(3),  # variant does not exist
@@ -238,8 +260,62 @@ def test_compile_variants_jit(cartesian_case, compile_variants_testee):
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
 
-# TODO Can we add a check that we are executing an optimized program?
-# TODO test more variants
+@pytest.fixture
+def compile_variants_testee_tuple(cartesian_case):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    @gtx.field_operator
+    def testee_op(
+        field_a: cases.IField,
+        int_tuple: tuple[int32, int32],
+        field_b: cases.IField,
+    ) -> cases.IField:
+        return field_a * int_tuple[0] + field_b * int_tuple[1]
+
+    @gtx.program(backend=cartesian_case.backend)
+    def testee(
+        field_a: cases.IField,
+        int_tuple: tuple[int32, int32],
+        field_b: cases.IField,
+        out: cases.IField,
+    ):
+        testee_op(field_a, int_tuple, field_b, out=out)
+
+    return testee.compile(
+        int_tuple=[(1, 2), (3, 4)],
+        offset_provider_type=cartesian_case.offset_provider,
+    )
+
+
+def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
+    # make sure the backend is never called
+    object.__setattr__(compile_variants_testee_tuple, "backend", _always_raise_callable)
+
+    field_a = cases.allocate(cartesian_case, compile_variants_testee_tuple, "field_a")()
+    field_b = cases.allocate(cartesian_case, compile_variants_testee_tuple, "field_b")()
+
+    out = cases.allocate(cartesian_case, compile_variants_testee_tuple, "out")()
+    compile_variants_testee_tuple(
+        field_a,
+        (1, 2),
+        field_b,
+        out=out,
+        offset_provider=cartesian_case.offset_provider,
+    )
+    assert np.allclose(out.asnumpy(), field_a.asnumpy() * 1 + field_b.asnumpy() * 2)
+
+    out = cases.allocate(cartesian_case, compile_variants_testee_tuple, "out")()
+    compile_variants_testee_tuple(
+        field_a,
+        (3, 4),
+        field_b,
+        out,
+        offset_provider=cartesian_case.offset_provider,
+    )
+    assert np.allclose(out.asnumpy(), field_a.asnumpy() * 3 + field_b.asnumpy() * 4)
+
+
 # TODO add test for static tuple values
 # TODO test for different offset_provider
 # TODO add jit only test by specifying static_args

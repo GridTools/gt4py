@@ -46,7 +46,7 @@ class CompileTimeArgs:
     """Compile-time standins for arguments to a GTX program to be used in ahead-of-time compilation."""
 
     args: tuple[ts.TypeSpec | StaticArg, ...]
-    kwargs: dict[str, ts.TypeSpec]
+    kwargs: dict[str, ts.TypeSpec | StaticArg]
     offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     column_axis: Optional[common.Dimension]
 
