@@ -72,7 +72,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Failed tests: <https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: **${{ matrix.gt4py-module }} (CPU)** for **Python-${{ matrix.python-version }}** with **'${{ matrix.dependencies-strategy }}' uv resolution strategy**.>"
+                  "text": "Failed tests: <https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: ${{ matrix.gt4py-module }} (CPU) for Python-${{ matrix.python-version }} with '${{ matrix.dependencies-strategy }}' uv resolution strategy.>"
                 }
               }
             ]

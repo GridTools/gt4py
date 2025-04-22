@@ -7,12 +7,6 @@ on:
   pull_request:
     branches:
     - main
-    paths-ignore:  # Skip when only gt4py.cartesian or doc files have been updated
-    - "src/gt4py/cartesian/**"
-    - "tests/cartesian_tests/**"
-    - "examples/**"
-    - "*.md"
-    - "*.rst"
 
 jobs:
   # First job to read Python versions from .python-versions file
@@ -25,6 +19,7 @@ jobs:
     - id: get-versions
       uses: ./.github/actions/get-python-versions
 
+  # Main job that runs the tests
   test-next:
     needs: get-python-versions
     strategy:
@@ -38,6 +33,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Use a deep clone to get target PR branch
 
     - name: Install uv and set the python version
       uses: astral-sh/setup-uv@v5
@@ -49,5 +46,7 @@ jobs:
     - name: Run CPU 'next' tests with nox
       env:
         NUM_PROCESSES: auto
+        GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "origin/${{ github.base_ref }}"
+        GT4PY_CI_NOX_VERBOSE: 1
       shell: bash
       run: uvx nox -s 'test_next-${{ matrix.python-version }}(${{ matrix.codegen-factor }}, cpu, ${{ matrix.mesh-factor }})'

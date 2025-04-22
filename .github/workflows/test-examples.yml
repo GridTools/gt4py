@@ -19,6 +19,7 @@ jobs:
     - id: get-versions
       uses: ./.github/actions/get-python-versions
 
+  # Main job that runs the tests
   test-notebooks:
     needs: get-python-versions
     strategy:
