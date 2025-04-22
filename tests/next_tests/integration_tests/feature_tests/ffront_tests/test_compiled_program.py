@@ -10,13 +10,26 @@ import numpy as np
 import pytest
 
 from gt4py import next as gtx
-from gt4py.next.ffront.fbuiltins import int32
+from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import cartesian_case
+from next_tests.integration_tests.cases import (
+    cartesian_case,
+    unstructured_case,
+    V2E,
+    mesh_descriptor,
+)
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
+    simple_mesh,
+    skip_value_mesh,
+    MeshDescriptor,
 )
+
+
+# @pytest.fixture
+# def mesh_descriptor(exec_alloc_descriptor) -> MeshDescriptor:
+#     yield simple_mesh(exec_alloc_descriptor.allocator)
 
 
 def _always_raise_callable(*args, **kwargs) -> None:
@@ -111,6 +124,131 @@ def test_compile_scan(cartesian_case, compile_testee_scan):
 
     compile_testee_scan(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
     assert np.allclose(kwargs["out"].ndarray, np.cumsum(args[0].ndarray))
+
+
+@pytest.fixture
+def compile_testee_unstructured(unstructured_case):
+    if unstructured_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    @gtx.field_operator
+    def testee_op(
+        e: cases.EField,
+    ) -> cases.VField:
+        return neighbor_sum(e(V2E), axis=cases.V2EDim)
+
+    @gtx.program(backend=unstructured_case.backend)
+    def testee(
+        e: cases.EField,
+        out: cases.VField,
+    ):
+        testee_op(e, out=out)
+
+    return testee
+
+
+def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
+    if unstructured_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    compile_testee_unstructured.compile(
+        offset_provider_type=unstructured_case.offset_provider,
+    )
+
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+
+    # make sure the backend is never called
+    object.__setattr__(compile_testee_unstructured, "backend", _always_raise_callable)
+
+    compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
+
+    v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
+    assert np.allclose(
+        kwargs["out"].asnumpy(),
+        np.sum(np.where(v2e_numpy != -1, args[0].asnumpy()[v2e_numpy], 0), axis=1),
+    )
+
+
+# override mesh descriptor to contain only the simple mesh
+@pytest.fixture
+def mesh_descriptor(exec_alloc_descriptor):
+    return simple_mesh(exec_alloc_descriptor.allocator)
+
+
+@pytest.fixture
+def skip_value_mesh_descriptor(exec_alloc_descriptor):
+    return skip_value_mesh(exec_alloc_descriptor.allocator)
+
+
+def test_compile_unstructured_jit(
+    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+):
+    if unstructured_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+    object.__setattr__(compile_testee_unstructured, "enable_jit", True)
+
+    # compiled for skip_value_mesh
+    compile_testee_unstructured.compile(
+        offset_provider_type=skip_value_mesh_descriptor.offset_provider,
+    )
+
+    # but executing the simple_mesh
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+    compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
+
+    v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
+    assert np.allclose(
+        kwargs["out"].asnumpy(),
+        np.sum(np.where(v2e_numpy != -1, args[0].asnumpy()[v2e_numpy], 0), axis=1),
+    )
+
+
+def test_compile_unstructured_wrong_offset_provider(
+    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+):
+    if unstructured_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
+
+    # compiled for skip_value_mesh
+    compile_testee_unstructured.compile(
+        offset_provider_type=skip_value_mesh_descriptor.offset_provider,
+    )
+
+    # but executing the simple_mesh
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+
+    # make sure the backend is never called
+    object.__setattr__(compile_testee_unstructured, "backend", _always_raise_callable)
+
+    with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
+        compile_testee_unstructured(
+            *args, offset_provider=unstructured_case.offset_provider, **kwargs
+        )
+
+
+def test_compile_unstructured_modified_offset_provider(
+    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+):
+    if unstructured_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
+
+    # compiled for skip_value_mesh
+    compile_testee_unstructured.compile(
+        offset_provider_type=skip_value_mesh_descriptor.offset_provider,
+    )
+
+    # but executing the simple_mesh
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+
+    # make sure the backend is never called
+    object.__setattr__(compile_testee_unstructured, "backend", _always_raise_callable)
+
+    with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
+        compile_testee_unstructured(
+            *args, offset_provider=unstructured_case.offset_provider, **kwargs
+        )
 
 
 @pytest.fixture
@@ -316,7 +454,5 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
     assert np.allclose(out.asnumpy(), field_a.asnumpy() * 3 + field_b.asnumpy() * 4)
 
 
-# TODO add test for static tuple values
-# TODO test for different offset_provider
 # TODO add jit only test by specifying static_args
 # TODO test without size_arguments (i.e. concrete domain)
