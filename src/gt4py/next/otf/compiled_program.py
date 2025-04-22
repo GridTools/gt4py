@@ -10,10 +10,11 @@ import concurrent.futures
 import dataclasses
 import functools
 import itertools
+from collections.abc import Sequence
 from typing import Any, TypeAlias
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend, common, config
+from gt4py.next import backend as gtx_backend, common, config
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info
@@ -36,32 +37,45 @@ class _CompiledProgramsKey:
         return hash((self.values, tuple(self.offset_provider_type.items())))
 
 
-@dataclasses.dataclass
 class CompiledPrograms:
-    backend: backend.Backend
+    backend: gtx_backend.Backend
     definition_stage: ffront_stages.ProgramDefinition
     program_type: ts_ffront.ProgramType
-    static_arg_indices: tuple[int, ...] | None = None
+    _static_arg_indices: tuple[int, ...] | None = None
 
     _compiled_programs: dict[
         _CompiledProgramsKey,
         stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
-    ] = dataclasses.field(default_factory=dict)
+    ]
 
-    def __post_init__(self) -> None:
+    def __init__(
+        self,
+        backend: gtx_backend.Backend,
+        definition_stage: ffront_stages.ProgramDefinition,
+        program_type: ts_ffront.ProgramType,
+        static_params: Sequence[str] | None = None,
+    ) -> None:
+        self.backend = backend
+        self.definition_stage = definition_stage
+        self.program_type = program_type
+
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
         assert not self.program_type.definition.kw_only_args
         assert not self.program_type.definition.pos_only_args
 
+        if static_params is not None:
+            self._init_static_arg_indices(static_params)
+        self._compiled_programs = {}
+
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
     ) -> None:
-        assert self.static_arg_indices is not None
+        assert self._static_arg_indices is not None
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
         offset_provider_type = _offset_provider_to_type_unsafe(offset_provider)
         key = _CompiledProgramsKey(
-            tuple(args[i] for i in self.static_arg_indices),
+            tuple(args[i] for i in self._static_arg_indices),
             offset_provider_type,
         )
         try:
@@ -72,7 +86,7 @@ class CompiledPrograms:
             program(*args, **kwargs, offset_provider=offset_provider)
         except KeyError as e:
             if enable_jit:
-                static_values = tuple(args[i] for i in self.static_arg_indices)
+                static_values = tuple(args[i] for i in self._static_arg_indices)
                 self._compile_variant(
                     static_values=static_values, offset_provider_type=offset_provider
                 )
@@ -81,13 +95,27 @@ class CompiledPrograms:
                 )  # passing `enable_jit=False` as a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 
+    def _init_static_arg_indices(self, static_params: Sequence[str]) -> None:
+        """
+        Initializes the static argument indices for this program.
+        """
+        arg_types_dict = self.program_type.definition.pos_or_kw_args
+        static_args_indices = tuple(
+            sorted(list(arg_types_dict.keys()).index(k) for k in static_params)
+        )
+
+        if self._static_arg_indices is None:
+            self._static_arg_indices = static_args_indices
+        elif self._static_arg_indices != static_args_indices:
+            raise ValueError("Static arguments must be the same for all compiled programs.")
+
     def _compile_variant(
         self,
         static_values: tuple[ScalarOrTupleOfScalars, ...],
         offset_provider_type: common.OffsetProviderType | common.OffsetProvider,
     ) -> None:
-        assert self.static_arg_indices is not None
-        index_to_value = dict(zip(self.static_arg_indices, static_values))
+        assert self._static_arg_indices is not None
+        index_to_value = dict(zip(self._static_arg_indices, static_values))
         args = tuple(
             type_
             if i not in index_to_value
@@ -117,16 +145,7 @@ class CompiledPrograms:
         offset_provider_type: common.OffsetProvider | common.OffsetProviderType,
         **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
     ) -> None:
-        arg_types_dict = self.program_type.definition.pos_or_kw_args
-
-        static_args_indices = tuple(
-            sorted(list(arg_types_dict.keys()).index(k) for k in static_args.keys())
-        )
-
-        if self.static_arg_indices is None:
-            self.static_arg_indices = static_args_indices
-        elif self.static_arg_indices != static_args_indices:
-            raise ValueError("Static arguments must be the same for all compiled programs.")
+        self._init_static_arg_indices(static_params=tuple(static_args.keys()))
 
         for static_values in itertools.product(*static_args.values()):
             self._compile_variant(tuple(static_values), offset_provider_type)
@@ -137,6 +156,15 @@ class CompiledPrograms:
         result = program.result()
         self._compiled_programs[key] = result
         return result
+
+    @functools.cached_property
+    def static_params(self) -> tuple[str, ...]:
+        """
+        Returns the names of the static parameters for this program.
+        """
+        names = tuple(self.program_type.definition.pos_or_kw_args.keys())
+        assert self._static_arg_indices is not None
+        return tuple(names[i] for i in self._static_arg_indices)
 
 
 def _offset_provider_to_type_unsafe(
