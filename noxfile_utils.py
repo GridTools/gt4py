@@ -34,13 +34,11 @@ import unittest.mock
 import nox
 import nox.registry
 
-PROJECT_PREFIX: Final = "GT4PY"
+ENV_VAR_PREFIX: Final = f"{prefix}_" if (prefix := os.environ.get("CI_NOX_PREFIX", "")) else ""
+ENV_VAR_RUN_ONLY_IF_CHANGED_FROM: Final = f"{ENV_VAR_PREFIX}CI_NOX_RUN_ONLY_IF_CHANGED_FROM"
+ENV_VAR_VERBOSE: Final = f"{ENV_VAR_PREFIX}CI_NOX_VERBOSE"
 
-# GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM
-CI_SOURCE_COMMIT_ENV_VAR_NAME: Final = f"{PROJECT_PREFIX}_CI_NOX_RUN_ONLY_IF_CHANGED_FROM"
-
-# GT4PY_CI_NOX_VERBOSE
-VERBOSE_MODE: Final = os.environ.get(f"{PROJECT_PREFIX}_CI_NOX_VERBOSE", "").lower() in [
+VERBOSE: Final = os.environ.get(ENV_VAR_VERBOSE, "").lower() in [
     "1",
     "on",
     "true",
@@ -128,7 +126,15 @@ def install_session_venv(
     extras: Sequence[str] = (),
     groups: Sequence[str] = (),
 ) -> None:
-    """Install session packages using uv."""
+    """
+    Install session packages using the `uv` tool.
+    
+    Args:
+        session: The Nox session object.
+        *args: Additional packages to install in the session (via `uv pip install`)
+        extras: Names of package's extras to install.
+        groups: Names of dependency groups to install.
+    """
 
     unversioned_session_name = session.name.split("-")[0]
     metadata = _metadata_registry.get(unversioned_session_name, None)
@@ -140,7 +146,7 @@ def install_session_venv(
         for key in _filter_names(os.environ.keys(), env_vars, ignore_env_vars)
     } | {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location}
 
-    if VERBOSE_MODE:
+    if VERBOSE:
         print(
             f"\n[{session.name}]:\n"
             f"  - Allow env variables patterns: {env_vars}\n"
@@ -165,7 +171,7 @@ def install_session_venv(
             "pip",
             "install",
             *((item,) if isinstance(item, str) else item),
-            env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
+            env=env,
         )
 
 
@@ -193,9 +199,9 @@ def _is_skippable_session(session: nox.Session) -> bool:
     Notes:
         - Uses environment variables to get the commit target and the verbose mode.
         - Uses git diff to find changed files from the commit specified in the environment variable.
-        - When VERBOSE_MODE is enabled, prints detailed information about the decision process.
+        - When VERBOSE is enabled, prints detailed information about the decision process.
     """
-    commit_spec = os.environ.get(CI_SOURCE_COMMIT_ENV_VAR_NAME, "")
+    commit_spec = os.environ.get(ENV_VAR_RUN_ONLY_IF_CHANGED_FROM, "")
     if not commit_spec:
         return False
 
@@ -206,7 +212,7 @@ def _is_skippable_session(session: nox.Session) -> bool:
         _changed_files_from_commit[commit_spec] = out.strip().split("\n")
 
     changed_files = _changed_files_from_commit[commit_spec]
-    if VERBOSE_MODE:
+    if VERBOSE:
         print(f"Modified files from '{commit_spec}': {changed_files}", file=sys.stderr)
 
     unversioned_session_name = session.name.split("-")[0]
@@ -215,7 +221,7 @@ def _is_skippable_session(session: nox.Session) -> bool:
     ignore_paths = metadata.ignore_paths if metadata else ()
 
     relevant_files = _filter_names(changed_files, paths, ignore_paths)
-    if VERBOSE_MODE:
+    if VERBOSE:
         print(
             f"\n[{session.name}]:\n"
             f"  - File include patterns: {paths}\n"
@@ -256,32 +262,28 @@ class NoxUtilsTestCase(unittest.TestCase):
         )
 
         # Source commit defined, `git diff` already cached
-        with unittest.mock.patch.dict(os.environ, {CI_SOURCE_COMMIT_ENV_VAR_NAME: "main"}):
+        with unittest.mock.patch.dict(os.environ, {ENV_VAR_RUN_ONLY_IF_CHANGED_FROM: "main"}):
             session = unittest.mock.Mock()
             session.name = "test_session-3.10(param1=foo,param2=bar)"
 
-            # Only included paths
             _changed_files_from_commit["main"] = ["src/foo.py"]
             self.assertFalse(_is_skippable_session(session))
 
-            # Included and excluded paths
             _changed_files_from_commit["main"] = ["src/foo.py", "tests/test_foo.py"]
             self.assertFalse(_is_skippable_session(session))
 
-            # Only excluded paths
             _changed_files_from_commit["main"] = ["tests/test_foo.py"]
             self.assertTrue(_is_skippable_session(session))
 
-            # Not included or excluded
             _changed_files_from_commit["main"] = ["docs/readme.md"]
             self.assertTrue(_is_skippable_session(session))
 
-            # Already cached: no need to run `git diff`
+            # No need to run `git diff`, already cached 
             session.run.assert_not_called()
 
         # Source commit defined, `git diff` not cached
         with unittest.mock.patch.dict(
-            os.environ, {CI_SOURCE_COMMIT_ENV_VAR_NAME: "not_cached_commit"}
+            os.environ, {ENV_VAR_RUN_ONLY_IF_CHANGED_FROM: "not_cached_commit"}
         ):
             session = unittest.mock.Mock(run=lambda *args, **kwargs: "src/bar.py\nsrc/baz.py")
             session.name = "test_session-3.10(param1=foo,param2=bar)"

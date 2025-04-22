@@ -18,7 +18,7 @@ from typing import Any, Final, Literal, TypeAlias
 import nox
 
 # Hack to load companion `noxfile_utils.py` from the same directory as this file
-# without modifying `sys.path` in the global scope.
+# using a temporary change to `sys.path`.
 with mock.patch("sys.path", [f"{pathlib.Path(__file__).parent!s}", *sys.path]):
     import noxfile_utils as nox_utils
 
@@ -304,6 +304,14 @@ def test_storage(
         str(pathlib.Path("src") / "gt4py" / "storage"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
+
+
+@nox.session(python=PYTHON_VERSIONS, tags=["infrastructure"])
+def test_noxfile_utils(session: nox.Session) -> None:
+    """Run custom nox utilities tests."""
+
+    session.install("nox")
+    session.run(*"python noxfile_utils.py".split(), *session.posargs)
 
 
 if __name__ == "__main__":
