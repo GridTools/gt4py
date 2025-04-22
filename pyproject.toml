@@ -93,7 +93,7 @@ dependencies = [
   'factory-boy>=3.3.0',
   "flufl-lock>=8.1.0",
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.8,==2.*',
+  'gridtools-cpp>=2.3.9,==2.*',
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.1',

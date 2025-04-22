@@ -254,7 +254,7 @@ class CollapseTuple(
             cpm.is_call_to(arg, "tuple_get") for arg in node.args
         ):
             # `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
-            assert isinstance(node.args[0], itir.FunCall)
+            assert len(node.args) > 0 and isinstance(node.args[0], itir.FunCall)
             first_expr = node.args[0].args[1]
 
             for i, v in enumerate(node.args):
@@ -430,16 +430,19 @@ class CollapseTuple(
                 ]
                 f_args = [im.ref(param.id, param.type) for param in f_params]
                 f_body = ir_misc.with_altered_arg(node, i, im.make_tuple(*f_args))
+
+                # if the function is not trivial the transformation would create a larger tree
+                # after inlining so we skip transformation this argument.
+                if not _is_trivial_or_tuple_thereof_expr(f_body):
+                    continue
+
                 # simplify, e.g., inline trivial make_tuple args
                 new_f_body = self.fp_transform(f_body, **kwargs)
                 # if the continuation did not simplify there is nothing to gain. Skip
                 # transformation of this argument.
                 if new_f_body is f_body:
                     continue
-                # if the function is not trivial the transformation we would create a larger tree
-                # after inlining so we skip transformation this argument.
-                if not _is_trivial_or_tuple_thereof_expr(new_f_body):
-                    continue
+
                 f = im.lambda_(*f_params)(new_f_body)
 
                 # this is the symbol refering to the tuple value inside the two branches of the
