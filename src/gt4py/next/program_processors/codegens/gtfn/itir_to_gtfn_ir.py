@@ -609,11 +609,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             node.expr = im.as_fieldop("deref", node.domain)(node.expr)
 
         itir_projector, extracted_expr = ir_utils_misc.extract_projector(node.expr)
-        projector = (
-            self.visit(itir_projector)
-            if itir_projector is not None
-            else self.visit(im.lambda_("_proj")(im.ref("_proj")))  # identity
-        )
+        projector = self.visit(itir_projector) if itir_projector is not None else None
         node.expr = extracted_expr
 
         assert cpm.is_applied_as_fieldop(node.expr), node.expr
@@ -669,7 +665,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 args=[self._visit_output_argument(node.target), *lowered_inputs],
                 axis=SymRef(id=column_axis.value),
             )
-        assert projector is None
+        assert projector is None  # only scans have projectors
         return StencilExecution(
             stencil=self.visit(
                 stencil,
