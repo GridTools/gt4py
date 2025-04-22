@@ -85,7 +85,7 @@ CodeGenNextTestSettings = CodeGenTestSettings | {
     python=PYTHON_VERSIONS,
     tags=["cartesian"],
     env_vars=["NUM_PROCESSES"],
-    ignore_paths=[  # Skip when only gt4py.next or doc files have been updated
+    ignore_paths=[  # In CI mode, skip when only gt4py.next or doc files have been updated
         "src/gt4py/next/*",
         "tests/next_tests/**",
         "examples/**",
@@ -110,6 +110,7 @@ def test_cartesian(
         extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
         groups=["test"],
     )
+    env = nox_utils.make_session_env(session)
 
     num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
@@ -119,10 +120,12 @@ def test_cartesian(
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
+        env=env,
     )
     session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "cartesian"),
+        env=env,
     )
 
 
@@ -130,7 +133,7 @@ def test_cartesian(
     python=PYTHON_VERSIONS,
     tags=["cartesian", "next", "cpu"],
     env_vars=["NUM_PROCESSES"],
-    paths=[  # Run when gt4py.eve files (or package settings) are changed
+    paths=[  # In CI mode, run when gt4py.eve files (or package settings) are changed
         "src/gt4py/eve/*",
         "tests/eve_tests/*",
         ".github/workflows/*",
@@ -144,6 +147,7 @@ def test_eve(session: nox.Session) -> None:
     """Run 'gt4py.eve' tests."""
 
     nox_utils.install_session_venv(session, groups=["test"])
+    env = nox_utils.make_session_env(session)
 
     num_processes = session.env.get("NUM_PROCESSES", "auto")
 
@@ -151,10 +155,12 @@ def test_eve(session: nox.Session) -> None:
         *f"pytest --cache-clear -sv -n {num_processes}".split(),
         str(pathlib.Path("tests") / "eve_tests"),
         *session.posargs,
+        env=env,
     )
     session.run(
         *"pytest --doctest-modules -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "eve"),
+        env=env,
     )
 
 
@@ -163,9 +169,10 @@ def test_examples(session: nox.Session) -> None:
     """Run and test documentation workflows."""
 
     nox_utils.install_session_venv(session, extras=["testing"], groups=["docs", "test"])
+    env = nox_utils.make_session_env(session)
 
-    session.run(*"jupytext docs/user/next/QuickstartGuide.md --to .ipynb".split())
-    session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split())
+    session.run(*"jupytext docs/user/next/QuickstartGuide.md --to .ipynb".split(), env=env)
+    session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split(), env=env)
 
     for notebook, extra_args in [
         ("docs/user/next/workshop/slides", None),
@@ -177,6 +184,7 @@ def test_examples(session: nox.Session) -> None:
         session.run(
             *f"pytest --nbmake {notebook} -sv -n 1 --benchmark-disable".split(),
             *(extra_args or []),
+            env=env,
         )
 
 
@@ -184,7 +192,7 @@ def test_examples(session: nox.Session) -> None:
     python=PYTHON_VERSIONS,
     tags=["next"],
     env_vars=["NUM_PROCESSES"],
-    ignore_paths=[  # Skip when only gt4py.cartesian or doc files have been updated
+    ignore_paths=[  # In CI mode, skip when only gt4py.cartesian or doc files have been updated
         "src/gt4py/cartesian/**",
         "tests/cartesian_tests/**",
         "examples/**",
@@ -226,6 +234,7 @@ def test_next(
         extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
         groups=groups,
     )
+    env = nox_utils.make_session_env(session)
 
     num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
@@ -236,11 +245,13 @@ def test_next(
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+        env=env,
     )
     session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "next"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+        env=env,
     )
 
 
@@ -249,11 +260,13 @@ def test_package(session: nox.Session) -> None:
     """Run 'gt4py' package level tests."""
 
     nox_utils.install_session_venv(session, groups=["test"])
+    env = nox_utils.make_session_env(session)
 
     session.run(
         *"pytest --cache-clear -sv".split(),
         str(pathlib.Path("tests") / "package_tests"),
         *session.posargs,
+        env=env,
     )
 
     modules = [str(path) for path in (pathlib.Path("src") / "gt4py").glob("*.py")]
@@ -261,6 +274,7 @@ def test_package(session: nox.Session) -> None:
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         *modules,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+        env=env,
     )
 
 
@@ -268,7 +282,7 @@ def test_package(session: nox.Session) -> None:
     python=PYTHON_VERSIONS,
     tags=["cartesian", "next"],
     env_vars=["NUM_PROCESSES"],
-    paths=[  # Run when gt4py.storage files (or package settings) are changed
+    paths=[  # In CI mode, run when gt4py.storage files (or package settings) are changed
         "src/gt4py/storage/**",
         "src/gt4py/cartesian/backend/**",  # For DaCe storages
         "tests/storage_tests/**",
@@ -291,6 +305,7 @@ def test_storage(
     nox_utils.install_session_venv(
         session, extras=["performance", "testing", *device_settings["extras"]], groups=["test"]
     )
+    env = nox_utils.make_session_env(session)
 
     num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(device_settings["markers"])
@@ -300,11 +315,13 @@ def test_storage(
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,
+        env=env,
     )
     session.run(
         *"pytest --doctest-modules -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "storage"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+        env=env,
     )
 
 

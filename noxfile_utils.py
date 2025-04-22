@@ -120,6 +120,44 @@ def customize_session(
     return decorator
 
 
+def make_session_env(session: nox.Session, **kwargs: str) -> dict[str, str]:
+    """Create an environment dictionary for a nox session.
+
+    This function builds an environment dictionary for a nox session based on registered metadata.
+    It filters environment variables according to allowed and ignored patterns defined in the
+    session metadata, and combines them with any additional key-value pairs provided.
+
+    Args:
+        session: The nox session for which to create the environment.
+        **kwargs: Additional environment variables to include in the returned dictionary.
+
+    Returns:
+        A dictionary containing the filtered environment variables from the current
+        environment, combined with any provided kwargs.
+    """
+    unversioned_session_name = session.name.split("-")[0]
+    metadata = _metadata_registry.get(unversioned_session_name, None)
+    env_vars = metadata.env_vars if metadata else ()
+    ignore_env_vars = metadata.ignore_env_vars if metadata else ()
+
+    env = {
+        key: os.environ.get(key)
+        for key in _filter_names(os.environ.keys(), env_vars, ignore_env_vars)
+    } | kwargs
+
+    if VERBOSE:
+        print(
+            f"\n[{session.name}]:\n"
+            f"  - Allow env variables patterns: {env_vars}\n"
+            f"  - Ignore env variables patterns: {ignore_env_vars}\n"
+            f"\n[{session.name}]:\n"
+            f"  - Environment: {env}\n",
+            file=sys.stderr,
+        )
+
+    return env
+
+
 def install_session_venv(
     session: nox.Session,
     *args: str | Sequence[str],
@@ -136,26 +174,7 @@ def install_session_venv(
         groups: Names of dependency groups to install.
     """
 
-    unversioned_session_name = session.name.split("-")[0]
-    metadata = _metadata_registry.get(unversioned_session_name, None)
-    env_vars = metadata.env_vars if metadata else ()
-    ignore_env_vars = metadata.ignore_env_vars if metadata else ()
-
-    env = {
-        key: os.environ.get(key)
-        for key in _filter_names(os.environ.keys(), env_vars, ignore_env_vars)
-    } | {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location}
-
-    if VERBOSE:
-        print(
-            f"\n[{session.name}]:\n"
-            f"  - Allow env variables patterns: {env_vars}\n"
-            f"  - Ignore env variables patterns: {ignore_env_vars}\n"
-            f"\n[{session.name}]:\n"
-            f"  - Environment: {env}\n",
-            file=sys.stderr,
-        )
-
+    env = make_session_env(session, UV_PROJECT_ENVIRONMENT=session.virtualenv.location)
     session.run_install(
         "uv",
         "sync",
