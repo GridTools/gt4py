@@ -131,13 +131,14 @@ class BindingCodeGenerator(TemplatedGenerator):
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
             }
-            {{body}}
+            auto gt4py_res_ = {{body}}
             if (exec_info.has_value()) {
                 {% if _this_node.device %}cudaDeviceSynchronize();{% endif %}
                 exec_info->operator[]("run_cpp_end_time") = static_cast<double>(
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
             }
+            return gt4py_res_;
         }\
         """
     )
