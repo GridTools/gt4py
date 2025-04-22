@@ -50,6 +50,19 @@ def compile_testee(cartesian_case):
 
 
 @pytest.fixture
+def compile_testee_domain(cartesian_case):
+    @gtx.field_operator
+    def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
+        return a + b
+
+    @gtx.program(backend=cartesian_case.backend)
+    def testee(a: cases.IField, b: cases.IField, out: cases.IField, isize: gtx.int32):
+        testee_op(a, b, out=out, domain={cases.IDim: (0, isize)})
+
+    return testee
+
+
+@pytest.fixture
 def compile_testee_scan(cartesian_case):
     @gtx.scan_operator(axis=cases.KDim, forward=True, init=0)
     def testee_op(carry: gtx.int32, inp: gtx.int32) -> gtx.int32:
@@ -124,6 +137,28 @@ def test_compile_scan(cartesian_case, compile_testee_scan):
 
     compile_testee_scan(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
     assert np.allclose(kwargs["out"].ndarray, np.cumsum(args[0].ndarray))
+
+
+def test_compile_domain(cartesian_case, compile_testee_domain):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    assert not compile_testee_domain._compiled_programs
+    compile_testee_domain.compile(offset_provider_type=cartesian_case.offset_provider)
+    assert compile_testee_domain._compiled_programs
+
+    args, kwargs = cases.get_default_data(cartesian_case, compile_testee_domain)
+
+    # make sure the backend is never called
+    object.__setattr__(compile_testee_domain, "backend", _always_raise_callable)
+
+    compile_testee_domain(
+        *args[:-1],
+        isize=cartesian_case.default_sizes[cases.IDim],
+        offset_provider=cartesian_case.offset_provider,
+        **kwargs,
+    )
+    assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
 
 
 @pytest.fixture
@@ -455,4 +490,3 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
 
 
 # TODO add jit only test by specifying static_args
-# TODO test without size_arguments (i.e. concrete domain)
