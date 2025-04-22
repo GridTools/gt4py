@@ -128,7 +128,7 @@ def install_session_venv(
 ) -> None:
     """
     Install session packages using the `uv` tool.
-    
+
     Args:
         session: The Nox session object.
         *args: Additional packages to install in the session (via `uv pip install`)
@@ -278,7 +278,7 @@ class NoxUtilsTestCase(unittest.TestCase):
             _changed_files_from_commit["main"] = ["docs/readme.md"]
             self.assertTrue(_is_skippable_session(session))
 
-            # No need to run `git diff`, already cached 
+            # No need to run `git diff`, already cached
             session.run.assert_not_called()
 
         # Source commit defined, `git diff` not cached

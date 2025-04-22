@@ -43,6 +43,8 @@ nox.options.sessions = [
     "test_package-3.11",
     "test_storage-3.10(cpu)",
     "test_storage-3.11(cpu)",
+    "test_noxfile_utils-3.10",
+    "test_noxfile_utils-3.11",
 ]
 
 
