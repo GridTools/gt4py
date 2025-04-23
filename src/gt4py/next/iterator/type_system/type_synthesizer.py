@@ -406,7 +406,7 @@ def as_fieldop(
 
         if not domain:
             deduced_domain = None
-            output_dims = set()
+            output_dims: list[common.Dimension] = []
             if offset_provider_type is not None:
                 for i, field in enumerate(new_fields):
                     for el in type_info.primitive_constituents(field):
@@ -415,15 +415,15 @@ def as_fieldop(
                             for shift_tuple in shift_results[
                                 i
                             ]:  # Use shift tuple corresponding to the input field
-                                output_dims.update(
+                                output_dims = common.promote_dims(
+                                    output_dims,
                                     _resolve_dimensions(
                                         input_dims, shift_tuple, offset_provider_type
-                                    )
+                                    ),
                                 )
 
                             assert all(isinstance(dim, common.Dimension) for dim in output_dims)
-                            output_dims_sorted = common.ordered_dims(output_dims)
-                            deduced_domain = it_ts.DomainType(dims=list(output_dims_sorted))
+                            deduced_domain = it_ts.DomainType(dims=list(output_dims))
 
             if deduced_domain:
                 domain = deduced_domain
