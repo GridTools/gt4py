@@ -856,13 +856,24 @@ class MapFusion(transformation.SingleStateTransformation):
                 # We have a Passthrough connection, i.e. there exists a matching `OUT_`.
                 old_conn = edge_to_move.dst_conn[3:]  # The connection name without prefix
                 new_conn = to_node.next_connector(old_conn)
-
-                to_node.add_in_connector("IN_" + new_conn)
-                for e in list(state.in_edges_by_connector(from_node, "IN_" + old_conn)):
-                    helpers.redirect_edge(state, e, new_dst=to_node, new_dst_conn="IN_" + new_conn)
-                to_node.add_out_connector("OUT_" + new_conn)
-                for e in list(state.out_edges_by_connector(from_node, "OUT_" + old_conn)):
-                    helpers.redirect_edge(state, e, new_src=to_node, new_src_conn="OUT_" + new_conn)
+                for iedge in state.in_edges(to_node):
+                    if iedge.data.data == edge_to_move.data.data:
+                        dst_in_conn = iedge.dst_conn
+                        break
+                else:
+                    dst_in_conn = f"IN_{new_conn}"
+                    to_node.add_in_connector(dst_in_conn)
+                    for e in list(state.in_edges_by_connector(from_node, f"IN_{old_conn}")):
+                        helpers.redirect_edge(state, e, new_dst=to_node, new_dst_conn=dst_in_conn)
+                for oedge in state.out_edges(to_node):
+                    if oedge.data.data == edge_to_move.data.data:
+                        dst_out_conn = oedge.src_conn
+                        break
+                else:
+                    dst_out_conn = f"OUT_{new_conn}"
+                    to_node.add_out_connector(dst_out_conn)
+                    for e in list(state.out_edges_by_connector(from_node, f"OUT_{old_conn}")):
+                        helpers.redirect_edge(state, e, new_src=to_node, new_src_conn=dst_out_conn)
                 from_node.remove_in_connector("IN_" + old_conn)
                 from_node.remove_out_connector("OUT_" + old_conn)
 
