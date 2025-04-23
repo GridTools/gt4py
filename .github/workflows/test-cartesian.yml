@@ -37,6 +37,8 @@ jobs:
         codegen-factor: [internal, dace]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
+    env:
+      CXX: g++
 
     runs-on: ubuntu-24.04
     steps:
