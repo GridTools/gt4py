@@ -85,13 +85,13 @@ class MapRangeSplit(dace_transformation.SingleStateTransformation):
     """
 
     def split_maps(
-            self,
-            graph: Union[dace.SDFGState, dace.SDFG],
-            sdfg: dace.SDFG,
-            first_map_entry: dace_nodes.MapEntry,
-            first_map_exit: dace_nodes.MapExit,
-            second_map_entry: dace_nodes.MapEntry,
-            second_map_exit: dace_nodes.MapExit,
+        self,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
+        first_map_entry: dace_nodes.MapEntry,
+        first_map_exit: dace_nodes.MapExit,
+        second_map_entry: dace_nodes.MapEntry,
+        second_map_exit: dace_nodes.MapExit,
     ) -> None:
         """Split the map range in order to obtain an overlapping range between the first and second map."""
         splitted_range = map_fusion_utils.split_overlapping_map_range(
@@ -138,9 +138,7 @@ class MapRangeHorizontalSplit(MapRangeSplit):
     @classmethod
     def expressions(cls) -> Any:
         map_fusion_parallel_match = dace_graph.OrderedMultiDiConnectorGraph()
-        map_fusion_parallel_match.add_nodes_from(
-            [cls.first_map_entry, cls.second_map_entry]
-        )
+        map_fusion_parallel_match.add_nodes_from([cls.first_map_entry, cls.second_map_entry])
         return [map_fusion_parallel_match]
 
     def can_be_applied(
@@ -170,7 +168,9 @@ class MapRangeHorizontalSplit(MapRangeSplit):
         second_map_entry: dace_nodes.MapEntry = self.second_map_entry
         second_map_exit: dace_nodes.MapExit = graph.exit_node(second_map_entry)
 
-        self.split_maps(graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit)
+        self.split_maps(
+            graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit
+        )
 
 
 @dace_properties.make_properties
@@ -226,4 +226,6 @@ class MapRangeVerticalSplit(MapRangeSplit):
         second_map_entry: dace_nodes.MapEntry = self.entry_second_map
         second_map_exit: dace_nodes.MapExit = graph.exit_node(self.entry_second_map)
 
-        self.split_maps(graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit)
+        self.split_maps(
+            graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit
+        )
