@@ -148,8 +148,20 @@ class MapRangeHorizontalSplit(MapRangeSplit):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        first_map: dace_nodes.Map = self.first_map_entry.map
-        second_map: dace_nodes.Map = self.second_map_entry.map
+        first_map_entry: dace_nodes.MapEntry = self.first_map_entry
+        second_map_entry: dace_nodes.MapEntry = self.second_map_entry
+        first_map: dace_nodes.Map = first_map_entry.map
+        second_map: dace_nodes.Map = second_map_entry.map
+
+        shared_edge_exists = False
+        for iedge1 in graph.in_edges(first_map_entry):
+            for iedge2 in graph.in_edges(second_map_entry):
+                if iedge1.src.label == iedge2.src.label:
+                    shared_edge_exists = True
+                    break
+
+        if not shared_edge_exists:
+            return False
 
         splitted_range = map_fusion_utils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
