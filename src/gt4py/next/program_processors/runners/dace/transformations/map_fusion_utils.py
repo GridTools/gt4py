@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import itertools
+from typing import Optional
 
 import dace
 from dace import subsets as dace_subsets
@@ -21,7 +22,7 @@ def copy_map_graph(
     graph: dace.SDFGState,
     map_entry: dace_nodes.MapEntry,
     map_exit: dace_nodes.MapExit,
-    suffix: str,
+    suffix: Optional[str] = None,
 ) -> tuple[dace_nodes.MapEntry, dace_nodes.MapExit]:
     """Performs a full copy of the map graph.
 
@@ -38,6 +39,10 @@ def copy_map_graph(
     Returns:
         A tuple of map entry and exit nodes, for the new map.
     """
+
+    def _new_name(old_name: str) -> str:
+        return old_name if suffix is None else f"{old_name}_{suffix}"
+
     new_nodes = {}
     new_data_names = {}
     new_data_descriptors = {}
@@ -56,7 +61,7 @@ def copy_map_graph(
             if isinstance(data_desc, (dace.data.Array, dace.data.Scalar)):
                 new_data_desc = data_desc.clone()
                 new_data_name = sdfg.add_datadesc(
-                    f"{data_name}_{suffix}", new_data_desc, find_new_name=True
+                    _new_name(data_name), new_data_desc, find_new_name=True
                 )
             else:
                 raise ValueError(f"Unsupported data type: {type(data_desc)}")
@@ -78,9 +83,9 @@ def copy_map_graph(
             node_ = copy.deepcopy(node)
             # change label to a unique name
             if isinstance(node, (dace_nodes.MapEntry, dace_nodes.MapExit)):
-                node_.map.label = f"{node.label}_{suffix}"
+                node_.map.label = _new_name(node.label)
             else:
-                node_.label = f"{node.label}_{suffix}"
+                node_.label = _new_name(node.label)
             graph.add_node(node_)
 
         new_nodes[node] = node_
