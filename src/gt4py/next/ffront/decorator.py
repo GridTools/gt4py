@@ -305,6 +305,7 @@ class Program:
             ),
             stacklevel=2,
         )
+        offset_provider = {**offset_provider, **self._implicit_offset_provider}
         with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
             # TODO: remove or make dependency on self.past_stage optional
             past_process_args._validate_args(
