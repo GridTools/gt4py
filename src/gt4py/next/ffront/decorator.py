@@ -296,7 +296,10 @@ class Program:
                 # they should call `.with_static_params()`.
                 object.__setattr__(self, "_static_params", ())
             self._init_compiled_programs()
-            return self.__call__(*args, offset_provider=offset_provider, **kwargs)  # try again
+            # Try again, make sure we are not calling the __call__ of a subclass.
+            # This would be cleaner if we would extract the call into a separate method at the cost
+            # of an additional indirection in the fast path.
+            return Program.__call__(self, *args, offset_provider=offset_provider, **kwargs)
 
         # embedded
         warnings.warn(
