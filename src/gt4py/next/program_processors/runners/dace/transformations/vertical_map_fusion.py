@@ -114,10 +114,7 @@ class MapRangeVerticalSplit(dace_transformation.SingleStateTransformation):
             )
 
         # remove the original first map
-        for node in graph.scope_subgraph(
-            first_map_entry, include_entry=True, include_exit=True
-        ).nodes():
-            graph.remove_node(node)
+        map_fusion_utils.delete_map(graph, first_map_entry, first_map_exit)
 
         # make copies of the second map with splitted ranges
         for i, r in enumerate(second_map_splitted_range):
@@ -126,10 +123,7 @@ class MapRangeVerticalSplit(dace_transformation.SingleStateTransformation):
             )
 
         # remove the original second map
-        for node in graph.scope_subgraph(
-            second_map_entry, include_entry=True, include_exit=True
-        ).nodes():
-            graph.remove_node(node)
+        map_fusion_utils.delete_map(graph, second_map_entry, second_map_exit)
 
         dace_propagation.propagate_memlets_state(sdfg, graph)
 

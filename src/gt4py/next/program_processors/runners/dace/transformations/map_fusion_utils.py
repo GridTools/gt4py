@@ -158,6 +158,20 @@ def copy_map_graph_with_new_range(
     return new_map_entry, new_map_exit
 
 
+def delete_map(
+    graph: dace.SDFGState, map_entry: dace_nodes.MapEntry, map_exit: dace_nodes.MapExit
+) -> None:
+    """Helper function to delete a map from a state graph.
+
+    Args:
+        graph: The SDFG state containing the map graph.
+        map_entry: The entry node of the map graph.
+        map_exit: The exit node of the map graph.
+    """
+    for node in graph.scope_subgraph(map_entry, include_entry=True, include_exit=True).nodes():
+        graph.remove_node(node)
+
+
 def split_overlapping_map_range(
     first_map: dace_nodes.Map,
     second_map: dace_nodes.Map,
