@@ -95,9 +95,9 @@ def test_copy_map_graph():
         (
             {"i": "0:M", "j": "0:N-1", "k": "3:7"},
             {"i": "1:M", "j": "0:N"},
-            {"0,0:N-1,3:7", "1:M,0:N-1,3:7"},
-            {"1:M,0:N-1", "1:M,N-1"},
-        ),  # overlapping, different ndrange parameters
+            {},
+            {},
+        ),  # overlapping but one extra ndrange parameter on first map, no splitting
     ],
 )
 def test_split_overlapping_map_range(map_ranges):
