@@ -19,12 +19,10 @@ def sample_metrics():
         "program1": metrics.RuntimeMetric(
             cpp=metrics.MetricAccumulator(values=[1.0, 2.0, 3.0]),
             total=metrics.MetricAccumulator(values=[4.0, 5.0, 6.0]),
-            transforms=metrics.MetricAccumulator(values=[7.0, 8.0, 9.0]),
         ),
         "program2": metrics.RuntimeMetric(
             cpp=metrics.MetricAccumulator(values=[10.0, 20.0, 30.0]),
             total=metrics.MetricAccumulator(values=[40.0, 50.0, 60.0]),
-            transforms=metrics.MetricAccumulator(values=[70.0, 80.0, 90.0]),
         ),
     }
 
@@ -64,7 +62,7 @@ def test_dump_json(sample_metrics, tmp_path):
     for metric in metrics.RuntimeMetric.metric_keys():
         assert metric in data["program1"]
     assert data["program1"]["cpp"] == [1.0, 2.0, 3.0]
-    assert data["program2"]["transforms"] == [70.0, 80.0, 90.0]
+    assert data["program2"]["total"] == [40.0, 50.0, 60.0]
 
 
 def test_dump_json_empty(empty_metrics, tmp_path):

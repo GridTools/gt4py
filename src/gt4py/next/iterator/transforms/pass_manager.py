@@ -6,11 +6,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import time
 from typing import Optional, Protocol
 
 from gt4py.eve import utils as eve_utils
-from gt4py.next import common, config, metrics
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
     fuse_as_fieldop,
@@ -57,8 +56,6 @@ def apply_common_transforms(
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
-    if config.COLLECT_METRICS:
-        start_time = time.thread_time()
     assert isinstance(ir, itir.Program)
 
     offset_provider_type = common.offset_provider_to_type(offset_provider)
@@ -178,17 +175,12 @@ def apply_common_transforms(
     )
 
     assert isinstance(ir, itir.Program)
-    if config.COLLECT_METRICS:
-        end_time = time.thread_time()
-        metrics.global_metric_container[ir.id].transforms.append(end_time - start_time)
     return ir
 
 
 def apply_fieldview_transforms(
     ir: itir.Program, *, offset_provider: common.OffsetProvider
 ) -> itir.Program:
-    if config.COLLECT_METRICS:
-        start_time = time.thread_time()
     ir = inline_fundefs.InlineFundefs().visit(ir)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
@@ -202,7 +194,4 @@ def apply_fieldview_transforms(
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     ir = prune_broadcast.PruneBroadcast.apply(ir)
-    if config.COLLECT_METRICS:
-        end_time = time.thread_time()
-        metrics.global_metric_container[ir.id].transforms.append(end_time - start_time)
     return ir

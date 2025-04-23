@@ -36,7 +36,6 @@ class MetricAccumulator:
 class RuntimeMetric:
     cpp: MetricAccumulator = dataclasses.field(default_factory=MetricAccumulator)
     total: MetricAccumulator = dataclasses.field(default_factory=MetricAccumulator)
-    transforms: MetricAccumulator = dataclasses.field(default_factory=MetricAccumulator)
 
     @classmethod
     def metric_keys(cls) -> Iterator[str]:
