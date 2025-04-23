@@ -10,9 +10,15 @@ import dataclasses
 import json
 import pathlib
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Sequence
+from typing import Final, TypeAlias
 
 import numpy as np
+
+
+# definitions for commonly used metric names
+CPP: Final = "cpp"
+TOTAL: Final = "total"
 
 
 @dataclasses.dataclass
@@ -32,54 +38,51 @@ class MetricAccumulator:
         self.values.append(value)
 
 
-@dataclasses.dataclass
-class RuntimeMetric:
-    cpp: MetricAccumulator = dataclasses.field(default_factory=MetricAccumulator)
-    total: MetricAccumulator = dataclasses.field(default_factory=MetricAccumulator)
-
-    @classmethod
-    def metric_keys(cls) -> Iterator[str]:
-        for f in dataclasses.fields(cls):
-            yield f.name
-
-    def metrics(self) -> Iterator[MetricAccumulator]:
-        for f in dataclasses.fields(self):
-            yield getattr(self, f.name)
-
-    def metric_items(self) -> Iterator[tuple[str, MetricAccumulator]]:
-        for f in dataclasses.fields(self):
-            yield f.name, getattr(self, f.name)
+# first level is program name, second level is type of the metric
+MetricContainer: TypeAlias = dict[str, dict[str, MetricAccumulator]]
+global_metric_container: MetricContainer = defaultdict(lambda: defaultdict(MetricAccumulator))
 
 
-global_metric_container: dict[str, RuntimeMetric] = defaultdict(RuntimeMetric)
+def _collect_metric_names(metric_container: MetricContainer) -> Sequence[str]:
+    result: dict[str, None] = {}
+    for metrics in metric_container.values():
+        for metric_name in metrics.keys():
+            result[metric_name] = None
+    return list(result.keys())
 
 
-def print_stats(metric_container: dict[str, RuntimeMetric] | None = None) -> None:
+def print_stats(metric_container: MetricContainer | None = None) -> None:
     if metric_container is None:
         metric_container = global_metric_container
     title_program = "program"
     title_cols = max(len(k) for k in (*metric_container.keys(), title_program))
 
+    metric_names = _collect_metric_names(metric_container)
     print()
-    titles = (f"{name:<11} {'+/-':<11}" for name in RuntimeMetric.metric_keys())
+    titles = (f"{name:<11} {'+/-':<11}" for name in metric_names)
     print(f"{title_program:{title_cols + 1}} {'  '.join(titles)}")
     for program in metric_container:
-        elems = (
-            f"{metric.mean():.5e} {metric.std():.5e}"
-            for metric in metric_container[program].metrics()
-        )
+        elems = []
+        for metric_name in metric_names:
+            if metric_name in metric_container[program]:
+                elems.append(
+                    f"{metric_container[program][metric_name].mean():.5e} "
+                    f"{metric_container[program][metric_name].std():.5e}"
+                )
+            else:
+                elems.append(f"{'N/A':<11} {'N/A':<11}")
         print(f"{program:{title_cols + 1}} {'  '.join(elems)}")
 
 
 def dump_json(
-    filename: str | pathlib.Path, metric_container: dict[str, RuntimeMetric] | None = None
+    filename: str | pathlib.Path, metric_container: MetricContainer | None = None
 ) -> None:
     if metric_container is None:
         metric_container = global_metric_container
     with open(filename, "w") as f:
         json.dump(
             {
-                k: {metric_name: metric.values for metric_name, metric in v.metric_items()}
+                k: {metric_name: metric.values for metric_name, metric in v.items()}
                 for k, v in metric_container.items()
             },
             f,

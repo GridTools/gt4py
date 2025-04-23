@@ -57,7 +57,7 @@ def inject_timer(name: str) -> Callable[[stages.CompiledProgram], stages.Compile
 
             start = exec_info["run_cpp_start_time"]
             end = exec_info["run_cpp_end_time"]
-            metrics.global_metric_container[name].cpp.append(end - start)
+            metrics.global_metric_container[name][metrics.CPP].append(end - start)
 
         return inner
 
@@ -102,7 +102,7 @@ def extract_connectivity_args(
             assert field_utils.verify_device_field_type(conn, device)
             args.append((ndarray, (0, 0)))
             continue
-        assert isinstance(conn, (common.Dimension, metrics.RuntimeMetric))
+        assert isinstance(conn, common.Dimension)
     return args
 
 
