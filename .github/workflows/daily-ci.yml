@@ -55,6 +55,9 @@ jobs:
       env:
         NUM_PROCESSES: auto
         UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
+        # Force a specific compiler for setuptools/distutils (used in gt4py.cartesian)
+        CXX: g++
+        CC: gcc
       run: uv run nox -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
     - name: Notify slack
