@@ -7,27 +7,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
+import copy
 
 dace = pytest.importorskip("dace")
-from dace.sdfg import nodes as dace_nodes
-from dace.transformation import dataflow as dace_dataflow
-
-import copy
 
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
-
-import dace
-
-import uuid
-from typing import Literal, Union, overload
-
-import dace
-from dace.sdfg import nodes as dace_nodes
-
-from typing import Callable
-import numpy as np
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 from sympy.core.numbers import Number
 
