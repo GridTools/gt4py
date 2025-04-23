@@ -154,12 +154,12 @@ class MapRangeHorizontalSplit(MapRangeSplit):
         first_map_src_data = {
             iedge.src.label
             for iedge in graph.in_edges(self.first_map_entry)
-            if isinstance(iedge.src, dace_nodes.AccessNode) and iedge.src.desc(graph).transient
+            if isinstance(iedge.src, dace_nodes.AccessNode)
         }
         second_map_src_data = {
             iedge.src.label
             for iedge in graph.in_edges(self.second_map_entry)
-            if isinstance(iedge.src, dace_nodes.AccessNode) and iedge.src.desc(graph).transient
+            if isinstance(iedge.src, dace_nodes.AccessNode)
         }
 
         if len(first_map_src_data.intersection(second_map_src_data)) == 0:
