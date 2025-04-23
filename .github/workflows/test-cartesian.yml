@@ -35,10 +35,11 @@ jobs:
     strategy:
       matrix:
         codegen-factor: [internal, dace]
+        os: ["ubuntu-latest"]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
 
