@@ -268,37 +268,31 @@ def test_horizontal_map_fusion():
     # check that there is no overlap between the maps' ranges
     map_entries = util.count_nodes(sdfg, dace_nodes.MapEntry, return_nodes=True)
     # check that there are no maps with overlapping ranges if they share an input
-    for i in range(len(map_entries)):
-        for j in range(i + 1, len(map_entries)):
-            map_entry_i = map_entries[i]
-            map_entry_j = map_entries[j]
-            for iedge in sdfg.state(0).in_edges(map_entry_i):
-                for jedge in sdfg.state(0).in_edges(map_entry_j):
-                    if iedge.src == jedge.src and iedge.src_conn == jedge.src_conn:
-                        # check that the ranges are not overlapping
-                        range_i = map_entry_i.map.range
-                        range_j = map_entry_j.map.range
-                        ranges_overlap = True
-                        for dim in range(len(range_i)):
-                            if not (
-                                (
-                                    isinstance(range_i[dim][0], (Number, int))
-                                    and isinstance(range_i[dim][1], (Number, int))
-                                )
-                                or (
-                                    isinstance(range_j[dim][0], (Number, int))
-                                    and isinstance(range_j[dim][1], (Number, int))
-                                )
-                            ):
-                                if (
-                                    range_i[dim][0] != range_j[dim][0]
-                                    or range_i[dim][1] != range_j[dim][1]
-                                ):
-                                    ranges_overlap = False
-                                continue
-                            if (
-                                range_i[dim][0] >= range_j[dim][1]
-                                or range_j[dim][0] >= range_i[dim][1]
-                            ):
-                                ranges_overlap = False
-                        assert not ranges_overlap, f"Found maps with overlapping ranges: {map_entry_i.label} and {map_entry_j.label} [{iedge.src.label}]"
+    for i, map_entry_i in enumerate(map_entries):
+        for map_entry_j in map_entries[i + 1 :]:
+            # Check if the maps share an input
+            shared_input = any(
+                iedge.src == jedge.src and iedge.src_conn == jedge.src_conn
+                for iedge in sdfg.state(0).in_edges(map_entry_i)
+                for jedge in sdfg.state(0).in_edges(map_entry_j)
+            )
+            if not shared_input:
+                continue
+
+            # Check if the ranges overlap
+            range_i = map_entry_i.map.range
+            range_j = map_entry_j.map.range
+            for dim in range(len(range_i)):
+                if (
+                    isinstance(range_i[dim][0], (Number, int))
+                    and isinstance(range_i[dim][1], (Number, int))
+                    and isinstance(range_j[dim][0], (Number, int))
+                    and isinstance(range_j[dim][1], (Number, int))
+                    and not (
+                        range_i[dim][1] <= range_j[dim][0] or range_j[dim][1] <= range_i[dim][0]
+                    )
+                ):
+                    raise AssertionError(
+                        f"Found maps with overlapping ranges: {map_entry_i.label} and {map_entry_j.label} "
+                        f"[{sdfg.state(0).in_edges(map_entry_i)[0].src.label}]"
+                    )
