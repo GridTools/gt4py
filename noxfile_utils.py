@@ -211,7 +211,9 @@ def run_session(session: nox.Session, *args: str | Sequence[str], **kwargs: Any)
 
 # -- Internal implementation utilities --
 def _filter_names(
-    names: Iterable[str], include_patterns: Sequence[str], exclude_patterns: Sequence[str]
+    names: Iterable[str],
+    include_patterns: Sequence[str] | None,
+    exclude_patterns: Sequence[str] | None,
 ) -> list[str]:
     """Filter names based on include and exclude `fnmatch`-style patterns."""
 
