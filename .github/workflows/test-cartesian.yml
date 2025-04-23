@@ -48,6 +48,10 @@ jobs:
         gcc --version
         clang --version
 
+    - name: print environment variables
+      shell: bash
+      run: env
+
     - name: Install uv and set the python version
       uses: astral-sh/setup-uv@v5
       with:
