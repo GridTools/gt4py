@@ -30,8 +30,7 @@ def gt_horizontal_map_fusion(
 
     ret = sdfg.apply_transformations_repeated(
         [
-            HorizontalMapFusion(),
-            gtx_transformations.SplitMemlet(),
+            MapRangeHorizontalSplit(),
             gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
             gtx_transformations.MapFusionParallel(only_if_common_ancestor=True),
         ],
@@ -61,7 +60,6 @@ def gt_vertical_map_fusion(
     ret = sdfg.apply_transformations_repeated(
         [
             MapRangeVerticalSplit(),
-            gtx_transformations.SplitMemlet(),
             gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
             gtx_transformations.MapFusionSerial(),
         ],
@@ -128,6 +126,54 @@ class MapRangeSplit(dace_transformation.SingleStateTransformation):
 
 
 @dace_properties.make_properties
+class MapRangeHorizontalSplit(MapRangeSplit):
+    """
+    Identify overlapping range between parallel maps, and split the range in order
+    to promote parallel map fusion.
+    """
+
+    first_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
+    second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
+
+    @classmethod
+    def expressions(cls) -> Any:
+        map_fusion_parallel_match = dace_graph.OrderedMultiDiConnectorGraph()
+        map_fusion_parallel_match.add_nodes_from(
+            [cls.first_map_entry, cls.second_map_entry]
+        )
+        return [map_fusion_parallel_match]
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState,
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        first_map: dace_nodes.Map = self.first_map_entry.map
+        second_map: dace_nodes.Map = self.second_map_entry.map
+
+        splitted_range = map_fusion_utils.split_overlapping_map_range(first_map, second_map)
+        if splitted_range is None:
+            return False
+
+        # TODO(edopao): additional checks needed?
+        return True
+
+    def apply(
+        self,
+        graph: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> None:
+        first_map_entry: dace_nodes.MapEntry = self.first_map_entry
+        first_map_exit: dace_nodes.MapExit = graph.exit_node(first_map_entry)
+        second_map_entry: dace_nodes.MapEntry = self.second_map_entry
+        second_map_exit: dace_nodes.MapExit = graph.exit_node(second_map_entry)
+
+        self.split_maps(graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit)
+
+
+@dace_properties.make_properties
 class MapRangeVerticalSplit(MapRangeSplit):
     """
     Identify overlapping range between serial maps, and split the range in order
@@ -179,51 +225,5 @@ class MapRangeVerticalSplit(MapRangeSplit):
         first_map_exit: dace_nodes.MapExit = self.exit_first_map
         second_map_entry: dace_nodes.MapEntry = self.entry_second_map
         second_map_exit: dace_nodes.MapExit = graph.exit_node(self.entry_second_map)
-
-        self.split_maps(graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit)
-
-
-@dace_properties.make_properties
-class HorizontalMapFusion(MapRangeSplit):
-    """Fuses two maps that are adjacent to each other in the same state.
-    """
-
-    first_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
-    second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
-
-    @classmethod
-    def expressions(cls) -> Any:
-        map_fusion_parallel_match = dace_graph.OrderedMultiDiConnectorGraph()
-        map_fusion_parallel_match.add_nodes_from(
-            [cls.first_map_entry, cls.second_map_entry]
-        )
-        return [map_fusion_parallel_match]
-
-    def can_be_applied(
-        self,
-        graph: dace.SDFGState,
-        expr_index: int,
-        sdfg: dace.SDFG,
-        permissive: bool = False,
-    ) -> bool:
-        first_map: dace_nodes.Map = self.first_map_entry.map
-        second_map: dace_nodes.Map = self.second_map_entry.map
-
-        splitted_range = map_fusion_utils.split_overlapping_map_range(first_map, second_map)
-        if splitted_range is None:
-            return False
-
-        # TODO(edopao): additional checks needed?
-        return True
-
-    def apply(
-        self,
-        graph: dace.SDFGState,
-        sdfg: dace.SDFG,
-    ) -> None:
-        first_map_entry: dace_nodes.MapEntry = self.first_map_entry
-        first_map_exit: dace_nodes.MapExit = graph.exit_node(first_map_entry)
-        second_map_entry: dace_nodes.MapEntry = self.second_map_entry
-        second_map_exit: dace_nodes.MapExit = graph.exit_node(second_map_entry)
 
         self.split_maps(graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit)

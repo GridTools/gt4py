@@ -259,12 +259,8 @@ def split_overlapping_map_range(
                     (overlap_range_stop + step, second_map_range[1], step)
                 )
 
-    first_map_combined_ranges = (
-        first_map_splitted_dict[param] for param in first_map.params
-    )
-    second_map_combined_ranges = (
-        second_map_splitted_dict[param] for param in second_map.params
-    )
+    first_map_combined_ranges = (first_map_splitted_dict[param] for param in first_map.params)
+    second_map_combined_ranges = (second_map_splitted_dict[param] for param in second_map.params)
 
     first_map_range_combinations = [
         dace_subsets.Range(r) for r in itertools.product(*first_map_combined_ranges)

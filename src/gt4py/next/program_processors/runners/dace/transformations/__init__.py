@@ -44,6 +44,7 @@ from .simplify import (
     gt_substitute_compiletime_symbols,
 )
 from .split_access_nodes import SplitAccessNode, gt_split_access_nodes
+from .split_map_ranges import gt_horizontal_map_fusion, gt_vertical_map_fusion
 from .state_fusion import GT4PyStateFusion
 from .strides import (
     gt_change_transient_strides,
@@ -53,7 +54,6 @@ from .strides import (
     gt_propagate_strides_of,
 )
 from .utils import gt_find_constant_arguments, gt_make_transients_persistent
-from .vertical_map_fusion import gt_horizontal_map_fusion, gt_vertical_map_fusion
 
 
 __all__ = [
@@ -82,6 +82,7 @@ __all__ = [
     "gt_find_constant_arguments",
     "gt_gpu_transform_non_standard_memlet",
     "gt_gpu_transformation",
+    "gt_horizontal_map_fusion",
     "gt_inline_nested_sdfg",
     "gt_make_transients_persistent",
     "gt_map_strides_to_dst_nested_sdfg",
