@@ -13,7 +13,6 @@ from typing import Any, Union
 import dace
 from dace import properties as dace_properties, transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
-from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import map_fusion_utils
@@ -25,13 +24,9 @@ def gt_vertical_map_fusion(
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
-    find_single_use_data = dace_analysis.FindSingleUseData()
-    single_use_data = find_single_use_data.apply_pass(sdfg, None)
-
     ret = sdfg.apply_transformations_repeated(
         [
             MapRangeVerticalSplit(),
-            gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
             gtx_transformations.MapFusionSerial(),
         ],
         validate=validate,
