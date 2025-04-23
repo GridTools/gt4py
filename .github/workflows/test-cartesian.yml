@@ -37,22 +37,10 @@ jobs:
         codegen-factor: [internal, dace]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
-    env:
-      CXX: g++
 
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-
-    - name: get some versions
-      shell: bash
-      run: |
-        gcc --version
-        clang --version
-
-    - name: print environment variables
-      shell: bash
-      run: env
 
     - name: Install uv and set the python version
       uses: astral-sh/setup-uv@v5
@@ -64,5 +52,6 @@ jobs:
     - name: Run CPU 'cartesian' tests with nox
       env:
         NUM_PROCESSES: auto
+        CXX: g++
       shell: bash
       run: uv run nox -s 'test_cartesian-${{ matrix.python-version }}(${{ matrix.codegen-factor }}, cpu)'
