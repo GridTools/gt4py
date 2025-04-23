@@ -579,8 +579,6 @@ def can_deref(expr):
     return call("can_deref")(expr)
 
 
-def compose(
-    a: itir.FunctionDefinition | itir.Lambda, b: itir.FunctionDefinition | itir.Lambda
-) -> itir.Lambda:
+def compose(a: itir.SymRef | itir.Lambda, b: itir.SymRef | itir.Lambda) -> itir.Lambda:
     # TODO(havogt): `a`, `b` must not contain `SymRef(id="_comp")` for a `Sym` in a parent scope
     return lambda_("_comp")(call(a)(call(b)("_comp")))

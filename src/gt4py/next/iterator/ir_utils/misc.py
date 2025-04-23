@@ -167,6 +167,9 @@ def extract_projector(
     A projector is an expression that consists only of `make_tuple` of `tuple_get` of the same expression,
     possibly in a let statement.
 
+    This is needed for expressions like `as_fieldop(scan(λ(state, val) → {val, state[0]+val}))(inp)[1]`,
+    where only element 1 of the state is used. In this example the projector is `λ(_proj) → _proj[1]`.
+
     Returns the projector and the expression it is applied to.
 
     Note: Supports only unary projectors. Extend to multi-parameter projectors if needed.
@@ -175,6 +178,11 @@ def extract_projector(
     expr = node
     if cpm.is_let(node) and len(node.fun.params) == 1:  # type: ignore[attr-defined] # ensured by cpm.is_let
         # a single param let, it's a projector if the let value aka `node.fun.expr` is a projector
+        # > let val = expr
+        # >  val[x]
+        # > end
+        # ->
+        # `λ(val) → val[x]`, `expr`
         is_projector, _ = extract_projector(node.fun.expr)  # type: ignore[attr-defined] # ensured by cpm.is_let
         if is_projector is not None:
             # we can directly use this as projector
