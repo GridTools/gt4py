@@ -52,6 +52,7 @@ jobs:
     - name: Run CPU 'cartesian' tests with nox
       env:
         NUM_PROCESSES: auto
+        # Force a specific compiler for setuptools/distutils
         CXX: g++
         CC: gcc
       shell: bash
