@@ -52,5 +52,8 @@ jobs:
         CI_NOX_PREFIX: GT4PY
         GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "origin/${{ github.base_ref }}"
         GT4PY_CI_NOX_VERBOSE: 1
+        # Force a specific compiler for setuptools/distutils
+        CXX: g++
+        CC: gcc
       shell: bash
       run: uvx nox -s 'test_cartesian-${{ matrix.python-version }}(${{ matrix.codegen-factor }}, cpu)'
