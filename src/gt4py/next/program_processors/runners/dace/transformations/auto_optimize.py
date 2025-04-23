@@ -115,11 +115,7 @@ def gt_auto_optimize(
             not if we have too much internal space (register pressure).
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
-
-    with dace.config.temporary_config():
-        dace.Config.set("optimizer", "match_exception", value=True)
-        dace.Config.set("store_history", value=False)
-
+    with dace.config.set_temporary("optimizer", "match_exception", value=True):
         # Initial Cleanup
         if constant_symbols:
             gtx_transformations.gt_substitute_compiletime_symbols(
