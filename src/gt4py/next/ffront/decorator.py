@@ -281,6 +281,13 @@ class Program:
         )
 
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
+        if __debug__:
+            # TODO: remove or make dependency on self.past_stage optional
+            past_process_args._validate_args(
+                self.past_stage.past_node,
+                arg_types=[type_translation.from_value(arg) for arg in args],
+                kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
+            )
         if self._compiled_programs is not None:  # fast path, implict `self.backend is not None`
             offset_provider = {  # TODO(havogt) cleanup implicit_offset_provider
                 **offset_provider,
@@ -310,12 +317,6 @@ class Program:
         )
         offset_provider = {**offset_provider, **self._implicit_offset_provider}
         with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-            # TODO: remove or make dependency on self.past_stage optional
-            past_process_args._validate_args(
-                self.past_stage.past_node,
-                arg_types=[type_translation.from_value(arg) for arg in args],
-                kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
-            )
             ctx.run(self.definition_stage.definition, *args, **kwargs)
         return
 
