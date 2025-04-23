@@ -268,10 +268,16 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        # Call horizontal and vertical map fusion to fuse together maps on partially
-        #  overlapping range. This is an itertive process that splits the maps to
+        # Call vertical and horizontal map fusion to fuse together maps on partially
+        #  overlapping range. This is an iterative process that splits the maps to
         #  expose overlapping range and applies serial/parallel map fusion.
         gtx_transformations.gt_vertical_map_fusion(
+            sdfg=sdfg,
+            run_simplify=False,
+            validate=validate,
+            validate_all=validate_all,
+        )
+        gtx_transformations.gt_horizontal_map_fusion(
             sdfg=sdfg,
             run_simplify=False,
             validate=validate,
