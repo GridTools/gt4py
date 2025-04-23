@@ -351,6 +351,37 @@ def _canonicalize_nb_fields(
         raise TypeError(f"Unexpected field type: {type(input_)}")
 
 
+def _resolve_dimensions(
+    input_dims: list[common.Dimension],
+    shift_tuple: tuple[itir.OffsetLiteral, ...],
+    offset_provider_type: common.OffsetProviderType,
+) -> list[common.Dimension]:
+    """
+    Resolves the final dimensions by applying shifts from the given shift tuple.
+
+    Args:
+        - input_dims: A list of initial dimensions to resolve.
+        - shift_tuple: A tuple of offset literals defining the shift.
+        - offset_provider_type: Offset provider dictionary.
+
+    Returns:
+        A list of resolved dimensions after applying the shifts.
+    """
+    resolved_dims = []
+    for input_dim in input_dims:
+        for off_literal in reversed(
+            shift_tuple[::2]
+        ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
+            offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
+            if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
+                continue  # No shift applied
+            if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
+                if input_dim == offset_type.codomain:  # Check if input fits to offset
+                    input_dim = offset_type.domain[0]  # Update input_dim for next iteration
+        resolved_dims.append(input_dim)
+    return resolved_dims
+
+
 @_register_builtin_type_synthesizer
 def as_fieldop(
     stencil: TypeSynthesizer,
@@ -358,38 +389,6 @@ def as_fieldop(
     *,
     offset_provider_type: common.OffsetProviderType,
 ) -> TypeSynthesizer:
-    def resolve_dimensions(
-        input_dims: list[common.Dimension],
-        shift_tuple: tuple[itir.OffsetLiteral, ...],
-        offset_provider_type: common.OffsetProviderType,
-    ) -> list[common.Dimension]:
-        """
-        Resolves the final dimensions by applying shifts from the given shift tuple.
-
-        Args:
-            - input_dims: A list of initial dimensions to resolve.
-            - shift_tuple: A tuple of offset literals defining the shift.
-            - offset_provider_type: Offset provider dictionary.
-
-        Returns:
-            A list of resolved dimensions after applying the shifts.
-        """
-        resolved_dims = []
-        for input_dim in input_dims:
-            for off_literal in reversed(
-                shift_tuple[::2]
-            ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
-                offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
-                if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
-                    continue  # No shift applied
-                if isinstance(
-                    offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)
-                ):
-                    if input_dim == offset_type.codomain:  # Check if input fits to offset
-                        input_dim = offset_type.domain[0]  # Update input_dim for next iteration
-            resolved_dims.append(input_dim)
-        return resolved_dims
-
     @TypeSynthesizer
     def applied_as_fieldop(
         *fields: ts.TupleType,
@@ -417,7 +416,7 @@ def as_fieldop(
                                 i
                             ]:  # Use shift tuple corresponding to the input field
                                 output_dims.update(
-                                    resolve_dimensions(
+                                    _resolve_dimensions(
                                         input_dims, shift_tuple, offset_provider_type
                                     )
                                 )

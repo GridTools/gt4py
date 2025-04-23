@@ -25,7 +25,7 @@ class OffsetLiteralType(ts.TypeSpec):
 
 
 class IteratorType(ts.DataType, ts.CallableType):
-    position_dims: list[common.Dimension] | Literal["unknown"]  # TODO: remove unknown: 80%?
+    position_dims: list[common.Dimension] | Literal["unknown"]
     defined_dims: list[common.Dimension]
     element_type: ts.DataType
 
