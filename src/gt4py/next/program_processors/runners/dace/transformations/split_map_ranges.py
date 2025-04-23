@@ -148,26 +148,28 @@ class MapRangeHorizontalSplit(MapRangeSplit):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        first_map_entry: dace_nodes.MapEntry = self.first_map_entry
-        second_map_entry: dace_nodes.MapEntry = self.second_map_entry
-        first_map: dace_nodes.Map = first_map_entry.map
-        second_map: dace_nodes.Map = second_map_entry.map
+        first_map: dace_nodes.Map = self.first_map_entry.map
+        second_map: dace_nodes.Map = self.second_map_entry.map
 
-        shared_edge_exists = False
-        for iedge1 in graph.in_edges(first_map_entry):
-            for iedge2 in graph.in_edges(second_map_entry):
-                if iedge1.src.label == iedge2.src.label:
-                    shared_edge_exists = True
-                    break
+        first_map_src_data = {
+            iedge.src.label
+            for iedge in graph.in_edges(self.first_map_entry)
+            if isinstance(iedge.src, dace_nodes.AccessNode) and iedge.src.desc(graph).transient
+        }
+        second_map_src_data = {
+            iedge.src.label
+            for iedge in graph.in_edges(self.second_map_entry)
+            if isinstance(iedge.src, dace_nodes.AccessNode) and iedge.src.desc(graph).transient
+        }
 
-        if not shared_edge_exists:
+        if len(first_map_src_data.intersection(second_map_src_data)) == 0:
+            # no common source access node
             return False
 
         splitted_range = map_fusion_utils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
             return False
 
-        # TODO(edopao): additional checks needed?
         return True
 
     def apply(
@@ -193,9 +195,9 @@ class MapRangeVerticalSplit(MapRangeSplit):
     """
 
     # Pattern Matching
-    exit_first_map = dace_transformation.PatternNode(dace_nodes.MapExit)
+    first_map_exit = dace_transformation.PatternNode(dace_nodes.MapExit)
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
-    entry_second_map = dace_transformation.PatternNode(dace_nodes.MapEntry)
+    second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
     @classmethod
     def expressions(cls) -> Any:
@@ -207,7 +209,7 @@ class MapRangeVerticalSplit(MapRangeSplit):
         """
         return [
             dace.sdfg.utils.node_path_graph(
-                cls.exit_first_map, cls.access_node, cls.entry_second_map
+                cls.first_map_exit, cls.access_node, cls.second_map_entry
             ),
         ]
 
@@ -220,23 +222,25 @@ class MapRangeVerticalSplit(MapRangeSplit):
     ) -> bool:
         """Check non overlapping range in the first and second map."""
         assert self.expr_index == expr_index
-        first_map = self.exit_first_map.map
-        second_map = self.entry_second_map.map
+        first_map = self.first_map_exit.map
+        second_map = self.second_map_entry.map
+
+        if not self.access_node.desc(graph).transient:
+            return False
 
         splitted_range = map_fusion_utils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
             return False
 
-        # TODO(edopao): additional checks needed?
         return True
 
     def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
         """Split the map range in order to obtain an overlapping range between the first and second map."""
 
-        first_map_entry: dace_nodes.MapEntry = graph.entry_node(self.exit_first_map)
-        first_map_exit: dace_nodes.MapExit = self.exit_first_map
-        second_map_entry: dace_nodes.MapEntry = self.entry_second_map
-        second_map_exit: dace_nodes.MapExit = graph.exit_node(self.entry_second_map)
+        first_map_entry: dace_nodes.MapEntry = graph.entry_node(self.first_map_exit)
+        first_map_exit: dace_nodes.MapExit = self.first_map_exit
+        second_map_entry: dace_nodes.MapEntry = self.second_map_entry
+        second_map_exit: dace_nodes.MapExit = graph.exit_node(self.second_map_entry)
 
         self.split_maps(
             graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit
