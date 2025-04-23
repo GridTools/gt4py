@@ -38,7 +38,7 @@ jobs:
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
 
@@ -48,6 +48,11 @@ jobs:
         enable-cache: true
         cache-dependency-glob: "uv.lock"
         python-version: ${{ matrix.python-version }}
+
+    - name: Install C++ libraries
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+      shell: bash
+      run: sudo apt install libboost-dev
 
     - name: Run CPU 'cartesian' tests with nox
       env:
