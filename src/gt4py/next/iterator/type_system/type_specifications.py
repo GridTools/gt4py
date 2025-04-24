@@ -17,7 +17,7 @@ class NamedRangeType(ts.TypeSpec):
 
 
 class OffsetLiteralType(ts.TypeSpec):
-    value: ts.ScalarType | common.Dimension
+    value: ts.ScalarType | str
 
 
 class IteratorType(ts.DataType, ts.CallableType):

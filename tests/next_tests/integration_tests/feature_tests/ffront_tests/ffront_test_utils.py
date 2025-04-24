@@ -14,7 +14,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend as next_backend, common, allocators as next_allocators
+from gt4py.next import backend as next_backend, common, allocators as next_allocators, constructors
 from gt4py.next.ffront import decorator
 
 import next_tests
@@ -158,7 +158,7 @@ class MeshDescriptor(Protocol):
     def offset_provider_type(self) -> common.OffsetProviderType: ...
 
 
-def simple_mesh() -> MeshDescriptor:
+def simple_mesh(allocator) -> MeshDescriptor:
     num_vertices = 9
     num_cells = 8
 
@@ -215,29 +215,33 @@ def simple_mesh() -> MeshDescriptor:
     e2v_arr = np.asarray(e2v_arr, dtype=gtx.IndexType)
 
     offset_provider = {
-        V2E.value: common._connectivity(
-            v2e_arr,
-            codomain=Edge,
+        V2E.value: constructors.as_connectivity(
             domain={Vertex: v2e_arr.shape[0], V2EDim: 4},
-            skip_value=None,
-        ),
-        E2V.value: common._connectivity(
-            e2v_arr,
-            codomain=Vertex,
-            domain={Edge: e2v_arr.shape[0], E2VDim: 2},
-            skip_value=None,
-        ),
-        C2V.value: common._connectivity(
-            c2v_arr,
-            codomain=Vertex,
-            domain={Cell: c2v_arr.shape[0], C2VDim: 4},
-            skip_value=None,
-        ),
-        C2E.value: common._connectivity(
-            c2e_arr,
             codomain=Edge,
-            domain={Cell: c2e_arr.shape[0], C2EDim: 4},
+            data=v2e_arr,
             skip_value=None,
+            allocator=allocator,
+        ),
+        E2V.value: constructors.as_connectivity(
+            domain={Edge: e2v_arr.shape[0], E2VDim: 2},
+            codomain=Vertex,
+            data=e2v_arr,
+            skip_value=None,
+            allocator=allocator,
+        ),
+        C2V.value: constructors.as_connectivity(
+            domain={Cell: c2v_arr.shape[0], C2VDim: 4},
+            codomain=Vertex,
+            data=c2v_arr,
+            skip_value=None,
+            allocator=allocator,
+        ),
+        C2E.value: constructors.as_connectivity(
+            domain={Cell: c2e_arr.shape[0], C2EDim: 4},
+            codomain=Edge,
+            data=c2e_arr,
+            skip_value=None,
+            allocator=allocator,
         ),
     }
 
@@ -251,7 +255,7 @@ def simple_mesh() -> MeshDescriptor:
     )
 
 
-def skip_value_mesh() -> MeshDescriptor:
+def skip_value_mesh(allocator) -> MeshDescriptor:
     """Mesh with skip values from the GT4Py quickstart guide."""
 
     num_vertices = 7
@@ -306,29 +310,33 @@ def skip_value_mesh() -> MeshDescriptor:
     )
 
     offset_provider = {
-        V2E.value: common._connectivity(
-            v2e_arr,
-            codomain=Edge,
+        V2E.value: constructors.as_connectivity(
             domain={Vertex: v2e_arr.shape[0], V2EDim: 5},
-            skip_value=common._DEFAULT_SKIP_VALUE,
-        ),
-        E2V.value: common._connectivity(
-            e2v_arr,
-            codomain=Vertex,
-            domain={Edge: e2v_arr.shape[0], E2VDim: 2},
-            skip_value=None,
-        ),
-        C2V.value: common._connectivity(
-            c2v_arr,
-            codomain=Vertex,
-            domain={Cell: c2v_arr.shape[0], C2VDim: 3},
-            skip_value=None,
-        ),
-        C2E.value: common._connectivity(
-            c2e_arr,
             codomain=Edge,
-            domain={Cell: c2e_arr.shape[0], C2EDim: 3},
+            data=v2e_arr,
+            skip_value=common._DEFAULT_SKIP_VALUE,
+            allocator=allocator,
+        ),
+        E2V.value: constructors.as_connectivity(
+            domain={Edge: e2v_arr.shape[0], E2VDim: 2},
+            codomain=Vertex,
+            data=e2v_arr,
             skip_value=None,
+            allocator=allocator,
+        ),
+        C2V.value: constructors.as_connectivity(
+            domain={Cell: c2v_arr.shape[0], C2VDim: 3},
+            codomain=Vertex,
+            data=c2v_arr,
+            skip_value=None,
+            allocator=allocator,
+        ),
+        C2E.value: constructors.as_connectivity(
+            domain={Cell: c2e_arr.shape[0], C2EDim: 3},
+            codomain=Edge,
+            data=c2e_arr,
+            skip_value=None,
+            allocator=allocator,
         ),
     }
 
@@ -364,10 +372,10 @@ __all__ = [
 
 @pytest.fixture(
     params=[
-        simple_mesh(),
-        pytest.param(skip_value_mesh(), marks=pytest.mark.uses_mesh_with_skip_values),
+        simple_mesh,
+        pytest.param(skip_value_mesh, marks=pytest.mark.uses_mesh_with_skip_values),
     ],
-    ids=lambda p: p.name,
+    ids=lambda p: p(None).name,
 )
-def mesh_descriptor(request) -> MeshDescriptor:
-    yield request.param
+def mesh_descriptor(request, exec_alloc_descriptor) -> MeshDescriptor:
+    yield request.param(exec_alloc_descriptor.allocator)

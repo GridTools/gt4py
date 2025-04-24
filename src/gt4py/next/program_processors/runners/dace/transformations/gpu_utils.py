@@ -61,14 +61,13 @@ def gt_gpu_transformation(
         validate_all: Perform extensive validation.
 
     Notes:
-        The function might modify the order of the iteration variables of some
-        maps.
-        In addition it might fuse Maps together that should not be fused. To prevent
-        that you should set `try_removing_trivial_maps` to `False`.
+        - In addition it might fuse Maps together that should not be fused. To prevent
+            that you should set `try_removing_trivial_maps` to `False`.
 
     Todo:
-        - Solve the fusing problem.
         - Currently only one block size for all maps is given, add more options.
+        - Investigate if the order of iteration is not changed (it should not).
+        - Investigate if the trivial GPU map remover is still needed.
     """
     assert (
         len(kwargs) == 0
@@ -92,6 +91,8 @@ def gt_gpu_transformation(
     gtx_transformations.gt_simplify(sdfg)
 
     if try_removing_trivial_maps:
+        # TODO(phimuell): Figuring out if it is still important/needed to do or if
+        #   it can be removed, it should definitely be reworked.
         gt_remove_trivial_gpu_maps(
             sdfg=sdfg,
             validate=validate,
@@ -99,7 +100,7 @@ def gt_gpu_transformation(
         )
         gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
 
-    # TODO(phimuell): Fixing the stride problem.
+    # TODO(phimuell): Fixing the stride problem in DaCe.
     sdfg = gt_gpu_transform_non_standard_memlet(
         sdfg=sdfg,
         map_postprocess=True,
@@ -128,7 +129,7 @@ def gt_gpu_transform_non_standard_memlet(
     validate: bool = True,
     validate_all: bool = False,
 ) -> dace.SDFG:
-    """Transform some non standard Melets to Maps.
+    """Transform some non-standard Melets to Maps.
 
     The GPU code generator is not able to handle certain sets of Memlets. To
     handle them, the code generator transforms them into copy Maps. The main
@@ -156,7 +157,7 @@ def gt_gpu_transform_non_standard_memlet(
         - This function should be called after `gt_set_iteration_order()` has run.
     """
 
-    # Expand all non standard memlets and get the new MapEntries.
+    # Expand all non-standard memlets and get the new MapEntries.
     new_maps: set[dace_nodes.MapEntry] = _gt_expand_non_standard_memlets(sdfg)
 
     # If there are no Memlets that are translated to copy-Maps, then we have nothing to do.
@@ -228,7 +229,7 @@ def gt_gpu_transform_non_standard_memlet(
 def _gt_expand_non_standard_memlets(
     sdfg: dace.SDFG,
 ) -> set[dace_nodes.MapEntry]:
-    """Finds all non standard Memlet in the SDFG and expand them.
+    """Finds all non-standard Memlet in the SDFG and expand them.
 
     The function is used by `gt_gpu_transform_non_standard_memlet()` and performs
     the actual expansion of the Memlet, i.e. turning all Memlets that can not be
