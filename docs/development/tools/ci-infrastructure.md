@@ -12,7 +12,7 @@ A `Code Quality` workflow runs `pre-commit` to check code quality requirements t
 
 ### Tests
 
-The `Test Cartesian (CPU)`, `Test Eve`, `Test Next (CPU)`, `Test Storage (CPU)` and `Test Package Root` workflows run the correspondent `nox` sessions testing the respective subpackages (`Test Package Root` tests the root package code). In all cases only tests are run that do not require the presence of a GPU. 
+The `Test Cartesian (CPU)`, `Test Eve`, `Test Next (CPU)`, `Test Storage (CPU)` and `Test Package Root` workflows run the correspondent `nox` sessions testing the respective subpackages (`Test Package Root` tests the root package code). In all cases only tests are run that do not require the presence of a GPU.
 
 #### When are workflows triggered
 

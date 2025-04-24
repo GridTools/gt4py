@@ -198,7 +198,7 @@ def make_session_env(session: nox.Session, **kwargs: str) -> dict[str, str]:
     return env
 
 
-def run_session(session: nox.Session, *args: str | Sequence[str], **kwargs: Any) -> None:
+def run_custom_session(session: nox.Session, *args: str | Sequence[str], **kwargs: Any) -> None:
     """Run a Nox session with the specified arguments and environment.
 
     This function runs a Nox session with the provided arguments, using the
