@@ -27,8 +27,9 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
     # scalar arguments that are not used in the SDFG will not be present.
     sdfg_arglist: list[tuple[str, dace.dtypes.Data]]
 
-    def __init__(self, program: dace.CompiledSDFG, implicit_domain: bool):
+    def __init__(self, program: dace.CompiledSDFG, name: str, implicit_domain: bool):
         self.sdfg_program = program
+        self.name = name
         self.implicit_domain = implicit_domain
         # `dace.CompiledSDFG.arglist()` returns an ordered dictionary that maps the argument
         # name to its data type, in the same order as arguments appear in the program ABI.
@@ -71,6 +72,10 @@ class DaCeCompiler(
         sdfg = dace.SDFG.from_json(inp.program_source.source_code)
         sdfg.build_folder = cache.get_cache_folder(inp, self.cache_lifetime)
 
+        if config.COLLECT_METRICS:
+            # measure execution time of the top-level SDFG
+            sdfg.instrument = dace.dtypes.InstrumentationType.Timer
+
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "build_type", value=self.cmake_build_type.value)
             dace.config.Config.set("compiler", "use_cache", value=False)  # we use the gt4py cache
@@ -78,6 +83,9 @@ class DaCeCompiler(
             #  up with the cuda streams, i.e. it allocates N streams but uses N+1.
             #  This is a workaround until this issue if fixed in DaCe.
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=1)
+
+            # Instrumentation of SDFG timers
+            dace.config.Config.set("instrumentation", "report_each_invocation", value=True)
 
             if self.device_type == core_defs.DeviceType.CPU:
                 compiler_args = dace.config.Config.get("compiler", "cpu", "args")
@@ -94,7 +102,11 @@ class DaCeCompiler(
 
             sdfg_program = sdfg.compile(validate=False)
 
-        return CompiledDaceProgram(sdfg_program, inp.program_source.implicit_domain)
+        return CompiledDaceProgram(
+            sdfg_program,
+            inp.program_source.entry_point.name,
+            inp.program_source.implicit_domain,
+        )
 
 
 class DaCeCompilationStepFactory(factory.Factory):
