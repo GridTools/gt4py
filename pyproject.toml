@@ -302,7 +302,9 @@ markers = [
   'uses_unstructured_shift: tests that use a unstructured connectivity',
   'uses_max_over: tests that use the max_over builtin',
   'uses_mesh_with_skip_values: tests that use a mesh with skip values',
-  'checks_specific_error: tests that rely on the backend to produce a specific error message'
+  'checks_specific_error: tests that rely on the backend to produce a specific error message',
+  'uses_frontend_concat_where: tests that use the frontend concat_where builtin',
+  'uses_gtir_concat_where: tests that use the GTIR concat_where builtin'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
 testpaths = 'tests'
