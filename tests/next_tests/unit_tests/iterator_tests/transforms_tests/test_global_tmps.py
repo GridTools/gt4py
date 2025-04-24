@@ -150,7 +150,10 @@ def test_trivial_let():
 )
 def test_dont_extract_projector(projector_maker, inp_type, out_type):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
-    expr = im.as_fieldop("deref", domain)("inp")
+    # this is a a scan, because we assert that we only extract projectors from scans
+    scan = im.as_fieldop(
+        im.call("scan")(im.lambda_("state", "inp")(im.call("deref")("inp")), True, 0), domain
+    )("inp")
 
     testee = program_factory(
         params=[
@@ -160,7 +163,7 @@ def test_dont_extract_projector(projector_maker, inp_type, out_type):
         body=[
             itir.SetAt(
                 target=im.ref("out"),
-                expr=projector_maker(expr),
+                expr=projector_maker(scan),
                 domain=domain,
             )
         ],
