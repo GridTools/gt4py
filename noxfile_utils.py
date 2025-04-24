@@ -70,16 +70,13 @@ def customize_session(
     based on the paths of the modified files.
 
     Args:
-        env_vars: A sequence of environment variable names that will be passed
-            from the outer environment to the test environment.
-        ignore_env_vars: A sequence of environment variable names that should be
-            removed from the outer environment before passing to the test environment.
         paths: A sequence of file paths or patterns that when changed will trigger the session.
-        ignore_paths: A sequence of file paths or patterns that when changed will cause the session to be skipped.
-            **kwargs: Additional keyword arguments passed to `nox.session` decorator.
+        ignore_paths: A sequence of file paths or patterns that when changed will cause the
+            session to be skipped.
+        **kwargs: Additional keyword arguments passed to `nox.session` decorator.
 
     Note:
-        Only one of the accept/ignore argument pairs can be used at the same time.
+        Only one of the `paths` / `ignore_paths` options can be used at the same time for now.
 
     Example:
         ```python
@@ -88,19 +85,12 @@ def customize_session(
             session.run("pytest")
         ```
     """
-
-    if env_vars and ignore_env_vars:
-        raise ValueError("Cannot use both 'env_vars' and 'ignore_env_vars' at the same time.")
     if paths and ignore_paths:
         raise ValueError("Cannot use both 'paths' and 'ignore_paths' at the same time.")
 
     def decorator(session_function: AnyCallable) -> nox.registry.Func:
-        assert (
-            session_function.__name__ not in _metadata_registry
-        ), f"Session function '{session_function.__name__}' already has metadata."
-        _metadata_registry[kwargs.get("name", session_function.__name__)] = types.SimpleNamespace(
-            env_vars=env_vars,
-            ignore_env_vars=ignore_env_vars,
+        session_name = kwargs.get("name", session_function.__name__)
+        _metadata_registry.setdefault(session_name, types.SimpleNamespace()).__dict__.update(
             paths=paths,
             ignore_paths=ignore_paths,
         )
@@ -140,7 +130,6 @@ def install_session_venv(
         groups: Names of dependency groups to install.
     """
 
-    env = make_session_env(session, UV_PROJECT_ENVIRONMENT=session.virtualenv.location)
     session.run_install(
         "uv",
         "sync",
@@ -148,7 +137,7 @@ def install_session_venv(
         "--no-dev",
         *(f"--extra={e}" for e in extras),
         *(f"--group={g}" for g in groups),
-        env=env,
+        env=session.env | dict(UV_PROJECT_ENVIRONMENT=session.virtualenv.location),
     )
     for item in args:
         session.run_install(
@@ -156,61 +145,8 @@ def install_session_venv(
             "pip",
             "install",
             *((item,) if isinstance(item, str) else item),
-            env=env,
+            env=session.env | dict(UV_PROJECT_ENVIRONMENT=session.virtualenv.location),
         )
-
-
-def make_session_env(session: nox.Session, **kwargs: str) -> dict[str, str]:
-    """Create an environment dictionary for a nox session.
-
-    This function builds an environment dictionary for a nox session based on registered metadata.
-    It filters environment variables according to allowed and ignored patterns defined in the
-    session metadata, and combines them with any additional key-value pairs provided.
-
-    Args:
-        session: The nox session for which to create the environment.
-        **kwargs: Additional environment variables to include in the returned dictionary.
-
-    Returns:
-        A dictionary containing the filtered environment variables from the current
-        environment, combined with any provided kwargs.
-    """
-    unversioned_session_name = session.name.split("-")[0]
-    metadata = _metadata_registry.get(unversioned_session_name, None)
-    env_vars = metadata.env_vars if metadata else ()
-    ignore_env_vars = metadata.ignore_env_vars if metadata else ()
-
-    env = {
-        key: os.environ.get(key)
-        for key in _filter_names(os.environ.keys(), env_vars, ignore_env_vars)
-    } | kwargs
-
-    if VERBOSE:
-        print(
-            f"\n[{session.name}]:\n"
-            f"  - Allow env variables patterns: {env_vars}\n"
-            f"  - Ignore env variables patterns: {ignore_env_vars}\n"
-            f"\n[{session.name}]:\n"
-            f"  - Environment: {env}\n",
-            file=sys.stderr,
-        )
-
-    return env
-
-
-def run_custom_session(session: nox.Session, *args: str | Sequence[str], **kwargs: Any) -> None:
-    """Run a Nox session with the specified arguments and environment.
-
-    This function runs a Nox session with the provided arguments, using the
-    environment variables defined in the session metadata.
-
-    Args:
-        session: The Nox session to run.
-        *args: Additional arguments to pass to the session.
-        **kwargs: Additional keyword arguments to pass to the session.
-    """
-    env = make_session_env(session)
-    return session.run(*args, **kwargs, env=env)
 
 
 # -- Internal implementation utilities --

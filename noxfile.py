@@ -5,6 +5,10 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+#
+# /// script
+# dependencies = ["nox>=2025.02.09"]
+# ///
 
 from __future__ import annotations
 
@@ -19,6 +23,8 @@ import nox
 
 # Hack to load companion `noxfile_utils.py` from the same directory as this file
 # using a temporary change to `sys.path`.
+# TODO(egparedes): Remove this if `noxfile_utils.py` is moved to a package
+# so it can be required as a PEP 723 dependency.
 with mock.patch("sys.path", [f"{pathlib.Path(__file__).parent!s}", *sys.path]):
     import noxfile_utils as nox_utils
 
@@ -84,7 +90,6 @@ CodeGenNextTestSettings = CodeGenTestSettings | {
 @nox_utils.customize_session(
     python=PYTHON_VERSIONS,
     tags=["cartesian"],
-    env_vars=["NUM_PROCESSES"],
     ignore_paths=[  # In CI mode, skip when only gt4py.next or doc files have been updated
         "src/gt4py/next/*",
         "tests/next_tests/**",
@@ -114,15 +119,13 @@ def test_cartesian(
     num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
-    nox_utils.run_custom_session(
-        session,
+    session.run(
         *f"pytest --cache-clear -sv -n {num_processes} --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
     )
-    nox_utils.run_custom_session(
-        session,
+    session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "cartesian"),
     )
@@ -149,14 +152,12 @@ def test_eve(session: nox.Session) -> None:
 
     num_processes = session.env.get("NUM_PROCESSES", "auto")
 
-    nox_utils.run_custom_session(
-        session,
+    session.run(
         *f"pytest --cache-clear -sv -n {num_processes}".split(),
         str(pathlib.Path("tests") / "eve_tests"),
         *session.posargs,
     )
-    nox_utils.run_custom_session(
-        session,
+    session.run(
         *"pytest --doctest-modules -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "eve"),
     )
@@ -167,10 +168,9 @@ def test_examples(session: nox.Session) -> None:
     """Run and test documentation workflows."""
 
     nox_utils.install_session_venv(session, extras=["testing"], groups=["docs", "test"])
-    env = {}
 
-    session.run(*"jupytext docs/user/next/QuickstartGuide.md --to .ipynb".split(), env=env)
-    session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split(), env=env)
+    session.run(*"jupytext docs/user/next/QuickstartGuide.md --to .ipynb".split())
+    session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split())
 
     for notebook, extra_args in [
         ("docs/user/next/workshop/slides", None),
@@ -182,14 +182,12 @@ def test_examples(session: nox.Session) -> None:
         session.run(
             *f"pytest --nbmake {notebook} -sv -n 1 --benchmark-disable".split(),
             *(extra_args or []),
-            env=env,
         )
 
 
 @nox_utils.customize_session(
     python=PYTHON_VERSIONS,
     tags=["next"],
-    env_vars=["NUM_PROCESSES"],
     ignore_paths=[  # In CI mode, skip when only gt4py.cartesian or doc files have been updated
         "src/gt4py/cartesian/**",
         "tests/cartesian_tests/**",
@@ -236,16 +234,14 @@ def test_next(
     num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
 
-    nox_utils.run_custom_session(
-        session,
+    session.run(
         *f"pytest --cache-clear -sv -n {num_processes}".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
-    nox_utils.run_custom_session(
-        session,
+    session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "next"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
@@ -257,13 +253,11 @@ def test_package(session: nox.Session) -> None:
     """Run 'gt4py' package level tests."""
 
     nox_utils.install_session_venv(session, groups=["test"])
-    env = {}
 
     session.run(
         *"pytest --cache-clear -sv".split(),
         str(pathlib.Path("tests") / "package_tests"),
         *session.posargs,
-        env=env,
     )
 
     modules = [str(path) for path in (pathlib.Path("src") / "gt4py").glob("*.py")]
@@ -271,14 +265,12 @@ def test_package(session: nox.Session) -> None:
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         *modules,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
-        env=env,
     )
 
 
 @nox_utils.customize_session(
     python=PYTHON_VERSIONS,
     tags=["cartesian", "next"],
-    env_vars=["NUM_PROCESSES"],
     paths=[  # In CI mode, run when gt4py.storage files (or package settings) are changed
         "src/gt4py/storage/**",
         "src/gt4py/cartesian/backend/**",  # For DaCe storages
@@ -306,15 +298,13 @@ def test_storage(
     num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(device_settings["markers"])
 
-    nox_utils.run_custom_session(
-        session,
+    session.run(
         *f"pytest --cache-clear -sv -n {num_processes}".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,
     )
-    nox_utils.run_custom_session(
-        session,
+    session.run(
         *"pytest --doctest-modules -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "storage"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
@@ -330,8 +320,4 @@ def test_noxfile_utils(session: nox.Session) -> None:
 
 
 if __name__ == "__main__":
-    print(
-        "This file is not meant to be run directly."
-        "Use `nox` to run the sessions defined in this file."
-    )
-    sys.exit(1)
+    nox.main()
