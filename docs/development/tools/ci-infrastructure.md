@@ -4,7 +4,7 @@ Any test job that runs on CI is encoded in automation tools like **nox** and **p
 
 ## GitHub Workflows
 
-The following of workflows are currently active.
+The following workflows are currently active.
 
 ### Code Quality
 
@@ -16,7 +16,9 @@ The `Test Cartesian (CPU)`, `Test Eve`, `Test Next (CPU)`, `Test Storage (CPU)` 
 
 #### When are workflows triggered
 
-The idea is to run workflows only when needed. This means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, `eve` tests will not be run when only GT4Py sources are changed. In the past we used the `paths` and `paths-ignore` workflow options together with an always-suceeding _fallback_ workflow for this, but a similar mechanism has now been defined directly with `nox`. The conditional execution of tests is disabled by default and it has to be activated through `GT4PY_CI_NOX_*` environment variables (check [`noxfile.py`](../../../noxfile.py) and [`noxfile_utils.py`](../../../noxfile_utils.py_) for details.
+The idea is to run workflows only when needed. This means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, `eve` tests will not be run when only GT4Py sources are changed.
+
+In the past we used the `paths` and `paths-ignore` workflow options together with an always-suceeding _fallback_ workflow for this, but a similar mechanism has now been defined directly with `nox`. The conditional execution of tests is disabled by default and it has to be activated through `GT4PY_CI_NOX_*` environment variables (check [`noxfile.py`](../../../noxfile.py) and [`noxfile_utils.py`](../../../noxfile_utils.py_) for details.
 
 The overall dependencies between subprojects and tests can be visualized as:
 
