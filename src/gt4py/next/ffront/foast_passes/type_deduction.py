@@ -429,7 +429,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not isinstance(new_node.condition.type, ts.ScalarType):
             raise errors.DSLError(
                 node.location,
-                "Condition for 'if' must be scalar, " f"got '{new_node.condition.type}' instead.",
+                f"Condition for 'if' must be scalar, got '{new_node.condition.type}' instead.",
             )
 
         if new_node.condition.type.kind != ts.ScalarKind.BOOL:
@@ -688,6 +688,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"{err_msg} Operator "
                     f"must be one of {', '.join((str(op) for op in logical_ops))}.",
                 )
+            assert isinstance(right.type.dims, list)
+            assert isinstance(left.type.dims, list)
             return ts.DomainType(dims=promote_dims(left.type.dims, right.type.dims))
         else:
             raise errors.DSLError(node.location, err_msg)
@@ -1006,13 +1008,22 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             collection_type=ts.TupleType,
             result_collection_constructor=lambda el: ts.TupleType(types=list(el)),
         )
-        def deduce_return_type(tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType):
+        def deduce_return_type(
+            tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType
+        ) -> ts.FieldType:
             if (t_dtype := type_info.extract_dtype(tb)) != (f_dtype := type_info.extract_dtype(fb)):
                 raise errors.DSLError(
                     node.location,
                     f"Field arguments must be of same dtype, got '{t_dtype}' != '{f_dtype}'.",
                 )
-            return_dims = promote_dims(mask_type.dims, type_info.promote(tb, fb).dims)
+            assert isinstance(mask_type.dims, list)
+            promoted_branches = type_info.promote(tb, fb)
+            branches_dims = (
+                [] if isinstance(promoted_branches, ts.ScalarType) else promoted_branches.dims
+            )
+            return_dims = promote_dims(mask_type.dims, branches_dims)
+            assert isinstance(t_dtype, ts.ScalarType)
+            assert isinstance(f_dtype, ts.ScalarType)
             return_type = ts.FieldType(dims=return_dims, dtype=type_info.promote(t_dtype, f_dtype))
             return return_type
 
