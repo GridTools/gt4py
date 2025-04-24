@@ -7,14 +7,18 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-Utility functions and decorators for managing and customizing Nox sessions
-in the GT4Py project. It includes functionality for filtering environment
-variables, handling session-specific metadata, and determining whether a
-session should be skipped based on changes in the repository.
+Utility functions and decorators for managing and customizing Nox sessions.
+
+It includes functionality for filtering environment variables, handling
+session-specific metadata, and determining whether a session should be
+skipped based on changes in the repository.
 
 Environment Variables:
-- `{PROJECT_PREFIX}_CI_NOX_RUN_ONLY_IF_CHANGED_FROM`: Specifies the commit to compare changes against.
-- `{PROJECT_PREFIX}_CI_NOX_VERBOSE`: Enables verbose mode for debugging session behavior.
+
+- `[{PROJECT_PREFIX}_]CI_NOX_RUN_ONLY_IF_CHANGED_FROM`: Specifies the
+  commit to compare changes against.
+- `[{PROJECT_PREFIX}_]CI_NOX_VERBOSE`: Enables verbose mode for debugging
+  session behavior.
 
 """
 

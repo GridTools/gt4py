@@ -110,22 +110,19 @@ def test_cartesian(
         extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
         groups=["test"],
     )
-    env = nox_utils.make_session_env(session)
 
     num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
-    session.run(
+    nox_utils.run_session(
         *f"pytest --cache-clear -sv -n {num_processes} --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
-        env=env,
     )
-    session.run(
+    nox_utils.run_session(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "cartesian"),
-        env=env,
     )
 
 
@@ -147,20 +144,17 @@ def test_eve(session: nox.Session) -> None:
     """Run 'gt4py.eve' tests."""
 
     nox_utils.install_session_venv(session, groups=["test"])
-    env = nox_utils.make_session_env(session)
 
     num_processes = session.env.get("NUM_PROCESSES", "auto")
 
-    session.run(
+    nox_utils.run_session(
         *f"pytest --cache-clear -sv -n {num_processes}".split(),
         str(pathlib.Path("tests") / "eve_tests"),
         *session.posargs,
-        env=env,
     )
-    session.run(
+    nox_utils.run_session(
         *"pytest --doctest-modules -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "eve"),
-        env=env,
     )
 
 
@@ -234,24 +228,21 @@ def test_next(
         extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
         groups=groups,
     )
-    env = nox_utils.make_session_env(session)
 
     num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
 
-    session.run(
+    nox_utils.run_session(
         *f"pytest --cache-clear -sv -n {num_processes}".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
-        env=env,
     )
-    session.run(
+    nox_utils.run_session(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "next"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
-        env=env,
     )
 
 
@@ -305,23 +296,20 @@ def test_storage(
     nox_utils.install_session_venv(
         session, extras=["performance", "testing", *device_settings["extras"]], groups=["test"]
     )
-    env = nox_utils.make_session_env(session)
 
     num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(device_settings["markers"])
 
-    session.run(
+    nox_utils.run_session(
         *f"pytest --cache-clear -sv -n {num_processes}".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,
-        env=env,
     )
-    session.run(
+    nox_utils.run_session(
         *"pytest --doctest-modules -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "storage"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
-        env=env,
     )
 
 
