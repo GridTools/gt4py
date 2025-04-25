@@ -69,13 +69,12 @@ def _process_args(
     if not isinstance(past_node.type, ts_ffront.ProgramType):
         raise TypeError("Can not process arguments for PAST programs prior to type inference.")
 
+    args, kwargs = type_info.canonicalize_arguments(past_node.type, args, kwargs)
     arg_types = tuple(arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in args)
     kwarg_types = {
         k: (v.type_ if isinstance(v, arguments.StaticArg) else v) for k, v in kwargs.items()
     }
     _validate_args(past_node=past_node, arg_types=arg_types, kwarg_types=kwarg_types)
-
-    args, kwargs = type_info.canonicalize_arguments(past_node.type, args, kwargs)
 
     implicit_domain = any(
         isinstance(stmt, past.Call) and "domain" not in stmt.kwargs for stmt in past_node.body
