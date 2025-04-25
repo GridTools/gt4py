@@ -15,16 +15,16 @@ from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
-    cartesian_case,
-    unstructured_case,
     V2E,
+    cartesian_case,
     mesh_descriptor,
+    unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    MeshDescriptor,
     exec_alloc_descriptor,
     simple_mesh,
     skip_value_mesh,
-    MeshDescriptor,
 )
 
 
@@ -699,3 +699,10 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
         offset_provider=cartesian_case.offset_provider,
     )
     assert np.allclose(out.asnumpy(), field_a.asnumpy() * 3 + field_b.asnumpy() * 4)
+
+
+def test_offset_provider_to_type_unsafe():
+    mesh = simple_mesh(None)
+    offset_provider = mesh.offset_provider
+
+    compiled_program

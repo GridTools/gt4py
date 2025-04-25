@@ -82,7 +82,7 @@ class Program:
     _static_params: (
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
-    _compiled_programs: compiled_program.CompiledPrograms | None = dataclasses.field(
+    _compiled_programs: compiled_program.CompiledProgramsPool | None = dataclasses.field(
         default=None, init=False, hash=False, repr=False
     )
 
@@ -92,7 +92,7 @@ class Program:
         definition: types.FunctionType,
         backend: next_backend.Backend | None,
         grid_type: common.GridType | None = None,
-        enable_jit: bool = config.ENABLE_JIT,
+        enable_jit: bool = config.ENABLE_JIT_DEFAULT,
         static_params: Sequence[str] | None = None,
         connectivities: Optional[
             common.OffsetProvider
@@ -272,7 +272,7 @@ class Program:
         object.__setattr__(
             self,
             "_compiled_programs",
-            compiled_program.CompiledPrograms(
+            compiled_program.CompiledProgramsPool(
                 backend=self.backend,
                 definition_stage=self.definition_stage,
                 program_type=program_type,
@@ -529,7 +529,7 @@ def program(
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
-    enable_jit: bool = config.ENABLE_JIT,  # only relevant if static_params are set
+    enable_jit: bool = config.ENABLE_JIT_DEFAULT,  # only relevant if static_params are set
     static_params: Sequence[str] | None = None,
     frozen: bool = False,
 ) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:

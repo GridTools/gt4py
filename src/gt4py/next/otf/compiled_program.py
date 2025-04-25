@@ -6,12 +6,14 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import concurrent.futures
 import dataclasses
 import functools
 import itertools
 from collections.abc import Sequence
-from typing import Any, TypeAlias
+from typing import Any, Callable, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend as gtx_backend, common, config
@@ -37,7 +39,7 @@ class _CompiledProgramsKey:
         return hash((self.values, tuple(self.offset_provider_type.items())))
 
 
-class CompiledPrograms:
+class CompiledProgramsPool:
     backend: gtx_backend.Backend
     definition_stage: ffront_stages.ProgramDefinition
     program_type: ts_ffront.ProgramType
@@ -100,14 +102,12 @@ class CompiledPrograms:
         Initializes the static argument indices for this program.
         """
         arg_types_dict = self.program_type.definition.pos_or_kw_args
-        static_args_indices = tuple(
-            sorted(list(arg_types_dict.keys()).index(k) for k in static_params)
-        )
+        sorted_args = sorted(list(arg_types_dict.keys()))
+        static_args_indices = tuple(sorted_args.index(k) for k in static_params)
 
-        if self._static_arg_indices is None:
-            self._static_arg_indices = static_args_indices
-        elif self._static_arg_indices != static_args_indices:
+        if self._static_arg_indices and self._static_arg_indices != static_args_indices:
             raise ValueError("Static arguments must be the same for all compiled programs.")
+        self._static_arg_indices = static_args_indices
 
     def _compile_variant(
         self,
@@ -167,11 +167,34 @@ class CompiledPrograms:
         return tuple(names[i] for i in self._static_arg_indices)
 
 
+_T = TypeVar("_T")
+_R = TypeVar("_R")
+
+
+class _CacheOnId(Generic[_T, _R]):
+    def __init__(self, func: Callable[[_T], _R]) -> None:
+        self.func = func
+
+    def __hash__(self) -> int:
+        return hash(id(self._arg))
+
+    def __eq__(self, other: Any) -> bool:
+        return id(self._arg) == id(other._arg)
+
+    @functools.lru_cache(maxsize=128)  # noqa: B019 # this lru_cache is not leaking as there will be only one instance (per cached function)
+    def _cache(self, _: int) -> _R:
+        return self.func(self._arg)
+
+    def __call__(self, arg: _T) -> _R:
+        self._arg = arg
+        return self._cache(id(arg))
+
+    def cache_info(self) -> functools._CacheInfo:
+        return self._cache.cache_info()
+
+
+@_CacheOnId
 def _offset_provider_to_type_unsafe(
     offset_provider: common.OffsetProvider,
 ) -> common.OffsetProviderType:
-    @functools.lru_cache(maxsize=128)
-    def _offset_provider_to_type_unsafe_impl(_: int) -> common.OffsetProviderType:
-        return common.offset_provider_to_type(offset_provider)
-
-    return _offset_provider_to_type_unsafe_impl(id(offset_provider))
+    return common.offset_provider_to_type(offset_provider)
