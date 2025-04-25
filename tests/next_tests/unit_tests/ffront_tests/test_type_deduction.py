@@ -187,6 +187,18 @@ def test_concat_where_invalid_dtype():
         _ = FieldOperatorParser.apply_to_function(domain_comparison)
 
 
+def test_domain_chained_comparison_failure():
+    def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
+        return concat_where(0 < TDim < 42, a, b)
+
+    # _ = FieldOperatorParser.apply_to_function(domain_comparison)
+    with pytest.raises(
+        errors.DSLError,
+        match=re.escape("TODO"),
+    ):
+        _ = FieldOperatorParser.apply_to_function(domain_comparison)
+
+
 @pytest.fixture
 def premap_setup():
     X = Dimension("X")
