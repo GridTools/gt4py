@@ -16,6 +16,21 @@ from gt4py.cartesian.gtc.dace import daceir as dcir
 pytestmark = pytest.mark.requires_dace
 
 
+def test_DomainInterval() -> None:
+    I_start = dcir.AxisBound(axis=dcir.Axis.I, level=common.LevelMarker.START)
+    I_end = dcir.AxisBound(axis=dcir.Axis.I, level=common.LevelMarker.END)
+    interval = dcir.DomainInterval(start=I_start, end=I_end)
+
+    assert interval.start == I_start
+    assert interval.end == I_end
+
+    with pytest.raises(ValueError, match=r"^Axis need to match for start and end bounds. Got *"):
+        dcir.DomainInterval(
+            start=I_start,
+            end=dcir.AxisBound(axis=dcir.Axis.J, level=common.LevelMarker.END),
+        )
+
+
 def test_DomainInterval_intersection() -> None:
     I_0_4 = dcir.DomainInterval(
         start=dcir.AxisBound(axis=dcir.Axis.I, level=common.LevelMarker.START),
@@ -76,3 +91,23 @@ def test_DomainInterval_intersection() -> None:
 
     with pytest.raises(ValueError, match=r"^No intersection found for intervals *"):
         dcir.DomainInterval.intersection(dcir.Axis.I, I_0_4, I_8_15)
+
+    with pytest.raises(ValueError, match=r"^Axis need to match: *"):
+        dcir.DomainInterval.intersection(
+            dcir.Axis.I,
+            dcir.DomainInterval(
+                start=dcir.AxisBound(axis=dcir.Axis.J, level=common.LevelMarker.START),
+                end=dcir.AxisBound(axis=dcir.Axis.J, level=common.LevelMarker.END),
+            ),
+            I_full,
+        )
+
+    with pytest.raises(ValueError, match=r"^Axis need to match: *"):
+        dcir.DomainInterval.intersection(
+            dcir.Axis.I,
+            I_full,
+            dcir.DomainInterval(
+                start=dcir.AxisBound(axis=dcir.Axis.J, level=common.LevelMarker.START),
+                end=dcir.AxisBound(axis=dcir.Axis.J, level=common.LevelMarker.END),
+            ),
+        )
