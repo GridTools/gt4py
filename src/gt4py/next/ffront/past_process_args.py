@@ -75,9 +75,7 @@ def _process_args(
     }
     _validate_args(past_node=past_node, arg_types=arg_types, kwarg_types=kwarg_types)
 
-    arg_types, kwarg_types = type_info.canonicalize_arguments(
-        past_node.type, arg_types, kwarg_types
-    )
+    args, kwargs = type_info.canonicalize_arguments(past_node.type, args, kwargs)
 
     implicit_domain = any(
         isinstance(stmt, past.Call) and "domain" not in stmt.kwargs for stmt in past_node.body
@@ -85,15 +83,13 @@ def _process_args(
 
     # extract size of all field arguments
     size_args: list[ts.TypeSpec] = []
-    rewritten_args = list(arg_types)
+    rewritten_args = list(args)
     for param_idx, param in enumerate(past_node.params):
         if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
             # TODO(tehrengruber): Previously this function was called with the actual arguments
             #  not their type. The check using the shape here is not functional anymore and
             #  should instead be placed in a proper location.
-            ranges_and_dims = [
-                *_field_constituents_range_and_dims(arg_types[param_idx], param.type)
-            ]
+            ranges_and_dims = [*_field_constituents_range_and_dims(args[param_idx], param.type)]
             # check that all non-scalar like constituents have the same shape and dimension, e.g.
             # for `(scalar, (field1, field2))` the two fields need to have the same shape and
             # dimension
@@ -111,7 +107,7 @@ def _process_args(
                 size_args.extend(
                     range_ if range_ else [ts.TupleType(types=[index_type, index_type])] * len(dims)  # type: ignore[arg-type]  # shape is always empty
                 )
-    return tuple(rewritten_args), tuple(size_args), kwarg_types
+    return tuple(rewritten_args), tuple(size_args), kwargs
 
 
 def _field_constituents_range_and_dims(
