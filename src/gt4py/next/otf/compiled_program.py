@@ -58,6 +58,8 @@ class CompiledProgramsPool:
     program_type: ts_ffront.ProgramType
     static_params: Sequence[str] | None = None  # not ordered
 
+    # TODO(havogt): This dict could be replaced by a `functools.cache`d method
+    # and appropriate hashing of the arguments.
     _compiled_programs: dict[
         _CompiledProgramsKey,
         stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
