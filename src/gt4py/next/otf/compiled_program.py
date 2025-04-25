@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from typing import Any, TypeAlias
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import utils as eve_utils
+from gt4py.eve import extended_typing, utils as eve_utils
 from gt4py.next import backend as gtx_backend, common, config
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
 from gt4py.next.otf import arguments, stages
@@ -26,9 +26,7 @@ from gt4py.next.type_system import type_info
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
 _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
 
-ScalarOrTupleOfScalars: TypeAlias = (
-    core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]
-)  # or nested
+ScalarOrTupleOfScalars: TypeAlias = extended_typing.TOrNestedTuple[core_defs.Scalar]
 
 
 @dataclasses.dataclass  # not frozen for performance

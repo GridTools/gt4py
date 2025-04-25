@@ -128,6 +128,10 @@ class ArgsOnlyCallable(Protocol[_A, _R]):
     def __call__(self, *args: _A) -> _R: ...
 
 
+_E = TypeVar("_E", covariant=True)
+NestedTuple = Tuple[Union[_E, "NestedTuple[_E]"], ...]
+TOrNestedTuple = Union[_E, NestedTuple[_E]]
+
 # -- Typing annotations --
 if _sys.version_info >= (3, 9):
     SolvedTypeAnnotation = Union[
