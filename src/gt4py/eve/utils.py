@@ -362,6 +362,35 @@ def optional_lru_cache(  # redefinition of unused function
     return _decorator(func) if func is not None else _decorator
 
 
+class HashableBy(Generic[_T]):
+    __slots__ = ["func", "value"]
+
+    def __init__(self, func: Callable[[_T], int], value: _T):
+        self.func = func
+        self.value = value
+
+    def __hash__(self) -> int:
+        return self.func(self.value)
+
+    def __eq__(self, other: Any) -> bool:
+        return self.value is other.value
+
+
+def hashable_by(func: Callable[[_T], int]) -> Callable[[_T], HashableBy[_T]]:
+    """
+    Creates a wrapper that uses `func` to hash the value passed it.
+    """
+
+    def _hashable_by(value: _T) -> HashableBy[_T]:
+        hashable = HashableBy(func, value)
+        return hashable
+
+    return _hashable_by
+
+
+hashable_by_id = hashable_by(id)
+
+
 def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     """Class decorator to automatically register virtual subclasses.
 

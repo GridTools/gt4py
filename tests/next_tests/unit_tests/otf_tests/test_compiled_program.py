@@ -16,12 +16,12 @@ def test_offset_provider_to_type_unsafe():
     offset_provider = mesh.offset_provider
 
     compiled_program._offset_provider_to_type_unsafe(offset_provider)
-    assert compiled_program._offset_provider_to_type_unsafe.cache_info().misses == 1
+    assert compiled_program._offset_provider_to_type_unsafe_impl.cache_info().misses == 1
     compiled_program._offset_provider_to_type_unsafe(offset_provider)
-    assert compiled_program._offset_provider_to_type_unsafe.cache_info().misses == 1
-    assert compiled_program._offset_provider_to_type_unsafe.cache_info().hits == 1
+    assert compiled_program._offset_provider_to_type_unsafe_impl.cache_info().misses == 1
+    assert compiled_program._offset_provider_to_type_unsafe_impl.cache_info().hits == 1
 
     offset_provider2 = {"V2E": mesh.offset_provider["V2E"]}
     compiled_program._offset_provider_to_type_unsafe(offset_provider2)
-    assert compiled_program._offset_provider_to_type_unsafe.cache_info().misses == 2
-    assert compiled_program._offset_provider_to_type_unsafe.cache_info().hits == 1
+    assert compiled_program._offset_provider_to_type_unsafe_impl.cache_info().misses == 2
+    assert compiled_program._offset_provider_to_type_unsafe_impl.cache_info().hits == 1
