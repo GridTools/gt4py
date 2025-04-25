@@ -33,18 +33,32 @@ ScalarOrTupleOfScalars: TypeAlias = (
 
 @dataclasses.dataclass  # not frozen for performance
 class _CompiledProgramsKey:
-    values: tuple[ScalarOrTupleOfScalars, ...]
+    values: tuple[ScalarOrTupleOfScalars, ...]  # in order of static_params
     offset_provider_type: common.OffsetProviderType
 
     def __hash__(self) -> int:
+        assert common.is_offset_provider_type(self.offset_provider_type)
         return hash((self.values, tuple(self.offset_provider_type.items())))
 
 
 class CompiledProgramsPool:
+    """
+    A pool of compiled programs for a given program and backend.
+
+    If 'static_params' is set (or static arguments are passed to 'compile'),
+    the pool will create a program for each argument that is marked static
+    and each 'OffsetProviderType'.
+
+    If `enable_jit` is True in the call to the pool, it will compile a program
+    with static arguments corresponding to the 'static_params', otherwise it
+    will error. In the latter case, the pool needs to be filled with call(s)
+    to 'compile' before it can be used.
+    """
+
     backend: gtx_backend.Backend
     definition_stage: ffront_stages.ProgramDefinition
     program_type: ts_ffront.ProgramType
-    _static_arg_indices: tuple[int, ...] | None = None
+    static_params: Sequence[str] | None = None  # not ordered
 
     _compiled_programs: dict[
         _CompiledProgramsKey,
@@ -67,14 +81,19 @@ class CompiledProgramsPool:
         assert not self.program_type.definition.kw_only_args
         assert not self.program_type.definition.pos_only_args
 
-        if static_params is not None:
-            self._init_static_arg_indices(static_params)
+        self.static_params = static_params
         self._compiled_programs = {}
 
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
     ) -> None:
-        assert self._static_arg_indices is not None
+        """
+        Calls a program with the given arguments and offset provider.
+
+        If the program is not in cache, it will jit compile with static arguments
+        (defined by 'static_params') in case `enable_jit` is True. Otherwise,
+        it is an error.
+        """
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
         offset_provider_type = _offset_provider_to_type_unsafe(offset_provider)
         key = _CompiledProgramsKey(
@@ -89,39 +108,35 @@ class CompiledProgramsPool:
             program(*args, **kwargs, offset_provider=offset_provider)
         except KeyError as e:
             if enable_jit:
-                static_values = tuple(args[i] for i in self._static_arg_indices)
-                self._compile_variant(
-                    static_values=static_values, offset_provider_type=offset_provider
-                )
+                assert self.static_params is not None
+                static_args = {name: args[self._param_index(name)] for name in self.static_params}
+                self._compile_variant(static_args=static_args, offset_provider_type=offset_provider)
                 return self(
                     *args, offset_provider=offset_provider, enable_jit=False, **kwargs
-                )  # passing `enable_jit=False` as a cache miss should be a hard-error in this call`
+                )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 
-    def _init_static_arg_indices(self, static_params: Sequence[str]) -> None:
-        """
-        Initializes the static argument indices for this program.
-        """
-        arg_types_dict = self.program_type.definition.pos_or_kw_args
-        sorted_args = sorted(list(arg_types_dict.keys()))
-        static_args_indices = tuple(sorted_args.index(k) for k in static_params)
+    def _param_index(self, name: str) -> int:
+        return list(self.program_type.definition.pos_or_kw_args.keys()).index(name)
 
-        if self._static_arg_indices and self._static_arg_indices != static_args_indices:
-            raise ValueError("Static arguments must be the same for all compiled programs.")
-        self._static_arg_indices = static_args_indices
+    @functools.cached_property
+    def _static_arg_indices(self) -> tuple[int, ...]:
+        if self.static_params is None:
+            # this could also be done in `__call__` but would be an extra if in the fast path
+            self.static_params = ()
+        return tuple(self._param_index(p) for p in self.static_params)
 
     def _compile_variant(
         self,
-        static_values: tuple[ScalarOrTupleOfScalars, ...],
+        static_args: dict[str, ScalarOrTupleOfScalars],
         offset_provider_type: common.OffsetProviderType | common.OffsetProvider,
     ) -> None:
-        assert self._static_arg_indices is not None
-        index_to_value = dict(zip(self._static_arg_indices, static_values))
+        assert self.static_params is not None
         args = tuple(
-            type_
-            if i not in index_to_value
-            else arguments.StaticArg(value=index_to_value[i], type_=type_)
-            for i, type_ in enumerate(self.program_type.definition.pos_or_kw_args.values())
+            arguments.StaticArg(value=static_args[name], type_=type_)
+            if name in self.static_params
+            else type_
+            for name, type_ in self.program_type.definition.pos_or_kw_args.items()
         )
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider_type,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
@@ -130,7 +145,7 @@ class CompiledProgramsPool:
             kwargs={},
         )
         key = _CompiledProgramsKey(
-            static_values,
+            tuple(static_args[p] for p in self.static_params),
             offset_provider_type
             if common.is_offset_provider_type(offset_provider_type)
             else common.offset_provider_to_type(offset_provider_type),
@@ -146,10 +161,30 @@ class CompiledProgramsPool:
         offset_provider_type: common.OffsetProvider | common.OffsetProviderType,
         **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
     ) -> None:
-        self._init_static_arg_indices(static_params=tuple(static_args.keys()))
+        """
+        Compiles the program for all combinations of static arguments and the given 'OffsetProviderType'.
+
+        Note: In case you want to compile for specific combinations of static arguments (instead
+        of the combinatoral), you can call compile multiples times.
+
+        Examples:
+            pool.compile(static_arg0=[0,1], static_arg1=[2,3], ...)
+                will compile for (0,2), (0,3), (1,2), (1,3)
+            pool.compile(static_arg0=[0], static_arg1=[2]).compile(static_arg=[1], static_arg1=[3])
+                will compile for (0,2), (1,3)
+        """
+        if self.static_params is not None:
+            if not sorted(self.static_params) == sorted(static_args.keys()):
+                raise ValueError(
+                    f"Static arguments must be the same for all compiled programs. Got {list(static_args.keys())}, expected {self.static_params}."
+                )
+        else:
+            self.static_params = tuple(static_args.keys())
 
         for static_values in itertools.product(*static_args.values()):
-            self._compile_variant(tuple(static_values), offset_provider_type)
+            self._compile_variant(
+                dict(zip(static_args.keys(), static_values, strict=True)), offset_provider_type
+            )
 
     def _resolve_future(self, key: _CompiledProgramsKey) -> stages.CompiledProgram:
         program = self._compiled_programs[key]
@@ -158,21 +193,12 @@ class CompiledProgramsPool:
         self._compiled_programs[key] = result
         return result
 
-    @functools.cached_property
-    def static_params(self) -> tuple[str, ...]:
-        """
-        Returns the names of the static parameters for this program.
-        """
-        names = tuple(self.program_type.definition.pos_or_kw_args.keys())
-        assert self._static_arg_indices is not None
-        return tuple(names[i] for i in self._static_arg_indices)
-
 
 @functools.lru_cache(maxsize=128)
 def _offset_provider_to_type_unsafe_impl(
-    offset_provider: eve_utils.HashableBy[common.OffsetProvider],
+    hashable_offset_provider: eve_utils.HashableBy[common.OffsetProvider],
 ) -> common.OffsetProviderType:
-    return common.offset_provider_to_type(offset_provider.value)
+    return common.offset_provider_to_type(hashable_offset_provider.value)
 
 
 def _offset_provider_to_type_unsafe(
