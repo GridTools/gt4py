@@ -16,15 +16,15 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 _Fun = TypeVar("_Fun", bound=itir.Expr)
 
 
-class _IsCall(itir.FunCall, Generic[_Fun]):
+class FunCallTo(itir.FunCall, Generic[_Fun]):
     fun: _Fun
     args: List[itir.Expr]
 
 
-_IsCallToPattern: TypeAlias = _IsCall[itir.SymRef]
+_FunCallToSymRef: TypeAlias = FunCallTo[itir.SymRef]
 
 
-def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_IsCallToPattern]:
+def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_FunCallToSymRef]:
     """
     Match call expression to a given function.
 
@@ -42,17 +42,20 @@ def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_IsCallToPatter
     True
     """
     assert not isinstance(fun, itir.Node)  # to avoid accidentally passing the fun as first argument
-    if isinstance(fun, (list, tuple, set, Iterable)) and not isinstance(fun, str):
+    if isinstance(fun, str):
+        return (
+            isinstance(node, itir.FunCall)
+            and isinstance(node.fun, itir.SymRef)
+            and node.fun.id == fun
+        )
+    else:
         return any((is_call_to(node, f) for f in fun))
-    return (
-        isinstance(node, itir.FunCall) and isinstance(node.fun, itir.SymRef) and node.fun.id == fun
-    )
 
 
-_IsFunCallToFunCallToRef: TypeAlias = _IsCall[_IsCallToPattern]
+_FunCallToFunCallToRef: TypeAlias = FunCallTo[_FunCallToSymRef]
 
 
-def is_applied_lift(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
+def is_applied_lift(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
     """Match expressions of the form `lift(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -62,7 +65,7 @@ def is_applied_lift(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
     )
 
 
-def is_applied_map(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
+def is_applied_map(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
     """Match expressions of the form `map(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -72,7 +75,7 @@ def is_applied_map(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
     )
 
 
-def is_applied_reduce(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
+def is_applied_reduce(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
     """Match expressions of the form `reduce(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -82,7 +85,7 @@ def is_applied_reduce(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
     )
 
 
-def is_applied_shift(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
+def is_applied_shift(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
     """Match expressions of the form `shift(λ(...) → ...)(...)`."""
     return (
         isinstance(arg, itir.FunCall)
@@ -92,15 +95,15 @@ def is_applied_shift(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
     )
 
 
-def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[_IsFunCallToFunCallToRef]:
+def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
     """Match expressions of the form `as_fieldop(stencil)(*args)`."""
     return isinstance(arg, itir.FunCall) and is_call_to(arg.fun, "as_fieldop")
 
 
-_LetPattern: TypeAlias = _IsCall[itir.Lambda]
+_FunCallToLambda: TypeAlias = FunCallTo[itir.Lambda]
 
 
-def is_let(node: itir.Node) -> TypeGuard[_LetPattern]:
+def is_let(node: itir.Node) -> TypeGuard[_FunCallToLambda]:
     """Match expression of the form `(λ(...) → ...)(...)`."""
     return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
 
@@ -109,7 +112,7 @@ def is_ref_to(node, ref: str) -> TypeGuard[itir.SymRef]:
     return isinstance(node, itir.SymRef) and node.id == ref
 
 
-def is_identity_as_fieldop(node: itir.Expr) -> TypeGuard[_IsFunCallToFunCallToRef]:
+def is_identity_as_fieldop(node: itir.Expr) -> TypeGuard[_FunCallToFunCallToRef]:
     """
     Match field operators implementing element-wise copy of a field argument,
     that is expressions of the form `as_fieldop(stencil)(*args)`
