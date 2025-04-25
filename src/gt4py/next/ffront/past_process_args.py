@@ -89,7 +89,9 @@ def _process_args(
             # TODO(tehrengruber): Previously this function was called with the actual arguments
             #  not their type. The check using the shape here is not functional anymore and
             #  should instead be placed in a proper location.
-            ranges_and_dims = [*_field_constituents_range_and_dims(args[param_idx], param.type)]
+            ranges_and_dims = [
+                *_field_constituents_range_and_dims(arg_types[param_idx], param.type)
+            ]
             # check that all non-scalar like constituents have the same shape and dimension, e.g.
             # for `(scalar, (field1, field2))` the two fields need to have the same shape and
             # dimension
