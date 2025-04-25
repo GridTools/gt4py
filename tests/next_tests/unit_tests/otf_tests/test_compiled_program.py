@@ -15,6 +15,8 @@ def test_offset_provider_to_type_unsafe():
     mesh = simple_mesh(None)
     offset_provider = mesh.offset_provider
 
+    assert compiled_program._offset_provider_to_type_unsafe_impl.cache_clear()
+
     compiled_program._offset_provider_to_type_unsafe(offset_provider)
     assert compiled_program._offset_provider_to_type_unsafe_impl.cache_info().misses == 1
     compiled_program._offset_provider_to_type_unsafe(offset_provider)
