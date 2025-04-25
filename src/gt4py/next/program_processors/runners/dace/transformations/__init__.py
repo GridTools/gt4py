@@ -23,6 +23,7 @@ from .gpu_utils import (
 from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
 from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
+from .map_fusion_extended import gt_horizontal_map_fusion, gt_vertical_map_fusion
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
@@ -44,7 +45,6 @@ from .simplify import (
     gt_substitute_compiletime_symbols,
 )
 from .split_access_nodes import SplitAccessNode, gt_split_access_nodes
-from .split_map_ranges import gt_horizontal_map_fusion, gt_vertical_map_fusion
 from .state_fusion import GT4PyStateFusion
 from .strides import (
     gt_change_transient_strides,
