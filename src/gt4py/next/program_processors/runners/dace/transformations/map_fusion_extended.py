@@ -22,7 +22,6 @@ from gt4py.next.program_processors.runners.dace.transformations import map_fusio
 def gt_horizontal_map_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
-    only_inner_maps: Optional[bool] = None,
     only_toplevel_maps: Optional[bool] = None,
     validate: bool = True,
     validate_all: bool = False,
@@ -33,14 +32,13 @@ def gt_horizontal_map_fusion(
     ret = sdfg.apply_transformations_repeated(
         [
             HorizontalSplitMapRange(
-                only_inner_maps=only_inner_maps,
                 only_toplevel_maps=only_toplevel_maps,
             ),
             HorizontalCloneMapRange(),
             gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
             gtx_transformations.MapFusionParallel(
                 only_if_common_ancestor=True,
-                only_inner_maps=only_inner_maps,
+                only_inner_maps=False,
                 only_toplevel_maps=only_toplevel_maps,
             ),
         ],
@@ -61,7 +59,6 @@ def gt_horizontal_map_fusion(
 def gt_vertical_map_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
-    only_inner_maps: Optional[bool] = None,
     only_toplevel_maps: Optional[bool] = None,
     validate: bool = True,
     validate_all: bool = False,
@@ -72,13 +69,12 @@ def gt_vertical_map_fusion(
     ret = sdfg.apply_transformations_repeated(
         [
             VerticalSplitMapRange(
-                only_inner_maps=only_inner_maps,
                 only_toplevel_maps=only_toplevel_maps,
             ),
             VerticalCloneMapRange(),
             gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
             gtx_transformations.MapFusionSerial(
-                only_inner_maps=only_inner_maps,
+                only_inner_maps=False,
                 only_toplevel_maps=only_toplevel_maps,
             ),
         ],
@@ -108,25 +104,16 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
         default=False,
         desc="Only perform fusing if the Maps are in the top level.",
     )
-    only_inner_maps = dace_properties.Property(
-        dtype=bool,
-        default=False,
-        desc="Only perform fusing if the Maps are inner Maps, i.e. does not have top level scope.",
-    )
 
     def __init__(
         self,
         only_toplevel_maps: Optional[bool] = None,
-        only_inner_maps: Optional[bool] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         if only_toplevel_maps is not None:
             self.only_toplevel_maps = only_toplevel_maps
-        if only_inner_maps is not None:
-            self.only_inner_maps = only_inner_maps
-        assert not (self.only_inner_maps and self.only_toplevel_maps)
 
     def split_maps(
         self,
@@ -203,9 +190,7 @@ class HorizontalSplitMapRange(SplitMapRange):
         second_map: dace_nodes.Map = self.second_map_entry.map
 
         map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[self.first_map_entry]
-        if self.only_inner_maps and (map_scope is None):
-            return False
-        elif self.only_toplevel_maps and (map_scope is not None):
+        if self.only_toplevel_maps and (map_scope is not None):
             return False
 
         first_map_src_data = {
@@ -290,9 +275,7 @@ class VerticalSplitMapRange(SplitMapRange):
         second_map = self.second_map_entry.map
 
         map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[self.first_map_exit]
-        if self.only_inner_maps and (map_scope is None):
-            return False
-        elif self.only_toplevel_maps and (map_scope is not None):
+        if self.only_toplevel_maps and (map_scope is not None):
             return False
 
         if not self.access_node.desc(graph).transient:
