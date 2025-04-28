@@ -605,14 +605,6 @@ class MapFusion(transformation.SingleStateTransformation):
                 return None
             processed_inter_nodes.add(intermediate_node)
 
-            # The intermediate can only have one incoming degree. It might be possible
-            #  to handle multiple incoming edges, if they all come from the top map.
-            #  However, the resulting SDFG might be invalid.
-            # NOTE: Allow this to happen (under certain cases) if the only producer
-            #   is the top map.
-            if state.in_degree(intermediate_node) != 1:
-                return None
-
             # If the second map is not reachable from the intermediate node, then
             #  the output is pure and we can end here.
             if not self.is_node_reachable_from(
@@ -622,6 +614,21 @@ class MapFusion(transformation.SingleStateTransformation):
             ):
                 pure_outputs.add(out_edge)
                 continue
+
+            # We require that there is only one edge between the MapExit of the
+            #  top Map and the intermediate. We allow that the intermediate has
+            #  multiple incoming edges. We assume that there is no write conflicts.
+            for intermediate_node_iedge in state.in_edges(intermediate_node):
+                if intermediate_node_iedge is out_edge:
+                    continue
+                if intermediate_node_iedge.src is first_map_exit:
+                    return None
+                if self.is_node_reachable_from(
+                    graph=state,
+                    begin=first_map_exit,
+                    end=intermediate_node_iedge.src,
+                ):
+                    return None
 
             # The following tests are _after_ we have determined if we have a pure
             #  output node, because this allows us to handle more exotic pure node
@@ -646,7 +653,7 @@ class MapFusion(transformation.SingleStateTransformation):
 
             # It can happen that multiple edges converges at the `IN_` connector
             #  of the first map exit, but there is only one edge leaving the exit.
-            #  It is complicate to handle this, so for now we ignore it.
+            #  This is complicate to handle, so for now we ignore it.
             # TODO(phimuell): Handle this case properly.
             #   To handle this we need to associate a consumer edge (the outgoing edges
             #   of the second map) with exactly one producer.
