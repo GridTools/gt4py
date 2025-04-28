@@ -17,10 +17,10 @@ from typing import Any, TypeAlias
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing, utils as eve_utils
-from gt4py.next import backend as gtx_backend, common, config
+from gt4py.next import backend as gtx_backend, common, config, errors
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
 from gt4py.next.otf import arguments, stages
-from gt4py.next.type_system import type_info
+from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
@@ -38,6 +38,78 @@ class _CompiledProgramsKey:
     def __hash__(self) -> int:
         assert common.is_offset_provider_type(self.offset_provider_type)
         return hash((self.values, frozenset(self.offset_provider_type.items())))
+
+
+def _convert_to_type(
+    value: ScalarOrTupleOfScalars, type_: ts.TupleType | ts.ScalarType
+) -> ScalarOrTupleOfScalars:
+    if isinstance(type_, ts.ScalarType):
+        return tt.as_dtype(type_).scalar_type(value)
+    else:
+        assert isinstance(type_, ts.TupleType)
+        assert isinstance(value, tuple)
+        assert all(isinstance(t, (ts.ScalarType, ts.TupleType)) for t in type_.types)
+        return tuple(_convert_to_type(v, t) for v, t in zip(value, type_.types))  # type: ignore[arg-type] # checked in assert
+
+
+def _validate_types(
+    program_name: str,
+    static_args: dict[str, ScalarOrTupleOfScalars],
+    program_type: ts_ffront.ProgramType,
+) -> None:
+    param_types = program_type.definition.pos_or_kw_args
+
+    type_errors = []
+    for name, type_ in param_types.items():
+        if name in static_args:
+            if not type_info.is_type_or_tuple_of_type(type_, ts.ScalarType):
+                type_errors.append(f"'{name}' with type '{type_}' cannot be static.")
+    if len(type_errors) > 0:
+        raise errors.TypeError_(
+            message=f"Invalid static arguments provided for '{program_name}' with type '{program_type}' (only scalars or (nested) tuples of scalars can be static):\n"
+            + ("\n".join([f"  - {error}" for error in type_errors])),
+            location=None,
+        )
+
+    static_arg_types = {name: tt.from_value(value) for name, value in static_args.items()}
+    types_from_values = [
+        static_arg_types[name]  # use type of the provided value for the static arguments
+        if name in static_arg_types
+        else type_  # else use the type from progam_type which will never mismatch
+        for name, type_ in program_type.definition.pos_or_kw_args.items()
+    ]
+    assert not program_type.definition.pos_only_args
+    assert not program_type.definition.kw_only_args
+
+    type_mismatch_errors = type_info.function_signature_incompatibilities(
+        program_type, args=types_from_values, kwargs={}
+    )
+    error_list = list(type_mismatch_errors)
+    if len(error_list) > 0:
+        raise errors.TypeError_(
+            message=f"Invalid static argument types when trying to compile '{program_name}' with type '{program_type}':\n"
+            + ("\n".join([f"  - {error}" for error in error_list])),
+            location=None,
+        )
+
+
+def _sanitize_static_args(
+    program_name: str,
+    static_args: dict[str, ScalarOrTupleOfScalars],
+    program_type: ts_ffront.ProgramType,
+) -> dict[str, ScalarOrTupleOfScalars]:
+    """
+    Sanitize static arguments to be used in the program compilation.
+
+    This function will convert all values to their corresponding type
+    and check that the types are compatible with the program type.
+    """
+    _validate_types(program_name, static_args, program_type)
+
+    return {
+        name: _convert_to_type(value, program_type.definition.pos_or_kw_args[name])  # type: ignore[arg-type] # checked in _validate_types
+        for name, value in static_args.items()
+    }
 
 
 class CompiledProgramsPool:
@@ -133,12 +205,17 @@ class CompiledProgramsPool:
         offset_provider_type: common.OffsetProviderType | common.OffsetProvider,
     ) -> None:
         assert self.static_params is not None
+        static_args = _sanitize_static_args(
+            self.definition_stage.definition.__name__, static_args, self.program_type
+        )
+
         args = tuple(
             arguments.StaticArg(value=static_args[name], type_=type_)
             if name in self.static_params
             else type_
             for name, type_ in self.program_type.definition.pos_or_kw_args.items()
         )
+
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider_type,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
             column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans

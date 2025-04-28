@@ -16,6 +16,7 @@ from .exceptions import (
     MissingArgumentError,
     MissingAttributeError,
     MissingParameterAnnotationError,
+    TypeError_,
     UndefinedSymbolError,
     UnsupportedPythonFeatureError,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "MissingArgumentError",
     "MissingAttributeError",
     "MissingParameterAnnotationError",
+    "TypeError_",
     "UndefinedSymbolError",
     "UnsupportedPythonFeatureError",
 ]
