@@ -36,7 +36,7 @@ class _CompiledProgramsKey:
 
     def __hash__(self) -> int:
         assert common.is_offset_provider_type(self.offset_provider_type)
-        return hash((self.values, tuple(self.offset_provider_type.items())))
+        return hash((self.values, frozenset(self.offset_provider_type.items())))
 
 
 class CompiledProgramsPool:
