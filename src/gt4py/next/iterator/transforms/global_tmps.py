@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import functools
+from collections.abc import Sequence
 from typing import Callable, Optional
 
 from gt4py.eve import utils as eve_utils
@@ -19,9 +20,92 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
+from gt4py.next.iterator.ir_utils.domain_utils import SymbolicDomain
 from gt4py.next.iterator.transforms import cse, infer_domain, inline_lambdas
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
+
+
+def select_elems_by_domain(
+    select_domain: SymbolicDomain,
+    target: itir.Expr,
+    args: Sequence[itir.Expr],
+    domains: tuple[SymbolicDomain, ...],
+):
+    """
+    Select all elements of possibly nested tuples for the given domain.
+
+    Returns (non-nested) tuples of the selected elements and the corresponding targets.
+    """
+    new_targets = []
+    new_els = []
+    for i, (el, el_domain) in enumerate(zip(args, domains)):
+        current_target = im.tuple_get(i, target)
+        if isinstance(el_domain, tuple):
+            assert cpm.is_call_to(el, "make_tuple")
+            more_targets, more_els = select_elems_by_domain(
+                select_domain, current_target, el.args, el_domain
+            )
+            new_els.extend(more_els)
+            new_targets.extend(more_targets)
+        else:
+            assert isinstance(el_domain, SymbolicDomain)
+            if el_domain == select_domain:
+                new_targets.append(current_target)
+                new_els.append(el)
+    return new_targets, new_els
+
+
+def _set_at_for_domain(stmt: itir.SetAt, domain: SymbolicDomain) -> itir.SetAt:
+    """Extract all elements with given domain into a new `SetAt` statement."""
+    tuple_expr = stmt.expr
+    assert cpm.is_call_to(tuple_expr, "make_tuple")
+    targets, expr_els = select_elems_by_domain(
+        domain, stmt.target, tuple_expr.args, stmt.expr.annex.domain
+    )
+    new_expr = im.make_tuple(*expr_els)
+    new_expr.annex.domain = domain
+
+    return itir.SetAt(expr=new_expr, domain=domain.as_expr(), target=im.make_tuple(*targets))
+
+
+def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
+    """
+    Splits `SetAt` statements with multiple domains into multiple statements.
+
+    `SetAt`s have a single domain therefore the target domains have to be the same.
+    We support nested tuples by flattening them and recombining them into non-nested tuples.
+    """
+    new_stmts: list[itir.Stmt] = []
+    for stmt in stmts:
+        if isinstance(stmt, itir.SetAt):
+            assert hasattr(stmt.expr.annex, "domain")
+            distinct_domains: list[domain_utils.SymbolicDomain] = list(
+                # ordered set for reproducibility
+                dict.fromkeys(next_utils.flatten_nested_tuple(stmt.expr.annex.domain))
+            )
+            if len(distinct_domains) == 1:
+                new_stmts.append(
+                    itir.SetAt(
+                        expr=stmt.expr,
+                        domain=distinct_domains[0].as_expr(),  # insert concrete domain
+                        target=stmt.target,
+                    )
+                )
+            else:
+                new_stmts.extend(_set_at_for_domain(stmt, domain) for domain in distinct_domains)
+        elif isinstance(stmt, itir.IfStmt):
+            new_stmts.append(
+                itir.IfStmt(
+                    cond=stmt.cond,
+                    true_branch=_populate_and_homogenize_domains(stmt.true_branch),
+                    false_branch=_populate_and_homogenize_domains(stmt.false_branch),
+                )
+            )
+        else:
+            raise ValueError("Expected `itir.SetAt` or `itir.IfStmt`.")
+
+    return new_stmts
 
 
 def _transform_if(
@@ -74,24 +158,6 @@ def _transform_by_pattern(
         #    or a tuple thereof)
         #  - one `SetAt` statement that materializes the expression into the temporary
         for tmp_sym, tmp_expr in extracted_fields.items():
-            domain: infer_domain.DomainAccess = tmp_expr.annex.domain
-
-            # TODO(tehrengruber): Implement. This happens when the expression is a combination
-            #  of an `if_` call with a tuple, e.g., `if_(cond, {a, b}, {c, d})`. As long as we are
-            #  able to eliminate all tuples, e.g., by propagating the scalar ifs to the top-level
-            #  of a SetAt, the CollapseTuple pass will eliminate most of this cases.
-            if isinstance(domain, tuple):
-                flattened_domains: tuple[domain_utils.SymbolicDomain] = (
-                    next_utils.flatten_nested_tuple(domain)  # type: ignore[assignment]  # mypy not smart enough
-                )
-                if not all(d == flattened_domains[0] for d in flattened_domains):
-                    raise NotImplementedError(
-                        "Tuple expressions with different domains is not supported yet."
-                    )
-                domain = flattened_domains[0]
-            assert isinstance(domain, domain_utils.SymbolicDomain)
-            domain_expr = domain.as_expr()
-
             assert isinstance(tmp_expr.type, ts.TypeSpec)
             tmp_names: str | tuple[str | tuple, ...] = type_info.apply_to_primitive_constituents(
                 lambda x: uids.sequential_id(),
@@ -103,20 +169,58 @@ def _transform_by_pattern(
             ) = type_info.apply_to_primitive_constituents(
                 type_info.extract_dtype,
                 tmp_expr.type,
+                tuple_constructor=lambda *elements: elements,
+            )
+
+            tmp_domains: SymbolicDomain | tuple[SymbolicDomain | tuple, ...] = tmp_expr.annex.domain
+
+            if cpm.is_applied_as_fieldop(tmp_expr):
+                # In this case all tuple elements have the same size (or will be `NEVER`).
+                # Create the tuple structure with that domain.
+                domain = list(
+                    set(next_utils.flatten_nested_tuple((tmp_domains,)))
+                    - {infer_domain.DomainAccessDescriptor.NEVER}  # type: ignore[arg-type] # type should always be `SymbolicDomain`
+                )
+                assert len(domain) == 1
+                # this is the domain used as initial value in the tuple construction below
+                tmp_domains = domain[0]
+
+            def get_domain(
+                _, path: tuple[int, ...]
+            ) -> domain_utils.SymbolicDomain:  # function only used inside loop
+                domain = functools.reduce(
+                    lambda var, idx: var[idx] if isinstance(var, tuple) else var,
+                    path,
+                    tmp_domains,  # noqa: B023
+                )
+                assert isinstance(domain, domain_utils.SymbolicDomain)
+                return domain
+
+            # The following propagates the domains to the tuple structure of `tmp_expr.type`.
+            # `tmp_domains` might not have this structure because domain inference was not able to infer the tuple structure.
+            tmp_domains = type_info.apply_to_primitive_constituents(
+                get_domain,
+                tmp_expr.type,
+                with_path_arg=True,
                 tuple_constructor=lambda *elements: tuple(elements),
             )
 
-            # allocate temporary for all tuple elements
-            def allocate_temporary(tmp_name: str, dtype: ts.ScalarType):
-                declarations.append(itir.Temporary(id=tmp_name, domain=domain_expr, dtype=dtype))  # noqa: B023 # function only used inside loop
-
-            next_utils.tree_map(allocate_temporary)(tmp_names, tmp_dtypes)
+            declarations.extend(
+                itir.Temporary(id=tmp_name, domain=domain.as_expr(), dtype=dtype)
+                for tmp_name, domain, dtype in zip(
+                    next_utils.flatten_nested_tuple((tmp_names,)),
+                    next_utils.flatten_nested_tuple((tmp_domains,)),
+                    next_utils.flatten_nested_tuple((tmp_dtypes,)),
+                    strict=True,
+                )
+            )
 
             # if the expr is a field this just gives a simple `itir.SymRef`, otherwise we generate a
             #  `make_tuple` expression.
             target_expr: itir.Expr = next_utils.tree_map(
-                lambda x: im.ref(x), result_collection_constructor=lambda els: im.make_tuple(*els)
-            )(tmp_names)  # type: ignore[assignment]  # typing of tree_map does not reflect action of `result_collection_constructor` yet
+                lambda name, domain: im.ref(name, annex={"domain": domain}),
+                result_collection_constructor=lambda els: im.make_tuple(*els),
+            )(tmp_names, tmp_domains)  # type: ignore[assignment]  # typing of tree_map does not reflect action of `result_collection_constructor` yet
 
             # note: the let would be removed automatically by the `cse.extract_subexpression`, but
             # we remove it here for readability & debuggability.
@@ -127,7 +231,13 @@ def _transform_by_pattern(
             # TODO(tehrengruber): _transform_stmt not needed if deepest_expr_first=True
             tmp_stmts.extend(
                 _transform_stmt(
-                    itir.SetAt(target=target_expr, domain=domain_expr, expr=tmp_expr),
+                    itir.SetAt(
+                        target=target_expr,
+                        # The domain is populated later in `_populate_and_homogenize_domains`
+                        # at this point the `SetAt` contains possibly expressions on different domains.
+                        domain=im.ref("UNPOPULATED"),
+                        expr=tmp_expr,
+                    ),
                     declarations,
                     uids,
                 )
@@ -170,6 +280,8 @@ def _transform_stmt(
         # no transformation occurred
         if not did_transform:
             stmts.append(stmt)
+
+    stmts = _populate_and_homogenize_domains(stmts)
 
     return stmts
 
