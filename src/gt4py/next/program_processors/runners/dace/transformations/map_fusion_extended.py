@@ -300,10 +300,11 @@ class VerticalSplitMapRange(SplitMapRange):
         """Check non overlapping range in the first and second map."""
         assert self.expr_index == expr_index
         first_map = self.first_map_exit.map
+        first_map_entry: dace_nodes.MapEntry = graph.entry_node(self.first_map_exit)
         second_map = self.second_map_entry.map
 
         # Test if the map is in the right scope.
-        map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[self.first_map_exit]
+        map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[first_map_entry]
         if self.only_toplevel_maps and (map_scope is not None):
             return False
 
