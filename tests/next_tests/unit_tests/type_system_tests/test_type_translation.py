@@ -123,6 +123,9 @@ def test_invalid_symbol_types():
     with pytest.raises(ValueError, match="undefined forward references"):
         type_translation.from_type_hint("foo")
 
+    with pytest.raises(ValueError, match="NoneType is not supported"):
+        type_translation.from_type_hint(None)
+
     # Tuples
     with pytest.raises(ValueError, match="least one argument"):
         type_translation.from_type_hint(typing.Tuple)
