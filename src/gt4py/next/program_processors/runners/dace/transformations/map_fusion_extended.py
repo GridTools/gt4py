@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import dace
 from dace import properties as dace_properties, transformation as dace_transformation
@@ -22,6 +22,8 @@ from gt4py.next.program_processors.runners.dace.transformations import map_fusio
 def gt_horizontal_map_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
+    only_inner_maps: Optional[bool] = None,
+    only_toplevel_maps: Optional[bool] = None,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
@@ -30,10 +32,17 @@ def gt_horizontal_map_fusion(
 
     ret = sdfg.apply_transformations_repeated(
         [
-            HorizontalSplitMapRange(),
+            HorizontalSplitMapRange(
+                only_inner_maps=only_inner_maps,
+                only_toplevel_maps=only_toplevel_maps,
+            ),
             HorizontalCloneMapRange(),
             gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
-            gtx_transformations.MapFusionParallel(only_if_common_ancestor=True),
+            gtx_transformations.MapFusionParallel(
+                only_if_common_ancestor=True,
+                only_inner_maps=only_inner_maps,
+                only_toplevel_maps=only_toplevel_maps,
+            ),
         ],
         validate=validate,
         validate_all=validate_all,
@@ -52,6 +61,8 @@ def gt_horizontal_map_fusion(
 def gt_vertical_map_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
+    only_inner_maps: Optional[bool] = None,
+    only_toplevel_maps: Optional[bool] = None,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
@@ -60,10 +71,16 @@ def gt_vertical_map_fusion(
 
     ret = sdfg.apply_transformations_repeated(
         [
-            VerticalSplitMapRange(),
+            VerticalSplitMapRange(
+                only_inner_maps=only_inner_maps,
+                only_toplevel_maps=only_toplevel_maps,
+            ),
             VerticalCloneMapRange(),
             gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
-            gtx_transformations.MapFusionSerial(),
+            gtx_transformations.MapFusionSerial(
+                only_inner_maps=only_inner_maps,
+                only_toplevel_maps=only_toplevel_maps,
+            ),
         ],
         validate=validate,
         validate_all=validate_all,
@@ -85,6 +102,31 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
     Identify overlapping range between maps, and split the range in order to
     promote map fusion.
     """
+
+    only_toplevel_maps = dace_properties.Property(
+        dtype=bool,
+        default=False,
+        desc="Only perform fusing if the Maps are in the top level.",
+    )
+    only_inner_maps = dace_properties.Property(
+        dtype=bool,
+        default=False,
+        desc="Only perform fusing if the Maps are inner Maps, i.e. does not have top level scope.",
+    )
+
+    def __init__(
+        self,
+        only_toplevel_maps: Optional[bool] = None,
+        only_inner_maps: Optional[bool] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        if only_toplevel_maps is not None:
+            self.only_toplevel_maps = only_toplevel_maps
+        if only_inner_maps is not None:
+            self.only_inner_maps = only_inner_maps
+        assert not (self.only_inner_maps and self.only_toplevel_maps)
 
     def split_maps(
         self,
@@ -137,6 +179,13 @@ class HorizontalSplitMapRange(SplitMapRange):
     first_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
     second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
+    def __init__(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+
     @classmethod
     def expressions(cls) -> Any:
         map_fusion_parallel_match = dace_graph.OrderedMultiDiConnectorGraph()
@@ -152,6 +201,12 @@ class HorizontalSplitMapRange(SplitMapRange):
     ) -> bool:
         first_map: dace_nodes.Map = self.first_map_entry.map
         second_map: dace_nodes.Map = self.second_map_entry.map
+
+        map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[self.first_map_entry]
+        if self.only_inner_maps and (map_scope is None):
+            return False
+        elif self.only_toplevel_maps and (map_scope is not None):
+            return False
 
         first_map_src_data = {
             iedge.src.label
@@ -201,6 +256,13 @@ class VerticalSplitMapRange(SplitMapRange):
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
+    def __init__(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+
     @classmethod
     def expressions(cls) -> Any:
         """Get the match expressions.
@@ -226,6 +288,12 @@ class VerticalSplitMapRange(SplitMapRange):
         assert self.expr_index == expr_index
         first_map = self.first_map_exit.map
         second_map = self.second_map_entry.map
+
+        map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[self.first_map_exit]
+        if self.only_inner_maps and (map_scope is None):
+            return False
+        elif self.only_toplevel_maps and (map_scope is not None):
+            return False
 
         if not self.access_node.desc(graph).transient:
             return False

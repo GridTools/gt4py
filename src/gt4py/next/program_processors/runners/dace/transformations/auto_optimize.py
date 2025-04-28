@@ -274,12 +274,14 @@ def _gt_auto_process_top_level_maps(
         gtx_transformations.gt_vertical_map_fusion(
             sdfg=sdfg,
             run_simplify=False,
+            only_toplevel_maps=True,
             validate=validate,
             validate_all=validate_all,
         )
         gtx_transformations.gt_horizontal_map_fusion(
             sdfg=sdfg,
             run_simplify=False,
+            only_toplevel_maps=True,
             validate=validate,
             validate_all=validate_all,
         )
@@ -309,7 +311,7 @@ def _gt_auto_process_dataflow_inside_maps(
     For a description of the arguments see `gt_auto_optimize()`.
     """
 
-    # Constants should bot be arguments to a kernel but be present inside the body.
+    # Constants should be arguments to a kernel but be present inside the body.
     sdfg.apply_transformations_once_everywhere(
         gtx_transformations.GT4PyMoveTaskletIntoMap,
         validate=validate,
