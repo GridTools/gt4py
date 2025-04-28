@@ -22,26 +22,38 @@ from gt4py.next.program_processors.runners.dace.transformations import map_fusio
 def gt_horizontal_map_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
-    only_toplevel_maps: Optional[bool] = None,
+    single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
-    find_single_use_data = dace_analysis.FindSingleUseData()
-    single_use_data = find_single_use_data.apply_pass(sdfg, None)
+    if single_use_data is None:
+        find_single_use_data = dace_analysis.FindSingleUseData()
+        single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+    # This transformation is only useful to operate on Maps that translates to
+    #  kernels (OpenMP loops or GPU kernels). Thus we have to restrict them
+    #  such that these Maps are processed. Thus we set `only_toplevel_maps` to
+    #  `True`.
+    # TODO: Restrict MapFusion such that it only applies to the Maps that have
+    #   been split and not some other random Maps.
+    transformations = [
+        HorizontalSplitMapRange(
+            only_toplevel_maps=True,
+        ),
+        HorizontalCloneMapRange(),
+        gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
+        gtx_transformations.MapFusionParallel(
+            only_if_common_ancestor=True,
+            only_inner_maps=False,
+            only_toplevel_maps=True,
+        ),
+    ]
+    # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
+    #   has been solved.
+    transformations[-1]._single_use_data = single_use_data  # type: ignore[attr-defined]
 
     ret = sdfg.apply_transformations_repeated(
-        [
-            HorizontalSplitMapRange(
-                only_toplevel_maps=only_toplevel_maps,
-            ),
-            HorizontalCloneMapRange(),
-            gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
-            gtx_transformations.MapFusionParallel(
-                only_if_common_ancestor=True,
-                only_inner_maps=False,
-                only_toplevel_maps=only_toplevel_maps,
-            ),
-        ],
+        transformations,
         validate=validate,
         validate_all=validate_all,
     )
@@ -59,25 +71,33 @@ def gt_horizontal_map_fusion(
 def gt_vertical_map_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
-    only_toplevel_maps: Optional[bool] = None,
+    single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
-    find_single_use_data = dace_analysis.FindSingleUseData()
-    single_use_data = find_single_use_data.apply_pass(sdfg, None)
+    if single_use_data is None:
+        find_single_use_data = dace_analysis.FindSingleUseData()
+        single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+    # TODO: Restrict MapFusion such that it only applies to the Maps that have
+    #   been split and not some other random Maps.
+    transformations = [
+        VerticalSplitMapRange(
+            only_toplevel_maps=True,
+        ),
+        VerticalCloneMapRange(),
+        gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
+        gtx_transformations.MapFusionSerial(
+            only_inner_maps=False,
+            only_toplevel_maps=True,
+        ),
+    ]
+    # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
+    #   has been solved.
+    transformations[-1]._single_use_data = single_use_data  # type: ignore[attr-defined]
 
     ret = sdfg.apply_transformations_repeated(
-        [
-            VerticalSplitMapRange(
-                only_toplevel_maps=only_toplevel_maps,
-            ),
-            VerticalCloneMapRange(),
-            gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
-            gtx_transformations.MapFusionSerial(
-                only_inner_maps=False,
-                only_toplevel_maps=only_toplevel_maps,
-            ),
-        ],
+        transformations,
         validate=validate,
         validate_all=validate_all,
     )
@@ -189,7 +209,13 @@ class HorizontalSplitMapRange(SplitMapRange):
         first_map: dace_nodes.Map = self.first_map_entry.map
         second_map: dace_nodes.Map = self.second_map_entry.map
 
-        map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[self.first_map_entry]
+        # Ensure that the Maps are in the same scope.
+        scope_dict = graph.scope_dict()
+        if scope_dict[self.first_map_entry] is not scope_dict[self.second_map_entry]:
+            return False
+
+        # Test if the map is in the right scope.
+        map_scope: Union[dace_nodes.Node, None] = scope_dict[self.first_map_entry]
         if self.only_toplevel_maps and (map_scope is not None):
             return False
 
@@ -211,6 +237,8 @@ class HorizontalSplitMapRange(SplitMapRange):
         splitted_range = map_fusion_utils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
             return False
+
+        # TODO: Ensure that the fusion can be performed.
 
         return True
 
@@ -274,6 +302,7 @@ class VerticalSplitMapRange(SplitMapRange):
         first_map = self.first_map_exit.map
         second_map = self.second_map_entry.map
 
+        # Test if the map is in the right scope.
         map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[self.first_map_exit]
         if self.only_toplevel_maps and (map_scope is not None):
             return False
@@ -284,6 +313,8 @@ class VerticalSplitMapRange(SplitMapRange):
         splitted_range = map_fusion_utils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
             return False
+
+        # TODO: Ensure that the fusion can be performed.
 
         return True
 

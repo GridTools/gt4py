@@ -274,14 +274,14 @@ def _gt_auto_process_top_level_maps(
         gtx_transformations.gt_vertical_map_fusion(
             sdfg=sdfg,
             run_simplify=False,
-            only_toplevel_maps=True,
+            single_use_data=single_use_data,
             validate=validate,
             validate_all=validate_all,
         )
         gtx_transformations.gt_horizontal_map_fusion(
             sdfg=sdfg,
             run_simplify=False,
-            only_toplevel_maps=True,
+            single_use_data=single_use_data,
             validate=validate,
             validate_all=validate_all,
         )
