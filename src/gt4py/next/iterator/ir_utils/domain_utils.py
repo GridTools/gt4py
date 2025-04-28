@@ -40,7 +40,7 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
     return sizes
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class SymbolicRange:
     start: itir.Expr
     stop: itir.Expr
@@ -49,12 +49,15 @@ class SymbolicRange:
         return SymbolicRange(im.plus(self.start, distance), im.plus(self.stop, distance))
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class SymbolicDomain:
     grid_type: Literal["unstructured_domain", "cartesian_domain"]
     ranges: dict[
         common.Dimension, SymbolicRange
     ]  # TODO(havogt): remove `AxisLiteral` by `Dimension` everywhere
+
+    def __hash__(self):
+        return hash((self.grid_type, frozenset(self.ranges.items())))
 
     @classmethod
     def from_expr(cls, node: itir.Node) -> SymbolicDomain:
