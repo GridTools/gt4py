@@ -341,6 +341,8 @@ def as_fieldop(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
             offset_provider_type=offset_provider_type,
         )
+        if isinstance(stencil_return, ts.DeferredType):
+            return stencil_return
         assert isinstance(stencil_return, ts.DataType)
         return type_info.apply_to_primitive_constituents(
             lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
