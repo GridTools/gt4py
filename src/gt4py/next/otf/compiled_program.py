@@ -29,7 +29,8 @@ _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(max_workers=conf
 ScalarOrTupleOfScalars: TypeAlias = extended_typing.TOrNestedTuple[core_defs.Scalar]
 
 
-@dataclasses.dataclass  # not frozen for performance
+# TODO(havogt): We should look at the hash related codepaths again when tuning Python overheads.
+@dataclasses.dataclass
 class _CompiledProgramsKey:
     values: tuple[ScalarOrTupleOfScalars, ...]  # in order of static_params
     offset_provider_type: common.OffsetProviderType
