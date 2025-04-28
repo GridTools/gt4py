@@ -303,6 +303,16 @@ class Program:
         offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
         **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
     ) -> Program:
+        """
+        Compiles the program for the given combination of static arguments and offset provider type.
+
+        Note: Unlike `with_...` methods, this method does not return a new instance of the program,
+        but adds the compiled variants to the current program instance.
+        """
+        # TODO(havogt): we should reconsider if we want to return a new program on `compile` (and
+        # rename to `with_static_args` or similar) once we have a better understanding of the
+        # use-cases.
+
         if self.static_params is None:
             object.__setattr__(self, "static_params", tuple(static_args.keys()))
         if self.connectivities is None and offset_provider_type is None:
