@@ -40,7 +40,6 @@ def gt_horizontal_map_fusion(
         HorizontalSplitMapRange(
             only_toplevel_maps=True,
         ),
-        HorizontalCloneMapRange(),
         gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
         gtx_transformations.MapFusionParallel(
             only_if_common_ancestor=True,
@@ -85,7 +84,6 @@ def gt_vertical_map_fusion(
         VerticalSplitMapRange(
             only_toplevel_maps=True,
         ),
-        VerticalCloneMapRange(),
         gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
         gtx_transformations.MapFusionSerial(
             only_inner_maps=False,
@@ -330,110 +328,3 @@ class VerticalSplitMapRange(SplitMapRange):
         self.split_maps(
             graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit
         )
-
-
-@dace_properties.make_properties
-class CloneMapRange(dace_transformation.SingleStateTransformation):
-    """
-    Identify small maps that can be duplicated and merged into large maps with
-    adjacent range, in order to promote map fusion.
-    """
-
-    def duplicate_map(
-        self,
-        graph: Union[dace.SDFGState, dace.SDFG],
-        sdfg: dace.SDFG,
-        map_entry: dace_nodes.MapEntry,
-        map_exit: dace_nodes.MapExit,
-    ) -> tuple[
-        dace_nodes.MapEntry, dace_nodes.MapExit, dict[dace_nodes.AccessNode, dace_nodes.AccessNode]
-    ]:
-        """Create a copy of the given map and duplicate the output data containers.
-
-        Args:
-            sdfg: The SDFG containing the map graph.
-            graph: The SDFG state containing the map graph.
-            map_entry: The entry node of the map graph.
-            map_exit: The exit node of the map graph.
-
-        Returns:
-            A tuple of three elements:
-            - The entry node of the cloned map.
-            - The exit node of the cloned map.
-            - Mapping from old access nodes to new ones for the data output of the cloned map.
-        """
-        suffix = "clone"
-        new_map_entry, new_map_exit = map_fusion_utils.copy_map_graph(
-            sdfg, graph, map_entry, map_exit, suffix
-        )
-
-        new_access_nodes = {}
-        for oedge in graph.out_edges(new_map_exit):
-            assert isinstance(oedge.data.dst, dace_nodes.AccessNode)
-            old_access_node = oedge.data.dst
-            data_name = old_access_node.data
-            data_desc = old_access_node.desc(sdfg)
-            new_data_desc = data_desc.clone()
-            new_data_name = sdfg.add_datadesc(
-                f"{data_name}_{suffix}", new_data_desc, find_new_name=True
-            )
-            new_access_node = graph.add_access(new_data_name)
-            oedge.dst = new_access_node
-            oedge.data.data = new_data_name
-            new_access_nodes[old_access_node] = new_access_node
-            if not data_desc.transient:
-                # We let the original map write to the global data node.
-                #  Therefore, we just replace the output node with a sink temporary,
-                #  that will be removed by dead-dataflow elimination pass.
-                new_data_desc.transient = True
-
-        # workaround to refresh `cfg_list` on the SDFG
-        sdfg.hash_sdfg()
-
-        return new_map_entry, new_map_exit, new_access_nodes
-
-
-@dace_properties.make_properties
-class HorizontalCloneMapRange(CloneMapRange):
-    """
-    Implementation of `CloneMapRange` for horizontal map fusion.
-    """
-
-    @classmethod
-    def expressions(cls) -> Any:
-        return []
-
-    def can_be_applied(
-        self,
-        graph: dace.SDFGState,
-        expr_index: int,
-        sdfg: dace.SDFG,
-        permissive: bool = False,
-    ) -> bool:
-        return False
-
-    def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
-        raise NotImplementedError()
-
-
-@dace_properties.make_properties
-class VerticalCloneMapRange(CloneMapRange):
-    """
-    Implementation of `CloneMapRange` for horizontal map fusion.
-    """
-
-    @classmethod
-    def expressions(cls) -> Any:
-        return []
-
-    def can_be_applied(
-        self,
-        graph: dace.SDFGState,
-        expr_index: int,
-        sdfg: dace.SDFG,
-        permissive: bool = False,
-    ) -> bool:
-        return False
-
-    def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
-        raise NotImplementedError()
