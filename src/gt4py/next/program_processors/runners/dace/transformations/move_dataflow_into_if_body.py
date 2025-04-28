@@ -352,7 +352,13 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 else:
                     # The data is defined somewhere in the Map scope itself.
                     outer_data = iedge.src
-                assert isinstance(outer_data, dace_nodes.AccessNode)
+                # TODO(phimuell): It is possible that this does not lead to an
+                #   AccessNode on the outside, but to something inside the Map scope
+                #   such as the MapExit of an inner map. To handle such a case we need
+                #   to construct the set of nodes to move differently, i.e.
+                #   considering this case already there.
+                if not isinstance(outer_data, dace_nodes.AccessNode):
+                    raise NotImplementedError()
                 assert not gtx_transformations.utils.is_view(outer_data, sdfg)
 
                 # If the data is not yet available in the inner SDFG made
