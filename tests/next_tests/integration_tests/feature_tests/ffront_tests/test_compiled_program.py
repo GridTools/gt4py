@@ -75,9 +75,7 @@ def test_compile(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    assert not compile_testee._compiled_programs
     compile_testee.compile(offset_provider_type=cartesian_case.offset_provider)
-    assert compile_testee._compiled_programs
 
     args, kwargs = cases.get_default_data(cartesian_case, compile_testee)
 
@@ -105,9 +103,7 @@ def test_compile_kwargs(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    assert not compile_testee._compiled_programs
     compile_testee.compile(offset_provider_type=cartesian_case.offset_provider)
-    assert compile_testee._compiled_programs
 
     (a, b), kwargs = cases.get_default_data(cartesian_case, compile_testee)
 
@@ -122,9 +118,7 @@ def test_compile_scan(cartesian_case, compile_testee_scan):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    assert not compile_testee_scan._compiled_programs
     compile_testee_scan.compile(offset_provider_type=cartesian_case.offset_provider)
-    assert compile_testee_scan._compiled_programs
 
     args, kwargs = cases.get_default_data(cartesian_case, compile_testee_scan)
 
@@ -139,9 +133,7 @@ def test_compile_domain(cartesian_case, compile_testee_domain):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    assert not compile_testee_domain._compiled_programs
     compile_testee_domain.compile(offset_provider_type=cartesian_case.offset_provider)
-    assert compile_testee_domain._compiled_programs
 
     args, kwargs = cases.get_default_data(cartesian_case, compile_testee_domain)
 
