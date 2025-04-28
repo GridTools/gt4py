@@ -16,12 +16,12 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 _Fun = TypeVar("_Fun", bound=itir.Expr)
 
 
-class FunCallTo(itir.FunCall, Generic[_Fun]):
+class _FunCallTo(itir.FunCall, Generic[_Fun]):
     fun: _Fun
     args: List[itir.Expr]
 
 
-_FunCallToSymRef: TypeAlias = FunCallTo[itir.SymRef]
+_FunCallToSymRef: TypeAlias = _FunCallTo[itir.SymRef]
 
 
 def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_FunCallToSymRef]:
@@ -52,7 +52,7 @@ def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_FunCallToSymRe
         return any((is_call_to(node, f) for f in fun))
 
 
-_FunCallToFunCallToRef: TypeAlias = FunCallTo[_FunCallToSymRef]
+_FunCallToFunCallToRef: TypeAlias = _FunCallTo[_FunCallToSymRef]
 
 
 def is_applied_lift(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
@@ -100,7 +100,7 @@ def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
     return isinstance(arg, itir.FunCall) and is_call_to(arg.fun, "as_fieldop")
 
 
-_FunCallToLambda: TypeAlias = FunCallTo[itir.Lambda]
+_FunCallToLambda: TypeAlias = _FunCallTo[itir.Lambda]
 
 
 def is_let(node: itir.Node) -> TypeGuard[_FunCallToLambda]:
