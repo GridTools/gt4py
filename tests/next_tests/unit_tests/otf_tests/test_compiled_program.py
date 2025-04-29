@@ -97,7 +97,7 @@ def test_sanitize_static_args_non_scalar_type():
         )
     )
     with pytest.raises(
-        errors.TypeError_,
+        errors.DSLTypeError,
         match="foo.*cannot be static",
     ):
         compiled_program._sanitize_static_args("foo_program", {"foo": gtx.int32(1)}, program_type)
@@ -112,7 +112,7 @@ def test_sanitize_static_args_wrong_type():
             returns=ts.VoidType(),
         )
     )
-    with pytest.raises(errors.TypeError_, match="got 'int64'"):
+    with pytest.raises(errors.DSLTypeError, match="got 'int64'"):
         compiled_program._sanitize_static_args("foo_program", {"foo": gtx.int64(1)}, program_type)
 
 

@@ -26,7 +26,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
 _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
 
-ScalarOrTupleOfScalars: TypeAlias = extended_typing.TOrNestedTuple[core_defs.Scalar]
+ScalarOrTupleOfScalars: TypeAlias = extended_typing.MaybeNestedInTuple[core_defs.Scalar]
 
 
 # TODO(havogt): We should look at the hash related codepaths again when tuning Python overheads.
@@ -40,16 +40,22 @@ class _CompiledProgramsKey:
         return hash((self.values, frozenset(self.offset_provider_type.items())))
 
 
-def _convert_to_type(
+def _type_convert_value(
     value: ScalarOrTupleOfScalars, type_: ts.TupleType | ts.ScalarType
 ) -> ScalarOrTupleOfScalars:
+    """
+    Converts `value` to the type specified by `type_`.
+
+    Note: This function does not check if the conversion is valid (within the GT4Py type system).
+    It is assumed that the caller has already checked that the types are compatible.
+    """
     if isinstance(type_, ts.ScalarType):
         return tt.as_dtype(type_).scalar_type(value)
     else:
         assert isinstance(type_, ts.TupleType)
         assert isinstance(value, tuple)
         assert all(isinstance(t, (ts.ScalarType, ts.TupleType)) for t in type_.types)
-        return tuple(_convert_to_type(v, t) for v, t in zip(value, type_.types))  # type: ignore[arg-type] # checked in assert
+        return tuple(_type_convert_value(v, t) for v, t in zip(value, type_.types, strict=True))  # type: ignore[arg-type] # checked in assert
 
 
 def _validate_types(
@@ -59,13 +65,13 @@ def _validate_types(
 ) -> None:
     param_types = program_type.definition.pos_or_kw_args
 
-    type_errors = []
-    for name, type_ in param_types.items():
-        if name in static_args:
-            if not type_info.is_type_or_tuple_of_type(type_, ts.ScalarType):
-                type_errors.append(f"'{name}' with type '{type_}' cannot be static.")
-    if len(type_errors) > 0:
-        raise errors.TypeError_(
+    type_errors = [
+        f"'{name}' with type '{param_types[name]}' cannot be static."
+        for name in static_args
+        if not type_info.is_type_or_tuple_of_type(param_types[name], ts.ScalarType)
+    ]
+    if type_errors:
+        raise errors.DSLTypeError(
             message=f"Invalid static arguments provided for '{program_name}' with type '{program_type}' (only scalars or (nested) tuples of scalars can be static):\n"
             + ("\n".join([f"  - {error}" for error in type_errors])),
             location=None,
@@ -84,11 +90,11 @@ def _validate_types(
     type_mismatch_errors = type_info.function_signature_incompatibilities(
         program_type, args=types_from_values, kwargs={}
     )
-    error_list = list(type_mismatch_errors)
-    if len(error_list) > 0:
-        raise errors.TypeError_(
+    mismatch_errors = list(type_mismatch_errors)
+    if mismatch_errors:
+        raise errors.DSLTypeError(
             message=f"Invalid static argument types when trying to compile '{program_name}' with type '{program_type}':\n"
-            + ("\n".join([f"  - {error}" for error in error_list])),
+            + ("\n".join([f"  - {error}" for error in mismatch_errors])),
             location=None,
         )
 
@@ -107,11 +113,12 @@ def _sanitize_static_args(
     _validate_types(program_name, static_args, program_type)
 
     return {
-        name: _convert_to_type(value, program_type.definition.pos_or_kw_args[name])  # type: ignore[arg-type] # checked in _validate_types
+        name: _type_convert_value(value, program_type.definition.pos_or_kw_args[name])  # type: ignore[arg-type] # checked in _validate_types
         for name, value in static_args.items()
     }
 
 
+@dataclasses.dataclass
 class CompiledProgramsPool:
     """
     A pool of compiled programs for a given program and backend.
@@ -136,26 +143,13 @@ class CompiledProgramsPool:
     _compiled_programs: dict[
         _CompiledProgramsKey,
         stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
-    ]
+    ] = dataclasses.field(default_factory=dict)
 
-    def __init__(
-        self,
-        backend: gtx_backend.Backend,
-        definition_stage: ffront_stages.ProgramDefinition,
-        program_type: ts_ffront.ProgramType,
-        static_params: Sequence[str] | None = None,
-    ) -> None:
-        self.backend = backend
-        self.definition_stage = definition_stage
-        self.program_type = program_type
-
+    def __postinit__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
         assert not self.program_type.definition.kw_only_args
         assert not self.program_type.definition.pos_only_args
-
-        self.static_params = static_params
-        self._compiled_programs = {}
 
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
@@ -237,7 +231,7 @@ class CompiledProgramsPool:
     def compile(
         self,
         offset_provider_type: common.OffsetProvider | common.OffsetProviderType,
-        **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
+        **static_args: list[ScalarOrTupleOfScalars],
     ) -> None:
         """
         Compiles the program for all combinations of static arguments and the given 'OffsetProviderType'.

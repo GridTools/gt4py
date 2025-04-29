@@ -373,19 +373,30 @@ class HashableBy(Generic[_T]):
         return self.func(self.value)
 
     def __eq__(self, other: Any) -> bool:
-        return self.value is other.value
+        return self.value is other.value and self.func is self.func
 
 
-def hashable_by(func: Callable[[_T], int]) -> Callable[[_T], HashableBy[_T]]:
+@overload
+def hashable_by(func: Callable[[_T], int], value: _T) -> HashableBy[_T]: ...
+
+
+@overload
+def hashable_by(
+    func: Callable[[_T], int], value: NothingType = NOTHING
+) -> functools.partial[HashableBy[_T]]: ...
+
+
+def hashable_by(
+    func: Callable[[_T], int], value: _T | NothingType = NOTHING
+) -> HashableBy[_T] | functools.partial[HashableBy[_T]]:
     """
-    Creates a wrapper that uses `func` to hash the value passed it.
+    Creates a wrapper that uses `func` to hash the value passed to it.
     """
-
-    def _hashable_by(value: _T) -> HashableBy[_T]:
-        hashable = HashableBy(func, value)
-        return hashable
-
-    return _hashable_by
+    return (
+        cast(HashableBy[_T], HashableBy(func, value))
+        if value is not NOTHING
+        else functools.partial(hashable_by, func)
+    )
 
 
 hashable_by_id = hashable_by(id)

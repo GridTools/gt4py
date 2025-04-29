@@ -75,6 +75,7 @@ def test_compile(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
+    # object.__setattr__(compile_testee, "backend", _always_raise_callable)
     compile_testee.compile(offset_provider_type=cartesian_case.offset_provider)
 
     args, kwargs = cases.get_default_data(cartesian_case, compile_testee)

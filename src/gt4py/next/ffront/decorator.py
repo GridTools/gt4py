@@ -89,7 +89,7 @@ class Program:
         definition: types.FunctionType,
         backend: next_backend.Backend | None,
         grid_type: common.GridType | None = None,
-        enable_jit: bool = config.ENABLE_JIT_DEFAULT,
+        enable_jit: bool = config.DEFAULT_ENABLE_JIT,
         static_params: Sequence[str] | None = None,
         connectivities: Optional[
             common.OffsetProvider
@@ -161,7 +161,7 @@ class Program:
         )
 
     def with_static_params(self, *static_params: str | None) -> Program:
-        if len(static_params) == 0 or (len(static_params) == 1 and static_params[0] is None):
+        if not static_params or (static_params == (None,)):
             _static_params = None
         else:
             assert all(p is not None for p in static_params)
@@ -256,10 +256,10 @@ class Program:
     @functools.cached_property
     def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
-            raise ValueError("Cannot compile a program without backend.")
+            raise RuntimeError("Cannot compile a program without backend.")
 
         if self.static_params is None:
-            object.__setattr__(self, "static_params", tuple())
+            object.__setattr__(self, "static_params", ())
 
         program_type = self.past_stage.past_node.type
         assert isinstance(program_type, ts_ffront.ProgramType)
@@ -301,8 +301,8 @@ class Program:
     def compile(
         self,
         offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
-        **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
-    ) -> Program:
+        **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
+    ) -> xtyping.Self:
         """
         Compiles the program for the given combination of static arguments and offset provider type.
 
@@ -491,8 +491,8 @@ class ProgramWithBoundArgs(Program):
     def compile(
         self,
         offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
-        **static_args: list[core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
-    ) -> Program:
+        **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
+    ) -> xtyping.Self:
         raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
 
 
@@ -517,7 +517,7 @@ def program(
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
-    enable_jit: bool = config.ENABLE_JIT_DEFAULT,  # only relevant if static_params are set
+    enable_jit: bool = config.DEFAULT_ENABLE_JIT,  # only relevant if static_params are set
     static_params: Sequence[str] | None = None,
     frozen: bool = False,
 ) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:

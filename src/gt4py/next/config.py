@@ -96,4 +96,4 @@ BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1
 
 #: The default for whether to allow jit-compilation for a compiled program.
 #: This default can be overriden per program.
-ENABLE_JIT_DEFAULT: bool = env_flag_to_bool("GT4PY_ENABLE_JIT_DEFAULT", default=True)
+DEFAULT_ENABLE_JIT: bool = env_flag_to_bool("GT4PY_ENABLE_JIT_DEFAULT", default=True)
