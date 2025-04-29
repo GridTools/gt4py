@@ -8,12 +8,12 @@
 
 import pytest
 
-
-from gt4py import next as gtx, eve
-from gt4py.next import errors
-from gt4py.next.otf import compiled_program
-from gt4py.next.type_system import type_specifications as ts
+from gt4py import eve, next as gtx
+from gt4py.next import errors, backend
 from gt4py.next.ffront import type_specifications as ts_ffront
+from gt4py.next.otf import compiled_program, toolchain, arguments
+from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.iterator import ir as itir
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import simple_mesh
 
@@ -113,3 +113,35 @@ def test_sanitize_static_args_wrong_type():
     )
     with pytest.raises(errors.TypeError_, match="got 'int64'"):
         compiled_program._sanitize_static_args("foo_program", {"foo": gtx.int64(1)}, program_type)
+
+
+def test_inlining_of_scalars_works():
+    TDim = gtx.Dimension("TDim")
+
+    @gtx.field_operator
+    def fop(cond: bool, a: gtx.Field[gtx.Dims[TDim], float], b: gtx.Field[gtx.Dims[TDim], float]):
+        return a if cond else b
+
+    @gtx.program
+    def testee(
+        cond: bool,
+        a: gtx.Field[gtx.Dims[TDim], float],
+        b: gtx.Field[gtx.Dims[TDim], float],
+        out: gtx.Field[gtx.Dims[TDim], float],
+    ):
+        fop(cond, a, b, out=out)
+
+    args = testee.past_stage.past_node.type.definition.pos_or_kw_args
+    args = [arguments.StaticArg(value=True, type_=v) if k == "cond" else v for k, v in args.items()]
+
+    input_pair = toolchain.CompilableProgram(
+        data=testee.definition_stage,
+        args=arguments.CompileTimeArgs(args=args, kwargs={}, offset_provider={}, column_axis=None),
+    )
+
+    transformed = backend.DEFAULT_TRANSFORMS(input_pair).data
+    assert isinstance(transformed.body[0], itir.SetAt)
+    assert isinstance(transformed.body[0].expr, itir.FunCall)
+    assert transformed.body[0].expr.fun == itir.SymRef(id="fop")
+    assert isinstance(transformed.body[0].expr.args[0], itir.Literal)
+    assert transformed.body[0].expr.args[0].value  # is True
