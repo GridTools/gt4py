@@ -684,7 +684,8 @@ def test_parallel_1():
     )
 
     assert nb_applies == 1
-    assert util.count_nodes(state, dace_nodes.AccessNode) == 4
+    # The access nodes are fused.
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 3
     assert util.count_nodes(state, dace_nodes.MapEntry) == 1
 
 
