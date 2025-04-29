@@ -613,7 +613,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         node.expr = extracted_expr
 
         assert cpm.is_applied_as_fieldop(node.expr), node.expr
-        stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
+        stencil = node.expr.fun.args[0]
         domain = node.domain
         inputs = node.expr.args
         lowered_inputs = []

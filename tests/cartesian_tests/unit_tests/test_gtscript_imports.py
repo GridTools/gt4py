@@ -132,7 +132,7 @@ def make_two_files(tmp_path, extension, reset_importsys):
 @pytest.fixture
 def make_package(tmp_path, extension, reset_importsys):
     """
-    Provide a gactory for a gtscript file and package.
+    Provide a factory for a gtscript file and package.
 
     test-function unique prefix required.
 
@@ -147,7 +147,6 @@ def make_package(tmp_path, extension, reset_importsys):
         |  +- <prefix>_sub2/
         |  |  |- __init__.py
         |  |  +- <prefix>_sub_sub.<ext>
-
     """
 
     def run(prefix):

@@ -76,7 +76,6 @@ class CachingStrategy(abc.ABC):
         ----------
         extra_cache_info:
             Additional info to be written
-
         """
         raise NotImplementedError
 

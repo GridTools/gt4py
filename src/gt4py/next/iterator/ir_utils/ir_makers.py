@@ -280,7 +280,7 @@ class let:
                 "Invalid arguments: expected a variable name and an init form or a list thereof."
             )
 
-    def __call__(self, form):
+    def __call__(self, form) -> itir.FunCall:
         return call(lambda_(*self.vars)(form))(*self.init_forms)
 
 
@@ -581,4 +581,4 @@ def can_deref(expr):
 
 def compose(a: itir.SymRef | itir.Lambda, b: itir.SymRef | itir.Lambda) -> itir.Lambda:
     # TODO(havogt): `a`, `b` must not contain `SymRef(id="_comp")` for a `Sym` in a parent scope
-    return lambda_("_comp")(call(a)(call(b)("_comp")))
+    return lambda_("__comp")(call(a)(call(b)("__comp")))
