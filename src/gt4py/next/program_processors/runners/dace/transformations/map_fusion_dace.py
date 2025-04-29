@@ -18,7 +18,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import dace
 from dace import data, properties, subsets, symbolic, transformation
-from dace.sdfg import SDFG, SDFGState, graph, nodes, validation
+from dace.sdfg import SDFG, SDFGState, graph, nodes, propagation, validation
 from dace.transformation import helpers
 
 
@@ -272,20 +272,23 @@ class MapFusion(transformation.SingleStateTransformation):
         # Now perform the dispatch.
         if self.expr_index == 0:
             assert self.allow_serial_map_fusion
-            return self.apply_serial_map_fusion(
+            self.apply_serial_map_fusion(
                 graph=graph,
                 sdfg=sdfg,
             )
 
         elif self.expr_index == 1:
             assert self.allow_parallel_map_fusion
-            return self.apply_parallel_map_fusion(
+            self.apply_parallel_map_fusion(
                 graph=graph,
                 sdfg=sdfg,
             )
 
         else:
             raise NotImplementedError(f"Encountered unknown expression index {self.expr_index}")
+
+        # TODO: Restrict to cases where it is really needed and also only where it is needed.
+        propagation.propagate_memlets_state(sdfg, graph)
 
     def can_parallel_map_fusion_be_applied(
         self,
@@ -817,6 +820,8 @@ class MapFusion(transformation.SingleStateTransformation):
         :param to_node: Node to which the edges should reconnect.
         :param state: The state in which the operation happens.
         :param sdfg: The SDFG that is modified.
+
+        :note: After the relocation Memlet propagation should be run.
         """
 
         # Now we relocate empty Memlets, from the `from_node` to the `to_node`
@@ -833,9 +838,7 @@ class MapFusion(transformation.SingleStateTransformation):
                 state.remove_edge(empty_edge)
             empty_targets.add(empty_edge.dst)
 
-        # We now determine which edges we have to migrate, for this we are looking at
-        #  the incoming edges, because this allows us also to detect dynamic map ranges.
-        #  TODO(phimuell): If there is already a connection to the node, reuse this.
+        # Relocating of the edges that carrying data.
         for edge_to_move in list(state.in_edges(from_node)):
             assert isinstance(edge_to_move.dst_conn, str)
 
@@ -862,14 +865,33 @@ class MapFusion(transformation.SingleStateTransformation):
             else:
                 # We have a Passthrough connection, i.e. there exists a matching `OUT_`.
                 old_conn = edge_to_move.dst_conn[3:]  # The connection name without prefix
-                new_conn = to_node.next_connector(old_conn)
+                new_conn, conn_was_reused = self._get_new_conn_name(
+                    edge_to_move=edge_to_move, to_node=to_node, state=state
+                )
 
-                to_node.add_in_connector("IN_" + new_conn)
-                for e in list(state.in_edges_by_connector(from_node, "IN_" + old_conn)):
-                    helpers.redirect_edge(state, e, new_dst=to_node, new_dst_conn="IN_" + new_conn)
-                to_node.add_out_connector("OUT_" + new_conn)
-                for e in list(state.out_edges_by_connector(from_node, "OUT_" + old_conn)):
-                    helpers.redirect_edge(state, e, new_src=to_node, new_src_conn="OUT_" + new_conn)
+                # Now move the incoming edges of `to_node` to `from_node`. However,
+                #  we only move `edge_to_move` if we have a new connector, if we
+                #  reuse the connector we will simply remove it.
+                dst_in_conn = "IN_" + new_conn
+                for e in list(state.in_edges_by_connector(from_node, f"IN_{old_conn}")):
+                    if conn_was_reused and e is edge_to_move:
+                        state.remove_edge(edge_to_move)
+                        if state.degree(edge_to_move.src) == 0:
+                            state.remove_node(edge_to_move.src)
+                    else:
+                        helpers.redirect_edge(state, e, new_dst=to_node, new_dst_conn=dst_in_conn)
+
+                # Now move the outgoing edges of `to_node` to `from_node`.
+                dst_out_conn = "OUT_" + new_conn
+                for e in list(state.out_edges_by_connector(from_node, f"OUT_{old_conn}")):
+                    helpers.redirect_edge(state, e, new_src=to_node, new_src_conn=dst_out_conn)
+
+                # If we have used new connectors we must add the new connector names.
+                if not conn_was_reused:
+                    to_node.add_in_connector(dst_in_conn)
+                    to_node.add_out_connector(dst_out_conn)
+
+                # In any case remove the old connector name from the `from_node`.
                 from_node.remove_in_connector("IN_" + old_conn)
                 from_node.remove_out_connector("OUT_" + old_conn)
 
@@ -888,6 +910,39 @@ class MapFusion(transformation.SingleStateTransformation):
             )
         assert len(from_node.in_connectors) == 0
         assert len(from_node.out_connectors) == 0
+
+    def _get_new_conn_name(
+        self,
+        edge_to_move: graph.MultiConnectorEdge[dace.Memlet],
+        to_node: Union[nodes.MapExit, nodes.MapEntry],
+        state: SDFGState,
+    ) -> Tuple[str, bool]:
+        """Determine the new connector name that should be used.
+
+        The function returns a pair. The first element is the name of the connector
+        name that should be used. The second element is a boolean that indicates if
+        the connector name is already present on `to_node`, `True`, or if a new
+        connector was created.
+        """
+        assert edge_to_move.dst_conn.startswith("IN_")
+        old_conn = edge_to_move.dst_conn[3:]
+        if state.scope_dict()[to_node] is not None:
+            # The Map is nested, so we keep the supplying edge. This is a simplification
+            #  because otherwise we would have to modify the surrounding Map.
+            return to_node.next_connector(old_conn), False
+
+        # The Map is not nested, so we look if we can reuse an Edge.
+        for iedge in state.in_edges(to_node):
+            if iedge.data.is_empty() or iedge.dst_conn is None:
+                continue
+            if not iedge.dst_conn.startswith("IN_"):
+                continue
+            if iedge.data.data == edge_to_move.data.data:
+                # The same data is used so we reuse that connection.
+                return iedge.dst_conn[3:], True
+
+        # The data is not used, so we create a new one.
+        return to_node.next_connector(old_conn), False
 
     def handle_intermediate_set(
         self,
