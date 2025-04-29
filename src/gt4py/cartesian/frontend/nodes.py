@@ -236,7 +236,7 @@ class Builtin(enum.Enum):
     TRUE = 1
 
     @classmethod
-    def from_value(cls, value: bool | None):
+    def from_value(cls, value: bool | None) -> Builtin:
         if value is None:
             return cls.NONE
         if value is True:
