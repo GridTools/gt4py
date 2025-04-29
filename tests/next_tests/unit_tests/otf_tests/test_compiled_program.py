@@ -14,6 +14,7 @@ from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.otf import compiled_program, toolchain, arguments
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import simple_mesh
 
@@ -115,33 +116,70 @@ def test_sanitize_static_args_wrong_type():
         compiled_program._sanitize_static_args("foo_program", {"foo": gtx.int64(1)}, program_type)
 
 
+TDim = gtx.Dimension("TDim")
+
+
+@gtx.field_operator
+def fop(cond: bool, a: gtx.Field[gtx.Dims[TDim], float], b: gtx.Field[gtx.Dims[TDim], float]):
+    return a if cond else b
+
+
+@gtx.program
+def prog(
+    cond: bool,
+    a: gtx.Field[gtx.Dims[TDim], gtx.float64],
+    b: gtx.Field[gtx.Dims[TDim], gtx.float64],
+    out: gtx.Field[gtx.Dims[TDim], gtx.float64],
+):
+    fop(cond, a, b, out=out)
+
+
+def _verify_program_has_expected_true_value(program: itir.Program):
+    assert isinstance(program.body[0], itir.SetAt)
+    assert isinstance(program.body[0].expr, itir.FunCall)
+    assert program.body[0].expr.fun == itir.SymRef(id="fop")
+    assert isinstance(program.body[0].expr.args[0], itir.Literal)
+    assert program.body[0].expr.args[0].value  # is True
+
+
 def test_inlining_of_scalars_works():
-    TDim = gtx.Dimension("TDim")
-
-    @gtx.field_operator
-    def fop(cond: bool, a: gtx.Field[gtx.Dims[TDim], float], b: gtx.Field[gtx.Dims[TDim], float]):
-        return a if cond else b
-
-    @gtx.program
-    def testee(
-        cond: bool,
-        a: gtx.Field[gtx.Dims[TDim], float],
-        b: gtx.Field[gtx.Dims[TDim], float],
-        out: gtx.Field[gtx.Dims[TDim], float],
-    ):
-        fop(cond, a, b, out=out)
-
-    args = testee.past_stage.past_node.type.definition.pos_or_kw_args
+    args = prog.past_stage.past_node.type.definition.pos_or_kw_args
     args = [arguments.StaticArg(value=True, type_=v) if k == "cond" else v for k, v in args.items()]
 
     input_pair = toolchain.CompilableProgram(
-        data=testee.definition_stage,
+        data=prog.definition_stage,
         args=arguments.CompileTimeArgs(args=args, kwargs={}, offset_provider={}, column_axis=None),
     )
 
     transformed = backend.DEFAULT_TRANSFORMS(input_pair).data
-    assert isinstance(transformed.body[0], itir.SetAt)
-    assert isinstance(transformed.body[0].expr, itir.FunCall)
-    assert transformed.body[0].expr.fun == itir.SymRef(id="fop")
-    assert isinstance(transformed.body[0].expr.args[0], itir.Literal)
-    assert transformed.body[0].expr.args[0].value  # is True
+    _verify_program_has_expected_true_value(transformed)
+
+
+def test_inlining_of_scalar_works_integration():
+    """
+    Test that `.compile` replaces the scalar arg in the program.
+    Unlike the previous test, this test uses a full backend and makes sure the replacement step is there.
+    """
+    # Note: this is more an integration test, but does not execute a program, like the other integration tests.
+
+    hijacked_program = None
+
+    def pirate(program: toolchain.CompilableProgram):
+        # Replaces the gtfn otf_workflow: and steals the compilable program,
+        # then returns a dummy "CompiledProgram" that does nothing.
+        nonlocal hijacked_program
+        hijacked_program = program
+        return lambda *args, **kwargs: None
+
+    hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", otf_workflow=pirate)
+
+    testee = prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider_type={})
+    testee(
+        cond=True,
+        a=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
+        b=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
+        out=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
+        offset_provider={},
+    )
+
+    _verify_program_has_expected_true_value(hijacked_program.data)
