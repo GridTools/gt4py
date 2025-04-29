@@ -663,7 +663,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.0"
-source = { git = "https://github.com/edopao/dace?branch=cuda-codegen-contextvar#40395a8c46e0ebf42d0180a88f5471ba1924122c" }
+source = { git = "https://github.com/edopao/dace?branch=cuda-codegen-contextvar#a10b5b3d01c7072dddbff02e1569e75630efae17" }
 resolution-markers = [
     "python_full_version >= '3.11'",
     "python_full_version < '3.11'",
@@ -1081,7 +1081,7 @@ dace = [
     { name = "dace", version = "1.0.2", source = { registry = "https://pypi.org/simple" } },
 ]
 dace-next = [
-    { name = "dace", version = "1.0.0", source = { git = "https://github.com/edopao/dace?branch=cuda-codegen-contextvar#40395a8c46e0ebf42d0180a88f5471ba1924122c" } },
+    { name = "dace", version = "1.0.0", source = { git = "https://github.com/edopao/dace?branch=cuda-codegen-contextvar#a10b5b3d01c7072dddbff02e1569e75630efae17" } },
 ]
 formatting = [
     { name = "clang-format" },
