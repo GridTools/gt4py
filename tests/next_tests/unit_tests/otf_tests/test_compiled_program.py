@@ -116,6 +116,21 @@ def test_sanitize_static_args_wrong_type():
         compiled_program._sanitize_static_args("foo_program", {"foo": gtx.int64(1)}, program_type)
 
 
+def test_sanitize_static_args_non_existing_parameter():
+    program_type = ts_ffront.ProgramType(
+        definition=ts.FunctionType(
+            pos_only_args=[],
+            pos_or_kw_args={"foo": ts.ScalarType(kind=ts.ScalarKind.INT32)},
+            kw_only_args={},
+            returns=ts.VoidType(),
+        )
+    )
+    with pytest.raises(errors.DSLTypeError, match="'unknown_param'"):
+        compiled_program._sanitize_static_args(
+            "foo_program", {"unknown_param": gtx.int64(1)}, program_type
+        )
+
+
 TDim = gtx.Dimension("TDim")
 
 

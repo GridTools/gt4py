@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from gt4py import next as gtx
+from gt4py.next import errors
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
@@ -668,6 +669,22 @@ def test_compile_variants_decorator_static_params_jit(
     )
     assert np.allclose(out[0].ndarray, field_a.ndarray + 1)
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
+
+
+def test_compile_variants_non_existing_param(cartesian_case, compile_variants_testee_not_compiled):
+    with pytest.raises(errors.DSLTypeError, match="non_existing_param"):
+        compile_variants_testee_not_compiled.compile(non_existing_param=[1], offset_provider={})
+
+
+def test_compile_variants_wrong_type(cartesian_case, compile_variants_testee_not_compiled):
+    with pytest.raises(errors.DSLTypeError, match="Expected.*'scalar_int'.*int32"):
+        compile_variants_testee_not_compiled.compile(scalar_int=[1.0], offset_provider={})
+
+
+def test_compile_variants_error_static_field(cartesian_case, compile_variants_testee_not_compiled):
+    field_a = cases.allocate(cartesian_case, compile_variants_testee_not_compiled, "field_a")()
+    with pytest.raises(errors.DSLTypeError, match="field_a.*cannot be static"):
+        compile_variants_testee_not_compiled.compile(field_a=[field_a], offset_provider={})
 
 
 @pytest.fixture

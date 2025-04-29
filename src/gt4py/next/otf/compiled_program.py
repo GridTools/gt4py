@@ -45,6 +45,16 @@ def _validate_types(
     static_args: dict[str, ScalarOrTupleOfScalars],
     program_type: ts_ffront.ProgramType,
 ) -> None:
+    unknown_args = list(
+        set(static_args.keys()) - set(program_type.definition.pos_or_kw_args.keys())
+    )
+    if unknown_args:
+        raise errors.DSLTypeError(
+            message=f"Invalid static arguments provided for '{program_name}' with type '{program_type}', the following are not parameters of the program:\n"
+            + ("\n".join([f"  - '{arg}'" for arg in unknown_args])),
+            location=None,
+        )
+
     param_types = program_type.definition.pos_or_kw_args
 
     type_errors = [
