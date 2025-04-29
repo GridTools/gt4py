@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import collections.abc
 import copy
-from typing import ClassVar, TypeVar
+from typing import ClassVar
 
 from . import concepts, trees
 from .extended_typing import Any
