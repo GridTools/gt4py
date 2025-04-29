@@ -63,5 +63,6 @@ class FixedPointTransformation(eve.NodeTranslator):
                         result is not node
                     ), f"Transformation {transformation.name.lower()} should have returned None, since nothing changed."
                     itir_type_inference.reinfer(result)
+                    self._preserve_annex(node, result)
                     return result
         return None

@@ -12,11 +12,14 @@ from __future__ import annotations
 
 import collections.abc
 import copy
-from typing import ClassVar
+from typing import ClassVar, TypeVar
 
 from . import concepts, trees
 from .extended_typing import Any
 from .type_definitions import NOTHING
+
+
+T = TypeVar("T", bound=concepts.Node)
 
 
 class NodeVisitor:
@@ -121,20 +124,6 @@ class NodeVisitor:
         return None
 
 
-def _preserve_annex(
-    node: concepts.Node, new_node: concepts.Node, preserved_annex_attrs: tuple[str, ...]
-) -> None:
-    # access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter
-    new_annex_dict = new_node.annex.__dict__
-    old_annex_dict = node.annex.__dict__
-    for key in (old_annex_dict.keys() & preserved_annex_attrs) - new_annex_dict.keys():
-        # Note: The annex item's value of the new node might not be equal
-        # (in the sense that an equality comparison returns false), to
-        # the old one, but in the context of the pass, they are
-        # equivalent. Therefore, we don't assert equality here.
-        new_annex_dict[key] = old_annex_dict[key]
-
-
 class NodeTranslator(NodeVisitor):
     """Special `NodeVisitor` to translate nodes and trees.
 
@@ -173,7 +162,7 @@ class NodeTranslator(NodeVisitor):
                 }
             )
             if self.PRESERVED_ANNEX_ATTRS and getattr(node, "__node_annex__", None):
-                _preserve_annex(node, new_node, self.PRESERVED_ANNEX_ATTRS)
+                self._preserve_annex(node, new_node)
 
             return new_node
 
@@ -208,6 +197,18 @@ class NodeTranslator(NodeVisitor):
             and self.PRESERVED_ANNEX_ATTRS
             and getattr(node, "__node_annex__", None)
         ):
-            _preserve_annex(node, new_node, self.PRESERVED_ANNEX_ATTRS)
+            self._preserve_annex(node, new_node)
 
+        return new_node
+
+    def _preserve_annex(self, node: concepts.Node, new_node: T) -> T:
+        # access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter
+        new_annex_dict = new_node.annex.__dict__
+        old_annex_dict = node.annex.__dict__
+        for key in (old_annex_dict.keys() & self.PRESERVED_ANNEX_ATTRS) - new_annex_dict.keys():
+            # Note: The annex item's value of the new node might not be equal
+            # (in the sense that an equality comparison returns false), to
+            # the old one, but in the context of the pass, they are
+            # equivalent. Therefore, we don't assert equality here.
+            new_annex_dict[key] = old_annex_dict[key]
         return new_node

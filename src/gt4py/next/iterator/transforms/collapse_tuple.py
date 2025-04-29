@@ -328,7 +328,7 @@ class CollapseTuple(
             for arg in node.args:
                 if cpm.is_call_to(node, "make_tuple") and not _is_trivial_make_tuple_call(node):
                     el_name = self.uids.sequential_id(prefix="__ct_el")
-                    new_args.append(im.ref(el_name, arg.type))
+                    new_args.append(self._preserve_annex(arg, im.ref(el_name, arg.type)))
                     bound_vars[im.sym(el_name, arg.type)] = arg
                 else:
                     new_args.append(arg)
@@ -548,7 +548,13 @@ class CollapseTuple(
         new_args: list[itir.Expr] = []
         for param, arg in zip(stencil.params, node.args, strict=True):
             if isinstance(arg.type, ts.TupleType):
-                ref_to_remapped_arg = im.ref(f"__ct_flat_remapped_{len(remapped_args)}", arg.type)
+                ref_to_remapped_arg = self._preserve_annex(
+                    arg,
+                    im.ref(
+                        f"__ct_flat_remapped_{len(remapped_args)}",
+                        arg.type,
+                    ),
+                )
                 remapped_args[im.sym(ref_to_remapped_arg.id, arg.type)] = arg
                 new_params_inner, lift_params = [], []
                 for i, type_ in enumerate(param.type.element_type.types):
