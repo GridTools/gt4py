@@ -19,9 +19,6 @@ from .extended_typing import Any
 from .type_definitions import NOTHING
 
 
-T = TypeVar("T", bound=concepts.Node)
-
-
 class NodeVisitor:
     """Simple node visitor class based on :class:`ast.NodeVisitor`.
 
@@ -201,7 +198,7 @@ class NodeTranslator(NodeVisitor):
 
         return new_node
 
-    def _preserve_annex(self, node: concepts.Node, new_node: T) -> T:
+    def _preserve_annex(self, node: concepts.Node, new_node: concepts.Node) -> None:
         # access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter
         new_annex_dict = new_node.annex.__dict__
         old_annex_dict = node.annex.__dict__
@@ -211,4 +208,3 @@ class NodeTranslator(NodeVisitor):
             # the old one, but in the context of the pass, they are
             # equivalent. Therefore, we don't assert equality here.
             new_annex_dict[key] = old_annex_dict[key]
-        return new_node
