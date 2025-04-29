@@ -305,6 +305,13 @@ class MapFusion(transformation.SingleStateTransformation):
         assert isinstance(first_map_entry, nodes.MapEntry)
         assert isinstance(second_map_entry, nodes.MapEntry)
 
+        # Since we matched any two Maps in the state, we have to ensure that they
+        #  are in the same state, otherwise it could be that one is inside one Map
+        #  while the other is inside another one.
+        scope = graph.scope_dict()
+        if scope[first_map_entry] != scope[second_map_entry]:
+            return False
+
         # We will now check if the two maps are parallel.
         if not self.is_parallel(graph=graph, node1=first_map_entry, node2=second_map_entry):
             return False
@@ -423,6 +430,8 @@ class MapFusion(transformation.SingleStateTransformation):
         first_map_exit: nodes.MapExit = graph.exit_node(first_map_entry)
         second_map_entry: nodes.MapEntry = self.second_parallel_map_entry
         second_map_exit: nodes.MapExit = graph.exit_node(second_map_entry)
+        # We have to get the scope_dict before we start mutating the graph.
+        scope_dict: Dict = graph.scope_dict().copy()
 
         # Before we do anything we perform the renaming, i.e. we will rename the
         #  parameters of the second map such that they match the one of the first map.
@@ -444,6 +453,7 @@ class MapFusion(transformation.SingleStateTransformation):
                 to_node=to_node,
                 state=graph,
                 sdfg=sdfg,
+                scope_dict=scope_dict,
             )
             # The relocate function does not remove the node, so we must do it.
             graph.remove_node(from_node)
@@ -471,6 +481,8 @@ class MapFusion(transformation.SingleStateTransformation):
         second_map_entry: nodes.MapEntry = self.second_map_entry
         second_map_exit: nodes.MapExit = graph.exit_node(self.second_map_entry)
         first_map_entry: nodes.MapEntry = graph.entry_node(self.first_map_exit)
+        # We have to get the scope_dict before we start mutating the graph.
+        scope_dict: Dict = graph.scope_dict().copy()
 
         # Before we do anything we perform the renaming.
         self.rename_map_parameters(
@@ -521,6 +533,7 @@ class MapFusion(transformation.SingleStateTransformation):
                 to_node=second_map_exit,
                 state=graph,
                 sdfg=sdfg,
+                scope_dict=scope_dict,
             )
 
         # Now move the input of the second map, that has no connection to the first
@@ -533,6 +546,7 @@ class MapFusion(transformation.SingleStateTransformation):
             to_node=first_map_entry,
             state=graph,
             sdfg=sdfg,
+            scope_dict=scope_dict,
         )
 
         for node_to_remove in [first_map_exit, second_map_entry]:
@@ -806,6 +820,7 @@ class MapFusion(transformation.SingleStateTransformation):
         to_node: Union[nodes.MapExit, nodes.MapEntry],
         state: SDFGState,
         sdfg: SDFG,
+        scope_dict: Dict,
     ) -> None:
         """Move the connectors and edges from `from_node` to `to_nodes` node.
 
@@ -866,7 +881,10 @@ class MapFusion(transformation.SingleStateTransformation):
                 # We have a Passthrough connection, i.e. there exists a matching `OUT_`.
                 old_conn = edge_to_move.dst_conn[3:]  # The connection name without prefix
                 new_conn, conn_was_reused = self._get_new_conn_name(
-                    edge_to_move=edge_to_move, to_node=to_node, state=state
+                    edge_to_move=edge_to_move,
+                    to_node=to_node,
+                    state=state,
+                    scope_dict=scope_dict,
                 )
 
                 # Now move the incoming edges of `to_node` to `from_node`. However,
@@ -916,6 +934,7 @@ class MapFusion(transformation.SingleStateTransformation):
         edge_to_move: graph.MultiConnectorEdge[dace.Memlet],
         to_node: Union[nodes.MapExit, nodes.MapEntry],
         state: SDFGState,
+        scope_dict: Dict,
     ) -> Tuple[str, bool]:
         """Determine the new connector name that should be used.
 
@@ -926,7 +945,18 @@ class MapFusion(transformation.SingleStateTransformation):
         """
         assert edge_to_move.dst_conn.startswith("IN_")
         old_conn = edge_to_move.dst_conn[3:]
-        if state.scope_dict()[to_node] is not None:
+
+        # If `to_node` is a `MapExit` node then we always handle as a non global
+        #  Map, i.e. we never reuse the connector. The reason is that to handle
+        #  that case we would need special logic and it is not that common.
+        # NOTE: Remember special behaviour of `scope_dict` if `to_node` is a `MapExit`.
+        # TODO(phimuell): Fix that.
+        if isinstance(to_node, nodes.MapExit):
+            is_in_global_scop = False
+        else:
+            is_in_global_scop = scope_dict[to_node] is None
+
+        if not is_in_global_scop:
             # The Map is nested, so we keep the supplying edge. This is a simplification
             #  because otherwise we would have to modify the surrounding Map.
             return to_node.next_connector(old_conn), False
@@ -1368,6 +1398,8 @@ class MapFusion(transformation.SingleStateTransformation):
         :param graph: The SDFGState in which the maps are located.
         :param sdfg: The SDFG itself.
         :param permissive: Currently unused.
+
+        :note: It is invalid to call this function after nodes have been removed from the SDFG.
         """
         if self.only_inner_maps and self.only_toplevel_maps:
             raise ValueError(
@@ -1405,17 +1437,13 @@ class MapFusion(transformation.SingleStateTransformation):
         """Tests if `node1` and `node2` are parallel in the data flow graph.
 
         The function considers two nodes parallel in the data flow graph, if `node2`
-        can not be reached from `node1` and vice versa.
+        can not be reached from `node1` and vice versa. The function does not check
+        the scope of the nodes.
 
         :param graph: The state on which we operate.
         :param node1: The first node to check.
         :param node2: The second node to check.
         """
-        # In order to be parallel they must be in the same scope.
-        scope = graph.scope_dict()
-        if scope[node1] != scope[node2]:
-            return False
-
         # The `all_nodes_between()` function traverse the graph and returns `None` if
         #  `end` was not found. We have to call it twice, because we do not know
         #  which node is upstream if they are not parallel.
