@@ -56,7 +56,7 @@ class SymbolicDomain:
         common.Dimension, SymbolicRange
     ]  # TODO(havogt): remove `AxisLiteral` by `Dimension` everywhere
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self.grid_type, frozenset(self.ranges.items())))
 
     @classmethod

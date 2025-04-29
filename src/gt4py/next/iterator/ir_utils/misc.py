@@ -8,6 +8,7 @@
 
 import dataclasses
 from collections import ChainMap
+from typing import Callable
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
@@ -37,21 +38,21 @@ class CannonicalizeBoundSymbolNames(eve.NodeTranslator):
     )
 
     @classmethod
-    def apply(cls, node: itir.Expr):
+    def apply(cls, node: itir.Expr) -> itir.Expr:
         return cls().visit(node, sym_map=ChainMap({}))
 
-    def visit_Lambda(self, node: itir.Lambda, *, sym_map: ChainMap):
+    def visit_Lambda(self, node: itir.Lambda, *, sym_map: ChainMap) -> itir.Lambda:
         sym_map = sym_map.new_child()
         for param in node.params:
             sym_map[str(param.id)] = self._uids.sequential_id()
 
         return im.lambda_(*sym_map.values())(self.visit(node.expr, sym_map=sym_map))
 
-    def visit_SymRef(self, node: itir.SymRef, *, sym_map: dict[str, str]):
+    def visit_SymRef(self, node: itir.SymRef, *, sym_map: dict[str, str]) -> itir.SymRef:
         return im.ref(sym_map[node.id]) if node.id in sym_map else node
 
 
-def is_equal(a: itir.Expr, b: itir.Expr):
+def is_equal(a: itir.Expr, b: itir.Expr) -> bool:
     """
     Return true if two expressions have provably equal values.
 
@@ -82,8 +83,8 @@ def canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
     """
     assert cpm.is_applied_as_fieldop(expr)
 
-    stencil = expr.fun.args[0]  # type: ignore[attr-defined]
-    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None  # type: ignore[attr-defined]
+    stencil = expr.fun.args[0]
+    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None
     if cpm.is_ref_to(stencil, "deref"):
         stencil = im.lambda_("arg")(im.deref("arg"))
         new_expr = im.as_fieldop(stencil, domain)(*expr.args)
@@ -93,17 +94,20 @@ def canonicalize_as_fieldop(expr: itir.FunCall) -> itir.FunCall:
     return expr
 
 
-def _remove_let_alias(let_expr: itir.FunCall):
+def _remove_let_alias(let_expr: itir.FunCall) -> itir.FunCall:
     assert cpm.is_let(let_expr)
     is_aliased_let = True
-    for param, arg in zip(let_expr.fun.params, let_expr.args, strict=True):  # type: ignore[attr-defined]  # ensured by cpm.is_let
+    for param, arg in zip(let_expr.fun.params, let_expr.args, strict=True):
         is_aliased_let &= cpm.is_ref_to(arg, param.id)
     if is_aliased_let:
-        return let_expr.fun.expr  # type: ignore[attr-defined]  # ensured by cpm.is_let
+        assert isinstance(let_expr.fun.expr, itir.FunCall)
+        return let_expr.fun.expr
     return let_expr
 
 
-def unwrap_scan(stencil: itir.Lambda | itir.FunCall):
+def unwrap_scan(
+    stencil: itir.Lambda | itir.FunCall,
+) -> tuple[itir.Lambda, Callable[[itir.Lambda], itir.FunCall | itir.Lambda]]:
     """
     If given a scan, extract stencil part of its scan pass and a back-transformation into a scan.
 
