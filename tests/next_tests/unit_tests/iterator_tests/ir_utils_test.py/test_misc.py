@@ -39,6 +39,21 @@ from gt4py.next.iterator.transforms import inline_lambdas
             im.ref("a"),
         ),
         (
+            im.tuple_get(
+                1,
+                im.as_fieldop("scan")(
+                    im.lambda_("state", "val")(
+                        im.make_tuple("val", im.plus(im.tuple_get(0, "state"), "val"))
+                    )
+                ),
+            ),
+            im.as_fieldop("scan")(
+                im.lambda_("state", "val")(
+                    im.make_tuple("val", im.plus(im.tuple_get(0, "state"), "val"))
+                )
+            ),
+        ),
+        (
             im.plus(im.ref("a"), im.ref("b")),
             im.plus(im.ref("a"), im.ref("b")),
         ),
@@ -52,11 +67,13 @@ def test_extract_projector(expr, expected_expr):
     actual_projector, actual_expr = misc.extract_projector(expr)
     assert actual_expr == expected_expr
 
-    applied_projector = (
-        im.call(actual_projector)(actual_expr) if actual_projector is not None else actual_expr
-    )
+    if expr == expected_expr:
+        assert actual_projector is None
 
-    # simplify original expression and applied projector for comparison
-    applied_projector = inline_lambdas.InlineLambdas.apply(applied_projector)
-    inlined_expr = inline_lambdas.InlineLambdas.apply(expr)
-    assert applied_projector == inlined_expr
+    if actual_projector is not None:
+        applied_projector = im.call(actual_projector)(actual_expr)
+
+        # simplify original expression and applied projector for comparison
+        applied_projector = inline_lambdas.InlineLambdas.apply(applied_projector)
+        inlined_expr = inline_lambdas.InlineLambdas.apply(expr)
+        assert applied_projector == inlined_expr

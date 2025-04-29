@@ -609,7 +609,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             node.expr = im.as_fieldop("deref", node.domain)(node.expr)
 
         itir_projector, extracted_expr = ir_utils_misc.extract_projector(node.expr)
-        projector = self.visit(itir_projector) if itir_projector is not None else None
+        projector = self.visit(itir_projector, **kwargs) if itir_projector is not None else None
         node.expr = extracted_expr
 
         assert cpm.is_applied_as_fieldop(node.expr), node.expr
