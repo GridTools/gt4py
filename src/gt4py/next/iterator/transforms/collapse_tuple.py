@@ -175,6 +175,8 @@ class CollapseTuple(
     ignore_tuple_size: bool
     enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
+    REINFER_TYPES = True
+
     PRESERVED_ANNEX_ATTRS = ("type", "domain")
 
     @classmethod

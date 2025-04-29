@@ -29,7 +29,7 @@ class FixedPointTransformation(eve.NodeTranslator):
     #: Usually the default value is chosen to be all transformations.
     enabled_transformations: enum.Flag
 
-    reinfer_types: bool = True
+    REINFER_TYPES: ClassVar[bool] = False
 
     def visit(self, node, **kwargs):
         node = super().visit(node, **kwargs)
