@@ -40,24 +40,6 @@ class _CompiledProgramsKey:
         return hash((self.values, frozenset(self.offset_provider_type.items())))
 
 
-def _type_convert_value(
-    value: ScalarOrTupleOfScalars, type_: ts.TupleType | ts.ScalarType
-) -> ScalarOrTupleOfScalars:
-    """
-    Converts `value` to the type specified by `type_`.
-
-    Note: This function does not check if the conversion is valid (within the GT4Py type system).
-    It is assumed that the caller has already checked that the types are compatible.
-    """
-    if isinstance(type_, ts.ScalarType):
-        return tt.as_dtype(type_).scalar_type(value)
-    else:
-        assert isinstance(type_, ts.TupleType)
-        assert isinstance(value, tuple)
-        assert all(isinstance(t, (ts.ScalarType, ts.TupleType)) for t in type_.types)
-        return tuple(_type_convert_value(v, t) for v, t in zip(value, type_.types, strict=True))  # type: ignore[arg-type] # checked in assert
-
-
 def _validate_types(
     program_name: str,
     static_args: dict[str, ScalarOrTupleOfScalars],
@@ -113,7 +95,7 @@ def _sanitize_static_args(
     _validate_types(program_name, static_args, program_type)
 
     return {
-        name: _type_convert_value(value, program_type.definition.pos_or_kw_args[name])  # type: ignore[arg-type] # checked in _validate_types
+        name: tt.cast_to(value, program_type.definition.pos_or_kw_args[name])  # type: ignore[arg-type] # checked in _validate_types
         for name, value in static_args.items()
     }
 
@@ -177,7 +159,7 @@ class CompiledProgramsPool:
             if enable_jit:
                 assert self.static_params is not None
                 static_args = {name: args[self._param_index(name)] for name in self.static_params}
-                self._compile_variant(static_args=static_args, offset_provider_type=offset_provider)
+                self._compile_variant(static_args=static_args, offset_provider=offset_provider)
                 return self(
                     *args, offset_provider=offset_provider, enable_jit=False, **kwargs
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
@@ -196,7 +178,7 @@ class CompiledProgramsPool:
     def _compile_variant(
         self,
         static_args: dict[str, ScalarOrTupleOfScalars],
-        offset_provider_type: common.OffsetProviderType | common.OffsetProvider,
+        offset_provider: common.OffsetProviderType | common.OffsetProvider,
     ) -> None:
         assert self.static_params is not None
         static_args = _sanitize_static_args(
@@ -211,16 +193,16 @@ class CompiledProgramsPool:
         )
 
         compile_time_args = arguments.CompileTimeArgs(
-            offset_provider=offset_provider_type,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
+            offset_provider=offset_provider,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
             column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
             args=args,
             kwargs={},
         )
         key = _CompiledProgramsKey(
             tuple(static_args[p] for p in self.static_params),
-            offset_provider_type
-            if common.is_offset_provider_type(offset_provider_type)
-            else common.offset_provider_to_type(offset_provider_type),
+            offset_provider
+            if common.is_offset_provider_type(offset_provider)
+            else common.offset_provider_to_type(offset_provider),
         )
         if key in self._compiled_programs:
             raise ValueError(f"Program with key {key} already exists.")
@@ -230,7 +212,7 @@ class CompiledProgramsPool:
 
     def compile(
         self,
-        offset_provider_type: common.OffsetProvider | common.OffsetProviderType,
+        offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
         **static_args: list[ScalarOrTupleOfScalars],
     ) -> None:
         """
@@ -253,10 +235,12 @@ class CompiledProgramsPool:
         else:
             self.static_params = tuple(static_args.keys())
 
-        for static_values in itertools.product(*static_args.values()):
-            self._compile_variant(
-                dict(zip(static_args.keys(), static_values, strict=True)), offset_provider_type
-            )
+        for offset_provider in offset_providers:  # not included in product for better type checking
+            for static_values in itertools.product(*static_args.values()):
+                self._compile_variant(
+                    dict(zip(static_args.keys(), static_values, strict=True)),
+                    offset_provider=offset_provider,
+                )
 
     def _resolve_future(self, key: _CompiledProgramsKey) -> stages.CompiledProgram:
         program = self._compiled_programs[key]

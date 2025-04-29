@@ -393,7 +393,7 @@ def hashable_by(
     Creates a wrapper that uses `func` to hash the value passed to it.
     """
     return (
-        cast(HashableBy[_T], HashableBy(func, value))
+        HashableBy(func, value)  # type: ignore[arg-type] # checked in condition
         if value is not NOTHING
         else functools.partial(hashable_by, func)
     )

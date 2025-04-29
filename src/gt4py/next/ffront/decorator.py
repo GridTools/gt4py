@@ -226,7 +226,7 @@ class Program:
         return self._frontend_transforms.past_to_itir(no_args_past).data
 
     @functools.cached_property
-    def _implicit_offset_provider(self) -> common.OffsetProvider:
+    def _implicit_offset_provider(self) -> dict[str, common.Dimension]:
         """
         Add all implicit offset providers.
 
@@ -300,7 +300,10 @@ class Program:
 
     def compile(
         self,
-        offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
+        offset_provider: common.OffsetProviderType
+        | common.OffsetProvider
+        | list[common.OffsetProviderType | common.OffsetProvider]
+        | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> xtyping.Self:
         """
@@ -315,7 +318,7 @@ class Program:
 
         if self.static_params is None:
             object.__setattr__(self, "static_params", tuple(static_args.keys()))
-        if self.connectivities is None and offset_provider_type is None:
+        if self.connectivities is None and offset_provider is None:
             raise ValueError(
                 "Cannot compile a program without connectivities / OffsetProviderType."
             )
@@ -324,15 +327,17 @@ class Program:
                 "Please provide the static arguments as lists."
             )  # To avoid confusion with tuple args
 
-        offset_provider_type = (
-            self.connectivities if offset_provider_type is None else offset_provider_type
-        )
-        assert common.is_offset_provider(offset_provider_type) or common.is_offset_provider_type(
-            offset_provider_type
-        )
-        offset_provider_type = {**offset_provider_type, **self._implicit_offset_provider}  # type: ignore[assignment] # TODO(havogt): cleanup usage of offset_provider vs offset_provider_type
+        offset_provider = self.connectivities if offset_provider is None else offset_provider
+        if not isinstance(offset_provider, list):
+            offset_provider = [offset_provider]  # type: ignore[list-item] # cleanup offset_provider vs offset_provider_type
 
-        self._compiled_programs.compile(offset_provider_type=offset_provider_type, **static_args)
+        assert all(
+            common.is_offset_provider(op) or common.is_offset_provider_type(op)
+            for op in offset_provider
+        )
+        offset_provider = [{**op, **self._implicit_offset_provider} for op in offset_provider]  # type: ignore[misc] # cleanup offset_provider vs offset_provider_type
+
+        self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
         return self
 
     def freeze(self) -> FrozenProgram:
@@ -490,7 +495,10 @@ class ProgramWithBoundArgs(Program):
     @xtyping.override
     def compile(
         self,
-        offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None,
+        offset_provider: common.OffsetProviderType
+        | common.OffsetProvider
+        | list[common.OffsetProviderType | common.OffsetProvider]
+        | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> xtyping.Self:
         raise NotImplementedError("Compilation of programs with bound arguments is not implemented")

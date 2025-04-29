@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from unittest import mock
+
 import numpy as np
 import pytest
 
@@ -28,8 +30,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-def _always_raise_callable(*args, **kwargs) -> None:
-    raise AssertionError("This function should never be called.")
+_raise_on_compile = mock.Mock()
+_raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
 
 
 @pytest.fixture
@@ -75,13 +77,12 @@ def test_compile(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    # object.__setattr__(compile_testee, "backend", _always_raise_callable)
-    compile_testee.compile(offset_provider_type=cartesian_case.offset_provider)
+    compile_testee.compile(offset_provider=cartesian_case.offset_provider)
 
     args, kwargs = cases.get_default_data(cartesian_case, compile_testee)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee, "backend", _always_raise_callable)
+    object.__setattr__(compile_testee, "backend", _raise_on_compile)
 
     compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
     assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
@@ -95,8 +96,8 @@ def test_compile_twice_same_program_errors(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
     with pytest.raises(ValueError):
-        compile_testee.compile(offset_provider_type=cartesian_case.offset_provider).compile(
-            offset_provider_type=cartesian_case.offset_provider
+        compile_testee.compile(offset_provider=cartesian_case.offset_provider).compile(
+            offset_provider=cartesian_case.offset_provider
         )
 
 
@@ -104,12 +105,12 @@ def test_compile_kwargs(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    compile_testee.compile(offset_provider_type=cartesian_case.offset_provider)
+    compile_testee.compile(offset_provider=cartesian_case.offset_provider)
 
     (a, b), kwargs = cases.get_default_data(cartesian_case, compile_testee)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee, "backend", _always_raise_callable)
+    object.__setattr__(compile_testee, "backend", _raise_on_compile)
 
     compile_testee(offset_provider=cartesian_case.offset_provider, b=b, a=a, **kwargs)
     assert np.allclose(kwargs["out"].ndarray, a.ndarray + b.ndarray)
@@ -119,12 +120,12 @@ def test_compile_scan(cartesian_case, compile_testee_scan):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    compile_testee_scan.compile(offset_provider_type=cartesian_case.offset_provider)
+    compile_testee_scan.compile(offset_provider=cartesian_case.offset_provider)
 
     args, kwargs = cases.get_default_data(cartesian_case, compile_testee_scan)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_scan, "backend", _always_raise_callable)
+    object.__setattr__(compile_testee_scan, "backend", _raise_on_compile)
 
     compile_testee_scan(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
     assert np.allclose(kwargs["out"].ndarray, np.cumsum(args[0].ndarray))
@@ -134,12 +135,12 @@ def test_compile_domain(cartesian_case, compile_testee_domain):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    compile_testee_domain.compile(offset_provider_type=cartesian_case.offset_provider)
+    compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
 
     args, kwargs = cases.get_default_data(cartesian_case, compile_testee_domain)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_domain, "backend", _always_raise_callable)
+    object.__setattr__(compile_testee_domain, "backend", _raise_on_compile)
 
     compile_testee_domain(
         *args[:-1],
@@ -176,13 +177,13 @@ def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     compile_testee_unstructured.compile(
-        offset_provider_type=unstructured_case.offset_provider,
+        offset_provider=unstructured_case.offset_provider,
     )
 
     args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _always_raise_callable)
+    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
 
     compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
 
@@ -209,11 +210,14 @@ def test_compile_unstructured_jit(
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
-    object.__setattr__(compile_testee_unstructured, "enable_jit", True)
+    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
 
-    # compiled for skip_value_mesh
+    # compiled for skip_value_mesh, simple_mesh
     compile_testee_unstructured.compile(
-        offset_provider_type=skip_value_mesh_descriptor.offset_provider,
+        offset_provider=[
+            skip_value_mesh_descriptor.offset_provider,
+            unstructured_case.offset_provider,
+        ],
     )
 
     # but executing the simple_mesh
@@ -236,14 +240,14 @@ def test_compile_unstructured_wrong_offset_provider(
 
     # compiled for skip_value_mesh
     compile_testee_unstructured.compile(
-        offset_provider_type=skip_value_mesh_descriptor.offset_provider,
+        offset_provider=skip_value_mesh_descriptor.offset_provider,
     )
 
     # but executing the simple_mesh
     args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _always_raise_callable)
+    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
 
     with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
         compile_testee_unstructured(
@@ -260,19 +264,47 @@ def test_compile_unstructured_modified_offset_provider(
 
     # compiled for skip_value_mesh
     compile_testee_unstructured.compile(
-        offset_provider_type=skip_value_mesh_descriptor.offset_provider,
+        offset_provider=skip_value_mesh_descriptor.offset_provider,
     )
 
     # but executing the simple_mesh
     args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _always_raise_callable)
+    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
 
     with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
         compile_testee_unstructured(
             *args, offset_provider=unstructured_case.offset_provider, **kwargs
         )
+
+
+def test_compile_unstructured_for_two_offset_providers(
+    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+):
+    if unstructured_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
+
+    # compiled for skip_value_mesh and simple_mesh
+    compile_testee_unstructured.compile(
+        offset_provider=[
+            skip_value_mesh_descriptor.offset_provider,
+            unstructured_case.offset_provider,
+        ],
+    )
+
+    # make sure the backend is never called
+    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
+
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+    compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
+
+    v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
+    assert np.allclose(
+        kwargs["out"].asnumpy(),
+        np.sum(np.where(v2e_numpy != -1, args[0].asnumpy()[v2e_numpy], 0), axis=1),
+    )
 
 
 @pytest.fixture
@@ -323,13 +355,13 @@ def compile_variants_testee(cartesian_case, compile_variants_testee_not_compiled
         scalar_int=[1, 2],
         scalar_float=[3.0, 4.0],
         scalar_bool=[True, False],
-        offset_provider_type=cartesian_case.offset_provider,
+        offset_provider=cartesian_case.offset_provider,
     )
 
 
 def test_compile_variants(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
-    object.__setattr__(compile_variants_testee, "backend", _always_raise_callable)
+    object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
 
     assert compile_variants_testee.static_params == ("scalar_int", "scalar_float", "scalar_bool")
 
@@ -365,7 +397,7 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
 
 def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
-    object.__setattr__(compile_variants_testee, "backend", _always_raise_callable)
+    object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -437,7 +469,7 @@ def test_compile_variants_not_compiled_then_reset_static_params(
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
     # make sure the backend is never called form here on
-    object.__setattr__(compile_variants_testee, "backend", _always_raise_callable)
+    object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
 
     # calling it again will not recompile
     out = cases.allocate(cartesian_case, testee_static_float_static_bool, "out")()
@@ -475,11 +507,11 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
         "scalar_float", "scalar_bool"
     )
     testee_static_float_static_bool.compile(
-        scalar_float=[4.0], scalar_bool=[False], offset_provider_type=cartesian_case.offset_provider
+        scalar_float=[4.0], scalar_bool=[False], offset_provider=cartesian_case.offset_provider
     )
 
     # make sure the backend is never called form here on
-    object.__setattr__(compile_variants_testee, "backend", _always_raise_callable)
+    object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
 
     out = cases.allocate(cartesian_case, testee_static_float_static_bool, "out")()
     testee_static_float_static_bool(
@@ -526,7 +558,7 @@ def test_compile_variants_jit(cartesian_case, compile_variants_testee):
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
     # make sure on the second call the backend is not called
-    object.__setattr__(compile_variants_testee, "backend", _always_raise_callable)
+    object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
     out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
     compile_variants_testee(
         field_a,
@@ -566,7 +598,7 @@ def test_compile_variants_with_static_params_jit(
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
     # make sure the backend is not called on the second call
-    object.__setattr__(testee_with_static_params, "backend", _always_raise_callable)
+    object.__setattr__(testee_with_static_params, "backend", _raise_on_compile)
 
     out = cases.allocate(cartesian_case, testee_with_static_params, "out")()
     testee_with_static_params(
@@ -622,7 +654,7 @@ def test_compile_variants_decorator_static_params_jit(
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
     # make sure the backend is not called on the second call
-    object.__setattr__(testee, "backend", _always_raise_callable)
+    object.__setattr__(testee, "backend", _raise_on_compile)
 
     out = cases.allocate(cartesian_case, testee, "out")()
     testee(
@@ -662,13 +694,13 @@ def compile_variants_testee_tuple(cartesian_case):
 
     return testee.compile(
         int_tuple=[(1, 2), (3, 4)],
-        offset_provider_type=cartesian_case.offset_provider,
+        offset_provider=cartesian_case.offset_provider,
     )
 
 
 def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
     # make sure the backend is never called
-    object.__setattr__(compile_variants_testee_tuple, "backend", _always_raise_callable)
+    object.__setattr__(compile_variants_testee_tuple, "backend", _raise_on_compile)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee_tuple, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee_tuple, "field_b")()

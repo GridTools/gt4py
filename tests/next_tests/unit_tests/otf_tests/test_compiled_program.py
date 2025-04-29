@@ -173,7 +173,7 @@ def test_inlining_of_scalar_works_integration():
 
     hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", otf_workflow=pirate)
 
-    testee = prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider_type={})
+    testee = prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
     testee(
         cond=True,
         a=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
