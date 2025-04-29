@@ -77,7 +77,6 @@ def compose(*functions_or_iterable):
     """Return a function that chains the input functions.
 
     Derived from: https://mathieularose.com/function-composition-in-python/
-
     """
     if len(functions_or_iterable) == 1 and isinstance(
         functions_or_iterable[0], collections.abc.Iterable
@@ -237,7 +236,6 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
     References:
       https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
       https://stackoverflow.com/a/43602645
-
     """
 
     def load():
