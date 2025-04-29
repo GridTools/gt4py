@@ -810,4 +810,3 @@ def test_relocation_connectors():
     csdfg_res(**res)
 
     assert all(np.allclose(ref[name], res[name]) for name in res)
-    sdfg.view()
