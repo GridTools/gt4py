@@ -64,7 +64,7 @@ class FixedPointTransformation(eve.NodeTranslator):
                     assert (
                         result is not node
                     ), f"Transformation {transformation.name.lower()} should have returned None, since nothing changed."
-                    if self.reinfer_types:
+                    if self.REINFER_TYPES:
                         itir_type_inference.reinfer(result)
                     return result
         return None
