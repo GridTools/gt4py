@@ -63,6 +63,8 @@ class ConstantFolding(
         "domain",
     )
 
+    reinfer_types: bool = False
+
     class Transformation(enum.Flag):
         # `1 + a` -> `a + 1`, prerequisite for FOLD_FUNCALL_LITERAL, FOLD_NEUTRAL_OP
         # `1 + f(...)` -> `f(...) + 1`, prerequisite for FOLD_FUNCALL_LITERAL, FOLD_NEUTRAL_OP
