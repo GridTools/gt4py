@@ -174,7 +174,7 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
                 # collect subexpressions for all arguments to the `if_`
                 arg_states = [self.State() for _ in node.args]
                 for arg, state in zip(node.args, arg_states):
-                    self.visit(arg, state=state, **(kwargs | {"depth": depth + 1})
+                    self.visit(arg, state=state, **(kwargs | {"depth": depth + 1}))
 
                 # remove all subexpressions that are not eligible for collection
                 #  (either they occur in the condition or in both branches)
@@ -191,12 +191,8 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
                         merged_data = subexprs.setdefault(subexpr, self.SubexpressionData())
                         merged_data.subexprs.extend(data.subexprs)
                         merged_data.max_depth = max(merged_data.max_depth, data.max_depth)
-                collected_child_node_ids = functools.reduce(
-                    operator.or_, (state.collected_child_node_ids for state in arg_states)
-                )
-                used_symbol_ids = functools.reduce(
-                    operator.or_, (state.used_symbol_ids for state in arg_states)
-                )
+                collected_child_node_ids = set.union(*(state.collected_child_node_ids for state in arg_states))
+                used_symbol_ids = set.union(*(state.used_symbol_ids for state in arg_states))
                 # propagate collected subexpressions to parent
                 for subexpr, data in subexprs.items():
                     parent_data = parent_state.subexprs.setdefault(
@@ -212,7 +208,7 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
                     node.fun, state=new_state, is_let_form=True, **(kwargs | {"depth": depth + 1})
                 )
                 for arg in node.args:
-                    self.visit(arg, state=new_state, **(kwargs | {"depth": depth + 1})
+                    self.visit(arg, state=new_state, **(kwargs | {"depth": depth + 1}))
             else:
                 super().visit(
                     node,
