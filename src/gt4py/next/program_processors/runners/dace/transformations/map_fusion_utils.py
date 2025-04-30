@@ -232,8 +232,12 @@ def split_overlapping_map_range(
             first_map_splitted_dict[param] = [first_map_range]
             second_map_splitted_dict[param] = [second_map_range]
         else:
-            overlap_range_start = max(first_map_range[0], second_map_range[0])
-            overlap_range_stop = min(first_map_range[1], second_map_range[1])
+            try:
+                overlap_range_start = max(first_map_range[0], second_map_range[0])
+                overlap_range_stop = min(first_map_range[1], second_map_range[1])
+            except TypeError:
+                # cannot determine truth value of Relational
+                return None
 
             first_map_splitted_dict[param] = [
                 (overlap_range_start, overlap_range_stop, step),
