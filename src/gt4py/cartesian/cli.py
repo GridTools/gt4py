@@ -194,8 +194,7 @@ class GTScriptBuilder:
         class of the backend that should be used.
 
     silent :
-        silence all reporting to stdout if True
-
+        silence all reporting to stdout if True.
     """
 
     def __init__(
