@@ -70,5 +70,5 @@ def test_vertical_map_fusion():
         validate=True,
         validate_all=True,
     )
-    assert ret == 1
-    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 3
+    assert ret == 2
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
