@@ -193,7 +193,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             static constexpr GT_FUNCTION auto body() {
                 return gtfn::scan_pass([](${','.join('auto const& ' + p for p in params)}) {
                     return ${expr};
-                }, ::gridtools::host_device::identity());
+                }, ${projector if _this_node.projector is not None else '::gridtools::host_device::identity()'});
             }
         };
         """
