@@ -304,8 +304,6 @@ def test_scalar_extraction_inside_as_fieldop():
 def test_no_extraction_from_unapplied_lambda():
     testee = im.if_(
         "cond",
-        # the `+0`, and `+1` respectively, are only needed to avoid that f itself is collected
-        # which is not what we are interested in here
         im.let("f", im.lambda_()(im.deref("guarded_it")))(im.if_("cond2", im.call("f")(), 0)),
         im.deref("guarded_it"),
     )
