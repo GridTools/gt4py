@@ -306,7 +306,7 @@ class MapFusion(transformation.SingleStateTransformation):
         assert isinstance(second_map_entry, nodes.MapEntry)
 
         # Since we matched any two Maps in the state, we have to ensure that they
-        #  are in the same state, otherwise it could be that one is inside one Map
+        #  are in the same scope (e.g. same state, or same parent map), otherwise it could be that one is inside one Map
         #  while the other is inside another one.
         scope = graph.scope_dict()
         if scope[first_map_entry] != scope[second_map_entry]:
