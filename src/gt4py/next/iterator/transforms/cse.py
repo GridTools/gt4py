@@ -212,7 +212,7 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
                     node.fun, state=new_state, is_let_form=True, **(kwargs | {"depth": depth + 1})
                 )
                 for arg in node.args:
-                    self.visit(arg, state=new_state, **{**kwargs, "depth": depth + 1})
+                    self.visit(arg, state=new_state, **(kwargs | {"depth": depth + 1})
             else:
                 super().visit(
                     node,
