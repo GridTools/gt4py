@@ -106,6 +106,12 @@ def test_lambda_redef_same_arg():
 
 
 def test_lambda_redef_same_arg_scope():
+    pytest.xfail(
+        reason="Not implemented. The CSE pass may not extract from a lambda function"
+        "unless it knows the function is unconditionally evaluated. For this"
+        "case this currently beyond scope."
+    )
+
     def common_expr():
         return im.lambda_("a")(im.plus("a", im.plus(1, 1)))
 
@@ -293,3 +299,18 @@ def test_scalar_extraction_inside_as_fieldop():
 
     actual = CSE.apply(testee, within_stencil=False)
     assert actual == expected
+
+
+def test_no_extraction_from_unapplied_lambda():
+    testee = im.if_(
+        "cond",
+        # the `+0`, and `+1` respectively, are only needed to avoid that f itself is collected
+        # which is not what we are interested in here
+        im.let("f", im.lambda_()(im.plus(im.deref("guarded_it"), 0)))(
+            im.if_("cond2", im.call("f")(), 0)
+        ),
+        im.let("f", im.lambda_()(im.plus(im.deref("guarded_it"), 1)))(im.call("f")()),
+    )
+
+    actual = CSE.apply(testee, within_stencil=True)
+    assert actual == testee  # no extraction should happen
