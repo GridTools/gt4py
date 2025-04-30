@@ -174,7 +174,7 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
                 # collect subexpressions for all arguments to the `if_`
                 arg_states = [self.State() for _ in node.args]
                 for arg, state in zip(node.args, arg_states):
-                    self.visit(arg, state=state, **{**kwargs, "depth": depth + 1})
+                    self.visit(arg, state=state, **(kwargs | {"depth": depth + 1})
 
                 # remove all subexpressions that are not eligible for collection
                 #  (either they occur in the condition or in both branches)
