@@ -1023,7 +1023,7 @@ class SplitMemlet(dace_transformation.SingleStateTransformation):
 
         assert dimension_in_which_to_split is not None
         assert len(splitted_subsets_in_dim) > 0
-        assert all(((e - s) > 0) == True for s, e, _ in splitted_subsets_in_dim)  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        assert all(((e - s) >= 0) == True for s, e, _ in splitted_subsets_in_dim)  # noqa: E712 [true-false-comparison]  # SymPy comparison
 
         splitted_subsets: list[dace_sbs.Range] = []
         for splitted_subset_in_dim in splitted_subsets_in_dim:
