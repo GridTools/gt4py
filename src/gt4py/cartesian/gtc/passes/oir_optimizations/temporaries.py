@@ -90,7 +90,6 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
 
     Note that temporaries used in horizontal regions in a single horizontal execution
     may not be scalarized.
-
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -121,7 +120,6 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
 
     Note that temporaries used in horizontal regions in a single horizontal execution
     may not be scalarized.
-
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:

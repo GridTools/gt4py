@@ -231,9 +231,11 @@ def make_tuple(*args):
     return call("make_tuple")(*args)
 
 
-def tuple_get(index: str | int, tuple_expr):
+def tuple_get(index: str | int | itir.Literal, tuple_expr):
     """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(index, tuple_expr)``."""
-    return call("tuple_get")(literal(str(index), builtins.INTEGER_INDEX_BUILTIN), tuple_expr)
+    if not isinstance(index, itir.Literal):
+        index = literal(str(index), builtins.INTEGER_INDEX_BUILTIN)
+    return call("tuple_get")(index, tuple_expr)
 
 
 def if_(cond, true_val, false_val):
@@ -278,7 +280,7 @@ class let:
                 "Invalid arguments: expected a variable name and an init form or a list thereof."
             )
 
-    def __call__(self, form):
+    def __call__(self, form) -> itir.FunCall:
         return call(lambda_(*self.vars)(form))(*self.init_forms)
 
 
@@ -575,3 +577,8 @@ def cast_(expr, dtype: ts.ScalarType | str):
 def can_deref(expr):
     """Create a `can_deref` call."""
     return call("can_deref")(expr)
+
+
+def compose(a: itir.SymRef | itir.Lambda, b: itir.SymRef | itir.Lambda) -> itir.Lambda:
+    # TODO(havogt): `a`, `b` must not contain `SymRef(id="_comp")` for a `Sym` in a parent scope
+    return lambda_("__comp")(call(a)(call(b)("__comp")))

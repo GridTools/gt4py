@@ -101,7 +101,7 @@ class UnrollVectorAssignments(IRNodeMapper):
     def apply(cls, root, **kwargs):
         return cls().visit(root, **kwargs)
 
-    def _is_vector_assignment(self, stmt: Node, fields_decls: Dict[str, FieldDecl]):
+    def _is_vector_assignment(self, stmt: Node, fields_decls: Dict[str, FieldDecl]) -> bool:
         if not isinstance(stmt, Assign):
             return False
 
@@ -182,7 +182,7 @@ class UnrollVectorExpressions(IRNodeMapper):
     def visit_FieldRef(self, node: FieldRef, *, fields_decls: Dict[str, FieldDecl], **kwargs):
         name = node.name
         if fields_decls[name].data_dims:
-            field_list = []
+            field_list: List[Union[FieldRef, List[FieldRef]]] = []
             # vector
             if len(fields_decls[name].data_dims) == 1:
                 dims = fields_decls[name].data_dims[0]
@@ -197,7 +197,7 @@ class UnrollVectorExpressions(IRNodeMapper):
             elif len(fields_decls[name].data_dims) == 2:
                 rows, cols = fields_decls[name].data_dims
                 for row in range(rows):
-                    row_list = []
+                    row_list: List[FieldRef] = []
                     for col in range(cols):
                         data_type = DataType.INT32
                         data_index = [
@@ -246,24 +246,28 @@ class UnrollVectorExpressions(IRNodeMapper):
                     acc = BinOpExpr(op=BinaryOperator.ADD, lhs=acc, rhs=mul, loc=node.loc)
 
                 result.append(acc)
-        else:
-            # vector and vector
-            if isinstance(lhs, list) and isinstance(rhs, list):
-                assert len(lhs) == len(rhs)
-                for lhs_el, rhs_el in zip(lhs, rhs):
-                    result.append(BinOpExpr(op=node.op, lhs=lhs_el, rhs=rhs_el, loc=node.loc))
-            # scalar and vector
-            elif isinstance(lhs, Expr) and isinstance(rhs, list):
-                for rhs_el in rhs:
-                    result.append(BinOpExpr(op=node.op, lhs=lhs, rhs=rhs_el, loc=node.loc))
-            elif isinstance(lhs, list) and isinstance(rhs, Expr):
-                for lhs_el in lhs:
-                    result.append(BinOpExpr(op=node.op, lhs=lhs_el, rhs=rhs, loc=node.loc))
-            # scalar and scalar fallback
-            else:
-                result = self.generic_visit(node, **kwargs)
+            return result
 
-        return result
+        # vector and vector
+        if isinstance(lhs, list) and isinstance(rhs, list):
+            assert len(lhs) == len(rhs)
+            for lhs_el, rhs_el in zip(lhs, rhs):
+                result.append(BinOpExpr(op=node.op, lhs=lhs_el, rhs=rhs_el, loc=node.loc))
+            return result
+
+        # scalar and vector
+        if isinstance(lhs, Expr) and isinstance(rhs, list):
+            for rhs_el in rhs:
+                result.append(BinOpExpr(op=node.op, lhs=lhs, rhs=rhs_el, loc=node.loc))
+            return result
+
+        if isinstance(lhs, list) and isinstance(rhs, Expr):
+            for lhs_el in lhs:
+                result.append(BinOpExpr(op=node.op, lhs=lhs_el, rhs=rhs, loc=node.loc))
+            return result
+
+        # scalar and scalar fallback
+        return self.generic_visit(node, **kwargs)
 
 
 class DefIRToGTIR(IRNodeVisitor):
@@ -351,14 +355,12 @@ class DefIRToGTIR(IRNodeVisitor):
         field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
         vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
-        if node.externals is not None:
-            externals = {
-                name: _make_literal(value)
-                for name, value in node.externals.items()
-                if isinstance(value, numbers.Number)
-            }
-        else:
-            externals = {}
+        externals = {
+            name: _make_literal(value)
+            for name, value in (node.externals or {}).items()
+            if isinstance(value, numbers.Number)
+        }
+
         return gtir.Stencil(
             name=node.name,
             api_signature=[
@@ -447,7 +449,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_BuiltinLiteral(self, node: BuiltinLiteral) -> gtir.Literal:  # type: ignore[return]
+    def visit_BuiltinLiteral(self, node: BuiltinLiteral) -> gtir.Literal:
         # currently deals only with boolean literals
         if node.value in self.GT4PY_BUILTIN_TO_GTIR.keys():
             return gtir.Literal(
@@ -488,15 +490,15 @@ class DefIRToGTIR(IRNodeVisitor):
                 ),
                 loc=location_to_source_location(node.loc),
             )
-        else:
-            return gtir.ScalarIfStmt(
-                cond=cond,
-                true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
-                false_branch=(
-                    gtir.BlockStmt(body=self.visit(node.else_body)) if node.else_body else None
-                ),
-                loc=location_to_source_location(node.loc),
-            )
+
+        return gtir.ScalarIfStmt(
+            cond=cond,
+            true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
+            false_branch=(
+                gtir.BlockStmt(body=self.visit(node.else_body)) if node.else_body else None
+            ),
+            loc=location_to_source_location(node.loc),
+        )
 
     def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.FieldIfStmt:
         def make_bound_or_level(bound: AxisBound, level) -> Optional[common.AxisBound]:
@@ -504,11 +506,11 @@ class DefIRToGTIR(IRNodeVisitor):
                 level == LevelMarker.END and bound.offset >= 10000
             ):
                 return None
-            else:
-                return common.AxisBound(
-                    level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[bound.level],
-                    offset=bound.offset,
-                )
+
+            return common.AxisBound(
+                level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[bound.level],
+                offset=bound.offset,
+            )
 
         axes = {
             axis.lower(): common.HorizontalInterval(
@@ -529,7 +531,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_VarRef(self, node: VarRef, **kwargs):
+    def visit_VarRef(self, node: VarRef, **kwargs) -> gtir.ScalarAccess:
         return gtir.ScalarAccess(name=node.name, loc=location_to_source_location(node.loc))
 
     def visit_AxisInterval(self, node: AxisInterval) -> Tuple[gtir.AxisBound, gtir.AxisBound]:
@@ -567,7 +569,7 @@ class DefIRToGTIR(IRNodeVisitor):
         k_val = offset.get("K", 0)
         if isinstance(k_val, numbers.Integral):
             return common.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)
-        elif isinstance(k_val, Expr):
+        if isinstance(k_val, Expr):
             return gtir.VariableKOffset(k=self.visit(k_val, **kwargs))
-        else:
-            raise TypeError("Unrecognized vertical offset type")
+
+        raise TypeError("Unrecognized vertical offset type")
