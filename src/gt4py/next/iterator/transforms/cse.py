@@ -154,9 +154,9 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
         can_collect_children = not isinstance(node, itir.Lambda) or is_let_form
 
         if (
-            not isinstance(node, SymbolTableTrait)
+            can_collect_children
+            and not isinstance(node, SymbolTableTrait)
             and not _is_collectable_expr(node)
-            and can_collect_children
         ):
             return super().visit(node, **kwargs)
 
