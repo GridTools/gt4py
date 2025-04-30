@@ -148,12 +148,12 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         if number_of_producers != len({iedge.src for iedge in graph.in_edges(access_node)}):
             return False
 
-        # To make sense there must also multiple different consumers, note that
-        #  we do not require that they are distinct. Which is different from the
-        #  producer where we require this.
-        number_of_consumers = graph.out_degree(access_node)
-        if number_of_consumers <= 1:
-            return False
+        # Note we explicitly allow that there are less than one consumer. This _can_
+        #  indicate that something is computed that is not used? However, because of
+        #  MapFusion's ability to handle intermediates that have multiple producers
+        #  this can happen. For that reason alone, we allow this. We really here on
+        #  DaCe's DeadDataflow elimination to remove them. This is possible because
+        #  we have made sure that the data is not used anywhere else.
 
         # Now check if a decomposition exist.
         assignment = self._match_consumers_to_producers(graph)
@@ -203,8 +203,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         The function will go through each outgoing edge and determine which
         incoming edge write that data. If it is not possible to clearly assign
         each consumer to a producer then `None` is returned.
-
-        No additional feasibility checks are performed.
+        Note that is possible that no consumer is assigned to a producer.
         """
         access_node: dace_nodes.AccessNode = self.access_node
 
@@ -222,11 +221,6 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
             if possible_producer is None:
                 return None
             assignment[possible_producer].add(oedge)
-
-        # At least every producer should have at least one consumer. If this is not the
-        #  case then we compute something that is not needed.
-        # TODO(phimuell): Figuring out what we should actually do.
-        assert not any(len(assigned_consumers) == 0 for assigned_consumers in assignment.values())
 
         return assignment
 
