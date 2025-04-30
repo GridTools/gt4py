@@ -8,10 +8,9 @@
 
 from __future__ import annotations
 
+import collections
 import dataclasses
-import functools
 import math
-import operator
 from typing import Callable, Iterable, TypeVar, Union, cast
 
 import gt4py.next.iterator.ir_utils.ir_makers as im
@@ -185,13 +184,17 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
                     arg_state.remove_subexprs(arg_state.subexprs.keys() - eligible_subexprs)
 
                 # merge the states of the three arguments
-                subexprs: dict[itir.Node, CollectSubexpressions.SubexpressionData] = {}
+                subexprs: dict[itir.Node, CollectSubexpressions.SubexpressionData] = (
+                    collections.defaultdict(self.SubexpressionData)
+                )
                 for state in arg_states:
                     for subexpr, data in state.subexprs.items():
-                        merged_data = subexprs.setdefault(subexpr, self.SubexpressionData())
+                        merged_data = subexprs[subexpr]
                         merged_data.subexprs.extend(data.subexprs)
                         merged_data.max_depth = max(merged_data.max_depth, data.max_depth)
-                collected_child_node_ids = set.union(*(state.collected_child_node_ids for state in arg_states))
+                collected_child_node_ids = set.union(
+                    *(state.collected_child_node_ids for state in arg_states)
+                )
                 used_symbol_ids = set.union(*(state.used_symbol_ids for state in arg_states))
                 # propagate collected subexpressions to parent
                 for subexpr, data in subexprs.items():
