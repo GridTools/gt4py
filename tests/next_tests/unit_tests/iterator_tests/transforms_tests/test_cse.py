@@ -306,11 +306,20 @@ def test_no_extraction_from_unapplied_lambda():
         "cond",
         # the `+0`, and `+1` respectively, are only needed to avoid that f itself is collected
         # which is not what we are interested in here
-        im.let("f", im.lambda_()(im.plus(im.deref("guarded_it"), 0)))(
-            im.if_("cond2", im.call("f")(), 0)
-        ),
-        im.let("f", im.lambda_()(im.plus(im.deref("guarded_it"), 1)))(im.call("f")()),
+        im.let("f", im.lambda_()(im.deref("guarded_it")))(im.if_("cond2", im.call("f")(), 0)),
+        im.deref("guarded_it"),
     )
 
     actual = CSE.apply(testee, within_stencil=True)
     assert actual == testee  # no extraction should happen
+
+
+def test_extraction_from_let_form():
+    common = im.plus(1, 2)
+    testee = im.plus(im.let("a", 1)(im.plus("a", common)), im.let("b", 2)(im.plus("b", common)))
+    expected = im.let("_cs_1", common)(
+        im.plus(im.let("a", 1)(im.plus("a", "_cs_1")), im.let("b", 2)(im.plus("b", "_cs_1")))
+    )
+
+    actual = CSE.apply(testee, within_stencil=True)
+    assert actual == expected
