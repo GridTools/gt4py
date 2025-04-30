@@ -261,6 +261,113 @@ def _make_parallel_sdfg_1(
     return sdfg, state
 
 
+def _make_multi_producer_intermediate() -> tuple[dace.SDFG, dace.SDFGState]:
+    """Produces an SDFG where the intermediate node has multiple producer.
+
+    It can be fused because the downstream map only updates it partially.
+    """
+    sdfg = dace.SDFG(util.unique_name("multi_producer_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+    state2 = sdfg.add_state_after(state)
+
+    anames = ["a", "t", "o1", "o2"]
+    for aname in anames:
+        sdfg.add_array(
+            name=aname,
+            shape=(20, (15 if aname == "o1" else 20)),
+            dtype=dace.float64,
+            transient=(aname == "t"),
+        )
+    t = state.add_access("t")
+
+    state.add_mapped_tasklet(
+        "comp1",
+        map_ranges={"__i0": "0:20", "__i1": "0:5"},
+        inputs={"__in": dace.Memlet("a[__i0, __i1]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("t[__i0, __i1]")},
+        output_nodes={t},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "comp2",
+        map_ranges={"__i0": "0:20", "__i1": "15:20"},
+        inputs={"__in": dace.Memlet("a[__i0, __i1]")},
+        code="__out = __in + 2.0",
+        outputs={"__out": dace.Memlet("t[__i0, __i1]")},
+        output_nodes={t},
+        external_edges=True,
+    )
+
+    state.add_mapped_tasklet(
+        "first_map",
+        map_ranges={"__i0": "0:20", "__i1": "5:15"},
+        inputs={"__in": dace.Memlet("a[__i0, __i1]")},
+        code="__out = __in + 3.0",
+        outputs={"__out": dace.Memlet("t[__i0, __i1]")},
+        output_nodes={t},
+        external_edges=True,
+    )
+
+    state.add_mapped_tasklet(
+        "second_map",
+        map_ranges={"__i0": "0:20", "__i1": "5:15"},
+        inputs={"__in": dace.Memlet("t[__i0, __i1]")},
+        code="__out = __in + 4.0",
+        outputs={"__out": dace.Memlet("o1[__i0, __i1 - 5]")},
+        input_nodes={t},
+        external_edges=True,
+    )
+
+    state2.add_nedge(
+        state2.add_access("t"),
+        state2.add_access("o2"),
+        dace.Memlet("t[0:20, 0:20] -> [0:20, 0:20]"),
+    )
+    sdfg.validate()
+
+    return sdfg, state
+
+
+def _make_parallel_inner() -> tuple[dace.SDFG, dace.SDFGState]:
+    sdfg = dace.SDFG(util.unique_name("multi_producer_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for aname in "ao":
+        sdfg.add_array(
+            name=aname,
+            shape=(20, 20, 2),
+            dtype=dace.float64,
+            transient=False,
+        )
+
+    o = state.add_access("o")
+
+    state.add_mapped_tasklet(
+        "comp1",
+        map_ranges={"__i0": "0:20", "__i1": "0:20"},
+        inputs={"__in": dace.Memlet("a[__i0, __i1, 0]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("o[__i0, __i1, 0]")},
+        output_nodes={o},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "comp1",
+        map_ranges={"__i0": "0:20", "__i1": "0:20"},
+        inputs={"__in": dace.Memlet("a[__i0, __i1, 1]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("o[__i0, __i1, 1]")},
+        output_nodes={o},
+        external_edges=True,
+    )
+    ret = sdfg.apply_transformations_repeated([dace_dataflow.MapExpansion])
+    assert ret == 2
+    sdfg.validate()
+
+    return sdfg, state
+
+
 def test_exclusive_itermediate():
     """Tests if the exclusive intermediate branch works."""
     N = 10
@@ -577,7 +684,8 @@ def test_parallel_1():
     )
 
     assert nb_applies == 1
-    assert util.count_nodes(state, dace_nodes.AccessNode) == 4
+    # The access nodes are fused.
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 3
     assert util.count_nodes(state, dace_nodes.MapEntry) == 1
 
 
@@ -606,3 +714,100 @@ def test_parallel_3():
     assert nb_applies == 0
     assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 3
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+
+
+def test_multi_producer_sdfg():
+    sdfg, state = _make_multi_producer_intermediate()
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 4
+
+    ac_initial = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    assert len(ac_initial) == 5
+    assert any(
+        state.out_degree(ac) == 1 and state.in_degree(ac) == 3
+        for ac in ac_initial
+        if ac.data == "t"
+    )
+
+    ref = {
+        "a": np.array(np.random.rand(20, 20), dtype=np.float64, copy=True),
+        "o1": np.array(np.random.rand(20, 15), dtype=np.float64, copy=True),
+        "o2": np.array(np.random.rand(20, 20), dtype=np.float64, copy=True),
+    }
+    res = copy.deepcopy(ref)
+
+    csdfg_ref = sdfg.compile()
+    csdfg_ref(**ref)
+
+    nb_applies = sdfg.apply_transformations_repeated(
+        gtx_transformations.MapFusion(), validate=True, validate_all=True
+    )
+
+    sdfg.validate()
+    assert nb_applies == 1
+
+    ac_after = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    assert len(ac_after) == 6  # The additional one is the transient.
+    assert any(
+        state.out_degree(ac) == 0 and state.in_degree(ac) == 3
+        for ac in ac_initial
+        if ac.data == "t"
+    )
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 3
+
+    csdfg_res = sdfg.compile()
+    csdfg_res(**res)
+    assert all(np.allclose(ref[name], res[name]) for name in ref)
+
+
+def test_relocation_connectors():
+    sdfg, state = _make_parallel_inner()
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 4
+
+    ac_nodes_befor = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    assert len(ac_nodes_befor) == 3
+    assert len([ac for ac in ac_nodes_befor if ac.data == "a"]) == 2
+
+    ref = {
+        "a": np.array(np.random.rand(20, 20, 2), dtype=np.float64, copy=True),
+        "o": np.array(np.random.rand(20, 20, 2), dtype=np.float64, copy=True),
+    }
+    res = copy.deepcopy(ref)
+
+    csdfg_ref = sdfg.compile()
+    csdfg_ref(**ref)
+
+    nb_applies = sdfg.apply_transformations_repeated(
+        gtx_transformations.MapFusion(), validate=True, validate_all=True
+    )
+
+    sdfg.validate()
+    assert nb_applies == 2
+
+    ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    assert len(ac_nodes) == 2
+    a, o = (ac_nodes[0], ac_nodes[1]) if ac_nodes[0] == "a" else (ac_nodes[1], ac_nodes[0])
+
+    # The input data node `a` must have been reused, while the output node is never reused.
+    assert state.in_degree(a) == 0 and state.out_degree(a) == 1
+    assert state.in_degree(o) == 2 and state.out_degree(o) == 0
+
+    map_entries = util.count_nodes(state, dace_nodes.MapEntry, return_nodes=True)
+    assert len(map_entries) == 2
+    scope_dict = state.scope_dict()
+    outer_me, inner_me = (
+        (map_entries[0], map_entries[1])
+        if scope_dict[map_entries[0]] is None
+        else (map_entries[1], map_entries[0])
+    )
+    # For global Maps the connectors are reused, but not for nested Maps.
+    assert state.in_degree(outer_me) == 1
+    assert state.out_degree(outer_me) == 2
+    assert len(outer_me.out_connectors) == 1
+    assert state.in_degree(inner_me) == 2
+    assert state.out_degree(inner_me) == 2
+    assert len(inner_me.out_connectors) == 2
+
+    csdfg_res = sdfg.compile()
+    csdfg_res(**res)
+
+    assert all(np.allclose(ref[name], res[name]) for name in res)
