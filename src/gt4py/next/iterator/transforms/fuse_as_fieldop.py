@@ -75,8 +75,6 @@ def _inline_as_fieldop_arg(
                 stencil_body
             )
         else:
-            # a scalar expression, a previously not inlined `as_fieldop` call or an opaque
-            # expression e.g. containing a tuple
             stencil_params.append(inner_param)
             new_outer_stencil_param = uids.sequential_id(prefix="__iasfop")
             extracted_args[new_outer_stencil_param] = inner_arg
