@@ -100,11 +100,10 @@ def fuse_as_fieldop(
 ) -> itir.Expr:
     assert cpm.is_applied_as_fieldop(expr)
 
-    stencil: itir.Lambda = expr.fun.args[0]  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
-    assert isinstance(expr.fun.args[0], itir.Lambda) or cpm.is_call_to(stencil, "scan")  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
-    stencil, restore_scan = ir_misc.unwrap_scan(stencil)
+    assert isinstance(expr.fun.args[0], itir.Lambda) or cpm.is_call_to(expr.fun.args[0], "scan")
+    stencil, restore_scan = ir_misc.unwrap_scan(expr.fun.args[0])
 
-    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
+    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None
 
     args: list[itir.Expr] = expr.args
 
@@ -147,11 +146,11 @@ def fuse_as_fieldop(
             new_args = _merge_arguments(new_args, {new_param: arg})
 
     stencil = im.lambda_(*new_args.keys())(new_stencil_body)
-    stencil = restore_scan(stencil)
+    new_stencil = restore_scan(stencil)
 
     # simplify stencil directly to keep the tree small
     new_stencil = inline_lambdas.InlineLambdas.apply(
-        stencil, opcount_preserving=True, force_inline_lift_args=False
+        new_stencil, opcount_preserving=True, force_inline_lift_args=False
     )
     new_stencil = inline_center_deref_lift_vars.InlineCenterDerefLiftVars.apply(
         new_stencil, is_stencil=True, uids=uids
@@ -173,7 +172,7 @@ def _arg_inline_predicate(node: itir.Expr, shifts: set[tuple[itir.OffsetLiteral,
 
     if (
         is_applied_fieldop := cpm.is_applied_as_fieldop(node)
-        and not cpm.is_call_to(node.fun.args[0], "scan")  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
+        and not cpm.is_call_to(node.fun.args[0], "scan")
     ) or cpm.is_call_to(node, "if_"):
         # always inline arg if it is an applied fieldop with only a single arg
         if is_applied_fieldop and len(node.args) == 1:

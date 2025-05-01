@@ -436,7 +436,7 @@ url = 'https://test.pypi.org/simple/'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/spcl/dace", branch = "main", extra = "dace-next"}
+dace = {git = "https://github.com/GridTools/dace", branch = "gt4py-next-integration", extra = "dace-next"}
 
 # -- versioningit --
 [tool.versioningit]
