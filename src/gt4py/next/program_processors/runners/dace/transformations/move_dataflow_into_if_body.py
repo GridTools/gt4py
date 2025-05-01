@@ -17,7 +17,7 @@ from dace import (
     subsets as dace_sbs,
     transformation as dace_transformation,
 )
-from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
+from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sutils
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -421,22 +421,21 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             lambda s1, s2: s1.union(s2), relocatable_dataflow.values(), set()
         )
 
-        # Remove all original nodes. We only have to handle the edges, between
-        #  moved nodes and the unmoved nodes, which are by definition given
-        #  through the incoming edges. `remove_memlet_path()` will take care of
-        #  that for us and also remove the connectors.
+        # Before we can clean the original nodes, we must clean the dataflow. If a
+        #  node, that was relocated, has incoming connections we must remove them
+        #  and the parent dataflow.
         for node_to_remove in all_relocatable_dataflow:
             for iedge in list(state.in_edges(node_to_remove)):
                 if iedge.src in all_relocatable_dataflow:
                     continue
-                assert state.memlet_path(iedge)[-1] is iedge
-                state.remove_memlet_path(iedge)
+                dace_sutils.remove_edge_and_dangling_path(state, iedge)
 
             if isinstance(node_to_remove, dace_nodes.AccessNode):
                 assert node_to_remove.desc(sdfg).transient
                 sdfg.remove_data(node_to_remove.data, validate=False)
 
-            state.remove_node(node_to_remove)
+        # Remove the original nodes.
+        state.remove_nodes_from(all_relocatable_dataflow)
 
     def _update_symbol_mapping(
         self,
