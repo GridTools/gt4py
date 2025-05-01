@@ -182,7 +182,6 @@ class StencilObject(abc.ABC):
         performance statistics. These include the stencil calls count, the
         cumulative time spent in all stencil calls, and the actual time spent
         in carrying out the computations.
-
     """
 
     # Those attributes are added to the class at loading time:

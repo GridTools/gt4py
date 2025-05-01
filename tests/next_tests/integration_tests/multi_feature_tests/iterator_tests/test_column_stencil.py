@@ -237,6 +237,133 @@ def test_ksum_back_scan(program_processor):
 
 
 @fundef
+def ksum_even_odd(state, inp):
+    even = tuple_get(0, state)
+    is_even = tuple_get(1, state)
+    odd = tuple_get(2, state)
+    return (
+        even + if_(is_even, deref(inp), 0.0),
+        not_(is_even),
+        odd + if_(not_(is_even), deref(inp), 0.0),
+    )
+
+
+@fendef(column_axis=KDim)
+def ksum_even_odd_fencil(i_size, k_size, inp, out):
+    domain = cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size))
+    scanop = as_fieldop(scan(ksum_even_odd, True, (0.0, True, 0.0)), domain)(inp)
+    expr = make_tuple(tuple_get(0, scanop), tuple_get(2, scanop))  # we remove the middle element
+    set_at(expr, domain, out)
+
+
+@pytest.mark.uses_scan
+def test_ksum_even_odd_scan(program_processor):
+    program_processor, validate = program_processor
+    shape = [1, 7]
+    inp = gtx.as_field([IDim, KDim], np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
+    out = (
+        gtx.as_field([IDim, KDim], np.zeros(shape, dtype=inp.dtype)),
+        gtx.as_field([IDim, KDim], np.zeros(shape, dtype=inp.dtype)),
+    )
+
+    even_ref = np.asarray([[0.0, 0.0, 2.0, 2.0, 6.0, 6.0, 12.0]])
+    odd_ref = np.asarray([[0.0, 1.0, 1.0, 4.0, 4.0, 9.0, 9.0]])
+
+    run_processor(
+        ksum_even_odd_fencil,
+        program_processor,
+        shape[0],
+        shape[1],
+        inp,
+        out,
+        offset_provider={"I": IDim, "K": KDim},
+    )
+
+    if validate:
+        assert np.allclose(even_ref, out[0].asnumpy())
+        assert np.allclose(odd_ref, out[1].asnumpy())
+
+
+@fundef
+def ksum_even_odd_nested(state, inp):
+    is_even = tuple_get(0, state)
+    even_odd = tuple_get(1, state)
+    even = tuple_get(0, even_odd)
+    odd = tuple_get(1, even_odd)
+    return make_tuple(
+        not_(is_even),
+        make_tuple(even + if_(is_even, deref(inp), 0.0), odd + if_(not_(is_even), deref(inp), 0.0)),
+    )
+
+
+@fendef(column_axis=KDim)
+def ksum_even_odd_nested_fencil(i_size, k_size, inp, out):
+    domain = cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size))
+    scanop = as_fieldop(scan(ksum_even_odd_nested, True, (True, (0.0, 0.0))), domain)(inp)
+    expr = tuple_get(1, scanop)
+    set_at(expr, domain, out)
+
+
+@pytest.mark.uses_scan
+def test_ksum_even_odd_nested_scan(program_processor):
+    program_processor, validate = program_processor
+    shape = [1, 7]
+    inp = gtx.as_field([IDim, KDim], np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
+    out = (
+        gtx.as_field([IDim, KDim], np.zeros(shape, dtype=inp.dtype)),
+        gtx.as_field([IDim, KDim], np.zeros(shape, dtype=inp.dtype)),
+    )
+
+    even_ref = np.asarray([[0.0, 0.0, 2.0, 2.0, 6.0, 6.0, 12.0]])
+    odd_ref = np.asarray([[0.0, 1.0, 1.0, 4.0, 4.0, 9.0, 9.0]])
+
+    run_processor(
+        ksum_even_odd_nested_fencil,
+        program_processor,
+        shape[0],
+        shape[1],
+        inp,
+        out,
+        offset_provider={"I": IDim, "K": KDim},
+    )
+
+    if validate:
+        assert np.allclose(even_ref, out[0].asnumpy())
+        assert np.allclose(odd_ref, out[1].asnumpy())
+
+
+@fendef(column_axis=KDim)
+def ksum_even_odd_nested_only_odd_fencil(i_size, k_size, inp, out):
+    domain = cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size))
+    scanop = as_fieldop(scan(ksum_even_odd_nested, True, (True, (0.0, 0.0))), domain)(inp)
+    expr = tuple_get(0, tuple_get(1, scanop))
+    set_at(expr, domain, out)
+
+
+@pytest.mark.uses_scan
+def test_ksum_even_odd_nested_only_even_scan(program_processor):
+    program_processor, validate = program_processor
+    shape = [1, 7]
+    inp = gtx.as_field([IDim, KDim], np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
+    out = gtx.as_field([IDim, KDim], np.zeros(shape, dtype=inp.dtype))
+
+    even_ref = np.asarray([[0.0, 0.0, 2.0, 2.0, 6.0, 6.0, 12.0]])
+
+    run_processor(
+        ksum_even_odd_nested_only_odd_fencil,
+        program_processor,
+        shape[0],
+        shape[1],
+        inp,
+        out,
+        offset_provider={"I": IDim, "K": KDim},
+    )
+
+    if validate:
+        assert np.allclose(even_ref, out.asnumpy())
+
+
+@fundef
 def kdoublesum(state, inp0, inp1):
     return make_tuple(tuple_get(0, state) + deref(inp0), tuple_get(1, state) + deref(inp1))
 

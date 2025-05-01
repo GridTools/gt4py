@@ -18,7 +18,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import dace
 from dace import data, properties, subsets, symbolic, transformation
-from dace.sdfg import SDFG, SDFGState, graph, nodes, validation
+from dace.sdfg import SDFG, SDFGState, graph, nodes, propagation, validation
 from dace.transformation import helpers
 
 
@@ -92,6 +92,8 @@ class MapFusion(transformation.SingleStateTransformation):
     :param allow_parallel_map_fusion: Allow to merge parallel maps, by default `False`.
     :param only_if_common_ancestor: In parallel map fusion mode, only fuse if both map
         have a common direct ancestor.
+    :param consolidate_edges: If `True`, the default, try to remove edges on the fused Map if they
+        refer to the same data, this will increase the subset size.
 
     :note: This transformation modifies more nodes than it matches.
     :note: If `assume_always_shared` is `True` then the transformation will assume that
@@ -151,6 +153,12 @@ class MapFusion(transformation.SingleStateTransformation):
         desc="If `True` restrict parallel map fusion to maps that have a direct common ancestor.",
     )
 
+    consolidate_edges = properties.Property(
+        dtype=bool,
+        default=True,
+        desc="If `True`, the default, try to remove edges referring to the same data on the fused Map.",
+    )
+
     def __init__(
         self,
         only_inner_maps: Optional[bool] = None,
@@ -160,6 +168,7 @@ class MapFusion(transformation.SingleStateTransformation):
         allow_serial_map_fusion: Optional[bool] = None,
         allow_parallel_map_fusion: Optional[bool] = None,
         only_if_common_ancestor: Optional[bool] = None,
+        consolidate_edges: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -177,6 +186,8 @@ class MapFusion(transformation.SingleStateTransformation):
             self.allow_parallel_map_fusion = allow_parallel_map_fusion
         if only_if_common_ancestor is not None:
             self.only_if_common_ancestor = only_if_common_ancestor
+        if consolidate_edges is not None:
+            self.consolidate_edges = consolidate_edges
 
         # See comment in `is_shared_data()` for more information.
         self._single_use_data: Optional[Dict[dace.SDFG, Set[str]]] = None
@@ -272,20 +283,23 @@ class MapFusion(transformation.SingleStateTransformation):
         # Now perform the dispatch.
         if self.expr_index == 0:
             assert self.allow_serial_map_fusion
-            return self.apply_serial_map_fusion(
+            self.apply_serial_map_fusion(
                 graph=graph,
                 sdfg=sdfg,
             )
 
         elif self.expr_index == 1:
             assert self.allow_parallel_map_fusion
-            return self.apply_parallel_map_fusion(
+            self.apply_parallel_map_fusion(
                 graph=graph,
                 sdfg=sdfg,
             )
 
         else:
             raise NotImplementedError(f"Encountered unknown expression index {self.expr_index}")
+
+        # TODO: Restrict to cases where it is really needed and also only where it is needed.
+        propagation.propagate_memlets_state(sdfg, graph)
 
     def can_parallel_map_fusion_be_applied(
         self,
@@ -301,6 +315,13 @@ class MapFusion(transformation.SingleStateTransformation):
         assert self.expr_index == 1
         assert isinstance(first_map_entry, nodes.MapEntry)
         assert isinstance(second_map_entry, nodes.MapEntry)
+
+        # Since we matched any two Maps in the state, we have to ensure that they
+        #  are in the same scope (e.g. same state, or same parent map), otherwise it could be that one is inside one Map
+        #  while the other is inside another one.
+        scope = graph.scope_dict()
+        if scope[first_map_entry] != scope[second_map_entry]:
+            return False
 
         # We will now check if the two maps are parallel.
         if not self.is_parallel(graph=graph, node1=first_map_entry, node2=second_map_entry):
@@ -420,6 +441,8 @@ class MapFusion(transformation.SingleStateTransformation):
         first_map_exit: nodes.MapExit = graph.exit_node(first_map_entry)
         second_map_entry: nodes.MapEntry = self.second_parallel_map_entry
         second_map_exit: nodes.MapExit = graph.exit_node(second_map_entry)
+        # We have to get the scope_dict before we start mutating the graph.
+        scope_dict: Dict = graph.scope_dict().copy()
 
         # Before we do anything we perform the renaming, i.e. we will rename the
         #  parameters of the second map such that they match the one of the first map.
@@ -441,6 +464,7 @@ class MapFusion(transformation.SingleStateTransformation):
                 to_node=to_node,
                 state=graph,
                 sdfg=sdfg,
+                scope_dict=scope_dict,
             )
             # The relocate function does not remove the node, so we must do it.
             graph.remove_node(from_node)
@@ -468,6 +492,8 @@ class MapFusion(transformation.SingleStateTransformation):
         second_map_entry: nodes.MapEntry = self.second_map_entry
         second_map_exit: nodes.MapExit = graph.exit_node(self.second_map_entry)
         first_map_entry: nodes.MapEntry = graph.entry_node(self.first_map_exit)
+        # We have to get the scope_dict before we start mutating the graph.
+        scope_dict: Dict = graph.scope_dict().copy()
 
         # Before we do anything we perform the renaming.
         self.rename_map_parameters(
@@ -518,6 +544,7 @@ class MapFusion(transformation.SingleStateTransformation):
                 to_node=second_map_exit,
                 state=graph,
                 sdfg=sdfg,
+                scope_dict=scope_dict,
             )
 
         # Now move the input of the second map, that has no connection to the first
@@ -530,6 +557,7 @@ class MapFusion(transformation.SingleStateTransformation):
             to_node=first_map_entry,
             state=graph,
             sdfg=sdfg,
+            scope_dict=scope_dict,
         )
 
         for node_to_remove in [first_map_exit, second_map_entry]:
@@ -605,14 +633,6 @@ class MapFusion(transformation.SingleStateTransformation):
                 return None
             processed_inter_nodes.add(intermediate_node)
 
-            # The intermediate can only have one incoming degree. It might be possible
-            #  to handle multiple incoming edges, if they all come from the top map.
-            #  However, the resulting SDFG might be invalid.
-            # NOTE: Allow this to happen (under certain cases) if the only producer
-            #   is the top map.
-            if state.in_degree(intermediate_node) != 1:
-                return None
-
             # If the second map is not reachable from the intermediate node, then
             #  the output is pure and we can end here.
             if not self.is_node_reachable_from(
@@ -622,6 +642,21 @@ class MapFusion(transformation.SingleStateTransformation):
             ):
                 pure_outputs.add(out_edge)
                 continue
+
+            # We require that there is only one edge between the MapExit of the
+            #  top Map and the intermediate. We allow that the intermediate has
+            #  multiple incoming edges. We assume that there is no write conflicts.
+            for intermediate_node_iedge in state.in_edges(intermediate_node):
+                if intermediate_node_iedge is out_edge:
+                    continue
+                if intermediate_node_iedge.src is first_map_exit:
+                    return None
+                if self.is_node_reachable_from(
+                    graph=state,
+                    begin=first_map_exit,
+                    end=intermediate_node_iedge.src,
+                ):
+                    return None
 
             # The following tests are _after_ we have determined if we have a pure
             #  output node, because this allows us to handle more exotic pure node
@@ -646,7 +681,7 @@ class MapFusion(transformation.SingleStateTransformation):
 
             # It can happen that multiple edges converges at the `IN_` connector
             #  of the first map exit, but there is only one edge leaving the exit.
-            #  It is complicate to handle this, so for now we ignore it.
+            #  This is complicate to handle, so for now we ignore it.
             # TODO(phimuell): Handle this case properly.
             #   To handle this we need to associate a consumer edge (the outgoing edges
             #   of the second map) with exactly one producer.
@@ -796,6 +831,7 @@ class MapFusion(transformation.SingleStateTransformation):
         to_node: Union[nodes.MapExit, nodes.MapEntry],
         state: SDFGState,
         sdfg: SDFG,
+        scope_dict: Dict,
     ) -> None:
         """Move the connectors and edges from `from_node` to `to_nodes` node.
 
@@ -810,6 +846,8 @@ class MapFusion(transformation.SingleStateTransformation):
         :param to_node: Node to which the edges should reconnect.
         :param state: The state in which the operation happens.
         :param sdfg: The SDFG that is modified.
+
+        :note: After the relocation Memlet propagation should be run.
         """
 
         # Now we relocate empty Memlets, from the `from_node` to the `to_node`
@@ -826,9 +864,7 @@ class MapFusion(transformation.SingleStateTransformation):
                 state.remove_edge(empty_edge)
             empty_targets.add(empty_edge.dst)
 
-        # We now determine which edges we have to migrate, for this we are looking at
-        #  the incoming edges, because this allows us also to detect dynamic map ranges.
-        #  TODO(phimuell): If there is already a connection to the node, reuse this.
+        # Relocation of the edges that carry data.
         for edge_to_move in list(state.in_edges(from_node)):
             assert isinstance(edge_to_move.dst_conn, str)
 
@@ -855,14 +891,36 @@ class MapFusion(transformation.SingleStateTransformation):
             else:
                 # We have a Passthrough connection, i.e. there exists a matching `OUT_`.
                 old_conn = edge_to_move.dst_conn[3:]  # The connection name without prefix
-                new_conn = to_node.next_connector(old_conn)
+                new_conn, conn_was_reused = self._get_new_conn_name(
+                    edge_to_move=edge_to_move,
+                    to_node=to_node,
+                    state=state,
+                    scope_dict=scope_dict,
+                )
 
-                to_node.add_in_connector("IN_" + new_conn)
-                for e in list(state.in_edges_by_connector(from_node, "IN_" + old_conn)):
-                    helpers.redirect_edge(state, e, new_dst=to_node, new_dst_conn="IN_" + new_conn)
-                to_node.add_out_connector("OUT_" + new_conn)
-                for e in list(state.out_edges_by_connector(from_node, "OUT_" + old_conn)):
-                    helpers.redirect_edge(state, e, new_src=to_node, new_src_conn="OUT_" + new_conn)
+                # Now move the incoming edges of `to_node` to `from_node`. However,
+                #  we only move `edge_to_move` if we have a new connector, if we
+                #  reuse the connector we will simply remove it.
+                dst_in_conn = "IN_" + new_conn
+                for e in list(state.in_edges_by_connector(from_node, f"IN_{old_conn}")):
+                    if conn_was_reused and e is edge_to_move:
+                        state.remove_edge(edge_to_move)
+                        if state.degree(edge_to_move.src) == 0:
+                            state.remove_node(edge_to_move.src)
+                    else:
+                        helpers.redirect_edge(state, e, new_dst=to_node, new_dst_conn=dst_in_conn)
+
+                # Now move the outgoing edges of `to_node` to `from_node`.
+                dst_out_conn = "OUT_" + new_conn
+                for e in list(state.out_edges_by_connector(from_node, f"OUT_{old_conn}")):
+                    helpers.redirect_edge(state, e, new_src=to_node, new_src_conn=dst_out_conn)
+
+                # If we have used new connectors we must add the new connector names.
+                if not conn_was_reused:
+                    to_node.add_in_connector(dst_in_conn)
+                    to_node.add_out_connector(dst_out_conn)
+
+                # In any case remove the old connector name from the `from_node`.
                 from_node.remove_in_connector("IN_" + old_conn)
                 from_node.remove_out_connector("OUT_" + old_conn)
 
@@ -881,6 +939,52 @@ class MapFusion(transformation.SingleStateTransformation):
             )
         assert len(from_node.in_connectors) == 0
         assert len(from_node.out_connectors) == 0
+
+    def _get_new_conn_name(
+        self,
+        edge_to_move: graph.MultiConnectorEdge[dace.Memlet],
+        to_node: Union[nodes.MapExit, nodes.MapEntry],
+        state: SDFGState,
+        scope_dict: Dict,
+    ) -> Tuple[str, bool]:
+        """Determine the new connector name that should be used.
+
+        The function returns a pair. The first element is the name of the connector
+        name that should be used. The second element is a boolean that indicates if
+        the connector name is already present on `to_node`, `True`, or if a new
+        connector was created.
+        If `self.consolidate_edges` is `False` the function will always reuse, creating
+        a new connector at `to_node`. This will lead to minimal subsets at the cost of
+        multiple edges to the same data.
+        """
+        assert edge_to_move.dst_conn.startswith("IN_")
+        old_conn = edge_to_move.dst_conn[3:]
+
+        # In case `to_node` is nested, a `MapExit` (pure simplification) or the edge
+        #  consolidation is disabled, we will always reuse the connector. The main
+        #  reason is to simplify things, because we do not have to modify enclosing
+        #  Maps.
+        # TODO(phimuell): Make this more intelligent, i.e. consolidate if one edge
+        #   is for example a subset of the other.
+        if (
+            isinstance(to_node, nodes.MapExit)
+            or (not self.consolidate_edges)
+            or (scope_dict[to_node] is not None)
+        ):
+            return to_node.next_connector(old_conn), False
+
+        # The Map is not nested, so we look if we can reuse an Edge.
+        for iedge in state.in_edges(to_node):
+            if iedge.data.is_empty() or iedge.dst_conn is None:
+                continue
+            if not iedge.dst_conn.startswith("IN_"):
+                continue
+            if iedge.data.data == edge_to_move.data.data:
+                # The same data is used so we reuse that connection.
+                return iedge.dst_conn[3:], True
+
+        # The data is not used, so we create a new one.
+        return to_node.next_connector(old_conn), False
 
     def handle_intermediate_set(
         self,
@@ -1306,6 +1410,8 @@ class MapFusion(transformation.SingleStateTransformation):
         :param graph: The SDFGState in which the maps are located.
         :param sdfg: The SDFG itself.
         :param permissive: Currently unused.
+
+        :note: It is invalid to call this function after nodes have been removed from the SDFG.
         """
         if self.only_inner_maps and self.only_toplevel_maps:
             raise ValueError(
@@ -1343,17 +1449,13 @@ class MapFusion(transformation.SingleStateTransformation):
         """Tests if `node1` and `node2` are parallel in the data flow graph.
 
         The function considers two nodes parallel in the data flow graph, if `node2`
-        can not be reached from `node1` and vice versa.
+        can not be reached from `node1` and vice versa. The function does not check
+        the scope of the nodes.
 
         :param graph: The state on which we operate.
         :param node1: The first node to check.
         :param node2: The second node to check.
         """
-        # In order to be parallel they must be in the same scope.
-        scope = graph.scope_dict()
-        if scope[node1] != scope[node2]:
-            return False
-
         # The `all_nodes_between()` function traverse the graph and returns `None` if
         #  `end` was not found. We have to call it twice, because we do not know
         #  which node is upstream if they are not parallel.
