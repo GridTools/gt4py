@@ -16,6 +16,7 @@ import gc
 
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
+from dace import data as dace_data
 from dace.transformation import dataflow as dace_dataflow
 
 from gt4py.next.program_processors.runners.dace import (
@@ -629,8 +630,12 @@ def test_if_mover_dependent_branch_3():
     tlet1 = state.add_tasklet(
         "tlet1", inputs={"__in1", "__in2"}, outputs={"__out"}, code="__out = __in1 + __in2"
     )
+
+    # Note we could also use a Tasklet here, but using a Map makes handling a bit more
+    #  difficult, because it is not a proper end of a Memlet path.
+    ime2, imx2 = state.add_map("think_of_me_as_a_tasklet", ndrange={"__UNUSED": "0"})
     tlet2 = state.add_tasklet(
-        "tlet2", inputs={"__in1", "__in2"}, outputs={"__out"}, code="__out = __in1 * __in2"
+        "tlet2", inputs={"__in1", "__in2"}, outputs={"__out"}, code="__out = __in1 + __in2"
     )
 
     state.add_edge(a, None, me, "IN_a", dace.Memlet("a[0:10]"))
@@ -643,11 +648,17 @@ def test_if_mover_dependent_branch_3():
 
     state.add_edge(c, None, me, "IN_c", dace.Memlet("c[0:10]"))
     state.add_edge(b, None, me, "IN_b2", dace.Memlet("b[0:10]"))
-    state.add_edge(me, "OUT_c", tlet2, "__in1", dace.Memlet("c[__i]"))
-    state.add_edge(me, "OUT_b2", tlet2, "__in2", dace.Memlet("b[__i]"))
-    state.add_edge(tlet2, "__out", t2, None, dace.Memlet("t2[0]"))
-    me.add_scope_connectors("c")
+    state.add_edge(me, "OUT_b2", ime2, "IN_b", dace.Memlet("b[__i]"))
+    state.add_edge(ime2, "OUT_b", tlet2, "__in1", dace.Memlet("b[__i]"))
+    state.add_edge(me, "OUT_c", ime2, "IN_c", dace.Memlet("c[__i]"))
+    state.add_edge(ime2, "OUT_c", tlet2, "__in2", dace.Memlet("c[__i]"))
+    state.add_edge(tlet2, "__out", imx2, "IN_t2", dace.Memlet("t2[0]"))
+    state.add_edge(imx2, "OUT_t2", t2, None, dace.Memlet("t2[0]"))
     me.add_scope_connectors("b2")
+    me.add_scope_connectors("c")
+    ime2.add_scope_connectors("b")
+    ime2.add_scope_connectors("c")
+    imx2.add_scope_connectors("t2")
 
     state.add_edge(cond, None, me, "IN_cond", dace.Memlet("cond[0:10]"))
     state.add_edge(me, "OUT_cond", if_block, "__cond", dace.Memlet("cond[__i]"))
@@ -665,14 +676,19 @@ def test_if_mover_dependent_branch_3():
     assert state.out_degree(b) == 2
     assert len(me.in_connectors) == 5
     assert util.count_nodes(state, dace_nodes.Tasklet) == 2
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 2
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 7
 
     _perform_test(sdfg, explected_applies=1)
 
-    # It is unspecific if `IN_b1` or `IN_b2` remains.
+    # It is unspecific if `IN_b1` or `IN_b2` remains, but `b` should have only one connector.
+    assert any(iconn in me.in_connectors for iconn in ["IN_b1", "IN_b2"])
     assert state.out_degree(b) == 1
     assert len(me.in_connectors) == 4
-    assert any(iconn in me.in_connectors for iconn in ["IN_b1", "IN_b2"])
     assert util.count_nodes(state, dace_nodes.Tasklet) == 0
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 1
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 5
+    assert set(gnames) == sdfg.arrays.keys()
 
 
 def test_if_mover_no_ops():
