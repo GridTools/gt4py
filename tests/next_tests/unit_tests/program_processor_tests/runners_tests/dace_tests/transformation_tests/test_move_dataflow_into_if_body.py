@@ -536,12 +536,7 @@ def test_if_mover_dependent_branch_2():
     state.add_edge(tasklet_a1, "__out", a1, None, dace.Memlet("a1[0]"))
 
     # Computing of `b1`:
-    tasklet_b1 = state.add_tasklet(
-        "tasklet_b1", inputs={"__in"}, outputs={"__out"}, code="__out = math.exp(__in)"
-    )
-
-    state.add_edge(me, "OUT_b", tasklet_b1, "__in", dace.Memlet("b[__i]"))
-    state.add_edge(tasklet_b1, "__out", b1, None, dace.Memlet("b1[0]"))
+    state.add_edge(me, "OUT_b", b1, None, dace.Memlet("b[__i] -> [0]"))
 
     # Now the condition.
     tasklet_cond = state.add_tasklet(
