@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
+import collections
 import dataclasses
 import enum
 import functools
@@ -40,10 +41,8 @@ def _merge_arguments(
 ) -> dict[str, itir.Expr]:
     new_args = {**args1}
     for stencil_param, stencil_arg in arg2.items():
-        if stencil_param not in new_args:
-            new_args[stencil_param] = stencil_arg
-        else:
-            assert new_args[stencil_param] == stencil_arg
+        assert stencil_param not in new_args
+        new_args[stencil_param] = stencil_arg
     return new_args
 
 
@@ -69,15 +68,7 @@ def _inline_as_fieldop_arg(
     stencil_body: itir.Expr = stencil.expr
 
     for inner_param, inner_arg in zip(stencil.params, inner_args, strict=True):
-        if isinstance(inner_arg, itir.SymRef):
-            if inner_arg.id in extracted_args:
-                assert extracted_args[inner_arg.id] == inner_arg
-                alias = stencil_params[list(extracted_args.keys()).index(inner_arg.id)]
-                stencil_body = im.let(inner_param, im.ref(alias.id))(stencil_body)
-            else:
-                stencil_params.append(inner_param)
-            extracted_args[inner_arg.id] = inner_arg
-        elif isinstance(inner_arg, itir.Literal):
+        if isinstance(inner_arg, itir.Literal):
             # note: only literals, not all scalar expressions are required as it doesn't make sense
             # for them to be computed per grid point.
             stencil_body = im.let(inner_param, im.promote_to_const_iterator(inner_arg))(
@@ -93,6 +84,41 @@ def _inline_as_fieldop_arg(
     return im.lift(im.lambda_(*stencil_params)(stencil_body))(
         *extracted_args.keys()
     ), extracted_args
+
+
+def _deduplicate_args(
+    args: dict[str, itir.Expr], stencil_body: itir.Expr
+) -> tuple[dict[str, itir.Expr], itir.Expr]:
+    new_args_inverted: dict[itir.Expr, list[str]] = collections.defaultdict(list)
+    for name, arg in args.items():
+        new_args_inverted[arg].append(name)
+
+    new_args: dict[str, itir.Expr] = {}
+    new_stencil_body = stencil_body
+    for arg, names in new_args_inverted.items():
+        # put internal names at the end
+        names = sorted(names, key=lambda s: (s.startswith("_"), s))
+        new_args[names[0]] = arg
+        if len(names) > 1:
+            new_stencil_body = im.let(*((name, names[0]) for name in names[1:]))(new_stencil_body)
+
+    return new_args, new_stencil_body
+
+
+def _prettify_args(
+    args: dict[str, itir.Expr], stencil_body: itir.Expr
+) -> tuple[dict[str, itir.Expr], itir.Expr]:
+    new_args: dict[str, itir.Expr] = {}
+    remap_table: dict[str, str] = {}
+    for name, arg in args.items():
+        if isinstance(arg, itir.SymRef):
+            assert arg.id not in new_args  # ensured by deduplication
+            new_args[arg.id] = arg
+            remap_table[name] = arg.id
+        else:
+            new_args[name] = arg
+
+    return new_args, im.let(*remap_table.items())(stencil_body)
 
 
 def fuse_as_fieldop(
@@ -135,15 +161,10 @@ def fuse_as_fieldop(
                 assert isinstance(arg.type, ts.TypeSpec)
                 dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
                 assert not isinstance(dtype, ts.ListType)
-            new_param: str
-            if isinstance(
-                arg, itir.SymRef
-            ):  # use name from outer scope (optional, just to get a nice IR)
-                new_param = arg.id
-                new_stencil_body = im.let(stencil_param.id, arg.id)(new_stencil_body)
-            else:
-                new_param = stencil_param.id
-            new_args = _merge_arguments(new_args, {new_param: arg})
+            new_args = _merge_arguments(new_args, {stencil_param.id: arg})
+
+    new_args, new_stencil_body = _deduplicate_args(new_args, new_stencil_body)
+    new_args, new_stencil_body = _prettify_args(new_args, new_stencil_body)
 
     stencil = im.lambda_(*new_args.keys())(new_stencil_body)
     new_stencil = restore_scan(stencil)
