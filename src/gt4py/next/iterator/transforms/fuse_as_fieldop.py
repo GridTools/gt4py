@@ -84,7 +84,7 @@ def _inline_as_fieldop_arg(
     ), extracted_args
 
 
-def _deduplicate_args(
+def _deduplicate_as_fieldop_args(
     args: dict[str, itir.Expr], stencil_body: itir.Expr
 ) -> tuple[dict[str, itir.Expr], itir.Expr]:
     new_args_inverted: dict[itir.Expr, list[str]] = collections.defaultdict(list)
@@ -103,7 +103,7 @@ def _deduplicate_args(
     return new_args, new_stencil_body
 
 
-def _prettify_args(
+def _prettify_as_fieldop_args(
     args: dict[str, itir.Expr], stencil_body: itir.Expr
 ) -> tuple[dict[str, itir.Expr], itir.Expr]:
     new_args: dict[str, itir.Expr] = {}
@@ -161,8 +161,8 @@ def fuse_as_fieldop(
                 assert not isinstance(dtype, ts.ListType)
             new_args = _merge_arguments(new_args, {stencil_param.id: arg})
 
-    new_args, new_stencil_body = _deduplicate_args(new_args, new_stencil_body)
-    new_args, new_stencil_body = _prettify_args(new_args, new_stencil_body)
+    new_args, new_stencil_body = _deduplicate_as_fieldop_args(new_args, new_stencil_body)
+    new_args, new_stencil_body = _prettify_as_fieldop_args(new_args, new_stencil_body)
 
     stencil = im.lambda_(*new_args.keys())(new_stencil_body)
     new_stencil = restore_scan(stencil)
