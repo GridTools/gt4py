@@ -212,29 +212,13 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 connector=conn_name,
             )
 
-        # Now fix the symbol mapping.
         self._update_symbol_mapping(if_block)
 
-        # Now remove the original dataflow on the outside of the if block. If we find
-        #  an AccessNode we will also remove the referencing data from the registry.
-        #  We can do that because we assume that we are inside a Map and assume SSA.
-        #  While edges within the dataflow are handled naturally we have to remove the
-        #  edges that go outside the relocated dataflow, but this only applies to
-        #  edges that go to the enclosing Map.
-        all_relocatable_dataflow: set[dace_nodes.Node] = functools.reduce(
-            lambda s1, s2: s1.union(s2), relocatable_dataflow.values(), set()
+        self._remove_outside_dataflow(
+            sdfg=sdfg,
+            state=graph,
+            relocatable_dataflow=relocatable_dataflow,
         )
-        for nodes_to_move in relocatable_dataflow.values():
-            for node_to_remove in nodes_to_move:
-                for iedge in list(graph.in_edges(node_to_remove)):
-                    if iedge.src in all_relocatable_dataflow:
-                        continue
-                    assert graph.memlet_path(iedge)[-1] is iedge
-                    graph.remove_memlet_path(iedge)
-                if isinstance(node_to_remove, dace_nodes.AccessNode):
-                    assert node_to_remove.desc(sdfg).transient
-                    sdfg.remove_data(node_to_remove.data, validate=False)
-                graph.remove_node(node_to_remove)
 
         # Because we relocate some node it seems that DaCe gets a bit confused.
         #  So we have to reset the list. Without it the `test_if_mover_chain`
@@ -394,9 +378,10 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     if_block.add_in_connector(outer_data.data)
                 else:
                     # This is the case that we found a node, that refers to data that
-                    #  was already patched into the `if_block`. We actually would have
-                    #  to now remove it. However, this function should not alter the
-                    #  original dataflow, instead we will handle it later.
+                    #  was already patched into the `if_block`. We would have to remove
+                    #  this, but since this function just replicates the dataflow,
+                    #  it will not do that. Instead we postpone this to the cleanup
+                    #  phase, see `_remove_outside_dataflow()`.
                     pass
 
                 if outer_data not in new_nodes:
@@ -421,6 +406,37 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # The old connector name is no longer valid.
         inner_sdfg.arrays[connector].transient = True
         if_block.remove_in_connector(connector)
+
+    def _remove_outside_dataflow(
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+        relocatable_dataflow: dict[str, set[dace_nodes.Node]],
+    ) -> None:
+        """Removes the original dataflow, that has been relocated.
+
+        The function will also remove data containers that are no longer in use.
+        """
+        all_relocatable_dataflow: set[dace_nodes.Node] = functools.reduce(
+            lambda s1, s2: s1.union(s2), relocatable_dataflow.values(), set()
+        )
+
+        # Remove all original nodes. We only have to handle the edges, between
+        #  moved nodes and the unmoved nodes, which are by definition given
+        #  through the incoming edges. `remove_memlet_path()` will take care of
+        #  that for us and also remove the connectors.
+        for node_to_remove in all_relocatable_dataflow:
+            for iedge in list(state.in_edges(node_to_remove)):
+                if iedge.src in all_relocatable_dataflow:
+                    continue
+                assert state.memlet_path(iedge)[-1] is iedge
+                state.remove_memlet_path(iedge)
+
+            if isinstance(node_to_remove, dace_nodes.AccessNode):
+                assert node_to_remove.desc(sdfg).transient
+                sdfg.remove_data(node_to_remove.data, validate=False)
+
+            state.remove_node(node_to_remove)
 
     def _update_symbol_mapping(
         self,

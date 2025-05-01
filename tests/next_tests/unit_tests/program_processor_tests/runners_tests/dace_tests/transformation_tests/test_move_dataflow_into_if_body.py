@@ -668,8 +668,10 @@ def test_if_mover_dependent_branch_3():
 
     _perform_test(sdfg, explected_applies=1)
 
+    # It is unspecific if `IN_b1` or `IN_b2` remains.
     assert state.out_degree(b) == 1
-    assert len(me.in_connectors) == 1
+    assert len(me.in_connectors) == 4
+    assert any(iconn in me.in_connectors for iconn in ["IN_b1", "IN_b2"])
     assert util.count_nodes(state, dace_nodes.Tasklet) == 0
 
 
