@@ -215,10 +215,22 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # Now fix the symbol mapping.
         self._update_symbol_mapping(if_block)
 
-        # Now remove the nodes that have been relocated from the SDFG and also
-        #  clean up the registry.
+        # Now remove the original dataflow on the outside of the if block. If we find
+        #  an AccessNode we will also remove the referencing data from the registry.
+        #  We can do that because we assume that we are inside a Map and assume SSA.
+        #  While edges within the dataflow are handled naturally we have to remove the
+        #  edges that go outside the relocated dataflow, but this only applies to
+        #  edges that go to the enclosing Map.
+        all_relocatable_dataflow: set[dace_nodes.Node] = functools.reduce(
+            lambda s1, s2: s1.union(s2), relocatable_dataflow.values(), set()
+        )
         for nodes_to_move in relocatable_dataflow.values():
             for node_to_remove in nodes_to_move:
+                for iedge in list(graph.in_edges(node_to_remove)):
+                    if iedge.src in all_relocatable_dataflow:
+                        continue
+                    assert graph.memlet_path(iedge)[-1] is iedge
+                    graph.remove_memlet_path(iedge)
                 if isinstance(node_to_remove, dace_nodes.AccessNode):
                     assert node_to_remove.desc(sdfg).transient
                     sdfg.remove_data(node_to_remove.data, validate=False)
@@ -380,6 +392,12 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         ),
                     )
                     if_block.add_in_connector(outer_data.data)
+                else:
+                    # This is the case that we found a node, that refers to data that
+                    #  was already patched into the `if_block`. We actually would have
+                    #  to now remove it. However, this function should not alter the
+                    #  original dataflow, instead we will handle it later.
+                    pass
 
                 if outer_data not in new_nodes:
                     assert all(

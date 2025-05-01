@@ -597,6 +597,82 @@ def test_if_mover_dependent_branch_2():
     assert if_block.sdfg.arrays.keys() == expected_data
 
 
+def test_if_mover_dependent_branch_3():
+    """
+    Very similar test to `test_if_mover_dependent_branch_1()`, but the common data
+    is an AccessNode outside the Map.
+    """
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches"))
+    state = sdfg.add_state(is_start_block=True)
+
+    gnames = ["a", "b", "c", "d", "cond"]
+    for name in gnames:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=(dace.bool_ if name == "cond" else dace.float64),
+            transient=False,
+        )
+    a, b, c, d, cond = (state.add_access(name) for name in gnames)
+
+    temp_names = ["t1", "t2"]
+    for name in temp_names:
+        sdfg.add_scalar(
+            name,
+            dtype=dace.float64,
+            transient=True,
+        )
+    t1, t2 = (state.add_access(name) for name in temp_names)
+
+    me, mx = state.add_map("map", ndrange={"__i": "0:10"})
+    if_block = _make_if_block(state=state, outer_sdfg=sdfg)
+    tlet1 = state.add_tasklet(
+        "tlet1", inputs={"__in1", "__in2"}, outputs={"__out"}, code="__out = __in1 + __in2"
+    )
+    tlet2 = state.add_tasklet(
+        "tlet2", inputs={"__in1", "__in2"}, outputs={"__out"}, code="__out = __in1 * __in2"
+    )
+
+    state.add_edge(a, None, me, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(b, None, me, "IN_b1", dace.Memlet("b[0:10]"))
+    state.add_edge(me, "OUT_a", tlet1, "__in1", dace.Memlet("a[__i]"))
+    state.add_edge(me, "OUT_b1", tlet1, "__in2", dace.Memlet("b[__i]"))
+    state.add_edge(tlet1, "__out", t1, None, dace.Memlet("t1[0]"))
+    me.add_scope_connectors("a")
+    me.add_scope_connectors("b1")
+
+    state.add_edge(c, None, me, "IN_c", dace.Memlet("c[0:10]"))
+    state.add_edge(b, None, me, "IN_b2", dace.Memlet("b[0:10]"))
+    state.add_edge(me, "OUT_c", tlet2, "__in1", dace.Memlet("c[__i]"))
+    state.add_edge(me, "OUT_b2", tlet2, "__in2", dace.Memlet("b[__i]"))
+    state.add_edge(tlet2, "__out", t2, None, dace.Memlet("t2[0]"))
+    me.add_scope_connectors("c")
+    me.add_scope_connectors("b2")
+
+    state.add_edge(cond, None, me, "IN_cond", dace.Memlet("cond[0:10]"))
+    state.add_edge(me, "OUT_cond", if_block, "__cond", dace.Memlet("cond[__i]"))
+    me.add_scope_connectors("cond")
+
+    state.add_edge(t1, None, if_block, "__arg1", dace.Memlet("t1[0]"))
+    state.add_edge(t2, None, if_block, "__arg2", dace.Memlet("t2[0]"))
+
+    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10]"))
+    mx.add_scope_connectors("d")
+
+    sdfg.validate()
+
+    assert state.out_degree(b) == 2
+    assert len(me.in_connectors) == 5
+    assert util.count_nodes(state, dace_nodes.Tasklet) == 2
+
+    _perform_test(sdfg, explected_applies=1)
+
+    assert state.out_degree(b) == 1
+    assert len(me.in_connectors) == 1
+    assert util.count_nodes(state, dace_nodes.Tasklet) == 0
+
+
 def test_if_mover_no_ops():
     """
     Essentially tests the following situation:
