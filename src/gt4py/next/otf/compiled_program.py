@@ -78,11 +78,9 @@ def _validate_types(
     assert not program_type.definition.pos_only_args
     assert not program_type.definition.kw_only_args
 
-    type_mismatch_errors = type_info.function_signature_incompatibilities(
+    if mismatch_errors := list(type_info.function_signature_incompatibilities(
         program_type, args=types_from_values, kwargs={}
-    )
-    mismatch_errors = list(type_mismatch_errors)
-    if mismatch_errors:
+    )):
         raise errors.DSLTypeError(
             message=f"Invalid static argument types when trying to compile '{program_name}' with type '{program_type}':\n"
             + ("\n".join([f"  - {error}" for error in mismatch_errors])),
