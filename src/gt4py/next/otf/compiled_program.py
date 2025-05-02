@@ -154,8 +154,9 @@ class CompiledProgramsPool:
         """
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
         offset_provider_type = _offset_provider_to_type_unsafe(offset_provider)
+        static_args_values = tuple(args[i] for i in self._static_arg_indices)
         key = _CompiledProgramsKey(
-            tuple(args[i] for i in self._static_arg_indices),
+            static_args_values,
             offset_provider_type,
         )
         try:
@@ -167,22 +168,24 @@ class CompiledProgramsPool:
         except KeyError as e:
             if enable_jit:
                 assert self.static_params is not None
-                static_args = {name: args[self._param_index(name)] for name in self.static_params}
+                static_args = {
+                    name: value
+                    for name, value in zip(self.static_params, static_args_values, strict=True)
+                }
                 self._compile_variant(static_args=static_args, offset_provider=offset_provider)
                 return self(
                     *args, offset_provider=offset_provider, enable_jit=False, **kwargs
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 
-    def _param_index(self, name: str) -> int:
-        return list(self.program_type.definition.pos_or_kw_args.keys()).index(name)
-
     @functools.cached_property
     def _static_arg_indices(self) -> tuple[int, ...]:
         if self.static_params is None:
             # this could also be done in `__call__` but would be an extra if in the fast path
             self.static_params = ()
-        return tuple(self._param_index(p) for p in self.static_params)
+
+        all_params = list(self.program_type.definition.pos_or_kw_args.keys())
+        return tuple(all_params.index(p) for p in self.static_params)
 
     def _compile_variant(
         self,
