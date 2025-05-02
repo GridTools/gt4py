@@ -1189,7 +1189,7 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
 
     promoted_dims = ordered_dims(unique_dims)
     check_dims(promoted_dims)
-    return promoted_dims if unique_dims else []
+    return promoted_dims or []
 
 
 class FieldBuiltinFuncRegistry:

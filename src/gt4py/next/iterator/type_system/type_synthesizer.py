@@ -298,7 +298,7 @@ def _convert_as_fieldop_input_to_iterator(
     domain: it_ts.DomainType, input_: ts.TypeSpec
 ) -> it_ts.IteratorType:
     """
-    Converts a field operation input into an iterator type, preserving its dimensions and data type.
+    Convert a field operation input into an iterator type, preserving its dimensions and data type.
     """
     input_dims = _collect_and_check_dimensions(input_)
     element_type: ts.DataType = type_info.apply_to_primitive_constituents(
@@ -327,28 +327,29 @@ def _canonicalize_nb_fields(
     >>> _canonicalize_nb_fields(input_field)
     FieldType(dims=[Dimension(value='Vertex', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ListType(element_type=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None), offset_type=Dimension(value='V2E', kind=<DimensionKind.LOCAL: 'local'>)))
     """
-    if isinstance(input_, (tuple, ts.TupleType)):
-        return ts.TupleType(types=[_canonicalize_nb_fields(field) for field in input_])
-    elif isinstance(input_, ts.FieldType):
-        input_dims = _collect_and_check_dimensions(input_)
-        element_type: ts.DataType = type_info.apply_to_primitive_constituents(
-            type_info.extract_dtype, input_
-        )
-        defined_dims = []
-        neighbor_dim = None
-        for dim in input_dims:
-            if dim.kind == common.DimensionKind.LOCAL:
-                assert neighbor_dim is None
-                neighbor_dim = dim
-            else:
-                defined_dims.append(dim)
-        if neighbor_dim:
-            element_type = ts.ListType(element_type=element_type, offset_type=neighbor_dim)
-        return ts.FieldType(dims=defined_dims, dtype=element_type)
-    elif isinstance(input_, ts.ScalarType):
-        return input_
-    else:
-        raise TypeError(f"Unexpected field type: {type(input_)}")
+    match input_:
+        case tuple() | ts.TupleType():
+            return ts.TupleType(types=[_canonicalize_nb_fields(field) for field in input_])
+        case ts.FieldType():
+            input_dims = _collect_and_check_dimensions(input_)
+            element_type: ts.DataType = type_info.apply_to_primitive_constituents(
+                type_info.extract_dtype, input_
+            )
+            defined_dims = []
+            neighbor_dim = None
+            for dim in input_dims:
+                if dim.kind == common.DimensionKind.LOCAL:
+                    assert neighbor_dim is None
+                    neighbor_dim = dim
+                else:
+                    defined_dims.append(dim)
+            if neighbor_dim:
+                element_type = ts.ListType(element_type=element_type, offset_type=neighbor_dim)
+            return ts.FieldType(dims=defined_dims, dtype=element_type)
+        case ts.ScalarType():
+            return input_
+        case _:
+            raise TypeError(f"Unexpected field type: {type(input_)}")
 
 
 def _resolve_dimensions(
