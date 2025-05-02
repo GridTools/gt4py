@@ -78,9 +78,11 @@ def _validate_types(
     assert not program_type.definition.pos_only_args
     assert not program_type.definition.kw_only_args
 
-    if mismatch_errors := list(type_info.function_signature_incompatibilities(
-        program_type, args=types_from_values, kwargs={}
-    )):
+    if mismatch_errors := list(
+        type_info.function_signature_incompatibilities(
+            program_type, args=types_from_values, kwargs={}
+        )
+    ):
         raise errors.DSLTypeError(
             message=f"Invalid static argument types when trying to compile '{program_name}' with type '{program_type}':\n"
             + ("\n".join([f"  - {error}" for error in mismatch_errors])),
@@ -102,7 +104,7 @@ def _sanitize_static_args(
     _validate_types(program_name, static_args, program_type)
 
     return {
-        name: tt.cast_to(value, program_type.definition.pos_or_kw_args[name])  # type: ignore[arg-type] # checked in _validate_types
+        name: tt.unsafe_cast_to(value, program_type.definition.pos_or_kw_args[name])  # type: ignore[arg-type] # checked in _validate_types
         for name, value in static_args.items()
     }
 
@@ -199,12 +201,6 @@ class CompiledProgramsPool:
             for name, type_ in self.program_type.definition.pos_or_kw_args.items()
         )
 
-        compile_time_args = arguments.CompileTimeArgs(
-            offset_provider=offset_provider,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
-            column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
-            args=args,
-            kwargs={},
-        )
         key = _CompiledProgramsKey(
             tuple(static_args[p] for p in self.static_params),
             offset_provider
@@ -213,6 +209,13 @@ class CompiledProgramsPool:
         )
         if key in self._compiled_programs:
             raise ValueError(f"Program with key {key} already exists.")
+
+        compile_time_args = arguments.CompileTimeArgs(
+            offset_provider=offset_provider,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
+            column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
+            args=args,
+            kwargs={},
+        )
         self._compiled_programs[key] = _async_compilation_pool.submit(
             self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
         )

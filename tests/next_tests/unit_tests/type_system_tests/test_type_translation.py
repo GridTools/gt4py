@@ -233,7 +233,7 @@ class SomeEnum(eve.IntEnum):
         ),
     ],
 )
-def test_cast_to(value, type_, expected):
-    result = type_translation.cast_to(value, type_)
+def test_unsafe_cast_to(value, type_, expected):
+    result = type_translation.unsafe_cast_to(value, type_)
     assert result == expected
     assert type(result) is type(expected)
