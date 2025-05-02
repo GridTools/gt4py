@@ -155,10 +155,7 @@ class CompiledProgramsPool:
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
         offset_provider_type = _offset_provider_to_type_unsafe(offset_provider)
         static_args_values = tuple(args[i] for i in self._static_arg_indices)
-        key = _CompiledProgramsKey(
-            static_args_values,
-            offset_provider_type,
-        )
+        key = _CompiledProgramsKey(static_args_values, offset_provider_type)
         try:
             self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # for performance: try to call first...
         except TypeError:  # 'Future' object is not callable
