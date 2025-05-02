@@ -95,10 +95,10 @@ def _deduplicate_as_fieldop_args(
     new_stencil_body = stencil_body
     for arg, names in new_args_inverted.items():
         # put internal names at the end
-        names = sorted(names, key=lambda s: (s.startswith("_"), s))
-        new_args[names[0]] = arg
-        if len(names) > 1:
-            new_stencil_body = im.let(*((name, names[0]) for name in names[1:]))(new_stencil_body)
+        new_name, *aliases = sorted(names, key=lambda s: (s.startswith("_"), s))
+        new_args[new_name] = arg
+        if aliases:
+            new_stencil_body = im.let(*((alias, new_name) for alias in aliases))(new_stencil_body)
 
     return new_args, new_stencil_body
 
