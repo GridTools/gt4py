@@ -10,8 +10,6 @@ import copy
 from typing import Any, ChainMap, List, Optional, Union
 
 import dace
-import dace.data
-import dace.library
 import dace.subsets
 
 import gt4py.cartesian.gtc.common as common

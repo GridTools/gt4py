@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import typing
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
@@ -38,7 +38,9 @@ def sym(sym_or_name: Union[str, itir.Sym], type_: str | ts.TypeSpec | None = Non
 
 
 def ref(
-    ref_or_name: Union[str, itir.SymRef], type_: str | ts.TypeSpec | None = None
+    ref_or_name: Union[str, itir.SymRef],
+    type_: str | ts.TypeSpec | None = None,
+    annex: dict[str, Any] | None = None,
 ) -> itir.SymRef:
     """
     Convert to SymRef if necessary.
@@ -57,8 +59,13 @@ def ref(
     """
     if isinstance(ref_or_name, itir.SymRef):
         assert not type_
+        assert not annex
         return ref_or_name
-    return itir.SymRef(id=ref_or_name, type=ensure_type(type_))
+    ref = itir.SymRef(id=ref_or_name, type=ensure_type(type_))
+    if annex is not None:
+        for key, value in annex.items():
+            setattr(ref.annex, key, value)
+    return ref
 
 
 def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> itir.Expr:
@@ -82,7 +89,7 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
         return literal_from_value(literal_or_expr)
     elif literal_or_expr is None:
         return itir.NoneLiteral()
-    assert isinstance(literal_or_expr, itir.Expr)
+    assert isinstance(literal_or_expr, itir.Expr), literal_or_expr
     return literal_or_expr
 
 
@@ -224,9 +231,11 @@ def make_tuple(*args):
     return call("make_tuple")(*args)
 
 
-def tuple_get(index: str | int, tuple_expr):
+def tuple_get(index: str | int | itir.Literal, tuple_expr):
     """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(index, tuple_expr)``."""
-    return call("tuple_get")(literal(str(index), builtins.INTEGER_INDEX_BUILTIN), tuple_expr)
+    if not isinstance(index, itir.Literal):
+        index = literal(str(index), builtins.INTEGER_INDEX_BUILTIN)
+    return call("tuple_get")(index, tuple_expr)
 
 
 def if_(cond, true_val, false_val):
@@ -276,7 +285,7 @@ class let:
                 "Invalid arguments: expected a variable name and an init form or a list thereof."
             )
 
-    def __call__(self, form):
+    def __call__(self, form) -> itir.FunCall:
         return call(lambda_(*self.vars)(form))(*self.init_forms)
 
 
@@ -334,6 +343,20 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     assert typename in builtins.TYPE_BUILTINS
 
     return literal(str(val), typename)
+
+
+def literal_from_tuple_value(
+    val: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
+) -> itir.FunCall | itir.Literal:
+    """
+    Create a `make_tuple` with literals from a tuple of values.
+
+    >>> str(literal_from_tuple_value((1.0, (2.0, 3.0))))
+    '{1.0, {2.0, 3.0}}'
+    """
+    if isinstance(val, tuple):
+        return make_tuple(*(literal_from_tuple_value(v) for v in val))
+    return literal_from_value(val)
 
 
 def neighbors(offset, it):
@@ -574,3 +597,8 @@ def cast_(expr, dtype: ts.ScalarType | str):
 def can_deref(expr):
     """Create a `can_deref` call."""
     return call("can_deref")(expr)
+
+
+def compose(a: itir.SymRef | itir.Lambda, b: itir.SymRef | itir.Lambda) -> itir.Lambda:
+    # TODO(havogt): `a`, `b` must not contain `SymRef(id="_comp")` for a `Sym` in a parent scope
+    return lambda_("__comp")(call(a)(call(b)("__comp")))

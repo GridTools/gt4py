@@ -87,7 +87,7 @@ def _is_trivial_or_tuple_thereof_expr(node: itir.Node) -> bool:
     if cpm.is_call_to(node, "if_"):
         return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args[1:])
     if cpm.is_let(node):
-        return _is_trivial_or_tuple_thereof_expr(node.fun.expr) and all(  # type: ignore[attr-defined]  # ensured by is_let
+        return _is_trivial_or_tuple_thereof_expr(node.fun.expr) and all(
             _is_trivial_or_tuple_thereof_expr(arg) for arg in node.args
         )
     return False
@@ -175,6 +175,8 @@ class CollapseTuple(
     ignore_tuple_size: bool
     enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
+    REINFER_TYPES = True
+
     PRESERVED_ANNEX_ATTRS = ("type", "domain")
 
     @classmethod
@@ -254,7 +256,7 @@ class CollapseTuple(
             cpm.is_call_to(arg, "tuple_get") for arg in node.args
         ):
             # `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
-            assert isinstance(node.args[0], itir.FunCall)
+            assert len(node.args) > 0 and isinstance(node.args[0], itir.FunCall)
             first_expr = node.args[0].args[1]
 
             for i, v in enumerate(node.args):
@@ -298,18 +300,16 @@ class CollapseTuple(
             # TODO(tehrengruber): extend to general symbols as long as the tail call in the let
             #   does not capture
             # `tuple_get(i, let(...)(make_tuple()))` -> `let(...)(tuple_get(i, make_tuple()))`
-            if cpm.is_let(node.args[1]):
-                idx, let_expr = node.args
+            idx, expr = node.args
+            assert isinstance(idx, itir.Literal)
+            if cpm.is_let(expr):
                 return im.call(
-                    im.lambda_(*let_expr.fun.params)(  # type: ignore[attr-defined]  # ensured by is_let
-                        self.fp_transform(im.tuple_get(idx.value, let_expr.fun.expr), **kwargs)  # type: ignore[attr-defined]  # ensured by is_let
+                    im.lambda_(*expr.fun.params)(
+                        self.fp_transform(im.tuple_get(idx.value, expr.fun.expr), **kwargs)
                     )
-                )(
-                    *let_expr.args  # type: ignore[attr-defined]  # ensured by is_let
-                )
-            elif cpm.is_call_to(node.args[1], "if_"):
-                idx = node.args[0]
-                cond, true_branch, false_branch = node.args[1].args
+                )(*expr.args)
+            elif cpm.is_call_to(expr, "if_"):
+                cond, true_branch, false_branch = expr.args
                 return im.if_(
                     cond,
                     self.fp_transform(im.tuple_get(idx.value, true_branch), **kwargs),
@@ -327,9 +327,10 @@ class CollapseTuple(
             new_args: list[itir.Expr] = []
             for arg in node.args:
                 if cpm.is_call_to(node, "make_tuple") and not _is_trivial_make_tuple_call(node):
-                    el_name = self.uids.sequential_id(prefix="__ct_el")
-                    new_args.append(im.ref(el_name, arg.type))
-                    bound_vars[im.sym(el_name, arg.type)] = arg
+                    new_arg = im.ref(self.uids.sequential_id(prefix="__ct_el"), arg.type)
+                    self._preserve_annex(arg, new_arg)
+                    new_args.append(new_arg)
+                    bound_vars[im.sym(new_arg.id, arg.type)] = arg
                 else:
                     new_args.append(arg)
 
@@ -430,16 +431,19 @@ class CollapseTuple(
                 ]
                 f_args = [im.ref(param.id, param.type) for param in f_params]
                 f_body = ir_misc.with_altered_arg(node, i, im.make_tuple(*f_args))
+
+                # if the function is not trivial the transformation would create a larger tree
+                # after inlining so we skip transformation this argument.
+                if not _is_trivial_or_tuple_thereof_expr(f_body):
+                    continue
+
                 # simplify, e.g., inline trivial make_tuple args
                 new_f_body = self.fp_transform(f_body, **kwargs)
                 # if the continuation did not simplify there is nothing to gain. Skip
                 # transformation of this argument.
                 if new_f_body is f_body:
                     continue
-                # if the function is not trivial the transformation we would create a larger tree
-                # after inlining so we skip transformation this argument.
-                if not _is_trivial_or_tuple_thereof_expr(new_f_body):
-                    continue
+
                 f = im.lambda_(*f_params)(new_f_body)
 
                 # this is the symbol refering to the tuple value inside the two branches of the
@@ -475,14 +479,14 @@ class CollapseTuple(
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
             outer_vars = {}
             inner_vars = {}
-            original_inner_expr = node.fun.expr  # type: ignore[attr-defined]  # ensured by is_let
-            for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
+            original_inner_expr = node.fun.expr
+            for arg_sym, arg in zip(node.fun.params, node.args):
                 assert arg_sym not in inner_vars  # TODO(tehrengruber): fix collisions
                 if cpm.is_let(arg):
-                    for sym, val in zip(arg.fun.params, arg.args):  # type: ignore[attr-defined]  # ensured by is_let
+                    for sym, val in zip(arg.fun.params, arg.args):
                         assert sym not in outer_vars  # TODO(tehrengruber): fix collisions
                         outer_vars[sym] = val
-                    inner_vars[arg_sym] = arg.fun.expr  # type: ignore[attr-defined]  # ensured by is_let
+                    inner_vars[arg_sym] = arg.fun.expr
                 else:
                     inner_vars[arg_sym] = arg
             if outer_vars:
@@ -498,10 +502,10 @@ class CollapseTuple(
 
     def transform_inline_trivial_let(self, node: itir.FunCall, **kwargs) -> Optional[itir.Node]:
         if cpm.is_let(node):
-            if isinstance(node.fun.expr, itir.SymRef):  # type: ignore[attr-defined]  # ensured by is_let
+            if isinstance(node.fun.expr, itir.SymRef):
                 # `let(a, 1)(a)` -> `1`
-                for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
-                    if isinstance(node.fun.expr, itir.SymRef) and node.fun.expr.id == arg_sym.id:  # type: ignore[attr-defined]  # ensured by is_let
+                for arg_sym, arg in zip(node.fun.params, node.args):
+                    if isinstance(node.fun.expr, itir.SymRef) and node.fun.expr.id == arg_sym.id:
                         return arg
             if any(
                 trivial_args := [isinstance(arg, (itir.SymRef, itir.Literal)) for arg in node.args]
@@ -545,10 +549,17 @@ class CollapseTuple(
         new_args: list[itir.Expr] = []
         for param, arg in zip(stencil.params, node.args, strict=True):
             if isinstance(arg.type, ts.TupleType):
-                ref_to_remapped_arg = im.ref(f"__ct_flat_remapped_{len(remapped_args)}", arg.type)
+                assert isinstance(param.type, it_ts.IteratorType)
+                ref_to_remapped_arg = im.ref(
+                    f"__ct_flat_remapped_{len(remapped_args)}",
+                    arg.type,
+                )
+                self._preserve_annex(arg, ref_to_remapped_arg)
                 remapped_args[im.sym(ref_to_remapped_arg.id, arg.type)] = arg
                 new_params_inner, lift_params = [], []
+                assert isinstance(param.type.element_type, ts.TupleType)
                 for i, type_ in enumerate(param.type.element_type.types):
+                    assert isinstance(type_, ts.DataType)
                     new_param = im.sym(
                         _flattened_as_fieldop_param_el_name(param.id, i),
                         _with_altered_iterator_element_type(param.type, type_),

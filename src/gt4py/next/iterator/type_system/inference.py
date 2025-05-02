@@ -288,8 +288,6 @@ class ITIRTypeInference(eve.NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
     offset_provider_type: Optional[common.OffsetProviderType]
-    #: Mapping from a dimension name to the actual dimension instance.
-    dimensions: Optional[dict[str, common.Dimension]]
     #: Allow sym refs to symbols that have not been declared. Mostly used in testing.
     allow_undeclared_symbols: bool
     #: Reinference-mode skipping already typed nodes.
@@ -375,16 +373,6 @@ class ITIRTypeInference(eve.NodeTranslator):
 
         instance = cls(
             offset_provider_type=offset_provider_type,
-            dimensions=(
-                _get_dimensions_from_offset_provider(offset_provider_type)
-                | _get_dimensions_from_types(
-                    node.pre_walk_values()
-                    .if_isinstance(itir.Node)
-                    .getattr("type")
-                    .if_is_not(None)
-                    .to_list()
-                )
-            ),
             allow_undeclared_symbols=allow_undeclared_symbols,
             reinfer=False,
         )
@@ -410,9 +398,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         if node.type:  # already inferred
             return node
 
-        instance = cls(
-            offset_provider_type=None, dimensions=None, allow_undeclared_symbols=True, reinfer=True
-        )
+        instance = cls(offset_provider_type=None, allow_undeclared_symbols=True, reinfer=True)
         instance.visit(node, ctx=_INITIAL_CONTEXT)
         return node
 
@@ -510,13 +496,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     # TODO: revisit what we want to do with OffsetLiterals as we already have an Offset type in
     #  the frontend.
-    def visit_OffsetLiteral(
-        self, node: itir.OffsetLiteral, **kwargs
-    ) -> it_ts.OffsetLiteralType | ts.DeferredType:
-        # `self.dimensions` not available in re-inference mode. Skip since we don't care anyway.
-        if self.reinfer:
-            return ts.DeferredType(constraint=it_ts.OffsetLiteralType)
-
+    def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs) -> it_ts.OffsetLiteralType:
         if _is_representable_as_int(node.value):
             return it_ts.OffsetLiteralType(
                 value=ts.ScalarType(
@@ -524,9 +504,8 @@ class ITIRTypeInference(eve.NodeTranslator):
                 )
             )
         else:
-            assert isinstance(self.dimensions, dict)
-            assert isinstance(node.value, str) and node.value in self.dimensions
-            return it_ts.OffsetLiteralType(value=self.dimensions[node.value])
+            assert isinstance(node.value, str)
+            return it_ts.OffsetLiteralType(value=node.value)
 
     def visit_Literal(self, node: itir.Literal, **kwargs) -> ts.ScalarType:
         assert isinstance(node.type, ts.ScalarType)

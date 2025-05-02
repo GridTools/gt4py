@@ -44,16 +44,6 @@ jobs:
       with:
         fetch-depth: 0  # Use a deep clone to get the correct version from tags
 
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'macos-latest' }}
-      shell: bash
-      run: brew install boost
-
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-      shell: bash
-      run: sudo apt install libboost-dev
-
     - name: Install uv and set the python version
       uses: astral-sh/setup-uv@v5
       with:
@@ -65,6 +55,9 @@ jobs:
       env:
         NUM_PROCESSES: auto
         UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
+        # Force a specific compiler for setuptools/distutils (used in gt4py.cartesian)
+        CXX: g++
+        CC: gcc
       run: uv run nox -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
     - name: Notify slack
