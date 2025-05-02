@@ -37,10 +37,10 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def _merge_arguments(
-    args1: dict[str, itir.Expr], arg2: dict[str, itir.Expr]
+    args1: dict[str, itir.Expr], args2: dict[str, itir.Expr]
 ) -> dict[str, itir.Expr]:
     new_args = {**args1}
-    for stencil_param, stencil_arg in arg2.items():
+    for stencil_param, stencil_arg in args2.items():
         assert stencil_param not in new_args
         new_args[stencil_param] = stencil_arg
     return new_args
