@@ -8,10 +8,9 @@
 
 from __future__ import annotations
 
+import collections
 import dataclasses
-import functools
 import math
-import operator
 from typing import Callable, Iterable, TypeVar, Union, cast
 
 import gt4py.next.iterator.ir_utils.ir_makers as im
@@ -159,8 +158,15 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
         depth = kwargs.pop("depth")
         return super().generic_visit(node, depth=depth + 1, **kwargs)
 
-    def visit(self, node: itir.Node, **kwargs) -> None:  # type: ignore[override] # supertype accepts any node, but we want to be more specific here.
-        if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
+    def visit(self, node: itir.Node, is_let_form: bool = False, **kwargs) -> None:  # type: ignore[override] # supertype accepts any node, but we want to be more specific here.
+        # do not descent into un-applied lambda
+        can_collect_children = not isinstance(node, itir.Lambda) or is_let_form
+
+        if (
+            can_collect_children
+            and not isinstance(node, SymbolTableTrait)
+            and not _is_collectable_expr(node)
+        ):
             return super().visit(node, **kwargs)
 
         depth = kwargs["depth"]
@@ -168,48 +174,62 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
         collected_child_node_ids: set[int] = set()
         used_symbol_ids: set[int] = set()
 
-        # Special handling of `if_(condition, true_branch, false_branch)` like expressions that
-        # avoids extracting subexpressions unless they are used in either the condition or both
-        # branches.
-        if isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="if_"):
-            assert len(node.args) == 3
-            # collect subexpressions for all arguments to the `if_`
-            arg_states = [self.State() for _ in node.args]
-            for arg, state in zip(node.args, arg_states):
-                self.visit(arg, state=state, **{**kwargs, "depth": depth + 1})
+        if can_collect_children:
+            # Special handling of `if_(condition, true_branch, false_branch)` like expressions that
+            # avoids extracting subexpressions unless they are used in either the condition or both
+            # branches.
+            if cpm.is_call_to(node, "if_"):
+                assert len(node.args) == 3
+                # collect subexpressions for all arguments to the `if_`
+                arg_states = [self.State() for _ in node.args]
+                for arg, state in zip(node.args, arg_states):
+                    self.visit(arg, state=state, **(kwargs | {"depth": depth + 1}))
 
-            # remove all subexpressions that are not eligible for collection
-            #  (either they occur in the condition or in both branches)
-            eligible_subexprs = arg_states[0].subexprs.keys() | (
-                arg_states[1].subexprs.keys() & arg_states[2].subexprs.keys()
-            )
-            for arg_state in arg_states:
-                arg_state.remove_subexprs(arg_state.subexprs.keys() - eligible_subexprs)
+                # remove all subexpressions that are not eligible for collection
+                #  (either they occur in the condition or in both branches)
+                eligible_subexprs = arg_states[0].subexprs.keys() | (
+                    arg_states[1].subexprs.keys() & arg_states[2].subexprs.keys()
+                )
+                for arg_state in arg_states:
+                    arg_state.remove_subexprs(arg_state.subexprs.keys() - eligible_subexprs)
 
-            # merge the states of the three arguments
-            subexprs: dict[itir.Node, CollectSubexpressions.SubexpressionData] = {}
-            for state in arg_states:
-                for subexpr, data in state.subexprs.items():
-                    merged_data = subexprs.setdefault(subexpr, self.SubexpressionData())
-                    merged_data.subexprs.extend(data.subexprs)
-                    merged_data.max_depth = max(merged_data.max_depth, data.max_depth)
-            collected_child_node_ids = functools.reduce(
-                operator.or_, (state.collected_child_node_ids for state in arg_states)
-            )
-            used_symbol_ids = functools.reduce(
-                operator.or_, (state.used_symbol_ids for state in arg_states)
-            )
-            # propagate collected subexpressions to parent
-            for subexpr, data in subexprs.items():
-                parent_data = parent_state.subexprs.setdefault(subexpr, self.SubexpressionData())
-                parent_data.subexprs.extend(data.subexprs)
-                parent_data.max_depth = max(merged_data.max_depth, data.max_depth)
-        else:
-            super().visit(
-                node,
-                state=self.State(parent_state.subexprs, collected_child_node_ids, used_symbol_ids),
-                **kwargs,
-            )
+                # merge the states of the three arguments
+                subexprs: dict[itir.Node, CollectSubexpressions.SubexpressionData] = (
+                    collections.defaultdict(self.SubexpressionData)
+                )
+                for state in arg_states:
+                    for subexpr, data in state.subexprs.items():
+                        merged_data = subexprs[subexpr]
+                        merged_data.subexprs.extend(data.subexprs)
+                        merged_data.max_depth = max(merged_data.max_depth, data.max_depth)
+                collected_child_node_ids = set.union(
+                    *(state.collected_child_node_ids for state in arg_states)
+                )
+                used_symbol_ids = set.union(*(state.used_symbol_ids for state in arg_states))
+                # propagate collected subexpressions to parent
+                for subexpr, data in subexprs.items():
+                    parent_data = parent_state.subexprs.setdefault(
+                        subexpr, self.SubexpressionData()
+                    )
+                    parent_data.subexprs.extend(data.subexprs)
+                    parent_data.max_depth = max(merged_data.max_depth, data.max_depth)
+            elif cpm.is_let(node):
+                new_state = self.State(
+                    parent_state.subexprs, collected_child_node_ids, used_symbol_ids
+                )
+                self.visit(
+                    node.fun, state=new_state, is_let_form=True, **(kwargs | {"depth": depth + 1})
+                )
+                for arg in node.args:
+                    self.visit(arg, state=new_state, **(kwargs | {"depth": depth + 1}))
+            else:
+                super().visit(
+                    node,
+                    state=self.State(
+                        parent_state.subexprs, collected_child_node_ids, used_symbol_ids
+                    ),
+                    **kwargs,
+                )
 
         if isinstance(node, SymbolTableTrait):
             # remove symbols used in child nodes if they are declared in the current node

@@ -251,6 +251,7 @@ class FuseAsFieldOp(
             return functools.reduce(operator.or_, self.__members__.values())
 
     PRESERVED_ANNEX_ATTRS = ("domain",)
+    REINFER_TYPES = True
 
     enabled_transformations = Transformation.all()
 

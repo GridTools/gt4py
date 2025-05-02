@@ -89,7 +89,7 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
         return literal_from_value(literal_or_expr)
     elif literal_or_expr is None:
         return itir.NoneLiteral()
-    assert isinstance(literal_or_expr, itir.Expr)
+    assert isinstance(literal_or_expr, itir.Expr), literal_or_expr
     return literal_or_expr
 
 
@@ -343,6 +343,20 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     assert typename in builtins.TYPE_BUILTINS
 
     return literal(str(val), typename)
+
+
+def literal_from_tuple_value(
+    val: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
+) -> itir.FunCall | itir.Literal:
+    """
+    Create a `make_tuple` with literals from a tuple of values.
+
+    >>> str(literal_from_tuple_value((1.0, (2.0, 3.0))))
+    '{1.0, {2.0, 3.0}}'
+    """
+    if isinstance(val, tuple):
+        return make_tuple(*(literal_from_tuple_value(v) for v in val))
+    return literal_from_value(val)
 
 
 def neighbors(offset, it):
