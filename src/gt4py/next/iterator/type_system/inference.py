@@ -572,7 +572,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         # The node is available here, but not within the TypeSynthesizer, so we handle it here.
         shifts = {}
         if is_applied_as_fieldop(node):
-            stencil = node.fun.args[0]  # type: ignore[attr-defined] # Assured by if above
+            stencil = node.fun.args[0]
             referenced_fun_names = symbol_ref_utils.collect_symbol_refs(stencil)
             shifts["shift_results"] = (
                 trace_shifts.trace_stencil(stencil, num_args=len(node.args))

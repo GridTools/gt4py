@@ -471,7 +471,7 @@ def infer_expr(
         )(expr.type),
     )
 
-    if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
+    if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):
         additional_dims = gtx_utils.tree_map(
             lambda d: _extract_vertical_dims(d)
             if isinstance(d, domain_utils.SymbolicDomain)
