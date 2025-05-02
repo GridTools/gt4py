@@ -32,7 +32,7 @@ ScalarOrTupleOfScalars: TypeAlias = extended_typing.MaybeNestedInTuple[core_defs
 # TODO(havogt): We should look at the hash related codepaths again when tuning Python overheads.
 @dataclasses.dataclass
 class _CompiledProgramsKey:
-    values: tuple[ScalarOrTupleOfScalars, ...]  # in order of static_params
+    values: tuple[ScalarOrTupleOfScalars, ...]  # in the same order as 'static_params'
     offset_provider_type: common.OffsetProviderType
 
     def __hash__(self) -> int:
