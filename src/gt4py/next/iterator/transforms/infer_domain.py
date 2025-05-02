@@ -130,9 +130,9 @@ def _canonicalize_domain_structure(
     d1_is_tuple = isinstance(d1, tuple)
     d2_is_tuple = isinstance(d2, tuple)
     if not d1_is_tuple and d2_is_tuple:
-        return _canonicalize_domain_structure((d1,) * len(d2), d2)
+        return _canonicalize_domain_structure((d1,) * len(d2), d2)  # type: ignore[arg-type] # assured by condition above
     if not d2_is_tuple and d1_is_tuple:
-        return _canonicalize_domain_structure(d1, (d2,) * len(d1))
+        return _canonicalize_domain_structure(d1, (d2,) * len(d1))  # type: ignore[arg-type] # assured by condition above
     if d1_is_tuple and d2_is_tuple:
         return tuple(
             zip(
