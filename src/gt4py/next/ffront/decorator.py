@@ -23,6 +23,7 @@ from typing import Any, Generic, Optional, TypeVar
 from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
+from gt4py.eve.extended_typing import Self, override
 from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
@@ -305,7 +306,7 @@ class Program:
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
-    ) -> xtyping.Self:
+    ) -> Self:
         """
         Compiles the program for the given combination of static arguments and offset provider type.
 
@@ -417,7 +418,7 @@ class ProgramFromPast(Program):
 
     past_stage: ffront_stages.PastProgramDefinition
 
-    @xtyping.override
+    @override
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         if self.backend is None:
             raise NotImplementedError(
@@ -440,7 +441,7 @@ class ProgramFromPast(Program):
 class ProgramWithBoundArgs(Program):
     bound_args: dict[str, float | int | bool] = dataclasses.field(default_factory=dict)
 
-    @xtyping.override
+    @override
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         type_ = self.past_stage.past_node.type
         assert isinstance(type_, ts_ffront.ProgramType)
@@ -492,7 +493,7 @@ class ProgramWithBoundArgs(Program):
 
         return super().__call__(*tuple(full_args), offset_provider=offset_provider, **full_kwargs)
 
-    @xtyping.override
+    @override
     def compile(
         self,
         offset_provider: common.OffsetProviderType
@@ -500,7 +501,7 @@ class ProgramWithBoundArgs(Program):
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
-    ) -> xtyping.Self:
+    ) -> Self:
         raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
 
 
@@ -750,7 +751,7 @@ class FieldOperatorFromFoast(FieldOperator):
 
     foast_stage: ffront_stages.FoastOperatorDefinition
 
-    @xtyping.override
+    @override
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         assert self.backend is not None
         return self.backend(self.foast_stage, *args, **kwargs)

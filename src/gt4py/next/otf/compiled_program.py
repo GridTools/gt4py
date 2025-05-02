@@ -234,13 +234,12 @@ class CompiledProgramsPool:
             pool.compile(static_arg0=[0], static_arg1=[2]).compile(static_arg=[1], static_arg1=[3])
                 will compile for (0,2), (1,3)
         """
-        if self.static_params is not None:
-            if not sorted(self.static_params) == sorted(static_args.keys()):
-                raise ValueError(
-                    f"Static arguments must be the same for all compiled programs. Got {list(static_args.keys())}, expected {self.static_params}."
-                )
-        else:
+        if self.static_params is None:
             self.static_params = tuple(static_args.keys())
+        elif set(self.static_params) != set(static_args.keys()):
+            raise ValueError(
+                f"Static arguments must be the same for all compiled programs. Got {list(static_args.keys())}, expected {self.static_params}."
+            )
 
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
