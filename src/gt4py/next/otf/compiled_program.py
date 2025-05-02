@@ -57,12 +57,11 @@ def _validate_types(
 
     param_types = program_type.definition.pos_or_kw_args
 
-    type_errors = [
+    if type_errors := [
         f"'{name}' with type '{param_types[name]}' cannot be static."
         for name in static_args
         if not type_info.is_type_or_tuple_of_type(param_types[name], ts.ScalarType)
-    ]
-    if type_errors:
+    ]:
         raise errors.DSLTypeError(
             message=f"Invalid static arguments provided for '{program_name}' with type '{program_type}' (only scalars or (nested) tuples of scalars can be static):\n"
             + ("\n".join([f"  - {error}" for error in type_errors])),
