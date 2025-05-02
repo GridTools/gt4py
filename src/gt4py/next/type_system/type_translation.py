@@ -262,3 +262,22 @@ def from_dtype(dtype: core_defs.DType) -> ts.ScalarType:
     elif dtype == core_defs.Float64DType():
         return ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     raise ValueError(f"DType '{dtype}' not supported.")
+
+
+# TODO(havogt): Could be extended to also accept `core_defs.DType`s as `type_`
+def unsafe_cast_to(
+    value: xtyping.MaybeNestedInTuple[core_defs.Scalar], type_: ts.TupleType | ts.ScalarType
+) -> xtyping.MaybeNestedInTuple[core_defs.Scalar]:
+    """
+    Converts `value` to the type specified by `type_`.
+
+    Note: This function does not check if the conversion is valid (within the GT4Py type system).
+    It is assumed that the caller has already checked that the types are compatible.
+    """
+    if isinstance(type_, ts.ScalarType):
+        return as_dtype(type_).scalar_type(value)
+    else:
+        assert isinstance(type_, ts.TupleType)
+        assert isinstance(value, tuple)
+        assert all(isinstance(t, (ts.ScalarType, ts.TupleType)) for t in type_.types)
+        return tuple(unsafe_cast_to(v, t) for v, t in zip(value, type_.types, strict=True))  # type: ignore[arg-type] # checked in assert
