@@ -9,7 +9,7 @@
 import functools
 import pathlib
 import tempfile
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import diskcache
 import factory
@@ -18,7 +18,7 @@ from flufl import lock
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
-from gt4py.next import backend, common, config, field_utils
+from gt4py.next import backend, common, config, field_utils, metrics
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
@@ -45,13 +45,34 @@ def convert_arg(arg: Any) -> Any:
     return arg
 
 
+def inject_timer(name: str) -> Callable[[stages.CompiledProgram], stages.CompiledProgram]:
+    def outer(fun: stages.CompiledProgram) -> stages.CompiledProgram:
+        if not config.COLLECT_METRICS:
+            return fun
+
+        def inner(*args: Any, **kwargs: Any) -> None:
+            exec_info: dict[str, float] = {}
+
+            fun(*args, **kwargs, exec_info=exec_info)
+
+            start = exec_info["run_cpp_start_time"]
+            end = exec_info["run_cpp_end_time"]
+            metrics.global_metric_container[name][metrics.CPP].append(end - start)
+
+        return inner
+
+    return outer
+
+
 def convert_args(
     inp: stages.ExtendedCompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
+    @inject_timer(inp.name)
     def decorated_program(
         *args: Any,
         offset_provider: dict[str, common.Connectivity | common.Dimension],
         out: Any = None,
+        exec_info: dict[str, float] | None = None,
     ) -> None:
         # Note: this function is on the hot path and needs to have minimal overhead.
         if out is not None:
@@ -59,10 +80,11 @@ def convert_args(
         converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
-        return inp(
+        inp(
             *converted_args,
             *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
             *conn_args,
+            exec_info,
         )
 
     return decorated_program

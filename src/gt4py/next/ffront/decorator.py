@@ -16,6 +16,7 @@ import concurrent
 import concurrent.futures
 import dataclasses
 import functools
+import time
 import types
 import typing
 import warnings
@@ -32,6 +33,7 @@ from gt4py.next import (
     config,
     embedded as next_embedded,
     errors,
+    metrics,
 )
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -241,6 +243,8 @@ class Program:
         return implicit_offset_provider
 
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
+        if config.COLLECT_METRICS:
+            start = time.time()
         offset_provider = {**offset_provider, **self._implicit_offset_provider}
         if self.backend is None:
             warnings.warn(
@@ -279,6 +283,9 @@ class Program:
                 *args,
                 **(kwargs | {"offset_provider": offset_provider}),
             )
+        if config.COLLECT_METRICS:
+            end = time.time()
+            metrics.global_metric_container[self.__name__][metrics.TOTAL].append(end - start)
 
     def compile(
         self, offset_provider_type: common.OffsetProviderType | common.OffsetProvider | None = None
