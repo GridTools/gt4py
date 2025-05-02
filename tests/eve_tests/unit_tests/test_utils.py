@@ -166,6 +166,24 @@ def test_fluid_partial():
     assert fp3() == 6
 
 
+def test_hashable_by():
+    from gt4py.eve.utils import hashable_by
+
+    @hashable_by
+    def make_hashable(obj):
+        return len(obj)
+
+    assert hash(make_hashable({1: 2})) == 1
+
+
+def test_hashable_by_id():
+    from gt4py.eve.utils import hashable_by_id
+
+    testee = {1: 2}
+
+    assert hash(hashable_by_id(testee)) == id(testee)
+
+
 def test_noninstantiable_class():
     @eve.utils.noninstantiable
     class NonInstantiableClass(eve.datamodels.DataModel):

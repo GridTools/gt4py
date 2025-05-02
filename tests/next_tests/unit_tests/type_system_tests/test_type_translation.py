@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
@@ -199,3 +200,40 @@ def test_from_value_module():
     assert type_translation.from_value(dummy_package.dummy_module.dummy_int) == ts.ScalarType(
         kind=ts.ScalarKind.INT32
     )
+
+
+class SomeEnum(eve.IntEnum):
+    FOO = 1
+
+
+@pytest.mark.parametrize(
+    "value, type_, expected",
+    [
+        (gtx.int32(1), ts.ScalarType(kind=ts.ScalarKind.INT32), gtx.int32(1)),
+        (gtx.int64(1), ts.ScalarType(kind=ts.ScalarKind.INT64), gtx.int64(1)),
+        (1.0, ts.ScalarType(kind=ts.ScalarKind.INT64), gtx.int64(1)),
+        (1, ts.ScalarType(kind=ts.ScalarKind.INT32), gtx.int32(1)),
+        (True, ts.ScalarType(kind=ts.ScalarKind.BOOL), np.bool_(True)),
+        (False, ts.ScalarType(kind=ts.ScalarKind.BOOL), np.bool_(False)),
+        (SomeEnum.FOO, ts.ScalarType(kind=ts.ScalarKind.INT32), gtx.int32(1)),
+        (
+            (1, (2.0, gtx.float32(3.0))),
+            ts.TupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.INT32),
+                    ts.TupleType(
+                        types=[
+                            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+                            ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                        ]
+                    ),
+                ]
+            ),
+            (gtx.float32(1), (gtx.float64(2.0), gtx.float32(3.0))),
+        ),
+    ],
+)
+def test_unsafe_cast_to(value, type_, expected):
+    result = type_translation.unsafe_cast_to(value, type_)
+    assert result == expected
+    assert type(result) is type(expected)

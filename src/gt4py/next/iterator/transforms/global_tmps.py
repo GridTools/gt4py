@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Sequence
-from typing import Callable, Optional
+from typing import Callable, Literal, Optional, cast
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common, utils as next_utils
@@ -19,6 +19,7 @@ from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
     domain_utils,
     ir_makers as im,
+    misc as ir_utils_misc,
 )
 from gt4py.next.iterator.ir_utils.domain_utils import SymbolicDomain
 from gt4py.next.iterator.transforms import cse, infer_domain, inline_lambdas
@@ -80,9 +81,14 @@ def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
     for stmt in stmts:
         if isinstance(stmt, itir.SetAt):
             assert hasattr(stmt.expr.annex, "domain")
+            # ordered set for reproducibility
+            domains: dict[
+                SymbolicDomain | Literal[infer_domain.DomainAccessDescriptor.NEVER], None
+            ] = dict.fromkeys(next_utils.flatten_nested_tuple(stmt.expr.annex.domain))
+            # don't count NEVER as a different domain
+            domains.pop(infer_domain.DomainAccessDescriptor.NEVER, None)
             distinct_domains: list[domain_utils.SymbolicDomain] = list(
-                # ordered set for reproducibility
-                dict.fromkeys(next_utils.flatten_nested_tuple(stmt.expr.annex.domain))
+                cast(dict[SymbolicDomain, None], domains)
             )
             if len(distinct_domains) == 1:
                 new_stmts.append(
@@ -106,6 +112,14 @@ def _populate_and_homogenize_domains(stmts: list[itir.Stmt]) -> list[itir.Stmt]:
             raise ValueError("Expected `itir.SetAt` or `itir.IfStmt`.")
 
     return new_stmts
+
+
+def _is_as_fieldop_of_scan(expr: itir.Expr) -> bool:
+    return (
+        cpm.is_applied_as_fieldop(expr)
+        and isinstance(expr.fun, itir.FunCall)
+        and cpm.is_call_to(expr.fun.args[0], "scan")
+    )
 
 
 def _transform_if(
@@ -140,8 +154,16 @@ def _transform_by_pattern(
     if not isinstance(stmt, itir.SetAt):
         return None
 
+    # hide projector from extraction
+    projector, expr = ir_utils_misc.extract_projector(stmt.expr)
+
+    # If we extracted a projector and the expression is not an as_fieldop of a scan,
+    # collapse tuple did not work as expected. We would expect that collapse
+    # tuple eleminated all top-level tuple expressions for non-scans.
+    assert projector is None or _is_as_fieldop_of_scan(expr)
+
     new_expr, extracted_fields, _ = cse.extract_subexpression(
-        stmt.expr,
+        expr,
         predicate=predicate,
         uid_generator=eve_utils.UIDGenerator(prefix="__tmp_subexpr"),
         # TODO(tehrengruber): extracting the deepest expression first would allow us to fuse
@@ -242,6 +264,12 @@ def _transform_by_pattern(
                     uids,
                 )
             )
+
+        if projector is not None:
+            # add the projector back
+            domain = new_expr.annex.domain
+            new_expr = im.call(projector)(new_expr)
+            new_expr.annex.domain = domain
 
         return [*tmp_stmts, itir.SetAt(target=stmt.target, domain=stmt.domain, expr=new_expr)]
     return None

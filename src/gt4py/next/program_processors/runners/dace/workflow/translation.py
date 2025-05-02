@@ -17,7 +17,7 @@ import factory
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
@@ -139,9 +139,13 @@ class DaCeTranslator(
             on_gpu=(self.device_type == core_defs.CUPY_DEVICE_TYPE),
         )
 
+        arg_types = tuple(
+            arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
+        )
+
         param_types = tuple(
             interface.Parameter(param, arg_type)
-            for param, arg_type in zip(sdfg.arg_names, inp.args.args)
+            for param, arg_type in zip(sdfg.arg_names, arg_types)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
