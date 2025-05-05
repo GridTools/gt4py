@@ -139,7 +139,9 @@ def _canonicalize_domain_structure(
                 *(
                     _canonicalize_domain_structure(el1, el2)
                     for el1, el2 in itertools.zip_longest(
-                        d1, d2, fillvalue=DomainAccessDescriptor.NEVER
+                        typing.cast(tuple[DomainAccess], d1),
+                        typing.cast(tuple[DomainAccess], d2),
+                        fillvalue=DomainAccessDescriptor.NEVER,
                     )
                 )
             )

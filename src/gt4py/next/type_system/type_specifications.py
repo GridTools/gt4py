@@ -112,6 +112,7 @@ class FieldType(DataType, CallableType):
 
 
 class TupleType(DataType):
+    # TODO(SF-N): Try to make this generic
     # TODO(tehrengruber): Remove `DeferredType` again. This was erroneously
     #  introduced before we checked the annotations at runtime. All attributes of
     #  a type that are types themselves must be concrete.

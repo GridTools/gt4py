@@ -11,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import inspect
+from typing import cast, overload
 
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
@@ -310,9 +311,21 @@ def _convert_as_fieldop_input_to_iterator(
     )
 
 
+@overload
 def _canonicalize_nb_fields(
-    input_: ts.ScalarType | ts.FieldType | ts.TupleType | tuple[ts.FieldType, ts.TupleType],
-) -> ts.ScalarType | ts.FieldType | ts.TupleType | tuple[ts.FieldType, ts.TupleType]:
+    input_: ts.ScalarType | ts.FieldType,
+) -> ts.ScalarType | ts.FieldType: ...
+
+
+@overload
+def _canonicalize_nb_fields(
+    input_: ts.TupleType | tuple[ts.FieldType | ts.TupleType, ...],
+) -> ts.TupleType: ...
+
+
+def _canonicalize_nb_fields(
+    input_: ts.ScalarType | ts.FieldType | ts.TupleType | tuple[ts.FieldType | ts.TupleType, ...],
+) -> ts.ScalarType | ts.FieldType | ts.TupleType:
     """
     Transform neighbor / sparse field type by removal of local dimension and addition of corresponding `ListType` dtype.
 
@@ -329,7 +342,13 @@ def _canonicalize_nb_fields(
     """
     match input_:
         case tuple() | ts.TupleType():
-            return ts.TupleType(types=[_canonicalize_nb_fields(field) for field in input_])
+            assert all(isinstance(field, (ts.FieldType, ts.TupleType)) for field in input_)
+            return ts.TupleType(
+                types=[
+                    _canonicalize_nb_fields(cast(ts.FieldType | ts.TupleType, field))
+                    for field in input_
+                ]
+            )
         case ts.FieldType():
             input_dims = _collect_and_check_dimensions(input_)
             element_type: ts.DataType = type_info.apply_to_primitive_constituents(
@@ -349,7 +368,7 @@ def _canonicalize_nb_fields(
         case ts.ScalarType():
             return input_
         case _:
-            raise TypeError(f"Unexpected field type: {type(input_)}")
+            raise TypeError(f"Unexpected type: {type(input_)}")
 
 
 def _resolve_dimensions(
