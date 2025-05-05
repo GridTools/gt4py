@@ -319,12 +319,15 @@ def _canonicalize_nb_fields(
 
 @overload
 def _canonicalize_nb_fields(
-    input_: ts.TupleType | tuple[ts.FieldType | ts.TupleType, ...],
+    input_: ts.TupleType | tuple[ts.ScalarType | ts.FieldType | ts.TupleType, ...],
 ) -> ts.TupleType: ...
 
 
 def _canonicalize_nb_fields(
-    input_: ts.ScalarType | ts.FieldType | ts.TupleType | tuple[ts.FieldType | ts.TupleType, ...],
+    input_: ts.ScalarType
+    | ts.FieldType
+    | ts.TupleType
+    | tuple[ts.ScalarType | ts.FieldType | ts.TupleType, ...],
 ) -> ts.ScalarType | ts.FieldType | ts.TupleType:
     """
     Transform neighbor / sparse field type by removal of local dimension and addition of corresponding `ListType` dtype.
@@ -342,7 +345,9 @@ def _canonicalize_nb_fields(
     """
     match input_:
         case tuple() | ts.TupleType():
-            assert all(isinstance(field, (ts.FieldType, ts.TupleType)) for field in input_)
+            assert all(
+                isinstance(field, (ts.ScalarType, ts.FieldType, ts.TupleType)) for field in input_
+            )
             return ts.TupleType(
                 types=[
                     _canonicalize_nb_fields(cast(ts.FieldType | ts.TupleType, field))
