@@ -92,9 +92,7 @@ def apply_common_transforms(
         inlined = ir
 
         inlined = InlineLambdas.apply(inlined, opcount_preserving=True)
-        inlined = ConstantFolding.apply(
-            inlined, enabled_transformations=ConstantFolding.Transformation.FOLD_IF
-        )  # type: ignore[assignment]  # always an itir.Program
+        inlined = ConstantFolding.apply(inlined)  # type: ignore[assignment]  # always an itir.Program
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(
