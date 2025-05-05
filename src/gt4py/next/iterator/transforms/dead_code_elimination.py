@@ -22,15 +22,16 @@ def dead_code_elimination(
     collapse_tuple_uids: Optional[eve_utils.UIDGenerator] = None,
     offset_provider_type: common.OffsetProviderType,
 ) -> itir.Program:
-    # remove dead-code, e.g. `let var=True in if_(var, val1, val2) end`
     # ensure all constant let init forms are inlined
     # `let var=True in if_(var, val1, val2) end` -> `if_(True, val1, val2)`
     ir = InlineLambdas.apply(ir, opcount_preserving=True)
 
     # remove the unreachable if branches
-    # `if_(True, val1, val2)` -> `val1`
+    # e.g. `if_(True, val1, val2)` -> `val1`
     ir = ConstantFolding.apply(ir, enabled_transformations=ConstantFolding.Transformation.FOLD_IF)  # type: ignore[assignment]  # always an itir.Program
 
+    # inline again since after constant folding some expressions might not be referenced anymore,
+    # e.g. `let field = as_fieldop(...) in val1 end` -> `val1`
     # note: `force_inline_lambda_args` increases the size of the tree and may not be required for
     # dead-code-elimination, but is needed since the domain inference cannot handle "user"
     # functions, e.g. `let f = λ(...) → ... in f(...)`
