@@ -1,3 +1,5 @@
+#! /usr/bin/env -S uv run -q --script
+#
 # GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2024, ETH Zurich
@@ -21,12 +23,20 @@ from typing import Any, Final, Literal, TypeAlias
 
 import nox
 
-# Hack to load companion `noxfile_utils.py` from the same directory as this file
-# using a temporary change to `sys.path`.
+# Load companion `noxfile_utils.py` module from the same directory.
+# Direct import works out-of-the-box when running the `noxfile.py` as a script,
+# but when running `nox` as a program, the parent folder is not in the `sys.path`,
+# so we need to add it temporarily.
 # TODO(egparedes): Remove this if `noxfile_utils.py` is moved to a package
 # so it can be required as a PEP 723 dependency.
-with mock.patch("sys.path", [f"{pathlib.Path(__file__).parent!s}", *sys.path]):
-    import noxfile_utils as nox_utils
+if _patched := ((_folder := f"{pathlib.Path(__file__).parent!s}") not in sys.path):
+    sys.path.insert(0, _folder)
+
+import noxfile_utils as nox_utils
+
+if _patched:
+    sys.path.pop(0)
+
 
 # This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
 # is not guaranteed to be available in the venv where `nox` is running.
