@@ -46,7 +46,6 @@ class StencilBuilder:
     -----
     Backends can use the :py:meth:`with_backend_data` method the :py:meth:`backend_data` property
     to set and retrieve backend specific information for use in later steps.
-
     """
 
     def __init__(
@@ -136,7 +135,6 @@ class StencilBuilder:
 
         kwargs:
             passed through to the options instance
-
         """
         self._build_data = {}
         # mypy attribkwclass bug
@@ -162,8 +160,6 @@ class StencilBuilder:
         Notes
         -----
         Resets all cached build data.
-
-
         """
         self._build_data = {}
         backend = gt4pyc.backend.from_name(backend_name)

@@ -312,7 +312,6 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
 
         Returns:
             A dict, mapping field names to min and max read offsets relative to loop order (i.e., positive means in the direction of the loop order).
-
         """
 
         def directional_k_offset(offset: Tuple[int, int, int]) -> int:

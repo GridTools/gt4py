@@ -231,7 +231,6 @@ def stencil(
     Examples
     --------
         TODO
-
     """
 
     from gt4py.cartesian import loader as gt_loader
