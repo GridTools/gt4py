@@ -217,6 +217,17 @@ class DomainInterval(eve.Node):
     start: AxisBound
     end: AxisBound
 
+    def __init__(self, start: AxisBound, end: AxisBound):
+        super().__init__()
+
+        if start.axis != end.axis:
+            raise ValueError(
+                f"Axis need to match for start and end bounds. Got {start.axis} and {end.axis}."
+            )
+
+        self.start = start
+        self.end = end
+
     @property
     def free_symbols(self) -> Set[eve.SymbolRef]:
         res = set()
@@ -247,9 +258,21 @@ class DomainInterval(eve.Node):
         second_start = second.start if second.start is not None else first.start
         second_end = second.end if second.end is not None else first_end.end
 
-        assert (first_start <= second_end and first_end >= second_start) or (
-            second_start <= first_end and second_end >= first_start
-        )
+        if hasattr(first_start, "axis") and first_start.axis != axis:
+            raise ValueError(f"Axis need to match: {first_start.axis} and {axis} are different.")
+
+        if hasattr(second_start, "axis") and second_start.axis != axis:
+            raise ValueError(f"Axis need to match: {second_start.axis} and {axis} are different.")
+
+        # overlapping intervals
+        # or first contained in second
+        # or second contained in first
+        if not (
+            (first_start <= second_end and second_start <= first_end)
+            or (second_start <= first_start and first_end <= second_end)
+            or (first_start <= second_start and second_end <= first_end)
+        ):
+            raise ValueError(f"No intersection found for intervals {first} and {second}")
 
         start = max(first_start, second_start)
         start = AxisBound(axis=axis, level=start.level, offset=start.offset)

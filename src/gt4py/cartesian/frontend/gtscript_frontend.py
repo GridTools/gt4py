@@ -89,7 +89,6 @@ class AxisIntervalParser(gt_meta.ASTPass):
 
     Corner cases: `ast.Ellipsis` refers to the entire interval, and
     if an `ast.Subscript` is passed, this parses its slice attribute.
-
     """
 
     @classmethod

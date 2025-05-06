@@ -211,7 +211,6 @@ class CLIBackendMixin(Backend):
 
         This can now be automatically be turned into a folder hierarchy that makes sense
         and can be incorporated into an external build system.
-
         """
         raise NotImplementedError
 
@@ -229,8 +228,7 @@ class CLIBackendMixin(Backend):
         Raises
         ------
         RuntimeError
-            If the backend does not support the bindings language
-
+            If the backend does not support the bindings language.
         """
         languages = getattr(self, "languages", {"bindings": {}})
         name = getattr(self, "name", "")
