@@ -17,33 +17,73 @@ from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 
 
 def dead_code_elimination(
-    ir: itir.Program,
+    program: itir.Program,
     *,
     collapse_tuple_uids: Optional[eve_utils.UIDGenerator] = None,
     offset_provider_type: common.OffsetProviderType,
 ) -> itir.Program:
-    # ensure all constant let init forms are inlined
+    """
+    Perform dead code elimination on a program by simplifying or removing
+    unused or unreachable code constructs.
+
+    This transformation includes several optimization passes:
+    - Inlines `let` bindings to reduce indirection.
+    - Performs constant folding, removing branches of conditional expressions
+      that are statically known (e.g., `if_(True, x, y)` → `x`).
+    - Inlines again post-folding to remove any newly dead intermediate values.
+    - Removes unused elements from tuple structures (e.g., `{a, b}[0]` → `a`).
+
+    For example, it transforms:
+    ```
+    let val = inp1
+      if_ True then
+        val
+      else
+        inp2
+    end
+    ```
+    into:
+    ```
+    inp1
+    ```
+
+    Args:
+        program (itir.Program): The program to transform.
+        collapse_tuple_uids (Optional[eve_utils.UIDGenerator], optional): UID generator
+            used for deduplicating tuple field accesses during tuple collapsing.
+        offset_provider_type (common.OffsetProviderType): Strategy used for resolving
+            tuple field accesses.
+
+    Returns:
+        itir.Program: A semantically equivalent program with dead code eliminated.
+    """
+    # ensure all constant let bindings are inlined
     # `let var=True in if_(var, val1, val2) end` -> `if_(True, val1, val2)`
-    ir = InlineLambdas.apply(ir, opcount_preserving=True)
+    # TODO(tehrengruber): we only want to inline literals here
+    program = InlineLambdas.apply(program, opcount_preserving=True)
 
     # remove the unreachable if branches
     # e.g. `if_(True, val1, val2)` -> `val1`
-    ir = ConstantFolding.apply(ir, enabled_transformations=ConstantFolding.Transformation.FOLD_IF)  # type: ignore[assignment]  # always an itir.Program
+    program = ConstantFolding.apply(
+        program, enabled_transformations=ConstantFolding.Transformation.FOLD_IF
+    )  # type: ignore[assignment]  # always an itir.Program
 
     # inline again since after constant folding some expressions might not be referenced anymore,
-    # e.g. `let field = as_fieldop(...) in val1 end` -> `val1`
+    # e.g. `let field = as_fieldop(...) in val1 end` -> `val1`.
+    # TODO(tehrengruber): If we first rearrange the tree such that let bindings are placed as
+    #  close as possible to references to them we don't need to inline again here.
     # note: `force_inline_lambda_args` increases the size of the tree and may not be required for
-    # dead-code-elimination, but is needed since the domain inference cannot handle "user"
+    # dead-code-elimination, but is needed later since the domain inference cannot handle "user"
     # functions, e.g. `let f = λ(...) → ... in f(...)`
-    ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
+    program = InlineLambdas.apply(program, opcount_preserving=True, force_inline_lambda_args=True)
 
     # get rid of tuple elements that are never accessed
     # `{a, b}[0]` -> `a`
-    ir = CollapseTuple.apply(
-        ir,
+    program = CollapseTuple.apply(
+        program,
         enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
         uids=collapse_tuple_uids,
         offset_provider_type=offset_provider_type,
     )  # type: ignore[assignment]  # always an itir.Program
 
-    return ir
+    return program
