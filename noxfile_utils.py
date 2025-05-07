@@ -156,7 +156,7 @@ def is_required_by_repo_changes(
     verbose: bool = VERBOSE,
 ) -> bool:
     """
-    Determine if a session is affected by changes from a commit int the git repository.
+    Determine if a session is affected by changes from a commit in the git repository.
 
     The decision is taken based on the session's registered file paths and ignore patterns.
 
