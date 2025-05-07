@@ -45,6 +45,5 @@ def program_factory(expr: itir.Expr) -> itir.Program:
 )
 def test_let_constant_foldable_if(input, expected):
     input_program = program_factory(input)
-    expected_program = program_factory(expected)
-    inlined = dead_code_elimination.dead_code_elimination(input, offset_provider_type={})
-    assert inlined == expected
+    inlined = dead_code_elimination.dead_code_elimination(input_program, offset_provider_type={})
+    assert inlined == program_factory(expected)
