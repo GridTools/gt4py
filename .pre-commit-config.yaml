@@ -61,6 +61,15 @@ repos:
 
 - repo: local
   hooks:
+  - id: noxfile-utils
+    name: noxfile-utils checker
+    entry: python noxfile_utils.py
+    language: system
+    pass_filenames: false
+    stages: [pre-commit]
+
+- repo: local
+  hooks:
   - id: mypy
     name: mypy static type checker
     entry: uv run --frozen mypy --no-install-types src/

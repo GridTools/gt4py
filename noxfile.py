@@ -316,15 +316,7 @@ def test_storage(
     )
 
 
-@nox.session(python=PYTHON_VERSIONS, tags=["infrastructure"])
-def test_noxfile_utils(session: nox.Session) -> None:
-    """Run tests for the custom `noxfile_utils` helpers."""
-
-    session.install("nox")
-    session.run(*"python noxfile_utils.py".split(), *session.posargs, env={})
-
-
-@nox.session(python=False, tags=["infrastructure"])
+@nox.session(python=False)
 def is_affected_by_repo_change(session: nox.Session) -> None:
     """
     Evaluate if given sessions (session names passed as `--` posargs) are affected by repo changes.
