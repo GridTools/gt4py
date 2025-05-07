@@ -189,7 +189,6 @@ def is_affected_by_repo_changes(
             cwd = pathlib.Path(__file__).parent
             out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=cwd).stdout
         else:
-            assert isinstance(session, nox.Session)
             out = session.run(cmd_args, external=True, silent=True)
         _changed_files_from_commit[commit_spec] = out.strip().split("\n")
 

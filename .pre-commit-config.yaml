@@ -64,9 +64,10 @@ repos:
   - id: noxfile-utils
     name: noxfile-utils checker
     entry: python noxfile_utils.py
-    language: system
+    language: python
     pass_filenames: false
     stages: [pre-commit]
+    additional_dependencies: ['nox>=2025.02.09']
 
 - repo: local
   hooks:
