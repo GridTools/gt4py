@@ -56,6 +56,7 @@ class TypeSynthesizer:
             synthesizer = self.type_synthesizer
             self.type_synthesizer = lambda *args, offset_provider_type, **kwargs: synthesizer(
                 *args, **kwargs
+            )
         if self.cache:
             self.type_synthesizer = eve_utils.lru_cache(
                 self.type_synthesizer,
