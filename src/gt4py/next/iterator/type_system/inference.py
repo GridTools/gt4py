@@ -108,8 +108,8 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
 
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
     >>> square_func = im.lambda_("base")(im.call("power")("base", 2))
-    >>> square_func_type_synthesizer = type_synthesizer.TypeSynthesizer(
-    ...     type_synthesizer=lambda base: power(base, int_type)
+    >>> square_func_type_synthesizer = type_synthesizer.type_synthesizer(
+    ...     lambda base: power(base, int_type)
     ... )
     >>> square_func_type_synthesizer(float_type, offset_provider_type={})
     ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None)
@@ -537,7 +537,7 @@ class ITIRTypeInference(eve.NodeTranslator):
     def visit_Lambda(
         self, node: itir.Lambda | itir.FunctionDefinition, *, ctx: dict[str, ts.TypeSpec]
     ) -> type_synthesizer.TypeSynthesizer:
-        @type_synthesizer.TypeSynthesizer
+        @type_synthesizer.type_synthesizer(cache=True)
         def fun(*args):
             return self.visit(
                 node.expr, ctx=ctx | {p.id: a for p, a in zip(node.params, args, strict=True)}

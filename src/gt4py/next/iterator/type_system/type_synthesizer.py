@@ -11,13 +11,22 @@ from __future__ import annotations
 import dataclasses
 import functools
 import inspect
+from typing import TypeVar, overload
 
+from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common, utils
 from gt4py.next.iterator import builtins
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
+
+
+def _type_synth_arg_cache_key(type_or_synth: TypeOrTypeSynthesizer) -> int:
+    if isinstance(type_or_synth, TypeSynthesizer):
+        return id(type_or_synth)
+    # TODO(tehrengruber): use regular __hash__ again when ts.TypeSpec supports it.
+    return hash(eve_utils.content_hash(type_or_synth))
 
 
 @dataclasses.dataclass
@@ -39,11 +48,20 @@ class TypeSynthesizer:
     """
 
     type_synthesizer: Callable[..., TypeOrTypeSynthesizer]
+    cache: bool = False
 
     def __post_init__(self):
         if "offset_provider_type" not in inspect.signature(self.type_synthesizer).parameters:
             synthesizer = self.type_synthesizer
             self.type_synthesizer = lambda *args, offset_provider_type: synthesizer(*args)
+        if self.cache:
+            self.type_synthesizer = eve_utils.lru_cache(
+                self.type_synthesizer,
+                # we only cache `itir.Lambda` right now which is only ever evaluated with
+                # the same arguments. Hence, the cache only needs a size of one.
+                maxsize=1,
+                key=_type_synth_arg_cache_key,
+            )
 
     def __call__(
         self, *args: TypeOrTypeSynthesizer, offset_provider_type: common.OffsetProviderType
@@ -52,6 +70,22 @@ class TypeSynthesizer:
 
 
 TypeOrTypeSynthesizer = Union[ts.TypeSpec, TypeSynthesizer]
+F = TypeVar("F", bound=Callable[..., TypeOrTypeSynthesizer])
+
+
+@overload
+def type_synthesizer(fun: F) -> TypeSynthesizer: ...
+@overload
+def type_synthesizer(*, cache: bool = False) -> Callable[[F], TypeSynthesizer]: ...
+
+
+def type_synthesizer(
+    fun: Optional[F] = None, cache: bool = False
+) -> Union[TypeSynthesizer, Callable[[F], TypeSynthesizer]]:
+    if fun is None:
+        return functools.partial(TypeSynthesizer, cache=cache)
+    return TypeSynthesizer(fun, cache=cache)
+
 
 #: dictionary from name of a builtin to its type synthesizer
 builtin_type_synthesizers: dict[str, TypeSynthesizer] = {}
@@ -76,7 +110,7 @@ def _register_builtin_type_synthesizer(
     # store names in function object for better debuggability
     synthesizer.fun_names = fun_names or [synthesizer.__name__]  # type: ignore[attr-defined]
     for f in synthesizer.fun_names:  # type: ignore[attr-defined]
-        builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
+        builtin_type_synthesizers[f] = type_synthesizer(synthesizer)
     return synthesizer
 
 
@@ -289,7 +323,7 @@ def neighbors(
 
 @_register_builtin_type_synthesizer
 def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
-    @TypeSynthesizer
+    @type_synthesizer
     def apply_lift(
         *its: it_ts.IteratorType, offset_provider_type: common.OffsetProviderType
     ) -> it_ts.IteratorType:
@@ -376,7 +410,7 @@ def as_fieldop(
     if domain is None:
         domain = ts.DomainType(dims="unknown")
 
-    @TypeSynthesizer
+    @type_synthesizer
     def applied_as_fieldop(*fields) -> ts.FieldType | ts.DeferredType:
         if any(
             isinstance(el, ts.DeferredType)
@@ -406,7 +440,7 @@ def scan(
 ) -> TypeSynthesizer:
     assert isinstance(direction, ts.ScalarType) and direction.kind == ts.ScalarKind.BOOL
 
-    @TypeSynthesizer
+    @type_synthesizer
     def apply_scan(
         *its: it_ts.IteratorType, offset_provider_type: common.OffsetProviderType
     ) -> ts.DataType:
@@ -419,7 +453,7 @@ def scan(
 
 @_register_builtin_type_synthesizer
 def map_(op: TypeSynthesizer) -> TypeSynthesizer:
-    @TypeSynthesizer
+    @type_synthesizer
     def applied_map(
         *args: ts.ListType, offset_provider_type: common.OffsetProviderType
     ) -> ts.ListType:
@@ -438,7 +472,7 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
 
 @_register_builtin_type_synthesizer
 def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
-    @TypeSynthesizer
+    @type_synthesizer
     def applied_reduce(*args: ts.ListType, offset_provider_type: common.OffsetProviderType):
         assert all(isinstance(arg, ts.ListType) for arg in args)
         return op(
@@ -450,7 +484,7 @@ def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
 
 @_register_builtin_type_synthesizer
 def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> TypeSynthesizer:
-    @TypeSynthesizer
+    @type_synthesizer
     def apply_shift(
         it: it_ts.IteratorType | ts.DeferredType,
     ) -> it_ts.IteratorType | ts.DeferredType:
