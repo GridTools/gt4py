@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import pathlib
+import os
 import sys
 import types
 from collections.abc import Sequence
@@ -55,8 +56,6 @@ nox.options.sessions = [
     "test_package-3.11",
     "test_storage-3.10(cpu)",
     "test_storage-3.11(cpu)",
-    "test_noxfile_utils-3.10",
-    "test_noxfile_utils-3.11",
 ]
 
 
@@ -122,11 +121,10 @@ def test_cartesian(
         groups=["test"],
     )
 
-    num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
     session.run(
-        *f"pytest --cache-clear -sv -n {num_processes} --dist loadgroup".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
@@ -155,10 +153,8 @@ def test_eve(session: nox.Session) -> None:
 
     nox_utils.install_session_venv(session, groups=["test"])
 
-    num_processes = session.env.get("NUM_PROCESSES", "auto")
-
     session.run(
-        *f"pytest --cache-clear -sv -n {num_processes}".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         str(pathlib.Path("tests") / "eve_tests"),
         *session.posargs,
     )
@@ -236,11 +232,10 @@ def test_next(
         groups=groups,
     )
 
-    num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
 
     session.run(
-        *f"pytest --cache-clear -sv -n {num_processes}".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
@@ -300,11 +295,10 @@ def test_storage(
         session, extras=["performance", "testing", *device_settings["extras"]], groups=["test"]
     )
 
-    num_processes = session.env.get("NUM_PROCESSES", "auto")
     markers = " and ".join(device_settings["markers"])
 
     session.run(
-        *f"pytest --cache-clear -sv -n {num_processes}".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,
@@ -317,20 +311,20 @@ def test_storage(
 
 
 @nox.session(python=False)
-def is_affected_by_repo_change(session: nox.Session) -> None:
+def _is_required_by_repo_changes(session: nox.Session) -> None:
     """
-    Evaluate if given sessions (session names passed as `--` posargs) are affected by repo changes.
+    Evaluate if given sessions (session names passed as 'posargs'`) are required by changes in the repo.
 
     Use `CI_NOX_RUN_ONLY_IF_CHANGED_FROM` env variable to pass the reference commit.
 
     Example:
-        $ CI_NOX_RUN_ONLY_IF_CHANGED_FROM='main' nox -s is_affected_by_repo_change -- test_cartesian
+        $ CI_NOX_RUN_ONLY_IF_CHANGED_FROM='main' CI_NOX_VERBOSE=1 nox -s _is_required_by_repo_changes -- test_cartesian
     """
 
     for arg in session.posargs:
         if arg.startswith("--"):
             session.error(f"Invalid argument: {arg}")
-        print(f"{arg}: {nox_utils.is_affected_by_repo_changes(arg, verbose=True)}")
+        print(f"{arg}: {nox_utils.is_required_by_repo_changes(arg, verbose=True)}")
 
 
 if __name__ == "__main__":

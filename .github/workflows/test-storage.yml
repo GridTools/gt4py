@@ -43,9 +43,7 @@ jobs:
 
     - name: Run CPU 'storage' tests with nox
       env:
-        NUM_PROCESSES: auto
-        CI_NOX_PREFIX: GT4PY
-        GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "origin/${{ github.base_ref }}"
-        GT4PY_CI_NOX_VERBOSE: 1
+        CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "origin/${{ github.base_ref }}"
+        CI_NOX_VERBOSE: 1
       shell: bash
       run: uv run --script noxfile.py -s 'test_storage-${{ matrix.python-version }}(cpu)'

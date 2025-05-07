@@ -98,7 +98,7 @@ def customize_session(
         @functools.wraps(session_function)
         def new_session_function(*args: Any, **kwargs: Any) -> Any:
             session = kwargs.get("session", None) or args[0]
-            if is_affected_by_repo_changes(session.name):
+            if is_required_by_repo_changes(session.name):
                 session_function(*args, **kwargs)
             else:
                 print(
@@ -150,7 +150,7 @@ def install_session_venv(
         )
 
 
-def is_affected_by_repo_changes(
+def is_required_by_repo_changes(
     session: nox.Session | str,
     commit_spec: str = COMMIT_SPEC_FOR_CHANGES,
     *,
@@ -159,15 +159,14 @@ def is_affected_by_repo_changes(
     """
     Determine if a session is affected by changes from a commit int the git repository.
 
-    This function checks if the given session is affected by changes in the git repository
-    from a specific commit based on the session's registered file paths and ignore patterns.
+    The decision is taken based on the session's registered file paths and ignore patterns.
 
     Args:
         session:
             The nox session to check or a string representing the session name.
         commit_spec:
             The git commit specification to use for determining changes (e.g., 'HEAD~1..HEAD').
-            If empty, the function returns True, indicating all sessions are affected.
+            If empty, the function returns True, indicating all sessions are required.
         verbose:
             Whether to print detailed information about the affected files.
 
@@ -206,11 +205,11 @@ def is_affected_by_repo_changes(
     if verbose:
         print(
             f"\n[{session_name}]:\n"
-            f"  - Affected: {is_affected}\n"
+            f"  - Required: {is_affected}\n"
             f"  - Commit spec: {commit_spec!r}\n"
             f"  - File include patterns: {paths}\n"
             f"  - File exclude patterns: {ignore_paths}\n"
-            f"  - Affected files ({len(relevant_files)}/{len(changed_files)}):\n",
+            f"  - Relevant files ({len(relevant_files)}/{len(changed_files)}):\n",
             "\n".join(f"\t+ [{'x' if f in relevant_files else ' '}] {f}" for f in changed_files),
             "\n",
             file=sys.stderr,
@@ -268,16 +267,16 @@ class NoxUtilsTestCase(unittest.TestCase):
         session.name = "test_session-3.10(param1=foo,param2=bar)"
 
         _changed_files_from_commit["main"] = ["src/foo.py"]
-        self.assertTrue(is_affected_by_repo_changes(session, commit_spec))
+        self.assertTrue(is_required_by_repo_changes(session, commit_spec))
 
         _changed_files_from_commit["main"] = ["src/foo.py", "tests/test_foo.py"]
-        self.assertTrue(is_affected_by_repo_changes(session, commit_spec))
+        self.assertTrue(is_required_by_repo_changes(session, commit_spec))
 
         _changed_files_from_commit["main"] = ["tests/test_foo.py"]
-        self.assertFalse(is_affected_by_repo_changes(session, commit_spec))
+        self.assertFalse(is_required_by_repo_changes(session, commit_spec))
 
         _changed_files_from_commit["main"] = ["docs/readme.md"]
-        self.assertFalse(is_affected_by_repo_changes(session, commit_spec))
+        self.assertFalse(is_required_by_repo_changes(session, commit_spec))
 
         # No need to run `git diff`, already cached
         session.run.assert_not_called()
@@ -287,7 +286,7 @@ class NoxUtilsTestCase(unittest.TestCase):
         session = unittest.mock.Mock(run=lambda *args, **kwargs: "src/bar.py\nsrc/baz.py")
         session.name = "test_session-3.10(param1=foo,param2=bar)"
 
-        self.assertTrue(is_affected_by_repo_changes(session, commit_spec))
+        self.assertTrue(is_required_by_repo_changes(session, commit_spec))
         self.assertEqual(
             _changed_files_from_commit["not_cached_commit"], ["src/bar.py", "src/baz.py"]
         )
@@ -297,7 +296,7 @@ class NoxUtilsTestCase(unittest.TestCase):
             session = unittest.mock.Mock()
             session.name = "test_session-3.10(param1=foo,param2=bar)"
 
-            self.assertTrue(is_affected_by_repo_changes(session, commit_spec))
+            self.assertTrue(is_required_by_repo_changes(session, commit_spec))
             session.run.assert_not_called()
 
 
