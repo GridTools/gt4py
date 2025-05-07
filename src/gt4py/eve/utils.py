@@ -402,7 +402,7 @@ def hashable_by(
 hashable_by_id = hashable_by(id)
 
 
-def lru_cache(  # redefinition of unused function
+def lru_cache(
     func: Optional[Callable[_P, _T]] = None,
     *,
     key: Callable[_P, Any],
