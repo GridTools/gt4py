@@ -23,19 +23,15 @@ from typing import Any, Final, Literal, TypeAlias
 
 import nox
 
-# Load companion `noxfile_utils.py` module from the same directory.
-# Direct import works out-of-the-box when running the `noxfile.py` as a script,
-# but when running `nox` as a program, the parent folder is not in the `sys.path`,
-# so we need to add it temporarily.
-# TODO(egparedes): Remove this if `noxfile_utils.py` is moved to a package
-# so it can be required as a PEP 723 dependency.
-if _patched := ((_folder := f"{pathlib.Path(__file__).parent!s}") not in sys.path):
+# When running the `noxfile.py` as a script, the current directory is
+# added to the `sys.path`, so we can import other python file in this
+# directory directly, like `noxfile_utils.py`.
+# However, when running `nox` as a CLI tool, the current
+# directory is not added to the `sys.path`, so we need to add it manually.
+if (_folder := f"{pathlib.Path(__file__).parent!s}") not in sys.path:
     sys.path.insert(0, _folder)
 
 import noxfile_utils as nox_utils
-
-if _patched:
-    sys.path.pop(0)
 
 
 # This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
@@ -144,7 +140,6 @@ def test_cartesian(
 @nox_utils.customize_session(
     python=PYTHON_VERSIONS,
     tags=["cartesian", "next", "cpu"],
-    env_vars=["NUM_PROCESSES"],
     paths=[  # In CI mode, run when gt4py.eve files (or package settings) are changed
         "src/gt4py/eve/*",
         "tests/eve_tests/*",
@@ -323,10 +318,28 @@ def test_storage(
 
 @nox.session(python=PYTHON_VERSIONS, tags=["infrastructure"])
 def test_noxfile_utils(session: nox.Session) -> None:
-    """Run custom nox utilities tests."""
+    """Run tests for the custom `noxfile_utils` helpers."""
 
     session.install("nox")
     session.run(*"python noxfile_utils.py".split(), *session.posargs, env={})
+
+
+@nox.session(python=False, tags=["infrastructure"])
+def is_affected_by_repo_change(session: nox.Session) -> None:
+    """
+    Evaluate if given sessions (session names passed as `--` posargs) are affected by repo changes.
+
+    Use `CI_NOX_RUN_ONLY_IF_CHANGED_FROM` env variable to pass the reference commit.
+
+    Example:
+        $ CI_NOX_RUN_ONLY_IF_CHANGED_FROM='main' nox -s is_affected_by_repo_change -- test_cartesian
+
+    """
+
+    for arg in session.posargs:
+        if arg.startswith("--"):
+            session.error(f"Invalid argument: {arg}")
+        print(f"{arg}: {nox_utils.is_affected_by_repo_changes(arg, verbose=True)}")
 
 
 if __name__ == "__main__":

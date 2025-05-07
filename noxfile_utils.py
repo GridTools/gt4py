@@ -28,6 +28,8 @@ import fnmatch
 import functools
 import itertools
 import os
+import pathlib
+import subprocess
 import sys
 import types
 import unittest
@@ -42,6 +44,7 @@ ENV_VAR_PREFIX: Final = f"{prefix}_" if (prefix := os.environ.get("CI_NOX_PREFIX
 ENV_VAR_RUN_ONLY_IF_CHANGED_FROM: Final = f"{ENV_VAR_PREFIX}CI_NOX_RUN_ONLY_IF_CHANGED_FROM"
 ENV_VAR_VERBOSE: Final = f"{ENV_VAR_PREFIX}CI_NOX_VERBOSE"
 
+COMMIT_SPEC_FOR_CHANGES: Final = os.environ.get(ENV_VAR_RUN_ONLY_IF_CHANGED_FROM, "")
 VERBOSE: Final = os.environ.get(ENV_VAR_VERBOSE, "").lower() in [
     "1",
     "on",
@@ -57,13 +60,12 @@ AnyCallable: TypeAlias = Callable[..., Any]
 
 
 def customize_session(
-    env_vars: Sequence[str] = (),
-    ignore_env_vars: Sequence[str] = (),
     paths: Sequence[str] = (),
     ignore_paths: Sequence[str] = (),
     **kwargs: Any,
 ) -> Callable[[AnyCallable], nox.registry.Func]:
-    """Customize a Nox session with path or environment-based filtering.
+    """
+    Customize a Nox session with path or environment-based filtering.
 
     Define a Nox session with the ability to sandbox the environment variables
     that are passed to the test environment and to conditionally skip the session
@@ -98,13 +100,13 @@ def customize_session(
         @functools.wraps(session_function)
         def new_session_function(*args, **kwargs) -> Any:
             session = kwargs.get("session", None) or args[0]
-            if _is_skippable_session(session):
+            if is_affected_by_repo_changes(session.name):
+                session_function(*args, **kwargs)
+            else:
                 print(
                     f"Skipping session '{session.name}' because it is not relevant for the current changes.",
                     file=sys.stderr,
                 )
-            else:
-                session_function(*args, **kwargs)
 
         for key, value in vars(session_function).items():
             setattr(new_session_function, key, value)
@@ -149,6 +151,78 @@ def install_session_venv(
         )
 
 
+def is_affected_by_repo_changes(
+    session: nox.Session | str,
+    commit_spec: str = COMMIT_SPEC_FOR_CHANGES,
+    *,
+    verbose: bool = VERBOSE,
+) -> bool:
+    """
+    Determine if a session is affected by changes from a commit int the git repository.
+
+    This function checks if the given session is affected by changes in the git repository
+    from a specific commit based on the session's registered file paths and ignore patterns.
+
+    Args:
+    session:
+        The nox session to check or a string representing the session name.
+    commit_spec:
+        The git commit specification to use for determining changes (e.g., 'HEAD~1..HEAD').
+        If empty, the function returns True, indicating all sessions are affected.
+    verbose:
+        Whether to print detailed information about the affected files.
+
+    Returns
+    -------
+    bool
+        True if the session is affected by the repository changes, False otherwise.
+
+    Notes
+    -----
+    - The function caches the list of changed files for each commit specification to avoid
+      multiple git calls.
+    - For a session to be affected, at least one changed file must match the session's
+      registered paths and not be in the ignore_paths.
+    - Session metadata (paths and ignore_paths) is retrieved from the _metadata_registry.
+    """
+    if not commit_spec:
+        return True
+
+    if commit_spec not in _changed_files_from_commit:
+        cmd_args = ["git", "diff", "--name-only", commit_spec]
+        if isinstance(session, str):
+            cwd = pathlib.Path(__file__).parent
+            out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=cwd).stdout
+        else:
+            out = session.run(cmd_args, external=True, silent=True)
+        _changed_files_from_commit[commit_spec] = out.strip().split("\n")
+
+    changed_files = _changed_files_from_commit[commit_spec]
+
+    session_name = getattr(session, "name", session)
+    unversioned_session_name = session_name.split("-")[0]
+    metadata = _metadata_registry.get(unversioned_session_name, None)
+    paths = metadata.paths if metadata else ()
+    ignore_paths = metadata.ignore_paths if metadata else ()
+
+    relevant_files = _filter_names(changed_files, paths, ignore_paths)
+    is_affected = len(relevant_files) > 0
+    if verbose:
+        print(
+            f"\n[{session_name}]:\n"
+            f"  - Affected: {is_affected}\n"
+            f"  - Commit spec: {commit_spec!r}\n"
+            f"  - File include patterns: {paths}\n"
+            f"  - File exclude patterns: {ignore_paths}\n"
+            f"  - Affected files ({len(relevant_files)}/{len(changed_files)}):\n",
+            "\n".join(f"\t+ [{'x' if f in relevant_files else ' '}] {f}" for f in changed_files),
+            "\n",
+            file=sys.stderr,
+        )
+
+    return is_affected
+
+
 # -- Internal implementation utilities --
 def _filter_names(
     names: Iterable[str],
@@ -164,51 +238,6 @@ def _filter_names(
     excluded = set(_filter(included, exclude_patterns) if exclude_patterns else [])
 
     return list(sorted(included - excluded))
-
-
-def _is_skippable_session(session: nox.Session) -> bool:
-    """Determine if a session can be skipped based on changed files from a specific commit.
-
-    This function checks if a session can be skipped by analyzing which files have changed
-    from a specific commit and comparing them against the session's relevant paths.
-
-    Notes:
-        - Uses environment variables to get the commit target and the verbose mode.
-        - Uses git diff to find changed files from the commit specified in the environment variable.
-        - When VERBOSE is enabled, prints detailed information about the decision process.
-    """
-    commit_spec = os.environ.get(ENV_VAR_RUN_ONLY_IF_CHANGED_FROM, "")
-    if not commit_spec:
-        return False
-
-    if commit_spec not in _changed_files_from_commit:
-        out = session.run(
-            *f"git diff --name-only {commit_spec} --".split(), external=True, silent=True
-        )
-        _changed_files_from_commit[commit_spec] = out.strip().split("\n")
-
-    changed_files = _changed_files_from_commit[commit_spec]
-    if VERBOSE:
-        print(f"Modified files from '{commit_spec}': {changed_files}", file=sys.stderr)
-
-    unversioned_session_name = session.name.split("-")[0]
-    metadata = _metadata_registry.get(unversioned_session_name, None)
-    paths = metadata.paths if metadata else ()
-    ignore_paths = metadata.ignore_paths if metadata else ()
-
-    relevant_files = _filter_names(changed_files, paths, ignore_paths)
-    if VERBOSE:
-        print(
-            f"\n[{session.name}]:\n"
-            f"  - File include patterns: {paths}\n"
-            f"  - File exclude patterns: {ignore_paths}\n"
-            f"  - Changed files: {list(changed_files)}\n"
-            f"  - Relevant files: {list(relevant_files)}\n"
-            f"\n[{session.name}]: \n",
-            file=sys.stderr,
-        )
-
-    return len(relevant_files) == 0
 
 
 # -- Self unit tests --
@@ -232,49 +261,47 @@ class NoxUtilsTestCase(unittest.TestCase):
         exclude_patterns = None
         self.assertEqual(_filter_names(names, include_patterns, exclude_patterns), ["bar", "baz"])
 
-    def test_is_skippable_session(self):
+    def test_is_affected_by_repo_changes(self):
         _metadata_registry["test_session"] = types.SimpleNamespace(
             paths=["src/*"], ignore_paths=["tests/*"]
         )
 
         # Source commit defined, `git diff` already cached
-        with unittest.mock.patch.dict(os.environ, {ENV_VAR_RUN_ONLY_IF_CHANGED_FROM: "main"}):
-            session = unittest.mock.Mock()
-            session.name = "test_session-3.10(param1=foo,param2=bar)"
+        commit_spec = "main"
+        session = unittest.mock.Mock()
+        session.name = "test_session-3.10(param1=foo,param2=bar)"
 
-            _changed_files_from_commit["main"] = ["src/foo.py"]
-            self.assertFalse(_is_skippable_session(session))
+        _changed_files_from_commit["main"] = ["src/foo.py"]
+        self.assertTrue(is_affected_by_repo_changes(session, commit_spec))
 
-            _changed_files_from_commit["main"] = ["src/foo.py", "tests/test_foo.py"]
-            self.assertFalse(_is_skippable_session(session))
+        _changed_files_from_commit["main"] = ["src/foo.py", "tests/test_foo.py"]
+        self.assertTrue(is_affected_by_repo_changes(session, commit_spec))
 
-            _changed_files_from_commit["main"] = ["tests/test_foo.py"]
-            self.assertTrue(_is_skippable_session(session))
+        _changed_files_from_commit["main"] = ["tests/test_foo.py"]
+        self.assertFalse(is_affected_by_repo_changes(session, commit_spec))
 
-            _changed_files_from_commit["main"] = ["docs/readme.md"]
-            self.assertTrue(_is_skippable_session(session))
+        _changed_files_from_commit["main"] = ["docs/readme.md"]
+        self.assertFalse(is_affected_by_repo_changes(session, commit_spec))
 
-            # No need to run `git diff`, already cached
-            session.run.assert_not_called()
+        # No need to run `git diff`, already cached
+        session.run.assert_not_called()
 
         # Source commit defined, `git diff` not cached
-        with unittest.mock.patch.dict(
-            os.environ, {ENV_VAR_RUN_ONLY_IF_CHANGED_FROM: "not_cached_commit"}
-        ):
-            session = unittest.mock.Mock(run=lambda *args, **kwargs: "src/bar.py\nsrc/baz.py")
-            session.name = "test_session-3.10(param1=foo,param2=bar)"
+        commit_spec = "not_cached_commit"
+        session = unittest.mock.Mock(run=lambda *args, **kwargs: "src/bar.py\nsrc/baz.py")
+        session.name = "test_session-3.10(param1=foo,param2=bar)"
 
-            self.assertFalse(_is_skippable_session(session))
-            self.assertEqual(
-                _changed_files_from_commit["not_cached_commit"], ["src/bar.py", "src/baz.py"]
-            )
+        self.assertTrue(is_affected_by_repo_changes(session, commit_spec))
+        self.assertEqual(
+            _changed_files_from_commit["not_cached_commit"], ["src/bar.py", "src/baz.py"]
+        )
 
         # Undefined source commit
         with unittest.mock.patch.dict(os.environ, {}):
             session = unittest.mock.Mock()
             session.name = "test_session-3.10(param1=foo,param2=bar)"
 
-            self.assertFalse(_is_skippable_session(session))
+            self.assertTrue(is_affected_by_repo_changes(session, commit_spec))
             session.run.assert_not_called()
 
 
