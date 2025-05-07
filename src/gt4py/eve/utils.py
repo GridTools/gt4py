@@ -450,7 +450,9 @@ def lru_cache(
 
             return typing.cast(Callable[_P, _T], inner)
 
-        return functools.lru_cache(maxsize=maxsize, typed=typed)(func)
+        return typing.cast(
+            Callable[_P, _T], functools.lru_cache(maxsize=maxsize, typed=typed)(func)
+        )
 
     return _decorator(func) if func is not None else _decorator
 
