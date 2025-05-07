@@ -18,7 +18,7 @@ The `Test Cartesian (CPU)`, `Test Eve`, `Test Next (CPU)`, `Test Storage (CPU)` 
 
 The idea is to run workflows only when needed. This means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, `eve` tests will not be run when only GT4Py sources are changed.
 
-In the past we used the `paths` and `paths-ignore` workflow options together with an always-suceeding _fallback_ workflow for this, but a similar mechanism has now been defined directly with `nox`. The conditional execution of tests is disabled by default and it has to be activated through `CI_NOX_*` environment variables (check [`noxfile.py`](../../../noxfile.py) and [`noxfile_utils.py`](../../../noxfile_utils.py_) for details.
+In the past we used the `paths` and `paths-ignore` workflow options together with an always-succeeding _fallback_ workflow for this, but a similar mechanism has now been defined directly with `nox`. The conditional execution of tests is disabled by default and it has to be activated through `CI_NOX_*` environment variables (check [`noxfile.py`](../../../noxfile.py) and [`noxfile_utils.py`](../../../noxfile_utils.py_) for details.
 
 The overall dependencies between subprojects and tests can be visualized as:
 
@@ -105,7 +105,7 @@ flowchart LR
 
 ### Daily CI
 
-There is an extra CI workflow on GitHub scheduled to run daily and testing `main` with different sets of requirements: newest dependencies, lowest dependencies versions and lowest dependencies versions including extras. Failures are accessible in [GitHub web interface](https://GitHub.com/GridTools/gt4py/actions/workflows/daily-ci.yml) and as the 'Daily CI' badge in the main [README.md](../../../README.md) file. Additionally, in case of failure a message _might_ be posted in the [#ci-notifications](https://app.slack.com/client/T0A5HP547/C0E145U65) channel of the GridTols slack, but those notifications do not work reliably.
+There is an extra CI workflow on GitHub scheduled to run daily and testing `main` with different sets of requirements: newest dependencies, lowest dependencies versions and lowest dependencies versions including extras. Failures are accessible in [GitHub web interface](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml) and as the 'Daily CI' badge in the main [README.md](../../../README.md) file. Additionally, in case of failure a message _might_ be posted in the [#ci-notifications](https://app.slack.com/client/T0A5HP547/C0E145U65) channel of the GridTols slack, but those notifications do not work reliably.
 
 ## CSCS-CI
 
