@@ -25,6 +25,7 @@ from gt4py.next.utils import tree_map
 def _type_synth_arg_cache_key(type_or_synth: TypeOrTypeSynthesizer) -> int:
     if isinstance(type_or_synth, TypeSynthesizer):
         return id(type_or_synth)
+    # TODO(tehrengruber): use regular __hash__ again when ts.TypeSpec supports it.
     return hash(eve_utils.content_hash(type_or_synth))
 
 
