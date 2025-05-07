@@ -333,7 +333,6 @@ def is_affected_by_repo_change(session: nox.Session) -> None:
 
     Example:
         $ CI_NOX_RUN_ONLY_IF_CHANGED_FROM='main' nox -s is_affected_by_repo_change -- test_cartesian
-
     """
 
     for arg in session.posargs:

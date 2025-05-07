@@ -9,9 +9,8 @@
 """
 Utility functions and decorators for managing and customizing Nox sessions.
 
-It includes functionality for filtering environment variables, handling
-session-specific metadata, and determining whether a session should be
-skipped based on changes in the repository.
+It includes functionality for handling session-specific metadata, like determining
+whether a session should be skipped based on the changes in the repository.
 
 Environment Variables:
 
@@ -65,10 +64,9 @@ def customize_session(
     **kwargs: Any,
 ) -> Callable[[AnyCallable], nox.registry.Func]:
     """
-    Customize a Nox session with path or environment-based filtering.
+    Customize a Nox session with path-based filtering.
 
-    Define a Nox session with the ability to sandbox the environment variables
-    that are passed to the test environment and to conditionally skip the session
+    Define a Nox session with the ability to conditionally skip the session
     based on the paths of the modified files.
 
     Args:
@@ -164,26 +162,23 @@ def is_affected_by_repo_changes(
     from a specific commit based on the session's registered file paths and ignore patterns.
 
     Args:
-    session:
-        The nox session to check or a string representing the session name.
-    commit_spec:
-        The git commit specification to use for determining changes (e.g., 'HEAD~1..HEAD').
-        If empty, the function returns True, indicating all sessions are affected.
-    verbose:
-        Whether to print detailed information about the affected files.
+        session:
+            The nox session to check or a string representing the session name.
+        commit_spec:
+            The git commit specification to use for determining changes (e.g., 'HEAD~1..HEAD').
+            If empty, the function returns True, indicating all sessions are affected.
+        verbose:
+            Whether to print detailed information about the affected files.
 
-    Returns
-    -------
-    bool
+    Returns:
         True if the session is affected by the repository changes, False otherwise.
 
-    Notes
-    -----
-    - The function caches the list of changed files for each commit specification to avoid
-      multiple git calls.
-    - For a session to be affected, at least one changed file must match the session's
-      registered paths and not be in the ignore_paths.
-    - Session metadata (paths and ignore_paths) is retrieved from the _metadata_registry.
+    Notes:
+        - The function caches the list of changed files for each commit specification to avoid
+        multiple git calls.
+        - For a session to be affected, at least one changed file must match the session's
+        registered paths and not be in the ignore_paths.
+        - Session metadata (paths and ignore_paths) is retrieved from the _metadata_registry.
     """
     if not commit_spec:
         return True
