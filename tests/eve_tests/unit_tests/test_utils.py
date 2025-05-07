@@ -369,3 +369,26 @@ def test_xenumerate():
     from gt4py.eve.utils import xenumerate
 
     assert list(xenumerate(string.ascii_letters[:3])) == [(0, "a"), (1, "b"), (2, "c")]
+
+
+def test_lru_cache_key_id_called_once():
+    from gt4py.eve.utils import lru_cache
+
+    call_count = 0
+
+    def func(x):
+        nonlocal call_count
+        call_count += 1
+        return x
+
+    cached = lru_cache(func, key=id)
+
+    assert cached.__wrapped__ == func
+
+    obj = object()
+    assert cached(obj) is obj
+    assert cached(obj) is obj
+    assert call_count == 1
+
+    assert cached.cache_info().hits == 1
+    assert cached.cache_info().misses == 1
