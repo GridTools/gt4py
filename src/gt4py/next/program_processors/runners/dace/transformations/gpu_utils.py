@@ -582,33 +582,32 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     ) -> None:
         """Modify the map as requested."""
         gpu_map: dace_nodes.Map = self.map_entry.map
-        map_params: list[str] = gpu_map.params
         map_size = gpu_map.range.size()
-        map_dim = len(map_params)
+        num_map_params = len(gpu_map.params)
 
         # Because of a particularity of the DaCe code generator, the iteration
         #  variable that is associated to the `x` dimension of the block is the
-        #  last parameter, i.e. `map_params[-1]`. The one for `y` the second last.
-        if map_dim == 1:
+        #  last parameter, i.e. `gpu_map.params[-1]`. The one for `y` the second last.
+        if num_map_params == 1:
             block_size = list(self.block_size_1d)
             launch_bounds = self.launch_bounds_1d
-            inspect_dims = 1
-        elif map_dim == 2:
+            dims_to_inspect = 1
+        elif num_map_params == 2:
             block_size = list(self.block_size_2d)
             launch_bounds = self.launch_bounds_2d
-            inspect_dims = 2
+            dims_to_inspect = 2
         else:
             block_size = list(self.block_size_3d)
             launch_bounds = self.launch_bounds_3d
             # If there are more than three dimensions DaCe will condense them into
             #  the `z` dimension of the block, so we have to ignore the `z` dimension,
             #  when we modify the block sizes.
-            inspect_dims = 3 if map_dim == 3 else 2
+            dims_to_inspect = 3 if num_map_params == 3 else 2
 
         # Cut down the block size.
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
-        for i in range(inspect_dims):
-            map_dim_idx_to_inspect = map_dim - 1 - i
+        for i in range(dims_to_inspect):
+            map_dim_idx_to_inspect = num_map_params - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
                 block_size[i] = map_size[map_dim_idx_to_inspect]
 
