@@ -57,8 +57,8 @@ class TypeSynthesizer:
         if self.cache:
             self.type_synthesizer = eve_utils.lru_cache(
                 self.type_synthesizer,
-                # we only cache `itir.Lambda` right now which is only every evaluated with
-                # the same argumemts. Hence the cache only needs a size of one.
+                # we only cache `itir.Lambda` right now which is only ever evaluated with
+                # the same argumemts. Hence, the cache only needs a size of one.
                 maxsize=1,
                 key=_type_synth_arg_cache_key,
             )
