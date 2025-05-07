@@ -383,6 +383,8 @@ def test_lru_cache_key_id_called_once():
 
     cached = lru_cache(func, key=id)
 
+    assert cached.__wrapped__ == func
+
     obj = object()
     assert cached(obj) is obj
     assert cached(obj) is obj

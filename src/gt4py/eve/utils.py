@@ -365,7 +365,7 @@ def optional_lru_cache(  # redefinition of unused function
 class HashableBy(Generic[_T]):
     __slots__ = ["func", "value"]
 
-    def __init__(self, func: Callable[[_T], int], value: _T):
+    def __init__(self, func: Callable[[_T], int], value: _T) -> None:
         self.func = func
         self.value = value
 
@@ -402,10 +402,13 @@ def hashable_by(
 hashable_by_id = hashable_by(id)
 
 
+# TODO(egparedes): it would be more efficient to implement the caching logic
+# here instead of relying on `functools.lru_cache` and wrapping/unwrapping the
+# arguments.
 def lru_cache(
     func: Optional[Callable[_P, _T]] = None,
     *,
-    key: Callable[_P, Any],
+    key: Optional[Callable[_P, Any]] = None,
     maxsize: Optional[int] = 128,
     typed: bool = False,
 ) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
@@ -428,18 +431,23 @@ def lru_cache(
     """
 
     def _decorator(func: Callable[_P, _T]) -> Callable[_P, _T]:
-        @functools.lru_cache(maxsize=maxsize, typed=typed)
-        def cached_func(*args: HashableBy, **kwargs: HashableBy) -> _T:
-            return func(*(arg.value for arg in args), **{k: v.value for k, v in kwargs.items()})
+        if key:
+            assert not typed, "Cannot use both 'key' and 'typed'"
+            @functools.lru_cache(maxsize=maxsize, typed=False)
+            def cached_func(*args: HashableBy, **kwargs: HashableBy) -> _T:
+                return func(*(arg.value for arg in args), **{k: v.value for k, v in kwargs.items()})
 
-        @functools.wraps(func)
-        def inner(*args, **kwargs):  # type: ignore[no-untyped-def]  # cast below restores type info
-            return cached_func(
-                *(hashable_by(key, arg) for arg in args),
-                **{k: hashable_by(key, arg) for k, arg in kwargs.items()},
-            )
+            @functools.wraps(func)
+            def inner(*args, **kwargs):  # type: ignore[no-untyped-def]  # cast below restores type info
+                return cached_func(
+                    *(hashable_by(key, arg) for arg in args),
+                    **{k: hashable_by(key, arg) for k, arg in kwargs.items()},
+                )
+            inner.cache_parameters = cached_func.cache_parameters
 
-        return typing.cast(Callable[_P, _T], inner)
+            return typing.cast(Callable[_P, _T], inner)
+
+        return functools.lru_cache(maxsize=maxsize, typed=typed)(func)
 
     return _decorator(func) if func is not None else _decorator
 
