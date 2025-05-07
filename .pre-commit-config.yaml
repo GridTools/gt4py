@@ -66,8 +66,8 @@ repos:
     entry: python noxfile_utils.py
     language: python
     pass_filenames: false
-    stages: [pre-commit]
     additional_dependencies: ['nox>=2025.02.09']
+    stages: [pre-commit]
 
 - repo: local
   hooks:

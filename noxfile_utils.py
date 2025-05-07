@@ -37,7 +37,7 @@ from typing import Any, Final, TypeAlias
 import unittest.mock
 
 import nox
-import nox.registry
+from nox._decorators import Func as NoxFunc
 
 ENV_VAR_PREFIX: Final = f"{prefix}_" if (prefix := os.environ.get("CI_NOX_PREFIX", "")) else ""
 ENV_VAR_RUN_ONLY_IF_CHANGED_FROM: Final = f"{ENV_VAR_PREFIX}CI_NOX_RUN_ONLY_IF_CHANGED_FROM"
@@ -62,7 +62,7 @@ def customize_session(
     paths: Sequence[str] = (),
     ignore_paths: Sequence[str] = (),
     **kwargs: Any,
-) -> Callable[[AnyCallable], nox.registry.Func]:
+) -> Callable[[AnyCallable], NoxFunc]:
     """
     Customize a Nox session with path-based filtering.
 
@@ -88,7 +88,7 @@ def customize_session(
     if paths and ignore_paths:
         raise ValueError("Cannot use both 'paths' and 'ignore_paths' at the same time.")
 
-    def decorator(session_function: AnyCallable) -> nox.registry.Func:
+    def decorator(session_function: AnyCallable) -> NoxFunc:
         session_name = kwargs.get("name", session_function.__name__)
         _metadata_registry.setdefault(session_name, types.SimpleNamespace()).__dict__.update(
             paths=paths,
@@ -96,7 +96,7 @@ def customize_session(
         )
 
         @functools.wraps(session_function)
-        def new_session_function(*args, **kwargs) -> Any:
+        def new_session_function(*args: Any, **kwargs: Any) -> Any:
             session = kwargs.get("session", None) or args[0]
             if is_affected_by_repo_changes(session.name):
                 session_function(*args, **kwargs)
@@ -133,7 +133,8 @@ def install_session_venv(
     session.run_install(
         "uv",
         "sync",
-        *("--python", session.python),
+        "--python",
+        str(session.python),
         "--no-dev",
         *(f"--extra={e}" for e in extras),
         *(f"--group={g}" for g in groups),
@@ -189,12 +190,12 @@ def is_affected_by_repo_changes(
             cwd = pathlib.Path(__file__).parent
             out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=cwd).stdout
         else:
-            out = session.run(cmd_args, external=True, silent=True)
+            out = session.run(*cmd_args, external=True, silent=True)  # type: ignore[assignment]
         _changed_files_from_commit[commit_spec] = out.strip().split("\n")
 
     changed_files = _changed_files_from_commit[commit_spec]
 
-    session_name = getattr(session, "name", session)
+    session_name: str = getattr(session, "name", session)  # type: ignore[arg-type]
     unversioned_session_name = session_name.split("-")[0]
     metadata = _metadata_registry.get(unversioned_session_name, None)
     paths = metadata.paths if metadata else ()
@@ -226,7 +227,7 @@ def _filter_names(
 ) -> list[str]:
     """Filter names based on include and exclude `fnmatch`-style patterns."""
 
-    def _filter(names: Iterable[str], patterns: Iterable[str]) -> set[str]:
+    def _filter(names: Iterable[str], patterns: Iterable[str]) -> Iterable[str]:
         return itertools.chain(*(fnmatch.filter(names, pattern) for pattern in patterns))
 
     included = set(_filter(names, include_patterns) if include_patterns else names)
@@ -300,6 +301,9 @@ class NoxUtilsTestCase(unittest.TestCase):
             session.run.assert_not_called()
 
 
-# Run this file as a script to execute the tests.
+# Run this file as a script to execute mypy checks and  unit tests.
 if __name__ == "__main__":
+    root_dir = pathlib.Path(__file__).parent
+    cmd_args = ["mypy", f"{root_dir / 'noxfile_utils.py'}"]
+    subprocess.run(cmd_args, cwd=str(root_dir), check=True)
     unittest.main()
