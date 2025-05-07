@@ -38,10 +38,13 @@ def program_factory(expr: itir.Expr) -> itir.Program:
         ],
     )
 
-
-def test_let_constant_foldable_if():
-    testee = program_factory(im.let("val", "inp1")(im.if_(True, "val", "inp2")))
-
-    expected = program_factory(im.ref("inp1"))
-    inlined = dead_code_elimination.dead_code_elimination(testee, offset_provider_type={})
+@pytest.mark.parametrize("input,expected",
+    [
+        (im.let("val", "inp1")(im.if_(True, "val", "inp2")) , im.ref("inp1"))
+    ],
+)
+def test_let_constant_foldable_if(input, expected):
+    input_program = program_factory(input)
+    expected_program = program_factory(expected)
+    inlined = dead_code_elimination.dead_code_elimination(input, offset_provider_type={})
     assert inlined == expected
