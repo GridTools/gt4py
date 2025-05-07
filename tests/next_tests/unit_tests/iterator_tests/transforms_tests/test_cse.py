@@ -9,8 +9,6 @@
 import pytest
 import textwrap
 
-from networkx.algorithms.structuralholes import constraint
-
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir
