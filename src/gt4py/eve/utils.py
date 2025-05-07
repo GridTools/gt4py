@@ -444,6 +444,7 @@ def lru_cache(
                     **{k: hashable_by(key, arg) for k, arg in kwargs.items()},
                 )
             inner.cache_parameters = cached_func.cache_parameters
+            inner.cache_info = cached_func.cache_info
 
             return typing.cast(Callable[_P, _T], inner)
 

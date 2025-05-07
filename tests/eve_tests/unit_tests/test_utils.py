@@ -389,3 +389,5 @@ def test_lru_cache_key_id_called_once():
     assert cached(obj) is obj
     assert cached(obj) is obj
     assert call_count == 1
+
+    assert cached.cache_info().hits == 1
