@@ -433,6 +433,7 @@ def lru_cache(
     def _decorator(func: Callable[_P, _T]) -> Callable[_P, _T]:
         if key:
             assert not typed, "Cannot use both 'key' and 'typed'"
+
             @functools.lru_cache(maxsize=maxsize, typed=False)
             def cached_func(*args: HashableBy, **kwargs: HashableBy) -> _T:
                 return func(*(arg.value for arg in args), **{k: v.value for k, v in kwargs.items()})
@@ -443,6 +444,7 @@ def lru_cache(
                     *(hashable_by(key, arg) for arg in args),
                     **{k: hashable_by(key, arg) for k, arg in kwargs.items()},
                 )
+
             inner.cache_parameters = cached_func.cache_parameters
             inner.cache_info = cached_func.cache_info
 
