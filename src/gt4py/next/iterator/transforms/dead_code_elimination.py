@@ -26,36 +26,21 @@ def dead_code_elimination(
     Perform dead code elimination on a program by simplifying or removing
     unused or unreachable code constructs.
 
-    This transformation includes several optimization passes:
-    - Inlines `let` bindings to reduce indirection.
-    - Performs constant folding, removing branches of conditional expressions
-      that are statically known (e.g., `if_(True, x, y)` → `x`).
-    - Inlines again post-folding to remove any newly dead intermediate values.
-    - Removes unused elements from tuple structures (e.g., `{a, b}[0]` → `a`).
+    This transformation is a composition of InlineLambdas, ConstantFolding, and CollapseTuple.
 
-    For example, it transforms:
+    Example:
     ```
-    let val = inp1
+    let val = {inp1, inp2}[0]
       if_ True then
         val
       else
-        inp2
+        inp3
     end
     ```
-    into:
+    is transformed into
     ```
     inp1
     ```
-
-    Args:
-        program (itir.Program): The program to transform.
-        collapse_tuple_uids (Optional[eve_utils.UIDGenerator], optional): UID generator
-            used for deduplicating tuple field accesses during tuple collapsing.
-        offset_provider_type (common.OffsetProviderType): Strategy used for resolving
-            tuple field accesses.
-
-    Returns:
-        itir.Program: A semantically equivalent program with dead code eliminated.
     """
     # ensure all constant let bindings are inlined
     # `let var=True in if_(var, val1, val2) end` -> `if_(True, val1, val2)`
@@ -70,7 +55,7 @@ def dead_code_elimination(
 
     # inline again since after constant folding some expressions might not be referenced anymore,
     # e.g. `let field = as_fieldop(...) in val1 end` -> `val1`.
-    # TODO(tehrengruber): If we first rearrange the tree such that let bindings are placed as
+    # TODO(tehrengruber): If we first re-arrange the tree such that let bindings are placed as
     #  close as possible to references to them we don't need to inline again here.
     # note: `force_inline_lambda_args` increases the size of the tree and may not be required for
     # dead-code-elimination, but is needed later since the domain inference cannot handle "user"
