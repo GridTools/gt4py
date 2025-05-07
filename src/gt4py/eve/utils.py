@@ -414,10 +414,7 @@ def lru_cache(  # redefinition of unused function
 
     Be careful: `key(obj1) == key(obj2)` must imply `obj1 == obj2`.
 
-    >>> def key_fn(x):
-    ...     return id(x)
-
-    >>> @lru_cache(key=key_fn)
+    >>> @lru_cache(key=id)
     ... def func(x):
     ...     print("called")
     ...     return x
