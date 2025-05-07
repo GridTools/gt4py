@@ -445,8 +445,8 @@ def lru_cache(
                     **{k: hashable_by(key, arg) for k, arg in kwargs.items()},
                 )
 
-            inner.cache_parameters = cached_func.cache_parameters
-            inner.cache_info = cached_func.cache_info
+            inner.cache_parameters = cached_func.cache_parameters  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
+            inner.cache_info = cached_func.cache_info  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
 
             return typing.cast(Callable[_P, _T], inner)
 
