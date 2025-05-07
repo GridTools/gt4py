@@ -432,7 +432,8 @@ def lru_cache(
 
     def _decorator(func: Callable[_P, _T]) -> Callable[_P, _T]:
         if key:
-            assert not typed, "Cannot use both 'key' and 'typed'"
+            if typed:
+                raise ValueError("Cannot use both 'key' and 'typed'")
 
             @functools.lru_cache(maxsize=maxsize, typed=False)
             def cached_func(*args: HashableBy, **kwargs: HashableBy) -> _T:
