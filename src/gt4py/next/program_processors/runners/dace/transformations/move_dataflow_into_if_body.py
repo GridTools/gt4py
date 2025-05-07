@@ -434,7 +434,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 assert node_to_remove.desc(sdfg).transient
                 sdfg.remove_data(node_to_remove.data, validate=False)
 
-        # Remove the original nodes.
+        # Remove the original nodes (data descriptors were deleted in the loop above).
         state.remove_nodes_from(all_relocatable_dataflow)
 
     def _update_symbol_mapping(
