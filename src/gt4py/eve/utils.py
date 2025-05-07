@@ -408,7 +408,7 @@ hashable_by_id = hashable_by(id)
 def lru_cache(
     func: Optional[Callable[_P, _T]] = None,
     *,
-    key: Optional[Callable[_P, Any]] = None,
+    key: Optional[Callable[_P, int]] = None,
     maxsize: Optional[int] = 128,
     typed: bool = False,
 ) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
