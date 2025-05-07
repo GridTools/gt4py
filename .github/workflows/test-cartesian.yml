@@ -56,4 +56,4 @@ jobs:
         CXX: g++
         CC: gcc
       shell: bash
-      run: uvx nox -s 'test_cartesian-${{ matrix.python-version }}(${{ matrix.codegen-factor }}, cpu)'
+      run: uv run --script noxfile.py -s 'test_cartesian-${{ matrix.python-version }}(${{ matrix.codegen-factor }}, cpu)'

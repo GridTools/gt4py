@@ -55,7 +55,7 @@ jobs:
         # Force a specific compiler for setuptools/distutils (used in gt4py.cartesian)
         CXX: g++
         CC: gcc
-      run: uvx nox -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
+      run: uv run --script noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
     - name: Notify slack
       if: ${{ failure() }}

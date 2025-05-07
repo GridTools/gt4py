@@ -50,4 +50,4 @@ jobs:
         GT4PY_CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "origin/${{ github.base_ref }}"
         GT4PY_CI_NOX_VERBOSE: 1
       shell: bash
-      run: uvx nox -s 'test_next-${{ matrix.python-version }}(${{ matrix.codegen-factor }}, cpu, ${{ matrix.mesh-factor }})'
+      run: uv run --script noxfile.py -s 'test_next-${{ matrix.python-version }}(${{ matrix.codegen-factor }}, cpu, ${{ matrix.mesh-factor }})'
