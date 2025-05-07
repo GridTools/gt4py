@@ -50,7 +50,6 @@ VERBOSE: Final = os.environ.get(ENV_VAR_VERBOSE, "").lower() in [
     "true",
 ]
 
-_changed_files_from_commit: dict[str, list[str]] = {}
 _metadata_registry: dict[str, types.SimpleNamespace] = {}
 
 
@@ -183,16 +182,13 @@ def is_required_by_repo_changes(
     if not commit_spec:
         return True
 
-    if commit_spec not in _changed_files_from_commit:
-        cmd_args = ["git", "diff", "--name-only", commit_spec]
-        if isinstance(session, str):
-            cwd = pathlib.Path(__file__).parent
-            out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=cwd).stdout
-        else:
-            out = session.run(*cmd_args, external=True, silent=True)  # type: ignore[assignment]
-        _changed_files_from_commit[commit_spec] = out.strip().split("\n")
-
-    changed_files = _changed_files_from_commit[commit_spec]
+    cmd_args = ["git", "diff", "--name-only", commit_spec]
+    if isinstance(session, str):
+        cwd = pathlib.Path(__file__).parent
+        out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=cwd).stdout
+    else:
+        out = session.run(*cmd_args, external=True, silent=True)  # type: ignore[assignment]
+    changed_files = out.strip().split("\n")
 
     session_name: str = getattr(session, "name", session)  # type: ignore[arg-type]
     unversioned_session_name = session_name.split("-")[0]
@@ -261,42 +257,32 @@ class NoxUtilsTestCase(unittest.TestCase):
             paths=["src/*"], ignore_paths=["tests/*"]
         )
 
-        # Source commit defined, `git diff` already cached
+        # Source commit defined
         commit_spec = "main"
         session = unittest.mock.Mock()
         session.name = "test_session-3.10(param1=foo,param2=bar)"
 
-        _changed_files_from_commit["main"] = ["src/foo.py"]
+        session.run.return_value = "src/foo.py"
         self.assertTrue(is_required_by_repo_changes(session, commit_spec))
 
-        _changed_files_from_commit["main"] = ["src/foo.py", "tests/test_foo.py"]
+        session.run.return_value = "src/foo.py\ntests/test_foo.py"
         self.assertTrue(is_required_by_repo_changes(session, commit_spec))
 
-        _changed_files_from_commit["main"] = ["tests/test_foo.py"]
+        session.run.return_value = "tests/test_foo.py"
         self.assertFalse(is_required_by_repo_changes(session, commit_spec))
 
-        _changed_files_from_commit["main"] = ["docs/readme.md"]
+        session.run.return_value = "docs/readme.md"
         self.assertFalse(is_required_by_repo_changes(session, commit_spec))
 
-        # No need to run `git diff`, already cached
-        session.run.assert_not_called()
-
-        # Source commit defined, `git diff` not cached
-        commit_spec = "not_cached_commit"
-        session = unittest.mock.Mock(run=lambda *args, **kwargs: "src/bar.py\nsrc/baz.py")
-        session.name = "test_session-3.10(param1=foo,param2=bar)"
-
+        session.run.return_value = "src/bar.py\nsrc/baz.py"
         self.assertTrue(is_required_by_repo_changes(session, commit_spec))
-        self.assertEqual(
-            _changed_files_from_commit["not_cached_commit"], ["src/bar.py", "src/baz.py"]
-        )
 
         # Undefined source commit
         with unittest.mock.patch.dict(os.environ, {}):
             session = unittest.mock.Mock()
             session.name = "test_session-3.10(param1=foo,param2=bar)"
 
-            self.assertTrue(is_required_by_repo_changes(session, commit_spec))
+            self.assertTrue(is_required_by_repo_changes(session))
             session.run.assert_not_called()
 
 
