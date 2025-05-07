@@ -107,8 +107,12 @@ class ConstantFolding(
     enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     @classmethod
-    def apply(cls, node: ir.Node) -> ir.Node:
-        node = cls().visit(node)
+    def apply(
+        cls, node: ir.Node, enabled_transformations: Optional[Transformation] = None
+    ) -> ir.Node:
+        enabled_transformations = enabled_transformations or cls.Transformation.all()
+
+        node = cls(enabled_transformations=enabled_transformations).visit(node)
         return UndoCanonicalizeMinus().visit(node)
 
     def transform_canonicalize_op_funcall_symref_literal(

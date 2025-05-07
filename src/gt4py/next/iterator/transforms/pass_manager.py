@@ -13,6 +13,7 @@ from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
     expand_library_functions,
+    dead_code_elimination,
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
@@ -78,16 +79,9 @@ def apply_common_transforms(
     #  test_can_deref. We didn't notice previously as FieldOpFusion did this implicitly everywhere.
     ir = inline_lifts.InlineLifts().visit(ir)
 
-    # note: this increases the size of the tree
-    # Inline. The domain inference can not handle "user" functions, e.g. `let f = λ(...) → ... in f(...)`
-    ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
-    # required in order to get rid of expressions without a domain (e.g. when a tuple element is never accessed)
-    ir = CollapseTuple.apply(
-        ir,
-        enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
-        uids=collapse_tuple_uids,
-        offset_provider_type=offset_provider_type,
-    )  # type: ignore[assignment]  # always an itir.Program
+    ir = dead_code_elimination.dead_code_elimination(
+        ir, collapse_tuple_uids=collapse_tuple_uids, offset_provider_type=offset_provider_type
+    )  # domain inference does not support dead-code
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir
     )  # domain inference does not support dynamic offsets yet
@@ -195,14 +189,11 @@ def apply_common_transforms(
 def apply_fieldview_transforms(
     ir: itir.Program, *, offset_provider: common.OffsetProvider
 ) -> itir.Program:
+    offset_provider_type = common.offset_provider_to_type(offset_provider)
+
     ir = inline_fundefs.InlineFundefs().visit(ir)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
-    ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lambda_args=True)
-    ir = CollapseTuple.apply(
-        ir,
-        enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
-        offset_provider_type=common.offset_provider_to_type(offset_provider),
-    )  # type: ignore[assignment] # type is still `itir.Program`
+    ir = dead_code_elimination.dead_code_elimination(ir, offset_provider_type=offset_provider_type)
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir
     )  # domain inference does not support dynamic offsets yet

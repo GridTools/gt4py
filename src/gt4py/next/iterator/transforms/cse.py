@@ -230,6 +230,9 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
                     ),
                     **kwargs,
                 )
+        else:
+            # we don't want to collect any expression, but still need to track all symbol refs
+            super().visit(node, state=self.State({}, set(), used_symbol_ids), **kwargs)
 
         if isinstance(node, SymbolTableTrait):
             # remove symbols used in child nodes if they are declared in the current node
