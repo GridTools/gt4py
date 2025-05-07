@@ -417,7 +417,9 @@ def as_fieldop(
     @TypeSynthesizer
     def applied_as_fieldop(
         *fields: ts.TupleType,
-        shift_results: list[set[tuple[itir.OffsetLiteral, ...]]],
+        # For each stencil parameter all locations it is `deref`ed on
+        #  see :func:`gt4py.next.iterator.transforms.trace_stencil`.
+        shift_sequences_per_param: list[set[tuple[itir.OffsetLiteral, ...]]],
     ) -> ts.FieldType | ts.DeferredType:
         if any(
             isinstance(el, ts.DeferredType)
@@ -433,17 +435,17 @@ def as_fieldop(
             deduced_domain = None
             output_dims: list[common.Dimension] = []
             if offset_provider_type is not None:
-                for i, field in enumerate(new_fields):
+                for field, shift_sequences in zip(
+                    new_fields, shift_sequences_per_param, strict=True
+                ):
                     for el in type_info.primitive_constituents(field):
-                        input_dims = el.dims if isinstance(el, ts.FieldType) else []
-                        if shift_results:
-                            for shift_tuple in shift_results[
-                                i
-                            ]:  # Use shift tuple corresponding to the input field
+                        input_dims = type_info.extract_dims(el)
+                        if shift_sequences_per_param:
+                            for shift_sequence in shift_sequences:
                                 output_dims = common.promote_dims(
                                     output_dims,
                                     _resolve_dimensions(
-                                        input_dims, shift_tuple, offset_provider_type
+                                        input_dims, shift_sequence, offset_provider_type
                                     ),
                                 )
 

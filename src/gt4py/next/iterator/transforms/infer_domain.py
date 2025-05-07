@@ -24,7 +24,7 @@ from gt4py.next.iterator.ir_utils import (
 )
 from gt4py.next.iterator.transforms import constant_folding, trace_shifts
 from gt4py.next.iterator.type_system import inference as itir_type_inference
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import flatten_nested_tuple, tree_map
 
 
@@ -487,7 +487,7 @@ def infer_expr(
     domain = gtx_utils.tree_map(
         lambda d, t, a: _filter_domain_dimensions(
             d,
-            t.dims if not isinstance(t, ts.ScalarType) else [],
+            type_info.extract_dims(t),
             additional_dims=a,
         )
         if not isinstance(t, ts.DeferredType) and isinstance(d, domain_utils.SymbolicDomain)

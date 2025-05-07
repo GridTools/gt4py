@@ -568,13 +568,14 @@ class ITIRTypeInference(eve.NodeTranslator):
             assert isinstance(tuple_.type, ts.TupleType)
             return tuple_.type.types[index]
 
-        # Collect shift_results and pass them as a kwarg to TypeSynthesizer:applied_as_fieldop.
-        # The node is available here, but not within the TypeSynthesizer, so we handle it here.
-        shifts = {}
+        # Additional information beyond what is given by the argument types
+        syntactic_info = {}
         if is_applied_as_fieldop(node):
+            # Collect shifts and pass them as a kwarg to :func:`type_synthesizer.applied_as_fieldop`.
+            # The node is available here, but not within the `TypeSynthesizer`, so we handle it here.
             stencil = node.fun.args[0]
             referenced_fun_names = symbol_ref_utils.collect_symbol_refs(stencil)
-            shifts["shift_results"] = (
+            syntactic_info["shift_sequences_per_param"] = (
                 trace_shifts.trace_stencil(stencil, num_args=len(node.args))
                 if not referenced_fun_names
                 else []
@@ -582,7 +583,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)
-        result = fun(*args, **shifts, offset_provider_type=self.offset_provider_type)
+        result = fun(*args, **syntactic_info, offset_provider_type=self.offset_provider_type)
 
         if isinstance(result, ObservableTypeSynthesizer):
             assert not result.node
