@@ -63,10 +63,14 @@ repos:
   hooks:
   - id: noxfile-utils
     name: noxfile-utils checker
-    entry: python noxfile_utils.py
+    entry: >
+      bash -c 'uv export --no-hashes | grep "^\(mypy\|nox\)==" > .reqs.txt ; 
+               uv run --with-requirements .reqs.txt --script noxfile_utils.py ;
+               uv run --with-requirements .reqs.txt mypy noxfile_utils.py ;
+               rm .reqs.txt'
     language: python
     pass_filenames: false
-    additional_dependencies: ['nox>=2025.02.09', 'mypy[faster-cache]>=1.13.0']
+    additional_dependencies: [uv]
     stages: [pre-commit]
 
 - repo: local

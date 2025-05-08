@@ -288,7 +288,4 @@ class NoxUtilsTestCase(unittest.TestCase):
 
 # Run this file as a script to execute mypy checks and  unit tests.
 if __name__ == "__main__":
-    root_dir = pathlib.Path(__file__).parent
-    cmd_args = ["mypy", f"{root_dir / 'noxfile_utils.py'}"]
-    subprocess.run(cmd_args, cwd=str(root_dir), check=True)
     unittest.main()
