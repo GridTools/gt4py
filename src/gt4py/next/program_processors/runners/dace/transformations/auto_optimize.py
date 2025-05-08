@@ -26,7 +26,7 @@ def gt_auto_optimize(
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
-    blocking_only_if_independent_nodes: Optional[bool] = None,
+    blocking_only_if_independent_nodes: bool = True,
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
@@ -77,9 +77,9 @@ def gt_auto_optimize(
             one for all.
         blocking_dim: On which dimension blocking should be applied.
         blocking_size: How many elements each block should process.
-        blocking_only_if_independent_nodes: If `True` only apply loop blocking if
-            there are independent nodes in the Map, see the `require_independent_nodes`
-            option of the `LoopBlocking` transformation.
+        blocking_only_if_independent_nodes: If `True`, the default, only apply loop
+            blocking if there are independent nodes in the Map, see the
+            `require_independent_nodes` option of the `LoopBlocking` transformation.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
