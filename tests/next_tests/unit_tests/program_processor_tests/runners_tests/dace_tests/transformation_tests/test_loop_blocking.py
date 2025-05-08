@@ -303,8 +303,10 @@ def test_intermediate_access_node():
     state.remove_edge(edge)
 
     # Test if after the modification the SDFG still works
-    sdfg(a=a, b=b, c=c, N=N, M=M)
+    csdfg = sdfg.compile()
+    csdfg(a=a, b=b, c=c, N=N, M=M)
     assert np.allclose(ref, c)
+    del csdfg
 
     # Apply the transformation.
     count = sdfg.apply_transformations_repeated(
@@ -325,8 +327,10 @@ def test_intermediate_access_node():
     assert bottom_node is not top_node
 
     c[:] = 0
-    sdfg(a=a, b=b, c=c, N=N, M=M)
+    csdfg = sdfg.compile()
+    csdfg(a=a, b=b, c=c, N=N, M=M)
     assert np.allclose(ref, c)
+    del csdfg
 
 
 def test_chained_access() -> None:
@@ -341,8 +345,10 @@ def test_chained_access() -> None:
     ref = reff(a, b)
 
     # Before the optimization
-    sdfg(a=a, b=b, c=c, M=M, N=N)
+    csdfg = sdfg.compile()
+    csdfg(a=a, b=b, c=c, M=M, N=N)
     assert np.allclose(c, ref)
+    del csdfg
     c[:] = 0
 
     # Apply the transformation.
@@ -354,8 +360,10 @@ def test_chained_access() -> None:
     assert count == 1
 
     # Now run the SDFG to see if it is still the same
-    sdfg(a=a, b=b, c=c, M=M, N=N)
+    csdfg = sdfg.compile()
+    csdfg(a=a, b=b, c=c, M=M, N=N)
     assert np.allclose(c, ref)
+    del csdfg
 
     # Now look for the outer map.
     outer_map = None
@@ -1273,6 +1281,56 @@ def test_only_last_two_elements_sdfg():
     res = copy.deepcopy(ref)
 
     ref_comp(**ref)
-    sdfg(**res)
+    csdfg = sdfg.compile()
+    csdfg(**res)
+    del csdfg
 
     assert np.allclose(ref["c"], res["c"])
+
+
+def test_blocking_size_too_big():
+    """
+    Here the blocking size is larger than the size in that dimension. Thus the
+    transformation will not apply.
+    """
+    sdfg = dace.SDFG(util.unique_name("blocking_size_too_large"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "ab":
+        sdfg.add_array(
+            name,
+            shape=(20, 10),
+            dtype=dace.float64,
+        )
+
+    state.add_mapped_tasklet(
+        name="comp",
+        map_ranges=dict(i=f"0:20", j=f"0:10"),
+        inputs=dict(__in0=dace.Memlet("a[i, j]")),
+        outputs=dict(__out=dace.Memlet("b[i, j]")),
+        code="__out = __in0 + 1.0",
+        external_edges=True,
+    )
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=30,
+            blocking_parameter="j",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
+
+    # If we select a smaller size then it will work.
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=5,
+            blocking_parameter="j",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
