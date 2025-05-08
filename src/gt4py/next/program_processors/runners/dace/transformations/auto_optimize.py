@@ -154,6 +154,7 @@ def gt_auto_optimize(
 
         # Configure the Maps:
         #  Will also perform the GPU transformation.
+        # TODO(phimuell): Maybe switch it with the inside map optimization.
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
             gpu=gpu,
