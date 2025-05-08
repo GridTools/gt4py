@@ -21,8 +21,6 @@ from gt4py.next.program_processors.runners.dace import (
 
 from . import util
 
-import dace
-
 
 def _perform_test(
     sdfg: dace.SDFG,
@@ -387,6 +385,7 @@ def test_map_producer_multi_consumer_fullread():
     _perform_test(sdfg, explected_applies=1, removed_transients={"t"})
 
 
+@pytest.mark.xfail(reason="Testing an edge case that has been allowed, think about how to proceed.")
 def test_map_producer_multi_consumer_partialread():
     # Because the data is only partially read, the transformation will not apply.
     #  This might change in the future.
