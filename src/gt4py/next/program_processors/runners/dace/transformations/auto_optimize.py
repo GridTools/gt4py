@@ -373,20 +373,21 @@ def _gt_auto_configure_maps_and_strides(
     For a description of the arguments see the `gt_auto_optimize()` function.
     """
 
+    # We now set the iteration order of the Maps. For that we use `unit_strides_kind`
+    #  argument and if not supplied we guess depending if we are on the GPU or not.
     if unit_strides_kind is None:
         unit_strides_kind = (
             gtx_common.DimensionKind.HORIZONTAL if gpu else gtx_common.DimensionKind.VERTICAL
         )
-    if unit_strides_kind is not None:
-        # It is not possible to use the `unit_strides_dim` argument of the
-        #  function, because `LoopBlocking` will change the name of the parameter
-        #  but the dimension can still be identified by its "kind".
-        gtx_transformations.gt_set_iteration_order(
-            sdfg=sdfg,
-            unit_strides_kind=unit_strides_kind,
-            validate=validate,
-            validate_all=validate_all,
-        )
+    # It is not possible to use the `unit_strides_dim` argument of the
+    #  function, because `LoopBlocking`, if run, changed the name of the
+    #  parameter but the dimension can still be identified by its "kind".
+    gtx_transformations.gt_set_iteration_order(
+        sdfg=sdfg,
+        unit_strides_kind=unit_strides_kind,
+        validate=validate,
+        validate_all=validate_all,
+    )
 
     # NOTE: We have to set the strides of transients before the non-standard Memlets
     #   get expanded, i.e. turned into Maps because no `cudaMemcpy*()` call exists,
