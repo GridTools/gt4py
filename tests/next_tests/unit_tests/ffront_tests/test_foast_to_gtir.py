@@ -40,6 +40,7 @@ from gt4py.next.iterator.transforms import inline_lambdas
 from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.iterator import ir as itir
 
+
 Edge = gtx.Dimension("Edge")
 Vertex = gtx.Dimension("Vertex")
 V2EDim = gtx.Dimension("V2E", gtx.DimensionKind.LOCAL)
