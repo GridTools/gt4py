@@ -63,6 +63,8 @@ def gt_gpu_transformation(
     Notes:
         - In addition it might fuse Maps together that should not be fused. To prevent
             that you should set `try_removing_trivial_maps` to `False`.
+        - The function assumes that the iteration order has been set correctly before
+            it is called.
 
     Todo:
         - Currently only one block size for all maps is given, add more options.
@@ -338,6 +340,10 @@ def gt_set_gpu_blocksize(
         launch_bounds: The value for the launch bound that should be used.
         launch_factor: If no `launch_bounds` was given use the number of threads
             in a block multiplied by this number.
+
+    Note:
+        If a Map is found whose range is smaller than the specified block size for
+        that dimension then the block size for that map is reduced.
     """
     for dim in [1, 2, 3]:
         for arg, val in {
@@ -443,6 +449,12 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     three dimensional). If no value is specified then the block size `(32, 1, 1)`
     will be used an no launch bound will be be emitted.
 
+    If a Map is found whose iteration size in a particular dimension is smaller than
+    the block size, the block size for that dimension is reduced to that value. For
+    example, the block size for 2D Maps is `(32, 8, 1)` and a Map that only performs
+    four iteration in the second dimension, will get a block size of `(32, 4, 1)`.
+    Note that this modification will not influence the launch bound value.
+
     Args:
         block_size_Xd: The size of a thread block on the GPU for `X` dimensional maps.
         launch_bounds_Xd: The value for the launch bound that should be used for `X`
@@ -454,6 +466,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         - You should use the `gt_set_gpu_blocksize()` function.
         - "Over specification" is ignored, i.e. if `(32, 3, 1)` is passed as block
             size for 1 dimensional maps, then it is changed to `(32, 1, 1)`.
+        - In case the Map has more than 3 dimension, normal DaCe semantic is used.
     """
 
     _block_size_default: Final[tuple[int, int, int]] = (32, 1, 1)
@@ -564,16 +577,36 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     ) -> None:
         """Modify the map as requested."""
         gpu_map: dace_nodes.Map = self.map_entry.map
-        if len(gpu_map.params) == 1:
-            block_size = self.block_size_1d
+        map_size = gpu_map.range.size()
+        num_map_params = len(gpu_map.params)
+
+        # Because of a particularity of the DaCe code generator, the iteration
+        #  variable that is associated to the `x` dimension of the block is the
+        #  last parameter, i.e. `gpu_map.params[-1]`. The one for `y` the second last.
+        if num_map_params == 1:
+            block_size = list(self.block_size_1d)
             launch_bounds = self.launch_bounds_1d
-        elif len(gpu_map.params) == 2:
-            block_size = self.block_size_2d
+            dims_to_inspect = 1
+        elif num_map_params == 2:
+            block_size = list(self.block_size_2d)
             launch_bounds = self.launch_bounds_2d
+            dims_to_inspect = 2
         else:
-            block_size = self.block_size_3d
+            block_size = list(self.block_size_3d)
             launch_bounds = self.launch_bounds_3d
-        gpu_map.gpu_block_size = block_size
+            # If there are more than three dimensions DaCe will condense them into
+            #  the `z` dimension of the block, so we have to ignore the `z` dimension,
+            #  when we modify the block sizes.
+            dims_to_inspect = 3 if num_map_params == 3 else 2
+
+        # Cut down the block size.
+        # TODO(phimuell): Think if it is useful to also modify the launch bounds.
+        for i in range(dims_to_inspect):
+            map_dim_idx_to_inspect = num_map_params - 1 - i
+            if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
+                block_size[i] = map_size[map_dim_idx_to_inspect]
+
+        gpu_map.gpu_block_size = tuple(block_size)
         if launch_bounds is not None:  # Note: empty string has a meaning in DaCe
             gpu_map.gpu_launch_bounds = launch_bounds
 
