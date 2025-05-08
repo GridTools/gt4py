@@ -601,6 +601,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
 
         # Cut down the block size.
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
+        # TODO(phimuell): Also think of how to connect this with the loop blocking.
         for i in range(dims_to_inspect):
             map_dim_idx_to_inspect = num_map_params - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
