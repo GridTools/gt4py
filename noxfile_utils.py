@@ -43,7 +43,7 @@ ENV_VAR_PREFIX: Final = f"{prefix}_" if (prefix := os.environ.get("CI_NOX_PREFIX
 ENV_VAR_RUN_ONLY_IF_CHANGED_FROM: Final = f"{ENV_VAR_PREFIX}CI_NOX_RUN_ONLY_IF_CHANGED_FROM"
 ENV_VAR_VERBOSE: Final = f"{ENV_VAR_PREFIX}CI_NOX_VERBOSE"
 
-COMMIT_SPEC_FOR_CHANGES: Final = os.environ.get(ENV_VAR_RUN_ONLY_IF_CHANGED_FROM, "")
+TARGET_GIT_SPEC_FOR_CHANGES: Final = os.environ.get(ENV_VAR_RUN_ONLY_IF_CHANGED_FROM, "")
 VERBOSE: Final = os.environ.get(ENV_VAR_VERBOSE, "").lower() in [
     "1",
     "on",
@@ -151,7 +151,7 @@ def install_session_venv(
 
 def is_required_by_repo_changes(
     session: nox.Session | str,
-    commit_spec: str = COMMIT_SPEC_FOR_CHANGES,
+    target_git_spec: str = TARGET_GIT_SPEC_FOR_CHANGES,
     *,
     verbose: bool = VERBOSE,
 ) -> bool:
@@ -163,7 +163,7 @@ def is_required_by_repo_changes(
     Args:
         session:
             The nox session to check or a string representing the session name.
-        commit_spec:
+        target_git_spec:
             The git commit specification to use for determining changes (e.g., 'HEAD~1..HEAD').
             If empty, the function returns True, indicating all sessions are required.
         verbose:
@@ -179,10 +179,10 @@ def is_required_by_repo_changes(
         registered paths and not be in the ignore_paths.
         - Session metadata (paths and ignore_paths) is retrieved from the _metadata_registry.
     """
-    if not commit_spec:
+    if not target_git_spec:
         return True
 
-    cmd_args = ["git", "diff", "--name-only", commit_spec]
+    cmd_args = ["git", "diff", "--name-only", target_git_spec]
     if isinstance(session, str):
         cwd = pathlib.Path(__file__).parent
         out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=cwd).stdout
@@ -202,7 +202,7 @@ def is_required_by_repo_changes(
         print(
             f"\n[{session_name}]:\n"
             f"  - Required: {is_affected}\n"
-            f"  - Commit spec: {commit_spec!r}\n"
+            f"  - Target git spec: {target_git_spec!r}\n"
             f"  - File include patterns: {paths}\n"
             f"  - File exclude patterns: {ignore_paths}\n"
             f"  - Relevant files ({len(relevant_files)}/{len(changed_files)}):\n",
