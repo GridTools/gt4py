@@ -25,6 +25,22 @@ def offset_provider_type(request):
     return {"I": common.Dimension("I", kind=common.DimensionKind.HORIZONTAL)}
 
 
+@pytest.fixture
+def opaque_fun(request):
+    return im.ref(
+        "opaque_fun",
+        ts.FunctionType(
+            pos_only_args=[],
+            pos_or_kw_args={
+                "f": ts.DeferredType(constraint=None),
+                "g": ts.DeferredType(constraint=None),
+            },
+            kw_only_args={},
+            returns=ts.DeferredType(constraint=None),
+        ),
+    )
+
+
 def test_trivial():
     common = im.plus("x", "y")
     testee = im.plus(common, common)
@@ -321,3 +337,21 @@ def test_extraction_from_let_form():
 
     actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected
+
+
+def test_sym_ref_collection_from_lambda(opaque_fun):
+    # This is more a regression than a unit test. When `f` & `g` are collected, we don't want to
+    # collect subexpression from their body (as the pass does not recognize them to be evaluated),
+    # but still need to respect that `val` is used inside. Hence, when extracting `f` and `g,` the
+    # extracted lambda needs to be placed after the definition of `val`.
+    testee = im.let("val", 1)(
+        im.let(("f", im.lambda_()("val")), ("g", im.lambda_()("val")))(
+            im.call(opaque_fun)("f", "g")
+        )
+    )
+    expected = im.let("val", 1)(
+        im.let("_cs_1", im.lambda_()("val"))(im.call(opaque_fun)("_cs_1", "_cs_1"))
+    )
+
+    actual = CSE.apply(testee, within_stencil=True)
+    assert actual == expected  # no extraction should happen
