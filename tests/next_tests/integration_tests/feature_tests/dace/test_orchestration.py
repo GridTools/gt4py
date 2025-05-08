@@ -132,8 +132,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         # DaCe strides: number of elements to jump
         return arg.strides[axis] // arg.itemsize
 
-    # use SDFG hash for dace cache to avoid clashes between parallel pytest workers
-    with dace.config.set_temporary("cache", value="hash"):
+    # use SDFG unique folder in dace cache to avoid clashes between parallel pytest workers
+    with dace.config.set_temporary("cache", value="unique"):
         SDFG = sdfg.to_sdfg(connectivities=connectivities)
         cSDFG = SDFG.compile()
 
