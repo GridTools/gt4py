@@ -738,19 +738,15 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # TODO(phimuell): Think if we should expand on that.
         nb_independent_nodes = len(self._independent_nodes)
 
-        no_scots = set()
-
         for node in self._independent_nodes:
             if isinstance(node, dace_nodes.Tasklet):
                 if not all(iedge.data.is_empty() for iedge in state.in_edges(node)):
                     continue
                 nb_independent_nodes -= 1
-                no_scots.add(node)
                 for oedge in state.out_edges(node):
                     assert isinstance(oedge.dst, dace_nodes.AccessNode)
                     assert oedge.dst in self._independent_nodes
                     nb_independent_nodes -= 1
-                    no_scots.add(oedge.dst)
             assert nb_independent_nodes >= 0
 
         return nb_independent_nodes > 0
