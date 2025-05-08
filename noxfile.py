@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import pathlib
-import os
 import sys
 import types
 from collections.abc import Sequence
@@ -145,7 +144,7 @@ def test_cartesian(
         "*.lock",
         "*.toml",
         "*.yml",
-        "noxfile.py",
+        "noxfile*.py",
     ],
 )
 def test_eve(session: nox.Session) -> None:
@@ -279,7 +278,7 @@ def test_package(session: nox.Session) -> None:
         "*.lock",
         "*.toml",
         "*.yml",
-        "noxfile.py",
+        "noxfile*.py",
     ],
 )
 @nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
