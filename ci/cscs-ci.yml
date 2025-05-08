@@ -111,10 +111,10 @@ build_py310_image_aarch64:
   script:
   - cd /gt4py.src
   - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
-  - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__}"
+  - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
   - echo "GITHUB_PR=${GITHUB_PR}"
-  - export CI_NOX_RUN_ONLY_IF_CHANGED_FROM=$(curl https://api.github.com/repos/gridtools/gt4py/pulls/2024 2>/dev/null | jq -r '.base.ref')
-  - echo "CI_NOX_RUN_ONLY_IF_CHANGED_FROM=${GITHUB_BASE_REF}"
+  - export CI_NOX_RUN_ONLY_IF_CHANGED_FROM=$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.base.ref')
+  - echo "CI_NOX_RUN_ONLY_IF_CHANGED_FROM=${CI_NOX_RUN_ONLY_IF_CHANGED_FROM}"
   - NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
   - nox -s "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS"
   variables:
