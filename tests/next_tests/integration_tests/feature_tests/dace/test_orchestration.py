@@ -59,7 +59,7 @@ def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
             tmp_field, out_field
         )
 
-    # use unique cache name based on process id to avoid clashes between parallel pytest workers
+    # use unique SDFG folder in dace cache to avoid clashes between parallel pytest workers
     with dace.config.set_temporary("cache", value="unique"):
         sdfg()
 
@@ -132,7 +132,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         # DaCe strides: number of elements to jump
         return arg.strides[axis] // arg.itemsize
 
-    # use SDFG unique folder in dace cache to avoid clashes between parallel pytest workers
+    # use unique SDFG folder in dace cache to avoid clashes between parallel pytest workers
     with dace.config.set_temporary("cache", value="unique"):
         SDFG = sdfg.to_sdfg(connectivities=connectivities)
         cSDFG = SDFG.compile()
