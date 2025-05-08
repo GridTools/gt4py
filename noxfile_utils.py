@@ -228,7 +228,7 @@ def _filter_names(
     included = set(_filter(names, include_patterns) if include_patterns else names)
     excluded = set(_filter(included, exclude_patterns) if exclude_patterns else [])
 
-    return list(sorted(included - excluded))
+    return sorted(included - excluded)
 
 
 # -- Self unit tests --
