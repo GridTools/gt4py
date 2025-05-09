@@ -1,3 +1,5 @@
+#! /usr/bin/env -S uv run -q --script
+#
 # GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2024, ETH Zurich
@@ -5,19 +7,35 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+#
+# /// script
+# dependencies = ["nox>=2025.02.09"]
+# ///
 
 from __future__ import annotations
 
-import os
 import pathlib
+import sys
 import types
 from collections.abc import Sequence
-from typing import Final, Literal, TypeAlias
+from unittest import mock
+from typing import Any, Final, Literal, TypeAlias
 
 import nox
 
-#: This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
-#: is not guaranteed to be available in the venv where `nox` is running.
+# When running the `noxfile.py` as a script, the current directory is
+# added to the `sys.path`, so we can import other python file in this
+# directory directly, like `noxfile_utils.py`.
+# However, when running `nox` as a CLI tool, the current
+# directory is not added to the `sys.path`, so we need to add it manually.
+if (_folder := f"{pathlib.Path(__file__).parent!s}") not in sys.path:
+    sys.path.insert(0, _folder)
+
+import noxfile_utils as nox_utils
+
+
+# This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
+# is not guaranteed to be available in the venv where `nox` is running.
 NO_TESTS_COLLECTED_EXIT_CODE: Final = 5
 
 # -- nox configuration --
@@ -38,6 +56,9 @@ nox.options.sessions = [
     "test_storage-3.10(cpu)",
     "test_storage-3.11(cpu)",
 ]
+
+
+PYTHON_VERSIONS: Final[list[str]] = pathlib.Path(".python-versions").read_text().splitlines()
 
 # -- Parameter sets --
 DeviceOption: TypeAlias = Literal["cpu", "cuda11", "cuda12", "rocm4_3", "rocm5_0"]
@@ -69,8 +90,18 @@ CodeGenNextTestSettings = CodeGenTestSettings | {
 }
 
 
-# -- nox sessions --
-@nox.session(python=["3.10", "3.11"], tags=["cartesian"])
+# -- Sessions --
+@nox_utils.customize_session(
+    python=PYTHON_VERSIONS,
+    tags=["cartesian"],
+    ignore_paths=[  # In CI mode, skip when only gt4py.next or doc files have been updated
+        "src/gt4py/next/*",
+        "tests/next_tests/**",
+        "examples/**",
+        "*.md",
+        "*.rst",
+    ],
+)
 @nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
 @nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace])
 def test_cartesian(
@@ -83,17 +114,16 @@ def test_cartesian(
     codegen_settings = CodeGenTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
 
-    _install_session_venv(
+    nox_utils.install_session_venv(
         session,
         extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
         groups=["test"],
     )
 
-    num_processes = os.environ.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
     session.run(
-        *f"pytest --cache-clear -sv -n {num_processes} --dist loadgroup".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
@@ -104,16 +134,26 @@ def test_cartesian(
     )
 
 
-@nox.session(python=["3.10", "3.11"], tags=["cartesian", "next", "cpu"])
+@nox_utils.customize_session(
+    python=PYTHON_VERSIONS,
+    tags=["cartesian", "next", "cpu"],
+    paths=[  # In CI mode, run when gt4py.eve files (or package settings) are changed
+        "src/gt4py/eve/*",
+        "tests/eve_tests/*",
+        ".github/workflows/*",
+        "*.lock",
+        "*.toml",
+        "*.yml",
+        "noxfile*.py",
+    ],
+)
 def test_eve(session: nox.Session) -> None:
     """Run 'gt4py.eve' tests."""
 
-    _install_session_venv(session, groups=["test"])
-
-    num_processes = os.environ.get("NUM_PROCESSES", "auto")
+    nox_utils.install_session_venv(session, groups=["test"])
 
     session.run(
-        *f"pytest --cache-clear -sv -n {num_processes}".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         str(pathlib.Path("tests") / "eve_tests"),
         *session.posargs,
     )
@@ -123,11 +163,11 @@ def test_eve(session: nox.Session) -> None:
     )
 
 
-@nox.session(python=["3.10", "3.11"])
+@nox.session(python=PYTHON_VERSIONS, tags=["next"])
 def test_examples(session: nox.Session) -> None:
     """Run and test documentation workflows."""
 
-    _install_session_venv(session, extras=["testing"], groups=["docs", "test"])
+    nox_utils.install_session_venv(session, extras=["testing"], groups=["docs", "test"])
 
     session.run(*"jupytext docs/user/next/QuickstartGuide.md --to .ipynb".split())
     session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split())
@@ -145,7 +185,17 @@ def test_examples(session: nox.Session) -> None:
         )
 
 
-@nox.session(python=["3.10", "3.11"], tags=["next"])
+@nox_utils.customize_session(
+    python=PYTHON_VERSIONS,
+    tags=["next"],
+    ignore_paths=[  # In CI mode, skip when only gt4py.cartesian or doc files have been updated
+        "src/gt4py/cartesian/**",
+        "tests/cartesian_tests/**",
+        "examples/**",
+        "*.md",
+        "*.rst",
+    ],
+)
 @nox.parametrize(
     "meshlib",
     [
@@ -175,17 +225,16 @@ def test_next(
             mesh_markers.append("requires_atlas")
             groups.append("frameworks")
 
-    _install_session_venv(
+    nox_utils.install_session_venv(
         session,
         extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
         groups=groups,
     )
 
-    num_processes = os.environ.get("NUM_PROCESSES", "auto")
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
 
     session.run(
-        *f"pytest --cache-clear -sv -n {num_processes}".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
@@ -198,14 +247,14 @@ def test_next(
     )
 
 
-@nox.session(python=["3.10", "3.11"], tags=["cartesian", "next", "cpu"])
+@nox.session(python=PYTHON_VERSIONS, tags=["cartesian", "next", "cpu"])
 def test_package(session: nox.Session) -> None:
     """Run 'gt4py' package level tests."""
 
-    _install_session_venv(session, groups=["test"])
+    nox_utils.install_session_venv(session, groups=["test"])
 
     session.run(
-        *f"pytest --cache-clear -sv".split(),
+        *"pytest --cache-clear -sv".split(),
         str(pathlib.Path("tests") / "package_tests"),
         *session.posargs,
     )
@@ -218,7 +267,20 @@ def test_package(session: nox.Session) -> None:
     )
 
 
-@nox.session(python=["3.10", "3.11"], tags=["cartesian", "next"])
+@nox_utils.customize_session(
+    python=PYTHON_VERSIONS,
+    tags=["cartesian", "next"],
+    paths=[  # In CI mode, run when gt4py.storage files (or package settings) are changed
+        "src/gt4py/storage/**",
+        "src/gt4py/cartesian/backend/**",  # For DaCe storages
+        "tests/storage_tests/**",
+        ".github/workflows/**",
+        "*.lock",
+        "*.toml",
+        "*.yml",
+        "noxfile*.py",
+    ],
+)
 @nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
 def test_storage(
     session: nox.Session,
@@ -228,15 +290,14 @@ def test_storage(
 
     device_settings = DeviceTestSettings[device]
 
-    _install_session_venv(
+    nox_utils.install_session_venv(
         session, extras=["performance", "testing", *device_settings["extras"]], groups=["test"]
     )
 
-    num_processes = os.environ.get("NUM_PROCESSES", "auto")
     markers = " and ".join(device_settings["markers"])
 
     session.run(
-        *f"pytest --cache-clear -sv -n {num_processes}".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,
@@ -248,29 +309,22 @@ def test_storage(
     )
 
 
-# -- utils --
-def _install_session_venv(
-    session: nox.Session,
-    *args: str | Sequence[str],
-    extras: Sequence[str] = (),
-    groups: Sequence[str] = (),
-) -> None:
-    """Install session packages using uv."""
-    session.run_install(
-        "uv",
-        "sync",
-        *("--python", session.python),
-        "--no-dev",
-        *(f"--extra={e}" for e in extras),
-        *(f"--group={g}" for g in groups),
-        env={key: value for key, value in os.environ.items()}
-        | {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
-    )
-    for item in args:
-        session.run_install(
-            "uv",
-            "pip",
-            "install",
-            *((item,) if isinstance(item, str) else item),
-            env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
-        )
+@nox.session(python=False)
+def _is_required_by_repo_changes(session: nox.Session) -> None:
+    """
+    Evaluate if given sessions (session names passed as 'posargs'`) are required by changes in the repo.
+
+    Use `CI_NOX_RUN_ONLY_IF_CHANGED_FROM` env variable to pass the reference commit.
+
+    Example:
+        $ CI_NOX_RUN_ONLY_IF_CHANGED_FROM='main' CI_NOX_VERBOSE=1 nox -s _is_required_by_repo_changes -- test_cartesian
+    """
+
+    for arg in session.posargs:
+        if arg.startswith("--"):
+            session.error(f"Invalid argument: {arg}")
+        print(f"{arg}: {nox_utils.is_required_by_repo_changes(arg, verbose=True)}")
+
+
+if __name__ == "__main__":
+    nox.main()
