@@ -1334,3 +1334,88 @@ def test_blocking_size_too_big():
         validate_all=True,
     )
     assert count == 1
+
+
+def _make_loop_blocking_sdfg_with_semi_independent_map() -> (
+    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]
+):
+    import dace
+
+    sdfg = dace.SDFG(util.unique_name("sdfg_with_inner_semi_independent_map"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array("A", shape=(40, 3), dtype=dace.float64, transient=False)
+    for name in "BC":
+        sdfg.add_array(name, shape=(40, 8), dtype=dace.float64, transient=False)
+    sdfg.add_scalar("t", dtype=dace.float64, transient=True)
+
+    # Note that creating `T` as an array is not useful at all, a scalar would be
+    #  enough. The only reason for doing it is, that the Memlets inside and outside
+    #  the inner Map scope can refer to different data, and the outside Memlet
+    #  is dependent.
+    sdfg.add_array("T", shape=(8,), dtype=dace.float64, transient=True)
+
+    A, B, C, T, t = (state.add_access(name) for name in "ABCTt")
+
+    me, mx = state.add_map("main_comp", ndrange={"__i0": "0:40", "__i1": "0:8"})
+
+    # The inner computation on its own is not useful.
+    ime, imx = state.add_map("inner_comp", ndrange={"__inner": "1"})
+    itlet = state.add_tasklet(
+        "inner_tasklet",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in + 10.0",
+    )
+
+    # This is the dependent Tasklet.
+    dtlet = state.add_tasklet(
+        "dependent_tlet",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = __in1 + __in2",
+    )
+
+    state.add_edge(A, None, me, "IN_A", dace.Memlet("A[0:40, 1]"))
+    state.add_edge(me, "OUT_A", ime, "IN_A", dace.Memlet("A[__i0, 1]"))
+    me.add_scope_connectors("A")
+
+    state.add_edge(ime, "OUT_A", itlet, "__in", dace.Memlet("A[__i0, 1]"))
+    ime.add_scope_connectors("A")
+
+    state.add_edge(itlet, "__out", t, None, dace.Memlet("t[0]"))
+
+    # Here is the interesting part, on the inside of the inner Map scope, the output
+    #  Memlet refers to `t` the scalar, but on the outside the Memlet refers to
+    #  `T` and this also includes the blocking variable `__i1`.
+    state.add_edge(t, None, imx, "IN_t", dace.Memlet("t[0]"))
+    state.add_edge(imx, "OUT_t", T, None, dace.Memlet("T[__i1]"))
+    imx.add_scope_connectors("t")
+
+    state.add_edge(B, None, me, "IN_B", dace.Memlet("B[0:40, 0:8]"))
+    state.add_edge(me, "OUT_B", dtlet, "__in2", dace.Memlet("B[__i0, __i1]"))
+    state.add_edge(T, None, dtlet, "__in1", dace.Memlet("T[__i1]"))
+    me.add_scope_connectors("B")
+
+    state.add_edge(dtlet, "__out", mx, "IN_C", dace.Memlet("C[__i0, __i1]"))
+    state.add_edge(mx, "OUT_C", C, None, dace.Memlet("C[0:40, 0:8]"))
+    mx.add_scope_connectors("C")
+
+    sdfg.validate()
+
+    return sdfg, state, me, ime
+
+
+def test_loop_blocking_sdfg_with_semi_independent_map():
+    sdfg, state, me, ime = _make_loop_blocking_sdfg_with_semi_independent_map()
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1

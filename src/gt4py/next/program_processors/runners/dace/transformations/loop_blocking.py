@@ -447,17 +447,28 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 return None
 
         elif isinstance(node_to_classify, dace_nodes.MapEntry):
-            # We check a Map as a whole, thus we must modify the output edges,
-            #  because these are not the output edges of the MapEntry, but the one
-            #  of the associated MapExit. Furthermore, we have to add all nodes
-            #  of the scope to the independent nodes.
+            # We check a Map as a whole and add it as a whole to the set of the
+            #  independent nodes. For that reason we must modify `out_edges` since
+            #  now the outputs of the associated `MapExit` must be checked.
+            #  However, we have to run some Map specific checks.
+            # TODO(phimuell): Do we also have to modify `node_to_classify`?
             map_exit = state.exit_node(node_to_classify)
-            out_edges = list(state.out_edges(map_exit))
 
+            # The blocking parameter can not be used inside the Map scope.
             map_scope = state.scope_subgraph(node_to_classify)
             if self.blocking_parameter in map_scope.free_symbols:
                 return False
 
+            # There is an obscure case, where the Memlet on the inside of a Map scope
+            #  and the Memlet on the outside refer to different data, thus we have to
+            #  check that here. Note that we only have to do it here in this case
+            #  because normally it would be spotted above where we checked the input.
+            out_edges = list(state.out_edges(map_exit))
+            if any(self.blocking_parameter in out_edge.data.free_symbols for out_edge in out_edges):
+                return False
+
+            # Add all nodes of the Map scope, including entry and exit node to the
+            #  set of new independent nodes.
             new_independent_nodes.update(map_scope.nodes())
 
         elif isinstance(node_to_classify, dace.libraries.standard.nodes.Reduce):
@@ -573,11 +584,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     new_memlet_outside = dace.Memlet()
 
                 elif not isinstance(independent_node, dace_nodes.AccessNode):
-                    # For syntactical reasons there must be an access node on the
-                    #  outside of the (inner) scope, that acts as cache. The
-                    #  classification and this preconditions on SDFG should ensure
-                    #  that, but there are a few super hard edge cases.
-                    # TODO(phimuell): Add an intermediate here in this case
+                    # For syntactical reasons the boundary, i.e. independent nodes
+                    #  that have a connection to a dependent node, must be AccessNodes,
+                    #  because something is needed as cache. Thus if you hit this
+                    #  case then there is a bug in the `classify_node()` function
+                    #  or your SDFG is wrong.
+                    # NOTE: We do not allow direct connections between Tasklets.
                     raise NotImplementedError()
 
                 else:
