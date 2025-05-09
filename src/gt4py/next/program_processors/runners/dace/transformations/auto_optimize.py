@@ -154,6 +154,7 @@ def gt_auto_optimize(
 
         # Configure the Maps:
         #  Will also perform the GPU transformation.
+        # TODO(phimuell): Maybe switch it with the inside map optimization.
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
             gpu=gpu,
@@ -288,12 +289,20 @@ def _gt_auto_process_dataflow_inside_maps(
     validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
-    """Optimizes the dataflow inside the top level Maps of teh SDFG inplace.
+    """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
 
     For a description of the arguments see `gt_auto_optimize()`.
+
+    It is important that nested Maps are not fused together. The main reason is that
+    in most cases it is not beneficial and might prevent other optimization, as the
+    fusion (especially the parallel version) will create dependency of otherwise
+    unrelated dataflow. Furthermore, the majority, if not all, of these maps are
+    over a constant range, e.g. the number of neighbours, which is known at compile
+    time, so the compiler will fully unroll them anyway.
     """
 
-    # Constants should bot be arguments to a kernel but be present inside the body.
+    # Constants (tasklets are needed to write them into a variable) should not be
+    #  arguments to a kernel but be present inside the body.
     sdfg.apply_transformations_once_everywhere(
         gtx_transformations.GT4PyMoveTaskletIntoMap,
         validate=validate,
@@ -327,27 +336,6 @@ def _gt_auto_process_dataflow_inside_maps(
         validate=validate,
         validate_all=validate_all,
     )
-
-    fusion_transformation = gtx_transformations.MapFusion(
-        only_toplevel_maps=False,
-        only_inner_maps=True,  # TODO(phimuell): What about Maps in nested SDFGs?
-        allow_parallel_map_fusion=True,
-        allow_serial_map_fusion=True,
-        only_if_common_ancestor=False,  # TODO(phimuell): Should we?
-    )
-    # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
-    #   has been solved.
-    fusion_transformation._single_use_data = dace_analysis.FindSingleUseData().apply_pass(sdfg, {})
-
-    while True:
-        nb_applied = sdfg.apply_transformations_repeated(
-            fusion_transformation,
-            validate=validate,
-            validate_all=validate_all,
-        )
-        if nb_applied == 0:
-            break
-        gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
 
     return sdfg
 
