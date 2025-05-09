@@ -151,9 +151,22 @@ class MapFusion(dace_map_fusion.MapFusion):
 class MapFusionSerial(MapFusion):
     """Wrapper around `MapFusion` that only supports serial map fusion.
 
+    It overrides the `expressions()` class method. This means that the pattern
+    matching system will not look for the parallel Maps that will be rejected
+    anyway.
+
     Note:
-        This class exists only for the transition period.
+        This class is needed to handle some stencils that have a lot of Maps, where
+        serial Map fusion has to be run first to bring down the number of Maps.
+        This splitting, having separate classes for parallel and serial Map fusion
+        is where DaCe will go anyway.
     """
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [
+            dace.sdfg.utils.node_path_graph(cls.first_map_exit, cls.array, cls.second_map_entry)
+        ]
 
     def __init__(
         self,
@@ -167,14 +180,51 @@ class MapFusionSerial(MapFusion):
             **kwargs,
         )
 
+    def can_be_applied(
+        self,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        assert expr_index == 0
+        assert self.allow_parallel_map_fusion is False
+        assert self.allow_serial_map_fusion
+
+        for edge in graph.edges():
+            edge.data.try_initialize(sdfg, graph, edge)
+
+        return super().can_serial_map_fusion_be_applied(
+            graph=graph,
+            sdfg=sdfg,
+        )
+
+    def apply(
+        self,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
+    ) -> None:
+        assert self.expr_index == 0
+        assert self.allow_parallel_map_fusion is False
+        assert self.allow_serial_map_fusion
+
+        return super().apply_serial_map_fusion(
+            graph=graph,
+            sdfg=sdfg,
+        )
+
 
 @dace_properties.make_properties
 class MapFusionParallel(MapFusion):
-    """Wrapper around `MapFusion` that only supports parallel map fusion.
+    """Wrapper around `MapFusion` that only supports parallel map fusion."""
 
-    Note:
-        This class exists only for the transition period.
-    """
+    @classmethod
+    def expressions(cls) -> Any:
+        map_fusion_parallel_match = dace.sdfg.graph.OrderedMultiDiConnectorGraph()
+        map_fusion_parallel_match.add_nodes_from(
+            [cls.first_parallel_map_entry, cls.second_parallel_map_entry]
+        )
+        return [map_fusion_parallel_match]
 
     def __init__(
         self,
@@ -186,4 +236,37 @@ class MapFusionParallel(MapFusion):
             allow_serial_map_fusion=False,
             allow_parallel_map_fusion=True,
             **kwargs,
+        )
+
+    def can_be_applied(
+        self,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        assert expr_index == 0
+        assert self.allow_parallel_map_fusion
+        assert self.allow_serial_map_fusion is False
+
+        for edge in graph.edges():
+            edge.data.try_initialize(sdfg, graph, edge)
+
+        return super().can_parallel_map_fusion_be_applied(
+            graph=graph,
+            sdfg=sdfg,
+        )
+
+    def apply(
+        self,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
+    ) -> None:
+        assert self.expr_index == 0
+        assert self.allow_parallel_map_fusion
+        assert self.allow_serial_map_fusion is False
+
+        return super().apply_parallel_map_fusion(
+            graph=graph,
+            sdfg=sdfg,
         )

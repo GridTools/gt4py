@@ -223,26 +223,33 @@ def _gt_auto_process_top_level_maps(
 
         # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
 
-        fusion_transformation = gtx_transformations.MapFusion(
+        serial_map_fusion = gtx_transformations.MapFusionSerial(
+            only_toplevel_maps=True,
+        )
+        # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
+        #   has been solved.
+        serial_map_fusion._single_use_data = single_use_data
+
+        parallel_map_fusion = gtx_transformations.MapFusionParallel(
             only_toplevel_maps=True,
             # TODO(phimuell): Should we enable this flag?
             only_if_common_ancestor=False,
         )
-        # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
-        #   has been solved.
-        fusion_transformation._single_use_data = single_use_data
+        parallel_map_fusion._single_use_data = single_use_data
 
         # NOTE: Since parallel Map fusion matches _any_ two Maps running it on large
         #  SDFGs is expensive. Thus we run serial Map fusion first to reduce the search
         #  space. Then we run serial and parallel Map fusion together.
-        for allow_parallel_map_fusion in [False, True]:
-            fusion_transformation.allow_serial_map_fusion = True
-            fusion_transformation.allow_parallel_map_fusion = allow_parallel_map_fusion
-            sdfg.apply_transformations_repeated(
-                fusion_transformation,
-                validate=validate,
-                validate_all=validate_all,
-            )
+        sdfg.apply_transformations_repeated(
+            serial_map_fusion,
+            validate=validate,
+            validate_all=validate_all,
+        )
+        sdfg.apply_transformations_repeated(
+            [serial_map_fusion, parallel_map_fusion],
+            validate=validate,
+            validate_all=validate_all,
+        )
 
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.
