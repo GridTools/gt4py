@@ -499,6 +499,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             # We consider nodes that are directly connected to the outer map exit as
             #  dependent. This is an implementation detail to avoid some hard cases.
             #  The only exceptions are scalars which we will handle later.
+            # NOTE: We restrict ourself to scalars to make sure that no dynamic
+            #  allocation is needed. It could be extended to arrays later.
             if out_edge.dst is outer_exit:
                 if (
                     isinstance(node_to_classify, dace_nodes.AccessNode)
