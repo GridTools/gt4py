@@ -11,6 +11,7 @@ from typing import Any, Optional, Union
 
 import dace
 from dace import (
+    data as dace_data,
     properties as dace_properties,
     subsets as dace_subsets,
     transformation as dace_transformation,
@@ -386,6 +387,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         if state.in_degree(node_to_classify) == 0 or state.out_degree(node_to_classify) == 0:
             return None
 
+        # The outer MapExit is always classified as dependent.
+        if node_to_classify is outer_exit:
+            return False
+
         # To fully understand what is going on we have to look at the input and output
         #  edges of the node. We define them here to allow to modify them in certain
         #  cases.
@@ -493,10 +498,14 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         for out_edge in out_edges:
             # We consider nodes that are directly connected to the outer map exit as
             #  dependent. This is an implementation detail to avoid some hard cases.
-            # TODO(phimuell): We should handle this case at least for scalar
-            #  AccessNodes in that case we should generate a copy Tasklet inside
-            #  the nested Map.
+            #  The only exceptions are scalars which we will handle later.
             if out_edge.dst is outer_exit:
+                if (
+                    isinstance(node_to_classify, dace_nodes.AccessNode)
+                    and isinstance(node_to_classify.desc(sdfg), dace_data.Scalar)
+                    and out_edge.data.wcr is None
+                ):
+                    continue
                 return False
 
         # Now we have to look at incoming edges individually.
@@ -625,6 +634,54 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 #  inner serial map.
                 if edge_dst in self._independent_nodes:
                     continue
+
+                # Special case, when we find an AccessNode, referring to a scalar,
+                #  that is connected to the outer MapExit node, then we will insert
+                #  a copy Tasklet, thus the copy Tasklet will then serve as dependent
+                #  node that writes into the output.
+                if isinstance(independent_node, dace_nodes.AccessNode) and edge_dst is outer_exit:
+                    assert isinstance(independent_node.desc(sdfg), dace_data.Scalar)
+                    assert not out_edge.data.is_empty()
+
+                    copy_tlet = state.add_tasklet(
+                        name=f"loop_blocking_copy_tlet_{independent_node.data}_{id(out_edge)}",
+                        inputs={"__in"},
+                        outputs={"__out"},
+                        code="__out = __in",
+                    )
+
+                    # remove the current output edge from the state, but we need it.
+                    org_out_edge = out_edge
+                    state.remove_edge(org_out_edge)
+
+                    # Now create a new `out_node`, that connects the independent node
+                    #  with the copy Tasklet. We can use a plain Memlet for that.
+                    #  This is the edge that we will split later.
+                    out_edge = state.add_edge(
+                        independent_node,
+                        org_out_edge.src_conn,
+                        copy_tlet,
+                        "__in",
+                        dace.Memlet(f"{independent_node.data}[0]"),
+                    )
+
+                    # Create the edge that connects the copy Tasklet with the outer MapExit.
+                    #  Here we are copying the original Memlet, however, because the
+                    #  new source is a Tasklet, instead of an AccessNode we must clear
+                    #  the source subset.
+                    new_output_edge = state.add_edge(
+                        copy_tlet,
+                        "__out",
+                        outer_exit,
+                        org_out_edge.dst_conn,
+                        dace.Memlet.from_memlet(org_out_edge.data),
+                    )
+                    new_output_edge.data.src_subset = None
+                    assert new_output_edge.data.dst_subset is not None
+
+                    # Update `edge_dst` and mark the copy Tasklet as processed.
+                    edge_dst = copy_tlet
+                    relocated_nodes.add(copy_tlet)
 
                 # Now split `out_edge` such that it passes through the new inner entry.
                 #  We do not need to modify the subsets, i.e. replacing the variable

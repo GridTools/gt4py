@@ -1488,15 +1488,23 @@ def test_loop_blocking_only_independent_inner_map():
     assert new_scope_of_inner_map is not me
 
 
-def _make_loop_blocking_output_access_node() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.Tasklet, dace_nodes.AccessNode]
-):
+def _make_loop_blocking_output_access_node(
+    scaler_temp: bool,
+) -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.Tasklet, dace_nodes.AccessNode
+]:
     sdfg = dace.SDFG(util.unique_name("sdfg_with_direct_output_access_node"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array("A", shape=(40,), dtype=dace.float64, transient=False)
     sdfg.add_array("B", shape=(40, 10), dtype=dace.float64, transient=False)
-    sdfg.add_scalar("t", dtype=dace.float64, transient=True)
+
+    if scaler_temp:
+        sdfg.add_scalar("t", dtype=dace.float64, transient=True)
+    else:
+        # The only reason why we use an array is because we want to trigger another
+        #  code pass
+        sdfg.add_array("t", shape=(2,), dtype=dace.float64, transient=True)
 
     A, B, t = (state.add_access(name) for name in "ABt")
     me, mx = state.add_map("main_comp", ndrange={"__i0": "0:40", "__i1": "0:10"})
@@ -1520,16 +1528,25 @@ def _make_loop_blocking_output_access_node() -> (
     return sdfg, state, me, tlet, t
 
 
-def test_loop_blocking_direct_access_node():
-    sdfg, state, me, tlet, t = _make_loop_blocking_output_access_node()
+def test_loop_blocking_direct_access_node_array():
+    sdfg, state, me, tlet, t = _make_loop_blocking_output_access_node(False)
 
     scope_dict_before = state.scope_dict()
     assert scope_dict_before[tlet] is me
     assert scope_dict_before[t] is me
 
+    ref = {
+        "A": np.array(np.random.rand(40), dtype=np.float64, copy=True),
+        "B": np.array(np.random.rand(40, 10), dtype=np.float64, copy=True),
+    }
+    res = copy.deepcopy(ref)
+    csdfg_ref = sdfg.compile()
+    csdfg_ref(**ref)
+
     # Because of the direct connection, of `t` with the Map exit node and the resulting
     #  removal of `tlet` from the set of independent node, the transformation will
     #  not apply, by default, but if requested.
+    #  This is because the intermediate is an array.
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=2,
@@ -1552,10 +1569,64 @@ def test_loop_blocking_direct_access_node():
     )
     assert count == 1
 
-    # NOTE: If we support direct connections between an AccessNode and the MapExit
-    #  node this test will fail.
     scope_dict_after = state.scope_dict()
     assert isinstance(scope_dict_after[tlet], dace_nodes.MapEntry)
     assert scope_dict_after[tlet] is not me
     assert isinstance(scope_dict_after[t], dace_nodes.MapEntry)
     assert scope_dict_after[t] is not me
+    assert util.count_nodes(state, dace_nodes.Tasklet) == 1
+
+    csdfg_res = sdfg.compile()
+    csdfg_res(**res)
+    assert all(np.allclose(ref[name], res[name]) for name in ref)
+
+    del csdfg_ref, csdfg_res
+
+
+def test_loop_blocking_direct_access_node_scalar():
+    sdfg, state, me, tlet, t = _make_loop_blocking_output_access_node(True)
+
+    scope_dict_before = state.scope_dict()
+    original_tlets = util.count_nodes(state, dace_nodes.Tasklet, return_nodes=True)
+    assert scope_dict_before[tlet] is me
+    assert scope_dict_before[t] is me
+    assert len(original_tlets) == 1
+
+    ref = {
+        "A": np.array(np.random.rand(40), dtype=np.float64, copy=True),
+        "B": np.array(np.random.rand(40, 10), dtype=np.float64, copy=True),
+    }
+    res = copy.deepcopy(ref)
+    csdfg_ref = sdfg.compile()
+    csdfg_ref(**ref)
+
+    # Because the intermediate is a scalar, it will be handled and both
+    #  the scalar and the tasklet will be independent.
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=True,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    scope_dict_after = state.scope_dict()
+    new_tlets = util.count_nodes(state, dace_nodes.Tasklet, return_nodes=True)
+    assert scope_dict_after[tlet] is me
+    assert scope_dict_after[t] is me
+    assert len(new_tlets) == 2
+
+    new_copy_tlet: dace_nodes.Tasklet = next(
+        iter(ntlet for ntlet in new_tlets if ntlet not in original_tlets)
+    )
+    assert new_copy_tlet.label.startswith("loop_blocking_copy_tlet_t_")
+    assert new_copy_tlet.code == "__out = __in"
+
+    csdfg_res = sdfg.compile()
+    csdfg_res(**res)
+    assert all(np.allclose(ref[name], res[name]) for name in ref)
+
+    del csdfg_ref, csdfg_res
