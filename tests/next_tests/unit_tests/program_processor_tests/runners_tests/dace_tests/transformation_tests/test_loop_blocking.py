@@ -1491,8 +1491,6 @@ def test_loop_blocking_only_independent_inner_map():
 def _make_loop_blocking_output_access_node() -> (
     tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.Tasklet, dace_nodes.AccessNode]
 ):
-    import dace
-
     sdfg = dace.SDFG(util.unique_name("sdfg_with_direct_output_access_node"))
     state = sdfg.add_state(is_start_block=True)
 
