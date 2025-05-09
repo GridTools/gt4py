@@ -194,6 +194,22 @@ class MapFusionSerial(MapFusion):
         for edge in graph.edges():
             edge.data.try_initialize(sdfg, graph, edge)
 
+        # If the call back is given then proceed with it.
+        if self._apply_fusion_callback is not None:
+            first_map_entry: dace_nodes.MapEntry = graph.entry_node(self.first_map_exit)
+            second_map_entry: dace_nodes.MapEntry = self.second_map_entry
+
+            # Apply the call back.
+            if not self._apply_fusion_callback(
+                self,
+                first_map_entry,
+                second_map_entry,
+                graph,
+                sdfg,
+                expr_index,
+            ):
+                return False
+
         return super().can_serial_map_fusion_be_applied(
             graph=graph,
             sdfg=sdfg,
@@ -251,6 +267,22 @@ class MapFusionParallel(MapFusion):
 
         for edge in graph.edges():
             edge.data.try_initialize(sdfg, graph, edge)
+
+        # If the call back is given then proceed with it.
+        if self._apply_fusion_callback is not None:
+            first_map_entry = self.first_parallel_map_entry
+            second_map_entry = self.second_parallel_map_entry
+
+            # Apply the call back.
+            if not self._apply_fusion_callback(
+                self,
+                first_map_entry,
+                second_map_entry,
+                graph,
+                sdfg,
+                expr_index,
+            ):
+                return False
 
         return super().can_parallel_map_fusion_be_applied(
             graph=graph,
