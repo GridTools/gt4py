@@ -711,7 +711,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # TODO(phimuell): Use a less expensive method.
         dace.sdfg.propagation.propagate_memlets_state(sdfg, state)
 
-    def _test_if_blocking_is_favourable(
+    def _check_if_blocking_is_favourable(
         self,
         state: dace.SDFGState,
     ) -> bool:
