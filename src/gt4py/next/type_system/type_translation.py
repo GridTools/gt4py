@@ -56,7 +56,10 @@ def from_type_hint(
     *,
     globalns: Optional[dict[str, Any]] = None,
     localns: Optional[dict[str, Any]] = None,
-) -> ts.TypeSpec:
+) -> ts.TypeSpec:    
+    if type_hint is None:
+        raise ValueError("NoneType is not supported as a type hint. Please provide a valid type.")
+
     recursive_make_symbol = functools.partial(from_type_hint, globalns=globalns, localns=localns)
     extra_args: list = []
 
@@ -158,8 +161,7 @@ def from_type_hint(
                 kw_only_args={},  # TODO
                 returns=returns,
             )
-    raise ValueError(f"'{type_hint}' type is not supported.")
-
+    
 
 class UnknownPythonObject(ts.TypeSpec):
     _object: Any
