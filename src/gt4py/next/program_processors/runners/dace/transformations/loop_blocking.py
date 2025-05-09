@@ -327,6 +327,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             if not found_new_independent_node:
                 break
 
+        # Perform some cleaning on the independent nodes.
+        self._post_process_independent_nodes(state)
+
         # If requested check if the blocking is a good idea.
         if self.require_independent_nodes and (not self._check_if_blocking_is_favourable(state)):
             self._independent_nodes = None
@@ -490,6 +493,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         for out_edge in out_edges:
             # We consider nodes that are directly connected to the outer map exit as
             #  dependent. This is an implementation detail to avoid some hard cases.
+            # TODO(phimuell): We should handle this case at least for scalar
+            #  AccessNodes in that case we should generate a copy Tasklet inside
+            #  the nested Map.
             if out_edge.dst is outer_exit:
                 return False
 
@@ -525,6 +531,57 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # Loop ended normally, thus we update the list of independent nodes.
         self._independent_nodes.update(new_independent_nodes)
         return True
+
+    def _post_process_independent_nodes(
+        self,
+        state: dace.SDFGState,
+    ) -> None:
+        """Cleans the set of independent nodes.
+
+        This function is mostly there to handle cases that are not implemented.
+        This function might remove, nodes from the set of independent nodes.
+        """
+        assert self._independent_nodes is not None  # silence MyPy
+        outer_entry: dace_nodes.MapEntry = self.outer_entry  # for caching.
+
+        for node in list(self._independent_nodes):
+            # The only nodes that are important here, are the independent nodes at
+            #  the boundaries, i.e. whose outgoing edges, will be split.
+            if all(oedge.dst in self._independent_nodes for oedge in state.out_edges(node)):
+                continue
+
+            if isinstance(node, dace_nodes.AccessNode):
+                # This is actually the only case that is implemented, which is also the
+                #  only case that makes sense, as the AccessNode is needed as cache.
+                pass
+
+            elif isinstance(node, dace_nodes.Tasklet):
+                # This is a very odd case. It happens when when the AccessNode the
+                #  Tasklet writes to, is classified as dependent, reasons could be
+                #  that it writes directly to the output, i.e. is connected to the
+                #  MapExit. We will remove this Tasklet from the set of independent
+                #  nodes. However, we require that all of its inputs are AccessNodes
+                #  or the MapEntry.
+                if all(
+                    iedge.src is outer_entry
+                    or (
+                        iedge.src in self._independent_nodes
+                        and isinstance(iedge.src, dace_nodes.AccessNode)
+                    )
+                    for iedge in state.in_edges(node)
+                ):
+                    # TODO(phimuell): Do something smarter here.
+                    self._independent_nodes.remove(node)
+                else:
+                    # We would have to remove more nodes, from the set of independent
+                    #  node, but we do not implement that.
+                    # TODO(phimuell): Handle this case.
+                    self._independent_nodes.clear()
+
+            else:
+                # We can not handle this, so we will not handle this loop blocking at all.
+                self._independent_nodes.clear()
+                return
 
     def _rewire_map_scope(
         self,
@@ -576,7 +633,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 if out_edge.data.is_empty():
                     # `out_edge` is an empty Memlet that ensures its source, which is
                     #  independent, is sequenced before its destination, which is
-                    #  dependent. We now have to split it into two.
+                    #  dependent. We now have to split the Memlet into two.
                     # TODO(phimuell): Can we remove this edge? Is the map enough to
                     #   ensure proper sequencing?
                     new_in_conn = None

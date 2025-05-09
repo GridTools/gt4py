@@ -1486,3 +1486,78 @@ def test_loop_blocking_only_independent_inner_map():
     new_scope_of_inner_map = state.scope_dict()[ime]
     assert isinstance(new_scope_of_inner_map, dace_nodes.MapEntry)
     assert new_scope_of_inner_map is not me
+
+
+def _make_loop_blocking_output_access_node() -> (
+    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.Tasklet, dace_nodes.AccessNode]
+):
+    import dace
+
+    sdfg = dace.SDFG(util.unique_name("sdfg_with_direct_output_access_node"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array("A", shape=(40,), dtype=dace.float64, transient=False)
+    sdfg.add_array("B", shape=(40, 10), dtype=dace.float64, transient=False)
+    sdfg.add_scalar("t", dtype=dace.float64, transient=True)
+
+    A, B, t = (state.add_access(name) for name in "ABt")
+    me, mx = state.add_map("main_comp", ndrange={"__i0": "0:40", "__i1": "0:10"})
+    tlet = state.add_tasklet(
+        "inner_tasklet",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in + 10.0",
+    )
+
+    state.add_edge(A, None, me, "IN_A", dace.Memlet("A[0:40]"))
+    state.add_edge(me, "OUT_A", tlet, "__in", dace.Memlet("A[__i0]"))
+    me.add_scope_connectors("A")
+    state.add_edge(tlet, "__out", t, None, dace.Memlet("t[0]"))
+    state.add_edge(t, None, mx, "IN_B", dace.Memlet("B[__i0, __i1]"))
+    state.add_edge(mx, "OUT_B", B, None, dace.Memlet("B[0:40, 0:10]"))
+    mx.add_scope_connectors("B")
+
+    sdfg.validate()
+
+    return sdfg, state, me, tlet, t
+
+
+def test_loop_blocking_direct_access_node():
+    sdfg, state, me, tlet, t = _make_loop_blocking_output_access_node()
+
+    scope_dict_before = state.scope_dict()
+    assert scope_dict_before[tlet] is me
+    assert scope_dict_before[t] is me
+
+    # Because of the direct connection, of `t` with the Map exit node and the resulting
+    #  removal of `tlet` from the set of independent node, the transformation will
+    #  not apply, by default, but if requested.
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=True,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    # NOTE: If we support direct connections between an AccessNode and the MapExit
+    #  node this test will fail.
+    scope_dict_after = state.scope_dict()
+    assert isinstance(scope_dict_after[tlet], dace_nodes.MapEntry)
+    assert scope_dict_after[tlet] is not me
+    assert isinstance(scope_dict_after[t], dace_nodes.MapEntry)
+    assert scope_dict_after[t] is not me
