@@ -221,26 +221,28 @@ def _gt_auto_process_top_level_maps(
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
-        # TODO(phimuell): Switch to `FullMapFusion` once DaCe has
-        #   [parallel map fusion](https://github.com/spcl/dace/pull/1965).
         # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
-        # TODO(phimuell): Should we restrict parallel fusing to Maps that have
-        #   common data?
+
         fusion_transformation = gtx_transformations.MapFusion(
             only_toplevel_maps=True,
-            allow_parallel_map_fusion=True,
-            allow_serial_map_fusion=True,
+            # TODO(phimuell): Should we enable this flag?
             only_if_common_ancestor=False,
         )
         # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
         #   has been solved.
         fusion_transformation._single_use_data = single_use_data
 
-        sdfg.apply_transformations_repeated(
-            fusion_transformation,
-            validate=validate,
-            validate_all=validate_all,
-        )
+        # NOTE: Since parallel Map fusion matches _any_ two Maps running it on large
+        #  SDFGs is expensive. Thus we run serial Map fusion first to reduce the search
+        #  space. Then we run serial and parallel Map fusion together.
+        for allow_parallel_map_fusion in [False, True]:
+            fusion_transformation.allow_serial_map_fusion = True
+            fusion_transformation.allow_parallel_map_fusion = allow_parallel_map_fusion
+            sdfg.apply_transformations_repeated(
+                fusion_transformation,
+                validate=validate,
+                validate_all=validate_all,
+            )
 
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.

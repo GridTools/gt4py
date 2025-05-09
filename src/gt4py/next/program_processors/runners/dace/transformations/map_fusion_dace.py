@@ -239,26 +239,34 @@ class MapFusion(transformation.SingleStateTransformation):
         assert expr_index == self.expr_index
         assert self.expr_index in [0, 1], f"Found invalid 'expr_index' {self.expr_index}"
 
+        # NOTE: The way of this check is written to fit the usage of how the
+        #  transformation is used inside the auto optimizer, i.e. we have to reject
+        #  parallel Maps fast if they are not desired. This will become less of a
+        #  problem once DaCe has parallel Map fusion which will be a separate
+        #  entity.
+        if not (
+            (self.allow_serial_map_fusion and expr_index == 0)
+            or (self.allow_parallel_map_fusion and expr_index == 1)
+        ):
+            return False
+
         # To ensures that the `{src,dst}_subset` are properly set, run initialization.
         #  See [issue 1708](https://github.com/spcl/dace/issues/1703)
         for edge in graph.edges():
             edge.data.try_initialize(sdfg, graph, edge)
 
         # Now perform the dispatch.
-        if self.allow_serial_map_fusion and expr_index == 0:
+        if expr_index == 0:
             return self.can_serial_map_fusion_be_applied(
                 graph=graph,
                 sdfg=sdfg,
             )
-
-        elif self.allow_parallel_map_fusion and expr_index == 1:
+        elif expr_index == 1:
             return self.can_parallel_map_fusion_be_applied(
                 graph=graph,
                 sdfg=sdfg,
             )
-
-        # Non of the cases applied
-        return False
+        raise NotImplementedError("Unreachable code.")
 
     def apply(
         self,
@@ -275,10 +283,9 @@ class MapFusion(transformation.SingleStateTransformation):
             raise ValueError("Disabled serial and parallel map fusion.")
         assert self.expr_index in [0, 1]
 
-        # To ensures that the `{src,dst}_subset` are properly set, run initialization.
-        #  See [issue 1708](https://github.com/spcl/dace/issues/1703)
-        for edge in graph.edges():
-            edge.data.try_initialize(sdfg, graph, edge)
+        # As in [issue 1708](https://github.com/spcl/dace/issues/1703) we should here
+        #  also initialize the edges. However, for performance reasons we do not do
+        #  it instead we hope that `can_be_applied()` was called immediately before.
 
         # Now perform the dispatch.
         if self.expr_index == 0:
