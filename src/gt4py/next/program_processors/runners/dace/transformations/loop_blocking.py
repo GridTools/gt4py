@@ -328,7 +328,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 break
 
         # If requested check if the blocking is a good idea.
-        if self.require_independent_nodes and (not self._test_if_blocking_is_favourable(state)):
+        if self.require_independent_nodes and (not self._check_if_blocking_is_favourable(state)):
             self._independent_nodes = None
             return False
 
