@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 import numpy as np
+import sympy
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
@@ -142,6 +143,11 @@ class PythonCodegen(codegen.TemplatedGenerator):
             builtin_name = str(node.fun.id)
             return format_builtin(builtin_name, *args)
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
+
+    def visit_InfinityLiteral(
+        self, node: gtir.InfinityLiteral, args_map: dict[str, gtir.Node]
+    ) -> str:
+        return str(sympy.oo) if node == gtir.InfinityLiteral.POSITIVE else str(-sympy.oo)
 
     def visit_SymRef(self, node: gtir.SymRef, args_map: dict[str, gtir.Node]) -> str:
         symbol = str(node.id)

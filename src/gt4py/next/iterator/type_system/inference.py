@@ -448,7 +448,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     def visit_Temporary(self, node: itir.Temporary, *, ctx) -> ts.FieldType | ts.TupleType:
         domain = self.visit(node.domain, ctx=ctx)
-        assert isinstance(domain, it_ts.DomainType)
+        assert isinstance(domain, ts.DomainType)
         assert domain.dims != "unknown"
         assert node.dtype
         return type_info.apply_to_primitive_constituents(
@@ -510,6 +510,12 @@ class ITIRTypeInference(eve.NodeTranslator):
     def visit_Literal(self, node: itir.Literal, **kwargs) -> ts.ScalarType:
         assert isinstance(node.type, ts.ScalarType)
         return node.type
+
+    def visit_InfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
+        return ts.ScalarType(kind=ts.ScalarKind.INT32)
+
+    def visit_NegInfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
+        return ts.ScalarType(kind=ts.ScalarKind.INT32)
 
     def visit_SymRef(
         self, node: itir.SymRef, *, ctx: dict[str, ts.TypeSpec]
