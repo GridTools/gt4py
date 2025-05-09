@@ -110,15 +110,20 @@ build_py310_image_aarch64:
   image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
   - cd /gt4py.src
+  - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
+  - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
+  - echo "GITHUB_PR=${GITHUB_PR}"
+  - export CI_NOX_RUN_ONLY_IF_CHANGED_FROM="gh/$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.base.ref')"
+  - echo "CI_NOX_RUN_ONLY_IF_CHANGED_FROM=${CI_NOX_RUN_ONLY_IF_CHANGED_FROM}"
   - NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
-  - nox -e "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS"
+  - nox -s "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS"
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 20
-    NUM_PROCESSES: auto
     PYENV_VERSION: $PYVERSION
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
+    CI_NOX_VERBOSE: 1
 # .test_helper_x86_64:
 #   extends: [.container-runner-daint-gpu, .test_helper]
 #   parallel:
@@ -148,7 +153,7 @@ build_py310_image_aarch64:
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     # Another problem, observed in test stage, is that gpu tests hang in combination with CUDA MPS,
     # when high test parallelism is used.
-    NUM_PROCESSES: 32
+    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
 
 # test_py311_x86_64:
 #   extends: [.test_helper_x86_64]
