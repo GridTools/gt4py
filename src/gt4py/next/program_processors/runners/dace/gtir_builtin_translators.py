@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import TYPE_CHECKING, Any, Final, Iterable, Optional, Protocol, Sequence, TypeAlias
+from typing import TYPE_CHECKING, Any, Final, Iterable, Optional, Protocol, TypeAlias
 
 import dace
 from dace import subsets as dace_subsets
@@ -18,13 +18,10 @@ from dace import subsets as dace_subsets
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import (
-    common_pattern_matcher as cpm,
-    domain_utils,
-    ir_makers as im,
-)
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
+    gtir_domain,
     gtir_python_codegen,
     gtir_sdfg,
     gtir_sdfg_utils,
@@ -36,32 +33,6 @@ from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 if TYPE_CHECKING:
     from gt4py.next.program_processors.runners.dace import gtir_sdfg
-
-
-def get_domain_indices(
-    dims: Sequence[gtx_common.Dimension], origin: Optional[Sequence[dace.symbolic.SymExpr]]
-) -> dace_subsets.Indices:
-    """
-    Helper function to construct the list of indices for a field domain, applying
-    an optional origin in each dimension as start index.
-
-    Args:
-        dims: The field dimensions.
-        origin: The domain start index in each dimension. If set to `None`, assume all zeros.
-
-    Returns:
-        A list of indices for field access in dace arrays. As this list is returned
-        as `dace.subsets.Indices`, it should be converted to `dace.subsets.Range` before
-        being used in memlet subset because ranges are better supported throughout DaCe.
-    """
-    assert len(dims) != 0
-    index_variables = [
-        dace.symbolic.pystr_to_symbolic(gtir_sdfg_utils.get_map_variable(dim)) for dim in dims
-    ]
-    origin = [0] * len(index_variables) if origin is None else origin
-    return dace_subsets.Indices(
-        [index - start_index for index, start_index in zip(index_variables, origin, strict=True)]
-    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -130,7 +101,7 @@ class FieldopData:
         return FieldopData(outer_node, self.gt_type, tuple(outer_origin))
 
     def get_local_view(
-        self, domain: FieldopDomain, sdfg: dace.SDFG
+        self, domain: gtir_domain.DomainRange, sdfg: dace.SDFG
     ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
         """Helper method to access a field in local view, given the compute domain of a field operator."""
         if isinstance(self.gt_type, ts.ScalarType):
@@ -151,8 +122,8 @@ class FieldopData:
                 # The `make_field` constructor converts any local dimension, if present, to `ListType`
                 # element type, while leaving the field domain with all global dimensions.
                 assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
-                domain_dims = [dim for dim, _, _ in domain]
-                domain_indices = get_domain_indices(domain_dims, origin=None)
+                domain_dims = [dim for dim, _ in domain]
+                domain_indices = gtir_domain.get_domain_indices(domain_dims, origin=None)
                 it_indices = {
                     dim: gtir_dataflow.SymbolExpr(index, INDEX_DTYPE)
                     for dim, index in zip(domain_dims, domain_indices)
@@ -203,17 +174,6 @@ class FieldopData:
                 for i, stride in enumerate(outer_desc.strides)
             }
         )
-
-
-FieldopDomain: TypeAlias = list[
-    tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
-]
-"""
-Domain of a field operator represented as a list of tuples with 3 elements:
- - dimension definition
- - symbolic expression for lower bound (inclusive)
- - symbolic expression for upper bound (exclusive)
-"""
 
 
 FieldopResult: TypeAlias = FieldopData | tuple[FieldopData | tuple, ...]
@@ -283,8 +243,7 @@ class PrimitiveTranslator(Protocol):
     def __call__(
         self,
         node: gtir.Node,
-        sdfg: dace.SDFG,
-        state: dace.SDFGState,
+        ctx: gtir_sdfg.SDFGContext,
         sdfg_builder: gtir_sdfg.SDFGBuilder,
     ) -> FieldopResult:
         """Creates the dataflow subgraph representing a GTIR primitive function.
@@ -293,9 +252,8 @@ class PrimitiveTranslator(Protocol):
         for a specific GTIR primitive function.
 
         Args:
-            node: The GTIR node describing the primitive to be lowered
-            sdfg: The SDFG where the primitive subgraph should be instantiated
-            state: The SDFG state where the result of the primitive function should be made available
+            node: The GTIR node describing the primitive to be lowered.
+            ctx: The SDFG context where the GTIR node should be lowered.
             sdfg_builder: The object responsible for visiting child nodes of the primitive node.
 
         Returns:
@@ -308,10 +266,9 @@ class PrimitiveTranslator(Protocol):
 
 def _parse_fieldop_arg(
     node: gtir.Expr,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    domain: FieldopDomain,
+    domain: gtir_domain.DomainRange,
 ) -> (
     gtir_dataflow.IteratorExpr
     | gtir_dataflow.MemletExpr
@@ -319,51 +276,19 @@ def _parse_fieldop_arg(
 ):
     """Helper method to visit an expression passed as argument to a field operator."""
 
-    arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
+    arg = sdfg_builder.visit(node, ctx=ctx)
 
     if isinstance(arg, FieldopData):
-        return arg.get_local_view(domain, sdfg)
+        return arg.get_local_view(domain, ctx.sdfg)
     else:
         # handle tuples of fields
         return gtx_utils.tree_map(lambda targ: targ.get_local_view(domain))(arg)
 
 
-def get_field_layout(
-    domain: FieldopDomain,
-) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
-    """
-    Parse the field operator domain and generates the shape of the result field.
-
-    It should be enough to allocate an array with shape (upper_bound - lower_bound)
-    but this would require to use array offset for compensate for the start index.
-    Suppose that a field operator executes on domain [2,N-2], the dace array to store
-    the result only needs size (N-4), but this would require to compensate all array
-    accesses with offset -2 (which corresponds to -lower_bound). Instead, we choose
-    to allocate (N-2), leaving positions [0:2] unused. The reason is that array offset
-    is known to cause issues to SDFG inlining. Besides, map fusion will in any case
-    eliminate most of transient arrays.
-
-    Args:
-        domain: The field operator domain.
-
-    Returns:
-        A tuple of three lists containing:
-            - the domain dimensions
-            - the domain origin, that is the start indices in all dimensions
-            - the domain size in each dimension
-    """
-    if len(domain) == 0:
-        return [], [], []
-    domain_dims, domain_lbs, domain_ubs = zip(*domain)
-    domain_sizes = [(ub - lb) for lb, ub in zip(domain_lbs, domain_ubs)]
-    return list(domain_dims), list(domain_lbs), domain_sizes
-
-
 def _create_field_operator_impl(
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
-    domain: FieldopDomain,
+    domain: gtir_domain.DomainRange,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
     map_exit: dace.nodes.MapExit,
@@ -375,9 +300,8 @@ def _create_field_operator_impl(
     This method is called by `_create_field_operator()`.
 
     Args:
+        ctx: The SDFG context of the field operator.
         sdfg_builder: The object used to build the map scope in the provided SDFG.
-        sdfg: The SDFG that represents the scope of the field data.
-        state: The SDFG state where to create an access node to the field data.
         domain: The domain of the field operator that computes the field.
         output_edge: The dataflow write edge representing the output data.
         output_type: The GT4Py field type descriptor.
@@ -387,17 +311,12 @@ def _create_field_operator_impl(
         The field data descriptor, which includes the field access node in the
         given `state` and the field domain offset.
     """
+    sdfg, state, domain_parser = ctx.sdfg, ctx.state, ctx.domain_parser
     dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
 
     # the memory layout of the output field follows the field operator compute domain
-    field_dims, field_origin, field_shape = get_field_layout(domain)
-    if len(domain) == 0:
-        # The field operator computes a zero-dimensional field, and the data subset
-        # is set later depending on the element type (`ts.ListType` or `ts.ScalarType`)
-        field_subset = dace_subsets.Range([])
-    else:
-        field_indices = get_domain_indices(field_dims, field_origin)
-        field_subset = dace_subsets.Range.from_indices(field_indices)
+    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(domain, domain_parser)
+    field_subset = gtir_domain.get_field_subset(domain)
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         if output_edge.result.gt_dtype != output_type.dtype:
@@ -436,9 +355,8 @@ def _create_field_operator_impl(
 
 
 def _create_field_operator(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
-    domain: FieldopDomain,
+    ctx: gtir_sdfg.SDFGContext,
+    domain: gtir_domain.DomainRange,
     node_type: ts.FieldType | ts.TupleType,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     input_edges: Iterable[gtir_dataflow.DataflowInputEdge],
@@ -452,8 +370,7 @@ def _create_field_operator(
     fields: for each field, this method will call `_create_field_operator_impl()`.
 
     Args:
-        sdfg: The SDFG that represents the scope of the field data.
-        state: The SDFG state where to create an access node to the field data.
+        ctx: The SDFG context of the field operator.
         domain: The domain of the field operator that computes the field.
         node_type: The GT4Py type of the IR node that produces this field.
         sdfg_builder: The object used to build the map scope in the provided SDFG.
@@ -472,11 +389,8 @@ def _create_field_operator(
         }
     else:
         # create map range corresponding to the field operator domain
-        map_range = {
-            gtir_sdfg_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
-            for dim, lower_bound, upper_bound in domain
-        }
-    map_entry, map_exit = sdfg_builder.add_map("fieldop", state, map_range)
+        map_range = {gtir_sdfg_utils.get_map_variable(dim): dim_range for dim, dim_range in domain}
+    map_entry, map_exit = sdfg_builder.add_map("fieldop", ctx.state, map_range)
 
     # here we setup the edges passing through the map entry node
     for edge in input_edges:
@@ -488,57 +402,21 @@ def _create_field_operator(
         )
         output_edge = output_tree[0]
         return _create_field_operator_impl(
-            sdfg_builder, sdfg, state, domain, output_edge, node_type, map_exit
+            ctx, sdfg_builder, domain, output_edge, node_type, map_exit
         )
     else:
         # handle tuples of fields
         output_symbol_tree = gtir_sdfg_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
             lambda output_edge, output_sym: _create_field_operator_impl(
-                sdfg_builder, sdfg, state, domain, output_edge, output_sym.type, map_exit
+                ctx, sdfg_builder, domain, output_edge, output_sym.type, map_exit
             )
         )(output_tree, output_symbol_tree)
 
 
-def extract_domain(node: gtir.Node) -> FieldopDomain:
-    """
-    Visits the domain of a field operator and returns a list of dimensions and
-    the corresponding lower and upper bounds. The returned lower bound is inclusive,
-    the upper bound is exclusive: [lower_bound, upper_bound[
-    """
-
-    domain = []
-
-    def parse_range_boundary(expr: gtir.Expr) -> str:
-        return dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(expr))
-
-    if cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")):
-        for named_range in node.args:
-            assert cpm.is_call_to(named_range, "named_range")
-            assert len(named_range.args) == 3
-            axis = named_range.args[0]
-            assert isinstance(axis, gtir.AxisLiteral)
-            lower_bound, upper_bound = (parse_range_boundary(arg) for arg in named_range.args[1:3])
-            dim = gtx_common.Dimension(axis.value, axis.kind)
-            domain.append((dim, lower_bound, upper_bound))
-
-    elif isinstance(node, domain_utils.SymbolicDomain):
-        assert str(node.grid_type) in {"cartesian_domain", "unstructured_domain"}
-        for dim, drange in node.ranges.items():
-            domain.append(
-                (dim, parse_range_boundary(drange.start), parse_range_boundary(drange.stop))
-            )
-
-    else:
-        raise ValueError(f"Invalid domain {node}.")
-
-    return domain
-
-
 def translate_as_fieldop(
     node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> FieldopResult:
     """
@@ -563,7 +441,7 @@ def translate_as_fieldop(
     fieldop_expr, domain_expr = fun_node.args
 
     if cpm.is_call_to(fieldop_expr, "scan"):
-        return translate_scan(node, sdfg, state, sdfg_builder)
+        return translate_scan(node, ctx, sdfg_builder)
 
     if cpm.is_ref_to(fieldop_expr, "deref"):
         # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
@@ -582,24 +460,21 @@ def translate_as_fieldop(
         )
 
     # parse the domain of the field operator
-    domain = extract_domain(domain_expr)
+    domain = gtir_domain.extract_domain(domain_expr)
 
     # visit the list of arguments to be passed to the lambda expression
-    fieldop_args = [_parse_fieldop_arg(arg, sdfg, state, sdfg_builder, domain) for arg in node.args]
+    fieldop_args = [_parse_fieldop_arg(arg, ctx, sdfg_builder, domain) for arg in node.args]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     input_edges, output_edges = gtir_dataflow.translate_lambda_to_dataflow(
-        sdfg, state, sdfg_builder, stencil_expr, fieldop_args
+        ctx.sdfg, ctx.state, sdfg_builder, stencil_expr, fieldop_args
     )
 
-    return _create_field_operator(
-        sdfg, state, domain, node.type, sdfg_builder, input_edges, output_edges
-    )
+    return _create_field_operator(ctx, domain, node.type, sdfg_builder, input_edges, output_edges)
 
 
 def _construct_if_branch_output(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     domain: gtir.Expr,
     sym: gtir.Sym,
@@ -610,6 +485,9 @@ def _construct_if_branch_output(
     Helper function called by `translate_if()` to allocate a temporary field to store
     the result of an if expression.
     """
+
+    sdfg, state, domain_parser = ctx.sdfg, ctx.state, ctx.domain_parser
+
     assert true_br.gt_type == false_br.gt_type
     out_type = true_br.gt_type
 
@@ -622,7 +500,9 @@ def _construct_if_branch_output(
 
     assert isinstance(out_type, ts.FieldType)
     assert isinstance(sym.type, ts.FieldType)
-    dims, origin, shape = get_field_layout(extract_domain(domain))
+    dims, origin, shape = gtir_domain.get_field_layout(
+        gtir_domain.extract_domain(domain), domain_parser
+    )
     assert dims == out_type.dims
 
     if isinstance(out_type.dtype, ts.ScalarType):
@@ -698,14 +578,15 @@ def _write_if_branch_output(
 
 def translate_if(
     node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> FieldopResult:
     """Generates the dataflow subgraph for the `if_` builtin function."""
     assert cpm.is_call_to(node, "if_")
     assert len(node.args) == 3
     cond_expr, true_expr, false_expr = node.args
+
+    sdfg, state = ctx.sdfg, ctx.state
 
     # expect condition as first argument
     if_stmt = gtir_python_codegen.get_source(cond_expr)
@@ -738,16 +619,8 @@ def translate_if(
     sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not ({if_stmt})")))
     sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
-    true_br_result = sdfg_builder.visit(
-        true_expr,
-        sdfg=sdfg,
-        head_state=true_state,
-    )
-    false_br_result = sdfg_builder.visit(
-        false_expr,
-        sdfg=sdfg,
-        head_state=false_state,
-    )
+    true_br_result = sdfg_builder.visit(true_expr, ctx=ctx.clone(true_state))
+    false_br_result = sdfg_builder.visit(false_expr, ctx=ctx.clone(false_state))
 
     if isinstance(node.type, ts.TupleType):
         symbol_tree = gtir_sdfg_utils.make_symbol_tree("x", node.type)
@@ -762,11 +635,9 @@ def translate_if(
             domain,
             true_br,
             false_br,
-            sdfg=sdfg,
-            state=state,
+            ctx=ctx,
             sdfg_builder=sdfg_builder: _construct_if_branch_output(
-                sdfg,
-                state,
+                ctx,
                 sdfg_builder,
                 domain,
                 sym,
@@ -780,15 +651,18 @@ def translate_if(
             false_br_result,
         )
         gtx_utils.tree_map(
-            lambda src, dst, state=true_state: _write_if_branch_output(sdfg, state, src, dst)
+            lambda src, dst, sdfg=ctx.sdfg, state=true_state: _write_if_branch_output(
+                sdfg, state, src, dst
+            )
         )(true_br_result, node_output)
         gtx_utils.tree_map(
-            lambda src, dst, state=false_state: _write_if_branch_output(sdfg, state, src, dst)
+            lambda src, dst, sdfg=ctx.sdfg, state=false_state: _write_if_branch_output(
+                sdfg, state, src, dst
+            )
         )(false_br_result, node_output)
     else:
         node_output = _construct_if_branch_output(
-            sdfg,
-            state,
+            ctx,
             sdfg_builder,
             node.annex.domain,
             im.sym("x", node.type),
@@ -803,8 +677,7 @@ def translate_if(
 
 def translate_index(
     node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> FieldopResult:
     """
@@ -815,10 +688,12 @@ def translate_index(
     assert cpm.is_call_to(node, "index")
     assert isinstance(node.type, ts.FieldType)
 
+    sdfg, state = ctx.sdfg, ctx.state
+
     assert "domain" in node.annex
-    domain = extract_domain(node.annex.domain)
+    domain = gtir_domain.extract_domain(node.annex.domain)
     assert len(domain) == 1
-    dim, _, _ = domain[0]
+    dim, _ = domain[0]
     dim_index = gtir_sdfg_utils.get_map_variable(dim)
 
     index_data, _ = sdfg_builder.add_temp_scalar(sdfg, INDEX_DTYPE)
@@ -846,9 +721,7 @@ def translate_index(
         gtir_dataflow.EmptyInputEdge(state, index_write_tasklet),
     ]
     output_edge = gtir_dataflow.DataflowOutputEdge(state, index_value)
-    return _create_field_operator(
-        sdfg, state, domain, node.type, sdfg_builder, input_edges, (output_edge,)
-    )
+    return _create_field_operator(ctx, domain, node.type, sdfg_builder, input_edges, (output_edge,))
 
 
 def _get_data_nodes(
@@ -915,40 +788,30 @@ def _get_symbolic_value(
 
 def translate_literal(
     node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> FieldopResult:
     """Generates the dataflow subgraph for a `ir.Literal` node."""
     assert isinstance(node, gtir.Literal)
 
     data_type = node.type
-    data_node = _get_symbolic_value(sdfg, state, sdfg_builder, node.value, data_type)
+    data_node = _get_symbolic_value(ctx.sdfg, ctx.state, sdfg_builder, node.value, data_type)
 
     return FieldopData(data_node, data_type, origin=())
 
 
 def translate_make_tuple(
     node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> FieldopResult:
     assert cpm.is_call_to(node, "make_tuple")
-    return tuple(
-        sdfg_builder.visit(
-            arg,
-            sdfg=sdfg,
-            head_state=state,
-        )
-        for arg in node.args
-    )
+    return tuple(sdfg_builder.visit(arg, ctx=ctx) for arg in node.args)
 
 
 def translate_tuple_get(
     node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> FieldopResult:
     assert cpm.is_call_to(node, "tuple_get")
@@ -959,26 +822,21 @@ def translate_tuple_get(
     assert ti.is_integral(node.args[0].type)
     index = int(node.args[0].value)
 
-    data_nodes = sdfg_builder.visit(
-        node.args[1],
-        sdfg=sdfg,
-        head_state=state,
-    )
+    data_nodes = sdfg_builder.visit(node.args[1], ctx=ctx)
     if isinstance(data_nodes, FieldopData):
         raise ValueError(f"Invalid tuple expression {node}")
     unused_arg_nodes: Iterable[FieldopData] = gtx_utils.flatten_nested_tuple(
         tuple(arg for i, arg in enumerate(data_nodes) if i != index)
     )
-    state.remove_nodes_from(
-        [arg.dc_node for arg in unused_arg_nodes if state.degree(arg.dc_node) == 0]
+    ctx.state.remove_nodes_from(
+        [arg.dc_node for arg in unused_arg_nodes if ctx.state.degree(arg.dc_node) == 0]
     )
     return data_nodes[index]
 
 
 def translate_scalar_expr(
     node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> FieldopResult:
     assert isinstance(node, gtir.FunCall)
@@ -1002,11 +860,7 @@ def translate_scalar_expr(
         if visit_expr:
             # we visit the argument expression and obtain the access node to
             # a scalar data container, which will be connected to the tasklet
-            arg = sdfg_builder.visit(
-                arg_expr,
-                sdfg=sdfg,
-                head_state=state,
-            )
+            arg = sdfg_builder.visit(arg_expr, ctx=ctx)
             if not (isinstance(arg, FieldopData) and isinstance(node.type, ts.ScalarType)):
                 raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
             param = f"__arg{i}"
@@ -1022,14 +876,14 @@ def translate_scalar_expr(
     python_code = gtir_python_codegen.get_source(scalar_node)
     tasklet_node = sdfg_builder.add_tasklet(
         name="scalar_expr",
-        state=state,
+        state=ctx.state,
         inputs=set(connectors),
         outputs={"__out"},
         code=f"__out = {python_code}",
     )
     # create edges for the input data connectors
     for arg_node, conn in zip(args, connectors, strict=True):
-        state.add_edge(
+        ctx.state.add_edge(
             arg_node,
             None,
             tasklet_node,
@@ -1037,9 +891,9 @@ def translate_scalar_expr(
             dace.Memlet(data=arg_node.data, subset="0"),
         )
     # finally, create temporary for the result value
-    temp_name, _ = sdfg_builder.add_temp_scalar(sdfg, gtx_dace_utils.as_dace_type(node.type))
-    temp_node = state.add_access(temp_name)
-    state.add_edge(
+    temp_name, _ = sdfg_builder.add_temp_scalar(ctx.sdfg, gtx_dace_utils.as_dace_type(node.type))
+    temp_node = ctx.state.add_access(temp_name)
+    ctx.state.add_edge(
         tasklet_node,
         "__out",
         temp_node,
@@ -1052,8 +906,7 @@ def translate_scalar_expr(
 
 def translate_symbol_ref(
     node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> FieldopResult:
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
@@ -1066,7 +919,7 @@ def translate_symbol_ref(
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
     # We rely on the dace simplify pass to remove duplicated access nodes.
-    return _get_data_nodes(sdfg, state, sdfg_builder, symbol_name, gt_symbol_type)
+    return _get_data_nodes(ctx.sdfg, ctx.state, sdfg_builder, symbol_name, gt_symbol_type)
 
 
 if TYPE_CHECKING:
