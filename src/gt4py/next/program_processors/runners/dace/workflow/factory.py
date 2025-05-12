@@ -38,7 +38,6 @@ class DaCeWorkflowFactory(factory.Factory):
 
     class Params:
         auto_optimize: bool = False
-        single_use_program: bool = False
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
             lambda: config.CMAKE_BUILD_TYPE
@@ -58,15 +57,11 @@ class DaCeWorkflowFactory(factory.Factory):
             DaCeTranslationStepFactory,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
-            single_use_program=factory.SelfAttribute("..single_use_program"),
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
-    bindings = factory.LazyAttribute(
-        lambda o: functools.partial(
-            bindings_step.bind_sdfg,
-            single_use_program=o.single_use_program,
-        )
+    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
+        bindings_step.bind_sdfg
     )
     compilation = factory.SubFactory(
         DaCeCompilationStepFactory,
