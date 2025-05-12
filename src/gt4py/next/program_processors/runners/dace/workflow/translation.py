@@ -25,7 +25,7 @@ from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
     utils as gtx_dace_utils,
 )
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
 def _find_constant_symbols(
@@ -71,6 +71,14 @@ class DaCeTranslator(
     auto_optimize: bool
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
+    assume_immotable_offset_provider: bool = True
+    single_use_program: bool = False
+
+    # auto-optimize arguments
+    gpu_block_size: tuple[int, int, int] = (32, 8, 1)
+    make_persistent: bool = False
+    blocking_dim: Optional[common.Dimension] = None
+    blocking_size: int = 10
 
     def _language_settings(self) -> languages.LanguageSettings:
         return languages.LanguageSettings(
@@ -108,11 +116,13 @@ class DaCeTranslator(
                 gtx_transformations.gt_auto_optimize(
                     sdfg,
                     gpu=on_gpu,
-                    gpu_block_size=(32, 8, 1),  # TODO: make block size configurable
+                    gpu_block_size=self.gpu_block_size,
                     unit_strides_kind=unit_strides_kind,
                     constant_symbols=constant_symbols,
                     assume_pointwise=True,
-                    make_persistent=False,
+                    make_persistent=(True if self.single_use_program else self.make_persistent),
+                    blocking_dim=self.blocking_dim,
+                    blocking_size=self.blocking_size,
                 )
             elif on_gpu:
                 # We run simplify to bring the SDFG into a canonical form that the gpu transformations
@@ -138,19 +148,31 @@ class DaCeTranslator(
             auto_opt=self.auto_optimize,
             on_gpu=(self.device_type == core_defs.CUPY_DEVICE_TYPE),
         )
+        parameters = [
+            interface.Parameter(param.id, arg.type_)
+            if isinstance(arg, arguments.StaticArg)
+            else interface.Parameter(param.id, arg)
+            for param, arg in zip(program.params, inp.args.args)
+        ]
 
-        arg_types = tuple(
-            arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
-        )
-
-        param_types = tuple(
-            interface.Parameter(param, arg_type)
-            for param, arg_type in zip(sdfg.arg_names, arg_types)
-        )
+        if not self.assume_immotable_offset_provider:
+            parameters.extend(
+                interface.Parameter(
+                    name=connectivity_id,
+                    type_=ts.FieldType(
+                        dims=list(connectivity_type.domain),
+                        dtype=tt.from_dtype(connectivity_type.dtype),
+                    ),
+                )
+                for offset, connectivity_type in inp.args.offset_provider_type.items()
+                if isinstance(connectivity_type, common.NeighborConnectivityType)
+                and (connectivity_id := gtx_dace_utils.connectivity_identifier(offset))
+                in sdfg.arrays
+            )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
             stages.ProgramSource(
-                entry_point=interface.Function(program.id, param_types),
+                entry_point=interface.Function(program.id, tuple(parameters)),
                 source_code=sdfg.to_json(),
                 library_deps=tuple(),
                 language=languages.SDFG,

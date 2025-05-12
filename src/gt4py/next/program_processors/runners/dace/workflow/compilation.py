@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any
+import importlib
+from typing import Any, Callable, Sequence
 
 import dace
 import factory
@@ -18,6 +19,20 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache
+from gt4py.next.program_processors.runners.dace.workflow import factory as dace_workflow_factory
+
+
+def _get_call_args_callback(
+    module_name: str, python_code: str
+) -> Callable[
+    [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]], None
+]:
+    spec = importlib.util.spec_from_loader(module_name, loader=None)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    exec(python_code, module.__dict__)
+    assert dace_workflow_factory.GT_DACE_BINDING_FUNCTION_NAME in module.__dict__
+    return module.__dict__[dace_workflow_factory.GT_DACE_BINDING_FUNCTION_NAME]
 
 
 class CompiledDaceProgram(stages.ExtendedCompiledProgram):
@@ -25,17 +40,30 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
 
     # Sorted list of SDFG arguments as they appear in program ABI and corresponding data type;
     # scalar arguments that are not used in the SDFG will not be present.
-    sdfg_arglist: list[tuple[str, dace.dtypes.Data]]
+    sdfg_argtypes: list[dace.dtypes.Data]
 
-    def __init__(self, program: dace.CompiledSDFG, implicit_domain: bool):
+    sdfg_arglist_callback: Callable[
+        [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]],
+        None,
+    ]
+
+    def __init__(
+        self,
+        program: dace.CompiledSDFG,
+        binding_source: stages.BindingSource[languages.SDFG, languages.Python],
+        implicit_domain: bool,
+    ):
         self.sdfg_program = program
         self.implicit_domain = implicit_domain
+
         # `dace.CompiledSDFG.arglist()` returns an ordered dictionary that maps the argument
         # name to its data type, in the same order as arguments appear in the program ABI.
         # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
-        self.sdfg_arglist = [
-            (arg_name, arg_type) for arg_name, arg_type in program.sdfg.arglist().items()
-        ]
+        self.sdfg_argtypes = [arg_type for _, arg_type in program.sdfg.arglist().items()]
+
+        self.sdfg_arglist_callback = _get_call_args_callback(
+            program.sdfg.label, binding_source.source_code
+        )
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         result = self.sdfg_program(*args, **kwargs)
@@ -99,7 +127,10 @@ class DaCeCompiler(
 
             sdfg_program = sdfg.compile(validate=False)
 
-        return CompiledDaceProgram(sdfg_program, inp.program_source.implicit_domain)
+        assert inp.binding_source is not None
+        return CompiledDaceProgram(
+            sdfg_program, inp.binding_source, inp.program_source.implicit_domain
+        )
 
 
 class DaCeCompilationStepFactory(factory.Factory):

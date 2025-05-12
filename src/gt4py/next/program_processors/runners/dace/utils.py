@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal, Mapping, Union
+from typing import Final, Literal, Mapping, Optional, Union
 
 import dace
 
@@ -18,8 +18,8 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 # arrays for connectivity tables use the following prefix
-CONNECTIVITY_INDENTIFIER_PREFIX: Final[str] = "connectivity_"
-CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^connectivity_(.+)$")
+CONNECTIVITY_INDENTIFIER_PREFIX: Final[str] = "gt_conn_"
+CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^gt_conn_(.+)$")
 
 
 # regex to match the symbols for field shape and strides
@@ -53,12 +53,12 @@ def connectivity_identifier(name: str) -> str:
 
 
 def is_connectivity_identifier(
-    name: str, offset_provider_type: gtx_common.OffsetProviderType
+    name: str, offset_provider_type: Optional[gtx_common.OffsetProviderType] = None
 ) -> bool:
     m = CONNECTIVITY_INDENTIFIER_RE.match(name)
     if m is None:
         return False
-    return m[1] in offset_provider_type
+    return True if offset_provider_type is None else (m[1] in offset_provider_type)
 
 
 def is_connectivity_symbol(name: str, offset_provider_type: gtx_common.OffsetProviderType) -> bool:
