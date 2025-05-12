@@ -42,10 +42,8 @@ class DaCeBackendFactory(factory.Factory):
             DaCeWorkflowFactory,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
-            single_use_program=factory.SelfAttribute("..single_use_program"),
         )
         auto_optimize = factory.Trait(name_postfix="_opt")
-        single_use_program = False
 
     name = factory.LazyAttribute(
         lambda o: f"run_dace_{o.name_device}{o.name_cached}{o.name_postfix}"
@@ -59,7 +57,7 @@ class DaCeBackendFactory(factory.Factory):
 run_dace_cpu = DaCeBackendFactory(auto_optimize=True)
 run_dace_cpu_noopt = DaCeBackendFactory(auto_optimize=False)
 run_dace_cpu_cached = DaCeBackendFactory(
-    auto_optimize=True, single_use_program=True, cached=True, otf_workflow__cached_translation=True
+    auto_optimize=True, cached=True, otf_workflow__cached_translation=True
 )
 
 run_dace_gpu = DaCeBackendFactory(gpu=True, auto_optimize=True)

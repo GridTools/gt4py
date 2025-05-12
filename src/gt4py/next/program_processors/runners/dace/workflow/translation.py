@@ -72,7 +72,6 @@ class DaCeTranslator(
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
     assume_immotable_offset_provider: bool = True
-    single_use_program: bool = False
 
     # auto-optimize arguments
     gpu_block_size: tuple[int, int, int] = (32, 8, 1)
@@ -120,7 +119,7 @@ class DaCeTranslator(
                     unit_strides_kind=unit_strides_kind,
                     constant_symbols=constant_symbols,
                     assume_pointwise=True,
-                    make_persistent=(True if self.single_use_program else self.make_persistent),
+                    make_persistent=self.make_persistent,
                     blocking_dim=self.blocking_dim,
                     blocking_size=self.blocking_size,
                 )
