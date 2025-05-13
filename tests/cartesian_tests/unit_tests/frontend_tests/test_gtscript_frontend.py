@@ -17,6 +17,7 @@ import pytest
 import gt4py.cartesian.definitions as gt_definitions
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend, nodes
+from gt4py.cartesian.frontend.exceptions import GTScriptSyntaxError
 from gt4py.cartesian.gtscript import (
     __INLINED,
     FORWARD,
@@ -1717,6 +1718,26 @@ class TestWarnInlined:
                 module=self.__class__.__name__,
                 externals={"SET_TO_ONE": True},
             )
+
+
+@gtscript.function
+def boolean_return(a):
+    return a == 1
+
+
+class TestFunctionIfError:
+    def test_function_if_error(self):
+        def func(field: gtscript.Field[np.float64]):  # type: ignore
+            with computation(PARALLEL), interval(...):
+                field = 0
+                if boolean_return(field):
+                    field = 1
+
+        with pytest.raises(
+            GTScriptSyntaxError,
+            match="Using function calls in the condition of an if is not allowed",
+        ):
+            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
 
 class TestAnnotations:
