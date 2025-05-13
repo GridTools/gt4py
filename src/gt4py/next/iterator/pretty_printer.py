@@ -133,6 +133,13 @@ class PrettyPrinter(NodeTranslator):
     def visit_Literal(self, node: ir.Literal, *, prec: int) -> list[str]:
         return [str(node.value)]
 
+    def visit_InfinityLiteral(self, node: ir.InfinityLiteral, *, prec: int) -> list[str]:
+        if node == ir.InfinityLiteral.POSITIVE:
+            return ["∞"]
+        elif node == ir.InfinityLiteral.NEGATIVE:
+            return ["-∞"]
+        raise AssertionError()
+
     def visit_OffsetLiteral(self, node: ir.OffsetLiteral, *, prec: int) -> list[str]:
         return [str(node.value) + "ₒ"]
 
