@@ -49,9 +49,7 @@ def dead_code_elimination(
 
     # remove the unreachable if branches
     # e.g. `if_(True, val1, val2)` -> `val1`
-    program = ConstantFolding.apply(
-        program, enabled_transformations=ConstantFolding.Transformation.FOLD_IF
-    )  # type: ignore[assignment]  # always an itir.Program
+    program = ConstantFolding.apply(program)  # type: ignore[assignment]  # always an itir.Program
 
     # inline again since after constant folding some expressions might not be referenced anymore,
     # e.g. `let field = as_fieldop(...) in val1 end` -> `val1`.

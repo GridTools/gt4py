@@ -41,7 +41,10 @@ def program_factory(expr: itir.Expr) -> itir.Program:
 
 @pytest.mark.parametrize(
     "input,expected",
-    [(im.let("val", "inp1")(im.if_(True, "val", "inp2")), im.ref("inp1"))],
+    [
+        (im.let("val", "inp1")(im.if_(True, "val", "inp2")), im.ref("inp1")),
+        (im.let("val", "inp1")(im.if_(im.and_(True, True), "val", "inp2")), im.ref("inp1")),
+    ],
 )
 def test_let_constant_foldable_if(input, expected):
     input_program = program_factory(input)
