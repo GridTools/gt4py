@@ -277,8 +277,8 @@ def _offset_provider_to_type_unsafe(
     try:
         return _OFFSET_PROVIDER_TO_TYPE_CACHE[cache_key]
     except KeyError:
-        # don't cache empty offset provider to avoid cache pollution in case if many calls with
-        # `offsetprovider={}` occur.
+        # don't cache empty offset provider to avoid cache pollution in case many calls with
+        # `offset_provider={}` occur.
         if not offset_provider:
             # this mechanism only works when we are using dicts
             assert common.offset_provider_to_type(offset_provider) == {}
