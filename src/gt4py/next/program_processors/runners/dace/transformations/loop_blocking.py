@@ -331,6 +331,14 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # Perform some cleaning on the independent nodes.
         self._post_process_independent_nodes(state)
 
+        assert all(
+            all(
+                iedge.src in self._independent_nodes or iedge.src is self.outer_entry
+                for iedge in state.in_edges(inode)
+            )
+            for inode in self._independent_nodes
+        )
+
         # If requested check if the blocking is a good idea.
         if self.require_independent_nodes and (not self._check_if_blocking_is_favourable(state)):
             self._independent_nodes = None
@@ -553,46 +561,39 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         This function might remove, nodes from the set of independent nodes.
         """
         assert self._independent_nodes is not None  # silence MyPy
-        outer_entry: dace_nodes.MapEntry = self.outer_entry  # for caching.
 
-        for node in list(self._independent_nodes):
-            # The only nodes that are important here, are the independent nodes at
-            #  the boundaries, i.e. whose outgoing edges, will be split.
-            if all(oedge.dst in self._independent_nodes for oedge in state.out_edges(node)):
-                continue
-
-            if isinstance(node, dace_nodes.AccessNode):
-                # This is actually the only case that is implemented, which is also the
-                #  only case that makes sense, as the AccessNode is needed as cache.
-                pass
-
-            elif isinstance(node, dace_nodes.Tasklet):
-                # This is a very odd case. It happens when when the AccessNode the
-                #  Tasklet writes to, is classified as dependent, reasons could be
-                #  that it writes directly to the output, i.e. is connected to the
-                #  MapExit. We will remove this Tasklet from the set of independent
-                #  nodes. However, we require that all of its inputs are AccessNodes
-                #  or the MapEntry.
+        independent_nodes_were_updated = True
+        while independent_nodes_were_updated:
+            independent_nodes_were_updated = False
+            for node in list(self._independent_nodes):
+                # The only nodes that are important here, are the independent nodes at
+                #  the boundaries, i.e. nodes that lead to an dependent node. Note that
+                #  here we ignore edges that are empty.
                 if all(
-                    iedge.src is outer_entry
-                    or (
-                        iedge.src in self._independent_nodes
-                        and isinstance(iedge.src, dace_nodes.AccessNode)
-                    )
-                    for iedge in state.in_edges(node)
+                    oedge.dst in self._independent_nodes
+                    for oedge in state.out_edges(node)
+                    if not oedge.data.is_empty()
                 ):
-                    # TODO(phimuell): Do something smarter here.
-                    self._independent_nodes.remove(node)
-                else:
-                    # We would have to remove more nodes, from the set of independent
-                    #  node, but we do not implement that.
-                    # TODO(phimuell): Handle this case.
-                    self._independent_nodes.clear()
+                    continue
 
-            else:
-                # We can not handle this, so we will not handle this loop blocking at all.
-                self._independent_nodes.clear()
-                return
+                if isinstance(node, dace_nodes.AccessNode):
+                    # This is actually the only case that is implemented, which is also the
+                    #  only case that makes sense, as the AccessNode is needed as cache.
+                    pass
+
+                elif isinstance(node, dace_nodes.Tasklet):
+                    # A Tasklet "generates" some data that has to be stored somewhere, for
+                    #  example in an AccessNode, that has to be independent. Thus we will
+                    #  now remove the node from the set of independent nodes.
+                    self._independent_nodes.remove(node)
+                    independent_nodes_were_updated = True
+                    break
+
+                else:
+                    # We can not handle this kind of boundary node, so remove it.
+                    self._independent_nodes.remove(node)
+                    independent_nodes_were_updated = True
+                    break
 
     def _rewire_map_scope(
         self,
@@ -637,7 +638,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 if edge_dst in self._independent_nodes:
                     continue
 
-                # Special case, when we find an AccessNode, referring to a scalar,
+                # Special case, when we encounter an AccessNode, referring to a scalar,
                 #  that is connected to the outer MapExit node, then we will insert
                 #  a copy Tasklet, thus the copy Tasklet will then serve as dependent
                 #  node that writes into the output.
