@@ -18,6 +18,18 @@ from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWork
 
 
 class DaCeBackendFactory(factory.Factory):
+    """
+    Workflow factory for the GTIR-DaCe backend.
+
+    Several parameters are inherithed from `backend.Backend`, see below the specific ones.
+
+    Args:
+        auto_optimize: Enables the SDFG transformation pipeline.
+        make_persistent: Enables optimization in SDFG lowering and bindings generation
+            assuming that the layout of temporary and global fields does not change
+            across multiple SDFG calls.
+    """
+
     class Meta:
         model = backend.Backend
 

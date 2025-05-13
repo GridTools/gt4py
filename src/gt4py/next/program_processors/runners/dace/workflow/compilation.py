@@ -27,6 +27,17 @@ def _get_call_args_callback(
 ) -> Callable[
     [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]], None
 ]:
+    """
+    Helper method to load dynamically generated Python code as a module and return
+    a function to update the list of SDFG call arguments.
+
+    Args:
+        module_name: Name to use to load the python code as a module.
+        python_code: String containg the Python code to load.
+
+    Returns:
+        A callable object to update the list of SDFG call arguments.
+    """
     spec = importlib.util.spec_from_loader(module_name, loader=None)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
@@ -42,6 +53,7 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
     # scalar arguments that are not used in the SDFG will not be present.
     sdfg_argtypes: list[dace.dtypes.Data]
 
+    # The compiled program contains a callable object to update the SDFG arguments list.
     sdfg_arglist_callback: Callable[
         [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]],
         None,
@@ -61,6 +73,7 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
         # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
         self.sdfg_argtypes = [arg_type for _, arg_type in program.sdfg.arglist().items()]
 
+        # Note that `binding_source` contains Python code tailored to this specific SDFG.
         self.sdfg_arglist_callback = _get_call_args_callback(
             program.sdfg.label, binding_source.source_code
         )

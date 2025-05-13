@@ -30,6 +30,7 @@ _cb_last_call_args = "last_call_args"
 def _update_sdfg_scalar_arg(
     code: codegen.TextBlock, rhs: str, sdfg_arg_desc: dace.data.Data, sdfg_arg_index: int
 ) -> None:
+    """Emit Python code to update a scalar argument in the SDFG arglist."""
     assert isinstance(sdfg_arg_desc, dace.data.Scalar)
     code.append(f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes._SimpleCData)")
     code.append(f"actype = {_cb_sdfg_argtypes}[{sdfg_arg_index}].dtype.as_ctypes()")
@@ -39,6 +40,7 @@ def _update_sdfg_scalar_arg(
 def _validate_sdfg_scalar_arg(
     code: codegen.TextBlock, rhs: str, sdfg_arg_desc: dace.data.Data, sdfg_arg_index: int
 ) -> None:
+    """Emit Python asserts to validate a scalar argument in the SDFG arglist."""
     assert isinstance(sdfg_arg_desc, dace.data.Scalar)
     code.append(f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes._SimpleCData)")
     code.append(f"assert {_cb_last_call_args}[{sdfg_arg_index}] == {rhs}")
@@ -53,7 +55,10 @@ def _parse_gt_param(
     sdfg_argnames: list[str],
     make_persistent: bool,
 ) -> None:
+    """Emit Python code to update an argument in the SDFG arglist."""
     if isinstance(param_type, ts.TupleType):
+        # Special handling for tuples. Each element of the tuple gets a name with
+        # index-based suffix and is recursively visited.
         for i, tuple_param_type in enumerate(param_type.types):
             tuple_arg = f"{arg}[{i}]"
             tuple_param_name = f"{param_name}_{i}"
@@ -151,6 +156,18 @@ def create_bindings(
     program_source: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
     make_persistent: bool,
 ) -> stages.BindingSource[SrcL, languages.Python]:
+    """
+    Creates the Python bindings to call an SDFG with a GT4Py arguments list.
+
+    Args:
+        program_source: The json representation of the SDFG.
+        make_persistent: When True, it is safe to assume that the field layout does
+            not change across mutiple program calls.
+
+    Returns:
+        The Python code to convert call arguments from gt4py canonical form to the
+        SDFG canonical form.
+    """
     sdfg = dace.SDFG.from_json(program_source.source_code)
 
     # `dace.SDFG.arglist()` returns an ordered dictionary that maps the argument
@@ -191,6 +208,11 @@ def bind_sdfg(
     inp: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
     make_persistent: bool,
 ) -> stages.CompilableSource[SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python]:
+    """
+    Method to be used as workflow stage for generation of SDFG bindings.
+
+    Refer to `create_bindings` documentation.
+    """
     return stages.CompilableSource(
         program_source=inp, binding_source=create_bindings(inp, make_persistent)
     )
