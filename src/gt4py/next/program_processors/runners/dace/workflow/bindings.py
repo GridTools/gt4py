@@ -93,9 +93,17 @@ def _parse_gt_param(
             code.append(f"assert gtx_common.Domain.is_finite({arg}.domain)")
             for i, size in enumerate(sdfg_arg_desc.shape):
                 if isinstance(size, dace.symbolic.SymbolicType):
-                    if gtx_dace_utils.is_connectivity_identifier(param_name):
-                        value = f"{arg}.ndarray.shape[{i}]"
-                        symbol_name = gtx_dace_utils.field_size_symbol_name(param_name, i)
+                    dim_range = f"{arg}.domain.ranges[{i}]"
+                    r0_symbol = gtx_dace_utils.range_start_symbol(param_name, i)
+                    r1_symbol = gtx_dace_utils.range_stop_symbol(param_name, i)
+                    for range_suffix, symbol_name in [
+                        ("start", r0_symbol),
+                        ("stop", r1_symbol),
+                    ]:
+                        value = f"{dim_range}.{range_suffix}"
+                        if symbol_name not in sdfg_arglist:
+                            # symbols that are not used are removed from the SDFG arglist
+                            continue
                         sdfg_symbol_arg_desc = sdfg_arglist[symbol_name]
                         sdfg_symbol_arg_index = sdfg_argnames.index(symbol_name)
                         if make_persistent:
@@ -107,29 +115,6 @@ def _parse_gt_param(
                             _update_sdfg_scalar_arg(
                                 code, value, sdfg_symbol_arg_desc, sdfg_symbol_arg_index
                             )
-                    else:
-                        dim_range = f"{arg}.domain.ranges[{i}]"
-                        r0_symbol = gtx_dace_utils.range_start_symbol(param_name, i)
-                        r1_symbol = gtx_dace_utils.range_stop_symbol(param_name, i)
-                        for range_suffix, symbol_name in [
-                            ("start", r0_symbol),
-                            ("stop", r1_symbol),
-                        ]:
-                            value = f"{dim_range}.{range_suffix}"
-                            if symbol_name not in sdfg_arglist:
-                                # symbols that are not used are removed from the SDFG arglist
-                                continue
-                            sdfg_symbol_arg_desc = sdfg_arglist[symbol_name]
-                            sdfg_symbol_arg_index = sdfg_argnames.index(symbol_name)
-                            if make_persistent:
-                                # only emit some debug code
-                                _validate_sdfg_scalar_arg(
-                                    code, value, sdfg_symbol_arg_desc, sdfg_symbol_arg_index
-                                )
-                            else:
-                                _update_sdfg_scalar_arg(
-                                    code, value, sdfg_symbol_arg_desc, sdfg_symbol_arg_index
-                                )
                 else:
                     # the array shape is set to constant value
                     code.append(
