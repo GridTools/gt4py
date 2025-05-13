@@ -61,6 +61,20 @@ repos:
 
 - repo: local
   hooks:
+  - id: noxfile-utils
+    name: noxfile-utils checker
+    entry: >
+      bash -c 'uv export --no-hashes | grep "^\(mypy\|nox\)==" > .reqs.txt ; 
+               uv run --with-requirements .reqs.txt --script noxfile_utils.py ;
+               uv run --with-requirements .reqs.txt mypy noxfile_utils.py ;
+               rm .reqs.txt'
+    language: python
+    pass_filenames: false
+    additional_dependencies: [uv]
+    stages: [pre-commit]
+
+- repo: local
+  hooks:
   - id: mypy
     name: mypy static type checker
     entry: uv run --frozen mypy --no-install-types src/

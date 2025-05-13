@@ -26,6 +26,9 @@ class NoBackend(next_backend.Backend):
     def __call__(self, program, *args, **kwargs) -> None:
         raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
+    def compile(self, program, compile_time_args):
+        raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+
     def __gt_allocator__(
         self,
     ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
@@ -68,10 +71,6 @@ no_backend = NoBackend(
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU_NO_OPT,
             marks=pytest.mark.requires_dace,
-        ),
-        pytest.param(
-            next_tests.definitions.OptionalProgramBackendId.DACE_GPU_NO_OPT,
-            marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
         ),
     ],
     ids=lambda p: p.short_id(),

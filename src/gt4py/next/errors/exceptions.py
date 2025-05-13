@@ -87,12 +87,12 @@ class MissingArgumentError(DSLError):
         self.is_kwarg = is_kwarg
 
 
-class TypeError_(DSLError):
+class DSLTypeError(DSLError):
     def __init__(self, location: Optional[SourceLocation], message: str) -> None:
         super().__init__(location, message)
 
 
-class MissingParameterAnnotationError(TypeError_):
+class MissingParameterAnnotationError(DSLTypeError):
     param_name: str
 
     def __init__(self, location: Optional[SourceLocation], param_name: str) -> None:
@@ -100,7 +100,7 @@ class MissingParameterAnnotationError(TypeError_):
         self.param_name = param_name
 
 
-class InvalidParameterAnnotationError(TypeError_):
+class InvalidParameterAnnotationError(DSLTypeError):
     param_name: str
     annotated_type: Any
 

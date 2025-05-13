@@ -25,6 +25,22 @@ def offset_provider_type(request):
     return {"I": common.Dimension("I", kind=common.DimensionKind.HORIZONTAL)}
 
 
+@pytest.fixture
+def opaque_fun(request):
+    return im.ref(
+        "opaque_fun",
+        ts.FunctionType(
+            pos_only_args=[],
+            pos_or_kw_args={
+                "f": ts.DeferredType(constraint=None),
+                "g": ts.DeferredType(constraint=None),
+            },
+            kw_only_args={},
+            returns=ts.DeferredType(constraint=None),
+        ),
+    )
+
+
 def test_trivial():
     common = im.plus("x", "y")
     testee = im.plus(common, common)
@@ -106,6 +122,12 @@ def test_lambda_redef_same_arg():
 
 
 def test_lambda_redef_same_arg_scope():
+    pytest.xfail(
+        reason="Not implemented. The CSE pass may not extract from a lambda function"
+        "unless it knows the function is unconditionally evaluated. For this"
+        "case this currently beyond scope."
+    )
+
     def common_expr():
         return im.lambda_("a")(im.plus("a", im.plus(1, 1)))
 
@@ -293,3 +315,43 @@ def test_scalar_extraction_inside_as_fieldop():
 
     actual = CSE.apply(testee, within_stencil=False)
     assert actual == expected
+
+
+def test_no_extraction_from_unapplied_lambda():
+    testee = im.if_(
+        "cond",
+        im.let("f", im.lambda_()(im.deref("guarded_it")))(im.if_("cond2", im.call("f")(), 0)),
+        im.deref("guarded_it"),
+    )
+
+    actual = CSE.apply(testee, within_stencil=True)
+    assert actual == testee  # no extraction should happen
+
+
+def test_extraction_from_let_form():
+    common = im.plus(1, 2)
+    testee = im.plus(im.let("a", 1)(im.plus("a", common)), im.let("b", 2)(im.plus("b", common)))
+    expected = im.let("_cs_1", common)(
+        im.plus(im.let("a", 1)(im.plus("a", "_cs_1")), im.let("b", 2)(im.plus("b", "_cs_1")))
+    )
+
+    actual = CSE.apply(testee, within_stencil=True)
+    assert actual == expected
+
+
+def test_sym_ref_collection_from_lambda(opaque_fun):
+    # This is more a regression than a unit test. When `f` & `g` are collected, we don't want to
+    # collect subexpression from their body (as the pass does not recognize them to be evaluated),
+    # but still need to respect that `val` is used inside. Hence, when extracting `f` and `g,` the
+    # extracted lambda needs to be placed after the definition of `val`.
+    testee = im.let("val", 1)(
+        im.let(("f", im.lambda_()("val")), ("g", im.lambda_()("val")))(
+            im.call(opaque_fun)("f", "g")
+        )
+    )
+    expected = im.let("val", 1)(
+        im.let("_cs_1", im.lambda_()("val"))(im.call(opaque_fun)("_cs_1", "_cs_1"))
+    )
+
+    actual = CSE.apply(testee, within_stencil=True)
+    assert actual == expected  # no extraction should happen

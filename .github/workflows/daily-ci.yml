@@ -20,8 +20,7 @@ jobs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Use a deep clone to get the correct version from tags
+
     - id: get-versions
       uses: ./.github/actions/get-python-versions
 
@@ -41,8 +40,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Use a deep clone to get the correct version from tags
 
     - name: Install uv and set the python version
       uses: astral-sh/setup-uv@v5
@@ -53,12 +50,11 @@ jobs:
 
     - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
       env:
-        NUM_PROCESSES: auto
         UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
         # Force a specific compiler for setuptools/distutils (used in gt4py.cartesian)
         CXX: g++
         CC: gcc
-      run: uv run nox -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
+      run: uv run --script noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
     - name: Notify slack
       if: ${{ failure() }}
@@ -75,7 +71,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Failed tests: <https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: **${{ matrix.gt4py-module }} (CPU)** for **Python-${{ matrix.python-version }}** with **'${{ matrix.dependencies-strategy }}' uv resolution strategy**.>"
+                  "text": "Failed tests: <https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: ${{ matrix.gt4py-module }} (CPU) for Python-${{ matrix.python-version }} with '${{ matrix.dependencies-strategy }}' uv resolution strategy.>"
                 }
               }
             ]

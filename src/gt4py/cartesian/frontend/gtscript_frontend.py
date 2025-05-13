@@ -1339,9 +1339,17 @@ class IRMaker(ast.NodeVisitor):
             self.decls_stack[-2].extend(self.decls_stack[-1])
             self.decls_stack.pop()
 
+        try:
+            condition = self.visit(node.test)
+        except KeyError as e:
+            raise GTScriptSyntaxError(
+                message="Using function calls in the condition of an if is not allowed,"
+                + " the function needs to be assigned to a variable outside the condition.",
+                loc=nodes.Location.from_ast_node(node),
+            ) from e
         result.append(
             nodes.If(
-                condition=self.visit(node.test),
+                condition=condition,
                 loc=nodes.Location.from_ast_node(node),
                 main_body=nodes.BlockStmt(stmts=main_stmts, loc=nodes.Location.from_ast_node(node)),
                 else_body=(

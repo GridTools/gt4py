@@ -229,9 +229,21 @@ def test_only_dependent():
     c = np.zeros_like(a)
     ref = reff(a, b)
 
-    # Apply the transformation
+    # By default there must be dependent nodes, so by default it will not apply.
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=10, blocking_parameter="j"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
+
+    # It will only apply if it is enabled.
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=10,
+            blocking_parameter="j",
+            require_independent_nodes=False,
+        ),
         validate=True,
         validate_all=True,
     )
@@ -291,8 +303,10 @@ def test_intermediate_access_node():
     state.remove_edge(edge)
 
     # Test if after the modification the SDFG still works
-    sdfg(a=a, b=b, c=c, N=N, M=M)
+    csdfg = sdfg.compile()
+    csdfg(a=a, b=b, c=c, N=N, M=M)
     assert np.allclose(ref, c)
+    del csdfg
 
     # Apply the transformation.
     count = sdfg.apply_transformations_repeated(
@@ -313,8 +327,10 @@ def test_intermediate_access_node():
     assert bottom_node is not top_node
 
     c[:] = 0
-    sdfg(a=a, b=b, c=c, N=N, M=M)
+    csdfg = sdfg.compile()
+    csdfg(a=a, b=b, c=c, N=N, M=M)
     assert np.allclose(ref, c)
+    del csdfg
 
 
 def test_chained_access() -> None:
@@ -329,8 +345,10 @@ def test_chained_access() -> None:
     ref = reff(a, b)
 
     # Before the optimization
-    sdfg(a=a, b=b, c=c, M=M, N=N)
+    csdfg = sdfg.compile()
+    csdfg(a=a, b=b, c=c, M=M, N=N)
     assert np.allclose(c, ref)
+    del csdfg
     c[:] = 0
 
     # Apply the transformation.
@@ -342,8 +360,10 @@ def test_chained_access() -> None:
     assert count == 1
 
     # Now run the SDFG to see if it is still the same
-    sdfg(a=a, b=b, c=c, M=M, N=N)
+    csdfg = sdfg.compile()
+    csdfg(a=a, b=b, c=c, M=M, N=N)
     assert np.allclose(c, ref)
+    del csdfg
 
     # Now look for the outer map.
     outer_map = None
@@ -408,8 +428,21 @@ def test_direct_map_exit_connection() -> dace.SDFG:
     assert all(out_edge.dst is tsklt for out_edge in state.out_edges(me))
     assert all(in_edge.src is tsklt for in_edge in state.in_edges(mx))
 
+    # Because there are no independent nodes, the transformation will not apply
+    #  and we have to explicitly enable it.
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=5,
+            blocking_parameter="j",
+            require_independent_nodes=False,
+        ),
         validate=True,
         validate_all=True,
     )
@@ -426,8 +459,22 @@ def test_empty_memlet_1():
     )
     state: dace.SDFGState = next(iter(sdfg.nodes()))
 
+    # The only independent nodes are the Tasklet that has an empty Memlet and is
+    #  thus filtered out, together with the output. Thus we have to disable this
+    #  filtering.
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=5,
+            blocking_parameter="j",
+            require_independent_nodes=False,
+        ),
         validate=True,
         validate_all=True,
     )
@@ -452,8 +499,21 @@ def test_empty_memlet_2():
     )
     state: dace.SDFGState = next(iter(sdfg.nodes()))
 
+    # Because there are no independent node so by default the transformation should
+    #  not apply.
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=5,
+            blocking_parameter="j",
+            require_independent_nodes=False,
+        ),
         validate=True,
         validate_all=True,
     )
@@ -481,8 +541,20 @@ def test_empty_memlet_3():
     )
     state: dace.SDFGState = next(iter(sdfg.nodes()))
 
+    # There are no independent nodes so we must force the blocking.
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=5,
+            blocking_parameter="j",
+            require_independent_nodes=False,
+        ),
         validate=True,
         validate_all=True,
     )
@@ -613,12 +685,26 @@ def test_loop_blocking_inner_map():
     )
     assert all(oedge.dst is inner_map for oedge in state.out_edges(outer_map))
 
+    # Because there is no independent part, we have to force the application of the
+    #  transformation.
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="__i0"),
         validate=True,
         validate_all=True,
     )
+    assert count == 0
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=5,
+            blocking_parameter="__i0",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
     assert count == 1
+
     assert all(
         oedge.dst is not inner_map and isinstance(oedge.dst, dace_nodes.MapEntry)
         for oedge in state.out_edges(outer_map)
@@ -805,8 +891,22 @@ def _make_loop_blocking_with_reduction(
 
 def test_loop_blocking_dependent_reduction():
     sdfg, state, me, red = _make_loop_blocking_with_reduction(reduction_is_dependent=True)
+
+    # Because there is no independent part, we have to force the application of the
+    #  transformation.
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameter="__i1"),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=False,
+        ),
         validate=True,
         validate_all=True,
     )
@@ -927,23 +1027,45 @@ def _make_mixed_memlet_sdfg(
     return (sdfg, state, me, tskl1, tskl2)
 
 
-def _apply_and_run_mixed_memlet_sdfg(sdfg: dace.SDFG) -> None:
+def _apply_and_run_mixed_memlet_sdfg(
+    sdfg: dace.SDFG,
+    tskl1_independent: bool,
+) -> None:
     ref = {
         "A": np.array(np.random.rand(10), dtype=np.float64, copy=True),
         "B": np.array(np.random.rand(10, 10), dtype=np.float64, copy=True),
         "C": np.array(np.random.rand(10, 10), dtype=np.float64, copy=True),
     }
     res = copy.deepcopy(ref)
-    sdfg(**ref)
+    csdfg_ref = sdfg.compile()
+    csdfg_ref(**ref)
+
+    require_independent_nodes = True
+    if not tskl1_independent:
+        count = sdfg.apply_transformations_repeated(
+            gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameter="j"),
+            validate=True,
+            validate_all=True,
+        )
+        assert count == 0
+        require_independent_nodes = False
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameter="j"),
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="j",
+            require_independent_nodes=require_independent_nodes,
+        ),
         validate=True,
         validate_all=True,
     )
     assert count == 1, f"Expected one application, but git {count}"
-    sdfg(**res)
+
+    csdfg_res = sdfg.compile()
+    csdfg_res(**res)
     assert all(np.allclose(ref[name], res[name]) for name in ref)
+
+    del csdfg_ref, csdfg_res
 
 
 def _make_conditional_block_sdfg(sdfg_label: str, sym: str, inp: str, out: str):
@@ -974,10 +1096,11 @@ def _make_conditional_block_sdfg(sdfg_label: str, sym: str, inp: str, out: str):
 
 
 def test_loop_blocking_mixed_memlets_1():
-    sdfg, state, me, tskl1, tskl2 = _make_mixed_memlet_sdfg(True)
+    tskl1_independent = True
+    sdfg, state, me, tskl1, tskl2 = _make_mixed_memlet_sdfg(tskl1_independent)
     mx = state.exit_node(me)
 
-    _apply_and_run_mixed_memlet_sdfg(sdfg)
+    _apply_and_run_mixed_memlet_sdfg(sdfg, tskl1_independent)
     scope_dict = state.scope_dict()
 
     # Ensure that `tskl1` is independent.
@@ -1011,10 +1134,11 @@ def test_loop_blocking_mixed_memlets_1():
 
 
 def test_loop_blocking_mixed_memlets_2():
-    sdfg, state, me, tskl1, tskl2 = _make_mixed_memlet_sdfg(False)
+    tskl1_independent = False
+    sdfg, state, me, tskl1, tskl2 = _make_mixed_memlet_sdfg(tskl1_independent)
     mx = state.exit_node(me)
 
-    _apply_and_run_mixed_memlet_sdfg(sdfg)
+    _apply_and_run_mixed_memlet_sdfg(sdfg, tskl1_independent)
     scope_dict = state.scope_dict()
 
     # Because `tskl1` is now dependent, everything is now dependent.
@@ -1157,6 +1281,56 @@ def test_only_last_two_elements_sdfg():
     res = copy.deepcopy(ref)
 
     ref_comp(**ref)
-    sdfg(**res)
+    csdfg = sdfg.compile()
+    csdfg(**res)
+    del csdfg
 
     assert np.allclose(ref["c"], res["c"])
+
+
+def test_blocking_size_too_big():
+    """
+    Here the blocking size is larger than the size in that dimension. Thus the
+    transformation will not apply.
+    """
+    sdfg = dace.SDFG(util.unique_name("blocking_size_too_large"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "ab":
+        sdfg.add_array(
+            name,
+            shape=(20, 10),
+            dtype=dace.float64,
+        )
+
+    state.add_mapped_tasklet(
+        name="comp",
+        map_ranges=dict(i=f"0:20", j=f"0:10"),
+        inputs=dict(__in0=dace.Memlet("a[i, j]")),
+        outputs=dict(__out=dace.Memlet("b[i, j]")),
+        code="__out = __in0 + 1.0",
+        external_edges=True,
+    )
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=30,
+            blocking_parameter="j",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
+
+    # If we select a smaller size then it will work.
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=5,
+            blocking_parameter="j",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1

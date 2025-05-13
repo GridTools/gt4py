@@ -7,14 +7,6 @@ on:
   pull_request:
     branches:
     - main
-    paths:  # Run when gt4py.storage files (or package settings) are changed
-    - "src/gt4py/storage/**"
-    - "src/gt4py/cartesian/backend/**"   # For DaCe storages
-    - "tests/storage_tests/**"
-    - ".github/workflows/**"
-    - "*.lock"
-    - "*.toml"
-    - "*.yml"
 
 jobs:
   # First job to read Python versions from .python-versions file
@@ -27,6 +19,7 @@ jobs:
     - id: get-versions
       uses: ./.github/actions/get-python-versions
 
+  # Test-running job
   test-storage:
     needs: get-python-versions
     strategy:
@@ -38,6 +31,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Use a deep clone to get target PR branch
 
     - name: Install uv and set the python version
       uses: astral-sh/setup-uv@v5
@@ -48,6 +43,7 @@ jobs:
 
     - name: Run CPU 'storage' tests with nox
       env:
-        NUM_PROCESSES: auto
+        CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "origin/${{ github.base_ref }}"
+        CI_NOX_VERBOSE: 1
       shell: bash
-      run: uv run nox -s 'test_storage-${{ matrix.python-version }}(cpu)'
+      run: uv run --script noxfile.py -s 'test_storage-${{ matrix.python-version }}(cpu)'

@@ -10,16 +10,23 @@ from __future__ import annotations
 
 import dataclasses
 import typing
-from typing import Any, Iterable, Iterator, Optional
+from typing import Any, Generic, Iterable, Iterator, Optional
 
 from typing_extensions import Self
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 DATA_T = typing.TypeVar("DATA_T")
+
+
+@dataclasses.dataclass(frozen=True)
+class StaticArg(Generic[core_defs.ScalarT]):
+    value: core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...]
+    type_: ts.TypeSpec
 
 
 @dataclasses.dataclass(frozen=True)
@@ -38,8 +45,8 @@ class JITArgs:
 class CompileTimeArgs:
     """Compile-time standins for arguments to a GTX program to be used in ahead-of-time compilation."""
 
-    args: tuple[ts.TypeSpec, ...]
-    kwargs: dict[str, ts.TypeSpec]
+    args: tuple[ts.TypeSpec | StaticArg, ...]
+    kwargs: dict[str, ts.TypeSpec | StaticArg]
     offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     column_axis: Optional[common.Dimension]
 
@@ -130,7 +137,7 @@ def iter_size_args(args: tuple[Any, ...]) -> Iterator[tuple[int, int]]:
 
 
 def iter_size_compile_args(
-    args: Iterable[ts.TypeSpec],
+    args: Iterable[ts.TypeSpec | StaticArg],
 ) -> Iterator[ts.TypeSpec]:
     """
     Yield a compile-time size argument for every compile-time field argument in each dimension.
@@ -138,13 +145,14 @@ def iter_size_compile_args(
     This can be used inside transformation workflows to generate compile-time domain size arguments for FieldView Programs that use an implicit domain.
     """
     for arg in args:
+        type_ = arg.type_ if isinstance(arg, StaticArg) else arg
         field_constituents: list[ts.FieldType] = typing.cast(
             list[ts.FieldType],
-            type_info.primitive_constituents(arg).if_isinstance(ts.FieldType).to_list(),
+            type_info.primitive_constituents(type_).if_isinstance(ts.FieldType).to_list(),
         )
         if field_constituents:
             # we only need the first field, because all fields in a tuple must have the same dims and sizes
             index_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
             yield from [
-                ts.TupleType(types=[index_type, index_type]) for dim in field_constituents[0].dims
+                ts.TupleType(types=[index_type, index_type]) for _ in field_constituents[0].dims
             ]
