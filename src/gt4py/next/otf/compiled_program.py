@@ -294,7 +294,7 @@ def _offset_provider_to_type_unsafe(
         # is a dict we can not use a weakref.
         _OFFSET_PROVIDER_REFS.append(offset_provider)
 
-        # empty cache when new offset providers continuously appear to avoid a memory-leak
+        # empty cache to avoid a memory-leak when new offset providers continuously appear
         if len(_OFFSET_PROVIDER_REFS) > 20:
             _reset_offset_provider_cache()
 
