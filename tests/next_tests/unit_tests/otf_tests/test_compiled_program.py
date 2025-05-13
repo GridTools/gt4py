@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import gc
+import sys
 import pytest
 
 from gt4py import eve, next as gtx
@@ -23,18 +25,31 @@ def test_offset_provider_to_type_unsafe():
     mesh = simple_mesh(None)
     offset_provider = mesh.offset_provider
 
-    compiled_program._offset_provider_to_type_unsafe_impl.cache_clear()
+    compiled_program._reset_offset_provider_cache()
 
     compiled_program._offset_provider_to_type_unsafe(offset_provider)
-    assert compiled_program._offset_provider_to_type_unsafe_impl.cache_info().misses == 1
-    compiled_program._offset_provider_to_type_unsafe(offset_provider)
-    assert compiled_program._offset_provider_to_type_unsafe_impl.cache_info().misses == 1
-    assert compiled_program._offset_provider_to_type_unsafe_impl.cache_info().hits == 1
+    assert len(compiled_program._OFFSET_PROVIDER_TO_TYPE_CACHE) == 1
 
     offset_provider2 = {"V2E": mesh.offset_provider["V2E"]}
     compiled_program._offset_provider_to_type_unsafe(offset_provider2)
-    assert compiled_program._offset_provider_to_type_unsafe_impl.cache_info().misses == 2
-    assert compiled_program._offset_provider_to_type_unsafe_impl.cache_info().hits == 1
+    assert len(compiled_program._OFFSET_PROVIDER_TO_TYPE_CACHE) == 2
+
+
+def test_offset_provider_to_type_unsafe_gc():
+    mesh = simple_mesh(None)
+    offset_provider = {**mesh.offset_provider}
+
+    compiled_program._reset_offset_provider_cache()
+
+    compiled_program._offset_provider_to_type_unsafe(offset_provider)
+    assert len(compiled_program._OFFSET_PROVIDER_TO_TYPE_CACHE) == 1
+
+    assert sys.getrefcount(offset_provider) == 3  # this function, sys, cache
+
+    compiled_program._reset_offset_provider_cache()
+    gc.collect()
+
+    assert sys.getrefcount(offset_provider) == 2  # this function, sys, but not the cache
 
 
 class SomeEnum(eve.IntEnum):

@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from typing import Any, TypeAlias
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing, utils as eve_utils
+from gt4py.eve import extended_typing
 from gt4py.next import backend as gtx_backend, common, config, errors
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
 from gt4py.next.otf import arguments, stages
@@ -259,16 +259,43 @@ class CompiledProgramsPool:
         return result
 
 
-@functools.lru_cache(maxsize=128)
-def _offset_provider_to_type_unsafe_impl(
-    hashable_offset_provider: eve_utils.HashableBy[common.OffsetProvider],
-) -> common.OffsetProviderType:
-    return common.offset_provider_to_type(hashable_offset_provider.value)
+_OFFSET_PROVIDER_TO_TYPE_CACHE: dict[int, common.OffsetProviderType] = {}
+_OFFSET_PROVIDER_REFS: list[common.OffsetProvider] = []
+
+
+def _reset_offset_provider_cache() -> None:
+    _OFFSET_PROVIDER_TO_TYPE_CACHE.clear()
+    _OFFSET_PROVIDER_REFS.clear()
 
 
 def _offset_provider_to_type_unsafe(
     offset_provider: common.OffsetProvider,
 ) -> common.OffsetProviderType:
-    return _offset_provider_to_type_unsafe_impl(
-        eve_utils.hashable_by_id(offset_provider),
-    )
+    # note: we don't use a functools.lru_cache here since eve_utils.hashable_by had too high
+    # overhead
+    cache_key = id(offset_provider)
+    try:
+        return _OFFSET_PROVIDER_TO_TYPE_CACHE[cache_key]
+    except KeyError:
+        # don't cache empty offset provider to avoid cache pollution in case if many calls with
+        # `offsetprovider={}` occur.
+        if not offset_provider:
+            # this mechanism only works when we are using dicts
+            assert common.offset_provider_to_type(offset_provider) == {}
+            return {}
+
+        offset_provider_type = common.offset_provider_to_type(offset_provider)
+
+        _OFFSET_PROVIDER_TO_TYPE_CACHE[cache_key] = offset_provider_type
+
+        # TODO(tehrengruber): This mechanism is far from ideal. Use a weakref-able object to store
+        #  the offset provider.
+        # Create a reference to the offset provider such that it is not garbage collected. Since it
+        # is a dict we can not use a weakref.
+        _OFFSET_PROVIDER_REFS.append(offset_provider)
+
+        # empty cache when new offset providers continuously appear to avoid a memory-leak
+        if len(_OFFSET_PROVIDER_REFS) > 20:
+            _reset_offset_provider_cache()
+
+        return offset_provider_type
