@@ -639,9 +639,8 @@ def _make_loop_blocking_sdfg_with_inner_map(
         sdfg.add_array("C", shape=(10,), dtype=dace.float64, transient=False)
         sdfg.add_scalar("tmp", dtype=dace.float64, transient=True)
         sdfg.add_scalar("tmp2", dtype=dace.float64, transient=True)
-        tmp, tmp2, C = (state.add_access(name) for name in ("tmp", "tmp2", "C"))
-        state.add_edge(tmp, None, tmp2, None, dace.Memlet("tmp2[0]"))
-        state.add_edge(tmp2, None, mx_out, "IN_tmp", dace.Memlet("C[__i0]"))
+        tmp, C = (state.add_access(name) for name in ("tmp", "C"))
+        state.add_edge(tmp, None, mx_out, "IN_tmp", dace.Memlet("C[__i0]"))
         mx_out.add_in_connector("IN_tmp")
         state.add_edge(mx_out, "OUT_tmp", C, None, dace.Memlet("C[0:10]"))
         mx_out.add_out_connector("OUT_tmp")
@@ -725,6 +724,7 @@ def test_loop_blocking_inner_map_with_independent_part(independent_part):
     Tests with an inner map with an independent part.
     """
     sdfg, state, outer_map, inner_map = _make_loop_blocking_sdfg_with_inner_map(independent_part)
+    outer_map_exit = state.exit_node(outer_map)
 
     # Find the parts that are independent.
     independent_node: dace_nodes.Tasklet | dace_nodes.NestedSDFG = next(
@@ -737,6 +737,7 @@ def test_loop_blocking_inner_map_with_independent_part(independent_part):
         oedge.dst for oedge in state.out_edges(independent_node)
     )
     assert i_access_node.data == "tmp"
+    assert all(oedge.dst is outer_map_exit for oedge in state.out_edges(i_access_node))
 
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="__i0"),
