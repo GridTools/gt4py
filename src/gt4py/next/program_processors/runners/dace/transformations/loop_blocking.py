@@ -558,7 +558,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """Cleans the set of independent nodes.
 
         This function is mostly there to handle cases that are not implemented.
-        This function might remove, nodes from the set of independent nodes.
+        This function might remove nodes from the set of independent nodes.
         """
         assert self._independent_nodes is not None  # silence MyPy
 
