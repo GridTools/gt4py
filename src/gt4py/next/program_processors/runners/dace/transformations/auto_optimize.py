@@ -26,7 +26,7 @@ def gt_auto_optimize(
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
-    blocking_only_if_independent_nodes: Optional[bool] = None,
+    blocking_only_if_independent_nodes: bool = True,
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
@@ -77,9 +77,9 @@ def gt_auto_optimize(
             one for all.
         blocking_dim: On which dimension blocking should be applied.
         blocking_size: How many elements each block should process.
-        blocking_only_if_independent_nodes: If `True` only apply loop blocking if
-            there are independent nodes in the Map, see the `require_independent_nodes`
-            option of the `LoopBlocking` transformation.
+        blocking_only_if_independent_nodes: If `True`, the default, only apply loop
+            blocking if there are independent nodes in the Map, see the
+            `require_independent_nodes` option of the `LoopBlocking` transformation.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
@@ -154,6 +154,7 @@ def gt_auto_optimize(
 
         # Configure the Maps:
         #  Will also perform the GPU transformation.
+        # TODO(phimuell): Maybe switch it with the inside map optimization.
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
             gpu=gpu,
@@ -221,23 +222,32 @@ def _gt_auto_process_top_level_maps(
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
-        # TODO(phimuell): Switch to `FullMapFusion` once DaCe has
-        #   [parallel map fusion](https://github.com/spcl/dace/pull/1965).
         # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
-        # TODO(phimuell): Should we restrict parallel fusing to Maps that have
-        #   common data?
-        fusion_transformation = gtx_transformations.MapFusion(
+
+        serial_map_fusion = gtx_transformations.MapFusionSerial(
             only_toplevel_maps=True,
-            allow_parallel_map_fusion=True,
-            allow_serial_map_fusion=True,
-            only_if_common_ancestor=False,
         )
         # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
         #   has been solved.
-        fusion_transformation._single_use_data = single_use_data
+        serial_map_fusion._single_use_data = single_use_data
 
+        parallel_map_fusion = gtx_transformations.MapFusionParallel(
+            only_toplevel_maps=True,
+            # TODO(phimuell): Should we enable this flag?
+            only_if_common_ancestor=False,
+        )
+        parallel_map_fusion._single_use_data = single_use_data
+
+        # NOTE: Since parallel Map fusion matches _any_ two Maps running it on large
+        #  SDFGs is expensive. Thus we run serial Map fusion first to reduce the search
+        #  space. Then we run serial and parallel Map fusion together.
         sdfg.apply_transformations_repeated(
-            fusion_transformation,
+            serial_map_fusion,
+            validate=validate,
+            validate_all=validate_all,
+        )
+        sdfg.apply_transformations_repeated(
+            [serial_map_fusion, parallel_map_fusion],
             validate=validate,
             validate_all=validate_all,
         )
@@ -288,12 +298,20 @@ def _gt_auto_process_dataflow_inside_maps(
     validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
-    """Optimizes the dataflow inside the top level Maps of teh SDFG inplace.
+    """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
 
     For a description of the arguments see `gt_auto_optimize()`.
+
+    It is important that nested Maps are not fused together. The main reason is that
+    in most cases it is not beneficial and might prevent other optimization, as the
+    fusion (especially the parallel version) will create dependency of otherwise
+    unrelated dataflow. Furthermore, the majority, if not all, of these maps are
+    over a constant range, e.g. the number of neighbours, which is known at compile
+    time, so the compiler will fully unroll them anyway.
     """
 
-    # Constants should bot be arguments to a kernel but be present inside the body.
+    # Constants (tasklets are needed to write them into a variable) should not be
+    #  arguments to a kernel but be present inside the body.
     sdfg.apply_transformations_once_everywhere(
         gtx_transformations.GT4PyMoveTaskletIntoMap,
         validate=validate,
@@ -328,27 +346,6 @@ def _gt_auto_process_dataflow_inside_maps(
         validate_all=validate_all,
     )
 
-    fusion_transformation = gtx_transformations.MapFusion(
-        only_toplevel_maps=False,
-        only_inner_maps=True,  # TODO(phimuell): What about Maps in nested SDFGs?
-        allow_parallel_map_fusion=True,
-        allow_serial_map_fusion=True,
-        only_if_common_ancestor=False,  # TODO(phimuell): Should we?
-    )
-    # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
-    #   has been solved.
-    fusion_transformation._single_use_data = dace_analysis.FindSingleUseData().apply_pass(sdfg, {})
-
-    while True:
-        nb_applied = sdfg.apply_transformations_repeated(
-            fusion_transformation,
-            validate=validate,
-            validate_all=validate_all,
-        )
-        if nb_applied == 0:
-            break
-        gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
-
     return sdfg
 
 
@@ -373,20 +370,21 @@ def _gt_auto_configure_maps_and_strides(
     For a description of the arguments see the `gt_auto_optimize()` function.
     """
 
+    # We now set the iteration order of the Maps. For that we use `unit_strides_kind`
+    #  argument and if not supplied we guess depending if we are on the GPU or not.
     if unit_strides_kind is None:
         unit_strides_kind = (
             gtx_common.DimensionKind.HORIZONTAL if gpu else gtx_common.DimensionKind.VERTICAL
         )
-    if unit_strides_kind is not None:
-        # It is not possible to use the `unit_strides_dim` argument of the
-        #  function, because `LoopBlocking` will change the name of the parameter
-        #  but the dimension can still be identified by its "kind".
-        gtx_transformations.gt_set_iteration_order(
-            sdfg=sdfg,
-            unit_strides_kind=unit_strides_kind,
-            validate=validate,
-            validate_all=validate_all,
-        )
+    # It is not possible to use the `unit_strides_dim` argument of the
+    #  function, because `LoopBlocking`, if run, changed the name of the
+    #  parameter but the dimension can still be identified by its "kind".
+    gtx_transformations.gt_set_iteration_order(
+        sdfg=sdfg,
+        unit_strides_kind=unit_strides_kind,
+        validate=validate,
+        validate_all=validate_all,
+    )
 
     # NOTE: We have to set the strides of transients before the non-standard Memlets
     #   get expanded, i.e. turned into Maps because no `cudaMemcpy*()` call exists,
