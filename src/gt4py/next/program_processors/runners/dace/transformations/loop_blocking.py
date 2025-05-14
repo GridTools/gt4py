@@ -566,9 +566,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         while independent_nodes_were_updated:
             independent_nodes_were_updated = False
             for node in list(self._independent_nodes):
-                # The only nodes that are important here, are the independent nodes at
-                #  the boundaries, i.e. nodes that lead to an dependent node. Note that
-                #  here we ignore edges that are empty.
+                # The only nodes that are important here, are the independent nodes
+                #  at the boundaries, i.e. independent nodes that are connected to
+                #  dependent nodes.
                 if all(
                     oedge.dst in self._independent_nodes
                     for oedge in state.out_edges(node)
