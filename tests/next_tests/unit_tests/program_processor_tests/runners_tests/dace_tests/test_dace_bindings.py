@@ -10,9 +10,8 @@
 
 import pytest
 
-from gt4py.eve import codegen
 from gt4py.next.otf.binding import interface
-from tests.next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
+from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
 
 dace = pytest.importorskip("dace")
 
