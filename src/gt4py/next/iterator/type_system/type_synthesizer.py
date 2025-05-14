@@ -482,7 +482,7 @@ def as_fieldop(
         *fields: ts.TupleType,
         # For each stencil parameter all locations it is `deref`ed on
         #  see :func:`gt4py.next.iterator.transforms.trace_stencil`.
-        shift_sequences_per_param: list[set[tuple[itir.OffsetLiteral, ...]]],
+        shift_sequences_per_param: list[set[tuple[itir.OffsetLiteral, ...]]] | None,
     ) -> ts.FieldType | ts.DeferredType:
         if any(
             isinstance(el, ts.DeferredType)
@@ -497,7 +497,7 @@ def as_fieldop(
         if not domain:
             deduced_domain = None
             output_dims: list[common.Dimension] = []
-            if offset_provider_type is not None:
+            if offset_provider_type is not None and shift_sequences_per_param is not None:
                 for field, shift_sequences in zip(
                     new_fields, shift_sequences_per_param, strict=True
                 ):

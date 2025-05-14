@@ -493,6 +493,7 @@ class ITIRTypeInference(eve.NodeTranslator):
             #  probably just change the behaviour of the lowering. Until then we do this more
             #  complicated comparison.
             if isinstance(target_type, ts.FieldType) and isinstance(expr_type, ts.FieldType):
+                assert expr_type.dims == target_type.dims
                 assert target_type.dtype == expr_type.dtype
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs) -> ts.DimensionType:
@@ -578,7 +579,7 @@ class ITIRTypeInference(eve.NodeTranslator):
             syntactic_info["shift_sequences_per_param"] = (
                 trace_shifts.trace_stencil(stencil, num_args=len(node.args))
                 if not referenced_fun_names
-                else []
+                else None
             )
 
         fun = self.visit(node.fun, ctx=ctx)

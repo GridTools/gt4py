@@ -539,9 +539,8 @@ def test_as_fieldop_without_domain_I():
     )
 
 
-def test_as_fieldop_without_domain_Cell_K(
-    mesh_descriptor,
-):  # TODO: get rid of mesh_descriptor
+def test_as_fieldop_without_domain_Cell_K():
+    mesh = simple_mesh(None)
     stencil = im.lambda_("it1", "it2")(
         im.plus(
             im.deref(im.shift("E2V", 1)(im.shift("C2E", 1)("it1"))),
@@ -555,7 +554,7 @@ def test_as_fieldop_without_domain_Cell_K(
     )
     result = itir_type_inference.infer(
         testee,
-        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        offset_provider_type={**mesh.offset_provider_type, "KOff": KDim},
         allow_undeclared_symbols=True,
     )
     assert result.type == ts.FieldType(dims=[Cell, KDim], dtype=float64_type)
@@ -571,7 +570,8 @@ def test_as_fieldop_without_domain_Cell_K(
     )
 
 
-def test_as_fieldop_without_domain_new(mesh_descriptor):  # TODO: get rid of mesh_descriptor
+def test_as_fieldop_without_domain_new():
+    mesh = simple_mesh(None)
     stencil = im.lambda_("it1", "it2")(
         im.plus(im.deref("it1"), im.deref(im.shift("KOff", 1)(im.shift("V2E", 0)("it2"))))
     )
@@ -581,7 +581,7 @@ def test_as_fieldop_without_domain_new(mesh_descriptor):  # TODO: get rid of mes
     )
     result = itir_type_inference.infer(
         testee,
-        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        offset_provider_type={**mesh.offset_provider_type, "KOff": KDim},
         allow_undeclared_symbols=True,
     )
     assert result.type == ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
@@ -664,13 +664,14 @@ def test_as_fieldop_without_domain_K_Vertex():
     )
 
 
-def test_as_fieldop_without_domain_V2E(mesh_descriptor):  # TODO: get rid of mesh_descriptor
+def test_as_fieldop_without_domain_V2E():
+    mesh = simple_mesh(None)
     stencil = im.lambda_("it")(im.deref(im.shift("V2E", 0)("it")))
 
     testee = im.as_fieldop(stencil)(im.ref("inp", float_edge_field))
     result = itir_type_inference.infer(
         testee,
-        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        offset_provider_type={**mesh.offset_provider_type, "KOff": KDim},
         allow_undeclared_symbols=True,
     )
     assert result.type == ts.FieldType(dims=[Vertex], dtype=float64_type)
@@ -681,9 +682,8 @@ def test_as_fieldop_without_domain_V2E(mesh_descriptor):  # TODO: get rid of mes
     )
 
 
-def test_as_fieldop_without_domain_theree_shifts(
-    mesh_descriptor,
-):  # TODO: get rid of mesh_descriptor
+def test_as_fieldop_without_domain_theree_shifts():
+    mesh = simple_mesh(None)
     stencil = im.lambda_("it")(
         im.deref(im.shift("V2E", 0)(im.shift("E2V", 0)(im.shift("C2E", 0)("it"))))
     )
@@ -691,7 +691,7 @@ def test_as_fieldop_without_domain_theree_shifts(
     testee = im.as_fieldop(stencil)(im.ref("inp", float_edge_field))
     result = itir_type_inference.infer(
         testee,
-        offset_provider_type={**mesh_descriptor.offset_provider_type},
+        offset_provider_type={**mesh.offset_provider_type},
         allow_undeclared_symbols=True,
     )
     assert result.type == ts.FieldType(dims=[Cell], dtype=float64_type)
@@ -702,9 +702,8 @@ def test_as_fieldop_without_domain_theree_shifts(
     )
 
 
-def test_as_fieldop_without_domain_one_shift(
-    mesh_descriptor,
-):  # TODO: get rid of mesh_descriptor
+def test_as_fieldop_without_domain_one_shift():
+    mesh = simple_mesh(None)
     stencil = im.lambda_("it1", "it2")(
         im.plus(im.deref(im.shift("V2E", 1)("it1")), im.deref("it2"))
     )
@@ -714,7 +713,7 @@ def test_as_fieldop_without_domain_one_shift(
     )
     result = itir_type_inference.infer(
         testee,
-        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        offset_provider_type={**mesh.offset_provider_type, "KOff": KDim},
         allow_undeclared_symbols=True,
     )
     assert result.type == ts.FieldType(dims=[Edge, Vertex], dtype=float64_type)
@@ -730,15 +729,14 @@ def test_as_fieldop_without_domain_one_shift(
     )
 
 
-def test_as_fieldop_without_domain_nested_shifts(
-    mesh_descriptor,
-):  # TODO: get rid of mesh_descriptor
+def test_as_fieldop_without_domain_nested_shifts():
+    mesh = simple_mesh(None)
     stencil = im.lambda_("it")(im.deref(im.shift("E2V", 0)(im.shift("C2E", 0)("it"))))
 
     testee = im.as_fieldop(stencil)(im.ref("inp", float_vertex_field))
     result = itir_type_inference.infer(
         testee,
-        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        offset_provider_type={**mesh.offset_provider_type, "KOff": KDim},
         allow_undeclared_symbols=True,
     )
     assert result.type == ts.FieldType(dims=[Cell], dtype=float64_type)
@@ -764,7 +762,8 @@ def test_as_fieldop_without_domain_no_shift():
     )
 
 
-def test_as_fieldop_without_domain_plus(mesh_descriptor):  # TODO: get rid of mesh_descriptor
+def test_as_fieldop_without_domain_plus():
+    mesh = simple_mesh(None)
     stencil = im.lambda_("it1", "it2")(
         im.plus(im.deref(im.shift("V2E", 1)("it1")), im.deref(im.shift("KOff", 1)("it2")))
     )
@@ -772,7 +771,7 @@ def test_as_fieldop_without_domain_plus(mesh_descriptor):  # TODO: get rid of me
     testee = im.as_fieldop(stencil)(im.ref("inp1", float_edge_field), im.ref("inp2", float_k_field))
     result = itir_type_inference.infer(
         testee,
-        offset_provider_type={**mesh_descriptor.offset_provider_type, "KOff": KDim},
+        offset_provider_type={**mesh.offset_provider_type, "KOff": KDim},
         allow_undeclared_symbols=True,
     )
     assert result.type == ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
