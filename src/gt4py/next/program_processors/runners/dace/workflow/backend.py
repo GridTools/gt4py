@@ -73,19 +73,9 @@ run_dace_cpu_noopt = DaCeBackendFactory(auto_optimize=False)
 run_dace_cpu_cached = DaCeBackendFactory(
     auto_optimize=True, cached=True, otf_workflow__cached_translation=True
 )
-run_dace_cpu_cached_persist = DaCeBackendFactory(
-    auto_optimize=True, make_persistent=True, cached=True, otf_workflow__cached_translation=True
-)
 
 run_dace_gpu = DaCeBackendFactory(gpu=True, auto_optimize=True)
 run_dace_gpu_noopt = DaCeBackendFactory(gpu=True, auto_optimize=False)
 run_dace_gpu_cached = DaCeBackendFactory(
     gpu=True, auto_optimize=True, cached=True, otf_workflow__cached_translation=True
-)
-run_dace_gpu_cached_persist = DaCeBackendFactory(
-    gpu=True,
-    auto_optimize=True,
-    make_persistent=True,
-    cached=True,
-    otf_workflow__cached_translation=True,
 )
