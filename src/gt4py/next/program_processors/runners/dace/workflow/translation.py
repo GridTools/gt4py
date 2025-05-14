@@ -60,6 +60,10 @@ def _find_constant_symbols(
     return constant_symbols
 
 
+def _language_settings() -> languages.LanguageSettings:
+    return languages.LanguageSettings(formatter_key="", formatter_style="", file_extension="sdfg")
+
+
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
@@ -77,11 +81,6 @@ class DaCeTranslator(
     make_persistent: bool = False
     blocking_dim: Optional[common.Dimension] = None
     blocking_size: int = 10
-
-    def _language_settings(self) -> languages.LanguageSettings:
-        return languages.LanguageSettings(
-            formatter_key="", formatter_style="", file_extension="sdfg"
-        )
 
     def generate_sdfg(
         self,
@@ -147,20 +146,22 @@ class DaCeTranslator(
             on_gpu=(self.device_type == core_defs.CUPY_DEVICE_TYPE),
         )
 
-        parameters = [
-            interface.Parameter(param.id, arg.type_)
-            if isinstance(arg, arguments.StaticArg)
-            else interface.Parameter(param.id, arg)
-            for param, arg in zip(program.params, inp.args.args)
-        ]
+        arg_types = tuple(
+            arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
+        )
+
+        program_parameters = tuple(
+            interface.Parameter(param, arg_type)
+            for param, arg_type in zip(sdfg.arg_names, arg_types)
+        )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
             stages.ProgramSource(
-                entry_point=interface.Function(program.id, tuple(parameters)),
+                entry_point=interface.Function(program.id, program_parameters),
                 source_code=sdfg.to_json(),
                 library_deps=tuple(),
                 language=languages.SDFG,
-                language_settings=self._language_settings(),
+                language_settings=_language_settings(),
                 implicit_domain=inp.data.implicit_domain,
             )
         )

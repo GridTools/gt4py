@@ -1,0 +1,235 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+"""Test utility functions of the dace backend module."""
+
+import pytest
+
+from gt4py.eve import codegen
+from gt4py.next.otf.binding import interface
+from tests.next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
+
+dace = pytest.importorskip("dace")
+
+from gt4py.next.otf import languages, stages
+from gt4py.next.program_processors.runners.dace.workflow import bindings as dace_bindings
+from gt4py.next.type_system import type_specifications as ts
+
+
+_bind_func_name = "dummy"
+
+_binding_source_not_persistent = f"""\
+import ctypes
+from gt4py.next import common as gtx_common, field_utils
+
+
+def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
+
+    actype = sdfg_argtypes[4].dtype.as_ctypes()
+    last_call_args[4] = actype(args[0])
+
+    last_call_args[0].value = args[1].data_ptr()
+    stride, remainder = divmod(args[1].ndarray.strides[0], args[1].ndarray.itemsize)
+    actype = sdfg_argtypes[7].dtype.as_ctypes()
+    last_call_args[7] = actype(stride)
+
+    last_call_args[1].value = args[2][0].data_ptr()
+    stride, remainder = divmod(args[2][0].ndarray.strides[0], args[2][0].ndarray.itemsize)
+    actype = sdfg_argtypes[8].dtype.as_ctypes()
+    last_call_args[8] = actype(stride)
+    stride, remainder = divmod(args[2][0].ndarray.strides[1], args[2][0].ndarray.itemsize)
+    actype = sdfg_argtypes[9].dtype.as_ctypes()
+    last_call_args[9] = actype(stride)
+    last_call_args[2].value = args[2][1][0].data_ptr()
+    stride, remainder = divmod(args[2][1][0].ndarray.strides[0], args[2][1][0].ndarray.itemsize)
+    actype = sdfg_argtypes[10].dtype.as_ctypes()
+    last_call_args[10] = actype(stride)
+    stride, remainder = divmod(args[2][1][0].ndarray.strides[1], args[2][1][0].ndarray.itemsize)
+    actype = sdfg_argtypes[11].dtype.as_ctypes()
+    last_call_args[11] = actype(stride)
+    actype = sdfg_argtypes[5].dtype.as_ctypes()
+    last_call_args[5] = actype(args[2][1][1])
+
+    actype = sdfg_argtypes[6].dtype.as_ctypes()
+    last_call_args[6] = actype(args[3])
+
+    last_call_args[3].value = args[4].data_ptr()
+    actype = sdfg_argtypes[12].dtype.as_ctypes()
+    last_call_args[12] = actype(args[4].domain.ranges[0].start)
+    actype = sdfg_argtypes[13].dtype.as_ctypes()
+    last_call_args[13] = actype(args[4].domain.ranges[0].stop)
+    actype = sdfg_argtypes[14].dtype.as_ctypes()
+    last_call_args[14] = actype(args[4].domain.ranges[1].start)
+    actype = sdfg_argtypes[15].dtype.as_ctypes()
+    last_call_args[15] = actype(args[4].domain.ranges[1].stop)
+    stride, remainder = divmod(args[4].ndarray.strides[0], args[4].ndarray.itemsize)
+    actype = sdfg_argtypes[16].dtype.as_ctypes()
+    last_call_args[16] = actype(stride)
+    stride, remainder = divmod(args[4].ndarray.strides[1], args[4].ndarray.itemsize)
+    actype = sdfg_argtypes[17].dtype.as_ctypes()
+    last_call_args[17] = actype(stride)\
+"""
+
+
+_binding_source_persistent = f"""\
+import ctypes
+from gt4py.next import common as gtx_common, field_utils
+
+
+def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
+
+    actype = sdfg_argtypes[4].dtype.as_ctypes()
+    last_call_args[4] = actype(args[0])
+
+    last_call_args[0].value = args[1].data_ptr()
+    stride, remainder = divmod(args[1].ndarray.strides[0], args[1].ndarray.itemsize)
+    actype = sdfg_argtypes[7].dtype.as_ctypes()
+    last_call_args[7] = actype(stride)
+
+    last_call_args[1].value = args[2][0].data_ptr()
+    stride, remainder = divmod(args[2][0].ndarray.strides[0], args[2][0].ndarray.itemsize)
+    actype = sdfg_argtypes[8].dtype.as_ctypes()
+    last_call_args[8] = actype(stride)
+    stride, remainder = divmod(args[2][0].ndarray.strides[1], args[2][0].ndarray.itemsize)
+    actype = sdfg_argtypes[9].dtype.as_ctypes()
+    last_call_args[9] = actype(stride)
+    last_call_args[2].value = args[2][1][0].data_ptr()
+    stride, remainder = divmod(args[2][1][0].ndarray.strides[0], args[2][1][0].ndarray.itemsize)
+    actype = sdfg_argtypes[10].dtype.as_ctypes()
+    last_call_args[10] = actype(stride)
+    stride, remainder = divmod(args[2][1][0].ndarray.strides[1], args[2][1][0].ndarray.itemsize)
+    actype = sdfg_argtypes[11].dtype.as_ctypes()
+    last_call_args[11] = actype(stride)
+    actype = sdfg_argtypes[5].dtype.as_ctypes()
+    last_call_args[5] = actype(args[2][1][1])
+
+    actype = sdfg_argtypes[6].dtype.as_ctypes()
+    last_call_args[6] = actype(args[3])
+
+    last_call_args[3].value = args[4].data_ptr()
+    stride, remainder = divmod(args[4].ndarray.strides[0], args[4].ndarray.itemsize)
+    actype = sdfg_argtypes[16].dtype.as_ctypes()
+    last_call_args[16] = actype(stride)
+    stride, remainder = divmod(args[4].ndarray.strides[1], args[4].ndarray.itemsize)
+    actype = sdfg_argtypes[17].dtype.as_ctypes()
+    last_call_args[17] = actype(stride)\
+"""
+
+
+# The difference between the two bindings versions is that the shape and strides
+# of array 'E' are not updated when 'make_persistent=True'. Therefore, the lines
+# for updating 'last_call_args[12-15]' are missing in this binding code.
+assert _binding_source_persistent != _binding_source_not_persistent
+
+
+def _language_settings() -> languages.LanguageSettings:
+    return languages.LanguageSettings(formatter_key="", formatter_style="", file_extension="sdfg")
+
+
+def _make_sdfg(sdfg_name: str) -> dace.SDFG:
+    sdfg = dace.SDFG(sdfg_name)
+
+    A, _ = sdfg.add_scalar("A", dace.float64)
+
+    B_dim0_rstart, B_dim0_rstop = (dace.symbol(f"__B_0_range_{i}") for i in (0, 1))
+    # set 'B_dim1' size to constant value to test the case of constant size in one dimension
+    B_shape = (B_dim0_rstop - B_dim0_rstart, 10)
+    # set 'B_dim1' stride to constant value
+    B_stride0, _ = (dace.symbol(f"__B_stride_{i}") for i in (0, 1))
+    B, _ = sdfg.add_array("B", B_shape, dace.int32, strides=(B_stride0, 1))
+
+    C_0_dim0_rstart, C_0_dim0_rstop = (dace.symbol(f"__C_0_0_range_{i}") for i in (0, 1))
+    C_0_dim1_rstart, C_0_dim1_rstop = (dace.symbol(f"__C_0_1_range_{i}") for i in (0, 1))
+    C_0_shape = (C_0_dim0_rstop - C_0_dim0_rstart, C_0_dim1_rstop - C_0_dim1_rstart)
+    C_0_strides = tuple(dace.symbol(f"__C_0_stride_{i}") for i in (0, 1))
+    C_0, _ = sdfg.add_array("C_0", C_0_shape, dace.int32, strides=C_0_strides)
+
+    C_1_0_dim0_rstart, C_1_0_dim0_rstop = (dace.symbol(f"__C_1_0_0_range_{i}") for i in (0, 1))
+    C_1_0_dim1_rstart, C_1_0_dim1_rstop = (dace.symbol(f"__C_1_0_1_range_{i}") for i in (0, 1))
+    C_1_0_shape = (C_1_0_dim0_rstop - C_1_0_dim0_rstart, C_1_0_dim1_rstop - C_1_0_dim1_rstart)
+    C_1_0_strides = tuple(dace.symbol(f"__C_1_0_stride_{i}") for i in (0, 1))
+    C_1_0, _ = sdfg.add_array("C_1_0", C_1_0_shape, dace.int32, strides=C_1_0_strides)
+
+    C_1_1, _ = sdfg.add_scalar("C_1_1", dace.float64)
+
+    D, _ = sdfg.add_scalar("D", dace.float64)
+
+    E_dim0_rstart, E_dim0_rstop = (dace.symbol(f"__E_0_range_{i}") for i in (0, 1))
+    E_dim1_rstart, E_dim1_rstop = (dace.symbol(f"__E_1_range_{i}") for i in (0, 1))
+    E_shape = (E_dim0_rstop - E_dim0_rstart, E_dim1_rstop - E_dim1_rstart)
+    E_strides = tuple(dace.symbol(f"__E_stride_{i}") for i in (0, 1))
+    E, _ = sdfg.add_array("E", E_shape, dace.int32, strides=E_strides)
+
+    st = sdfg.add_state()
+    st.add_mapped_tasklet(
+        "compute",
+        code="result = arg0 + arg1 + arg2 + arg3 + arg4 + arg5",
+        map_ranges=dict(i=f"{E_dim0_rstart}:{E_dim0_rstop}", j=f"{E_dim1_rstart}:{E_dim1_rstop}"),
+        inputs={
+            "arg0": dace.Memlet(data=A, subset="0"),
+            "arg1": dace.Memlet(data=B, subset=f"i-{E_dim0_rstart},j-{E_dim1_rstart}"),
+            "arg2": dace.Memlet(data=C_0, subset=f"i-{E_dim0_rstart},j-{E_dim1_rstart}"),
+            "arg3": dace.Memlet(data=C_1_0, subset=f"i-{E_dim0_rstart},j-{E_dim1_rstart}"),
+            "arg4": dace.Memlet(data=C_1_1, subset="0"),
+            "arg5": dace.Memlet(data=D, subset="0"),
+        },
+        outputs={
+            "result": dace.Memlet(data=E, subset=f"i-{E_dim0_rstart},j-{E_dim1_rstart}"),
+        },
+        external_edges=True,
+    )
+
+    sdfg.validate()
+    return sdfg
+
+
+@pytest.mark.parametrize(
+    "persistent_config",
+    [(False, _binding_source_not_persistent), (True, _binding_source_persistent)],
+)
+def test_sdfg_bindings(persistent_config):
+    make_persistent, binding_source_ref = persistent_config
+    program_name = "sdfg_bindings{}".format("_persistent" if make_persistent else "")
+
+    FloatType = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    FieldType = ts.FieldType(dims=[ffront_test_utils.IDim, ffront_test_utils.JDim], dtype=FloatType)
+    TupleType = ts.TupleType(types=[FieldType, ts.TupleType(types=[FieldType, FloatType])])
+
+    sdfg = _make_sdfg(program_name)
+
+    program_parameters = (
+        interface.Parameter("A", FloatType),
+        interface.Parameter("B", FieldType),
+        interface.Parameter("C", TupleType),
+        interface.Parameter("D", FloatType),
+        interface.Parameter("E", FieldType),
+    )
+
+    program_source: stages.ProgramSource[dace_bindings.SrcL, languages.LanguageSettings] = (
+        stages.ProgramSource(
+            entry_point=interface.Function(program_name, tuple(program_parameters)),
+            source_code=sdfg.to_json(),
+            library_deps=tuple(),
+            language=languages.SDFG,
+            language_settings=_language_settings(),
+            implicit_domain=False,
+        )
+    )
+
+    binding_source = dace_bindings.create_sdfg_bindings(
+        program_source, _bind_func_name, make_persistent
+    )
+
+    # ignore assert statements
+    binding_source_pruned = "\n".join(
+        line
+        for line in binding_source.source_code.splitlines()
+        if not line.lstrip().startswith("assert")
+    )
+
+    assert binding_source_pruned == binding_source_ref
