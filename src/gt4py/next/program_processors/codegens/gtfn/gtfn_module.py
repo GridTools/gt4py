@@ -21,7 +21,7 @@ from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
@@ -85,6 +85,7 @@ class GTFNTranslationStep(
         arg_exprs: list[str] = []
 
         for arg_type, program_param in zip(arg_types, program.params, strict=True):
+            arg_type = arg_type.type_ if isinstance(arg_type, arguments.StaticArg) else arg_type
             # parameter
             parameter = get_param_description(program_param.id, arg_type)
             parameters.append(parameter)
@@ -215,8 +216,11 @@ class GTFNTranslationStep(
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
+        arg_types = tuple(
+            arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
+        )
         regular_parameters, regular_args_expr = self._process_regular_arguments(
-            program, inp.args.args, inp.args.offset_provider_type
+            program, arg_types, inp.args.offset_provider_type
         )
 
         # handle connectivity parameters and arguments (i.e. what the user provided in the offset

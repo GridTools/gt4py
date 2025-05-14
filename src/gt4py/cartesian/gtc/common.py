@@ -688,24 +688,24 @@ class AxisBound(eve.Node):
 
     def __lt__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
-            return NotImplemented
+            raise TypeError
         return (self.level == LevelMarker.START and other.level == LevelMarker.END) or (
             self.level == other.level and self.offset < other.offset
         )
 
     def __le__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
-            return NotImplemented
+            raise TypeError
         return self < other or self == other
 
     def __gt__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
-            return NotImplemented
+            raise TypeError
         return not self < other and not self == other
 
     def __ge__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
-            return NotImplemented
+            raise TypeError
         return not self < other
 
 
@@ -714,7 +714,6 @@ class HorizontalInterval(eve.Node):
 
     This is separate from `gtir.Interval` because the endpoints may
     be outside the compute domain.
-
     """
 
     start: Optional[AxisBound]

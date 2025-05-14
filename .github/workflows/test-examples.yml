@@ -19,6 +19,7 @@ jobs:
     - id: get-versions
       uses: ./.github/actions/get-python-versions
 
+  # Test-running job
   test-notebooks:
     needs: get-python-versions
     strategy:
@@ -39,7 +40,5 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Run 'docs' nox session
-      env:
-        NUM_PROCESSES: auto
       shell: bash
-      run: uv run nox -s 'test_examples-${{ matrix.python-version }}'
+      run: uv run --script noxfile.py -s 'test_examples-${{ matrix.python-version }}'
