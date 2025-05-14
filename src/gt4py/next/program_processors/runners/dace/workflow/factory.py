@@ -29,7 +29,7 @@ from gt4py.next.program_processors.runners.dace.workflow.translation import (
 from gt4py.next.program_processors.runners.gtfn import FileCache
 
 
-GT_DACE_BINDING_FUNCTION_NAME: Final[str] = "update_sdfg_args"
+_GT_DACE_BINDING_FUNCTION_NAME: Final[str] = "update_sdfg_args"
 
 
 class DaCeWorkflowFactory(factory.Factory):
@@ -65,11 +65,13 @@ class DaCeWorkflowFactory(factory.Factory):
     bindings = factory.LazyAttribute(
         lambda o: functools.partial(
             bindings_step.bind_sdfg,
+            bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
             make_persistent=o.make_persistent,
         )
     )
     compilation = factory.SubFactory(
         DaCeCompilationStepFactory,
+        bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )

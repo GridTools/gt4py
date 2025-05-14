@@ -15,7 +15,6 @@ import dace
 from gt4py.eve import codegen
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
-from gt4py.next.program_processors.runners.dace.workflow import factory as dace_workflow_factory
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -154,6 +153,7 @@ def _parse_gt_param(
 
 def create_bindings(
     program_source: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
+    bind_func_name: str,
     make_persistent: bool,
 ) -> stages.BindingSource[SrcL, languages.Python]:
     """
@@ -183,7 +183,7 @@ def create_bindings(
     code.empty_line()
     code.append(
         "def {funname}({arg0}, {arg1}, {arg2}, {arg3}):".format(
-            funname=dace_workflow_factory.GT_DACE_BINDING_FUNCTION_NAME,
+            funname=bind_func_name,
             arg0=_cb_device,
             arg1=_cb_sdfg_argtypes,
             arg2=_cb_args,
@@ -206,6 +206,7 @@ def create_bindings(
 
 def bind_sdfg(
     inp: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
+    bind_func_name: str,
     make_persistent: bool,
 ) -> stages.CompilableSource[SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python]:
     """
@@ -214,5 +215,5 @@ def bind_sdfg(
     Refer to `create_bindings` documentation.
     """
     return stages.CompilableSource(
-        program_source=inp, binding_source=create_bindings(inp, make_persistent)
+        program_source=inp, binding_source=create_bindings(inp, bind_func_name, make_persistent)
     )

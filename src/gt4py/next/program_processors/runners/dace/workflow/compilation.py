@@ -19,11 +19,10 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache
-from gt4py.next.program_processors.runners.dace.workflow import factory as dace_workflow_factory
 
 
 def _get_call_args_callback(
-    module_name: str, python_code: str
+    module_name: str, bind_func_name: str, python_code: str
 ) -> Callable[
     [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]], None
 ]:
@@ -42,8 +41,8 @@ def _get_call_args_callback(
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     exec(python_code, module.__dict__)
-    assert dace_workflow_factory.GT_DACE_BINDING_FUNCTION_NAME in module.__dict__
-    return module.__dict__[dace_workflow_factory.GT_DACE_BINDING_FUNCTION_NAME]
+    assert bind_func_name in module.__dict__
+    return module.__dict__[bind_func_name]
 
 
 class CompiledDaceProgram(stages.ExtendedCompiledProgram):
@@ -62,6 +61,7 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
     def __init__(
         self,
         program: dace.CompiledSDFG,
+        bind_func_name: str,
         binding_source: stages.BindingSource[languages.SDFG, languages.Python],
         implicit_domain: bool,
     ):
@@ -75,7 +75,7 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
 
         # Note that `binding_source` contains Python code tailored to this specific SDFG.
         self.sdfg_arglist_callback = _get_call_args_callback(
-            program.sdfg.label, binding_source.source_code
+            program.sdfg.label, bind_func_name, binding_source.source_code
         )
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
@@ -101,6 +101,7 @@ class DaCeCompiler(
 ):
     """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
+    bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
@@ -142,7 +143,10 @@ class DaCeCompiler(
 
         assert inp.binding_source is not None
         return CompiledDaceProgram(
-            sdfg_program, inp.binding_source, inp.program_source.implicit_domain
+            sdfg_program,
+            self.bind_func_name,
+            inp.binding_source,
+            inp.program_source.implicit_domain,
         )
 
 
