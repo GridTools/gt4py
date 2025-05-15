@@ -29,6 +29,7 @@ FIELD_SYMBOL_GT_TYPE: Final[ts.ScalarType] = ts.ScalarType(
 
 _cb_args: Final[str] = "args"
 _cb_device: Final[str] = "device"
+_cb_get_stride: Final[str] = "_get_stride"
 _cb_sdfg_argtypes: Final[str] = "sdfg_argtypes"
 _cb_last_call_args: Final[str] = "last_call_args"
 
@@ -38,9 +39,10 @@ def _update_sdfg_scalar_arg(
 ) -> None:
     """Emit Python code to update a scalar argument in the SDFG arglist."""
     assert isinstance(sdfg_arg_desc, dace.data.Scalar)
+    actype = sdfg_arg_desc.dtype.as_ctypes()
+    actype_call = f"{actype.__module__}.{actype.__name__}"
     code.append(f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes._SimpleCData)")
-    code.append(f"actype = {_cb_sdfg_argtypes}[{sdfg_arg_index}].dtype.as_ctypes()")
-    code.append(f"{_cb_last_call_args}[{sdfg_arg_index}] = actype({rhs})")
+    code.append(f"{_cb_last_call_args}[{sdfg_arg_index}] = {actype_call}({rhs})")
 
 
 def _validate_sdfg_scalar_arg(
@@ -121,8 +123,11 @@ def _parse_gt_param(
                 )
                 code.append(f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}.data_ptr()")
                 code.append(f"assert gtx_common.Domain.is_finite({arg}.domain)")
-                for i, size in enumerate(sdfg_arg_desc.shape):
-                    if isinstance(size, dace.symbolic.SymbolicType):
+                for i, array_size in enumerate(sdfg_arg_desc.shape):
+                    if (
+                        isinstance(array_size, dace.symbolic.SymbolicType)
+                        and not array_size.is_constant()
+                    ):
                         dim_range = f"{arg}.domain.ranges[{i}]"
                         rstart = gtx_dace_utils.range_start_symbol(param_name, i)
                         rstop = gtx_dace_utils.range_stop_symbol(param_name, i)
@@ -143,17 +148,18 @@ def _parse_gt_param(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[i] == {arg}.ndarray.shape[i]"
                         )
                 for i, array_stride in enumerate(sdfg_arg_desc.strides):
-                    if isinstance(array_stride, dace.symbolic.SymbolicType):
+                    if (
+                        isinstance(array_stride, dace.symbolic.SymbolicType)
+                        and not array_stride.is_constant()
+                    ):
                         assert array_stride.name == gtx_dace_utils.field_stride_symbol_name(
                             param_name, i
                         )
-                        value = f"{arg}.ndarray.strides[{i}]"
-                        code.append(f"stride, remainder = divmod({value}, {arg}.ndarray.itemsize)")
-                        code.append("assert remainder == 0")
+                        value = f"{_cb_get_stride}({arg}.ndarray, {i})"
                         _parse_gt_param(
                             array_stride.name,
                             FIELD_SYMBOL_GT_TYPE,
-                            "stride",
+                            value,
                             code,
                             sdfg_arglist,
                             sdfg_argnames,
@@ -207,6 +213,13 @@ def create_sdfg_bindings(
     code.append("import ctypes")
     code.append("from gt4py.next import common as gtx_common, field_utils")
     code.empty_line()
+    code.append(f"""\
+def {_cb_get_stride}(ndarray, dim_index):
+    stride, remainder = divmod(ndarray.strides[dim_index], ndarray.itemsize)
+    assert remainder == 0
+    return stride
+""")
+    code.empty_line()
     code.append(
         "def {funname}({arg0}, {arg1}, {arg2}, {arg3}):".format(
             funname=bind_func_name,
@@ -218,7 +231,6 @@ def create_sdfg_bindings(
     )
     code.indent()
     for i, param in enumerate(program_source.entry_point.parameters):
-        code.empty_line()
         arg = f"{_cb_args}[{i}]"
         assert isinstance(param.type_, ts.DataType)
         _parse_gt_param(

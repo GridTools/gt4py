@@ -22,102 +22,59 @@ from gt4py.next.type_system import type_specifications as ts
 
 _bind_func_name = "dummy"
 
-_binding_source_not_persistent = f"""\
+
+_bind_header = """\
 import ctypes
 from gt4py.next import common as gtx_common, field_utils
 
 
-def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
+def _get_stride(ndarray, dim_index):
+    stride, remainder = divmod(ndarray.strides[dim_index], ndarray.itemsize)
+    return stride
 
-    actype = sdfg_argtypes[4].dtype.as_ctypes()
-    last_call_args[4] = actype(args[0])
 
-    last_call_args[0].value = args[1].data_ptr()
-    stride, remainder = divmod(args[1].ndarray.strides[0], args[1].ndarray.itemsize)
-    actype = sdfg_argtypes[7].dtype.as_ctypes()
-    last_call_args[7] = actype(stride)
-
-    last_call_args[1].value = args[2][0].data_ptr()
-    stride, remainder = divmod(args[2][0].ndarray.strides[0], args[2][0].ndarray.itemsize)
-    actype = sdfg_argtypes[8].dtype.as_ctypes()
-    last_call_args[8] = actype(stride)
-    stride, remainder = divmod(args[2][0].ndarray.strides[1], args[2][0].ndarray.itemsize)
-    actype = sdfg_argtypes[9].dtype.as_ctypes()
-    last_call_args[9] = actype(stride)
-    last_call_args[2].value = args[2][1][0].data_ptr()
-    stride, remainder = divmod(args[2][1][0].ndarray.strides[0], args[2][1][0].ndarray.itemsize)
-    actype = sdfg_argtypes[10].dtype.as_ctypes()
-    last_call_args[10] = actype(stride)
-    stride, remainder = divmod(args[2][1][0].ndarray.strides[1], args[2][1][0].ndarray.itemsize)
-    actype = sdfg_argtypes[11].dtype.as_ctypes()
-    last_call_args[11] = actype(stride)
-    actype = sdfg_argtypes[5].dtype.as_ctypes()
-    last_call_args[5] = actype(args[2][1][1])
-
-    actype = sdfg_argtypes[6].dtype.as_ctypes()
-    last_call_args[6] = actype(args[3])
-
-    last_call_args[3].value = args[4].data_ptr()
-    actype = sdfg_argtypes[12].dtype.as_ctypes()
-    last_call_args[12] = actype(args[4].domain.ranges[0].start)
-    actype = sdfg_argtypes[13].dtype.as_ctypes()
-    last_call_args[13] = actype(args[4].domain.ranges[0].stop)
-    actype = sdfg_argtypes[14].dtype.as_ctypes()
-    last_call_args[14] = actype(args[4].domain.ranges[1].start)
-    actype = sdfg_argtypes[15].dtype.as_ctypes()
-    last_call_args[15] = actype(args[4].domain.ranges[1].stop)
-    stride, remainder = divmod(args[4].ndarray.strides[0], args[4].ndarray.itemsize)
-    actype = sdfg_argtypes[16].dtype.as_ctypes()
-    last_call_args[16] = actype(stride)
-    stride, remainder = divmod(args[4].ndarray.strides[1], args[4].ndarray.itemsize)
-    actype = sdfg_argtypes[17].dtype.as_ctypes()
-    last_call_args[17] = actype(stride)\
 """
 
 
-_binding_source_persistent = f"""\
-import ctypes
-from gt4py.next import common as gtx_common, field_utils
-
-
+_binding_source_not_persistent = (
+    _bind_header
+    + f"""\
 def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
-
-    actype = sdfg_argtypes[4].dtype.as_ctypes()
-    last_call_args[4] = actype(args[0])
-
+    last_call_args[4] = ctypes.c_double(args[0])
     last_call_args[0].value = args[1].data_ptr()
-    stride, remainder = divmod(args[1].ndarray.strides[0], args[1].ndarray.itemsize)
-    actype = sdfg_argtypes[7].dtype.as_ctypes()
-    last_call_args[7] = actype(stride)
-
+    last_call_args[7] = ctypes.c_int(_get_stride(args[1].ndarray, 0))
     last_call_args[1].value = args[2][0].data_ptr()
-    stride, remainder = divmod(args[2][0].ndarray.strides[0], args[2][0].ndarray.itemsize)
-    actype = sdfg_argtypes[8].dtype.as_ctypes()
-    last_call_args[8] = actype(stride)
-    stride, remainder = divmod(args[2][0].ndarray.strides[1], args[2][0].ndarray.itemsize)
-    actype = sdfg_argtypes[9].dtype.as_ctypes()
-    last_call_args[9] = actype(stride)
+    last_call_args[8] = ctypes.c_int(_get_stride(args[2][0].ndarray, 0))
+    last_call_args[9] = ctypes.c_int(_get_stride(args[2][0].ndarray, 1))
     last_call_args[2].value = args[2][1][0].data_ptr()
-    stride, remainder = divmod(args[2][1][0].ndarray.strides[0], args[2][1][0].ndarray.itemsize)
-    actype = sdfg_argtypes[10].dtype.as_ctypes()
-    last_call_args[10] = actype(stride)
-    stride, remainder = divmod(args[2][1][0].ndarray.strides[1], args[2][1][0].ndarray.itemsize)
-    actype = sdfg_argtypes[11].dtype.as_ctypes()
-    last_call_args[11] = actype(stride)
-    actype = sdfg_argtypes[5].dtype.as_ctypes()
-    last_call_args[5] = actype(args[2][1][1])
-
-    actype = sdfg_argtypes[6].dtype.as_ctypes()
-    last_call_args[6] = actype(args[3])
-
+    last_call_args[10] = ctypes.c_int(_get_stride(args[2][1][0].ndarray, 0))
+    last_call_args[11] = ctypes.c_int(_get_stride(args[2][1][0].ndarray, 1))
+    last_call_args[5] = ctypes.c_double(args[2][1][1])
+    last_call_args[6] = ctypes.c_double(args[3])
     last_call_args[3].value = args[4].data_ptr()
-    stride, remainder = divmod(args[4].ndarray.strides[0], args[4].ndarray.itemsize)
-    actype = sdfg_argtypes[16].dtype.as_ctypes()
-    last_call_args[16] = actype(stride)
-    stride, remainder = divmod(args[4].ndarray.strides[1], args[4].ndarray.itemsize)
-    actype = sdfg_argtypes[17].dtype.as_ctypes()
-    last_call_args[17] = actype(stride)\
+    last_call_args[12] = ctypes.c_int(args[4].domain.ranges[0].start)
+    last_call_args[13] = ctypes.c_int(args[4].domain.ranges[0].stop)
+    last_call_args[14] = ctypes.c_int(args[4].domain.ranges[1].start)
+    last_call_args[15] = ctypes.c_int(args[4].domain.ranges[1].stop)
+    last_call_args[16] = ctypes.c_int(_get_stride(args[4].ndarray, 0))
+    last_call_args[17] = ctypes.c_int(_get_stride(args[4].ndarray, 1))\
 """
+)
+
+
+_binding_source_persistent = (
+    _bind_header
+    + f"""\
+def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
+    last_call_args[4] = ctypes.c_double(args[0])
+    last_call_args[0].value = args[1].data_ptr()
+    last_call_args[1].value = args[2][0].data_ptr()
+    last_call_args[2].value = args[2][1][0].data_ptr()
+    last_call_args[5] = ctypes.c_double(args[2][1][1])
+    last_call_args[6] = ctypes.c_double(args[3])
+    last_call_args[3].value = args[4].data_ptr()\
+"""
+)
 
 
 # The difference between the two bindings versions is that the shape and strides
@@ -191,7 +148,7 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
     "persistent_config",
     [(False, _binding_source_not_persistent), (True, _binding_source_persistent)],
 )
-def test_sdfg_bindings(persistent_config):
+def test_create_sdfg_bindings(persistent_config):
     make_persistent, binding_source_ref = persistent_config
     program_name = "sdfg_bindings{}".format("_persistent" if make_persistent else "")
 
