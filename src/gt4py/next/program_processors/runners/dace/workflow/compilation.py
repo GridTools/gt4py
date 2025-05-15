@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import importlib
+import os
 from typing import Any, Callable, Sequence
 
 import dace
@@ -74,8 +75,12 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
         self.sdfg_argtypes = [arg_type for _, arg_type in program.sdfg.arglist().items()]
 
         # Note that `binding_source` contains Python code tailored to this specific SDFG.
+        #   We need to ensure that it is loaded as a Python module with a unique name,
+        #   in order to avoid conflicts with other variants of the same program.
+        #   Therefore, we use the name of the build folder as module name.
+        binding_module_name = os.path.basename(program.sdfg.build_folder)
         self.sdfg_arglist_callback = _get_call_args_callback(
-            program.sdfg.label, bind_func_name, binding_source.source_code
+            binding_module_name, bind_func_name, binding_source.source_code
         )
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
