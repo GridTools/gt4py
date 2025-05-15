@@ -151,8 +151,8 @@ class DaCeTranslator(
         )
 
         program_parameters = tuple(
-            interface.Parameter(param, arg_type)
-            for param, arg_type in zip(sdfg.arg_names, arg_types)
+            interface.Parameter(param.id, arg_type)
+            for param, arg_type in zip(program.params, arg_types)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
