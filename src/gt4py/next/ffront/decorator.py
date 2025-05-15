@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import time
 import types
 import typing
 import warnings
@@ -31,6 +32,7 @@ from gt4py.next import (
     config,
     embedded as next_embedded,
     errors,
+    metrics,
 )
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -272,6 +274,9 @@ class Program:
         )
 
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
+        if config.COLLECT_METRICS:
+            start = time.time()
+
         if __debug__:
             # TODO: remove or make dependency on self.past_stage optional
             past_process_args._validate_args(
@@ -295,9 +300,12 @@ class Program:
                 ),
                 stacklevel=2,
             )
-            offset_provider = {**offset_provider, **self._implicit_offset_provider}
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 ctx.run(self.definition_stage.definition, *args, **kwargs)
+
+        if config.COLLECT_METRICS:
+            end = time.time()
+            metrics.global_metric_container[self.__name__][metrics.TOTAL].append(end - start)
 
     def compile(
         self,
