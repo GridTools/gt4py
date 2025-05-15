@@ -34,6 +34,7 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_maker
 from gt4py.next.program_processors.runners.dace import (
     gtir_builtin_translators as gtir_translators,
     gtir_dataflow,
+    gtir_domain,
     gtir_sdfg,
     gtir_sdfg_utils,
 )
@@ -46,10 +47,9 @@ if TYPE_CHECKING:
 
 def _parse_scan_fieldop_arg(
     node: gtir.Expr,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    domain: gtir_translators.FieldopDomain,
+    domain: gtir_domain.DomainRange,
 ) -> gtir_dataflow.MemletExpr | tuple[gtir_dataflow.MemletExpr | tuple[Any, ...], ...]:
     """Helper method to visit an expression passed as argument to a scan field operator.
 
@@ -63,16 +63,16 @@ def _parse_scan_fieldop_arg(
     def _parse_fieldop_arg_impl(
         arg: gtir_translators.FieldopData,
     ) -> gtir_dataflow.MemletExpr:
-        arg_expr = arg.get_local_view(domain, sdfg)
+        arg_expr = arg.get_local_view(domain, ctx.sdfg)
         if isinstance(arg_expr, gtir_dataflow.MemletExpr):
             return arg_expr
         # In scan field operator, the arguments to the vertical stencil are passed by value.
         # Therefore, the full field shape is passed as `MemletExpr` rather than `IteratorExpr`.
         return gtir_dataflow.MemletExpr(
-            arg_expr.field, arg_expr.gt_dtype, arg_expr.get_memlet_subset(sdfg)
+            arg_expr.field, arg_expr.gt_dtype, arg_expr.get_memlet_subset(ctx.sdfg)
         )
 
-    arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
+    arg = sdfg_builder.visit(node, ctx=ctx)
 
     if isinstance(arg, gtir_translators.FieldopData):
         return _parse_fieldop_arg_impl(arg)
@@ -85,7 +85,8 @@ def _create_scan_field_operator_impl(
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    domain: gtir_translators.FieldopDomain,
+    domain: gtir_domain.DomainRange,
+    domain_parser: gtir_domain.GTIRDomainParser,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
     map_exit: dace.nodes.MapExit,
@@ -109,9 +110,8 @@ def _create_scan_field_operator_impl(
     assert isinstance(dataflow_output_desc, dace.data.Array)
 
     # the memory layout of the output field follows the field operator compute domain
-    field_dims, field_origin, field_shape = gtir_translators.get_field_layout(domain)
-    field_indices = gtir_translators.get_domain_indices(field_dims, field_origin)
-    field_subset = dace_subsets.Range.from_indices(field_indices)
+    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(domain, domain_parser)
+    field_subset = gtir_domain.get_field_subset(domain)
 
     # the vertical dimension used as scan column is computed by the `LoopRegion`
     # inside the map scope, therefore it is excluded from the map range
@@ -173,9 +173,8 @@ def _create_scan_field_operator_impl(
 
 
 def _create_scan_field_operator(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
-    domain: gtir_translators.FieldopDomain,
+    ctx: gtir_sdfg.SDFGContext,
+    domain: gtir_domain.DomainRange,
     node_type: ts.FieldType | ts.TupleType,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     input_edges: Iterable[gtir_dataflow.DataflowInputEdge],
@@ -194,7 +193,8 @@ def _create_scan_field_operator(
     Refer to `gtir_builtin_translators._create_field_operator()` for the
     description of function arguments and return values.
     """
-    domain_dims, _, _ = gtir_translators.get_field_layout(domain)
+    sdfg, state, domain_parser = ctx.sdfg, ctx.state, ctx.domain_parser
+    domain_dims, _, _ = gtir_domain.get_field_layout(domain, domain_parser)
 
     # create a map scope to execute the `LoopRegion` over the horizontal domain
     if len(domain_dims) == 1:
@@ -212,8 +212,8 @@ def _create_scan_field_operator(
             "fieldop",
             state,
             ndrange={
-                gtir_sdfg_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
-                for dim, lower_bound, upper_bound in domain
+                gtir_sdfg_utils.get_map_variable(dim): dim_range
+                for dim, dim_range in domain
                 if not sdfg_builder.is_column_axis(dim)
             },
         )
@@ -225,7 +225,7 @@ def _create_scan_field_operator(
     if isinstance(node_type, ts.FieldType):
         assert isinstance(output_tree, gtir_dataflow.DataflowOutputEdge)
         return _create_scan_field_operator_impl(
-            sdfg_builder, sdfg, state, domain, output_tree, node_type, map_exit
+            sdfg_builder, sdfg, state, domain, domain_parser, output_tree, node_type, map_exit
         )
     else:
         # handle tuples of fields
@@ -239,6 +239,7 @@ def _create_scan_field_operator(
                     sdfg,
                     state,
                     domain,
+                    domain_parser,
                     output_edge,
                     output_sym.type,
                     map_exit,
@@ -264,9 +265,9 @@ def _scan_output_name(input_name: str) -> str:
 
 def _lower_lambda_to_nested_sdfg(
     lambda_node: gtir.Lambda,
-    sdfg: dace.SDFG,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    domain: gtir_translators.FieldopDomain,
+    domain: gtir_domain.DomainRange,
     init_data: gtir_translators.FieldopResult,
     lambda_symbols: dict[str, ts.DataType],
     scan_forward: bool,
@@ -288,7 +289,7 @@ def _lower_lambda_to_nested_sdfg(
 
     Args:
         lambda_node: The lambda representing the stencil expression on the horizontal level.
-        sdfg: The SDFG where the scan field operator is translated.
+        ctx: The parent SDFG context of the lambda expression.
         sdfg_builder: The SDFG builder object to access the field operator context.
         domain: The field operator domain, with all horizontal and vertical dimensions.
         init_data: The data produced in the field operator context that is used
@@ -310,18 +311,19 @@ def _lower_lambda_to_nested_sdfg(
     """
 
     # the lambda expression, i.e. body of the scan, will be created inside a nested SDFG.
-    nsdfg = dace.SDFG(sdfg_builder.unique_nsdfg_name(sdfg, "scan"))
-    nsdfg.debuginfo = gtir_sdfg_utils.debug_info(lambda_node, default=sdfg.debuginfo)
+    lambda_translator, lambda_init_ctx = sdfg_builder.setup_nested_context(
+        lambda_node, "scan", ctx, lambda_symbols, state_name="scan_init"
+    )
+    nsdfg, init_state = lambda_init_ctx.sdfg, lambda_init_ctx.state
     # We set `using_explicit_control_flow=True` because the vertical scan is lowered to a `LoopRegion`.
     # This property is used by pattern matching in SDFG transformation framework
     # to skip those transformations that do not yet support control flow blocks.
     nsdfg.using_explicit_control_flow = True
-    lambda_translator = sdfg_builder.setup_nested_context(nsdfg, sdfg, lambda_symbols)
 
     # use the vertical dimension in the domain as scan dimension
     scan_domain = [
-        (dim, lower_bound, upper_bound)
-        for dim, lower_bound, upper_bound in domain
+        (dim, dim_range[0], dim_range[1] + dim_range[2])
+        for dim, dim_range in domain
         if sdfg_builder.is_column_axis(dim)
     ]
     assert len(scan_domain) == 1
@@ -352,7 +354,6 @@ def _lower_lambda_to_nested_sdfg(
 
     # Create the body of the initialization state
     # This dataflow will write the initial value of the scan carry variable.
-    init_state = nsdfg.add_state("scan_init", is_start_block=True)
     scan_carry_input = (
         gtir_sdfg_utils.make_symbol_tree(scan_carry_symbol.id, scan_carry_symbol.type)
         if isinstance(scan_carry_symbol.type, ts.TupleType)
@@ -404,11 +405,12 @@ def _lower_lambda_to_nested_sdfg(
     # The 'update' state writes the value computed by the stencil into the scan carry variable,
     # in order to make it available to the next vertical level.
     compute_state = scan_loop.add_state("scan_compute")
+    lambda_compute_ctx = lambda_init_ctx.clone(compute_state)
     update_state = scan_loop.add_state_after(compute_state, "scan_update")
 
     # inside the 'compute' state, visit the list of arguments to be passed to the stencil
     stencil_args = [
-        _parse_scan_fieldop_arg(im.ref(p.id), nsdfg, compute_state, lambda_translator, domain)
+        _parse_scan_fieldop_arg(im.ref(p.id), lambda_compute_ctx, lambda_translator, domain)
         for p in lambda_node.params
     ]
     # stil inside the 'compute' state, generate the dataflow representing the stencil
@@ -534,8 +536,7 @@ def _connect_nested_sdfg_output_to_temporaries(
 
 def translate_scan(
     node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> gtir_translators.FieldopResult:
     """
@@ -560,7 +561,7 @@ def translate_scan(
     assert cpm.is_call_to(scan_expr, "scan")
 
     # parse the domain of the scan field operator
-    domain = gtir_translators.extract_domain(domain_expr)
+    domain = gtir_domain.extract_domain(domain_expr)
 
     # parse scan parameters
     assert len(scan_expr.args) == 3
@@ -577,7 +578,7 @@ def translate_scan(
     # params[2]: the expression that computes the value for scan initialization
     init_expr = scan_expr.args[2]
     # visit the initialization value of the scan expression
-    init_data = sdfg_builder.visit(init_expr, sdfg=sdfg, head_state=state)
+    init_data = sdfg_builder.visit(init_expr, ctx=ctx)
     # extract type definition of the scan carry
     scan_carry_type = (
         init_data.gt_type
@@ -598,7 +599,7 @@ def translate_scan(
     # lower the scan stencil expression in a separate SDFG context
     nsdfg, lambda_output = _lower_lambda_to_nested_sdfg(
         stencil_expr,
-        sdfg,
+        ctx,
         sdfg_builder,
         domain,
         init_data,
@@ -610,7 +611,7 @@ def translate_scan(
     # visit the arguments to be passed to the lambda expression
     # this must be executed before visiting the lambda expression, in order to populate
     # the data descriptor with the correct field domain offsets for field arguments
-    lambda_args = [sdfg_builder.visit(arg, sdfg=sdfg, head_state=state) for arg in node.args]
+    lambda_args = [sdfg_builder.visit(arg, ctx=ctx) for arg in node.args]
     lambda_args_mapping = [
         (im.sym(_scan_input_name(scan_carry), scan_carry_type), init_data),
     ] + [
@@ -638,13 +639,13 @@ def translate_scan(
     # build the mapping of symbols from nested SDFG to field operator context
     nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
     for psym, arg in lambda_args_mapping:
-        nsdfg_symbols_mapping |= gtir_translators.get_arg_symbol_mapping(psym.id, arg, sdfg)
+        nsdfg_symbols_mapping |= gtir_translators.get_arg_symbol_mapping(psym.id, arg, ctx.sdfg)
 
     # the scan nested SDFG is ready: it is instantiated in the field operator context
     # where the map scope over the horizontal domain lives
-    nsdfg_node = state.add_nested_sdfg(
+    nsdfg_node = ctx.state.add_nested_sdfg(
         nsdfg,
-        sdfg,
+        ctx.sdfg,
         inputs=set(lambda_arg_nodes.keys()),
         outputs=set(lambda_flat_outs.keys()),
         symbol_mapping=nsdfg_symbols_mapping,
@@ -652,10 +653,10 @@ def translate_scan(
 
     lambda_input_edges = []
     for input_connector, outer_arg in lambda_arg_nodes.items():
-        arg_desc = outer_arg.dc_node.desc(sdfg)
+        arg_desc = outer_arg.dc_node.desc(ctx.sdfg)
         input_subset = dace_subsets.Range.from_array(arg_desc)
         input_edge = gtir_dataflow.MemletInputEdge(
-            state, outer_arg.dc_node, input_subset, nsdfg_node, input_connector
+            ctx.state, outer_arg.dc_node, input_subset, nsdfg_node, input_connector
         )
         lambda_input_edges.append(input_edge)
 
@@ -663,11 +664,16 @@ def translate_scan(
     # results of a column slice for each point in the horizontal domain
     lambda_output_tree = gtx_utils.tree_map(
         lambda lambda_output_data: _connect_nested_sdfg_output_to_temporaries(
-            sdfg, nsdfg, nsdfg_node, state, lambda_output_data
+            ctx.sdfg, nsdfg, nsdfg_node, ctx.state, lambda_output_data
         )
     )(lambda_output)
 
     # we call a helper method to create a map scope that will compute the entire field
     return _create_scan_field_operator(
-        sdfg, state, domain, node.type, sdfg_builder, lambda_input_edges, lambda_output_tree
+        ctx,
+        domain,
+        node.type,
+        sdfg_builder,
+        lambda_input_edges,
+        lambda_output_tree,
     )
