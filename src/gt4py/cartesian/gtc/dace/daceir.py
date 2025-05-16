@@ -848,14 +848,6 @@ class ComputationNode(LocNode):
             conns[memlet.field].add(memlet.connector)
 
     @property
-    def read_fields(self):
-        return set(ml.field for ml in self.read_memlets)
-
-    @property
-    def write_fields(self):
-        return set(ml.field for ml in self.write_memlets)
-
-    @property
     def input_connectors(self):
         return set(ml.connector for ml in self.read_memlets)
 
