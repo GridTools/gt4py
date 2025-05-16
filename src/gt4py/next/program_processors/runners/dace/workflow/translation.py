@@ -60,6 +60,27 @@ def _find_constant_symbols(
     return constant_symbols
 
 
+def _make_sdfg_async(sdfg: dace.SDFG) -> None:
+    """Sets all cuda stream to the default stream."""
+
+    # Emit cpp code for the SDFG to set the cuda streams
+    sdfg.append_global_code(f"""\
+DACE_EXPORTED bool __dace_gpu_set_stream({sdfg.name}_state_t *__state, int streamid, gpuStream_t stream);
+DACE_EXPORTED void __set_stream_{sdfg.name}({sdfg.name}_state_t *__state, gpuStream_t stream) {{
+for (int i = 0; i < __state->gpu_context->num_streams; i++)
+    __dace_gpu_set_stream(__state, i, stream);
+}}\
+""")
+    sdfg.append_init_code(f"""\
+__set_stream_{sdfg.name}(__state, cudaStreamDefault);
+""")
+
+    # Loop over all state in the top-level SDFG
+    for state in sdfg.states():
+        # TODO: add a check that the state contains only one gpu map
+        state.nosync = True
+
+
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
@@ -69,6 +90,7 @@ class DaCeTranslator(
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
+    async_sdfg_call: bool = True
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
 
@@ -84,6 +106,7 @@ class DaCeTranslator(
         column_axis: Optional[common.Dimension],
         auto_opt: bool,
         on_gpu: bool,
+        async_sdfg_call: bool,
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
             ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
@@ -122,6 +145,9 @@ class DaCeTranslator(
                 gtx_transformations.gt_simplify(sdfg)
                 gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
+        if on_gpu and async_sdfg_call:
+            _make_sdfg_async(sdfg)
+
         return sdfg
 
     def __call__(
@@ -137,6 +163,7 @@ class DaCeTranslator(
             inp.args.column_axis,
             auto_opt=self.auto_optimize,
             on_gpu=(self.device_type == core_defs.CUPY_DEVICE_TYPE),
+            async_sdfg_call=self.async_sdfg_call,
         )
 
         arg_types = tuple(
