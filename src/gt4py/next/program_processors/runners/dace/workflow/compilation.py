@@ -22,7 +22,7 @@ from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache
 
 
-def _get_call_args_callback(
+def _get_sdfg_ctype_arglist_callback(
     module_name: str, bind_func_name: str, python_code: str
 ) -> Callable[
     [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]], None
@@ -33,6 +33,7 @@ def _get_call_args_callback(
 
     Args:
         module_name: Name to use to load the python code as a module.
+        bind_func_name: Name to use for the translation function.
         python_code: String containg the Python code to load.
 
     Returns:
@@ -54,7 +55,7 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
     sdfg_argtypes: list[dace.dtypes.Data]
 
     # The compiled program contains a callable object to update the SDFG arguments list.
-    sdfg_arglist_callback: Callable[
+    update_sdfg_ctype_arglist: Callable[
         [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]],
         None,
     ]
@@ -79,7 +80,7 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
         #   in order to avoid conflicts with other variants of the same program.
         #   Therefore, we use the name of the build folder as module name.
         binding_module_name = os.path.basename(program.sdfg.build_folder)
-        self.sdfg_arglist_callback = _get_call_args_callback(
+        self.update_sdfg_ctype_arglist = _get_sdfg_ctype_arglist_callback(
             binding_module_name, bind_func_name, binding_source.source_code
         )
 

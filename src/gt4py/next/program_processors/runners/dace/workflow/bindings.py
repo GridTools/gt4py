@@ -60,10 +60,18 @@ def _parse_gt_param(
     arg: str,
     code: codegen.TextBlock,
     sdfg_arglist: dict[str, dace.data.Data],
-    sdfg_argnames: list[str],
     make_persistent: bool,
 ) -> None:
-    """Emit Python code to update an argument in the SDFG arglist."""
+    """Emit Python code to parse a program argument and set the required fields in the SDFG arglist.
+
+    For scalar arguments, a single field is set in the SDFG arglist.
+
+    For array arguments, in addition to the data pointer, the fields for array shape
+    and strides are also set in SDFG arglist. This results in nested calls to
+    `_parse_gt_param()` with the scalar values of array shape and strides.
+
+    For tuple arguments, this function is recursively called on all elements of the tuple.
+    """
     if isinstance(param_type, ts.TupleType):
         # Special handling of tuples
         if (m := FIELD_RANGE_PARAM_RE.match(param_name)) is not None:
@@ -81,7 +89,6 @@ def _parse_gt_param(
                     tuple_arg,
                     code,
                     sdfg_arglist,
-                    sdfg_argnames,
                     make_persistent,
                 )
         else:
@@ -97,7 +104,6 @@ def _parse_gt_param(
                     tuple_arg,
                     code,
                     sdfg_arglist,
-                    sdfg_argnames,
                     make_persistent,
                 )
 
@@ -108,7 +114,7 @@ def _parse_gt_param(
 
     else:
         sdfg_arg_desc = sdfg_arglist[param_name]
-        sdfg_arg_index = sdfg_argnames.index(param_name)
+        sdfg_arg_index = list(sdfg_arglist.keys()).index(param_name)
 
         if isinstance(param_type, ts.FieldType):
             if len(param_type.dims) == 0:
@@ -121,8 +127,8 @@ def _parse_gt_param(
                 code.append(
                     f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes.c_void_p)"
                 )
-                code.append(f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}.data_ptr()")
                 code.append(f"assert gtx_common.Domain.is_finite({arg}.domain)")
+                code.append(f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}.data_ptr()")
                 for i, array_size in enumerate(sdfg_arg_desc.shape):
                     if (
                         isinstance(array_size, dace.symbolic.SymbolicType)
@@ -139,7 +145,6 @@ def _parse_gt_param(
                                 value,
                                 code,
                                 sdfg_arglist,
-                                sdfg_argnames,
                                 make_persistent,
                             )
                     else:
@@ -162,7 +167,6 @@ def _parse_gt_param(
                             value,
                             code,
                             sdfg_arglist,
-                            sdfg_argnames,
                             make_persistent,
                         )
                     else:
@@ -189,12 +193,14 @@ def create_sdfg_bindings(
     make_persistent: bool,
 ) -> stages.BindingSource[SrcL, languages.Python]:
     """
-    Creates the Python bindings to call an SDFG with a GT4Py arguments list.
+    Creates a Python translation function to call an SDFG with a GT4Py arguments list.
 
     Args:
         program_source: The json representation of the SDFG.
+        bind_func_name: Name to use for the translation function.
         make_persistent: When True, it is safe to assume that the field layout does
-            not change across mutiple program calls.
+            not change across mutiple program calls. It implies that
+            the `make_persistent` flag can also be set on the SDFG auto-optimizer.
 
     Returns:
         The Python code to convert call arguments from gt4py canonical form to the
@@ -206,7 +212,6 @@ def create_sdfg_bindings(
     # name to its data type, in the same order as arguments appear in the program ABI.
     # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
     sdfg_arglist = sdfg.arglist()
-    sdfg_argnames = [arg_name for arg_name in sdfg_arglist.keys()]
 
     code = codegen.TextBlock()
 
@@ -233,9 +238,7 @@ def {_cb_get_stride}(ndarray, dim_index):
     for i, param in enumerate(program_source.entry_point.parameters):
         arg = f"{_cb_args}[{i}]"
         assert isinstance(param.type_, ts.DataType)
-        _parse_gt_param(
-            param.name, param.type_, arg, code, sdfg_arglist, sdfg_argnames, make_persistent
-        )
+        _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
     code.dedent()
 
     src = codegen.format_python_source(code.text)

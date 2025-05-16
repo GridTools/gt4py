@@ -28,7 +28,9 @@ def convert_args(
     on_gpu = True if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM] else False
 
     # We use the callback function provided by the compiled program to update the SDFG arglist.
-    update_sdfg_call_args = functools.partial(inp.sdfg_arglist_callback, device, inp.sdfg_argtypes)
+    update_sdfg_call_args = functools.partial(
+        inp.update_sdfg_ctype_arglist, device, inp.sdfg_argtypes
+    )
 
     def decorated_program(
         *args: Any,
