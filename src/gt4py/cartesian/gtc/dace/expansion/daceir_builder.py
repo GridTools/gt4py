@@ -15,8 +15,6 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Union, ca
 
 import dace
 import dace.data
-import dace.library
-import dace.subsets
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir, utils as gtc_utils

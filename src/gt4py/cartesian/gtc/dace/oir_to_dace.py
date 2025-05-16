@@ -12,8 +12,6 @@ from dataclasses import dataclass
 from typing import Dict
 
 import dace
-import dace.properties
-import dace.subsets
 
 import gt4py.cartesian.gtc.oir as oir
 from gt4py import eve

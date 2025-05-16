@@ -13,8 +13,6 @@ from dataclasses import dataclass
 from typing import Any, ChainMap, Dict, List, Optional, Set, Tuple
 
 import dace
-import dace.data
-import dace.library
 import dace.subsets
 
 from gt4py import eve
