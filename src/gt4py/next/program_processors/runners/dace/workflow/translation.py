@@ -61,6 +61,9 @@ def _find_constant_symbols(
 
 
 def _make_sdfg_async(sdfg: dace.SDFG) -> None:
+    """Sets all cuda stream to the default stream."""
+
+    # Emit cpp code for the SDFG to set the cuda streams
     sdfg.append_global_code(f"""\
 DACE_EXPORTED bool __dace_gpu_set_stream({sdfg.name}_state_t *__state, int streamid, gpuStream_t stream);
 DACE_EXPORTED void __set_stream_{sdfg.name}({sdfg.name}_state_t *__state, gpuStream_t stream) {{
@@ -71,8 +74,10 @@ for (int i = 0; i < __state->gpu_context->num_streams; i++)
     sdfg.append_init_code(f"""\
 __set_stream_{sdfg.name}(__state, cudaStreamDefault);
 """)
+
+    # Loop over all state in the top-level SDFG
     for state in sdfg.states():
-        # TODO: add a check that the state contains contains only one gpu map
+        # TODO: add a check that the state contains only one gpu map
         state.nosync = True
 
 
@@ -85,6 +90,7 @@ class DaCeTranslator(
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
+    async_sdfg_call: bool = True
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
 
@@ -157,7 +163,7 @@ class DaCeTranslator(
             inp.args.column_axis,
             auto_opt=self.auto_optimize,
             on_gpu=(self.device_type == core_defs.CUPY_DEVICE_TYPE),
-            async_sdfg_call=True,
+            async_sdfg_call=self.async_sdfg_call,
         )
 
         arg_types = tuple(
