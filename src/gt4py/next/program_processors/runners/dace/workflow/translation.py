@@ -69,7 +69,7 @@ for (int i = 0; i < __state->gpu_context->num_streams; i++)
 }}\
 """)
     sdfg.append_init_code(f"""\
-__set_stream_{sdfg.name}(__state, nullptr);
+__set_stream_{sdfg.name}(__state, cudaStreamDefault);
 """)
     for state in sdfg.states():
         # TODO: add a check that the state contains contains only one gpu map
