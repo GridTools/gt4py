@@ -127,7 +127,8 @@ class DaCeTranslator(
             sdfg.append_global_code(f"""\
 DACE_EXPORTED bool __dace_gpu_set_stream({sdfg.name}_state_t *__state, int streamid, gpuStream_t stream);
 DACE_EXPORTED void __set_stream_{sdfg.name}({sdfg.name}_state_t *__state, gpuStream_t stream) {{
-    __dace_gpu_set_stream(__state, 0, stream);
+    for (int i = 0; i < __state->gpu_context->num_streams; i++)
+        __dace_gpu_set_stream(__state, i, stream);
 }}\
 """)
             sdfg.append_init_code(f"""\
