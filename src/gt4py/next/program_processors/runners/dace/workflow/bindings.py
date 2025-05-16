@@ -35,7 +35,10 @@ _cb_last_call_args: Final[str] = "last_call_args"
 
 
 def _update_sdfg_scalar_arg(
-    code: codegen.TextBlock, rhs: str, sdfg_arg_desc: dace.data.Data, sdfg_arg_index: int
+    code: codegen.TextBlock,
+    sdfg_arg_desc: dace.data.Data,
+    sdfg_arg_index: int,
+    rhs: str,
 ) -> None:
     """Emit Python code to update a scalar argument in the SDFG arglist."""
     assert isinstance(sdfg_arg_desc, dace.data.Scalar)
@@ -46,7 +49,10 @@ def _update_sdfg_scalar_arg(
 
 
 def _validate_sdfg_scalar_arg(
-    code: codegen.TextBlock, rhs: str, sdfg_arg_desc: dace.data.Data, sdfg_arg_index: int
+    code: codegen.TextBlock,
+    sdfg_arg_desc: dace.data.Data,
+    sdfg_arg_index: int,
+    rhs: str,
 ) -> None:
     """Emit Python asserts to validate a scalar argument in the SDFG arglist."""
     assert isinstance(sdfg_arg_desc, dace.data.Scalar)
@@ -120,7 +126,9 @@ def _parse_gt_param(
             if len(param_type.dims) == 0:
                 # Pass zero-dimensional fields as scalars.
                 assert isinstance(sdfg_arg_desc, dace.data.Scalar)
-                _update_sdfg_scalar_arg(code, f"{arg}.as_scalar()", sdfg_arg_desc, sdfg_arg_index)
+                _update_sdfg_scalar_arg(
+                    code, sdfg_arg_desc, sdfg_arg_index, rhs=f"{arg}.as_scalar()"
+                )
             else:
                 assert isinstance(sdfg_arg_desc, dace.data.Array)
                 code.append(f"assert field_utils.verify_device_field_type({arg}, {_cb_device})")
@@ -179,9 +187,9 @@ def _parse_gt_param(
             assert isinstance(sdfg_arg_desc, dace.data.Scalar)
             if gtx_dace_utils.is_field_symbol(param_name) and make_persistent:
                 # only emit some debug code
-                _validate_sdfg_scalar_arg(code, arg, sdfg_arg_desc, sdfg_arg_index)
+                _validate_sdfg_scalar_arg(code, sdfg_arg_desc, sdfg_arg_index, rhs=arg)
             else:
-                _update_sdfg_scalar_arg(code, arg, sdfg_arg_desc, sdfg_arg_index)
+                _update_sdfg_scalar_arg(code, sdfg_arg_desc, sdfg_arg_index, rhs=arg)
 
         else:
             raise ValueError(f"Unexpected paramter type {param_type}")
@@ -193,7 +201,8 @@ def create_sdfg_bindings(
     make_persistent: bool,
 ) -> stages.BindingSource[SrcL, languages.Python]:
     """
-    Creates a Python translation function to call an SDFG with a GT4Py arguments list.
+    Creates a Python translation function to convert the GT4Py arguments list
+    to the SDFG calling convention.
 
     Args:
         program_source: The json representation of the SDFG.
@@ -220,9 +229,8 @@ def create_sdfg_bindings(
     code.empty_line()
     code.append(f"""\
 def {_cb_get_stride}(ndarray, dim_index):
-    stride, remainder = divmod(ndarray.strides[dim_index], ndarray.itemsize)
-    assert remainder == 0
-    return stride
+    assert divmod(ndarray.strides[dim_index], ndarray.itemsize)[1] == 0
+    return ndarray.strides[dim_index] // ndarray.itemsize
 """)
     code.empty_line()
     code.append(

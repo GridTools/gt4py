@@ -73,7 +73,7 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
         # `dace.CompiledSDFG.arglist()` returns an ordered dictionary that maps the argument
         # name to its data type, in the same order as arguments appear in the program ABI.
         # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
-        self.sdfg_argtypes = [arg_type for _, arg_type in program.sdfg.arglist().items()]
+        self.sdfg_argtypes = list(program.sdfg.arglist().values())
 
         # Note that `binding_source` contains Python code tailored to this specific SDFG.
         #   We need to ensure that it is loaded as a Python module with a unique name,
