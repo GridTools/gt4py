@@ -130,7 +130,9 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
     def get_stride_from_numpy_to_dace(arg: core_defs.NDArrayObject, axis: int) -> int:
         # NumPy strides: number of bytes to jump
         # DaCe strides: number of elements to jump
-        return arg.strides[axis] // arg.itemsize
+        stride, remainder = divmod(arg.strides[axis], arg.itemsize)
+        assert remainder == 0
+        return stride
 
     # use unique SDFG folder in dace cache to avoid clashes between parallel pytest workers
     with dace.config.set_temporary("cache", value="unique"):
