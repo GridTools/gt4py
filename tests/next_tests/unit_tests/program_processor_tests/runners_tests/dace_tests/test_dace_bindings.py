@@ -29,8 +29,7 @@ from gt4py.next import common as gtx_common, field_utils
 
 
 def _get_stride(ndarray, dim_index):
-    stride, remainder = divmod(ndarray.strides[dim_index], ndarray.itemsize)
-    return stride
+    return ndarray.strides[dim_index] // ndarray.itemsize
 
 
 """
