@@ -60,6 +60,22 @@ def _find_constant_symbols(
     return constant_symbols
 
 
+def _make_sdfg_async(sdfg: dace.SDFG) -> None:
+    sdfg.append_global_code(f"""\
+DACE_EXPORTED bool __dace_gpu_set_stream({sdfg.name}_state_t *__state, int streamid, gpuStream_t stream);
+DACE_EXPORTED void __set_stream_{sdfg.name}({sdfg.name}_state_t *__state, gpuStream_t stream) {{
+for (int i = 0; i < __state->gpu_context->num_streams; i++)
+    __dace_gpu_set_stream(__state, i, stream);
+}}\
+""")
+    sdfg.append_init_code(f"""\
+__set_stream_{sdfg.name}(__state, nullptr);
+""")
+    for state in sdfg.states():
+        # TODO: add a check that the state contains contains only one gpu map
+        state.nosync = True
+
+
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
@@ -124,19 +140,7 @@ class DaCeTranslator(
                 gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
         if on_gpu and async_sdfg_call:
-            sdfg.append_global_code(f"""\
-DACE_EXPORTED bool __dace_gpu_set_stream({sdfg.name}_state_t *__state, int streamid, gpuStream_t stream);
-DACE_EXPORTED void __set_stream_{sdfg.name}({sdfg.name}_state_t *__state, gpuStream_t stream) {{
-    for (int i = 0; i < __state->gpu_context->num_streams; i++)
-        __dace_gpu_set_stream(__state, i, stream);
-}}\
-""")
-            sdfg.append_init_code(f"""\
-    __set_stream_{sdfg.name}(__state, nullptr);
-""")
-            for state in sdfg.states():
-                # TODO: add a check that the state contains contains only one gpu map
-                state.nosync = True
+            _make_sdfg_async(sdfg)
 
         return sdfg
 
