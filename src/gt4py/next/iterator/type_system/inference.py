@@ -487,11 +487,6 @@ class ITIRTypeInference(eve.NodeTranslator):
             )
             assert isinstance(target_type, (ts.FieldType, ts.DeferredType))
             assert isinstance(expr_type, (ts.FieldType, ts.DeferredType))
-            # TODO(tehrengruber): The lowering emits domains that always have the horizontal domain
-            #  first. Since the expr inherits the ordering from the domain this can lead to a mismatch
-            #  between the target and expr (e.g. when the target has dimension K, Vertex). We should
-            #  probably just change the behaviour of the lowering. Until then we do this more
-            #  complicated comparison.
             if isinstance(target_type, ts.FieldType) and isinstance(expr_type, ts.FieldType):
                 assert expr_type.dims == target_type.dims
                 assert target_type.dtype == expr_type.dtype
