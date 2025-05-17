@@ -23,7 +23,7 @@ def program_factory(expr: itir.Expr) -> itir.Program:
         function_definitions=[],
         params=[
             im.sym("inp", ts.FieldType(dims=[TDim], dtype=int_type)),
-            im.sym("out", ts.FieldType(dims=[TDim], dtype=int_type))
+            im.sym("out", ts.FieldType(dims=[TDim], dtype=int_type)),
         ],
         declarations=[],
         body=[
