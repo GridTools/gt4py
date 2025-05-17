@@ -25,7 +25,6 @@ from gt4py.next.iterator.ir_utils import (
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.type_system import type_specifications as ts
-from tests.next_tests.integration_tests.cases import IField
 
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
