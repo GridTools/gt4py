@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
+import itertools
 from typing import Any, Callable, ClassVar, Optional, ParamSpec, TypeGuard, TypeVar, cast, overload
 
 
@@ -151,3 +152,65 @@ def tree_map(
             collection_type=collection_type,
             result_collection_constructor=result_collection_constructor,
         )
+
+
+_T1 = TypeVar("_T1")
+_T2 = TypeVar("_T2")
+
+
+def equalize_tuple_structure(
+    d1: _T1, d2: _T2, *, fill_value: Any, bidirectional: bool = True
+) -> tuple[_T1, _T2]:
+    """
+    Given two values or tuples thereof equalize their structure.
+
+    If one of the arguments is a tuple the argument will be promoted to a tuple of the same
+    structure.
+
+    >>> equalize_tuple_structure((1,), (2, 3), fill_value=None) == (
+    ...     (1, None),
+    ...     (2, 3),
+    ... )
+    True
+
+    >>> equalize_tuple_structure(1, (2, 3), fill_value=None) == (
+    ...     (1, 1),
+    ...     (2, 3),
+    ... )
+    True
+
+    If `bidirectional` is `False` only the second argument is equalized and an error is raised if
+    the first argument would require promotion.
+    """
+    d1_is_tuple = isinstance(d1, tuple)
+    d2_is_tuple = isinstance(d2, tuple)
+    if not d1_is_tuple and d2_is_tuple:
+        if not bidirectional:
+            raise ValueError(f"Expected `{d2!s}` to have same structure as `{d1!s}`.")
+        return equalize_tuple_structure(
+            (d1,) * len(d2),  # type: ignore[arg-type] # ensured by condition above
+            d2,
+            fill_value=fill_value,
+            bidirectional=bidirectional,
+        )
+    if d1_is_tuple and not d2_is_tuple:
+        return equalize_tuple_structure(
+            d1,
+            (d2,) * len(d1),  # type: ignore[arg-type] # ensured by condition above
+            fill_value=fill_value,
+            bidirectional=bidirectional,
+        )
+    if d1_is_tuple and d2_is_tuple:
+        if not bidirectional and len(d1) < len(d2):  # type: ignore[arg-type] # ensured by condition above
+            raise ValueError(f"Expected `{d2!s}` to be longer than or equal to `{d1!s}`.")
+        return tuple(  # type: ignore[return-value] # mypy not smart enough
+            zip(
+                *(
+                    equalize_tuple_structure(
+                        el1, el2, fill_value=fill_value, bidirectional=bidirectional
+                    )
+                    for el1, el2 in itertools.zip_longest(d1, d2, fillvalue=fill_value)  # type: ignore[call-overload] # d1, d2 are tuples
+                )
+            )
+        )
+    return d1, d2
