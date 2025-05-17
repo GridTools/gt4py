@@ -512,7 +512,7 @@ def as_fieldop(
                             )
 
                         assert all(isinstance(dim, common.Dimension) for dim in output_dims)
-                        deduced_domain = it_ts.DomainType(dims=list(output_dims))
+                        deduced_domain = it_ts.DomainType(dims=output_dims)
 
             if deduced_domain:
                 domain = deduced_domain
