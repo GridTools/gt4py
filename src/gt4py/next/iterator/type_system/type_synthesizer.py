@@ -503,17 +503,16 @@ def as_fieldop(
                 ):
                     for el in type_info.primitive_constituents(field):
                         input_dims = type_info.extract_dims(el)
-                        if shift_sequences_per_param:
-                            for shift_sequence in shift_sequences:
-                                output_dims = common.promote_dims(
-                                    output_dims,
-                                    _resolve_dimensions(
-                                        input_dims, shift_sequence, offset_provider_type
-                                    ),
-                                )
+                        for shift_sequence in shift_sequences:
+                            output_dims = common.promote_dims(
+                                output_dims,
+                                _resolve_dimensions(
+                                    input_dims, shift_sequence, offset_provider_type
+                                ),
+                            )
 
-                            assert all(isinstance(dim, common.Dimension) for dim in output_dims)
-                            deduced_domain = it_ts.DomainType(dims=list(output_dims))
+                        assert all(isinstance(dim, common.Dimension) for dim in output_dims)
+                        deduced_domain = it_ts.DomainType(dims=list(output_dims))
 
             if deduced_domain:
                 domain = deduced_domain
