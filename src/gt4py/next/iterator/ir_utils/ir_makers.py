@@ -425,7 +425,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
 
 def domain(
     grid_type: Union[common.GridType, str],
-    ranges: dict[common.Dimension, tuple[itir.Expr | int, itir.Expr | int]],
+    ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]],
 ) -> itir.FunCall:
     """
     >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
