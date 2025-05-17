@@ -25,7 +25,7 @@ from gt4py.next.iterator.ir_utils import (
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.type_system import type_specifications as ts
-
+from tests.next_tests.integration_tests.cases import IField
 
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
@@ -66,9 +66,11 @@ def premap_field(
 def setup_test_as_fieldop(
     stencil: itir.Lambda | Literal["deref"],
     domain: itir.FunCall,
-    expected_domains: dict[str, itir.Expr | dict[Dimension, tuple[itir.Expr, itir.Expr]]],
     *,
-    refs: Iterable[str | itir.SymRef | int] = None,
+    expected_domains: Optional[
+        dict[str, itir.Expr | dict[Dimension, tuple[itir.Expr, itir.Expr]]]
+    ] = None,
+    refs: Optional[Iterable[str | itir.SymRef | int]] = None,
 ) -> tuple[itir.FunCall, itir.FunCall]:
     if refs is None:
         assert isinstance(stencil, itir.Lambda)
@@ -76,27 +78,15 @@ def setup_test_as_fieldop(
 
     new_refs = []
     for ref in refs:
-        if isinstance(ref, (int, float)):
-            new_refs.append(ref)
-        elif expected_domains[ref] in [
-            infer_domain.DomainAccessDescriptor.NEVER,
-            infer_domain.DomainAccessDescriptor.UNKNOWN,
-        ]:
-            new_refs.append(
-                im.ref(
-                    ref,
-                    ts.FieldType(
-                        dims=[],
-                        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-                    ),
-                )
-            )
-        elif isinstance(ref, str) and isinstance(
-            list(expected_domains[ref].keys())[0], common.Dimension
+        if (
+            isinstance(ref, str)
+            and expected_domains
+            and isinstance(expected_domains[ref], domain_utils.SymbolicDomain)
         ):
             new_refs.append(
                 im.ref(
                     ref,
+                    # use type as given by expected domain dict
                     ts.FieldType(
                         dims=list(expected_domains[ref].keys()),
                         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
@@ -204,14 +194,16 @@ def test_forward_difference_x(offset_provider):
     stencil = im.lambda_("arg0")(im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0")))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected_domains = {"in_field1": {IDim: (0, 12)}}
-    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains)
+    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains=expected_domains)
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
 def test_deref(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected_domains = {"in_field": {IDim: (0, 11)}}
-    testee, expected = setup_test_as_fieldop("deref", domain, expected_domains, refs=["in_field"])
+    testee, expected = setup_test_as_fieldop(
+        "deref", domain, refs=[im.ref("in_field", float_i_field)]
+    )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -230,7 +222,7 @@ def test_multi_length_shift(offset_provider):
     )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected_domains = {"in_field1": {IDim: (3, 14)}}
-    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains)
+    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains=expected_domains)
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -239,7 +231,7 @@ def test_unstructured_shift(unstructured_offset_provider):
     domain = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
     expected_domains = {"in_field1": {Vertex: (0, 2)}}
 
-    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains)
+    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains=expected_domains)
     run_test_expr(testee, expected, domain, expected_domains, unstructured_offset_provider)
 
 
@@ -262,7 +254,7 @@ def test_laplace(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11), JDim: (0, 7)})
     expected_domains = {"in_field1": {IDim: (-1, 12), JDim: (-1, 8)}}
 
-    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains)
+    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains=expected_domains)
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -278,7 +270,7 @@ def test_shift_x_y_two_inputs(offset_provider):
         "in_field1": {IDim: (-1, 10), JDim: (0, 7)},
         "in_field2": {IDim: (0, 11), JDim: (1, 8)},
     }
-    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains)
+    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains=expected_domains)
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -296,8 +288,7 @@ def test_shift_x_y_two_inputs_literal(offset_provider):
     testee, expected = setup_test_as_fieldop(
         stencil,
         domain,
-        expected_domains,
-        refs=("in_field1", 2.0),
+        refs=(im.ref("in_field1", float_ij_field), 2.0),
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -319,7 +310,9 @@ def test_shift_x_y_z_three_inputs(offset_provider):
         "in_field3": {IDim: (0, 11), JDim: (0, 7), KDim: (-1, 2)},
     }
     testee, expected = setup_test_as_fieldop(
-        stencil, im.domain(common.GridType.CARTESIAN, domain_dict), expected_domains
+        stencil,
+        im.domain(common.GridType.CARTESIAN, domain_dict),
+        expected_domains=expected_domains,
     )
     run_test_expr(
         testee,
@@ -342,7 +335,7 @@ def test_two_params_same_arg(offset_provider):
         "in_field": {IDim: (0, 12)},
     }
     testee, expected = setup_test_as_fieldop(
-        stencil, domain, expected_domains, refs=["in_field", "in_field"]
+        stencil, domain, refs=[im.ref("in_field", float_i_field), im.ref("in_field", float_i_field)]
     )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
@@ -443,7 +436,11 @@ def test_unused_input(offset_provider):
         "in_field1": {IDim: (0, 11)},
         "in_field2": infer_domain.DomainAccessDescriptor.NEVER,
     }
-    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains)
+    testee, expected = setup_test_as_fieldop(
+        stencil,
+        domain,
+        refs=[im.ref("in_field1", float_i_field), im.ref("in_field2", float_i_field)],
+    )
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -1183,7 +1180,7 @@ def test_symbolic_domain_sizes(unstructured_offset_provider):
     testee, expected = setup_test_as_fieldop(
         stencil,
         domain,
-        expected_domains,
+        expected_domains=expected_domains,
     )
     run_test_expr(
         testee,
@@ -1202,7 +1199,7 @@ def test_unknown_domain(offset_provider):
         "in_field1": infer_domain.DomainAccessDescriptor.UNKNOWN,
         "in_field2": {IDim: (0, 10)},
     }
-    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains)
+    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains=expected_domains)
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
@@ -1213,7 +1210,7 @@ def test_never_accessed_domain(offset_provider):
         "in_field1": {IDim: (0, 10)},
         "in_field2": infer_domain.DomainAccessDescriptor.NEVER,
     }
-    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains)
+    testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains=expected_domains)
     run_test_expr(testee, expected, domain, expected_domains, offset_provider)
 
 
