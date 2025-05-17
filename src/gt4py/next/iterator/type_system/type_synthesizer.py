@@ -426,33 +426,33 @@ def _resolve_dimensions(
         A list of resolved dimensions after applying the shifts.
 
     Examples:
-        Consider you have a field defined on [Edge, K] that is given to an
-        im.as_fieldop(im.lambda_("it")(im.deref(im.shift("KOff", 1)(im.shift("V2E", 0)("it")))))(
-            im.ref("inp", float_edge_k_field))
-        then
-        _resolve_dimensions with input_dims=[Edge, K] and
-        shift_tuple=(itir.OffsetLiteral(value="V2E"), itir.OffsetLiteral(value=0),
-            itir.OffsetLiteral(value="KOff"), itir.OffsetLiteral(value=1))
-        tells you the dimensions of the field returned by as_fieldop, in this case [Vertex, K].
+        Consider the following expression
+        ```
+        (⇑(λ(it) → ·⟪V2Eₒ, 0ₒ⟫(it)))(inp)
+        ```
+        where `inp` is a field defined on [Edge, K] that is given to an `as_fieldop` then
+        ```
+        _resolve_dimensions([Edge, K], (V2Eₒ, 0ₒ), ...)
+        ```
+        tells you the dimensions of the field returned by the `as_fieldop`, in this case
+        `[Vertex, K]`.
 
         >>> Edge = common.Dimension(value="Edge")
         >>> Vertex = common.Dimension(value="Vertex")
         >>> K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
         >>> V2E = common.Dimension(value="V2E")
-        >>> input_dims_ = [Edge, K]
-        >>> shift_tuple_ = (
+        >>> input_dims = [Edge, K]
+        >>> shift_tuple = (
         ...     itir.OffsetLiteral(value="V2E"),
         ...     itir.OffsetLiteral(value=0),
-        ...     itir.OffsetLiteral(value="KOff"),
-        ...     itir.OffsetLiteral(value=1),
         ... )
-        >>> offset_provider_type_ = {
+        >>> offset_provider_type = {
         ...     "V2E": common.NeighborConnectivityType(
         ...         domain=(Vertex, V2E), codomain=Edge, skip_value=None, dtype=None, max_neighbors=4
         ...     ),
         ...     "KOff": K,
         ... }
-        >>> _resolve_dimensions(input_dims_, shift_tuple_, offset_provider_type_)
+        >>> _resolve_dimensions(input_dims, shift_tuple, offset_provider_type)
         [Dimension(value='Vertex', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>)]
     """
     resolved_dims = []
