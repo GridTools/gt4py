@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import itertools
 import typing
 
 from gt4py import eve
@@ -103,52 +102,6 @@ def _domain_union(
     return domain_utils.domain_union(*filtered_domains)
 
 
-def _canonicalize_domain_structure(
-    d1: DomainAccess, d2: DomainAccess
-) -> tuple[DomainAccess, DomainAccess]:
-    """
-    Given two domains or composites thereof, canonicalize their structure.
-
-    If one of the arguments is a tuple the other one will be promoted to a tuple of same structure
-    unless it already is a tuple. Missing values are filled by :ref:`DomainAccessDescriptor.NEVER`.
-
-    >>> domain = im.domain(common.GridType.CARTESIAN, {})
-    >>> _canonicalize_domain_structure((domain,), (domain, domain)) == (
-    ...     (domain, DomainAccessDescriptor.NEVER),
-    ...     (domain, domain),
-    ... )
-    True
-
-    >>> _canonicalize_domain_structure(
-    ...     (domain, DomainAccessDescriptor.NEVER), DomainAccessDescriptor.NEVER
-    ... ) == (
-    ...     (domain, DomainAccessDescriptor.NEVER),
-    ...     (DomainAccessDescriptor.NEVER, DomainAccessDescriptor.NEVER),
-    ... )
-    True
-    """
-    d1_is_tuple = isinstance(d1, tuple)
-    d2_is_tuple = isinstance(d2, tuple)
-    if not d1_is_tuple and d2_is_tuple:
-        return _canonicalize_domain_structure((d1,) * len(d2), d2)  # type: ignore[arg-type] # assured by condition above
-    if not d2_is_tuple and d1_is_tuple:
-        return _canonicalize_domain_structure(d1, (d2,) * len(d1))  # type: ignore[arg-type] # assured by condition above
-    if d1_is_tuple and d2_is_tuple:
-        return tuple(
-            zip(
-                *(
-                    _canonicalize_domain_structure(el1, el2)
-                    for el1, el2 in itertools.zip_longest(
-                        typing.cast(tuple[DomainAccess], d1),
-                        typing.cast(tuple[DomainAccess], d2),
-                        fillvalue=DomainAccessDescriptor.NEVER,
-                    )
-                )
-            )
-        )  # type: ignore[return-value]  # mypy not smart enough
-    return d1, d2
-
-
 def _merge_domains(
     original_domains: AccessedDomains,
     additional_domains: AccessedDomains,
@@ -156,8 +109,10 @@ def _merge_domains(
     new_domains = {**original_domains}
 
     for key, domain in additional_domains.items():
-        original_domain, domain = _canonicalize_domain_structure(
-            original_domains.get(key, DomainAccessDescriptor.NEVER), domain
+        original_domain, domain = gtx_utils.equalize_tuple_structure(
+            original_domains.get(key, DomainAccessDescriptor.NEVER),
+            domain,
+            fill_value=DomainAccessDescriptor.NEVER,
         )
         new_domains[key] = tree_map(_domain_union)(original_domain, domain)
 
@@ -468,11 +423,14 @@ def infer_expr(
     itir_type_inference.reinfer(
         expr, offset_provider_type=common.offset_provider_to_type(offset_provider)
     )
-    domain, el_types = _canonicalize_domain_structure(
-        domain,
+    el_types, domain = gtx_utils.equalize_tuple_structure(
         gtx_utils.tree_map(collection_type=ts.TupleType, result_collection_constructor=tuple)(
             lambda x: x
         )(expr.type),
+        domain,
+        fill_value=DomainAccessDescriptor.NEVER,
+        # el_types already has the right structure, we only want to change domain
+        bidirectional=False,
     )
 
     if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):

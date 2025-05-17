@@ -1008,7 +1008,7 @@ def test_tuple_get_let_make_tuple(offset_provider):
 
 def test_nested_make_tuple(offset_provider):
     testee = im.make_tuple(
-        im.make_tuple(im.ref("a", float_i_field), im.ref("b", float_i_field)),
+        im.make_tuple(im.ref("a", float_i_field), im.ref("b", tuple_float_i_field)),
         im.ref("c", float_i_field),
     )
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
@@ -1016,7 +1016,7 @@ def test_nested_make_tuple(offset_provider):
     domain2_2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 13)})
     domain3 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 14)})
     expected = im.make_tuple(
-        im.make_tuple(im.ref("a", float_i_field), im.ref("b", float_i_field)),
+        im.make_tuple(im.ref("a", float_i_field), im.ref("b", tuple_float_i_field)),
         im.ref("c", float_i_field),
     )
     expected_domains = {"a": domain1, "b": (domain2_1, domain2_2), "c": domain3}
@@ -1041,9 +1041,9 @@ def test_nested_make_tuple(offset_provider):
 
 
 def test_tuple_get_1(offset_provider):
-    testee = im.tuple_get(1, im.ref("a"))
+    testee = im.tuple_get(1, im.ref("a", tuple_float_i_field))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected = im.tuple_get(1, im.ref("a"))
+    expected = im.tuple_get(1, im.ref("a", tuple_float_i_field))
     expected_domains = {"a": (infer_domain.DomainAccessDescriptor.NEVER, domain)}
 
     actual, actual_domains = infer_domain.infer_expr(
@@ -1055,10 +1055,10 @@ def test_tuple_get_1(offset_provider):
 
 
 def test_domain_tuple(offset_provider):
-    testee = im.ref("a", float_i_field)
+    testee = im.ref("a", tuple_float_i_field)
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
-    expected = im.ref("a", float_i_field)
+    expected = im.ref("a", tuple_float_i_field)
     expected_domains = {"a": (domain1, domain2)}
 
     actual, actual_domains = infer_domain.infer_expr(
@@ -1075,10 +1075,14 @@ def test_domain_tuple(offset_provider):
 
 
 def test_as_fieldop_tuple_get(offset_provider):
-    testee = im.op_as_fieldop(im.plus)(im.tuple_get(0, im.ref("a")), im.tuple_get(1, im.ref("a")))
+    testee = im.op_as_fieldop(im.plus)(
+        im.tuple_get(0, im.ref("a", tuple_float_i_field)),
+        im.tuple_get(1, im.ref("a", tuple_float_i_field)),
+    )
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     expected = im.op_as_fieldop(im.plus, domain)(
-        im.tuple_get(0, im.ref("a")), im.tuple_get(1, im.ref("a"))
+        im.tuple_get(0, im.ref("a", tuple_float_i_field)),
+        im.tuple_get(1, im.ref("a", tuple_float_i_field)),
     )
     expected_domains = {"a": (domain, domain)}
 
@@ -1091,10 +1095,16 @@ def test_as_fieldop_tuple_get(offset_provider):
 
 
 def test_make_tuple_2tuple_get(offset_provider):
-    testee = im.make_tuple(im.tuple_get(0, im.ref("a")), im.tuple_get(1, im.ref("a")))
+    testee = im.make_tuple(
+        im.tuple_get(0, im.ref("a", tuple_float_i_field)),
+        im.tuple_get(1, im.ref("a", tuple_float_i_field)),
+    )
     domain1 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain2 = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    expected = im.make_tuple(im.tuple_get(0, im.ref("a")), im.tuple_get(1, im.ref("a")))
+    expected = im.make_tuple(
+        im.tuple_get(0, im.ref("a", tuple_float_i_field)),
+        im.tuple_get(1, im.ref("a", tuple_float_i_field)),
+    )
     expected_domains = {"a": (domain1, domain2)}
 
     actual, actual_domains = infer_domain.infer_expr(
