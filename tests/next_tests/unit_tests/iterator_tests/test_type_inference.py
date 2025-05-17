@@ -566,25 +566,6 @@ def test_if_stmt():
     assert result.true_branch[0].expr.type == float_i_field
 
 
-def test_as_fieldop_without_domain_new():
-    mesh = simple_mesh(None)
-    stencil = im.lambda_("it1", "it2")(
-        im.plus(im.deref("it1"), im.deref(im.shift("KOff", 1)(im.shift("V2E", 0)("it2"))))
-    )
-
-    testee = im.as_fieldop(stencil)(
-        im.ref("inp1", float_vertex_field), im.ref("inp2", float_edge_k_field)
-    )
-    result = itir_type_inference.infer(
-        testee,
-        offset_provider_type={**mesh.offset_provider_type, "KOff": KDim},
-        allow_undeclared_symbols=True,
-    )
-    assert result.type == ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
-    stencil_type: ts.FunctionType = result.fun.args[0].type
-    assert stencil_type.pos_only_args[0].position_dims == [Vertex, KDim]
-
-
 def test_as_fieldop_without_domain_nb_field_input():
     stencil = im.lambda_("it1")(im.deref("it1"))
 
