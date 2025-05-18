@@ -144,6 +144,4 @@ class FunctionType(TypeSpec, CallableType):
 
 
 class DomainType(DataType):
-    # TODO(tehrengruber): Remove "unknown" here again after the result type of `as_fieldop`
-    #  is always precisely known. This is the case after #1853.
-    dims: list[common.Dimension] | Literal["unknown"]
+    dims: list[common.Dimension]
