@@ -153,7 +153,7 @@ def test_dont_extract_projector(projector_maker, inp_type, out_type):
     # this is a a scan, because we assert that we only extract projectors from scans
     scan = im.as_fieldop(
         im.call("scan")(im.lambda_("state", "inp")(im.call("deref")("inp")), True, 0), domain
-    )("inp")
+    )(im.ref("inp", inp_type))
 
     testee = program_factory(
         params=[
