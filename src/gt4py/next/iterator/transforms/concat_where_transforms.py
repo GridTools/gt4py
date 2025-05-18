@@ -27,7 +27,7 @@ class _TransformTupleConcatWhere(PreserveLocationVisitor, NodeTranslator):
     )
 
     @classmethod
-    def apply(cls, node: ir.Node, offset_provider_type: Optional[common.OffsetProviderType] = None):
+    def apply(cls, node: ir.Node, offset_provider_type: common.OffsetProviderType):
         node = type_inference.infer(
             node,
             offset_provider_type=offset_provider_type,

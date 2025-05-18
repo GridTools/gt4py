@@ -97,10 +97,10 @@ def apply_common_transforms(
 
     # Note: executing domain inference again afterwards will give wrong domains.
     # This might be problematic in the temporary extraction, where we do this...
-    ir = concat_where_transforms.expand_tuple(ir)
-    ir = ConstantFolding.apply(ir)  # TODO: remove
+    ir = concat_where_transforms.expand_tuple(ir, offset_provider_type=offset_provider_type)
+    #ir = ConstantFolding.apply(ir)  # TODO: remove
     ir = concat_where_transforms.expand(ir)
-    ir = ConstantFolding.apply(ir)  # TODO: remove
+    #ir = ConstantFolding.apply(ir)  # TODO: remove
     ir = expand_library_functions.ExpandLibraryFunctions.apply(ir)
 
     for _ in range(10):
