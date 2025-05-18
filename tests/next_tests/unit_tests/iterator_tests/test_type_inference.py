@@ -220,7 +220,10 @@ def expression_test_cases():
             ts.TupleType(types=[float_ij_field, float_ij_field]),
         ),
         (
-            im.as_fieldop(im.scan(im.lambda_("state")("state"), True, 0.0), k_domain)(),
+            im.as_fieldop(
+                im.scan(im.lambda_("state", "inp")(im.plus("state", im.deref("inp"))), True, 0.0),
+                k_domain,
+            )(im.ref("inp", float_k_field)),
             float_k_field,
         ),
         (
