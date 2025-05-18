@@ -22,7 +22,7 @@ from gt4py.next.iterator.transforms import (
     inline_fundefs,
     inline_lifts,
     nest_concat_wheres,
-    prune_broadcast,
+    remove_broadcast,
     transform_concat_where,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
@@ -93,7 +93,7 @@ def apply_common_transforms(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
-    ir = prune_broadcast.PruneBroadcast.apply(ir)
+    ir = remove_broadcast.RemoveBroadcast.apply(ir)
 
     # Note: executing domain inference again afterwards will give wrong domains.
     # This might be problematic in the temporary extraction, where we do this...
@@ -204,5 +204,5 @@ def apply_fieldview_transforms(
     ir = ConstantFolding.apply(ir)
 
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
-    ir = prune_broadcast.PruneBroadcast.apply(ir)
+    ir = remove_broadcast.RemoveBroadcast.apply(ir)
     return ir
