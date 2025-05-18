@@ -79,6 +79,7 @@ it_ijk_type = it_ts.IteratorType(
 def expression_test_cases():
     i_domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 1)})
     ij_domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 1), JDim: (0, 1)})
+    k_domain = im.domain(common.GridType.CARTESIAN, {KDim: (0, 1)})
     cell_k_domain = im.domain(common.GridType.UNSTRUCTURED, {Cell: (0, 1), KDim: (0, 1)})
     vertex_k_domain = im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 1), KDim: (0, 1)})
 
@@ -217,6 +218,10 @@ def expression_test_cases():
                 ij_domain,
             )(im.ref("inp1", float_i_field), im.ref("inp2", float_j_field)),
             ts.TupleType(types=[float_ij_field, float_ij_field]),
+        ),
+        (
+            im.as_fieldop(im.scan(im.lambda_("state")("state"), True, 0.0), k_domain)(),
+            float_k_field,
         ),
         (
             im.as_fieldop(im.lambda_("x")(im.deref("x")))(

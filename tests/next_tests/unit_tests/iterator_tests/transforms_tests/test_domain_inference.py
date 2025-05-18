@@ -455,13 +455,13 @@ def test_let_unused_field(offset_provider):
 def test_program(offset_provider):
     stencil = im.lambda_("arg0")(im.minus(im.deref(im.shift("Ioff", 1)("arg0")), im.deref("arg0")))
 
-    applied_as_fieldop_tmp = im.as_fieldop(stencil)(im.ref("in_field", float_ij_field))
-    applied_as_fieldop = im.as_fieldop(stencil)(im.ref("tmp", float_ij_field))
+    applied_as_fieldop_tmp = im.as_fieldop(stencil)(im.ref("in_field", float_i_field))
+    applied_as_fieldop = im.as_fieldop(stencil)(im.ref("tmp", float_i_field))
 
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain_tmp = im.domain(common.GridType.CARTESIAN, {IDim: (0, 12)})
 
-    params = [im.sym(name) for name in ["in_field", "out_field"]]
+    params = [im.sym(name, float_i_field) for name in ["in_field", "out_field"]]
 
     testee = itir.Program(
         id="forward_diff_with_tmp",
@@ -474,8 +474,8 @@ def test_program(offset_provider):
         ],
     )
 
-    expected_expr_tmp = im.as_fieldop(stencil, domain_tmp)(im.ref("in_field", float_ij_field))
-    expected_epxr = im.as_fieldop(stencil, domain)(im.ref("tmp", float_ij_field))
+    expected_expr_tmp = im.as_fieldop(stencil, domain_tmp)(im.ref("in_field", float_i_field))
+    expected_epxr = im.as_fieldop(stencil, domain)(im.ref("tmp", float_i_field))
 
     expected = itir.Program(
         id="forward_diff_with_tmp",
@@ -493,7 +493,7 @@ def test_program(offset_provider):
 
 def test_program_make_tuple(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
-    params = [im.sym(name) for name in ["in_field", "out_field"]]
+    params = [im.sym("in_field", float_i_field), im.sym("out_field", tuple_float_i_field)]
 
     testee = itir.Program(
         id="make_tuple_prog",
@@ -503,8 +503,8 @@ def test_program_make_tuple(offset_provider):
         body=[
             itir.SetAt(
                 expr=im.make_tuple(
-                    im.as_fieldop("deref")(im.ref("in_field", float_ij_field)),
-                    im.ref("in_field", float_ij_field),
+                    im.as_fieldop("deref")(im.ref("in_field", float_i_field)),
+                    im.ref("in_field", float_i_field),
                 ),
                 domain=domain,
                 target=im.ref("out_field"),
@@ -520,8 +520,8 @@ def test_program_make_tuple(offset_provider):
         body=[
             itir.SetAt(
                 expr=im.make_tuple(
-                    im.as_fieldop("deref", domain)(im.ref("in_field", float_ij_field)),
-                    im.ref("in_field", float_ij_field),
+                    im.as_fieldop("deref", domain)(im.ref("in_field", float_i_field)),
+                    im.ref("in_field", float_i_field),
                 ),
                 domain=domain,
                 target=im.ref("out_field"),
@@ -825,7 +825,7 @@ def test_program_let(offset_provider):
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 11)})
     domain_lm1 = im.domain(common.GridType.CARTESIAN, {IDim: (-1, 11)})
 
-    params = [im.sym(name) for name in ["in_field", "out_field", "outer"]]
+    params = [im.sym(name, float_i_field) for name in ["in_field", "out_field", "outer"]]
 
     testee = itir.Program(
         id="forward_diff_with_tmp",

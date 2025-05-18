@@ -507,6 +507,10 @@ def infer_program(
         not program.function_definitions
     ), "Domain propagation does not support function definitions."
 
+    program = itir_type_inference.infer(
+        program, offset_provider_type=common.offset_provider_to_type(offset_provider)
+    )
+
     return itir.Program(
         id=program.id,
         function_definitions=program.function_definitions,
