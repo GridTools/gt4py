@@ -8,7 +8,7 @@
 from gt4py.next import common
 import pytest
 from gt4py.next.iterator.ir_utils import ir_makers as im, domain_utils
-from gt4py.next.iterator.transforms import transform_concat_where
+from gt4py.next.iterator.transforms import concat_where_transforms
 from gt4py.next.iterator.transforms import inline_lambdas
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.type_system import type_specifications as it_ts
@@ -32,9 +32,9 @@ def test_trivial():
             )
         ),
         domain,
-    )(im.make_tuple(im.index(IDim)), "true_branch", "false_branch", "cond")
+    )(im.make_tuple(im.index(IDim)), "true_branch", "false_branch")
 
-    actual = transform_concat_where.TransformConcatWhere.apply(testee)
+    actual = concat_where_transforms.expand(testee)
     actual = inline_lambdas.InlineLambdas.apply(actual)  # simplify
 
     assert actual == expected
@@ -62,7 +62,7 @@ def test_capturing_cond():
         domain,
     )(im.make_tuple(im.index(IDim)), "true_branch", "false_branch", "start", "stop")
 
-    actual = transform_concat_where.TransformConcatWhere.apply(testee)
+    actual = concat_where_transforms.expand(testee)
     actual = inline_lambdas.InlineLambdas.apply(actual)  # simplify
 
     assert actual == expected
