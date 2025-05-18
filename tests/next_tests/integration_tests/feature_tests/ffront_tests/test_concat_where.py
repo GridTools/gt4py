@@ -12,6 +12,7 @@ import pytest
 from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
 from gt4py import next as gtx
 from gt4py.next import errors
+from gt4py.next import broadcast
 from gt4py.next.ffront.experimental import concat_where
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -287,6 +288,50 @@ def test_with_tuples(cartesian_case):
     ref1 = np.where(
         k[np.newaxis, np.newaxis, :] == 0,
         boundary1.asnumpy()[:, :, np.newaxis],
+        interior1.asnumpy(),
+    )
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        interior0,
+        boundary0,
+        interior1,
+        boundary1,
+        out=out,
+        ref=(ref0, ref1),
+    )
+
+
+@pytest.mark.uses_frontend_concat_where
+@pytest.mark.uses_tuple_returns
+def test_with_tuples_different_domain(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        interior0: cases.IJKField,
+        boundary0: cases.IJKField,
+        interior1: cases.KField,
+        boundary1: cases.KField,
+    ) -> Tuple[cases.IJKField, cases.IJKField]:
+        a, b = concat_where(KDim == 0, (boundary0, boundary1), (interior0, interior1))
+        # the broadcast is only needed since we can not return fields on different domains yet
+        return a, broadcast(b, (IDim, JDim, KDim))
+
+    interior0 = cases.allocate(cartesian_case, testee, "interior0")()
+    boundary0 = cases.allocate(cartesian_case, testee, "boundary0")()
+    interior1 = cases.allocate(cartesian_case, testee, "interior1")()
+    boundary1 = cases.allocate(cartesian_case, testee, "boundary1")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    ref0 = np.where(
+        k[np.newaxis, np.newaxis, :] == 0,
+        boundary0.asnumpy(),
+        interior0.asnumpy(),
+    )
+    ref1 = np.where(
+        k == 0,
+        boundary1.asnumpy(),
         interior1.asnumpy(),
     )
 

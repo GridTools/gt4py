@@ -12,8 +12,9 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
-    expand_library_functions,
+    concat_where_transforms,
     dead_code_elimination,
+    expand_library_functions,
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
@@ -23,7 +24,6 @@ from gt4py.next.iterator.transforms import (
     inline_lifts,
     nest_concat_wheres,
     remove_broadcast,
-    transform_concat_where,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -97,8 +97,9 @@ def apply_common_transforms(
 
     # Note: executing domain inference again afterwards will give wrong domains.
     # This might be problematic in the temporary extraction, where we do this...
+    ir = concat_where_transforms.expand_tuple(ir)
     ir = ConstantFolding.apply(ir)  # TODO: remove
-    ir = transform_concat_where.TransformConcatWhere.apply(ir)
+    ir = concat_where_transforms.expand(ir)
     ir = ConstantFolding.apply(ir)  # TODO: remove
     ir = expand_library_functions.ExpandLibraryFunctions.apply(ir)
 

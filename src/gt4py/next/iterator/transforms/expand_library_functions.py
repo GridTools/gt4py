@@ -35,8 +35,8 @@ class ExpandLibraryFunctions(PreserveLocationVisitor, NodeTranslator):
         if cpm.is_call_to(node, "in_"):
             ret = []
             pos, domain = node.args
-            for i, (_, v) in enumerate(
-                domain_utils.SymbolicDomain.from_expr(node.args[1]).ranges.items()
+            for i, v in enumerate(
+                domain_utils.SymbolicDomain.from_expr(node.args[1]).ranges.values()
             ):
                 ret.append(
                     im.and_(

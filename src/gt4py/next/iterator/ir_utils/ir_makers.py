@@ -245,6 +245,7 @@ def if_(cond, true_val, false_val):
 
 def concat_where(cond, true_field, false_field):
     """Create a concat_where FunCall, shorthand for ``call("concat_where")(expr)``."""
+
     return call("concat_where")(cond, true_field, false_field)
 
 
@@ -442,18 +443,18 @@ def domain(
     """
     if isinstance(grid_type, common.GridType):
         grid_type = f"{grid_type!s}_domain"
-    return call(grid_type)(
+    expr = call(grid_type)(
         *[
             call("named_range")(
-                itir.AxisLiteral(value=d.value, kind=d.kind)
-                if isinstance(d, common.Dimension)
-                else itir.AxisLiteral(value=d),
+                itir.AxisLiteral(value=d.value, kind=d.kind),
                 r[0],
                 r[1],
             )
             for d, r in ranges.items()
         ]
     )
+    expr.type = ts.DomainType(dims=list(ranges.keys()))
+    return expr
 
 
 def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Callable:

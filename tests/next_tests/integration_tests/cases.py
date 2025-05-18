@@ -403,7 +403,7 @@ def verify(
     out: Optional[FieldViewInout] = None,
     inout: Optional[FieldViewInout] = None,
     offset_provider: Optional[OffsetProvider] = None,
-    comparison: Callable[[Any, Any], bool] = np.allclose,
+    comparison: Callable[[Any, Any], bool] = gt_utils.tree_map(np.allclose),
 ) -> None:
     """
     Check the result of executing a fieldview program or operator against ref.

@@ -369,11 +369,7 @@ def _collect_and_check_dimensions(input_: ts.TypeSpec) -> list[common.Dimension]
         .filter(lambda dims: len(dims) > 0)
         .to_list()
     )
-    if all_input_dims:
-        assert all(cur_input_dims == all_input_dims[0] for cur_input_dims in all_input_dims)
-        return all_input_dims[0]
-
-    return []
+    return common.promote_dims(*all_input_dims)
 
 
 def _convert_as_fieldop_input_to_iterator(
