@@ -41,6 +41,19 @@ test_data = [
         im.multiplies_(im.plus(2, 1), im.plus("x", "x")),
     ),
     (
+        "name_shadowing_external",
+        im.call(im.lambda_("x")(im.lambda_("y")(im.plus("x", "y"))))(im.plus("x", "y")),
+        im.lambda_("y_")(im.plus(im.plus("x", "y"), "y_")),
+    ),
+    (
+        "renaming_collision",
+        # the `y` param of the lambda may not be renamed to `y_` as this name is already referenced
+        im.call(im.lambda_("x")(im.lambda_("y")(im.plus(im.plus("x", "y"), "y_"))))(
+            im.plus("x", "y")
+        ),
+        im.lambda_("y__")(im.plus(im.plus(im.plus("x", "y"), "y__"), "y_")),
+    ),
+    (
         # ensure opcount preserving option works whether `itir.SymRef` has a type or not
         "typed_ref",
         im.let("a", im.call("opaque")())(
