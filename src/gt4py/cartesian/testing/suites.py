@@ -24,9 +24,7 @@ from gt4py.cartesian import gtscript, utils as gt_utils
 from gt4py.cartesian.definitions import AccessKind, FieldInfo
 from gt4py.cartesian.gtc.definitions import Boundary, CartesianSpace, Index, Shape
 from gt4py.cartesian.stencil_object import StencilObject
-from gt4py.storage.cartesian import utils as storage_utils
-
-from .input_strategies import (
+from gt4py.cartesian.testing.input_strategies import (
     SymbolKind,
     composite_implementation_strategy_factory,
     composite_strategy_factory,
@@ -34,7 +32,8 @@ from .input_strategies import (
     ndarray_shape_st,
     ndarray_st,
 )
-from .utils import annotate_function, standardize_dtype_dict
+from gt4py.cartesian.testing.utils import annotate_function, standardize_dtype_dict
+from gt4py.storage.cartesian import utils as storage_utils
 
 
 ParameterSet = type(pytest.param())

@@ -9,9 +9,8 @@
 from collections import defaultdict
 from typing import Any, Dict
 
+from gt4py.cartesian.gtc.cuir import cuir
 from gt4py.eve import NodeTranslator
-
-from . import cuir
 
 
 class CacheExtents(NodeTranslator):

@@ -9,9 +9,8 @@
 from typing import List
 
 from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import AccessCollector
 from gt4py.eve import NodeTranslator
-
-from .utils import AccessCollector
 
 
 class MaskStmtMerging(NodeTranslator):

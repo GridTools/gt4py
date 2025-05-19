@@ -21,12 +21,9 @@ import numpy as np
 
 from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
 from gt4py.cartesian.frontend import node_util, nodes
+from gt4py.cartesian.frontend.base import Frontend, register
 from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
-from gt4py.cartesian.gtc import utils as gtc_utils
-from gt4py.cartesian.utils import NOTHING, meta as gt_meta
-
-from .base import Frontend, register
-from .exceptions import (
+from gt4py.cartesian.frontend.exceptions import (
     GTScriptAssertionError,
     GTScriptDataTypeError,
     GTScriptDefinitionError,
@@ -34,6 +31,8 @@ from .exceptions import (
     GTScriptSyntaxError,
     GTScriptValueError,
 )
+from gt4py.cartesian.gtc import utils as gtc_utils
+from gt4py.cartesian.utils import NOTHING, meta as gt_meta
 
 
 PYTHON_AST_VERSION: Final = (3, 8)

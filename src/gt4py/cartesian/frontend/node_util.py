@@ -14,8 +14,7 @@ import boltons.typeutils
 
 import gt4py.cartesian.gtc.utils as gtc_utils
 from gt4py import eve
-
-from .nodes import Location, Node
+from gt4py.cartesian.frontend.nodes import Location, Node
 
 
 #: Marker value used to avoid confusion with `None`

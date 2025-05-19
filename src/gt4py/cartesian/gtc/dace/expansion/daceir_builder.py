@@ -19,6 +19,7 @@ import dace.data
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir, utils as gtc_utils
 from gt4py.cartesian.gtc.dace import daceir as dcir
+from gt4py.cartesian.gtc.dace.expansion.utils import remove_horizontal_region
 from gt4py.cartesian.gtc.dace.expansion_specification import Loop, Map, Sections, Stages
 from gt4py.cartesian.gtc.dace.utils import (
     compute_tasklet_access_infos,
@@ -30,8 +31,6 @@ from gt4py.cartesian.gtc.dace.utils import (
     untile_memlets,
 )
 from gt4py.cartesian.gtc.definitions import Extent
-
-from .utils import remove_horizontal_region
 
 
 if TYPE_CHECKING:
