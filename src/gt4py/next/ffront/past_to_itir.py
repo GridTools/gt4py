@@ -96,10 +96,13 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         i: arg.value for i, arg in enumerate(inp.args.args) if isinstance(arg, arguments.StaticArg)
     }
     static_args = {
-        itir_program.params[i].id: im.literal_from_tuple_value(value)
+        str(itir_program.params[i].id): im.literal_from_tuple_value(value)
         for i, value in static_args_index.items()
     }
-    body = remap_symbols.RemapSymbolRefs.apply(itir_program.body, symbol_map=static_args)
+    body = [
+        remap_symbols.RemapSymbolRefs.apply(stmt, symbol_map=static_args)
+        for stmt in itir_program.body
+    ]
     itir_program = itir.Program(
         id=itir_program.id,
         function_definitions=itir_program.function_definitions,
