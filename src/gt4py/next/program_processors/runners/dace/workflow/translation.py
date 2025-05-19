@@ -63,6 +63,14 @@ def _find_constant_symbols(
 def _make_sdfg_async(sdfg: dace.SDFG) -> None:
     """Sets all cuda stream to the default stream."""
 
+    has_gpu_code = any(
+        array_desc.storage in dace.dtypes.GPU_STORAGES for array_desc in sdfg.arrays.values()
+    )
+
+    if not has_gpu_code:
+        # The async execution mode requires CUDA, therefore it is only available on GPU
+        return
+
     # Emit cpp code for the SDFG to set the cuda streams
     sdfg.append_global_code(f"""\
 DACE_EXPORTED bool __dace_gpu_set_stream({sdfg.name}_state_t *__state, int streamid, gpuStream_t stream);
@@ -77,7 +85,6 @@ __set_stream_{sdfg.name}(__state, cudaStreamDefault);
 
     # Loop over all state in the top-level SDFG
     for state in sdfg.states():
-        # TODO: add a check that the state contains only one gpu map
         state.nosync = True
 
 
