@@ -17,7 +17,7 @@ import factory
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
@@ -88,36 +88,39 @@ class DaCeTranslator(
         if not self.disable_itir_transforms:
             ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
         offset_provider_type = common.offset_provider_to_type(offset_provider)
-        sdfg = gtir_sdfg.build_sdfg_from_gtir(
-            ir,
-            offset_provider_type,
-            column_axis,
-            disable_field_origin_on_program_arguments=self.disable_field_origin_on_program_arguments,
-        )
 
-        if auto_opt:
-            unit_strides_kind = (
-                common.DimensionKind.HORIZONTAL
-                if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
-                else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
+        # do not store transformation history in SDFG
+        with dace.config.set_temporary("store_history", value=False):
+            sdfg = gtir_sdfg.build_sdfg_from_gtir(
+                ir,
+                offset_provider_type,
+                column_axis,
+                disable_field_origin_on_program_arguments=self.disable_field_origin_on_program_arguments,
             )
-            constant_symbols = _find_constant_symbols(ir, sdfg, offset_provider_type)
-            gtx_transformations.gt_auto_optimize(
-                sdfg,
-                gpu=on_gpu,
-                gpu_block_size=(32, 8, 1),  # TODO: make block size configurable
-                unit_strides_kind=unit_strides_kind,
-                constant_symbols=constant_symbols,
-                assume_pointwise=True,
-                make_persistent=False,
-            )
-        elif on_gpu:
-            # We run simplify to bring the SDFG into a canonical form that the gpu transformations
-            # can handle. This is a workaround for an issue with scalar expressions that are
-            # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
-            # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
-            gtx_transformations.gt_simplify(sdfg)
-            gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+
+            if auto_opt:
+                unit_strides_kind = (
+                    common.DimensionKind.HORIZONTAL
+                    if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+                    else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
+                )
+                constant_symbols = _find_constant_symbols(ir, sdfg, offset_provider_type)
+                gtx_transformations.gt_auto_optimize(
+                    sdfg,
+                    gpu=on_gpu,
+                    gpu_block_size=(32, 8, 1),  # TODO: make block size configurable
+                    unit_strides_kind=unit_strides_kind,
+                    constant_symbols=constant_symbols,
+                    assume_pointwise=True,
+                    make_persistent=False,
+                )
+            elif on_gpu:
+                # We run simplify to bring the SDFG into a canonical form that the gpu transformations
+                # can handle. This is a workaround for an issue with scalar expressions that are
+                # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
+                # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
+                gtx_transformations.gt_simplify(sdfg)
+                gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
         return sdfg
 
@@ -136,9 +139,13 @@ class DaCeTranslator(
             on_gpu=(self.device_type == core_defs.CUPY_DEVICE_TYPE),
         )
 
+        arg_types = tuple(
+            arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
+        )
+
         param_types = tuple(
             interface.Parameter(param, arg_type)
-            for param, arg_type in zip(sdfg.arg_names, inp.args.args)
+            for param, arg_type in zip(sdfg.arg_names, arg_types)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (

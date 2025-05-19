@@ -45,7 +45,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         blocking_size: The size of the block, denoted as `B` above.
         blocking_parameter: On which parameter should we block.
         require_independent_nodes: If `True` only apply loop blocking if the Map
-            actually contains independent nodes. Defaults to `False`.
+            actually contains independent nodes. Defaults to `True`.
 
     Todo:
         - Modify the inner map such that it always starts at zero.
@@ -65,7 +65,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     )
     require_independent_nodes = dace_properties.Property(
         dtype=bool,
-        default=False,
+        default=True,
         desc="If 'True' then blocking is only applied if there are independent nodes.",
     )
 
@@ -125,10 +125,21 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         scope = graph.scope_dict()
         if scope[outer_entry] is not None:
             return False
-        if block_var not in outer_entry.map.params:
+
+        if block_var not in map_params:
             return False
-        if map_range[map_params.index(block_var)][2] != 1:
+
+        block_var_idx = map_params.index(block_var)
+        map_range_size = map_range.size()
+        if map_range[block_var_idx][2] != 1:
             return False
+
+        # Require that there are more iteration than the blocking size.
+        # TODO(phimuell): Synchronize this with the GPU block size since it also
+        #   plays into it.
+        if (map_range_size[block_var_idx] <= self.blocking_size) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
+            return False
+
         if not self.partition_map_output(graph, sdfg):
             return False
         self._independent_nodes = None
@@ -316,12 +327,13 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             if not found_new_independent_node:
                 break
 
-        if self.require_independent_nodes and len(self._independent_nodes) == 0:
+        # If requested check if the blocking is a good idea.
+        if self.require_independent_nodes and (not self._check_if_blocking_is_favourable(state)):
             self._independent_nodes = None
             return False
 
         # After the independent set is computed compute the set of dependent nodes
-        #  as the set of all nodes adjacent to `outer_entry` that are not dependent.
+        #  as the set of all nodes adjacent to `outer_entry` that are not independent.
         self._dependent_nodes = {
             edge.dst
             for edge in state.out_edges(self.outer_entry)
@@ -698,3 +710,43 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         _ = sdfg.hash_sdfg()
         # TODO(phimuell): Use a less expensive method.
         dace.sdfg.propagation.propagate_memlets_state(sdfg, state)
+
+    def _check_if_blocking_is_favourable(
+        self,
+        state: dace.SDFGState,
+    ) -> bool:
+        """Test if the nodes are really independent nodes.
+
+        After the classification the function will examine the set to see if some
+        nodes were found that brings no benefit to move out. The classical example
+        is a Tasklet that writes a constant into an AccessNode. These kind of
+        nodes are filtered out.
+
+        The function returns `True` if it decides that blocking is good and `False`
+        otherwise. The function will not modify `self._independent_nodes`.
+        """
+        assert self._independent_nodes is not None
+        assert self._dependent_nodes is None
+
+        # There is nothing to move out so ignore it.
+        if len(self._independent_nodes) == 0:
+            return False
+
+        # Currently we only filter out Tasklets that do not read any data, which
+        #  is the example above, Because of how DaCe works we also subtract all
+        #  of its output nodes, that are classified independent.
+        # TODO(phimuell): Think if we should expand on that.
+        nb_independent_nodes = len(self._independent_nodes)
+
+        for node in self._independent_nodes:
+            if isinstance(node, dace_nodes.Tasklet):
+                if not all(iedge.data.is_empty() for iedge in state.in_edges(node)):
+                    continue
+                nb_independent_nodes -= 1
+                for oedge in state.out_edges(node):
+                    assert isinstance(oedge.dst, dace_nodes.AccessNode)
+                    assert oedge.dst in self._independent_nodes
+                    nb_independent_nodes -= 1
+            assert nb_independent_nodes >= 0
+
+        return nb_independent_nodes > 0

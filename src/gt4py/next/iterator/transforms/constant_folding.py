@@ -105,8 +105,12 @@ class ConstantFolding(
     enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     @classmethod
-    def apply(cls, node: ir.Node) -> ir.Node:
-        node = cls().visit(node)
+    def apply(
+        cls, node: ir.Node, enabled_transformations: Optional[Transformation] = None
+    ) -> ir.Node:
+        enabled_transformations = enabled_transformations or cls.Transformation.all()
+
+        node = cls(enabled_transformations=enabled_transformations).visit(node)
         return UndoCanonicalizeMinus().visit(node)
 
     def transform_canonicalize_op_funcall_symref_literal(
@@ -131,7 +135,7 @@ class ConstantFolding(
     def transform_canonicalize_min_max(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         # `maximum(a, maximum(...))` -> `maximum(maximum(...), a)`
         if cpm.is_call_to(node, ("maximum", "minimum")):
-            op = node.fun.id  # type: ignore[attr-defined] # assured by if above
+            op = node.fun.id
             if cpm.is_call_to(node.args[1], op) and not cpm.is_call_to(node.args[0], op):
                 return im.call(op)(node.args[1], node.args[0])
         return None
@@ -152,7 +156,7 @@ class ConstantFolding(
         # `maximum(maximum(a, 1), a)` -> `maximum(a, 1)`
         # `maximum(maximum(a, 1), 1)` -> `maximum(a, 1)`
         if cpm.is_call_to(node, ("minimum", "maximum")):
-            op = node.fun.id  # type: ignore[attr-defined] # assured by if above
+            op = node.fun.id
             if cpm.is_call_to(node.args[0], op):
                 fun_call, arg1 = node.args
                 if arg1 in fun_call.args:  # type: ignore[attr-defined] # assured by if above

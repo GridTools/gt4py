@@ -17,7 +17,7 @@ from dace import (
     subsets as dace_sbs,
     transformation as dace_transformation,
 )
-from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
+from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sutils
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -212,17 +212,13 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 connector=conn_name,
             )
 
-        # Now fix the symbol mapping.
         self._update_symbol_mapping(if_block)
 
-        # Now remove the nodes that have been relocated from the SDFG and also
-        #  clean up the registry.
-        for nodes_to_move in relocatable_dataflow.values():
-            for node_to_remove in nodes_to_move:
-                if isinstance(node_to_remove, dace_nodes.AccessNode):
-                    assert node_to_remove.desc(sdfg).transient
-                    sdfg.remove_data(node_to_remove.data, validate=False)
-                graph.remove_node(node_to_remove)
+        self._remove_outside_dataflow(
+            sdfg=sdfg,
+            state=graph,
+            relocatable_dataflow=relocatable_dataflow,
+        )
 
         # Because we relocate some node it seems that DaCe gets a bit confused.
         #  So we have to reset the list. Without it the `test_if_mover_chain`
@@ -352,7 +348,13 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 else:
                     # The data is defined somewhere in the Map scope itself.
                     outer_data = iedge.src
-                assert isinstance(outer_data, dace_nodes.AccessNode)
+                # TODO(phimuell): It is possible that this does not lead to an
+                #   AccessNode on the outside, but to something inside the Map scope
+                #   such as the MapExit of an inner map. To handle such a case we need
+                #   to construct the set of nodes to move differently, i.e.
+                #   considering this case already there.
+                if not isinstance(outer_data, dace_nodes.AccessNode):
+                    raise NotImplementedError()
                 assert not gtx_transformations.utils.is_view(outer_data, sdfg)
 
                 # If the data is not yet available in the inner SDFG made
@@ -374,6 +376,13 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         ),
                     )
                     if_block.add_in_connector(outer_data.data)
+                else:
+                    # This is the case that we found a node, that refers to data that
+                    #  was already patched into the `if_block`. We would have to remove
+                    #  this, but since this function just replicates the dataflow,
+                    #  it will not do that. Instead we postpone this to the cleanup
+                    #  phase, see `_remove_outside_dataflow()`.
+                    pass
 
                 if outer_data not in new_nodes:
                     assert all(
@@ -397,6 +406,36 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # The old connector name is no longer valid.
         inner_sdfg.arrays[connector].transient = True
         if_block.remove_in_connector(connector)
+
+    def _remove_outside_dataflow(
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+        relocatable_dataflow: dict[str, set[dace_nodes.Node]],
+    ) -> None:
+        """Removes the original dataflow, that has been relocated.
+
+        The function will also remove data containers that are no longer in use.
+        """
+        all_relocatable_dataflow: set[dace_nodes.Node] = functools.reduce(
+            lambda s1, s2: s1.union(s2), relocatable_dataflow.values(), set()
+        )
+
+        # Before we can clean the original nodes, we must clean the dataflow. If a
+        #  node, that was relocated, has incoming connections we must remove them
+        #  and the parent dataflow.
+        for node_to_remove in all_relocatable_dataflow:
+            for iedge in list(state.in_edges(node_to_remove)):
+                if iedge.src in all_relocatable_dataflow:
+                    continue
+                dace_sutils.remove_edge_and_dangling_path(state, iedge)
+
+            if isinstance(node_to_remove, dace_nodes.AccessNode):
+                assert node_to_remove.desc(sdfg).transient
+                sdfg.remove_data(node_to_remove.data, validate=False)
+
+        # Remove the original nodes (data descriptors were deleted in the loop above).
+        state.remove_nodes_from(all_relocatable_dataflow)
 
     def _update_symbol_mapping(
         self,

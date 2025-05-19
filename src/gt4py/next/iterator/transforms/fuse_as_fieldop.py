@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
+import collections
 import dataclasses
 import enum
 import functools
@@ -36,14 +37,12 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def _merge_arguments(
-    args1: dict[str, itir.Expr], arg2: dict[str, itir.Expr]
+    args1: dict[str, itir.Expr], args2: dict[str, itir.Expr]
 ) -> dict[str, itir.Expr]:
     new_args = {**args1}
-    for stencil_param, stencil_arg in arg2.items():
-        if stencil_param not in new_args:
-            new_args[stencil_param] = stencil_arg
-        else:
-            assert new_args[stencil_param] == stencil_arg
+    for stencil_param, stencil_arg in args2.items():
+        assert stencil_param not in new_args
+        new_args[stencil_param] = stencil_arg
     return new_args
 
 
@@ -69,23 +68,13 @@ def _inline_as_fieldop_arg(
     stencil_body: itir.Expr = stencil.expr
 
     for inner_param, inner_arg in zip(stencil.params, inner_args, strict=True):
-        if isinstance(inner_arg, itir.SymRef):
-            if inner_arg.id in extracted_args:
-                assert extracted_args[inner_arg.id] == inner_arg
-                alias = stencil_params[list(extracted_args.keys()).index(inner_arg.id)]
-                stencil_body = im.let(inner_param, im.ref(alias.id))(stencil_body)
-            else:
-                stencil_params.append(inner_param)
-            extracted_args[inner_arg.id] = inner_arg
-        elif isinstance(inner_arg, itir.Literal):
+        if isinstance(inner_arg, itir.Literal):
             # note: only literals, not all scalar expressions are required as it doesn't make sense
             # for them to be computed per grid point.
             stencil_body = im.let(inner_param, im.promote_to_const_iterator(inner_arg))(
                 stencil_body
             )
         else:
-            # a scalar expression, a previously not inlined `as_fieldop` call or an opaque
-            # expression e.g. containing a tuple
             stencil_params.append(inner_param)
             new_outer_stencil_param = uids.sequential_id(prefix="__iasfop")
             extracted_args[new_outer_stencil_param] = inner_arg
@@ -95,16 +84,50 @@ def _inline_as_fieldop_arg(
     ), extracted_args
 
 
+def _deduplicate_as_fieldop_args(
+    args: dict[str, itir.Expr], stencil_body: itir.Expr
+) -> tuple[dict[str, itir.Expr], itir.Expr]:
+    new_args_inverted: dict[itir.Expr, list[str]] = collections.defaultdict(list)
+    for name, arg in args.items():
+        new_args_inverted[arg].append(name)
+
+    new_args: dict[str, itir.Expr] = {}
+    new_stencil_body = stencil_body
+    for arg, names in new_args_inverted.items():
+        # put internal names at the end
+        new_name, *aliases = sorted(names, key=lambda s: (s.startswith("_"), s))
+        new_args[new_name] = arg
+        if aliases:
+            new_stencil_body = im.let(*((alias, new_name) for alias in aliases))(new_stencil_body)
+
+    return new_args, new_stencil_body
+
+
+def _prettify_as_fieldop_args(
+    args: dict[str, itir.Expr], stencil_body: itir.Expr
+) -> tuple[dict[str, itir.Expr], itir.Expr]:
+    new_args: dict[str, itir.Expr] = {}
+    remap_table: dict[str, str] = {}
+    for name, arg in args.items():
+        if isinstance(arg, itir.SymRef):
+            assert arg.id not in new_args  # ensured by deduplication
+            new_args[arg.id] = arg
+            remap_table[name] = arg.id
+        else:
+            new_args[name] = arg
+
+    return new_args, im.let(*remap_table.items())(stencil_body)
+
+
 def fuse_as_fieldop(
     expr: itir.Expr, eligible_args: list[bool], *, uids: eve_utils.UIDGenerator
 ) -> itir.Expr:
     assert cpm.is_applied_as_fieldop(expr)
 
-    stencil: itir.Lambda = expr.fun.args[0]  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
-    assert isinstance(expr.fun.args[0], itir.Lambda) or cpm.is_call_to(stencil, "scan")  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
-    stencil, restore_scan = ir_misc.unwrap_scan(stencil)
+    assert isinstance(expr.fun.args[0], itir.Lambda) or cpm.is_call_to(expr.fun.args[0], "scan")
+    stencil, restore_scan = ir_misc.unwrap_scan(expr.fun.args[0])
 
-    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
+    domain = expr.fun.args[1] if len(expr.fun.args) > 1 else None
 
     args: list[itir.Expr] = expr.args
 
@@ -136,22 +159,17 @@ def fuse_as_fieldop(
                 assert isinstance(arg.type, ts.TypeSpec)
                 dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
                 assert not isinstance(dtype, ts.ListType)
-            new_param: str
-            if isinstance(
-                arg, itir.SymRef
-            ):  # use name from outer scope (optional, just to get a nice IR)
-                new_param = arg.id
-                new_stencil_body = im.let(stencil_param.id, arg.id)(new_stencil_body)
-            else:
-                new_param = stencil_param.id
-            new_args = _merge_arguments(new_args, {new_param: arg})
+            new_args = _merge_arguments(new_args, {stencil_param.id: arg})
+
+    new_args, new_stencil_body = _deduplicate_as_fieldop_args(new_args, new_stencil_body)
+    new_args, new_stencil_body = _prettify_as_fieldop_args(new_args, new_stencil_body)
 
     stencil = im.lambda_(*new_args.keys())(new_stencil_body)
-    stencil = restore_scan(stencil)
+    new_stencil = restore_scan(stencil)
 
     # simplify stencil directly to keep the tree small
     new_stencil = inline_lambdas.InlineLambdas.apply(
-        stencil, opcount_preserving=True, force_inline_lift_args=False
+        new_stencil, opcount_preserving=True, force_inline_lift_args=False
     )
     new_stencil = inline_center_deref_lift_vars.InlineCenterDerefLiftVars.apply(
         new_stencil, is_stencil=True, uids=uids
@@ -173,7 +191,7 @@ def _arg_inline_predicate(node: itir.Expr, shifts: set[tuple[itir.OffsetLiteral,
 
     if (
         is_applied_fieldop := cpm.is_applied_as_fieldop(node)
-        and not cpm.is_call_to(node.fun.args[0], "scan")  # type: ignore[attr-defined]  # ensured by cpm.is_applied_as_fieldop
+        and not cpm.is_call_to(node.fun.args[0], "scan")
     ) or cpm.is_call_to(node, "if_"):
         # always inline arg if it is an applied fieldop with only a single arg
         if is_applied_fieldop and len(node.args) == 1:
@@ -252,6 +270,7 @@ class FuseAsFieldOp(
             return functools.reduce(operator.or_, self.__members__.values())
 
     PRESERVED_ANNEX_ATTRS = ("domain",)
+    REINFER_TYPES = True
 
     enabled_transformations = Transformation.all()
 

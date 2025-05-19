@@ -4,7 +4,23 @@ Any test job that runs on CI is encoded in automation tools like **nox** and **p
 
 ## GitHub Workflows
 
-The following workflows are currently active:
+The following workflows are currently active.
+
+### Code Quality
+
+A `Code Quality` workflow runs `pre-commit` to check code quality requirements through tools like **mypy** or **ruff**. Code coverage workflows are currently disabled.
+
+### Tests
+
+The `Test Cartesian (CPU)`, `Test Eve`, `Test Next (CPU)`, `Test Storage (CPU)` and `Test Package Root` workflows run the correspondent `nox` sessions testing the respective subpackages (`Test Package Root` tests the root package code). In all cases only tests are run that do not require the presence of a GPU.
+
+#### When are workflows triggered
+
+The idea is to run workflows only when needed. This means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, `eve` tests will not be run when only GT4Py sources are changed.
+
+In the past we used the `paths` and `paths-ignore` workflow options together with an always-succeeding _fallback_ workflow for this, but a similar mechanism has now been defined directly with `nox`. The conditional execution of tests is disabled by default and it has to be activated through `CI_NOX_*` environment variables (check [`noxfile.py`](../../../noxfile.py) and [`noxfile_utils.py`](../../../noxfile_utils.py_) for details.
+
+The overall dependencies between subprojects and tests can be visualized as:
 
 ```mermaid
 %%{
@@ -87,16 +103,6 @@ flowchart LR
     linkStyle 18 stroke:ForestGreen,stroke-width:2px;
 ```
 
-The `Test Cartesian (CPU)`, `Test Eve`, `Test Next (CPU)` and `Test Storage (CPU)` workflows run the automated tests for the respective subpackages. In all cases only tests are run that do not require the presence of a GPU. The `Test Package Root` workflow runs the automated tests for the root package code.
-
-The `Code Quality` workflow runs pre-commit to check code quality requirements through tools like **mypy** or **ruff**.
-
-Code coverage workflows are currently disabled.
-
-### When are workflows triggered
-
-The general idea is to run workflows only when needed. In this monorepo structure, this practically means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, `eve` tests will not be run when only GT4Py sources are changed. In those cases where some subpackage workflows are not triggered, replacement (always-succeeding) `Fallback:` workflows will be executed instead to satisfy the GitHub merge protection rules.
-
 ### Daily CI
 
 There is an extra CI workflow on GitHub scheduled to run daily and testing `main` with different sets of requirements: newest dependencies, lowest dependencies versions and lowest dependencies versions including extras. Failures are accessible in [GitHub web interface](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml) and as the 'Daily CI' badge in the main [README.md](../../../README.md) file. Additionally, in case of failure a message _might_ be posted in the [#ci-notifications](https://app.slack.com/client/T0A5HP547/C0E145U65) channel of the GridTols slack, but those notifications do not work reliably.
@@ -105,7 +111,7 @@ There is an extra CI workflow on GitHub scheduled to run daily and testing `main
 
 CI pipelines for all tests can be triggered via CSCS-CI. These automatically run from a Gitlab mirror for whitelisted users only, and have to be explicitly run by a whitelisted user via the comment "cscs-ci run default" on PRs from other users. There is currently no finegrained control over which subpackage tests are run. Neither can a subset be started manually from the comments nor can tests be skipped based on which files have been changed. Both are achievable (the latter with considerable effort), however given the current duration of the pipeline it does not seem worth doing so.
 
-Since all tests routinely run here, this might be a better match for reintroducing test coverage in the future than github workflows.
+Since all tests routinely run here, this might be a better match for reintroducing test coverage in the future than GitHub workflows.
 
 Additional information on how to change this process, such as adding whitelisted users, regenerating tokens etc can be found in [cscs-ci.md](cscs-ci.md)
 
