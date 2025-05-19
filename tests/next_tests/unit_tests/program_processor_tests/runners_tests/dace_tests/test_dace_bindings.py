@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Test utility functions of the dace backend module."""
+"""Test the bindings stage of the dace backend workflow."""
 
 import pytest
 
@@ -16,7 +16,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_
 dace = pytest.importorskip("dace")
 
 from gt4py.next.otf import languages, stages
-from gt4py.next.program_processors.runners.dace.workflow import bindings as dace_bindings
+from gt4py.next.program_processors.runners.dace.workflow import bindings as dace_bindings_stage
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -165,7 +165,7 @@ def test_bind_sdfg(persistent_config):
         interface.Parameter("E", FieldType),
     )
 
-    program_source: stages.ProgramSource[dace_bindings.SrcL, languages.LanguageSettings] = (
+    program_source: stages.ProgramSource[dace_bindings_stage.SrcL, languages.LanguageSettings] = (
         stages.ProgramSource(
             entry_point=interface.Function(program_name, tuple(program_parameters)),
             source_code=sdfg.to_json(),
@@ -176,7 +176,7 @@ def test_bind_sdfg(persistent_config):
         )
     )
 
-    compilable_program_source = dace_bindings.bind_sdfg(
+    compilable_program_source = dace_bindings_stage.bind_sdfg(
         program_source, _bind_func_name, make_persistent
     )
 

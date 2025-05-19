@@ -40,7 +40,10 @@ def _update_sdfg_scalar_arg(
     sdfg_arg_index: int,
     rhs: str,
 ) -> None:
-    """Emit Python code to update a scalar argument in the SDFG arglist."""
+    """
+    Emit Python code to update a scalar argument in the SDFG arglist
+    with the value passed as `rhs` (right-hand side in assignment expression).
+    """
     assert isinstance(sdfg_arg_desc, dace.data.Scalar)
     actype = sdfg_arg_desc.dtype.as_ctypes()
     actype_call = f"{actype.__module__}.{actype.__name__}"
@@ -54,7 +57,10 @@ def _validate_sdfg_scalar_arg(
     sdfg_arg_index: int,
     rhs: str,
 ) -> None:
-    """Emit Python asserts to validate a scalar argument in the SDFG arglist."""
+    """
+    Emit Python asserts to validate a scalar argument in the SDFG arglist
+    against the value passed as `rhs` (right-hand side in assignment expression).
+    """
     assert isinstance(sdfg_arg_desc, dace.data.Scalar)
     code.append(f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes._SimpleCData)")
     code.append(f"assert {_cb_last_call_args}[{sdfg_arg_index}] == {rhs}")
@@ -127,7 +133,10 @@ def _parse_gt_param(
                 # Pass zero-dimensional fields as scalars.
                 assert isinstance(sdfg_arg_desc, dace.data.Scalar)
                 _update_sdfg_scalar_arg(
-                    code, sdfg_arg_desc, sdfg_arg_index, rhs=f"{arg}.as_scalar()"
+                    code=code,
+                    sdfg_arg_desc=sdfg_arg_desc,
+                    sdfg_arg_index=sdfg_arg_index,
+                    rhs=f"{arg}.as_scalar()",
                 )
             else:
                 assert isinstance(sdfg_arg_desc, dace.data.Array)
@@ -187,9 +196,19 @@ def _parse_gt_param(
             assert isinstance(sdfg_arg_desc, dace.data.Scalar)
             if gtx_dace_utils.is_field_symbol(param_name) and make_persistent:
                 # only emit some debug code
-                _validate_sdfg_scalar_arg(code, sdfg_arg_desc, sdfg_arg_index, rhs=arg)
+                _validate_sdfg_scalar_arg(
+                    code=code,
+                    sdfg_arg_desc=sdfg_arg_desc,
+                    sdfg_arg_index=sdfg_arg_index,
+                    rhs=arg,
+                )
             else:
-                _update_sdfg_scalar_arg(code, sdfg_arg_desc, sdfg_arg_index, rhs=arg)
+                _update_sdfg_scalar_arg(
+                    code=code,
+                    sdfg_arg_desc=sdfg_arg_desc,
+                    sdfg_arg_index=sdfg_arg_index,
+                    rhs=arg,
+                )
 
         else:
             raise ValueError(f"Unexpected paramter type {param_type}")
@@ -261,7 +280,7 @@ def bind_sdfg(
     """
     Method to be used as workflow stage for generation of SDFG bindings.
 
-    Refer to `create_bindings` documentation.
+    Refer to `_create_sdfg_bindings` documentation.
     """
     return stages.CompilableSource(
         program_source=inp,
