@@ -86,7 +86,6 @@ def _create_scan_field_operator_impl(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     domain: gtir_domain.DomainRange,
-    domain_parser: gtir_domain.GTIRDomainParser,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
     map_exit: dace.nodes.MapExit,
@@ -110,7 +109,7 @@ def _create_scan_field_operator_impl(
     assert isinstance(dataflow_output_desc, dace.data.Array)
 
     # the memory layout of the output field follows the field operator compute domain
-    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(domain, domain_parser)
+    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(domain)
     field_subset = gtir_domain.get_field_subset(domain)
 
     # the vertical dimension used as scan column is computed by the `LoopRegion`
@@ -193,8 +192,8 @@ def _create_scan_field_operator(
     Refer to `gtir_builtin_translators._create_field_operator()` for the
     description of function arguments and return values.
     """
-    sdfg, state, domain_parser = ctx.sdfg, ctx.state, ctx.domain_parser
-    domain_dims, _, _ = gtir_domain.get_field_layout(domain, domain_parser)
+    sdfg, state = ctx.sdfg, ctx.state
+    domain_dims, _, _ = gtir_domain.get_field_layout(domain)
 
     # create a map scope to execute the `LoopRegion` over the horizontal domain
     if len(domain_dims) == 1:
@@ -225,7 +224,7 @@ def _create_scan_field_operator(
     if isinstance(node_type, ts.FieldType):
         assert isinstance(output_tree, gtir_dataflow.DataflowOutputEdge)
         return _create_scan_field_operator_impl(
-            sdfg_builder, sdfg, state, domain, domain_parser, output_tree, node_type, map_exit
+            sdfg_builder, sdfg, state, domain, output_tree, node_type, map_exit
         )
     else:
         # handle tuples of fields
@@ -239,7 +238,6 @@ def _create_scan_field_operator(
                     sdfg,
                     state,
                     domain,
-                    domain_parser,
                     output_edge,
                     output_sym.type,
                     map_exit,

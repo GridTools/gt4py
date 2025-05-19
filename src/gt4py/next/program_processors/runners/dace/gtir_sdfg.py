@@ -122,11 +122,10 @@ class DataflowContext:
 
     sdfg: dace.SDFG
     state: dace.SDFGState
-    domain_parser: gtir_domain.GTIRDomainParser
 
     def clone(self, state: dace.SDFGState) -> "DataflowContext":
         """Create a new context for the given state."""
-        return DataflowContext(self.sdfg, state, self.domain_parser)
+        return DataflowContext(self.sdfg, state)
 
 
 class SDFGBuilder(DataflowBuilder, Protocol):
@@ -355,8 +354,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         if state_name is None:
             state_name = "entry"
-        st = nested_sdfg.add_state(state_name, is_start_block=True)
-        nested_sdfg_ctx = DataflowContext(nested_sdfg, st, parent_ctx.domain_parser)
+        start_state_in_nested_sdfg = nested_sdfg.add_state(state_name, is_start_block=True)
+        nested_sdfg_ctx = DataflowContext(nested_sdfg, start_state_in_nested_sdfg)
 
         return nested_sdfg_builder, nested_sdfg_ctx
 
@@ -520,7 +519,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def _visit_expression(
         self,
         node: gtir.Expr,
-        domain: gtir_domain.DomainRange,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
         use_temp: bool = True,
@@ -534,8 +532,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             A list of array nodes containing the result fields.
         """
-        domain_parser = gtir_domain.GTIRDomainParser(domain)
-        result = self.visit(node, ctx=DataflowContext(sdfg, head_state, domain_parser))
+        result = self.visit(node, ctx=DataflowContext(sdfg, head_state))
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
         # i.e. eventually only introduce internal branches, and keep the same head state
@@ -686,11 +683,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         domain = gtir_domain.extract_domain(stmt.domain)
 
         # lower the GTIR expression to a dataflow that computes some temporary fields
-        source_fields = self._visit_expression(stmt.expr, domain, sdfg, state)
+        source_fields = self._visit_expression(stmt.expr, sdfg, state)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        target_fields = self._visit_expression(stmt.target, domain, sdfg, state, use_temp=False)
+        target_fields = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
 
         expr_input_args = {
             sym_id

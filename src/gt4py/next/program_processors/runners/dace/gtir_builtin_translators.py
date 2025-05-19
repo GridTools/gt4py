@@ -311,11 +311,11 @@ def _create_field_operator_impl(
         The field data descriptor, which includes the field access node in the
         given `state` and the field domain offset.
     """
-    sdfg, state, domain_parser = ctx.sdfg, ctx.state, ctx.domain_parser
+    sdfg, state = ctx.sdfg, ctx.state
     dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
 
     # the memory layout of the output field follows the field operator compute domain
-    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(domain, domain_parser)
+    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(domain)
     field_subset = gtir_domain.get_field_subset(domain)
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
@@ -486,7 +486,7 @@ def _construct_if_branch_output(
     the result of an if expression.
     """
 
-    sdfg, state, domain_parser = ctx.sdfg, ctx.state, ctx.domain_parser
+    sdfg, state = ctx.sdfg, ctx.state
 
     assert true_br.gt_type == false_br.gt_type
     out_type = true_br.gt_type
@@ -500,9 +500,7 @@ def _construct_if_branch_output(
 
     assert isinstance(out_type, ts.FieldType)
     assert isinstance(sym.type, ts.FieldType)
-    dims, origin, shape = gtir_domain.get_field_layout(
-        gtir_domain.extract_domain(domain), domain_parser
-    )
+    dims, origin, shape = gtir_domain.get_field_layout(gtir_domain.extract_domain(domain))
     assert dims == out_type.dims
 
     if isinstance(out_type.dtype, ts.ScalarType):
