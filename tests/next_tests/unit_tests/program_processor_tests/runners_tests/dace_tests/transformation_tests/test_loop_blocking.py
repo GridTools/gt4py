@@ -639,9 +639,8 @@ def _make_loop_blocking_sdfg_with_inner_map(
         sdfg.add_array("C", shape=(10,), dtype=dace.float64, transient=False)
         sdfg.add_scalar("tmp", dtype=dace.float64, transient=True)
         sdfg.add_scalar("tmp2", dtype=dace.float64, transient=True)
-        tmp, tmp2, C = (state.add_access(name) for name in ("tmp", "tmp2", "C"))
-        state.add_edge(tmp, None, tmp2, None, dace.Memlet("tmp2[0]"))
-        state.add_edge(tmp2, None, mx_out, "IN_tmp", dace.Memlet("C[__i0]"))
+        tmp, C = (state.add_access(name) for name in ("tmp", "C"))
+        state.add_edge(tmp, None, mx_out, "IN_tmp", dace.Memlet("C[__i0]"))
         mx_out.add_in_connector("IN_tmp")
         state.add_edge(mx_out, "OUT_tmp", C, None, dace.Memlet("C[0:10]"))
         mx_out.add_out_connector("OUT_tmp")
@@ -725,6 +724,7 @@ def test_loop_blocking_inner_map_with_independent_part(independent_part):
     Tests with an inner map with an independent part.
     """
     sdfg, state, outer_map, inner_map = _make_loop_blocking_sdfg_with_inner_map(independent_part)
+    outer_map_exit = state.exit_node(outer_map)
 
     # Find the parts that are independent.
     independent_node: dace_nodes.Tasklet | dace_nodes.NestedSDFG = next(
@@ -737,6 +737,7 @@ def test_loop_blocking_inner_map_with_independent_part(independent_part):
         oedge.dst for oedge in state.out_edges(independent_node)
     )
     assert i_access_node.data == "tmp"
+    assert all(oedge.dst is outer_map_exit for oedge in state.out_edges(i_access_node))
 
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="__i0"),
@@ -1334,3 +1335,299 @@ def test_blocking_size_too_big():
         validate_all=True,
     )
     assert count == 1
+
+
+def _make_loop_blocking_sdfg_with_semi_independent_map() -> (
+    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]
+):
+    sdfg = dace.SDFG(util.unique_name("sdfg_with_inner_semi_independent_map"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array("A", shape=(40, 3), dtype=dace.float64, transient=False)
+    for name in "BC":
+        sdfg.add_array(name, shape=(40, 8), dtype=dace.float64, transient=False)
+    sdfg.add_scalar("t", dtype=dace.float64, transient=True)
+
+    # Note that creating `T` as an array is not useful at all, a scalar would be
+    #  enough. The only reason for doing it is, that the Memlets inside and outside
+    #  the inner Map scope can refer to different data, and the outside Memlet
+    #  is dependent.
+    sdfg.add_array("T", shape=(8,), dtype=dace.float64, transient=True)
+
+    A, B, C, T, t = (state.add_access(name) for name in "ABCTt")
+
+    me, mx = state.add_map("main_comp", ndrange={"__i0": "0:40", "__i1": "0:8"})
+
+    # The inner computation on its own is not useful.
+    ime, imx = state.add_map("inner_comp", ndrange={"__inner": "1"})
+    itlet = state.add_tasklet(
+        "inner_tasklet",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in + 10.0",
+    )
+
+    # This is the dependent Tasklet.
+    dtlet = state.add_tasklet(
+        "dependent_tlet",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = __in1 + __in2",
+    )
+
+    state.add_edge(A, None, me, "IN_A", dace.Memlet("A[0:40, 1]"))
+    state.add_edge(me, "OUT_A", ime, "IN_A", dace.Memlet("A[__i0, 1]"))
+    me.add_scope_connectors("A")
+
+    state.add_edge(ime, "OUT_A", itlet, "__in", dace.Memlet("A[__i0, 1]"))
+    ime.add_scope_connectors("A")
+
+    state.add_edge(itlet, "__out", t, None, dace.Memlet("t[0]"))
+
+    # Here is the interesting part, on the inside of the inner Map scope, the output
+    #  Memlet refers to `t` the scalar, but on the outside the Memlet refers to
+    #  `T` and this also includes the blocking variable `__i1`.
+    state.add_edge(t, None, imx, "IN_t", dace.Memlet("t[0]"))
+    state.add_edge(imx, "OUT_t", T, None, dace.Memlet("T[__i1]"))
+    imx.add_scope_connectors("t")
+
+    state.add_edge(B, None, me, "IN_B", dace.Memlet("B[0:40, 0:8]"))
+    state.add_edge(me, "OUT_B", dtlet, "__in2", dace.Memlet("B[__i0, __i1]"))
+    state.add_edge(T, None, dtlet, "__in1", dace.Memlet("T[__i1]"))
+    me.add_scope_connectors("B")
+
+    state.add_edge(dtlet, "__out", mx, "IN_C", dace.Memlet("C[__i0, __i1]"))
+    state.add_edge(mx, "OUT_C", C, None, dace.Memlet("C[0:40, 0:8]"))
+    mx.add_scope_connectors("C")
+
+    sdfg.validate()
+
+    return sdfg, state, me, ime
+
+
+def test_loop_blocking_sdfg_with_semi_independent_map():
+    sdfg, state, me, ime = _make_loop_blocking_sdfg_with_semi_independent_map()
+
+    scope_dict_before = state.scope_dict()
+    assert scope_dict_before[ime] is me
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    new_scope_of_inner_map = state.scope_dict()[ime]
+    assert isinstance(new_scope_of_inner_map, dace_nodes.MapEntry)
+    assert new_scope_of_inner_map is not me
+
+
+def _make_loop_blocking_only_independent_inner_map() -> (
+    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]
+):
+    sdfg = dace.SDFG(util.unique_name("sdfg_with_only_independent_inner_map"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array("A", shape=(40, 3), dtype=dace.float64, transient=False)
+    sdfg.add_array("B", shape=(40, 8), dtype=dace.float64, transient=False)
+    sdfg.add_scalar("t", dtype=dace.float64, transient=True)
+
+    A, B, t = (state.add_access(name) for name in "ABt")
+    me, mx = state.add_map("main_comp", ndrange={"__i0": "0:40", "__i1": "0:8"})
+
+    ime, imx = state.add_map("inner_comp", ndrange={"__inner": "1"})
+    itlet = state.add_tasklet(
+        "inner_tasklet",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in + 10.0",
+    )
+
+    state.add_edge(A, None, me, "IN_A", dace.Memlet("A[0:40, 1]"))
+    state.add_edge(me, "OUT_A", ime, "IN_A", dace.Memlet("A[__i0, 1]"))
+    me.add_scope_connectors("A")
+
+    state.add_edge(ime, "OUT_A", itlet, "__in", dace.Memlet("A[__i0, 1]"))
+    state.add_edge(itlet, "__out", t, None, dace.Memlet("t[0]"))
+    state.add_edge(t, None, imx, "IN_B", dace.Memlet("t[0]"))
+    ime.add_scope_connectors("A")
+
+    state.add_edge(imx, "OUT_B", mx, "IN_B", dace.Memlet("B[__i0, __i1]"))
+    state.add_edge(mx, "OUT_B", B, None, dace.Memlet("B[0:40, 0:8]"))
+    imx.add_scope_connectors("B")
+    mx.add_scope_connectors("B")
+
+    sdfg.validate()
+
+    return sdfg, state, me, ime
+
+
+def test_loop_blocking_only_independent_inner_map():
+    sdfg, state, me, ime = _make_loop_blocking_only_independent_inner_map()
+
+    scope_dict_before = state.scope_dict()
+    assert scope_dict_before[ime] is me
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    new_scope_of_inner_map = state.scope_dict()[ime]
+    assert isinstance(new_scope_of_inner_map, dace_nodes.MapEntry)
+    assert new_scope_of_inner_map is not me
+
+
+def _make_loop_blocking_output_access_node(
+    scaler_temp: bool,
+) -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.Tasklet, dace_nodes.AccessNode
+]:
+    sdfg = dace.SDFG(util.unique_name("sdfg_with_direct_output_access_node"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array("A", shape=(40,), dtype=dace.float64, transient=False)
+    sdfg.add_array("B", shape=(40, 10), dtype=dace.float64, transient=False)
+
+    if scaler_temp:
+        sdfg.add_scalar("t", dtype=dace.float64, transient=True)
+    else:
+        # The only reason why we use an array is because we want to trigger another
+        #  code pass
+        sdfg.add_array("t", shape=(2,), dtype=dace.float64, transient=True)
+
+    A, B, t = (state.add_access(name) for name in "ABt")
+    me, mx = state.add_map("main_comp", ndrange={"__i0": "0:40", "__i1": "0:10"})
+    tlet = state.add_tasklet(
+        "inner_tasklet",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in + 10.0",
+    )
+
+    state.add_edge(A, None, me, "IN_A", dace.Memlet("A[0:40]"))
+    state.add_edge(me, "OUT_A", tlet, "__in", dace.Memlet("A[__i0]"))
+    me.add_scope_connectors("A")
+    state.add_edge(tlet, "__out", t, None, dace.Memlet("t[0]"))
+    state.add_edge(t, None, mx, "IN_B", dace.Memlet("B[__i0, __i1]"))
+    state.add_edge(mx, "OUT_B", B, None, dace.Memlet("B[0:40, 0:10]"))
+    mx.add_scope_connectors("B")
+
+    sdfg.validate()
+
+    return sdfg, state, me, tlet, t
+
+
+def test_loop_blocking_direct_access_node_array():
+    sdfg, state, me, tlet, t = _make_loop_blocking_output_access_node(False)
+
+    scope_dict_before = state.scope_dict()
+    assert scope_dict_before[tlet] is me
+    assert scope_dict_before[t] is me
+
+    ref = {
+        "A": np.array(np.random.rand(40), dtype=np.float64, copy=True),
+        "B": np.array(np.random.rand(40, 10), dtype=np.float64, copy=True),
+    }
+    res = copy.deepcopy(ref)
+    csdfg_ref = sdfg.compile()
+    csdfg_ref(**ref)
+
+    # Because of the direct connection, of `t` with the Map exit node and the resulting
+    #  removal of `tlet` from the set of independent node, the transformation will
+    #  not apply, by default, but if requested.
+    #  This is because the intermediate is an array.
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=True,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 0
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=False,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    scope_dict_after = state.scope_dict()
+    assert isinstance(scope_dict_after[tlet], dace_nodes.MapEntry)
+    assert scope_dict_after[tlet] is not me
+    assert isinstance(scope_dict_after[t], dace_nodes.MapEntry)
+    assert scope_dict_after[t] is not me
+    assert util.count_nodes(state, dace_nodes.Tasklet) == 1
+
+    csdfg_res = sdfg.compile()
+    csdfg_res(**res)
+    assert all(np.allclose(ref[name], res[name]) for name in ref)
+
+    del csdfg_ref, csdfg_res
+
+
+def test_loop_blocking_direct_access_node_scalar():
+    sdfg, state, me, tlet, t = _make_loop_blocking_output_access_node(True)
+
+    scope_dict_before = state.scope_dict()
+    original_tlets = util.count_nodes(state, dace_nodes.Tasklet, return_nodes=True)
+    assert scope_dict_before[tlet] is me
+    assert scope_dict_before[t] is me
+    assert len(original_tlets) == 1
+
+    ref = {
+        "A": np.array(np.random.rand(40), dtype=np.float64, copy=True),
+        "B": np.array(np.random.rand(40, 10), dtype=np.float64, copy=True),
+    }
+    res = copy.deepcopy(ref)
+    csdfg_ref = sdfg.compile()
+    csdfg_ref(**ref)
+
+    # Because the intermediate is a scalar, it will be handled and both
+    #  the scalar and the tasklet will be independent.
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=True,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == 1
+
+    scope_dict_after = state.scope_dict()
+    new_tlets = util.count_nodes(state, dace_nodes.Tasklet, return_nodes=True)
+    assert scope_dict_after[tlet] is me
+    assert scope_dict_after[t] is me
+    assert len(new_tlets) == 2
+
+    new_copy_tlet: dace_nodes.Tasklet = next(
+        iter(ntlet for ntlet in new_tlets if ntlet not in original_tlets)
+    )
+    assert new_copy_tlet.label.startswith("loop_blocking_copy_tlet_t_")
+    assert new_copy_tlet.code == "__out = __in"
+
+    csdfg_res = sdfg.compile()
+    csdfg_res(**res)
+    assert all(np.allclose(ref[name], res[name]) for name in ref)
+
+    del csdfg_ref, csdfg_res

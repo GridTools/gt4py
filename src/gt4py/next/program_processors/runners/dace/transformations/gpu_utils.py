@@ -266,8 +266,10 @@ def _gt_expand_non_standard_memlets_sdfg(
     for state in sdfg.states():
         for e in state.edges():
             # We are only interested in edges that connects two access nodes of GPU memory.
+            #  However, we must exclude Memlets that are empty.
             if not (
-                isinstance(e.src, dace_nodes.AccessNode)
+                (not e.data.is_empty())
+                and isinstance(e.src, dace_nodes.AccessNode)
                 and isinstance(e.dst, dace_nodes.AccessNode)
                 and e.src.desc(sdfg).storage == dace_dtypes.StorageType.GPU_Global
                 and e.dst.desc(sdfg).storage == dace_dtypes.StorageType.GPU_Global

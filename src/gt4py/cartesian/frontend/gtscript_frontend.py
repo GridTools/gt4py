@@ -15,7 +15,6 @@ import numbers
 import textwrap
 import time
 import types
-import warnings
 from typing import Any, Dict, Final, List, Literal, Optional, Sequence, Set, Tuple, Type, Union
 
 import numpy as np
@@ -581,12 +580,11 @@ class CallInliner(ast.NodeTransformer):
 
 class CompiledIfInliner(ast.NodeTransformer):
     @classmethod
-    def apply(cls, ast_object: ast.AST, context: Dict[str, Any], stencil_name: str):
-        cls(context, stencil_name).visit(ast_object)
+    def apply(cls, ast_object: ast.AST, context: Dict[str, Any]):
+        cls(context).visit(ast_object)
 
-    def __init__(self, context: Dict[str, Any], stencil_name: str):
+    def __init__(self, context: Dict[str, Any]):
         self.context = context
-        self.stencil_name = stencil_name
 
     def visit_If(self, node: ast.If):
         # Compile-time evaluation of "if" conditions
@@ -597,10 +595,6 @@ class CompiledIfInliner(ast.NodeTransformer):
             and node.test.func.id == "__INLINED"
             and len(node.test.args) == 1
         ):
-            warnings.warn(  # noqa: B028 [no-explicit-stacklevel]
-                f"stencil {self.stencil_name}, line {node.lineno}, column {node.col_offset}: compile-time if condition via __INLINED deprecated",
-                category=DeprecationWarning,
-            )
             eval_node = node.test.args[0]
             condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
             if condition_value is not NOTHING:
@@ -2059,7 +2053,7 @@ class GTScriptParser(ast.NodeVisitor):
         CallInliner.apply(main_func_node, context=local_context)
 
         # Evaluate and inline compile-time conditionals
-        CompiledIfInliner.apply(main_func_node, context=local_context, stencil_name=self.main_name)
+        CompiledIfInliner.apply(main_func_node, context=local_context)
 
         AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
 
