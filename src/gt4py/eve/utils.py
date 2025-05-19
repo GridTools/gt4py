@@ -283,12 +283,11 @@ class CustomDefaultDictBase(collections.UserDict[_K, _V]):
 
     """
 
-    @property
     @abc.abstractmethod
     def value_factory(self, key: _K) -> _V:
         raise NotImplementedError
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: _K) -> _V:
         try:
             return super().__getitem__(key)
         except KeyError:
@@ -320,7 +319,7 @@ class custom_defaultdict(dict[_K, _V]):
         super().__init__()
         self.value_factory = value_factory
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: _K) -> _V:
         try:
             return super().__getitem__(key)
         except KeyError:

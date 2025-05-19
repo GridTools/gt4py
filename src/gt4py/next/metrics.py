@@ -144,7 +144,7 @@ active_metric_collection: contextvars.ContextVar[MetricCollection | None] = cont
 )
 
 
-def dumps(metric_cs: MetricCollectionStore | None = None) -> None:
+def dumps(metric_cs: MetricCollectionStore | None = None) -> str:
     """
     Formats the metrics in the collection store as a string table.
 
@@ -184,7 +184,7 @@ def dump(filename: str | pathlib.Path, metric_cs: MetricCollectionStore | None =
     pathlib.Path(filename).write_text(dumps(metric_cs))
 
 
-def dumps_json(metric_cs: MetricCollectionStore | None = None) -> None:
+def dumps_json(metric_cs: MetricCollectionStore | None = None) -> str:
     """
     Export metrics as a JSON string with structure: {program: {metric_name: [samples]}}
 

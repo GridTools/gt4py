@@ -9,7 +9,6 @@
 import functools
 import pathlib
 import tempfile
-import threading
 from typing import Any, Optional
 
 import diskcache
@@ -60,7 +59,7 @@ def convert_args(
         converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
 
-        opt_kwargs = {}
+        opt_kwargs: dict[str, Any] = {}
         if collect_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE):
             exec_info: dict[str, float]
             opt_kwargs["exec_info"] = (exec_info := {})
@@ -74,8 +73,9 @@ def convert_args(
         )
 
         if collect_metrics:
+            assert metrics.active_metric_collection.get() is not None
             value = exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"]
-            metrics.active_metric_collection.get().add_sample(metrics.CC_METRIC, value)
+            metrics.active_metric_collection.get().add_sample(metrics.CC_METRIC, value)  # type: ignore[union-attr]  # guarded by the if
 
     return decorated_program
 
