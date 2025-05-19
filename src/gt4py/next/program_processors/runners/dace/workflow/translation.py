@@ -60,6 +60,10 @@ def _find_constant_symbols(
     return constant_symbols
 
 
+def _language_settings() -> languages.LanguageSettings:
+    return languages.LanguageSettings(formatter_key="", formatter_style="", file_extension="sdfg")
+
+
 def _make_sdfg_async(sdfg: dace.SDFG) -> None:
     """Sets all cuda stream to the default stream."""
 
@@ -101,10 +105,11 @@ class DaCeTranslator(
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
 
-    def _language_settings(self) -> languages.LanguageSettings:
-        return languages.LanguageSettings(
-            formatter_key="", formatter_style="", file_extension="sdfg"
-        )
+    # auto-optimize arguments
+    gpu_block_size: tuple[int, int, int] = (32, 8, 1)
+    make_persistent: bool = False
+    blocking_dim: Optional[common.Dimension] = None
+    blocking_size: int = 10
 
     def generate_sdfg(
         self,
@@ -138,11 +143,13 @@ class DaCeTranslator(
                 gtx_transformations.gt_auto_optimize(
                     sdfg,
                     gpu=on_gpu,
-                    gpu_block_size=(32, 8, 1),  # TODO: make block size configurable
+                    gpu_block_size=self.gpu_block_size,
                     unit_strides_kind=unit_strides_kind,
                     constant_symbols=constant_symbols,
                     assume_pointwise=True,
-                    make_persistent=False,
+                    make_persistent=self.make_persistent,
+                    blocking_dim=self.blocking_dim,
+                    blocking_size=self.blocking_size,
                 )
             elif on_gpu:
                 # We run simplify to bring the SDFG into a canonical form that the gpu transformations
@@ -177,18 +184,18 @@ class DaCeTranslator(
             arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
         )
 
-        param_types = tuple(
-            interface.Parameter(param, arg_type)
-            for param, arg_type in zip(sdfg.arg_names, arg_types)
+        program_parameters = tuple(
+            interface.Parameter(param.id, arg_type)
+            for param, arg_type in zip(program.params, arg_types)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
             stages.ProgramSource(
-                entry_point=interface.Function(program.id, param_types),
+                entry_point=interface.Function(program.id, program_parameters),
                 source_code=sdfg.to_json(),
                 library_deps=tuple(),
                 language=languages.SDFG,
-                language_settings=self._language_settings(),
+                language_settings=_language_settings(),
                 implicit_domain=inp.data.implicit_domain,
             )
         )
