@@ -38,32 +38,32 @@ def _update_sdfg_scalar_arg(
     code: codegen.TextBlock,
     sdfg_arg_desc: dace.data.Data,
     sdfg_arg_index: int,
-    rhs: str,
+    call_arg: str,
 ) -> None:
     """
     Emit Python code to update a scalar argument in the SDFG arglist
-    with the value passed as `rhs` (right-hand side in assignment expression).
+    with the argument value passed to the gt4py program call.
     """
     assert isinstance(sdfg_arg_desc, dace.data.Scalar)
     actype = sdfg_arg_desc.dtype.as_ctypes()
     actype_call = f"{actype.__module__}.{actype.__name__}"
     code.append(f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes._SimpleCData)")
-    code.append(f"{_cb_last_call_args}[{sdfg_arg_index}] = {actype_call}({rhs})")
+    code.append(f"{_cb_last_call_args}[{sdfg_arg_index}] = {actype_call}({call_arg})")
 
 
 def _validate_sdfg_scalar_arg(
     code: codegen.TextBlock,
     sdfg_arg_desc: dace.data.Data,
     sdfg_arg_index: int,
-    rhs: str,
+    call_arg: str,
 ) -> None:
     """
     Emit Python asserts to validate a scalar argument in the SDFG arglist
-    against the value passed as `rhs` (right-hand side in assignment expression).
+    against the argument value passed to the gt4py program call.
     """
     assert isinstance(sdfg_arg_desc, dace.data.Scalar)
     code.append(f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes._SimpleCData)")
-    code.append(f"assert {_cb_last_call_args}[{sdfg_arg_index}] == {rhs}")
+    code.append(f"assert {_cb_last_call_args}[{sdfg_arg_index}] == {call_arg}")
 
 
 def _parse_gt_param(
@@ -136,7 +136,7 @@ def _parse_gt_param(
                     code=code,
                     sdfg_arg_desc=sdfg_arg_desc,
                     sdfg_arg_index=sdfg_arg_index,
-                    rhs=f"{arg}.as_scalar()",
+                    call_arg=f"{arg}.as_scalar()",
                 )
             else:
                 assert isinstance(sdfg_arg_desc, dace.data.Array)
@@ -200,14 +200,14 @@ def _parse_gt_param(
                     code=code,
                     sdfg_arg_desc=sdfg_arg_desc,
                     sdfg_arg_index=sdfg_arg_index,
-                    rhs=arg,
+                    call_arg=arg,
                 )
             else:
                 _update_sdfg_scalar_arg(
                     code=code,
                     sdfg_arg_desc=sdfg_arg_desc,
                     sdfg_arg_index=sdfg_arg_index,
-                    rhs=arg,
+                    call_arg=arg,
                 )
 
         else:
