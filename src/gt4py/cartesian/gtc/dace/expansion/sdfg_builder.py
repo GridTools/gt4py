@@ -255,7 +255,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         *,
         sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
         node_ctx: StencilComputationSDFGBuilder.NodeContext,
-        symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs: Any,
     ) -> None:
         sdfg_ctx.add_while(node)
@@ -278,15 +277,13 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         eval_node_ctx = StencilComputationSDFGBuilder.NodeContext(
             input_node_and_conns=read_acc_and_conn, output_node_and_conns=write_acc_and_conn
         )
-        self.visit(
-            node.condition, sdfg_ctx=sdfg_ctx, node_ctx=eval_node_ctx, symtable=symtable, **kwargs
-        )
+        self.visit(node.condition, sdfg_ctx=sdfg_ctx, node_ctx=eval_node_ctx, **kwargs)
 
         sdfg_ctx.pop_while_guard()
         sdfg_ctx.pop_while_loop()
 
         for state in node.body:
-            self.visit(state, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs)
+            self.visit(state, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, **kwargs)
 
         sdfg_ctx.pop_while_after()
 
@@ -296,7 +293,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         *,
         sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
         node_ctx: StencilComputationSDFGBuilder.NodeContext,
-        symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs: Any,
     ) -> None:
         sdfg_ctx.add_condition(node)
@@ -319,18 +315,16 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         eval_node_ctx = StencilComputationSDFGBuilder.NodeContext(
             input_node_and_conns=read_acc_and_conn, output_node_and_conns=write_acc_and_conn
         )
-        self.visit(
-            node.condition, sdfg_ctx=sdfg_ctx, node_ctx=eval_node_ctx, symtable=symtable, **kwargs
-        )
+        self.visit(node.condition, sdfg_ctx=sdfg_ctx, node_ctx=eval_node_ctx, **kwargs)
 
         sdfg_ctx.pop_condition_guard()
         sdfg_ctx.pop_condition_true()
         for state in node.true_states:
-            self.visit(state, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs)
+            self.visit(state, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, **kwargs)
 
         sdfg_ctx.pop_condition_false()
         for state in node.false_states:
-            self.visit(state, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, symtable=symtable, **kwargs)
+            self.visit(state, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, **kwargs)
 
         sdfg_ctx.pop_condition_after()
 
@@ -339,7 +333,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         node: dcir.Tasklet,
         *,
         sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
-        node_ctx: StencilComputationSDFGBuilder.NodeContext,
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs: Any,
     ) -> None:
@@ -446,7 +439,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             node.read_memlets,
             scope_node=tasklet,
             sdfg_ctx=sdfg_ctx,
-            node_ctx=node_ctx,
             symtable=symtable,
             **kwargs,
         )
@@ -454,7 +446,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             node.write_memlets,
             scope_node=tasklet,
             sdfg_ctx=sdfg_ctx,
-            node_ctx=node_ctx,
             symtable=symtable,
             **kwargs,
         )
