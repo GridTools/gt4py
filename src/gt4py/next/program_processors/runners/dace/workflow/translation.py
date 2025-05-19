@@ -67,9 +67,7 @@ def _language_settings() -> languages.LanguageSettings:
 def _make_sdfg_async(sdfg: dace.SDFG) -> None:
     """Sets all cuda stream to the default stream."""
 
-    has_gpu_code = any(
-        array_desc.storage in dace.dtypes.GPU_STORAGES for array_desc in sdfg.arrays.values()
-    )
+    has_gpu_code = any(getattr(node, "schedule", False) for node, _ in sdfg.all_nodes_recursive())
 
     if not has_gpu_code:
         # The async execution mode requires CUDA, therefore it is only available on GPU
@@ -101,7 +99,7 @@ class DaCeTranslator(
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
-    async_sdfg_call: bool = True
+    async_sdfg_call: bool = False
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
 
@@ -116,13 +114,11 @@ class DaCeTranslator(
         ir: itir.Program,
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
-        auto_opt: bool,
-        on_gpu: bool,
-        async_sdfg_call: bool,
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
             ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
         offset_provider_type = common.offset_provider_to_type(offset_provider)
+        on_gpu = self.device_type == core_defs.CUPY_DEVICE_TYPE
 
         # do not store transformation history in SDFG
         with dace.config.set_temporary("store_history", value=False):
@@ -133,7 +129,7 @@ class DaCeTranslator(
                 disable_field_origin_on_program_arguments=self.disable_field_origin_on_program_arguments,
             )
 
-            if auto_opt:
+            if self.auto_optimize:
                 unit_strides_kind = (
                     common.DimensionKind.HORIZONTAL
                     if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
@@ -159,7 +155,7 @@ class DaCeTranslator(
                 gtx_transformations.gt_simplify(sdfg)
                 gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
-        if on_gpu and async_sdfg_call:
+        if on_gpu and self.async_sdfg_call:
             _make_sdfg_async(sdfg)
 
         return sdfg
@@ -175,9 +171,6 @@ class DaCeTranslator(
             program,
             inp.args.offset_provider,  # TODO(havogt): should be offset_provider_type once the transformation don't require run-time info
             inp.args.column_axis,
-            auto_opt=self.auto_optimize,
-            on_gpu=(self.device_type == core_defs.CUPY_DEVICE_TYPE),
-            async_sdfg_call=self.async_sdfg_call,
         )
 
         arg_types = tuple(
