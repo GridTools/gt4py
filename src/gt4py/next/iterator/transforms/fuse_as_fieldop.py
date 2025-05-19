@@ -157,8 +157,11 @@ def fuse_as_fieldop(
             type_inference.reinfer(arg)
             if arg.type and not isinstance(arg.type, ts.DeferredType):
                 assert isinstance(arg.type, ts.TypeSpec)
-                dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type)
-                assert not isinstance(dtype, ts.ListType)
+
+                assert not isinstance(
+                    type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type),
+                    ts.ListType,
+                )
             new_args = _merge_arguments(new_args, {stencil_param.id: arg})
 
     new_args, new_stencil_body = _deduplicate_as_fieldop_args(new_args, new_stencil_body)
