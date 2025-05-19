@@ -316,7 +316,7 @@ def _lower_lambda_to_nested_sdfg(
     # This property is used by pattern matching in SDFG transformation framework
     # to skip those transformations that do not yet support control flow blocks.
     nsdfg.using_explicit_control_flow = True
-    lambda_translator = sdfg_builder.setup_nested_context(nsdfg, sdfg, lambda_symbols)
+    lambda_translator = sdfg_builder.setup_nested_context(lambda_node, nsdfg, sdfg, lambda_symbols)
 
     # use the vertical dimension in the domain as scan dimension
     scan_domain = [

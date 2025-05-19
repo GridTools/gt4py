@@ -115,14 +115,21 @@ def make_mesh_symbols(mesh: MeshDescriptor):
 
 
 def build_dace_sdfg(
-    ir: gtir.Program, offset_provider_type: gtx_common.OffsetProviderType
+    ir: gtir.Program,
+    offset_provider_type: gtx_common.OffsetProviderType,
+    skip_domain_inference: bool = False,
 ) -> Callable[..., Any]:
-    # run domain inference in order to add the domain annex information to the IR nodes
-    ir = infer_domain.infer_program(
-        ir,
-        offset_provider=offset_provider_type,
-        symbolic_domain_sizes={IDim.value: "size", Edge.value: "nedges", Vertex.value: "nvertices"},
-    )
+    if not skip_domain_inference:
+        # run domain inference in order to add the domain annex information to the IR nodes
+        ir = infer_domain.infer_program(
+            ir,
+            offset_provider=offset_provider_type,
+            symbolic_domain_sizes={
+                IDim.value: "size",
+                Edge.value: "nedges",
+                Vertex.value: "nvertices",
+            },
+        )
     return dace_backend.build_sdfg_from_gtir(
         ir, offset_provider_type, disable_field_origin_on_program_arguments=True
     )
@@ -1703,7 +1710,8 @@ def test_gtir_let_lambda():
 
 
 def test_gtir_let_lambda_scalar_expression():
-    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    domain_inner = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, "size_inner")})
+    domain_outer = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="let_lambda_scalar_expression",
         function_definitions=[],
@@ -1717,10 +1725,18 @@ def test_gtir_let_lambda_scalar_expression():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.let("tmp", im.multiplies_("a", "b"))(
-                    im.op_as_fieldop("multiplies", domain)("x", im.multiplies_("tmp", "tmp"))
+                expr=im.let("size_inner", im.plus("size", 1))(
+                    im.let("tmp", im.multiplies_("a", "b"))(
+                        im.as_fieldop(
+                            im.lambda_("a")(im.deref(im.shift(IDim.value, 1)("a"))), domain_outer
+                        )(
+                            im.op_as_fieldop("multiplies", domain_inner)(
+                                "x", im.multiplies_("tmp", "tmp")
+                            )
+                        )
+                    )
                 ),
-                domain=domain,
+                domain=domain_outer,
                 target=gtir.SymRef(id="y"),
             )
         ],
@@ -1731,7 +1747,9 @@ def test_gtir_let_lambda_scalar_expression():
     c = np.random.rand(N)
     d = np.empty_like(c)
 
-    sdfg = build_dace_sdfg(testee, {})
+    sdfg = build_dace_sdfg(
+        testee, offset_provider_type=CARTESIAN_OFFSETS, skip_domain_inference=True
+    )
 
     sdfg(a, b, c, d, **FSYMBOLS)
     assert np.allclose(d, (a * a * b * b * c))

@@ -140,6 +140,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     @abc.abstractmethod
     def setup_nested_context(
         self,
+        node: gtir.Lambda,
         sdfg: dace.SDFG,
         parent: dace.SDFG,
         scope_symbols: dict[str, ts.DataType],
@@ -153,6 +154,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         that is scalar values represented as dace symbols in the parent SDFG.
 
         Args:
+            node: The expression to be lowered as a nested SDFG.
             sdfg: The SDFG where to lower the nested expression.
             parent: The parent SDFG.
             scope_symbols: Mapping from symbol name to data type for the GTIR symbols
@@ -311,13 +313,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def setup_nested_context(
         self,
+        node: gtir.Lambda,
         sdfg: dace.SDFG,
         parent: dace.SDFG,
         scope_symbols: dict[str, ts.DataType],
     ) -> SDFGBuilder:
         nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, scope_symbols)
         params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in scope_symbols.items()]
-        symbolic_arguments = {
+        symbolic_arguments = _collect_symbols_in_domain_expressions(node, node.params) | {
             # scalar values represented as dace symbols in parent SDFG are mapped
             # to dace symbols in the nested SDFG
             pname
@@ -777,7 +780,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # lower let-statement lambda node as a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nsdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=sdfg.debuginfo)
-        lambda_translator = self.setup_nested_context(nsdfg, sdfg, lambda_symbols)
+        lambda_translator = self.setup_nested_context(node, nsdfg, sdfg, lambda_symbols)
 
         nstate = nsdfg.add_state("lambda")
         lambda_result = lambda_translator.visit(
@@ -843,7 +846,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         # map free symbols to parent SDFG
-        nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
+        nsdfg_symbols_mapping = {}
+        for sym in nsdfg.free_symbols:
+            if (sym_id := str(sym)) in lambda_arg_nodes:
+                source_data_node = lambda_arg_nodes[sym_id].dc_node
+                source_data_desc = source_data_node.desc(sdfg)
+                assert isinstance(source_data_desc, dace.data.Scalar)
+                input_memlets[sym_id] = dace.Memlet(data=source_data_node.data, subset="0")
+            else:
+                nsdfg_symbols_mapping[sym_id] = sym
         for sym, arg in zip(node.params, args, strict=True):
             nsdfg_symbols_mapping |= gtir_builtin_translators.get_arg_symbol_mapping(
                 sym.id, arg, sdfg
