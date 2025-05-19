@@ -19,7 +19,6 @@ from gt4py.cartesian import gtscript
 from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend, nodes
 from gt4py.cartesian.frontend.exceptions import GTScriptSyntaxError
 from gt4py.cartesian.gtscript import (
-    __INLINED,
     FORWARD,
     IJ,
     IJK,
@@ -1699,25 +1698,6 @@ class TestNativeFunctions:
                 in_field = asin(in_field) + 1 if 1 < in_field else sin(in_field)
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
-
-
-class TestWarnInlined:
-    def test_inlined_emits_warning(self):
-        def func(field: gtscript.Field[np.float64]):
-            from gt4py.cartesian.__externals__ import SET_TO_ONE
-
-            with computation(PARALLEL), interval(...):
-                field = 0
-                if __INLINED(SET_TO_ONE):
-                    field = 1
-
-        with pytest.warns(DeprecationWarning, match="__INLINED deprecated"):
-            parse_definition(
-                func,
-                name=inspect.stack()[0][3],
-                module=self.__class__.__name__,
-                externals={"SET_TO_ONE": True},
-            )
 
 
 @gtscript.function
