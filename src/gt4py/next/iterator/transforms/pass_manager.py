@@ -19,7 +19,7 @@ from gt4py.next.iterator.transforms import (
     inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
-    prune_broadcast,
+    remove_broadcast,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -86,7 +86,7 @@ def apply_common_transforms(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
-    ir = prune_broadcast.PruneBroadcast.apply(ir)
+    ir = remove_broadcast.RemoveBroadcast.apply(ir)
 
     for _ in range(10):
         inlined = ir
@@ -184,5 +184,5 @@ def apply_fieldview_transforms(
         ir
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
-    ir = prune_broadcast.PruneBroadcast.apply(ir)
+    ir = remove_broadcast.RemoveBroadcast.apply(ir)
     return ir

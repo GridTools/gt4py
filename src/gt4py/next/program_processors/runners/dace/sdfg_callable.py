@@ -21,8 +21,6 @@ from . import utils as gtx_dace_utils
 
 def get_field_domain_symbols(name: str, domain: gtx_common.Domain) -> dict[str, int]:
     assert gtx_common.Domain.is_finite(domain)
-    if len(domain.dims) == 0:
-        return {}
     return {
         gtx_dace_utils.range_start_symbol(name, i): r.start for i, r in enumerate(domain.ranges)
     } | {gtx_dace_utils.range_stop_symbol(name, i): r.stop for i, r in enumerate(domain.ranges)}
@@ -32,12 +30,12 @@ def get_array_shape_symbols(
     array_desc: dace.data.Array, ndarray: core_defs.NDArrayObject
 ) -> dict[str, int]:
     array_symbols = {}
-    for desc_size, size in zip(array_desc.shape, ndarray.shape, strict=True):
-        if (desc_size == size) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
+    for array_size, size in zip(array_desc.shape, ndarray.shape, strict=True):
+        if (array_size == size) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
             pass
         else:
-            assert isinstance(desc_size, dace.symbol)
-            array_symbols[desc_size.name] = size
+            assert isinstance(array_size, dace.symbol)
+            array_symbols[array_size.name] = size
     return array_symbols
 
 
@@ -45,14 +43,14 @@ def get_array_stride_symbols(
     array_desc: dace.data.Array, ndarray: core_defs.NDArrayObject
 ) -> dict[str, int]:
     array_symbols = {}
-    for desc_stride, size in zip(array_desc.strides, ndarray.strides, strict=True):
-        stride, remainder = divmod(size, ndarray.itemsize)
-        assert remainder == 0
-        if (desc_stride == stride) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
+    for array_stride, value in zip(array_desc.strides, ndarray.strides, strict=True):
+        assert divmod(value, ndarray.itemsize)[1] == 0
+        stride = value // ndarray.itemsize
+        if (array_stride == stride) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
             pass
         else:
-            assert isinstance(desc_stride, dace.symbol)
-            array_symbols[desc_stride.name] = stride
+            assert isinstance(array_stride, dace.symbol)
+            array_symbols[array_stride.name] = stride
     return array_symbols
 
 
@@ -76,12 +74,11 @@ def _get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
             range_symbols |= get_field_domain_symbols(name, domain)
             stride_symbols |= get_array_stride_symbols(sdfg.arrays[name], call_arg)
     # sanity check in case range symbols are passed as explicit program arguments
-    for range_symbol, value in range_symbols.items():
-        if (call_arg := call_args.get(range_symbol, None)) is not None:
-            if call_arg != value:
-                raise ValueError(
-                    f"Received program argument {range_symbol} with value {call_arg}, expected {value}."
-                )
+    assert all(
+        call_arg == range_symbols[param]
+        for param, call_arg in call_args.items()
+        if param in range_symbols
+    )
     return call_args | range_symbols | stride_symbols
 
 

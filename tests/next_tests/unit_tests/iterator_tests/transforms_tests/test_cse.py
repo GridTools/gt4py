@@ -308,10 +308,15 @@ def test_field_extraction_outside_asfieldop():
 
 
 def test_scalar_extraction_inside_as_fieldop():
-    common = im.plus(1, 2)
+    common_expr = im.plus(1, 2)
 
-    testee = im.as_fieldop(im.lambda_()(im.plus(common, common)))()
-    expected = im.as_fieldop(im.lambda_()(im.let("_cs_1", common)(im.plus("_cs_1", "_cs_1"))))()
+    testee = im.as_fieldop(
+        im.lambda_()(im.plus(common_expr, common_expr)), im.domain(common.GridType.CARTESIAN, {})
+    )()
+    expected = im.as_fieldop(
+        im.lambda_()(im.let("_cs_1", common_expr)(im.plus("_cs_1", "_cs_1"))),
+        im.domain(common.GridType.CARTESIAN, {}),
+    )()
 
     actual = CSE.apply(testee, within_stencil=False)
     assert actual == expected
