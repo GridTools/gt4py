@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import abc
+import collections
 import collections.abc
 import dataclasses
 import enum
@@ -254,6 +256,75 @@ class IndexerCallable(Generic[_S, _T]):
 
     def __getitem__(self, key: _S | Tuple[_S, ...]) -> _T:
         return self.func(*key) if isinstance(key, tuple) else self.func(key)
+
+
+_K = TypeVar("_K")
+_V = TypeVar("_V")
+
+
+class CustomDefaultDictBase(collections.UserDict[_K, _V]):
+    """
+    A base class for a dictionary-like object that allows computing a default value per key.
+    This class is not intended to be used directly, but as a base for other classes.
+
+    Examples:
+        >>> class MyDefaultDict(DefaultDictBase):
+        ...     def value_factory(self, key):
+        ...         return key * 2
+        >>> d = MyDefaultDict()
+        >>> d[1]
+        2
+        >>> d[2]
+        4
+        >>> d[1] = 10
+        >>> d[1]
+        10
+
+    """
+
+    @property
+    @abc.abstractmethod
+    def value_factory(self, key: _K) -> _V:
+        raise NotImplementedError
+
+    def __getitem__(self, key):
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            self.data[key] = (value := self.value_factory(key))
+            return value
+
+
+class custom_defaultdict(dict[_K, _V]):
+    """
+    Custom defaultdict-like class that allows computing a default value per key.
+
+    Examples:
+        >>> d = custom_defaultdict(lambda x: x * 2)
+        >>> d[1]
+        2
+        >>> d[2]
+        4
+        >>> d[1] = 10
+        >>> d[1]
+        10
+
+    """
+
+    __slots__ = ("value_factory",)
+
+    value_factory: Callable
+
+    def __init__(self, value_factory: Callable) -> None:
+        super().__init__()
+        self.value_factory = value_factory
+
+    def __getitem__(self, key):
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            self[key] = (value := self.value_factory(key))
+            return value
 
 
 class fluid_partial(functools.partial):

@@ -274,8 +274,13 @@ class Program:
         )
 
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
-        if config.COLLECT_METRICS:
-            start = time.time()
+        if collect_metrics_level := config.COLLECT_METRICS_LEVEL:
+            assert metrics.active_metric_collection.get() is None
+            metrics.active_metric_collection.set(
+                program_metrics := metrics.program_metrics[self.__name__]
+            )
+            if collect_metrics := (collect_metrics_level >= metrics.INFO):
+                start = time.time()
 
         if __debug__:
             # TODO: remove or make dependency on self.past_stage optional
@@ -303,9 +308,11 @@ class Program:
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 ctx.run(self.definition_stage.definition, *args, **kwargs)
 
-        if config.COLLECT_METRICS:
-            end = time.time()
-            metrics.global_metric_container[self.__name__][metrics.TOTAL].append(end - start)
+        if collect_metrics_level:
+            if collect_metrics:
+                program_metrics[metrics.TOTAL_METRIC].add_sample(time.time() - start)
+
+            metrics.active_metric_collection.set(None)
 
     def compile(
         self,
