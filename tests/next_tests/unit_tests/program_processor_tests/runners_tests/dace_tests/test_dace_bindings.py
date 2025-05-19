@@ -147,7 +147,7 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
     "persistent_config",
     [(False, _binding_source_not_persistent), (True, _binding_source_persistent)],
 )
-def test_create_sdfg_bindings(persistent_config):
+def test_bind_sdfg(persistent_config):
     make_persistent, binding_source_ref = persistent_config
     program_name = "sdfg_bindings{}".format("_persistent" if make_persistent else "")
 
@@ -176,14 +176,17 @@ def test_create_sdfg_bindings(persistent_config):
         )
     )
 
-    binding_source = dace_bindings.create_sdfg_bindings(
+    compilable_program_source = dace_bindings.bind_sdfg(
         program_source, _bind_func_name, make_persistent
     )
+
+    assert compilable_program_source.program_source == program_source
+    assert len(compilable_program_source.library_deps) == 0
 
     # ignore assert statements
     binding_source_pruned = "\n".join(
         line
-        for line in binding_source.source_code.splitlines()
+        for line in compilable_program_source.binding_source.source_code.splitlines()
         if not line.lstrip().startswith("assert")
     )
 

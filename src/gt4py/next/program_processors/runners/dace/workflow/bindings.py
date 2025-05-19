@@ -195,7 +195,7 @@ def _parse_gt_param(
             raise ValueError(f"Unexpected paramter type {param_type}")
 
 
-def create_sdfg_bindings(
+def _create_sdfg_bindings(
     program_source: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
     bind_func_name: str,
     make_persistent: bool,
@@ -265,5 +265,5 @@ def bind_sdfg(
     """
     return stages.CompilableSource(
         program_source=inp,
-        binding_source=create_sdfg_bindings(inp, bind_func_name, make_persistent),
+        binding_source=_create_sdfg_bindings(inp, bind_func_name, make_persistent),
     )
