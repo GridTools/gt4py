@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
 def _parse_scan_fieldop_arg(
     node: gtir.Expr,
-    ctx: gtir_sdfg.SDFGContext,
+    ctx: gtir_sdfg.DataflowContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     domain: gtir_domain.DomainRange,
 ) -> gtir_dataflow.MemletExpr | tuple[gtir_dataflow.MemletExpr | tuple[Any, ...], ...]:
@@ -173,7 +173,7 @@ def _create_scan_field_operator_impl(
 
 
 def _create_scan_field_operator(
-    ctx: gtir_sdfg.SDFGContext,
+    ctx: gtir_sdfg.DataflowContext,
     domain: gtir_domain.DomainRange,
     node_type: ts.FieldType | ts.TupleType,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
@@ -265,7 +265,7 @@ def _scan_output_name(input_name: str) -> str:
 
 def _lower_lambda_to_nested_sdfg(
     lambda_node: gtir.Lambda,
-    ctx: gtir_sdfg.SDFGContext,
+    ctx: gtir_sdfg.DataflowContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     domain: gtir_domain.DomainRange,
     init_data: gtir_translators.FieldopResult,
@@ -536,7 +536,7 @@ def _connect_nested_sdfg_output_to_temporaries(
 
 def translate_scan(
     node: gtir.Node,
-    ctx: gtir_sdfg.SDFGContext,
+    ctx: gtir_sdfg.DataflowContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> gtir_translators.FieldopResult:
     """

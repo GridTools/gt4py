@@ -24,7 +24,7 @@ DomainRange: TypeAlias = list[tuple[gtx_common.Dimension, dace_subsets.Subset]]
 """
 Domain of a field operator represented as a list of tuples with 2 elements:
  - dimension definition
- - dimension range represented as a dace subset
+ - dimension range represented as a dace subset: start, stop (included), step
 """
 
 
@@ -32,7 +32,7 @@ class GTIRDomainParser:
     """Utility class to apply domain constraints on a dace symbolic expression.
 
     Dace uses sympy for symbolic expression in the SDFG. By applying assumptions
-    on the sympy expression, we sometimes obtain a simplified expression.
+    on the sympy expression, we may obtain a simplified expression.
     This is particularly important in the lowering of concat_where domain expressions,
     because it usually results in cleaner memlet subsets and better map fusion.
     """
@@ -59,6 +59,7 @@ class GTIRDomainParser:
             A new symbolic expression.
         """
         for lb, ub, size in self.domain_constraints:
+            # we want to enforce the constraint `ub = lb + size`
             expr = expr.subs(lb, ub - size).subs(size, ub - lb)
         return expr
 
@@ -167,7 +168,11 @@ def get_field_layout(
 
 def get_field_subset(domain: DomainRange) -> dace_subsets.Range:
     """
-    Construct the memlet subset to access a point in the field domain.
+    Construct the memlet subset to access a point in the field global domain.
+
+    The subset is limited to only the global dimensions. The remaining part of the
+    subset (being it a local list or the scalar representing a zero-dimensional
+    field) should be handled outside by the caller.
 
     Args:
         domain: The field domain.
