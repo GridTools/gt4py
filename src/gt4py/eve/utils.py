@@ -265,10 +265,11 @@ _V = TypeVar("_V")
 class CustomDefaultDictBase(collections.UserDict[_K, _V]):
     """
     A base class for a dictionary-like object that allows computing a default value per key.
+
     This class is not intended to be used directly, but as a base for other classes.
 
     Examples:
-        >>> class MyDefaultDict(DefaultDictBase):
+        >>> class MyDefaultDict(CustomDefaultDictBase):
         ...     def value_factory(self, key):
         ...         return key * 2
         >>> d = MyDefaultDict()

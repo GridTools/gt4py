@@ -38,15 +38,11 @@ class Metric:
     """
     A class to collect and analyze samples of a metric.
 
-    Attributes:
-        name: A string identifier for the metric (optional).
-        samples: A list storing the collected samples.
-
     Examples:
         >>> metric = Metric(name="execution_time")
         >>> metric.add_sample(0.1)
         >>> metric.add_sample(0.2)
-        >>> print(metric.mean)
+        >>> print(f"{metric.mean:.2}")
         0.15
         >>> print(metric)
         1.50000e-01 +/- 7.07107e-02
