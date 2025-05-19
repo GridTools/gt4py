@@ -34,7 +34,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
     @dataclass
     class SDFGContext:
         sdfg: dace.SDFG
-        last_state: dace.SDFGState
+        current_state: dace.SDFGState
         decls: Dict[str, oir.Decl]
         block_extents: Dict[int, Extent]
         access_infos: Dict[str, dcir.FieldAccessInfo]
@@ -42,7 +42,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
         def __init__(self, stencil: oir.Stencil):
             self.sdfg = dace.SDFG(stencil.name)
-            self.last_state = self.sdfg.add_state(is_start_block=True)
+            self.current_state = self.sdfg.add_state(is_start_block=True)
             self.decls = {decl.name: decl for decl in stencil.params + stencil.declarations}
             self.block_extents = compute_horizontal_block_extents(stencil)
 
@@ -116,10 +116,8 @@ class OirSDFGBuilder(eve.NodeVisitor):
             oir_node=node,
         )
 
-        state = ctx.sdfg.add_state()
-        ctx.sdfg.add_edge(ctx.last_state, state, dace.InterstateEdge())
-        ctx.last_state = state
-
+        state = ctx.sdfg.add_state_after(ctx.current_state)
+        ctx.current_state = state
         state.add_node(library_node)
 
         access_collection = AccessCollector.apply(node)
