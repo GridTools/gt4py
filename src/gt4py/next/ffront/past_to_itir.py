@@ -102,7 +102,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
     body = [
         remap_symbols.RemapSymbolRefs.apply(stmt, symbol_map=static_args)
         for stmt in itir_program.body
-    ]
+    ]  # type: ignore[arg-type]
     itir_program = itir.Program(
         id=itir_program.id,
         function_definitions=itir_program.function_definitions,
