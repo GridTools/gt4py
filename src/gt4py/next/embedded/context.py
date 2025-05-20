@@ -30,14 +30,14 @@ def update(
     *,
     closure_column_range: common.NamedRange | eve.NothingType = eve.NOTHING,
     offset_provider: common.OffsetProvider | eve.NothingType = eve.NOTHING,
-) -> Generator[cvars.Context, None, None]:
+) -> Generator[None, None, None]:
     """Create a new context, updating the provided values."""
 
     closure_token, offset_provider_token = None, None
     if closure_column_range is not eve.NOTHING:
-        closure_token = gtx_embedded.context.closure_column_range.set(closure_column_range)
+        closure_token = gtx_embedded.context.closure_column_range.set(closure_column_range)  # type: ignore[arg-type]
     if offset_provider is not eve.NOTHING:
-        offset_provider_token = gtx_embedded.context.offset_provider.set(offset_provider)
+        offset_provider_token = gtx_embedded.context.offset_provider.set(offset_provider)  # type: ignore[arg-type]
 
     yield
 

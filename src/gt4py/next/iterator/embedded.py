@@ -1825,11 +1825,12 @@ def closure(
                 assert _is_concrete_position(pos)
                 out.field_setitem(pos, res)
             else:
+                column_range = cast(common.NamedRange, column_range)
                 col_pos = pos.copy()
                 for k in column_range.unit_range:
                     col_pos[column_range.dim.value] = k
                     assert _is_concrete_position(col_pos)
-                    out.field_setitem(col_pos, res[k])
+                    out.field_setitem(col_pos, res[k])  # type: ignore[index]
 
 
 def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
