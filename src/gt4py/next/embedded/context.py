@@ -11,10 +11,10 @@ from __future__ import annotations
 import contextlib
 import contextvars as cvars
 from collections.abc import Generator
-from typing import Any
 
 import gt4py.eve as eve
 import gt4py.next.common as common
+import gt4py.next.embedded as gtx_embedded
 
 
 #: Column range used in column mode (`column_axis != None`) in the current embedded iterator
@@ -26,31 +26,25 @@ offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar("off
 
 
 @contextlib.contextmanager
-def new_context(
+def update(
     *,
     closure_column_range: common.NamedRange | eve.NothingType = eve.NOTHING,
     offset_provider: common.OffsetProvider | eve.NothingType = eve.NOTHING,
 ) -> Generator[cvars.Context, None, None]:
     """Create a new context, updating the provided values."""
 
-    import gt4py.next.embedded.context as this_module
-
-    updates: list[tuple[cvars.ContextVar[Any], Any]] = []
+    closure_token, offset_provider_token = None, None
     if closure_column_range is not eve.NOTHING:
-        updates.append((this_module.closure_column_range, closure_column_range))
+        closure_token = gtx_embedded.context.closure_column_range.set(closure_column_range)
     if offset_provider is not eve.NOTHING:
-        updates.append((this_module.offset_provider, offset_provider))
+        offset_provider_token = gtx_embedded.context.offset_provider.set(offset_provider)
 
-    # Create new context with provided values
-    ctx = cvars.copy_context()
+    yield
 
-    def ctx_updater(*args: tuple[cvars.ContextVar[Any], Any]) -> None:
-        for cvar, value in args:
-            cvar.set(value)
-
-    ctx.run(ctx_updater, *updates)
-
-    yield ctx
+    if closure_token is not None:
+        gtx_embedded.context.closure_column_range.reset(closure_token)
+    if offset_provider_token is not None:
+        gtx_embedded.context.offset_provider.reset(offset_provider_token)
 
 
 def within_valid_context() -> bool:

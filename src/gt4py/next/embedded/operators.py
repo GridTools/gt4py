@@ -112,8 +112,8 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
 
-        with embedded_context.new_context(**new_context_kwargs) as ctx:
-            res = ctx.run(op, *args, **kwargs)
+        with embedded_context.update(**new_context_kwargs):
+            res = op(*args, **kwargs)
             _tuple_assign_field(
                 out,
                 res,  # type: ignore[arg-type] # maybe can't be inferred properly because decorator.py is not properly typed yet

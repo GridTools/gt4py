@@ -1744,8 +1744,8 @@ def _get_output_type(
 
     # determine dtype by computing result at one point
     pos_in_domain = next(iter(_domain_iterator(domain)))
-    with embedded_context.new_context(closure_column_range=col_range) as ctx:
-        single_pos_result = ctx.run(_compute_at_position, fun, args, pos_in_domain, col_dim)
+    with embedded_context.update(closure_column_range=col_range):
+        single_pos_result = _compute_at_position(fun, args, pos_in_domain, col_dim)
     assert single_pos_result is not _UNDEFINED, "Stencil contains an Out-Of-Bound access."
     return type_translation.from_value(single_pos_result)
 
@@ -1817,23 +1817,19 @@ def closure(
     out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
     promoted_ins = [promote_scalars(inp) for inp in ins]
 
-    with embedded_context.new_context(closure_column_range=column_range) as ctx:
+    with embedded_context.update(closure_column_range=column_range):
+        for pos in _domain_iterator(domain):
+            res = _compute_at_position(sten, promoted_ins, pos, column_dim)
 
-        def _iterate():
-            for pos in _domain_iterator(domain):
-                res = _compute_at_position(sten, promoted_ins, pos, column_dim)
-
-                if column_range is eve.NOTHING:
-                    assert _is_concrete_position(pos)
-                    out.field_setitem(pos, res)
-                else:
-                    col_pos = pos.copy()
-                    for k in column_range.unit_range:
-                        col_pos[column_range.dim.value] = k
-                        assert _is_concrete_position(col_pos)
-                        out.field_setitem(col_pos, res[k])
-
-        ctx.run(_iterate)
+            if column_range is eve.NOTHING:
+                assert _is_concrete_position(pos)
+                out.field_setitem(pos, res)
+            else:
+                col_pos = pos.copy()
+                for k in column_range.unit_range:
+                    col_pos[column_range.dim.value] = k
+                    assert _is_concrete_position(col_pos)
+                    out.field_setitem(col_pos, res[k])
 
 
 def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
@@ -1852,8 +1848,8 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     if len(args) < len(inspect.getfullargspec(fun).args):
         args = (*args, *arguments.iter_size_args(args))
 
-    with embedded_context.new_context(**context_vars) as ctx:
-        ctx.run(fun, *args)
+    with embedded_context.update(**context_vars):
+        fun(*args)
 
 
 runtime.fendef_embedded = fendef_embedded
