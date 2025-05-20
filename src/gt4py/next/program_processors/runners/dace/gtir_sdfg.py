@@ -18,6 +18,7 @@ import abc
 import dataclasses
 import itertools
 import operator
+import warnings
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Set, Tuple, Union
 
 import dace
@@ -852,6 +853,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for sym in nsdfg.free_symbols:
             if (sym_id := str(sym)) in lambda_arg_nodes:
                 # Map a scalar container to a symbol on the nested SDFG.
+                # TODO: Investigate alternative data representation to prevent this to happen in the lowering.
+                warnings.warn(
+                    "SDFG WITH POSSIBLE PERFORMANCE DEGRADATION: Mapping a scalar data descriptor "
+                    + "to a symbol on a nested SDFG by means of an InterState edge assignment.",
+                    stacklevel=2,
+                )
                 # This is done by adding a new global scalar and connector on the nested SDFG
                 # and by making an inter-state assignment inside the nested SDFG, on the start
                 # state, that initializes the symbol with the scalar value.
