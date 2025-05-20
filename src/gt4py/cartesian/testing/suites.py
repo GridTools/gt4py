@@ -19,8 +19,8 @@ import numpy as np
 import pytest
 
 import gt4py.cartesian.gtc.utils as gtc_utils
-from gt4py import cartesian as gt, cartesian as gt4pyc, storage as gt_storage
-from gt4py.cartesian import gtscript, utils as gt_utils
+from gt4py import storage as gt_storage
+from gt4py.cartesian import backend as gt_backend, gtscript, utils as gt_utils
 from gt4py.cartesian.definitions import AccessKind, FieldInfo
 from gt4py.cartesian.gtc.definitions import Boundary, CartesianSpace, Index, Shape
 from gt4py.cartesian.stencil_object import StencilObject
@@ -213,7 +213,7 @@ class SuiteMeta(type):
                 )
 
                 marks = test["marks"].copy()
-                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
                     marks.append(pytest.mark.requires_gpu)
                 # Run generation and implementation tests in the same group to ensure
                 # (thread-) safe parallelization of stencil tests.
@@ -247,7 +247,7 @@ class SuiteMeta(type):
                 )
 
                 marks = test["marks"].copy()
-                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
                     marks.append(pytest.mark.requires_gpu)
                 # Run generation and implementation tests in the same group to ensure
                 # (thread-) safe parallelization of stencil tests.
@@ -308,7 +308,7 @@ class SuiteMeta(type):
             raise TypeError("'backends' must be a sequence of strings")
         backends = [pytest.param(b) if isinstance(b, str) else b for b in backends]
         for b in backends:
-            if b.values[0] not in gt.backend.REGISTRY.names:
+            if b.values[0] not in gt_backend.REGISTRY.names:
                 raise ValueError("backend '{backend}' not supported".format(backend=b))
 
         # Check definition and validation functions
@@ -340,7 +340,7 @@ class SuiteMeta(type):
         cls_dict["backends"] = [
             backend
             for backend in cls_dict["backends"]
-            if gt4pyc.backend.from_name(backend if isinstance(backend, str) else backend.values[0])
+            if gt_backend.from_name(backend if isinstance(backend, str) else backend.values[0])
             is not None
         ]
 

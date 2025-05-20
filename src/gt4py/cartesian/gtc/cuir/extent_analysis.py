@@ -9,11 +9,11 @@
 from collections import defaultdict
 from typing import Any, Dict
 
+from gt4py import eve
 from gt4py.cartesian.gtc.cuir import cuir
-from gt4py.eve import NodeTranslator
 
 
-class CacheExtents(NodeTranslator):
+class CacheExtents(eve.NodeTranslator):
     def visit_IJCacheDecl(
         self, node: cuir.IJCacheDecl, *, ij_extents: Dict[str, cuir.KExtent], **kwargs: Any
     ) -> cuir.IJCacheDecl:
