@@ -745,21 +745,23 @@ def translate_concat_where(
         # in case one of the arguments is a scalar value, we convert it to a single-element
         # 1D field with the dimension of the concat expression
         if isinstance(lower.gt_type, ts.ScalarType):
+            assert len(lower_domain) == 0
             assert isinstance(upper.gt_type, ts.FieldType)
-            origin = lower_domain[concat_dim_index][1]
             lower = FieldopData(
                 lower.dc_node,
                 ts.FieldType(dims=[concat_dim], dtype=lower.gt_type),
-                origin=(origin,),
+                origin=(concat_dim_bound - 1,),
             )
+            lower_domain = [(concat_dim, concat_dim_bound - 1, concat_dim_bound)]
         elif isinstance(upper.gt_type, ts.ScalarType):
+            assert len(upper_domain) == 0
             assert isinstance(lower.gt_type, ts.FieldType)
-            origin = upper_domain[concat_dim_index][1]
             upper = FieldopData(
                 upper.dc_node,
                 ts.FieldType(dims=[concat_dim], dtype=upper.gt_type),
-                origin=(origin,),
+                origin=(concat_dim_bound,),
             )
+            upper_domain = [(concat_dim, concat_dim_bound, concat_dim_bound + 1)]
 
         is_lower_slice, is_upper_slice = (False, False)
         if concat_dim not in lower.gt_type.dims:
@@ -781,10 +783,22 @@ def translate_concat_where(
             )
             is_upper_slice = True
         elif len(lower.gt_type.dims) == 1:
+            assert len(lower_domain) == 1 and lower_domain[0][0] == concat_dim
+            lower_domain = [
+                *output_domain[:concat_dim_index],
+                lower_domain[0],
+                *output_domain[concat_dim_index + 1 :],
+            ]
             lower, lower_desc = _make_concat_scalar_broadcast(
                 sdfg, state, lower, lower_desc, lower_domain, concat_dim_index
             )
         elif len(upper.gt_type.dims) == 1:
+            assert len(upper_domain) == 1 and upper_domain[0][0] == concat_dim
+            upper_domain = [
+                *output_domain[:concat_dim_index],
+                upper_domain[0],
+                *output_domain[concat_dim_index + 1 :],
+            ]
             upper, upper_desc = _make_concat_scalar_broadcast(
                 sdfg, state, upper, upper_desc, upper_domain, concat_dim_index
             )

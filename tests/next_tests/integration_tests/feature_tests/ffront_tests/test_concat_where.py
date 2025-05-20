@@ -308,7 +308,7 @@ def test_nested_conditions_with_empty_branches(cartesian_case):
     @gtx.field_operator
     def testee(interior: cases.IField, boundary: cases.IField, N: gtx.int32) -> cases.IField:
         interior = concat_where(IDim == 0, boundary, interior)
-        interior = concat_where(1 <= IDim < N - 1, interior * 2, interior)
+        interior = concat_where((1 <= IDim) & (IDim < N - 1), interior * 2, interior)
         interior = concat_where(IDim == N - 1, boundary, interior)
         return interior
 
