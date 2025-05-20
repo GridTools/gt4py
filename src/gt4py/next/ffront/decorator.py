@@ -289,11 +289,12 @@ class Program:
                 arg_types=[type_translation.from_value(arg) for arg in args],
                 kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
             )
+
+        offset_provider = {
+            **offset_provider,
+            **self._implicit_offset_provider,  # TODO(havogt) cleanup implicit_offset_provider
+        }
         if self.backend is not None:
-            offset_provider = {  # TODO(havogt) cleanup implicit_offset_provider
-                **offset_provider,
-                **self._implicit_offset_provider,
-            }
             self._compiled_programs(
                 *args, **kwargs, offset_provider=offset_provider, enable_jit=self.enable_jit
             )

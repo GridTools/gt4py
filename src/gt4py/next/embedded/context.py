@@ -39,7 +39,7 @@ def update(
     if offset_provider is not eve.NOTHING:
         offset_provider_token = gtx_embedded.context.offset_provider.set(offset_provider)  # type: ignore[arg-type]
 
-    yield
+    yield None
 
     if closure_token is not None:
         gtx_embedded.context.closure_column_range.reset(closure_token)
