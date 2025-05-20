@@ -266,8 +266,10 @@ def _gt_expand_non_standard_memlets_sdfg(
     for state in sdfg.states():
         for e in state.edges():
             # We are only interested in edges that connects two access nodes of GPU memory.
+            #  However, we must exclude Memlets that are empty.
             if not (
-                isinstance(e.src, dace_nodes.AccessNode)
+                (not e.data.is_empty())
+                and isinstance(e.src, dace_nodes.AccessNode)
                 and isinstance(e.dst, dace_nodes.AccessNode)
                 and e.src.desc(sdfg).storage == dace_dtypes.StorageType.GPU_Global
                 and e.dst.desc(sdfg).storage == dace_dtypes.StorageType.GPU_Global
@@ -601,6 +603,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
 
         # Cut down the block size.
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
+        # TODO(phimuell): Also think of how to connect this with the loop blocking.
         for i in range(dims_to_inspect):
             map_dim_idx_to_inspect = num_map_params - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.

@@ -84,24 +84,6 @@ def _get_domains(nodes: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
     return result
 
 
-def _extract_grid_type(domain: itir.FunCall) -> common.GridType:
-    if domain.fun == itir.SymRef(id="cartesian_domain"):
-        return common.GridType.CARTESIAN
-    else:
-        assert domain.fun == itir.SymRef(id="unstructured_domain")
-        return common.GridType.UNSTRUCTURED
-
-
-def _get_gridtype(body: list[itir.Stmt]) -> common.GridType:
-    domains = _get_domains(body)
-    grid_types = {_extract_grid_type(d) for d in domains}
-    if len(grid_types) != 1:
-        raise ValueError(
-            f"Found 'set_at' with more than one 'GridType': '{grid_types}'. This is currently not supported."
-        )
-    return grid_types.pop()
-
-
 def _name_from_named_range(named_range_call: itir.FunCall) -> str:
     assert isinstance(named_range_call, itir.FunCall) and named_range_call.fun == itir.SymRef(
         id="named_range"
@@ -342,7 +324,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
         node = itir_type_inference.infer(node, offset_provider_type=offset_provider_type)
-        grid_type = _get_gridtype(node.body)
+        grid_type = ir_utils_misc.grid_type_from_program(node)
         if grid_type == common.GridType.UNSTRUCTURED:
             node = _CannonicalizeUnstructuredDomain.apply(node)
         return cls(

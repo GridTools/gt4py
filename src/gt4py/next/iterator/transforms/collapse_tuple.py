@@ -308,9 +308,10 @@ class CollapseTuple(
                         self.fp_transform(im.tuple_get(idx.value, expr.fun.expr), **kwargs)
                     )
                 )(*expr.args)
-            elif cpm.is_call_to(expr, "if_"):
+            elif cpm.is_call_to(expr, ("if_", "concat_where")):
+                fun = expr.fun
                 cond, true_branch, false_branch = expr.args
-                return im.if_(
+                return im.call(fun)(
                     cond,
                     self.fp_transform(im.tuple_get(idx.value, true_branch), **kwargs),
                     self.fp_transform(im.tuple_get(idx.value, false_branch), **kwargs),
