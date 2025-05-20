@@ -146,16 +146,17 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         scope_symbols: dict[str, ts.DataType],
     ) -> SDFGBuilder:
         """
-        Create an SDFG context to translate a nested expression, indipendent
+        Create an nested SDFG context to lower a lambda expression, indipendent
         from the current context where the parent expression is being translated.
 
         This method will setup the global symbols, that correspond to the parameters
         of the expression to be lowered, as well as the set of symbolic arguments,
-        that is scalar values represented as dace symbols in the parent SDFG.
+        that is symbols used in domain expressions or scalar values represented
+        as dace symbols in the parent SDFG.
 
         Args:
-            node: The expression to be lowered as a nested SDFG.
-            sdfg: The SDFG where to lower the nested expression.
+            node: The lambda expression to be lowered as a nested SDFG.
+            sdfg: The nested SDFG where to lower the nested expression.
             parent: The parent SDFG.
             scope_symbols: Mapping from symbol name to data type for the GTIR symbols
                 forwarded to the nested context.
@@ -849,6 +850,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         nsdfg_symbols_mapping = {}
         for sym in nsdfg.free_symbols:
             if (sym_id := str(sym)) in lambda_arg_nodes:
+                # Map a scalar container to a symbol on the nested SDFG.
+                # This is done by adding a connector on the nested SDFG with the
+                # same name as the free symbol.
                 source_data_node = lambda_arg_nodes[sym_id].dc_node
                 source_data_desc = source_data_node.desc(sdfg)
                 assert isinstance(source_data_desc, dace.data.Scalar)

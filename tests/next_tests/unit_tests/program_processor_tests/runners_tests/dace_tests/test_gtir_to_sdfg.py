@@ -1725,6 +1725,7 @@ def test_gtir_let_lambda_scalar_expression():
         declarations=[],
         body=[
             gtir.SetAt(
+                # we create an inner symbol that will be mapped to a scalar expression of the parent node
                 expr=im.let("size_inner", im.plus("size", 1))(
                     im.let("tmp", im.multiplies_("a", "b"))(
                         im.as_fieldop(
@@ -1747,6 +1748,9 @@ def test_gtir_let_lambda_scalar_expression():
     c = np.random.rand(N)
     d = np.empty_like(c)
 
+    # we use `skip_domain_inference=True` to avoid propagating the compute domain
+    # to the inner expression, so that the mapping of the scalar expression `size + 1`
+    # to the symbol `inner_size` is preserved, for which we want to test the lowering.
     sdfg = build_dace_sdfg(
         testee, offset_provider_type=CARTESIAN_OFFSETS, skip_domain_inference=True
     )
