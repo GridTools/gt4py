@@ -79,10 +79,10 @@ class Metric:
 
 class MetricCollection(utils.CustomDefaultDictBase[str, Metric]):
     """
-    A collection of metrics, organized as a dictionary mapping metric names to `Metric` objects.
+    A collection of metrics, organized as a mapping from metric names to `Metric` objects.
 
     Empty `Metric` instances are created automatically when accessing keys
-    that don't exist yet.
+    that do not exist.
 
     Example:
         >>> metrics = MetricCollection()
@@ -146,7 +146,7 @@ active_metric_collection: contextvars.ContextVar[MetricCollection | None] = cont
 
 def dumps(metric_cs: MetricCollectionStore | None = None) -> str:
     """
-    Formats the metrics in the collection store as a string table.
+    Format the metrics in the collection store as a string table.
 
     This function generates a formatted string representation of the metrics
     in the collection store. Each row represents a program, and each column
