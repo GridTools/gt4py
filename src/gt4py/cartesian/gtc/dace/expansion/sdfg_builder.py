@@ -22,8 +22,26 @@ from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo, make_dace_subset
 
 
-def node_name_from_connector(connector: str) -> str:
+def _node_name_from_connector(connector: str) -> str:
+    assert connector.startswith(prefix.TASKLET_IN) or connector.startswith(prefix.TASKLET_OUT)
     return connector.removeprefix(prefix.TASKLET_OUT).removeprefix(prefix.TASKLET_IN)
+
+
+def _add_empty_edges(
+    entry_node: dace.nodes.Node,
+    exit_node: dace.nodes.Node,
+    *,
+    sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
+    node_ctx: StencilComputationSDFGBuilder.NodeContext,
+) -> None:
+    if not sdfg_ctx.state.in_degree(entry_node) and None in node_ctx.input_node_and_conns:
+        sdfg_ctx.state.add_edge(
+            *node_ctx.input_node_and_conns[None], entry_node, None, dace.Memlet()
+        )
+    if not sdfg_ctx.state.out_degree(exit_node) and None in node_ctx.output_node_and_conns:
+        sdfg_ctx.state.add_edge(
+            exit_node, None, *node_ctx.output_node_and_conns[None], dace.Memlet()
+        )
 
 
 class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
@@ -231,24 +249,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                 memlet,
             )
 
-    @classmethod
-    def _add_empty_edges(
-        cls,
-        entry_node: dace.nodes.Node,
-        exit_node: dace.nodes.Node,
-        *,
-        sdfg_ctx: StencilComputationSDFGBuilder.SDFGContext,
-        node_ctx: StencilComputationSDFGBuilder.NodeContext,
-    ) -> None:
-        if not sdfg_ctx.state.in_degree(entry_node) and None in node_ctx.input_node_and_conns:
-            sdfg_ctx.state.add_edge(
-                *node_ctx.input_node_and_conns[None], entry_node, None, dace.Memlet()
-            )
-        if not sdfg_ctx.state.out_degree(exit_node) and None in node_ctx.output_node_and_conns:
-            sdfg_ctx.state.add_edge(
-                exit_node, None, *node_ctx.output_node_and_conns[None], dace.Memlet()
-            )
-
     def visit_WhileLoop(
         self,
         node: dcir.WhileLoop,
@@ -429,13 +429,13 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
 
         # Add memlets for scalars access (read/write)
         for connector in scalar_outputs:
-            original_name = node_name_from_connector(connector)
+            original_name = _node_name_from_connector(connector)
             access_node = sdfg_ctx.state.add_write(original_name)
             sdfg_ctx.state.add_memlet_path(
                 tasklet, access_node, src_conn=connector, memlet=dace.Memlet(data=original_name)
             )
         for connector in scalar_inputs:
-            original_name = node_name_from_connector(connector)
+            original_name = _node_name_from_connector(connector)
             access_node = sdfg_ctx.state.add_read(original_name)
             sdfg_ctx.state.add_memlet_path(
                 access_node, tasklet, dst_conn=connector, memlet=dace.Memlet(data=original_name)
@@ -521,9 +521,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             connector_prefix=prefix.PASSTHROUGH_OUT,
             **kwargs,
         )
-        StencilComputationSDFGBuilder._add_empty_edges(
-            map_entry, map_exit, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
-        )
+        _add_empty_edges(map_entry, map_exit, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
 
     def visit_DomainLoop(
         self,
@@ -656,9 +654,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                 symtable=symtable.parents,
                 **kwargs,
             )
-            StencilComputationSDFGBuilder._add_empty_edges(
-                nsdfg, nsdfg, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
-            )
+            _add_empty_edges(nsdfg, nsdfg, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
             return nsdfg
 
         return dace.nodes.NestedSDFG(
