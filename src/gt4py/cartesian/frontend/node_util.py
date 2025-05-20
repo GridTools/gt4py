@@ -12,8 +12,8 @@ from typing import Generator, Optional, Type
 
 import boltons.typeutils
 
-import gt4py.cartesian.gtc.utils as gtc_utils
 from gt4py import eve
+from gt4py.cartesian import utils as gt_utils
 from gt4py.cartesian.frontend.nodes import Location, Node
 
 
@@ -122,7 +122,7 @@ def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None
                 else:
                     children = node
             else:
-                children = gtc_utils.listify(value)
+                children = gt_utils.listify(value)
 
             for value in children:
                 if isinstance(value, Node):
