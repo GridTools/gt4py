@@ -446,7 +446,7 @@ def domain(
     expr = call(grid_type)(
         *[
             call("named_range")(
-                itir.AxisLiteral(value=d.value, kind=d.kind),
+                axis_literal(d),
                 r[0],
                 r[1],
             )
@@ -520,6 +520,10 @@ def op_as_fieldop(
         return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
 
     return _impl
+
+
+def axis_literal(dim: common.Dimension) -> itir.AxisLiteral:
+    return itir.AxisLiteral(value=dim.value, kind=dim.kind)
 
 
 def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):

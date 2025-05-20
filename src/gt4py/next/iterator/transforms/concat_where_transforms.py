@@ -5,7 +5,6 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-from typing import Optional
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next import common, utils
