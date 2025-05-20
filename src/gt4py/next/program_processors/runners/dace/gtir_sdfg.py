@@ -848,15 +848,31 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # map free symbols to parent SDFG
         nsdfg_symbols_mapping = {}
+        nsdfg_init_state: Optional[dace.SDFGState] = None
         for sym in nsdfg.free_symbols:
             if (sym_id := str(sym)) in lambda_arg_nodes:
                 # Map a scalar container to a symbol on the nested SDFG.
-                # This is done by adding a connector on the nested SDFG with the
-                # same name as the free symbol.
+                # This is done by adding a new global scalar and connector on the nested SDFG
+                # and by making an inter-state assignment inside the nested SDFG, on the start
+                # state, that initializes the symbol with the scalar value.
                 source_data_node = lambda_arg_nodes[sym_id].dc_node
                 source_data_desc = source_data_node.desc(sdfg)
                 assert isinstance(source_data_desc, dace.data.Scalar)
-                input_memlets[sym_id] = dace.Memlet(data=source_data_node.data, subset="0")
+                # Here we add a new global scalar and connector on the nested SDFG
+                conn, _ = nsdfg.add_scalar(f"__gtx_{sym_id}", source_data_desc.dtype)
+                input_memlets[conn] = dace.Memlet(data=source_data_node.data, subset="0")
+                if nsdfg_init_state is None:
+                    # We create a new start state to allow initializing the symbol
+                    # on the first inter-state edge.
+                    start_state = nsdfg.start_block
+                    assert isinstance(start_state, dace.SDFGState)
+                    nsdfg_init_state = nsdfg.add_state_before(start_state)
+                # We assign the global scalar value to the symbol
+                nsdfg.out_edges(nsdfg_init_state)[0].data.assignments[sym_id] = conn
+                # Now we remove the old argument mapping, and add an entry
+                # for the newly created connector.
+                arg_node = lambda_arg_nodes.pop(sym_id)
+                lambda_arg_nodes[conn] = arg_node
             else:
                 nsdfg_symbols_mapping[sym_id] = sym
         for sym, arg in zip(node.params, args, strict=True):

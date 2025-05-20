@@ -1745,18 +1745,18 @@ def test_gtir_let_lambda_scalar_expression():
 
     a = np.random.rand()
     b = np.random.rand()
-    c = np.random.rand(N)
-    d = np.empty_like(c)
+    c = np.random.rand(N + 1)
+    d = np.zeros(N)
 
-    # we use `skip_domain_inference=True` to avoid propagating the compute domain
+    # We use `skip_domain_inference=True` to avoid propagating the compute domain
     # to the inner expression, so that the mapping of the scalar expression `size + 1`
     # to the symbol `inner_size` is preserved, for which we want to test the lowering.
     sdfg = build_dace_sdfg(
         testee, offset_provider_type=CARTESIAN_OFFSETS, skip_domain_inference=True
     )
 
-    sdfg(a, b, c, d, **FSYMBOLS)
-    assert np.allclose(d, (a * a * b * b * c))
+    sdfg(a, b, c, d, **(FSYMBOLS | {"__x_0_range_1": N + 1}))
+    assert np.allclose(d, (a * a * b * b * c[1 : N + 1]))
 
 
 def test_gtir_let_lambda_with_connectivity():
