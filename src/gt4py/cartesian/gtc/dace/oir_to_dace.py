@@ -13,8 +13,8 @@ from typing import Dict
 
 import dace
 
-import gt4py.cartesian.gtc.oir as oir
 from gt4py import eve
+from gt4py.cartesian.gtc import oir
 from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass

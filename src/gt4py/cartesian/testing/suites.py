@@ -18,10 +18,10 @@ import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
-import gt4py.cartesian.gtc.utils as gtc_utils
 from gt4py import storage as gt_storage
 from gt4py.cartesian import backend as gt_backend, gtscript, utils as gt_utils
 from gt4py.cartesian.definitions import AccessKind, FieldInfo
+from gt4py.cartesian.gtc import utils as gtc_utils
 from gt4py.cartesian.gtc.definitions import Boundary, CartesianSpace, Index, Shape
 from gt4py.cartesian.stencil_object import StencilObject
 from gt4py.cartesian.testing.input_strategies import (

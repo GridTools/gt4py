@@ -13,9 +13,8 @@ from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple, U
 import dace
 import sympy
 
-import gt4py.cartesian.gtc.definitions
 from gt4py import eve
-from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc import common, definitions, oir
 from gt4py.cartesian.gtc.common import LocNode
 from gt4py.cartesian.gtc.dace import prefix
 from gt4py.cartesian.gtc.dace.symbol_utils import (
@@ -438,7 +437,7 @@ class GridSubset(eve.Node):
         return GridSubset(intervals=intervals)
 
     @classmethod
-    def from_gt4py_extent(cls, extent: gt4py.cartesian.gtc.definitions.Extent):
+    def from_gt4py_extent(cls, extent: definitions.Extent):
         i_interval = DomainInterval(
             start=AxisBound(level=common.LevelMarker.START, offset=extent[0][0], axis=Axis.I),
             end=AxisBound(level=common.LevelMarker.END, offset=extent[0][1], axis=Axis.I),
