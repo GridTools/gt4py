@@ -295,38 +295,6 @@ class CustomDefaultDictBase(collections.UserDict[_K, _V]):
             return value
 
 
-class custom_defaultdict(dict[_K, _V]):
-    """
-    Custom defaultdict-like class passing the key as an argument to the value factory.
-
-    Examples:
-        >>> d = custom_defaultdict(lambda x: x * 2)
-        >>> d[1]
-        2
-        >>> d[2]
-        4
-        >>> d[1] = 10
-        >>> d[1]
-        10
-
-    """
-
-    __slots__ = ("value_factory",)
-
-    value_factory: Callable
-
-    def __init__(self, value_factory: Callable) -> None:
-        super().__init__()
-        self.value_factory = value_factory
-
-    def __getitem__(self, key: _K) -> _V:
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            self[key] = (value := self.value_factory(key))
-            return value
-
-
 class fluid_partial(functools.partial):
     """Create a `functools.partial` with support for multiple applications calling `.partial()`."""
 

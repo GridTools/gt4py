@@ -65,7 +65,7 @@ class WrapperFunction(eve.Node):
     name: str
     parameters: Sequence[FunctionParameter]
     body: Union[ExprStmt, ReturnStmt]
-    device: bool = False
+    on_device: bool = False
 
 
 class BindingFunction(eve.Node):
@@ -140,7 +140,7 @@ class BindingCodeGenerator(TemplatedGenerator):
             }
             {{body}}
             if (exec_info.has_value()) {
-                {% if _this_node.device %}cudaDeviceSynchronize();{% endif %}
+                {% if _this_node.on_device %}cudaDeviceSynchronize();{% endif %}
                 exec_info->operator[]("run_cpp_end_time") = static_cast<double>(
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
@@ -166,7 +166,7 @@ class BindingCodeGenerator(TemplatedGenerator):
     )
 
     BindingFunction = as_jinja(
-        """module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}", {{", ".join(["nanobind::arg()"]*_this_node.n_params + ['nanobind::arg("exec_info") = nanobind::none()'])}});"""
+        """module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}", {{", ".join(["nanobind::arg()"] * _this_node.n_params + ['nanobind::arg("exec_info") = nanobind::none()'])}});"""
     )
 
     def visit_FunctionCall(self, call: FunctionCall, **kwargs: Any) -> str:
@@ -280,7 +280,7 @@ def create_bindings(
                     ],
                 )
             ),
-            device=(program_source.language in [languages.CUDA, languages.HIP]),
+            on_device=(program_source.language in [languages.CUDA, languages.HIP]),
         ),
         binding_module=BindingModule(
             name=program_source.entry_point.name,

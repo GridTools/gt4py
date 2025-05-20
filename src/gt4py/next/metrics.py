@@ -20,7 +20,7 @@ from gt4py.eve.extended_typing import Final, TypeVar
 
 
 # Common metric names
-CC_METRIC: Final = sys.intern("compiled_code")
+STENCIL_METRIC: Final = sys.intern("stencil")
 TOTAL_METRIC: Final = sys.intern("total")
 
 

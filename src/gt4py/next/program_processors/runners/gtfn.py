@@ -73,9 +73,10 @@ def convert_args(
         )
 
         if collect_metrics:
-            assert metrics.active_metric_collection.get() is not None
+            metric_collection = metrics.active_metric_collection.get()
+            assert metric_collection is not None
             value = exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"]
-            metrics.active_metric_collection.get().add_sample(metrics.CC_METRIC, value)  # type: ignore[union-attr]  # guarded by the if
+            metric_collection.add_sample(metrics.STENCIL_METRIC, value)  # type: ignore[union-attr]  # guarded by the if
 
     return decorated_program
 

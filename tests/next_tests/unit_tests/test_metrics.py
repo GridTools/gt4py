@@ -18,11 +18,11 @@ def sample_metrics():
     return metrics.MetricCollectionStore(
         {
             "program1": {
-                metrics.CC_METRIC: metrics.Metric(samples=[1.0, 2.0, 3.0]),
+                metrics.STENCIL_METRIC: metrics.Metric(samples=[1.0, 2.0, 3.0]),
                 metrics.TOTAL_METRIC: metrics.Metric(samples=[4.0, 5.0, 6.0]),
             },
             "program2": {
-                metrics.CC_METRIC: metrics.Metric(samples=[10.0, 20.0, 30.0]),
+                metrics.STENCIL_METRIC: metrics.Metric(samples=[10.0, 20.0, 30.0]),
                 metrics.TOTAL_METRIC: metrics.Metric(samples=[40.0, 50.0, 60.0]),
             },
         }
@@ -38,30 +38,35 @@ def test_dumps(sample_metrics):
     """Test that dumps correctly formats the metrics as a string table."""
     result = metrics.dumps(sample_metrics)
     assert isinstance(result, str)
-    assert "program1" in result
-    assert "program2" in result
-    assert metrics.CC_METRIC in result
-    assert metrics.TOTAL_METRIC in result
-    # Check that the mean values are properly formatted
-    assert "2.00000e+00" in result  # Mean of [1.0, 2.0, 3.0]
-    assert "5.00000e+00" in result  # Mean of [4.0, 5.0, 6.0]
-    assert "2.00000e+01" in result  # Mean of [10.0, 20.0, 30.0]
-    assert "5.00000e+01" in result  # Mean of [40.0, 50.0, 60.0]
-    # Check that std deviations are properly formatted
-    assert "1.00000e+00" in result  # Std of [1.0, 2.0, 3.0]
-    assert "1.00000e+00" in result  # Std of [4.0, 5.0, 6.0]
-    assert "1.00000e+01" in result  # Std of [10.0, 20.0, 30.0]
-    assert "1.00000e+01" in result  # Std of [40.0, 50.0, 60.0]
+
+    lines = result.splitlines()
+    i = 0
+    while i < len(lines) and lines[i] == "":
+        i += 1
+    assert (
+        lines[i].split()
+        == f"program {metrics.STENCIL_METRIC} +/- {metrics.TOTAL_METRIC} +/-".split()
+    )
+    assert (
+        lines[i + 1].split() == "program1 2.00000e+00 1.00000e+00 5.00000e+00 1.00000e+00".split()
+    )
+    assert (
+        lines[i + 2].split() == "program2 2.00000e+01 1.00000e+01 5.00000e+01 1.00000e+01".split()
+    )
 
 
 def test_dumps_empty_metrics(empty_metrics):
     """Test dumps with empty metrics collections."""
     result = metrics.dumps(empty_metrics)
     assert isinstance(result, str)
-    assert "program1" in result
-    assert "program2" in result
-    # There should be no metrics columns
-    assert result.count("N/A") == 0
+
+    lines = result.splitlines()
+    i = 0
+    while i < len(lines) and lines[i] == "":
+        i += 1
+    assert lines[i].split() == "program".split()
+    assert lines[i + 1].split() == "program1".split()
+    assert lines[i + 2].split() == "program2".split()
 
 
 def test_dump(sample_metrics, tmp_path):
@@ -74,11 +79,20 @@ def test_dump(sample_metrics, tmp_path):
     content = output_file.read_text()
 
     # Verify the content contains expected information
-    assert isinstance(content, str)
-    assert "program1" in content
-    assert "program2" in content
-    assert metrics.CC_METRIC in content
-    assert metrics.TOTAL_METRIC in content
+    lines = content.splitlines()
+    i = 0
+    while i < len(lines) and lines[i] == "":
+        i += 1
+    assert (
+        lines[i].split()
+        == f"program {metrics.STENCIL_METRIC} +/- {metrics.TOTAL_METRIC} +/-".split()
+    )
+    assert (
+        lines[i + 1].split() == "program1 2.00000e+00 1.00000e+00 5.00000e+00 1.00000e+00".split()
+    )
+    assert (
+        lines[i + 2].split() == "program2 2.00000e+01 1.00000e+01 5.00000e+01 1.00000e+01".split()
+    )
 
 
 def test_dumps_json(sample_metrics):
@@ -94,14 +108,14 @@ def test_dumps_json(sample_metrics):
     assert "program2" in data
 
     # Check metric data for program1
-    assert metrics.CC_METRIC in data["program1"]
-    assert data["program1"][metrics.CC_METRIC] == [1.0, 2.0, 3.0]
+    assert metrics.STENCIL_METRIC in data["program1"]
+    assert data["program1"][metrics.STENCIL_METRIC] == [1.0, 2.0, 3.0]
     assert metrics.TOTAL_METRIC in data["program1"]
     assert data["program1"][metrics.TOTAL_METRIC] == [4.0, 5.0, 6.0]
 
     # Check metric data for program2
-    assert metrics.CC_METRIC in data["program2"]
-    assert data["program2"][metrics.CC_METRIC] == [10.0, 20.0, 30.0]
+    assert metrics.STENCIL_METRIC in data["program2"]
+    assert data["program2"][metrics.STENCIL_METRIC] == [10.0, 20.0, 30.0]
     assert metrics.TOTAL_METRIC in data["program2"]
     assert data["program2"][metrics.TOTAL_METRIC] == [40.0, 50.0, 60.0]
 
