@@ -626,21 +626,21 @@ def _make_concat_field_slice(
     origin = tuple([*f.origin[:concat_dim_index], concat_dim_origin, *f.origin[concat_dim_index:]])
     shape = tuple([*f_desc.shape[:concat_dim_index], 1, *f_desc.shape[concat_dim_index:]])
     strides = tuple([*f_desc.strides[:concat_dim_index], 1, *f_desc.strides[concat_dim_index:]])
-    slice, slice_desc = sdfg.add_view(
+    slice_data, slice_data_desc = sdfg.add_view(
         f"view_{f.dc_node.data}", shape, f_desc.dtype, strides=strides
     )
-    slice_node = state.add_access(slice)
+    slice_node = state.add_access(slice_data)
     state.add_nedge(
         f.dc_node,
         slice_node,
         dace.Memlet(
             data=f.dc_node.data,
             subset=dace_subsets.Range.from_array(f_desc),
-            other_subset=dace_subsets.Range.from_array(slice_desc),
+            other_subset=dace_subsets.Range.from_array(slice_data_desc),
         ),
     )
     fslice = FieldopData(slice_node, ts.FieldType(dims=dims, dtype=f.gt_type.dtype), origin)
-    return fslice, slice_desc
+    return fslice, slice_data_desc
 
 
 def _make_concat_scalar_broadcast(
@@ -797,24 +797,24 @@ def translate_concat_where(
         assert all(ftype.dims == output_dims for ftype in (lower.gt_type, upper.gt_type))
 
         # the lower/upper range to be copied is defined by the start ('range_0') and stop ('range_1') indices
-        lower_range_0 = lower_domain[concat_dim_index][1]
-        lower_range_1 = (
-            (lower_range_0 + 1)
-            if is_lower_slice
-            else dace.symbolic.pystr_to_symbolic(
+        if is_lower_slice:
+            lower_range_0 = lower.origin[concat_dim_index]
+            lower_range_1 = lower_range_0 + 1
+        else:
+            lower_range_0 = lower_domain[concat_dim_index][1]
+            lower_range_1 = dace.symbolic.pystr_to_symbolic(
                 f"max({lower_range_0}, {lower_domain[concat_dim_index][2]})"
             )
-        )
         lower_range_size = lower_range_1 - lower_range_0
 
-        upper_range_0 = upper_domain[concat_dim_index][1]
-        upper_range_1 = (
-            (upper_range_0 + 1)
-            if is_upper_slice
-            else dace.symbolic.pystr_to_symbolic(
+        if is_upper_slice:
+            upper_range_0 = upper.origin[concat_dim_index]
+            upper_range_1 = upper_range_0 + 1
+        else:
+            upper_range_0 = upper_domain[concat_dim_index][1]
+            upper_range_1 = dace.symbolic.pystr_to_symbolic(
                 f"max({upper_range_0}, {upper_domain[concat_dim_index][2]})"
             )
-        )
         upper_range_size = upper_range_1 - upper_range_0
 
         output, output_desc = sdfg_builder.add_temp_array(sdfg, output_shape, lower_desc.dtype)
