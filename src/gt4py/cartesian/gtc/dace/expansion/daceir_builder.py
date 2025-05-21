@@ -370,7 +370,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         var_offset_fields: set[eve.SymbolRef],
         K_write_with_offset: set[eve.SymbolRef],
         **kwargs: Any,
-    ) -> dcir.IndexAccess | dcir.ScalarAccess:
+    ) -> dcir.IndexAccess:
         """Generate the relevant accessor to match the memlet that was previously setup.
 
         Args:
@@ -389,7 +389,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         )
         name = get_tasklet_symbol(node.name, offset=node.offset, is_target=is_target)
 
-        access_node: dcir.IndexAccess | dcir.ScalarAccess
+        access_node: dcir.IndexAccess
         if node.name in var_offset_fields.union(K_write_with_offset):
             access_node = dcir.IndexAccess(
                 name=name,
@@ -428,7 +428,19 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 dtype=node.dtype,
             )
         else:
-            access_node = dcir.ScalarAccess(name=name, dtype=node.dtype, is_target=is_write)
+            access_node = dcir.IndexAccess(
+                name=name,
+                is_target=is_write,
+                offset=self.visit(
+                    node.offset,
+                    is_target=False,
+                    targets=targets,
+                    var_offset_fields=var_offset_fields,
+                    K_write_with_offset=K_write_with_offset,
+                    **kwargs,
+                ),
+                dtype=node.dtype,
+            )
 
         if is_write and not any(
             isinstance(t, oir.FieldAccess) and t.name == node.name and t.offset == node.offset
