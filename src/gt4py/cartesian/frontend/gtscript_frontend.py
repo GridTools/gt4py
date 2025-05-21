@@ -1502,6 +1502,37 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
+    def visit_ForIndex(self, node: ForIndex) -> nodes.ForIndex:
+        return nodes.ForIndex(name=node.name)
+
+    def visit_For(self, node: For) -> list:
+        assert isinstance(node, For)
+
+        loc = nodes.Location.from_ast_node(node)
+
+        self.decls_stack.append([])
+        stmts = gt_utils.flatten([self.visit(stmt) for stmt in node.body])
+        assert all(isinstance(item, nodes.Statement) for item in stmts)
+
+        result = [
+            nodes.For(
+                index=nodes.ForIndex(name=node.index_name),
+                iter_start=node.index_values.start,
+                iter_stop=node.index_values.stop,
+                iter_step=node.index_values.step,
+                body=nodes.BlockStmt(stmts=stmts, loc=loc),
+                loc=nodes.Location.from_ast_node(node),
+            )
+        ]
+
+        if len(self.decls_stack) == 1:
+            result.extend(self.decls_stack.pop())
+        elif len(self.decls_stack) > 1:
+            self.decls_stack[-2].extend(self.decls_stack[-1])
+            self.decls_stack.pop()
+
+        return result
+
     def visit_Call(self, node: ast.Call):
         native_fcn = nodes.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 

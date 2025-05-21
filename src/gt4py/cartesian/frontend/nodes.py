@@ -376,6 +376,11 @@ class AxisIndex(Expr):
     data_type = attribute(of=DataType, default=DataType.INT32)
 
 
+@attribclass
+class ForIndex(Expr):
+    name = attribute(of=str)
+
+
 @enum.unique
 class NativeFunction(enum.Enum):
     ABS = enum.auto()
@@ -652,6 +657,16 @@ class While(Statement):
     condition = attribute(of=Expr)
     body = attribute(of=BlockStmt)
     loc = attribute(of=Location, optional=True)
+
+
+@attribclass
+class For(Statement):
+    index = attribute(of=ForIndex)
+    iter_start = attribute(of=int)
+    iter_stop = attribute(of=int)
+    iter_step = attribute(of=int)
+    body = attribute(of=BlockStmt)
+    loc = attribute(of=Location, optional=None)
 
 
 # ---- IR: computations ----
