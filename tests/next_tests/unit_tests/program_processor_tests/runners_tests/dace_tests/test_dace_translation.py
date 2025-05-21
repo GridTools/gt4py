@@ -30,27 +30,18 @@ IntType = ts.ScalarType(kind=ts.ScalarKind.INT32)
 
 
 def _is_present_async_sdfg_init_code(sdfg: dace.SDFG) -> bool:
-    async_sdfg_init_code = f"__set_stream_{sdfg.name}(__state, cudaStreamDefault);"
-    return (
-        len(
-            [
-                line
-                for line in sdfg.init_code["frame"].code.splitlines()
-                if line == async_sdfg_init_code
-            ]
-        )
-        >= 1
-    )
+    async_sdfg_init_code = f"""\
+for (int i = 0; i < __state->gpu_context->num_streams; i++)
+    __dace_gpu_set_stream(__state, i, cudaStreamDefault);\
+"""
+    return async_sdfg_init_code in sdfg.init_code["frame"].code
 
 
 def _is_present_async_sdfg_global_code(sdfg: dace.SDFG) -> bool:
-    async_sdfg_global_code = f"""\
-DACE_EXPORTED bool __dace_gpu_set_stream({sdfg.name}_state_t *__state, int streamid, gpuStream_t stream);
-DACE_EXPORTED void __set_stream_{sdfg.name}({sdfg.name}_state_t *__state, gpuStream_t stream) {{
-for (int i = 0; i < __state->gpu_context->num_streams; i++)
-    __dace_gpu_set_stream(__state, i, stream);
-}}\
-"""
+    async_sdfg_global_code = (
+        "DACE_EXPORTED bool __dace_gpu_set_stream("
+        + f"{sdfg.name}_state_t *__state, int streamid, gpuStream_t stream);"
+    )
     return async_sdfg_global_code in sdfg.global_code["frame"].code
 
 
@@ -79,7 +70,6 @@ def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
 def test_generate_sdfg_async_call(make_async_sdfg_call):
     """Verify that the flag `async_sdfg_call` takes effect on the SDFG generation."""
     program_name = "field_ir_{}_async_call".format("with" if make_async_sdfg_call else "without")
-    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={ffront_test_utils.IDim: (0, "N")})
 
     program = itir.Program(
         id=program_name,
@@ -92,8 +82,10 @@ def test_generate_sdfg_async_call(make_async_sdfg_call):
         ],
         body=[
             itir.SetAt(
-                expr=im.op_as_fieldop("plus", domain)("x", 1.0),
-                domain=domain,
+                expr=im.op_as_fieldop("plus")("x", 1.0),
+                domain=im.domain(
+                    gtx_common.GridType.CARTESIAN, ranges={ffront_test_utils.IDim: (0, "N")}
+                ),
                 target=itir.SymRef(id="y"),
             ),
         ],
@@ -114,7 +106,6 @@ def test_generate_sdfg_async_call(make_async_sdfg_call):
 def test_generate_sdfg_async_call_no_map():
     """Verify that the flag `async_sdfg_call=True` has no effect on an SDFG that does not contain any GPU map."""
     program_name = "scalar_ir_with_async_call"
-    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={ffront_test_utils.IDim: (0, "N")})
 
     program = itir.Program(
         id=program_name,
@@ -128,7 +119,9 @@ def test_generate_sdfg_async_call_no_map():
         body=[
             itir.SetAt(
                 expr=itir.SymRef(id="x"),
-                domain=domain,
+                domain=im.domain(
+                    gtx_common.GridType.CARTESIAN, ranges={ffront_test_utils.IDim: (0, "N")}
+                ),
                 target=itir.SymRef(id="y"),
             ),
         ],
@@ -141,3 +134,89 @@ def test_generate_sdfg_async_call_no_map():
     ).generate_sdfg(program, offset_provider={}, column_axis=None)
 
     _check_sdfg_without_async_call(sdfg)
+
+
+def _make_multi_state_sdfg_0(
+    sdfg_name: str = "async_call_multi_state_0",
+) -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
+    """Make an SDFG with two states, no data descriptor is accessed on the InterState edge."""
+    sdfg = dace.SDFG(sdfg_name)
+    R = sdfg.add_symbol("R", dace.int32)
+    X_size = sdfg.add_symbol("X_size", dace.int32)
+    T, _ = sdfg.add_scalar("T", dace.int32)
+    X, _ = sdfg.add_array("X", [X_size], dace.int32)
+
+    first_state = sdfg.add_state()
+    twrite = first_state.add_tasklet(
+        "write",
+        code="val = 10",
+        inputs={},
+        outputs={"val"},
+    )
+    first_state.add_edge(
+        twrite, "val", first_state.add_access(T), None, dace.Memlet(data=T, subset="0")
+    )
+    second_state = sdfg.add_state_after(first_state)
+    second_state.add_mapped_tasklet(
+        "compute",
+        map_ranges=dict(i=f"0:{R}"),
+        code="val = 1.0",
+        inputs={},
+        outputs={"val": dace.Memlet(data=X, subset="i")},
+        external_edges=True,
+    )
+    sdfg.out_edges(first_state)[0].data.assignments["R"] = 1
+    return sdfg, first_state, second_state
+
+
+def _make_multi_state_sdfg_1(
+    sdfg_name: str = "async_call_multi_state_1",
+) -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
+    """
+    Make an SDFG with two states, the data descriptor 'T' is assigned to 'R'
+    on the InterState edge.
+    """
+    sdfg, first_state, second_state = _make_multi_state_sdfg_0(sdfg_name)
+    sdfg.out_edges(first_state)[0].data.assignments["R"] = "T"
+    return sdfg, first_state, second_state
+
+
+def _make_multi_state_sdfg_2(
+    sdfg_name: str = "async_call_multi_state_2",
+) -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
+    """
+    Make an SDFG with two states, the data descriptor 'T' is used in comparison condition
+    on the InterState edge.
+    """
+    sdfg, first_state, second_state = _make_multi_state_sdfg_0(sdfg_name)
+    sdfg.out_edges(first_state)[0].data.condition = dace.properties.CodeBlock("R > T")
+    return sdfg, first_state, second_state
+
+
+@pytest.mark.parametrize(
+    "multi_state_config",
+    [
+        (True, _make_multi_state_sdfg_0),
+        (False, _make_multi_state_sdfg_1),
+        (False, _make_multi_state_sdfg_2),
+    ],
+)
+def test_generate_sdfg_async_call_multi_state(multi_state_config):
+    """
+    Verify that states are not made async when a data descriptor is accessed
+    on an outgoing InterState edge.
+    """
+    expect_async_sdfg_call_on_first_state, make_multi_state_sdfg = multi_state_config
+    sdfg, first_state, second_state = make_multi_state_sdfg()
+
+    dace_translation_stage.make_sdfg_async(sdfg)
+
+    assert _is_present_async_sdfg_global_code(sdfg)
+    assert _is_present_async_sdfg_init_code(sdfg)
+
+    if expect_async_sdfg_call_on_first_state:
+        assert first_state.nosync == True
+        assert second_state.nosync == True
+    else:
+        assert first_state.nosync == False
+        assert second_state.nosync == True

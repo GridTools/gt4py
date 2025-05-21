@@ -13,6 +13,7 @@ from typing import Optional
 
 import dace
 import factory
+from dace.codegen.targets import cpp as dace_codegen_cpp
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
@@ -60,12 +61,27 @@ def _find_constant_symbols(
     return constant_symbols
 
 
-def _language_settings() -> languages.LanguageSettings:
-    return languages.LanguageSettings(formatter_key="", formatter_style="", file_extension="sdfg")
+def make_sdfg_async(sdfg: dace.SDFG) -> None:
+    """Make an SDFG call immediatly return, without waiting for execution to complete.
+    This allows to run the SDFG asynchronously, thus letting gpu kernel execution
+    to overlap with host python code.
 
+    The asynchronous call is implemented by the following changes to SDFG:
 
-def _make_sdfg_async(sdfg: dace.SDFG) -> None:
-    """Sets all cuda stream to the default stream."""
+    - Set all cuda streams to the default stream. This allows to serialize all
+      kernels on one gpu queue, avoiding synchronization between different cuda
+      streams. Besides, device-to-host copies are performed on the default cuda
+      stream, which allows to synchronize the last gpu kernel on the host side.
+
+    - Set `nosync=True` on the states of the top-level SDFG. This flag is used
+      by dace codegen to skip emission of `cudaStreamSynchronize()` at the end
+      of each state. An exception is made for state transitions where data descriptors
+      are accessed on an InterState edge. The typical example is a symbol set to
+      the scalar value produced by the previous state, or a condition accessing
+      some data descriptor. In this case, we have to wait for the previous state
+      to complete.
+
+    """
 
     has_gpu_code = any(getattr(node, "schedule", False) for node, _ in sdfg.all_nodes_recursive())
 
@@ -74,20 +90,32 @@ def _make_sdfg_async(sdfg: dace.SDFG) -> None:
         return
 
     # Emit cpp code for the SDFG to set the cuda streams
+    dace_state_type_name = dace_codegen_cpp.mangle_dace_state_struct_name(sdfg)
     sdfg.append_global_code(f"""\
-DACE_EXPORTED bool __dace_gpu_set_stream({sdfg.name}_state_t *__state, int streamid, gpuStream_t stream);
-DACE_EXPORTED void __set_stream_{sdfg.name}({sdfg.name}_state_t *__state, gpuStream_t stream) {{
-for (int i = 0; i < __state->gpu_context->num_streams; i++)
-    __dace_gpu_set_stream(__state, i, stream);
-}}\
+DACE_EXPORTED bool __dace_gpu_set_stream({dace_state_type_name} *__state, int streamid, gpuStream_t stream);\
 """)
-    sdfg.append_init_code(f"""\
-__set_stream_{sdfg.name}(__state, cudaStreamDefault);
+    sdfg.append_init_code("""\
+for (int i = 0; i < __state->gpu_context->num_streams; i++)
+    __dace_gpu_set_stream(__state, i, cudaStreamDefault);\
 """)
 
-    # Loop over all state in the top-level SDFG
+    # Loop over all states in the top-level SDFG
     for state in sdfg.states():
-        state.nosync = True
+        for oedge in sdfg.out_edges(state):
+            # we collect the data descriptors accessed on an InterState edge in assignment or condition expression
+            data_desc = set(sdfg.arrays.keys()).intersection(
+                oedge.data.condition.get_free_symbols()
+                | {
+                    str(sym)
+                    for v in oedge.data.assignments.values()
+                    for sym in dace.symbolic.pystr_to_symbolic(v).free_symbols
+                }
+            )
+            if len(data_desc) > 0:
+                break
+        else:
+            # no data descriptor is accessed on InterState edge, we can make the state async
+            state.nosync = True
 
 
 @dataclasses.dataclass(frozen=True)
@@ -156,7 +184,7 @@ class DaCeTranslator(
                 gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
         if on_gpu and self.async_sdfg_call:
-            _make_sdfg_async(sdfg)
+            make_sdfg_async(sdfg)
 
         return sdfg
 
@@ -188,7 +216,9 @@ class DaCeTranslator(
                 source_code=sdfg.to_json(),
                 library_deps=tuple(),
                 language=languages.SDFG,
-                language_settings=_language_settings(),
+                language_settings=languages.LanguageSettings(
+                    formatter_key="", formatter_style="", file_extension="sdfg"
+                ),
                 implicit_domain=inp.data.implicit_domain,
             )
         )
