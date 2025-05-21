@@ -31,15 +31,24 @@ def gt_multi_state_global_self_copy_elimination(
 
     For the return value see `MultiStateGlobalSelfCopyElimination.apply_pass()`.
     """
-    pipeline = dace_ppl.Pipeline([gtx_transformations.MultiStateGlobalSelfCopyElimination()])
-    res = pipeline.apply_pass(sdfg, {})
+    transforms = [
+        gtx_transformations.MultiStateGlobalSelfCopyElimination(),
+        gtx_transformations.MultiStateGlobalSelfCopyElimination2(),
+    ]
+
+    pipeline = dace_ppl.Pipeline(transforms)
+    pip_res = pipeline.apply_pass(sdfg, {})
 
     if validate:
         sdfg.validate()
 
-    if "MultiStateGlobalSelfCopyElimination" not in res:
-        return None
-    return res["MultiStateGlobalSelfCopyElimination"][sdfg]
+    res: dict[dace.SDFG, set[str]] = {}
+    for trans in transforms:
+        tname = trans.__class__.__name__
+        if tname in pip_res:
+            for nsdfg, processed_data in pip_res[tname].items():
+                res.setdefault(nsdfg, set()).update(processed_data)
+    return res if res else None
 
 
 def gt_remove_copy_chain(
@@ -107,6 +116,7 @@ class MultiStateGlobalSelfCopyElimination(dace_transformation.Pass):
             `SingleStateGlobalSelfCopyElimination`, see `_classify_candidate()` and
             `_remove_writes_to_global()` for more.
         - Make it more efficient such that the SDFG is not scanned multiple times.
+        - Merge with the `MultiStateGlobalSelfCopyElimination2`.
     """
 
     def modifies(self) -> dace_ppl.Modifies:
