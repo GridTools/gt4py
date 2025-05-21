@@ -767,6 +767,9 @@ class IndexAccess(common.FieldAccess, Expr):
     # ScalarAccess used for indirect addressing
     offset: Optional[common.CartesianOffset | Literal | ScalarAccess | VariableKOffset]
     is_target: bool
+    # original field name. name attribute is used for name/offset-mangled tasklet symbol
+    field_name: eve.SymbolRef
+    oir_offset: common.CartesianOffset | common.VariableKOffset
 
     explicit_indices: Optional[list[Literal | ScalarAccess | VariableKOffset]] = None
     """Used to access as a full field with explicit indices"""
