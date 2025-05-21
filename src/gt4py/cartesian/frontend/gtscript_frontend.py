@@ -16,7 +16,20 @@ import textwrap
 import time
 import types
 import warnings
-from typing import Any, Dict, Final, List, Literal, Optional, Sequence, Set, Tuple, Type, Union
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    Final,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 import numpy as np
 
@@ -25,6 +38,7 @@ from gt4py.cartesian.frontend import node_util, nodes
 from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
 from gt4py.cartesian.gtc import utils as gtc_utils
 from gt4py.cartesian.utils import NOTHING, meta as gt_meta
+from gt4py.eve import datamodels as gt_datamodels
 
 from .base import Frontend, register
 from .exceptions import (
@@ -341,6 +355,77 @@ class ReturnReplacer(gt_utils.meta.ASTTransformPass):
             )
 
 
+@gt_datamodels.datamodel(frozen=True)
+class ForIndex(ast.AST):
+    name: str
+
+
+@gt_datamodels.datamodel(frozen=True)
+class ForIndexTransformer(ast.NodeTransformer):
+    name: str
+
+    def visit_Name(self, node: ast.Name) -> Union[ForIndex, ast.Name]:
+        super().generic_visit(node)
+        return ForIndex(self.name) if node.id == self.name else node
+
+
+@gt_datamodels.datamodel
+class For(ast.AST):
+    index_name: str
+    index_values: Optional[range]
+    body: list[ast.AST]
+    _fields: ClassVar[tuple[str, ...]] = ("body",)
+
+    def __post_init__(self) -> None:
+        transformer = ForIndexTransformer(self.index_name)
+        self.body = [transformer.visit(stmt) for stmt in self.body]
+
+
+@gt_datamodels.datamodel(frozen=True)
+class ForTransformer(ast.NodeTransformer):
+    context: dict
+
+    @classmethod
+    def apply(cls, func_node: ast.FunctionDef, context: dict):
+        unroller = cls(context)
+        unroller(func_node)
+
+    def __call__(self, func_node: ast.FunctionDef) -> None:
+        self.visit(func_node)
+
+    def visit_For(self, node: Union[ast.For, For]) -> For:
+        super().generic_visit(node)
+        if isinstance(node, ast.For):
+            assert isinstance(node.target, ast.Name)
+
+            if (
+                isinstance(node.iter, ast.Call)
+                and isinstance(node.iter.func, ast.Name)
+                and node.iter.func.id == "range"
+            ):
+                range_args = [eval(ast.unparse(arg), self.context) for arg in node.iter.args]
+                assert 1 <= len(range_args) <= 3
+                if len(range_args) == 1:
+                    start, stop, step = 0, *range_args, 1
+                elif len(range_args) == 2:
+                    start, stop, step = *range_args, 1
+                else:
+                    start, stop, step = range_args
+                index_values = range(start, stop, step)
+            else:
+                raise GTScriptSyntaxError(
+                    "For-loop index values can only be specified using range()."
+                )
+
+            return For(
+                index_name=node.target.id,
+                index_values=index_values,
+                body=[self.visit(item) for item in node.body],
+            )
+        else:
+            return node
+
+
 class CallInliner(ast.NodeTransformer):
     """Inlines calls to gtscript.function calls.
 
@@ -403,6 +488,10 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_While(self, node: ast.While):
+        node.body = self._process_stmts(node.body)
+        return node
+
+    def visit_For(self, node: Union[ast.For, For]):
         node.body = self._process_stmts(node.body)
         return node
 
@@ -643,138 +732,6 @@ class CompiledIfInliner(ast.NodeTransformer):
                 )
 
         return node if node else None
-
-
-class LoopIndexReplacer(ast.NodeTransformer):
-    def __init__(self, name: str, value: int) -> None:
-        self.name = name
-        self.value = value
-
-    def visit_Name(self, node: ast.Name) -> Union[ast.Constant, ast.Name]:
-        if node.id == self.name:
-            return ast.Constant(self.value, ctx=node.ctx)
-        else:
-            return node
-
-
-def _get_loop_index_values(
-    node: Union[ast.Call, ast.List, ast.Tuple], context: dict
-) -> Optional[Union[list, range]]:
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range":
-        range_args = [eval(ast.unparse(arg), context) for arg in node.args]
-        assert 1 <= len(range_args) <= 3
-        if len(range_args) == 1:
-            start, stop, step = 0, *range_args, 1
-        elif len(range_args) == 2:
-            start, stop, step = *range_args, 1
-        else:
-            start, stop, step = range_args
-        index_values = range(start, stop, step)
-    elif isinstance(node, (ast.List, ast.Tuple)):
-        index_values = [eval(ast.unparse(elt), context) for elt in node.elts]
-    else:
-        index_values = None
-    return index_values
-
-
-class ReductionUnroller(ast.NodeTransformer):
-    REDUCTION_OP_TO_AST_OP = {"add": ast.Add}
-
-    @classmethod
-    def apply(cls, func_node: ast.FunctionDef, context: dict):
-        unroller = cls(context)
-        unroller(func_node)
-
-    def __init__(self, context: dict) -> None:
-        self.context = context
-
-    def __call__(self, func_node: ast.FunctionDef) -> None:
-        self.visit(func_node)
-
-    def visit_Call(self, node: ast.Call) -> Union[ast.Call, ast.BinOp]:
-        if isinstance(node.func, ast.Name) and node.func.id == "reduce":
-            return self._unroll_reduction(node)
-        else:
-            return node
-
-    def _unroll_reduction(self, node: ast.Call) -> ast.BinOp:
-        param_names = ["op", "generator", "initial"][len(args := node.args) :]
-        for kwarg in node.keywords:
-            if kwarg.arg in param_names:
-                args.append(kwarg.value)
-            else:
-                raise GTScriptSyntaxError(f"Reduce: unknown argument `{kwarg.arg}`.")
-
-        if not 2 <= len(args) <= 3:
-            raise GTScriptSyntaxError("Reduce: the function takes 2 to 3 arguments.")
-
-        if isinstance(args[0], ast.Name) and (op_id := args[0].id) in self.REDUCTION_OP_TO_AST_OP:
-            op = self.REDUCTION_OP_TO_AST_OP[op_id]()
-        else:
-            raise GTScriptSyntaxError("Reduce: invalid reduction operator.")
-
-        if isinstance((generator_expr := args[1]), ast.GeneratorExp):
-            template_item = generator_expr.elt
-            index_name = generator_expr.generators[0].target.id
-            index_values = list(
-                _get_loop_index_values(generator_expr.generators[0].iter, self.context)
-            )
-        else:
-            raise GTScriptSyntaxError("Reduce: second argument should be a generator expression.")
-
-        initial_value = args[2] if len(node.args) == 3 else None
-
-        return self._get_binary_node(
-            op, template_item, index_name, index_values, left=initial_value
-        )
-
-    def _get_binary_node(self, op, template_item, index_name, index_values, left=None) -> ast.BinOp:
-        if left is None:
-            assert len(index_values) > 1
-            left = LoopIndexReplacer(index_name, index_values[0]).visit(
-                copy.deepcopy(template_item)
-            )
-            index_values = index_values[1:]
-
-        assert len(index_values) > 0
-        if len(index_values) == 1:
-            right = LoopIndexReplacer(index_name, index_values[0]).visit(template_item)
-        else:
-            right = self._get_binary_node(op, template_item, index_name, index_values)
-
-        return ast.BinOp(left=left, op=op, right=right)
-
-
-class DataDimLoopUnroller(ast.NodeTransformer):
-    @classmethod
-    def apply(cls, func_node: ast.FunctionDef, context: dict):
-        unroller = cls(context)
-        unroller(func_node)
-
-    def __init__(self, context):
-        self.context = context
-        self.prefix = ""
-
-    def __call__(self, func_node: ast.FunctionDef) -> None:
-        self.visit(func_node)
-
-    def visit_For(self, node: ast.For) -> Union[ast.For, list[ast.AST]]:
-        super().generic_visit(node)
-
-        if (index_values := _get_loop_index_values(node.iter, self.context)) is not None:
-            assert isinstance(node.target, ast.Name)
-            index_name = node.target.id
-
-            new_body = []
-            for index_value in index_values:
-                body = copy.deepcopy(node.body)
-                transformer = LoopIndexReplacer(index_name, index_value)
-                new_body_item = [transformer.visit(stmt) for stmt in body]
-                new_body += new_body_item
-
-            return new_body
-        else:
-            return node
 
 
 def _make_temp_decls(
@@ -2215,18 +2172,16 @@ class GTScriptParser(ast.NodeVisitor):
 
         ValueInliner.apply(main_func_node, context=local_context)
 
-        ReductionUnroller.apply(main_func_node, context=local_context)
-
-        # unroll loops over data dimensions
+        # Insert custom nodes for for-loops
         # note(stubbiali): address the case of a function called within a for-loop
-        DataDimLoopUnroller.apply(main_func_node, context=local_context)
+        ForTransformer.apply(main_func_node, context=local_context)
 
         # Inline function calls
         CallInliner.apply(main_func_node, context=local_context)
 
-        # unroll loops over data dimensions
+        # Insert custom nodes for for-loops
         # note(stubbiali): address the case of a for-loop inside a function
-        DataDimLoopUnroller.apply(main_func_node, context=local_context)
+        ForTransformer.apply(main_func_node, context=local_context)
 
         # Evaluate and inline compile-time conditionals
         CompiledIfInliner.apply(main_func_node, context=local_context, stencil_name=self.main_name)
