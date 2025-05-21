@@ -139,6 +139,24 @@ class GTIRToOIR(eve.NodeTranslator):
         condition: oir.Expr = self.visit(node.cond)
         return oir.While(cond=condition, body=body, loc=node.loc)
 
+    def visit_ForIndex(self, node: gtir.ForIndex, **kwargs: Any) -> oir.ForIndex:
+        return oir.ForIndex(name=node.name)
+
+    def visit_For(self, node: gtir.For, **kwargs: Any) -> oir.For:
+        body: List[oir.Stmt] = []
+        for statement in node.body:
+            oir_statement = self.visit(statement, **kwargs)
+            body.extend(utils.flatten_list(utils.listify(oir_statement)))
+
+        return oir.For(
+            index=self.visit(node.index),
+            iter_start=node.iter_start,
+            iter_stop=node.iter_stop,
+            iter_step=node.iter_step,
+            body=body,
+            loc=node.loc,
+        )
+
     def visit_FieldIfStmt(
         self,
         node: gtir.FieldIfStmt,
