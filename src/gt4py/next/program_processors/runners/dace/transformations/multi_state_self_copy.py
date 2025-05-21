@@ -20,33 +20,18 @@ AccessLocation: TypeAlias = tuple[dace.SDFGState, dace_nodes.AccessNode]
 
 
 @dace_properties.make_properties
-class MultiStateGlobalSelfCopyElimination(dace_transformation.Pass):
+class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
     """Removes self copying across different states.
 
-    This transformation is very similar to `SingleStateGlobalSelfCopyElimination`, but
-    addresses a slightly different case. Assume we have the pattern `(G) -> (T)`
-    in one state, i.e. the global data `G` is copied into a transient. In another
-    state, we have the pattern `(T) -> (G)`, i.e. the data is written back.
-
-    If the following conditions are satisfied, this transformation will remove all
-    writes to `G`:
-    - The only write access to `G` happens in the `(T) -> (G)` pattern. ADR-18
-        guarantees, that if `G` is used as an input and output it must be pointwise.
-        Thus there is no weird shifting.
-
-    If the only usage of `T` is to write into `G` then the transient `T` will be
-    removed.
-
-    Note that this transformation does not consider the subsets of the writes from
-    `T` to `G` because ADR-18 guarantees to us, that _if_ `G` is a genuine input
-    and output, then the `G` read and write subsets have the exact same range.
-    If `G` is not an output then any mutating changes to `G` would be invalid.
+    This function is very similar to `MultiStateGlobalSelfCopyElimination2`, however,
+    it is a bit more restricted, as `MultiStateGlobalSelfCopyElimination` has a much
+    better way to handle some edge cases.
+    The main difference is that `MultiStateGlobalSelfCopyElimination2` uses an other
+    way to locate the redundant data. Instead of focusing on the on the globals this
+    transformation focuses on the transients.
 
     Todo:
-        - Implement the pattern `(G) -> (T) -> (G)` which is handled currently by
-            `SingleStateGlobalSelfCopyElimination`, see `_classify_candidate()` and
-            `_remove_writes_to_global()` for more.
-        - Make it more efficient such that the SDFG is not scanned multiple times.
+        Merge with the `MultiStateGlobalSelfCopyElimination2`.
     """
 
     def modifies(self) -> dace_ppl.Modifies:
@@ -166,7 +151,9 @@ class MultiStateGlobalSelfCopyElimination(dace_transformation.Pass):
             if not desc.transient:
                 continue
             write_read_locations = self._find_exclusive_read_and_write_locations_of(sdfg, data_name)
-            if write_read_locations is not None and (len(write_read_locations[1]) != 0):
+            if write_read_locations is None:
+                continue
+            if len(write_read_locations[1]) != 0:
                 possible_redundant_transients[data_name] = write_read_locations
 
         # Nothing was found.
@@ -213,7 +200,24 @@ class MultiStateGlobalSelfCopyElimination(dace_transformation.Pass):
         global data. If this is the case the function returns the name of the data
         and if this is not possible `None`.
         """
-        global_data: Union[None, str] = None
+
+        # Currently we require that there is exactly one location where the temporary
+        #  is defined and written back. This is a simplification, that should be
+        #  removed.
+        if len(write_locations) != 1 and len(read_locations) != 1:
+            return None
+
+        # We actually have to check if the global data is not modified between the
+        #  location where the transient is defined and where it is written back.
+        #  `MultiStateGlobalSelfCopyElimination` does this in a quite sophisticated
+        #  way. We do it cheap we require that the state in which the definition of
+        #  the transient happens is the immediate predecessor of where it is used.
+        for defining_state, _ in write_locations:
+            successor_states = {oedge.dst for oedge in sdfg.out_edges(defining_state)}
+            if not all(
+                write_back_state in successor_states for write_back_state, _ in read_locations
+            ):
+                return None
 
         # We now must look at what defines the transient. For that we look at what
         #  defines it. For that there must be global data that writes into it.
@@ -221,6 +225,7 @@ class MultiStateGlobalSelfCopyElimination(dace_transformation.Pass):
         #   producers are allowed, also differently.
         # TODO(phimuell): In `concat_where` we are using `dynamic` Memlets, they should
         #   also be checked.
+        global_data: Union[None, str] = None
         for state, transient_access_node in write_locations:
             for iedge in state.in_edges(transient_access_node):
                 src_node = iedge.src
