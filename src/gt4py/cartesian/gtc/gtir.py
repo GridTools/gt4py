@@ -152,8 +152,7 @@ class While(common.While[Stmt, Expr], Stmt):
 
 
 class ForIndex(common.ForIndex, Expr):
-    kind: common.ExprKind = common.ExprKind.SCALAR
-    dtype: common.DataType = common.DataType.INT64
+    pass
 
 
 class For(common.For[Stmt], Stmt):
