@@ -13,7 +13,7 @@ import pytest
 dace = pytest.importorskip("dace")
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, config
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -21,12 +21,81 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 )
 from gt4py.next.type_system import type_specifications as ts
 
-from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    IDim,
+    KDim,
+    Vertex,
+    skip_value_mesh,
+)
 
 
 FloatType = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-FieldType = ts.FieldType(dims=[ffront_test_utils.IDim], dtype=FloatType)
+FieldType = ts.FieldType(dims=[IDim], dtype=FloatType)
 IntType = ts.ScalarType(kind=ts.ScalarKind.INT32)
+
+
+@pytest.mark.parametrize("has_unit_stride", [False, True])
+def test_find_constant_symbols(has_unit_stride):
+    config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE = has_unit_stride
+    SKIP_VALUE_MESH = skip_value_mesh(None)
+
+    ir = itir.Program(
+        id=f"find_constant_symbols_{int(has_unit_stride)}",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x", type=ts.FieldType(dims=[Vertex], dtype=FloatType)),
+            itir.Sym(id="y", type=ts.FieldType(dims=[Vertex, KDim], dtype=FloatType)),
+            itir.Sym(id="h_size", type=IntType),
+            itir.Sym(id="v_size", type=IntType),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.op_as_fieldop("plus")("x", 1.0),
+                domain=im.domain(
+                    gtx_common.GridType.UNSTRUCTURED,
+                    ranges={Vertex: (0, "h_size"), KDim: (0, "v_size")},
+                ),
+                target=itir.SymRef(id="y"),
+            )
+        ],
+    )
+
+    sdfg = dace.SDFG(ir.id)
+    x_size_0 = dace.symbol("__x_size_0", dace.int32)
+    x_stride_0 = dace.symbol("__x_stride_0", dace.int32)
+    y_size_0 = dace.symbol("__y_size_0", dace.int32)
+    y_size_1 = dace.symbol("__y_size_1", dace.int32)
+    y_stride_0 = dace.symbol("__y_stride_0", dace.int32)
+    y_stride_1 = dace.symbol("__y_stride_1", dace.int32)
+    gt_conn_V2E_size_0 = dace.symbol("__gt_conn_V2E_size_0", dace.int32)
+    gt_conn_V2E_size_1 = SKIP_VALUE_MESH.offset_provider_type["V2E"].max_neighbors
+    gt_conn_V2E_stride_0 = dace.symbol("__gt_conn_V2E_stride_0", dace.int32)
+    gt_conn_V2E_stride_1 = dace.symbol("__gt_conn_V2E_stride_1", dace.int32)
+    sdfg.add_array("x", [x_size_0], dace.float64, strides=[x_stride_0])
+    sdfg.add_array("y", [y_size_0, y_size_1], dace.float64, strides=[y_stride_0, y_stride_1])
+    sdfg.add_array(
+        "gt_conn_V2E",
+        [gt_conn_V2E_size_0, gt_conn_V2E_size_1],
+        dace.int32,
+        strides=[gt_conn_V2E_stride_0, gt_conn_V2E_stride_1],
+    )
+
+    for i, data in enumerate(["x", "y"]):
+        assert len(ir.params[i].type.dims) == len(sdfg.arrays[data].shape)
+
+    constant_symbols = dace_translation_stage.find_constant_symbols(
+        ir, sdfg, offset_provider_type=SKIP_VALUE_MESH.offset_provider_type
+    )
+    if has_unit_stride:
+        assert all(sym in sdfg.free_symbols for sym in constant_symbols.keys())
+        assert constant_symbols == {
+            "__x_stride_0": 1,
+            "__y_stride_0": 1,
+            "__gt_conn_V2E_stride_0": 1,
+        }
+    else:
+        assert len(constant_symbols) == 0
 
 
 def _is_present_async_sdfg_init_code(sdfg: dace.SDFG) -> bool:
@@ -83,9 +152,7 @@ def test_generate_sdfg_async_call(make_async_sdfg_call):
         body=[
             itir.SetAt(
                 expr=im.op_as_fieldop("plus")("x", 1.0),
-                domain=im.domain(
-                    gtx_common.GridType.CARTESIAN, ranges={ffront_test_utils.IDim: (0, "N")}
-                ),
+                domain=im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "N")}),
                 target=itir.SymRef(id="y"),
             ),
         ],
@@ -119,9 +186,7 @@ def test_generate_sdfg_async_call_no_map():
         body=[
             itir.SetAt(
                 expr=itir.SymRef(id="x"),
-                domain=im.domain(
-                    gtx_common.GridType.CARTESIAN, ranges={ffront_test_utils.IDim: (0, "N")}
-                ),
+                domain=im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "N")}),
                 target=itir.SymRef(id="y"),
             ),
         ],

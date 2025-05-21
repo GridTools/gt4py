@@ -29,7 +29,7 @@ from gt4py.next.program_processors.runners.dace import (
 from gt4py.next.type_system import type_specifications as ts
 
 
-def _find_constant_symbols(
+def find_constant_symbols(
     ir: itir.Program,
     sdfg: dace.SDFG,
     offset_provider_type: common.OffsetProviderType,
@@ -163,7 +163,7 @@ class DaCeTranslator(
                     if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
                     else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
                 )
-                constant_symbols = _find_constant_symbols(ir, sdfg, offset_provider_type)
+                constant_symbols = find_constant_symbols(ir, sdfg, offset_provider_type)
                 gtx_transformations.gt_auto_optimize(
                     sdfg,
                     gpu=on_gpu,
