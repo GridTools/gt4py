@@ -114,11 +114,11 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         with embedded_context.update(**new_context_kwargs):
             res = op(*args, **kwargs)
-            _tuple_assign_field(
-                out,
-                res,  # type: ignore[arg-type] # maybe can't be inferred properly because decorator.py is not properly typed yet
-                domain=out_domain,
-            )
+        _tuple_assign_field(
+            out,
+            res,  # type: ignore[arg-type] # maybe can't be inferred properly because decorator.py is not properly typed yet
+            domain=out_domain,
+        )
         return None
     else:
         # called from other field_operator or missing `out` argument
