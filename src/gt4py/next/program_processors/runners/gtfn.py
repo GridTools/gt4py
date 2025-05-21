@@ -76,7 +76,7 @@ def convert_args(
             metric_collection = metrics.active_metric_collection.get()
             assert metric_collection is not None
             value = exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"]
-            metric_collection.add_sample(metrics.STENCIL_METRIC, value)
+            metric_collection.add_sample(metrics.COMPUTE_METRIC, value)
 
     return decorated_program
 

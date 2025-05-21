@@ -41,9 +41,11 @@ def update(
 
     yield None
 
-    if closure_token is not None:
+    if closure_column_range is not eve.NOTHING:
+        assert closure_token is not None
         gtx_embedded.context.closure_column_range.reset(closure_token)
-    if offset_provider_token is not None:
+    if offset_provider is not eve.NOTHING:
+        assert offset_provider_token is not None
         gtx_embedded.context.offset_provider.reset(offset_provider_token)
 
 

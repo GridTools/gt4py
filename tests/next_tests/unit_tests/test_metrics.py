@@ -18,11 +18,11 @@ def sample_metrics():
     return metrics.MetricCollectionStore(
         {
             "program1": {
-                metrics.STENCIL_METRIC: metrics.Metric(samples=[1.0, 2.0, 3.0]),
+                metrics.COMPUTE_METRIC: metrics.Metric(samples=[1.0, 2.0, 3.0]),
                 metrics.TOTAL_METRIC: metrics.Metric(samples=[4.0, 5.0, 6.0]),
             },
             "program2": {
-                metrics.STENCIL_METRIC: metrics.Metric(samples=[10.0, 20.0, 30.0]),
+                metrics.COMPUTE_METRIC: metrics.Metric(samples=[10.0, 20.0, 30.0]),
                 metrics.TOTAL_METRIC: metrics.Metric(samples=[40.0, 50.0, 60.0]),
             },
         }
@@ -45,7 +45,7 @@ def test_dumps(sample_metrics):
         i += 1
     assert (
         lines[i].split()
-        == f"program {metrics.STENCIL_METRIC} +/- {metrics.TOTAL_METRIC} +/-".split()
+        == f"program {metrics.COMPUTE_METRIC} +/- {metrics.TOTAL_METRIC} +/-".split()
     )
     assert (
         lines[i + 1].split() == "program1 2.00000e+00 1.00000e+00 5.00000e+00 1.00000e+00".split()
@@ -85,7 +85,7 @@ def test_dump(sample_metrics, tmp_path):
         i += 1
     assert (
         lines[i].split()
-        == f"program {metrics.STENCIL_METRIC} +/- {metrics.TOTAL_METRIC} +/-".split()
+        == f"program {metrics.COMPUTE_METRIC} +/- {metrics.TOTAL_METRIC} +/-".split()
     )
     assert (
         lines[i + 1].split() == "program1 2.00000e+00 1.00000e+00 5.00000e+00 1.00000e+00".split()
@@ -108,14 +108,14 @@ def test_dumps_json(sample_metrics):
     assert "program2" in data
 
     # Check metric data for program1
-    assert metrics.STENCIL_METRIC in data["program1"]
-    assert data["program1"][metrics.STENCIL_METRIC] == [1.0, 2.0, 3.0]
+    assert metrics.COMPUTE_METRIC in data["program1"]
+    assert data["program1"][metrics.COMPUTE_METRIC] == [1.0, 2.0, 3.0]
     assert metrics.TOTAL_METRIC in data["program1"]
     assert data["program1"][metrics.TOTAL_METRIC] == [4.0, 5.0, 6.0]
 
     # Check metric data for program2
-    assert metrics.STENCIL_METRIC in data["program2"]
-    assert data["program2"][metrics.STENCIL_METRIC] == [10.0, 20.0, 30.0]
+    assert metrics.COMPUTE_METRIC in data["program2"]
+    assert data["program2"][metrics.COMPUTE_METRIC] == [10.0, 20.0, 30.0]
     assert metrics.TOTAL_METRIC in data["program2"]
     assert data["program2"][metrics.TOTAL_METRIC] == [40.0, 50.0, 60.0]
 
