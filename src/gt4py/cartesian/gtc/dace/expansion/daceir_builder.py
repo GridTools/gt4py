@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Union, cast
 
 import dace
@@ -38,97 +37,27 @@ if TYPE_CHECKING:
     from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 
 
-class AccessType(Enum):
-    READ = 0
-    WRITE = 1
-
-
-def _field_access_iterator(
-    code_block: oir.CodeBlock | oir.MaskStmt | oir.While, access_type: AccessType
-):
-    if access_type == AccessType.WRITE:
-        return (
-            code_block.walk_values()
-            .if_isinstance(oir.AssignStmt)
-            .getattr("left")
-            .if_isinstance(oir.FieldAccess)
-        )
-
-    def read_access_iterator():
-        for node in code_block.walk_values():
-            if isinstance(node, oir.AssignStmt):
-                yield from node.right.walk_values().if_isinstance(oir.FieldAccess)
-            elif isinstance(node, oir.While):
-                yield from node.cond.walk_values().if_isinstance(oir.FieldAccess)
-            elif isinstance(node, oir.MaskStmt):
-                yield from node.mask.walk_values().if_isinstance(oir.FieldAccess)
-
-    return read_access_iterator()
-
-
-def _mapped_access_iterator(
-    node: oir.CodeBlock | oir.MaskStmt | oir.While, access_type: AccessType
-):
-    iterator = _field_access_iterator(node, access_type)
-    write_access = access_type == AccessType.WRITE
-
-    yield from (
-        eve.utils.xiter(iterator).map(
-            lambda acc: (
-                acc.name,
-                acc.offset,
-                get_tasklet_symbol(acc.name, offset=acc.offset, is_target=write_access),
-            )
-        )
-    ).unique(key=lambda x: x[2])
-
-
-def _get_tasklet_inout_memlets(
-    node: oir.CodeBlock | oir.MaskStmt | oir.While,
-    access_type: AccessType,
+def _get_tasklet_memlets(
+    dcir_statements: list[dcir.Stmt],
     *,
     global_ctx: DaCeIRBuilder.GlobalContext,
     horizontal_extent,
     k_interval,
     grid_subset: dcir.GridSubset,
-    dcir_statements: list[dcir.Stmt],
-) -> list[dcir.Memlet]:
-    access_infos = compute_tasklet_access_infos(
-        node,
-        collect_read=access_type == AccessType.READ,
-        collect_write=access_type == AccessType.WRITE,
+) -> tuple[list[dcir.Memlet], list[dcir.Memlet]]:
+    read_access_info, write_access_info = compute_tasklet_access_infos(
+        dcir_statements,
         declarations=global_ctx.library_node.declarations,
         horizontal_extent=horizontal_extent,
         k_interval=k_interval,
         grid_subset=grid_subset,
     )
 
-    names = [
-        access.name
-        for statement in dcir_statements
-        for access in statement.walk_values().if_isinstance(dcir.ScalarAccess, dcir.IndexAccess)
-    ]
+    reads: list[dcir.Memlet] = []
+    for key, value in read_access_info.items():
+        connector_name = key
+        field_name, offset, access_info = value
 
-    memlets: list[dcir.Memlet] = []
-    for name, offset, tasklet_symbol in _mapped_access_iterator(node, access_type):
-        # Avoid adding extra inputs/outputs to the tasklet
-        if name not in access_infos:
-            continue
-
-        # Find `tasklet_symbol` in dcir_statements because we can't know (from the oir statements)
-        # where the tasklet boundaries will be. Consider
-        #
-        # with computation(PARALLEL), interval(...):
-        #   statement1
-        #   if condition:
-        #     statement2
-        #   statement3
-        #
-        # statements 1 and 3 will end up in the same CodeBlock but aren't in the same tasklet.
-        if tasklet_symbol not in names:
-            continue
-
-        access_info = access_infos[name]
         if not access_info.variable_offset_axes:
             offset_dict = offset.to_dict()
             for axis in access_info.axes():
@@ -136,16 +65,39 @@ def _get_tasklet_inout_memlets(
                     axis, extent=(offset_dict[axis.lower()], offset_dict[axis.lower()])
                 )
 
-        memlets.append(
+        reads.append(
             dcir.Memlet(
-                field=name,
-                connector=tasklet_symbol,
+                field=field_name,
+                connector=connector_name,
                 access_info=access_info,
-                is_read=access_type == AccessType.READ,
-                is_write=access_type == AccessType.WRITE,
+                is_read=True,
+                is_write=False,
             )
         )
-    return memlets
+
+    writes: list[dcir.Memlet] = []
+    for key, value in write_access_info.items():
+        connector_name = key
+        field_name, offset, access_info = value
+
+        if not access_info.variable_offset_axes:
+            offset_dict = offset.to_dict()
+            for axis in access_info.axes():
+                access_info = access_info.restricted_to_index(
+                    axis, extent=(offset_dict[axis.lower()], offset_dict[axis.lower()])
+                )
+
+        writes.append(
+            dcir.Memlet(
+                field=field_name,
+                connector=connector_name,
+                access_info=access_info,
+                is_read=False,
+                is_write=True,
+            )
+        )
+
+    return (reads, writes)
 
 
 def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval: Any) -> bool:
@@ -334,8 +286,12 @@ class DaCeIRBuilder(eve.NodeTranslator):
         node: oir.HorizontalRestriction,
         *,
         symbol_collector: DaCeIRBuilder.SymbolCollector,
+        horizontal_mask: common.HorizontalMask | None = None,
         **kwargs: Any,
     ) -> dcir.HorizontalRestriction:
+        if horizontal_mask is not None:
+            raise ValueError("Nested horizontal region detected.")
+
         for axis, interval in zip(dcir.Axis.dims_horizontal(), node.mask.intervals):
             for bound in (interval.start, interval.end):
                 if bound is not None:
@@ -348,7 +304,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             body=self.visit(
                 node.body,
                 symbol_collector=symbol_collector,
-                inside_horizontal_region=True,
+                horizontal_mask=node.mask,
                 **kwargs,
             ),
         )
@@ -393,7 +349,9 @@ class DaCeIRBuilder(eve.NodeTranslator):
         if node.name in var_offset_fields.union(K_write_with_offset):
             access_node = dcir.IndexAccess(
                 name=name,
+                field_name=node.name,
                 is_target=is_target,
+                oir_offset=node.offset,
                 offset=self.visit(
                     node.offset,
                     is_target=False,
@@ -415,6 +373,8 @@ class DaCeIRBuilder(eve.NodeTranslator):
         elif node.data_index:
             access_node = dcir.IndexAccess(
                 name=name,
+                field_name=node.name,
+                oir_offset=node.offset,
                 offset=None,
                 is_target=is_target,
                 data_index=self.visit(
@@ -430,7 +390,9 @@ class DaCeIRBuilder(eve.NodeTranslator):
         else:
             access_node = dcir.IndexAccess(
                 name=name,
+                field_name=node.name,
                 is_target=is_write,
+                oir_offset=node.offset,
                 offset=self.visit(
                     node.offset,
                     is_target=False,
@@ -531,26 +493,25 @@ class DaCeIRBuilder(eve.NodeTranslator):
             loc=node.loc,
         )
 
-        read_memlets: list[dcir.Memlet] = _get_tasklet_inout_memlets(
-            node,
-            AccessType.READ,
+        reads, writes = _get_tasklet_memlets(
+            [statement],
             global_ctx=global_ctx,
             horizontal_extent=horizontal_extent,
             k_interval=k_interval,
             grid_subset=iteration_ctx.grid_subset,
-            dcir_statements=[statement],
         )
+        assert len(writes) == 0
 
         tasklet = dcir.Tasklet(
             label=f"eval_{prefix}_{id(node)}",
             stmts=[statement],
-            read_memlets=read_memlets,
-            write_memlets=[],
+            read_memlets=reads,
+            write_memlets=writes,
         )
         # See notes inside the function
         self._fix_memlet_array_access(
             tasklet=tasklet,
-            memlets=read_memlets,
+            memlets=reads,
             global_context=global_ctx,
             symbol_collector=symbol_collector,
             targets=targets,
@@ -568,10 +529,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
         horizontal_extent,
         k_interval,
         targets: list[oir.FieldAccess | oir.ScalarAccess],
-        inside_horizontal_region: bool = False,
+        horizontal_mask: common.HorizontalMask | None = None,
         **kwargs: Any,
     ) -> dcir.MaskStmt | dcir.Condition:
-        if inside_horizontal_region:
+        if horizontal_mask is not None:
             # inside horizontal regions, we use old-style mask statements that
             # might translate to if statements inside the tasklet
             return dcir.MaskStmt(
@@ -583,7 +544,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     symbol_collector=symbol_collector,
                     horizontal_extent=horizontal_extent,
                     k_interval=k_interval,
-                    inside_horizontal_region=inside_horizontal_region,
+                    horizontal_mask=horizontal_mask,
                     targets=targets,
                     **kwargs,
                 ),
@@ -594,7 +555,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     symbol_collector=symbol_collector,
                     horizontal_extent=horizontal_extent,
                     k_interval=k_interval,
-                    inside_horizontal_region=inside_horizontal_region,
+                    horizontal_mask=horizontal_mask,
                     targets=targets,
                     **kwargs,
                 ),
@@ -632,10 +593,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
         horizontal_extent,
         k_interval,
         targets: list[oir.FieldAccess | oir.ScalarAccess],
-        inside_horizontal_region: bool = False,
+        horizontal_mask: common.HorizontalMask | None = None,
         **kwargs: Any,
     ) -> dcir.While | dcir.WhileLoop:
-        if inside_horizontal_region:
+        if horizontal_mask is not None:
             # inside horizontal regions, we use old-style while statements that
             # might translate to while statements inside the tasklet
             return dcir.While(
@@ -647,7 +608,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     symbol_collector=symbol_collector,
                     horizontal_extent=horizontal_extent,
                     k_interval=k_interval,
-                    inside_horizontal_region=inside_horizontal_region,
+                    horizontal_mask=horizontal_mask,
                     targets=targets,
                     **kwargs,
                 ),
@@ -658,7 +619,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     symbol_collector=symbol_collector,
                     horizontal_extent=horizontal_extent,
                     k_interval=k_interval,
-                    inside_horizontal_region=inside_horizontal_region,
+                    horizontal_mask=horizontal_mask,
                     targets=targets,
                     **kwargs,
                 ),
@@ -812,34 +773,23 @@ class DaCeIRBuilder(eve.NodeTranslator):
 
             last_statement = index == len(statements) - 1
             if (is_control_flow or last_statement) and len(current_block) > 0:
-                read_memlets: list[dcir.Memlet] = _get_tasklet_inout_memlets(
-                    node,
-                    AccessType.READ,
+                reads, writes = _get_tasklet_memlets(
+                    current_block,
                     global_ctx=global_ctx,
                     horizontal_extent=horizontal_extent,
                     k_interval=k_interval,
                     grid_subset=iteration_ctx.grid_subset,
-                    dcir_statements=current_block,
-                )
-                write_memlets: list[dcir.Memlet] = _get_tasklet_inout_memlets(
-                    node,
-                    AccessType.WRITE,
-                    global_ctx=global_ctx,
-                    horizontal_extent=horizontal_extent,
-                    k_interval=k_interval,
-                    grid_subset=iteration_ctx.grid_subset,
-                    dcir_statements=current_block,
                 )
                 tasklet = dcir.Tasklet(
                     label=node.label,
                     stmts=current_block,
-                    read_memlets=read_memlets,
-                    write_memlets=write_memlets,
+                    read_memlets=reads,
+                    write_memlets=writes,
                 )
                 # See notes inside the function
                 self._fix_memlet_array_access(
                     tasklet=tasklet,
-                    memlets=[*read_memlets, *write_memlets],
+                    memlets=[*reads, *writes],
                     global_context=global_ctx,
                     symbol_collector=symbol_collector,
                     targets=targets,
