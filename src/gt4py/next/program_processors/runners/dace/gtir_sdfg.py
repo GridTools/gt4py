@@ -223,6 +223,65 @@ def _make_access_index_for_field(
         return dace.subsets.Range.from_string("0")
 
 
+def _map_args_to_symbols_on_nested_sdfg(
+    parent_sdfg: dace.SDFG,
+    nested_sdfg: dace.SDFG,
+    nested_sdfg_symbols: set[str],
+    args_mapping: dict[str, gtir_builtin_translators.FieldopData],
+) -> dict[str, dace.Memlet]:
+    """Map scalar data descriptors to a symbols on a nested SDFG.
+
+    This is done by adding a new global scalar and connector on the nested SDFG
+    for each symbol, and by making an inter-state assignment inside the nested SDFG,
+    on the start state, to initializes the symbol with the scalar value.
+    TODO: Investigate alternative data representation to prevent this to happen
+    in the lowering.
+
+    Args:
+        parent_sdfg: The parent SDFG where to add the nested SDFG.
+        nested_sdfg: The SDFG to add as a `NestedSDFG` node.
+        nested_sdfg_symbols: The symbols to be mapped to data descriptors in the parent SDFG.
+        args_mapping: Mapping from nested SDFG inputs (either connectors or symbols)
+            to data in the parent SDFG.
+
+    Returns:
+        Mapping from data connectors on the nested SDFG to memlets that read the
+        input data in the parent SDFG.
+        Observe that the dictionary `args_mapping` is updated as a side effect
+        of creating new connectors on the nested SDFG.
+    """
+    if len(nested_sdfg_symbols) == 0:
+        return {}
+    warnings.warn(
+        "SDFG WITH POSSIBLE PERFORMANCE DEGRADATION: Mapping a scalar data descriptor "
+        + "to a symbol on a nested SDFG by means of an InterState edge assignment.",
+        stacklevel=2,
+    )
+
+    # We create a new start state to allow initializing the symbol
+    # on the first inter-state edge.
+    start_state = nested_sdfg.start_block
+    assert isinstance(start_state, dace.SDFGState)
+    nested_sdfg_init_state = nested_sdfg.add_state_before(start_state)
+
+    input_memlets = {}
+    for sym_id in nested_sdfg_symbols:
+        source_data_node = args_mapping[sym_id].dc_node
+        source_data_desc = source_data_node.desc(parent_sdfg)
+        assert isinstance(source_data_desc, dace.data.Scalar)
+        # Here we add a new global scalar and connector on the nested SDFG
+        conn, _ = nested_sdfg.add_scalar(f"__gtx_{sym_id}", source_data_desc.dtype)
+        input_memlets[conn] = dace.Memlet(data=source_data_node.data, subset="0")
+        # We assign the global scalar value to the symbol
+        nested_sdfg.out_edges(nested_sdfg_init_state)[0].data.assignments[sym_id] = conn
+        # Now we remove the old argument mapping, and add an entry
+        # for the newly created connector.
+        arg_node = args_mapping.pop(sym_id)
+        args_mapping[conn] = arg_node
+
+    return input_memlets
+
+
 @dataclasses.dataclass(frozen=True)
 class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
@@ -849,39 +908,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # map free symbols to parent SDFG
         nsdfg_symbols_mapping = {}
-        nsdfg_init_state: Optional[dace.SDFGState] = None
+        nsdfg_symbols_to_args = set()
         for sym in nsdfg.free_symbols:
             if (sym_id := str(sym)) in lambda_arg_nodes:
-                # Map a scalar container to a symbol on the nested SDFG.
-                # TODO: Investigate alternative data representation to prevent this to happen in the lowering.
-                warnings.warn(
-                    "SDFG WITH POSSIBLE PERFORMANCE DEGRADATION: Mapping a scalar data descriptor "
-                    + "to a symbol on a nested SDFG by means of an InterState edge assignment.",
-                    stacklevel=2,
-                )
-                # This is done by adding a new global scalar and connector on the nested SDFG
-                # and by making an inter-state assignment inside the nested SDFG, on the start
-                # state, that initializes the symbol with the scalar value.
-                source_data_node = lambda_arg_nodes[sym_id].dc_node
-                source_data_desc = source_data_node.desc(sdfg)
-                assert isinstance(source_data_desc, dace.data.Scalar)
-                # Here we add a new global scalar and connector on the nested SDFG
-                conn, _ = nsdfg.add_scalar(f"__gtx_{sym_id}", source_data_desc.dtype)
-                input_memlets[conn] = dace.Memlet(data=source_data_node.data, subset="0")
-                if nsdfg_init_state is None:
-                    # We create a new start state to allow initializing the symbol
-                    # on the first inter-state edge.
-                    start_state = nsdfg.start_block
-                    assert isinstance(start_state, dace.SDFGState)
-                    nsdfg_init_state = nsdfg.add_state_before(start_state)
-                # We assign the global scalar value to the symbol
-                nsdfg.out_edges(nsdfg_init_state)[0].data.assignments[sym_id] = conn
-                # Now we remove the old argument mapping, and add an entry
-                # for the newly created connector.
-                arg_node = lambda_arg_nodes.pop(sym_id)
-                lambda_arg_nodes[conn] = arg_node
+                # Map a scalar data descriptor to a symbol on the nested SDFG.
+                nsdfg_symbols_to_args.add(sym_id)
             else:
                 nsdfg_symbols_mapping[sym_id] = sym
+        input_memlets |= _map_args_to_symbols_on_nested_sdfg(
+            sdfg, nsdfg, nsdfg_symbols_to_args, lambda_arg_nodes
+        )
         for sym, arg in zip(node.params, args, strict=True):
             nsdfg_symbols_mapping |= gtir_builtin_translators.get_arg_symbol_mapping(
                 sym.id, arg, sdfg
