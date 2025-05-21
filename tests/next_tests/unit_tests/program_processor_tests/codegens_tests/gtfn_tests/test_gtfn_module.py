@@ -166,6 +166,10 @@ def test_gtfn_file_cache(program_example):
 
 # TODO(egparedes): we should switch to use the cached backend by default and then remove this test
 def test_gtfn_file_cache_whole_workflow(cartesian_case_no_backend):
+    import gt4py.next.embedded.context as gtx_context
+
+    assert gtx_context.within_valid_context() is False
+
     cartesian_case = cartesian_case_no_backend
     cartesian_case.backend = gtfn.GTFNBackendFactory(
         gpu=False, cached=True, otf_workflow__cached_translation=True
@@ -174,6 +178,7 @@ def test_gtfn_file_cache_whole_workflow(cartesian_case_no_backend):
 
     assert cartesian_case.backend is not None
     assert cartesian_case.allocator is not None
+    cartesian_case.backend = None
 
     @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:
