@@ -151,6 +151,15 @@ class While(common.While[Stmt, Expr], Stmt):
             raise ValueError(f"Illegal write and read with horizontal offset detected for {names}.")
 
 
+class ForIndex(common.ForIndex, Expr):
+    kind: common.ExprKind = common.ExprKind.SCALAR
+    dtype: common.DataType = common.DataType.INT64
+
+
+class For(common.For[Stmt], Stmt):
+    pass
+
+
 class UnaryOp(common.UnaryOp[Expr], Expr):
     pass
 
