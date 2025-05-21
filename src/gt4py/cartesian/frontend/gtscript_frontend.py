@@ -745,6 +745,7 @@ class IRMaker(ast.NodeVisitor):
         )
 
         self.backend_name = backend_name
+        self.stencil_name: str | None = None
         self.fields = fields
         self.parameters = parameters
         self.local_symbols = local_symbols
@@ -1638,10 +1639,8 @@ class IRMaker(ast.NodeVisitor):
         return self.visit_Assign(assignment)
 
     def visit_With(self, node: ast.With):
-        loc = nodes.Location.from_ast_node(node)
-        syntax_error = GTScriptSyntaxError(
-            f"Invalid 'with' statement at line {loc.line} (column {loc.column})", loc=loc
-        )
+        loc = nodes.Location.from_ast_node(node, scope=self.stencil_name)
+        error_message = f"Invalid 'with' statement in '{loc.scope}' at line {loc.line} (column {loc.column})"
 
         if (
             len(node.items) == 1
@@ -1649,7 +1648,8 @@ class IRMaker(ast.NodeVisitor):
             and node.items[0].context_expr.func.id == "horizontal"
         ):
             if any(isinstance(child_node, ast.With) for child_node in node.body):
-                raise GTScriptSyntaxError("Cannot nest `with` node inside horizontal region")
+                details = "Cannot nest `with` node inside a horizontal region."
+                raise GTScriptSyntaxError(f"{error_message}: {details}")
 
             self.parsing_horizontal_region = True
             intervals_dicts = self._visit_with_horizontal(node.items[0], loc)
@@ -1663,10 +1663,8 @@ class IRMaker(ast.NodeVisitor):
             names = _find_accesses_with_offsets(body_block)
             written_then_offset = names.intersection(self.written_vars)
             if written_then_offset:
-                raise GTScriptSyntaxError(
-                    "The following variables are"
-                    f"written before being referenced with an offset in a horizontal region: {', '.join(written_then_offset)}"
-                )
+                details = f"The following variables are written before being referenced with an offset in a horizontal region: {', '.join(written_then_offset)}"
+                raise GTScriptSyntaxError(f"{error_message} {details}")
             stmts.extend(
                 [
                     nodes.HorizontalIf(intervals=intervals_dict, body=body_block)
@@ -1674,57 +1672,55 @@ class IRMaker(ast.NodeVisitor):
                 ]
             )
             return stmts
-        else:
-            # If we find nested `with` blocks flatten them, i.e. transform
-            #  with computation(PARALLEL):
-            #   with interval(...):
-            #     ...
-            # into
-            #  with computation(PARALLEL), interval(...):
-            #    ...
-            # otherwise just parse the node
-            if self.parsing_context == ParsingContext.CONTROL_FLOW and all(
-                isinstance(child_node, ast.With)
-                and child_node.items[0].context_expr.func.id == "interval"
-                for child_node in node.body
+
+        # If we find nested `with` blocks flatten them, i.e. transform
+        #  with computation(PARALLEL):
+        #   with interval(...):
+        #     ...
+        # into
+        #  with computation(PARALLEL), interval(...):
+        #    ...
+        # otherwise just parse the node
+        if self.parsing_context == ParsingContext.CONTROL_FLOW and all(
+            isinstance(child_node, ast.With)
+            and child_node.items[0].context_expr.func.id == "interval"
+            for child_node in node.body
+        ):
+            # Ensure top level `with` specifies the iteration order
+            if not any(
+                with_item.context_expr.func.id == "computation"
+                for with_item in node.items
+                if isinstance(with_item.context_expr, ast.Call)
             ):
-                # Ensure top level `with` specifies the iteration order
-                if not any(
-                    with_item.context_expr.func.id == "computation"
-                    for with_item in node.items
-                    if isinstance(with_item.context_expr, ast.Call)
-                ):
-                    raise syntax_error
+                raise GTScriptSyntaxError(f"{error_message}.")
 
-                # Parse nested `with` blocks
-                compute_blocks = []
-                for with_node in node.body:
-                    with_node = copy.deepcopy(with_node)  # Copy to avoid altering original ast
-                    # Splice `withItems` of current/primary with statement into nested with
-                    with_node.items.extend(node.items)
+            # Parse nested `with` blocks
+            compute_blocks = []
+            for with_node in node.body:
+                with_node = copy.deepcopy(with_node)  # Copy to avoid altering original ast
+                # Splice `withItems` of current/primary with statement into nested with
+                with_node.items.extend(node.items)
 
-                    compute_blocks.append(self._visit_computation_node(with_node))
+                compute_blocks.append(self._visit_computation_node(with_node))
 
-                # Validate block specification order
-                #  the nested computation blocks must be specified in their order of execution. The order of execution is
-                #  such that the lowest (highest) interval is processed first if the iteration order is forward (backward).
-                if not self._are_blocks_sorted(compute_blocks):
-                    raise GTScriptSyntaxError(
-                        f"Invalid 'with' statement at line {loc.line} (column {loc.column}). Intervals must be specified in order of execution."
-                    )
-                if not self._are_intervals_nonoverlapping(compute_blocks):
-                    raise GTScriptSyntaxError(
-                        f"Overlapping intervals detected at line {loc.line} (column {loc.column})"
-                    )
+            # Validate block specification order
+            #  the nested computation blocks must be specified in their order of execution. The order of execution is
+            #  such that the lowest (highest) interval is processed first if the iteration order is forward (backward).
+            if not self._are_blocks_sorted(compute_blocks):
+                raise GTScriptSyntaxError(f"{error_message}: Intervals must be specified in order of execution.")
+            
+            if not self._are_intervals_nonoverlapping(compute_blocks):
+                raise GTScriptSyntaxError(f"{error_message}: Overlapping intervals detected.")
 
-                return compute_blocks
-            elif self.parsing_context == ParsingContext.CONTROL_FLOW:
-                return gt_utils.listify(self._visit_computation_node(node))
-            else:
-                # Mixing nested `with` blocks with stmts not allowed
-                raise syntax_error
+            return compute_blocks
+        
+        if self.parsing_context == ParsingContext.CONTROL_FLOW:
+            return gt_utils.listify(self._visit_computation_node(node))
+        
+        raise GTScriptSyntaxError(f"{error_message}: Mixing nested `with` blocks and statements is not allowed.")
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> List[nodes.ComputationBlock]:
+        self.stencil_name = node.name
         blocks = []
         for stmt in filter(lambda s: not isinstance(s, ast.AnnAssign), node.body):
             blocks.extend(self.visit(stmt))
