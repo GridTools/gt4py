@@ -100,7 +100,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             temp = temp_decls[accessor_ref.name]
             data_index = "+".join(
                 [
-                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i+1:], initial=1))}"
+                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i + 1 :], initial=1))}"
                     for i, index in enumerate(accessor_ref.data_index)
                 ]
             )
@@ -251,6 +251,14 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     )
 
     While = as_mako("while(${cond}) {${''.join(body)}}")
+
+    ForIndex = as_mako("${name}")
+    For = as_mako(
+        "for(std::size_t ${_this_node.index.name}=${iter_start}; "
+        "${_this_node.index.name}${'<' if _this_node.iter_step > 0 else '>'}${iter_stop}; "
+        "${_this_node.index.name}+=(${iter_step})) "
+        "{${''.join(body)}}"
+    )
 
     BlockStmt = as_mako("{${''.join(body)}}")
 
