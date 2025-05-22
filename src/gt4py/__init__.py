@@ -8,7 +8,7 @@
 
 """Python library for generating high-performance implementations of stencil kernels for weather and climate modeling.
 
-The library carries to implementations available as submodule imports:
+The library carries two implementations available as submodule imports:
     - `gt4py.cartesian` is a cartesian grid restricted,
     - `gt4py.next` supports structured and unstructured grid.
 """
