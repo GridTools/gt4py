@@ -24,7 +24,7 @@ from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo, make_dace_subset
 
 def _node_name_from_connector(connector: str) -> str:
     if not connector.startswith(prefix.TASKLET_IN) and not connector.startswith(prefix.TASKLET_OUT):
-        raise NameError(
+        raise ValueError(
             f"Connector {connector} doesn't follow the in ({prefix.TASKLET_IN}) or out ({prefix.TASKLET_OUT}) prefix rule"
         )
     return connector.removeprefix(prefix.TASKLET_OUT).removeprefix(prefix.TASKLET_IN)
