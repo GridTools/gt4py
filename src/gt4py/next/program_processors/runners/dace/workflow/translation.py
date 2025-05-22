@@ -13,7 +13,6 @@ from typing import Optional
 
 import dace
 import factory
-from dace.codegen.targets import cpp as dace_codegen_cpp
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
@@ -63,15 +62,15 @@ def find_constant_symbols(
 
 def make_sdfg_async(sdfg: dace.SDFG) -> None:
     """Make an SDFG call immediatly return, without waiting for execution to complete.
-    This allows to run the SDFG asynchronously, thus letting gpu kernel execution
+    This allows to run the SDFG asynchronously, thus letting GPU kernel execution
     to overlap with host python code.
 
     The asynchronous call is implemented by the following changes to SDFG:
 
     - Set all cuda streams to the default stream. This allows to serialize all
-      kernels on one gpu queue, avoiding synchronization between different cuda
+      kernels on one GPU queue, avoiding synchronization between different cuda
       streams. Besides, device-to-host copies are performed on the default cuda
-      stream, which allows to synchronize the last gpu kernel on the host side.
+      stream, which allows to synchronize the last GPU kernel on the host side.
 
     - Set `nosync=True` on the states of the top-level SDFG. This flag is used
       by dace codegen to skip emission of `cudaStreamSynchronize()` at the end
@@ -89,33 +88,32 @@ def make_sdfg_async(sdfg: dace.SDFG) -> None:
         # The async execution mode requires CUDA, therefore it is only available on GPU
         return
 
-    # Emit cpp code for the SDFG to set the cuda streams
-    dace_state_type_name = dace_codegen_cpp.mangle_dace_state_struct_name(sdfg)
-    sdfg.append_global_code(f"""\
-DACE_EXPORTED bool __dace_gpu_set_stream({dace_state_type_name} *__state, int streamid, gpuStream_t stream);\
-""")
-    sdfg.append_init_code("""\
-for (int i = 0; i < __state->gpu_context->num_streams; i++)
-    __dace_gpu_set_stream(__state, i, cudaStreamDefault);\
-""")
-
     # Loop over all states in the top-level SDFG
+    is_nosync_used = False
     for state in sdfg.states():
         for oedge in sdfg.out_edges(state):
-            # we collect the data descriptors accessed on an InterState edge in assignment or condition expression
-            data_desc = set(sdfg.arrays.keys()).intersection(
-                oedge.data.condition.get_free_symbols()
-                | {
-                    str(sym)
-                    for v in oedge.data.assignments.values()
-                    for sym in dace.symbolic.pystr_to_symbolic(v).free_symbols
-                }
-            )
-            if len(data_desc) > 0:
+            # We check whether the expressions on an InterState edge (symbols assignment
+            # and condition for state transition) do access any data descriptor.
+            # If so, we break the loop and leave the default `state.nosync=False`.
+            if any(
+                sym_id in sdfg.arrays for sym_id in oedge.data.condition.get_free_symbols()
+            ) or any(
+                str(sym) in sdfg.arrays
+                for v in oedge.data.assignments.values()
+                for sym in dace.symbolic.pystr_to_symbolic(v).free_symbols
+            ):
                 break
         else:
-            # no data descriptor is accessed on InterState edge, we can make the state async
+            # No data descriptor is accessed on the InterState edge, we make the state async.
             state.nosync = True
+            is_nosync_used = True
+
+    if is_nosync_used:
+        # Emit cuda code for the SDFG to use only the default cuda stream.
+        # This allows to serialize all kernels on one GPU queue.
+        sdfg.append_init_code(
+            "__dace_gpu_set_all_streams(__state, cudaStreamDefault);", location="cuda"
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -176,7 +174,7 @@ class DaCeTranslator(
                     blocking_size=self.blocking_size,
                 )
             elif on_gpu:
-                # We run simplify to bring the SDFG into a canonical form that the gpu transformations
+                # We run simplify to bring the SDFG into a canonical form that the GPU transformations
                 # can handle. This is a workaround for an issue with scalar expressions that are
                 # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
                 # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
