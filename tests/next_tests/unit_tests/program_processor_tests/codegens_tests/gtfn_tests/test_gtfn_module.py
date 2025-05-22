@@ -168,6 +168,9 @@ def test_gtfn_file_cache(program_example):
 def test_gtfn_file_cache_whole_workflow(cartesian_case_no_backend):
     import gt4py.next.embedded.context as gtx_context
 
+    if gtx_context.within_valid_context():
+        print(f"{gtx_context.get_closure_column_range()=}")
+        print(f"{gtx_context.get_offset_provider()=}")
     assert gtx_context.within_valid_context() is False
 
     cartesian_case = cartesian_case_no_backend

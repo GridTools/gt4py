@@ -27,10 +27,9 @@ _offset_provider: contextvars.ContextVar[common.OffsetProvider] = contextvars.Co
 )
 
 
-_T = TypeVar("_T")
-
-
 _NO_DEFAULT_SENTINEL: Any = object()
+
+_T = TypeVar("_T")
 
 
 @overload

@@ -27,7 +27,7 @@ def test_column_ufunc():
         assert np.array_equal(res.data, a.data + b.data)
         assert res.kstart == 1
 
-    with embedded_context.update(offset_provider={}):
+    with embedded_context.update(offset_provider={}, closure_column_range="SOMETHING"):
         test_func()
 
     def test_func(data_a: int, data_b: int):
@@ -59,7 +59,7 @@ def test_column_ufunc_with_scalar():
         assert np.array_equal(res.data, a.data + 1.0)
         assert res.kstart == 1
 
-    with embedded_context.update(offset_provider={}):
+    with embedded_context.update(offset_provider={}, closure_column_range="SOMETHING"):
         test_func()
 
 
@@ -71,7 +71,7 @@ def test_column_ufunc_wrong_kstart():
         with pytest.raises(ValueError):
             a + wrong_kstart
 
-    with embedded_context.update(offset_provider={}):
+    with embedded_context.update(offset_provider={}, closure_column_range="SOMETHING"):
         test_func()
 
 
@@ -83,7 +83,7 @@ def test_column_ufunc_wrong_shape():
         with pytest.raises(ValueError):
             a + wrong_shape
 
-    with embedded_context.update(offset_provider={}):
+    with embedded_context.update(offset_provider={}, closure_column_range="SOMETHING"):
         test_func()
 
 
@@ -100,7 +100,7 @@ def test_column_array_function():
         assert np.array_equal(res.data, ref)
         assert res.kstart == 1
 
-    with embedded_context.update(offset_provider={}):
+    with embedded_context.update(offset_provider={}, closure_column_range="SOMETHING"):
         test_func()
 
 
@@ -117,7 +117,7 @@ def test_column_array_function_with_scalar():
         assert np.array_equal(res.data, ref)
         assert res.kstart == 1
 
-    with embedded_context.update(offset_provider={}):
+    with embedded_context.update(offset_provider={}, closure_column_range="SOMETHING"):
         test_func()
 
 
@@ -130,7 +130,7 @@ def test_column_array_function_wrong_kstart():
         with pytest.raises(ValueError):
             np.where(cond, wrong_kstart, b)
 
-    with embedded_context.update(offset_provider={}):
+    with embedded_context.update(offset_provider={}, closure_column_range="SOMETHING"):
         test_func()
 
 
@@ -143,5 +143,5 @@ def test_column_array_function_wrong_shape():
         with pytest.raises(ValueError):
             np.where(cond, wrong_shape, b)
 
-    with embedded_context.update(offset_provider={}):
+    with embedded_context.update(offset_provider={}, closure_column_range="SOMETHING"):
         test_func()
