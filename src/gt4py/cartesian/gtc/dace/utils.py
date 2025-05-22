@@ -350,42 +350,54 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
     @dataclass
     class Context:
         axes: dict[str, list[dcir.Axis]]
-        access_infos: dict[str, dcir.FieldAccessInfo] = field(default_factory=dict)
+        # dict of "input" / "output"
+        # -> [dict of tasklet_name -> (field_name, offset, FieldAccessInfo)]
+        access_infos: dict[str, dict[str, tuple[str, Any, dcir.FieldAccessInfo]]]
 
     def __init__(
-        self, collect_read: bool, collect_write: bool, *, horizontal_extent, k_interval, grid_subset
+        self,
+        *,
+        horizontal_extent,
+        k_interval,
+        grid_subset,
     ):
-        self.collect_read: bool = collect_read
-        self.collect_write: bool = collect_write
-
         self.ij_grid = dcir.GridSubset.from_gt4py_extent(horizontal_extent)
         self.he_grid = self.ij_grid.set_interval(dcir.Axis.K, k_interval)
         self.grid_subset = grid_subset
 
-    def visit_CodeBlock(self, _node: oir.CodeBlock, **_kwargs):
-        raise RuntimeError("We shouldn't reach code blocks anymore")
+        self.horizontal_mask = None
 
-    def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
-        self.visit(node.right, is_write=False, **kwargs)
-        self.visit(node.left, is_write=True, **kwargs)
+    def visit_AssignStmt(self, node: dcir.AssignStmt, **kwargs: Any) -> None:
+        self.visit(node.right, is_read=True, **kwargs)
+        self.visit(node.left, is_read=False, **kwargs)
 
-    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs):
-        self.visit(node.mask, is_write=False, **kwargs)
+    def visit_MaskStmt(self, node: dcir.MaskStmt, **kwargs: Any) -> None:
+        self.visit(node.mask, is_read=True, **kwargs)
         self.visit(node.body, **kwargs)
 
-    def visit_While(self, node: oir.While, **kwargs):
-        self.visit(node.cond, is_write=False, **kwargs)
+    def visit_While(self, node: dcir.While, **kwargs: Any) -> None:
+        self.visit(node.cond, is_read=True, **kwargs)
         self.visit(node.body, **kwargs)
 
-    def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs):
-        self.visit(node.mask, is_write=False, **kwargs)
-        self.visit(node.body, region=node.mask, **kwargs)
+    def visit_HorizontalRestriction(self, node: dcir.HorizontalRestriction, **kwargs: Any) -> None:
+        # Set horizontal mask for the body of this HorizontalRestriction
+        self.horizontal_mask = node.mask
+
+        # Let the visitor do its job
+        self.visit(node.body, **kwargs)
+
+        # Reset horizontal mask for other statements that might follow
+        self.horizontal_mask = None
+
+    def visit_Condition(self, node: dcir.Condition, **kwargs: Any) -> None:
+        raise ValueError("We shouldn't end of up a Condition. DaCe IR error.")
+
+    def visit_WhileLoop(self, node: dcir.WhileLoop, **kwargs: Any) -> None:
+        raise ValueError("We shouldn't end of in a WhileLoop. DaCe IR error.")
 
     def _global_grid_subset(
-        self,
-        region: Optional[common.HorizontalMask],
-        offset: list[Optional[int]],
-    ):
+        self, region: common.HorizontalMask | None, offset: list[int | None]
+    ) -> dcir.GridSubset:
         res: dict[dcir.Axis, dcir.DomainInterval | dcir.IndexWithExtent | dcir.TileInterval] = {}
         if region is not None:
             for axis, oir_interval in zip(dcir.Axis.dims_horizontal(), region.intervals):
@@ -414,16 +426,13 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
         return dcir.GridSubset(intervals=res)
 
     def _make_access_info(
-        self,
-        offset_node: CartesianOffset | VariableKOffset,
-        axes,
-        region: Optional[common.HorizontalMask],
+        self, offset_node: CartesianOffset | VariableKOffset, axes
     ) -> dcir.FieldAccessInfo:
         # Check we have expression offsets in K
         offset = [offset_node.to_dict()[k] for k in "ijk"]
         variable_offset_axes = [dcir.Axis.K] if isinstance(offset_node, VariableKOffset) else []
 
-        global_subset = self._global_grid_subset(region, offset)
+        global_subset = self._global_grid_subset(self.horizontal_mask, offset)
         intervals = {}
         for axis in axes:
             extent = (
@@ -439,39 +448,43 @@ class TaskletAccessInfoCollector(eve.NodeVisitor):
             grid_subset=dcir.GridSubset(intervals=intervals),
             global_grid_subset=global_subset,
             # Field access inside horizontal regions might or might not happen
-            dynamic_access=region is not None,
+            dynamic_access=self.horizontal_mask is not None,
             variable_offset_axes=variable_offset_axes,
         )
 
     def visit_FieldAccess(
         self,
-        node: oir.FieldAccess,
+        node: dcir.IndexAccess,
         *,
-        is_write: bool,
-        region: Optional[common.HorizontalMask] = None,
+        is_read: bool,
         ctx: TaskletAccessInfoCollector.Context,
         **kwargs,
-    ):
-        self.visit(node.offset, ctx=ctx, is_write=False, region=region, **kwargs)
+    ) -> None:
+        self.visit(node.offset, ctx=ctx, is_read=True, **kwargs)
 
-        if (is_write and not self.collect_write) or (not is_write and not self.collect_read):
+        inputs = ctx.access_infos["input"]
+        outputs = ctx.access_infos["output"]
+
+        if is_read:
+            #  read after write     or read after read
+            if node.name in outputs or node.name in inputs:
+                return
+
+            access_info = self._make_access_info(node.oir_offset, axes=ctx.axes[node.field_name])
+            inputs[node.name] = (node.field_name, node.oir_offset, access_info)
             return
 
-        access_info = self._make_access_info(
-            node.offset,
-            axes=ctx.axes[node.name],
-            region=region,
-        )
-        ctx.access_infos[node.name] = access_info.union(
-            ctx.access_infos.get(node.name, access_info)
-        )
+        # write after write
+        if node.name in outputs:
+            return
+
+        access_info = self._make_access_info(node.oir_offset, axes=ctx.axes[node.field_name])
+        outputs[node.name] = (node.field_name, node.oir_offset, access_info)
 
 
 def compute_tasklet_access_infos(
-    node: oir.CodeBlock | oir.MaskStmt | oir.While,
+    statements: list[dcir.Stmt],
     *,
-    collect_read: bool = True,
-    collect_write: bool = True,
     declarations: dict[str, oir.Decl],
     horizontal_extent,
     k_interval,
@@ -486,28 +499,20 @@ def compute_tasklet_access_infos(
         for name, declaration in declarations.items()
         if isinstance(declaration, oir.FieldDecl)
     }
-    ctx = TaskletAccessInfoCollector.Context(axes=axes, access_infos=dict())
+    access_infos: dict[str, dict] = {
+        "input": dict(),
+        "output": dict(),
+    }
+    ctx = TaskletAccessInfoCollector.Context(axes=axes, access_infos=access_infos)
     collector = TaskletAccessInfoCollector(
-        collect_read=collect_read,
-        collect_write=collect_write,
         horizontal_extent=horizontal_extent,
         k_interval=k_interval,
         grid_subset=grid_subset,
     )
-    if isinstance(node, oir.CodeBlock):
-        collector.visit(node.body, ctx=ctx)
-    elif isinstance(node, oir.MaskStmt):
-        # node.mask is a simple expression.
-        # Pass `is_write` explicitly since we don't automatically set it in `visit_AssignStmt()`
-        collector.visit(node.mask, ctx=ctx, is_write=False)
-    elif isinstance(node, oir.While):
-        # node.cond is a simple expression.
-        # Pass `is_write` explicitly since we don't automatically set it in `visit_AssignStmt()`
-        collector.visit(node.cond, ctx=ctx, is_write=False)
-    else:
-        raise ValueError("Unexpected node type.")
+    for node in statements:
+        collector.visit(node, ctx=ctx)
 
-    return ctx.access_infos
+    return (ctx.access_infos["input"], ctx.access_infos["output"])
 
 
 def make_dace_subset(
