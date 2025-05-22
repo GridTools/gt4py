@@ -63,35 +63,36 @@ class AssertionChecker(ast.NodeTransformer):
         self.source = source
 
     def _process_assertion(self, expr_node: ast.Expr) -> None:
-        condition_value = gt_meta.ast_eval(expr_node, self.context, default=gt_utils.NOTHING)
-        if condition_value is not gt_utils.NOTHING:
-            if not condition_value:
-                source_lines = textwrap.dedent(self.source).split("\n")
-                loc = nodes.Location.from_ast_node(expr_node)
-                raise GTScriptAssertionError(source_lines[loc.line - 1], loc=loc)
-        else:
+        condition_value = gt_utils.meta.ast_eval(expr_node, self.context, default=gt_utils.NOTHING)
+        if condition_value is gt_utils.NOTHING:
             raise GTScriptSyntaxError(
                 "Evaluation of compile_assert condition failed at the preprocessing step."
             )
+
+        if not condition_value:
+            source_lines = textwrap.dedent(self.source).split("\n")
+            loc = nodes.Location.from_ast_node(expr_node)
+            raise GTScriptAssertionError(source_lines[loc.line - 1], loc=loc)
+
         return None
 
     def _process_call(self, node: ast.Call) -> Optional[ast.Call]:
         name = gt_meta.get_qualified_name_from_node(node.func)
         if name != "compile_assert":
             return node
-        else:
-            if len(node.args) != 1:
-                raise GTScriptSyntaxError(
-                    "Invalid assertion. Correct syntax: compile_assert(condition)"
-                )
-            return self._process_assertion(node.args[0])
+
+        if len(node.args) != 1:
+            raise GTScriptSyntaxError(
+                "Invalid assertion. Correct syntax: compile_assert(condition)"
+            )
+        return self._process_assertion(node.args[0])
 
     def visit_Expr(self, node: ast.Expr) -> Optional[ast.AST]:
         if isinstance(node.value, ast.Call):
             ret = self._process_call(node.value)
             return ast.Expr(value=ret) if ret else None
-        else:
-            return node
+
+        return node
 
 
 class AxisIntervalParser(gt_meta.ASTPass):
@@ -170,28 +171,28 @@ class AxisIntervalParser(gt_meta.ASTPass):
     ) -> nodes.AxisBound:
         if isinstance(value, nodes.AxisBound):
             return value
-        else:
-            if isinstance(value, int):
-                level = nodes.LevelMarker.END if value < 0 else nodes.LevelMarker.START
-                offset = value
-            elif isinstance(value, nodes.VarRef):
-                level = value
-                offset = 0
-            elif isinstance(value, gtscript.AxisIndex):
-                level = nodes.LevelMarker.START if value.index >= 0 else nodes.LevelMarker.END
-                offset = value.index + value.offset
-            elif value is None:
-                LARGE_NUM = 10000
-                seq_name = nodes.Domain.LatLonGrid().sequential_axis.name
-                level = endpt
-                if self.axis_name == seq_name:
-                    offset = 0
-                else:
-                    offset = -LARGE_NUM if level == nodes.LevelMarker.START else LARGE_NUM
-            else:
-                raise self.interval_error
 
-            return nodes.AxisBound(level=level, offset=offset, loc=self.loc)
+        if isinstance(value, int):
+            level = nodes.LevelMarker.END if value < 0 else nodes.LevelMarker.START
+            offset = value
+        elif isinstance(value, nodes.VarRef):
+            level = value
+            offset = 0
+        elif isinstance(value, gtscript.AxisIndex):
+            level = nodes.LevelMarker.START if value.index >= 0 else nodes.LevelMarker.END
+            offset = value.index + value.offset
+        elif value is None:
+            LARGE_NUM = 10000
+            seq_name = nodes.Domain.LatLonGrid().sequential_axis.name
+            level = endpt
+            if self.axis_name == seq_name:
+                offset = 0
+            else:
+                offset = -LARGE_NUM if level == nodes.LevelMarker.START else LARGE_NUM
+        else:
+            raise self.interval_error
+
+        return nodes.AxisBound(level=level, offset=offset, loc=self.loc)
 
     def visit_Name(self, node: ast.Name) -> nodes.VarRef:
         return nodes.VarRef(name=node.id, loc=nodes.Location.from_ast_node(node))
@@ -199,15 +200,15 @@ class AxisIntervalParser(gt_meta.ASTPass):
     def visit_Constant(self, node: ast.Constant) -> Union[int, gtscript.AxisIndex, None]:
         if isinstance(node.value, gtscript.AxisIndex):
             return node.value
-        elif isinstance(node.value, numbers.Number):
+        if isinstance(node.value, numbers.Number):
             return int(node.value)
-        elif node.value is None:
+        if node.value is None:
             return None
-        else:
-            raise GTScriptSyntaxError(
-                f"Unexpected type found {type(node.value)}. Expected one of: int, AxisIndex, string (var ref), or None.",
-                loc=self.loc,
-            )
+
+        raise GTScriptSyntaxError(
+            f"Unexpected type found {type(node.value)}. Expected one of: int, AxisIndex, string (var ref), or None.",
+            loc=self.loc,
+        )
 
     def visit_BinOp(self, node: ast.BinOp) -> Union[gtscript.AxisIndex, nodes.AxisBound, int]:
         left = self.visit(node.left)
@@ -237,30 +238,30 @@ class AxisIntervalParser(gt_meta.ASTPass):
             return gtscript.AxisIndex(
                 axis=left.axis, index=left.index, offset=bin_op(left.offset, right)
             )
-        elif isinstance(left, nodes.VarRef):
+        if isinstance(left, nodes.VarRef):
             if not isinstance(right, numbers.Number):
                 raise incompatible_types_error
             return nodes.AxisBound(level=left, offset=u_op(right), loc=self.loc)
-        elif isinstance(left, nodes.AxisBound):
+        if isinstance(left, nodes.AxisBound):
             if not isinstance(right, numbers.Number):
                 raise incompatible_types_error
             return nodes.AxisBound(
                 level=left.level, offset=bin_op(left.offset, right), loc=self.loc
             )
-        elif isinstance(left, numbers.Number) and isinstance(right, numbers.Number):
+        if isinstance(left, numbers.Number) and isinstance(right, numbers.Number):
             return bin_op(left, right)
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> nodes.AxisBound:
-        if isinstance(node.op, ast.USub):
-            op = lambda x: -x  # noqa: E731 [lambda-assignment]
-        else:
+        if not isinstance(node.op, ast.USub):
             raise self.interval_error
 
+        op = lambda x: -x  # noqa: E731 [lambda-assignment]
         value = self.visit(node.operand)
+
         if isinstance(value, numbers.Number):
             return op(value)
-        else:
-            raise self.interval_error
+
+        raise self.interval_error
 
     def visit_Subscript(self, node: ast.Subscript) -> nodes.AxisBound:
         if node.value.id != self.axis_name:
@@ -342,10 +343,8 @@ class ReturnReplacer(gt_meta.ASTTransformPass):
                 lineno=node.lineno,
                 col_offset=node.col_offset,
             )
-        else:
-            raise GTScriptSyntaxError(
-                "Number of returns values does not match arguments on left side"
-            )
+
+        raise GTScriptSyntaxError("Number of returns values does not match arguments on left side")
 
 
 def _filter_absolute_K_index_method(node: ast.Call) -> bool:
@@ -449,7 +448,7 @@ class CallInliner(ast.NodeTransformer):
         if call_name in gtscript.IGNORE_WHEN_INLINING:
             # Not a function to inline, return as-is.
             return node
-        elif call_name not in self.context or not hasattr(self.context[call_name], "_gtscript_"):
+        if call_name not in self.context or not hasattr(self.context[call_name], "_gtscript_"):
             raise GTScriptSyntaxError("Unknown call", loc=nodes.Location.from_ast_node(node))
 
         # Recursively inline any possible nested subroutine call
@@ -1041,13 +1040,15 @@ class IRMaker(ast.NodeVisitor):
         value = node.value
         if value is None:
             return nodes.BuiltinLiteral(value=nodes.Builtin.from_value(value))
-        elif isinstance(value, bool):
+        
+        if isinstance(value, bool):
             return nodes.Cast(
                 data_type=nodes.DataType.BOOL,
                 expr=nodes.BuiltinLiteral(value=nodes.Builtin.from_value(value)),
                 loc=nodes.Location.from_ast_node(node),
             )
-        elif isinstance(value, numbers.Number):
+        
+        if isinstance(value, numbers.Number):
             if self.dtypes and type(value) in self.dtypes.keys():
                 value_type = self.dtypes[type(value)]
             else:
@@ -1063,11 +1064,11 @@ class IRMaker(ast.NodeVisitor):
                     )
             data_type = nodes.DataType.from_dtype(value_type)
             return nodes.ScalarLiteral(value=value, data_type=data_type)
-        else:
-            raise GTScriptSyntaxError(
-                f"Unknown constant value found: {value}. Expected boolean or number.",
-                loc=nodes.Location.from_ast_node(node),
-            )
+
+        raise GTScriptSyntaxError(
+            f"Unknown constant value found: {value}. Expected boolean or number.",
+            loc=nodes.Location.from_ast_node(node),
+        )
 
     def visit_Tuple(self, node: ast.Tuple) -> tuple:
         value = tuple(self.visit(elem) for elem in node.elts)
@@ -1082,9 +1083,9 @@ class IRMaker(ast.NodeVisitor):
                 arg=self.visit(node.value),
                 loc=nodes.Location.from_ast_node(node),
             )
-        else:
-            qualified_name = gt_meta.get_qualified_name_from_node(node)
-            return self.visit(ast.Name(id=qualified_name, ctx=node.ctx))
+
+        qualified_name = gt_meta.get_qualified_name_from_node(node)
+        return self.visit(ast.Name(id=qualified_name, ctx=node.ctx))
 
     def visit_Name(self, node: ast.Name) -> nodes.Ref:
         symbol = node.id
@@ -1124,32 +1125,33 @@ class IRMaker(ast.NodeVisitor):
                 raise GTScriptSyntaxError(
                     message="Could not evaluate axis shift expression.", loc=index_node
                 ) from ex
+
             if not isinstance(value, (gtscript.ShiftedAxis, gtscript.Axis)):
                 raise GTScriptSyntaxError(
                     message=f"Axis shift expression evaluated to unrecognized type {type(value)}.",
                     loc=index_node,
                 )
-            else:
-                axis_index = all_spatial_axes.index(value.name)
-                if axis_index < 0:
-                    raise GTScriptSyntaxError(
-                        message=f"Unrecognized axis: {value.name}", loc=index_node
-                    )
-                elif axis_index < last_index:
-                    raise GTScriptSyntaxError(
-                        message=f"Axis {value.name} is specified out of order", loc=index_node
-                    )
-                elif axis_index == last_index:
-                    raise GTScriptSyntaxError(
-                        message=f"Duplicate axis found: {value.name}", loc=index_node
-                    )
-                last_index = axis_index
 
-                try:
-                    shift = value.shift
-                except AttributeError:
-                    shift = 0
-                index_dict[value.name] = shift
+            axis_index = all_spatial_axes.index(value.name)
+            if axis_index < 0:
+                raise GTScriptSyntaxError(
+                    message=f"Unrecognized axis: {value.name}", loc=index_node
+                )
+            if axis_index < last_index:
+                raise GTScriptSyntaxError(
+                    message=f"Axis {value.name} is specified out of order", loc=index_node
+                )
+            if axis_index == last_index:
+                raise GTScriptSyntaxError(
+                    message=f"Duplicate axis found: {value.name}", loc=index_node
+                )
+            last_index = axis_index
+
+            try:
+                shift = value.shift
+            except AttributeError:
+                shift = 0
+            index_dict[value.name] = shift
 
         return [index_dict.get(axis, 0) for axis in ("I", "J", "K") if axis in field_axes]
 
@@ -1179,17 +1181,16 @@ class IRMaker(ast.NodeVisitor):
             # This is the new-style syntax for representing spatial axis offsets, e.g. [I+1]
             return self._eval_new_spatial_index(index_nodes, field_axes)
 
-        else:
-            # This is either the old-style syntax using all spatial axes (e.g. [1, 0, 0]), or a data index.
-            index = []
-            for index_node in index_nodes:
-                try:
-                    offset = ast.literal_eval(index_node)
-                    index.append(offset)
-                except Exception:
-                    index.append(self.visit(index_node))
+        # This is either the old-style syntax using all spatial axes (e.g. [1, 0, 0]), or a data index.
+        index = []
+        for index_node in index_nodes:
+            try:
+                offset = ast.literal_eval(index_node)
+                index.append(offset)
+            except Exception:
+                index.append(self.visit(index_node))
 
-            return index
+        return index
 
     def visit_Subscript(self, node: ast.Subscript):
         assert isinstance(node.ctx, (ast.Load, ast.Store))
@@ -1258,11 +1259,9 @@ class IRMaker(ast.NodeVisitor):
         op = self.visit(node.op)
         arg = self.visit(node.operand)
         if isinstance(arg, numbers.Number):
-            result = eval("{op}{arg}".format(op=op.python_symbol, arg=arg))
-        else:
-            result = nodes.UnaryOpExpr(op=op, arg=arg, loc=nodes.Location.from_ast_node(node))
+            return eval("{op}{arg}".format(op=op.python_symbol, arg=arg))
 
-        return result
+        return nodes.UnaryOpExpr(op=op, arg=arg, loc=nodes.Location.from_ast_node(node))
 
     def visit_UAdd(self, node: ast.UAdd) -> nodes.UnaryOperator:
         return nodes.UnaryOperator.POS
@@ -1842,46 +1841,46 @@ class GTScriptParser(ast.NodeVisitor):
                     value=definition,
                     message="'*args' tuple parameter is not supported in GTScript definitions",
                 )
-            elif param.kind == inspect.Parameter.VAR_KEYWORD:
+            if param.kind == inspect.Parameter.VAR_KEYWORD:
                 raise GTScriptDefinitionError(
                     name=qualified_name,
                     value=definition,
                     message="'**kwargs' dict parameter is not supported in GTScript definitions",
                 )
-            else:
-                is_keyword = param.kind == inspect.Parameter.KEYWORD_ONLY
 
-                default = nodes.Empty
-                if param.default != inspect.Parameter.empty:
-                    if not isinstance(param.default, GTScriptParser.CONST_VALUE_TYPES):
-                        raise GTScriptValueError(
-                            name=param.name,
-                            value=param.default,
-                            message=f"Invalid default value for argument '{param.name}': {param.default}",
-                        )
-                    default = param.default
+            is_keyword = param.kind == inspect.Parameter.KEYWORD_ONLY
 
-                if isinstance(param.annotation, (str, gtscript._FieldDescriptor)):
-                    dtype_annotation = param.annotation
-                elif (
-                    isinstance(param.annotation, type)
-                    and param.annotation in gtscript._VALID_DATA_TYPES
-                ):
-                    dtype_annotation = np.dtype(param.annotation)
-                elif param.annotation is inspect.Signature.empty:
-                    dtype_annotation = None
-                else:
+            default = nodes.Empty
+            if param.default != inspect.Parameter.empty:
+                if not isinstance(param.default, GTScriptParser.CONST_VALUE_TYPES):
                     raise GTScriptValueError(
                         name=param.name,
-                        value=param.annotation,
-                        message=f"Invalid annotated dtype value for argument '{param.name}': {param.annotation}",
+                        value=param.default,
+                        message=f"Invalid default value for argument '{param.name}': {param.default}",
                     )
+                default = param.default
 
-                api_signature.append(
-                    nodes.ArgumentInfo(name=param.name, is_keyword=is_keyword, default=default)
+            if isinstance(param.annotation, (str, gtscript._FieldDescriptor)):
+                dtype_annotation = param.annotation
+            elif (
+                isinstance(param.annotation, type)
+                and param.annotation in gtscript._VALID_DATA_TYPES
+            ):
+                dtype_annotation = np.dtype(param.annotation)
+            elif param.annotation is inspect.Signature.empty:
+                dtype_annotation = None
+            else:
+                raise GTScriptValueError(
+                    name=param.name,
+                    value=param.annotation,
+                    message=f"Invalid annotated dtype value for argument '{param.name}': {param.annotation}",
                 )
 
-                api_annotations.append(dtype_annotation)
+            api_signature.append(
+                nodes.ArgumentInfo(name=param.name, is_keyword=is_keyword, default=default)
+            )
+
+            api_annotations.append(dtype_annotation)
 
         nonlocal_symbols, imported_symbols = GTScriptParser.collect_external_symbols(definition)
         ast_func_def = gt_meta.get_ast(definition, feature_version=PYTHON_AST_VERSION).body[0]
