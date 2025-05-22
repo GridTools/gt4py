@@ -306,10 +306,10 @@ def track_view(
         raise RuntimeError(f"Failed to determine the direction of the view '{view}'.")
     if curr_edge.dst_conn == "views":
         # The view is used for reading.
-        next_node = lambda curr_edge: curr_edge.src  # noqa: E731
+        next_node = lambda curr_edge: curr_edge.src  # noqa: E731 [lambda-assignment]
     elif curr_edge.src_conn == "views":
         # The view is used for writing.
-        next_node = lambda curr_edge: curr_edge.dst  # noqa: E731
+        next_node = lambda curr_edge: curr_edge.dst  # noqa: E731 [lambda-assignment]
     else:
         raise RuntimeError(f"Failed to determine the direction of the view '{view}' | {curr_edge}.")
 
