@@ -22,7 +22,6 @@ from gt4py.next.iterator.transforms import (
     inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
-    nest_concat_wheres,
     remove_broadcast,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
@@ -86,7 +85,7 @@ def apply_common_transforms(
         ir
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain_ops.InferDomainOps.apply(ir)
-    ir = nest_concat_wheres.NestConcatWheres.apply(ir)
+    ir = concat_where_transforms.NestConcatWheres.apply(ir)
 
     ir = infer_domain.infer_program(
         ir,
