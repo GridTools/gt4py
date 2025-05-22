@@ -1640,7 +1640,9 @@ class IRMaker(ast.NodeVisitor):
 
     def visit_With(self, node: ast.With):
         loc = nodes.Location.from_ast_node(node, scope=self.stencil_name)
-        error_message = f"Invalid 'with' statement in '{loc.scope}' at line {loc.line} (column {loc.column})"
+        error_message = (
+            f"Invalid 'with' statement in '{loc.scope}' at line {loc.line} (column {loc.column})"
+        )
 
         if (
             len(node.items) == 1
@@ -1707,17 +1709,21 @@ class IRMaker(ast.NodeVisitor):
             #  the nested computation blocks must be specified in their order of execution. The order of execution is
             #  such that the lowest (highest) interval is processed first if the iteration order is forward (backward).
             if not self._are_blocks_sorted(compute_blocks):
-                raise GTScriptSyntaxError(f"{error_message}: Intervals must be specified in order of execution.")
-            
+                raise GTScriptSyntaxError(
+                    f"{error_message}: Intervals must be specified in order of execution."
+                )
+
             if not self._are_intervals_nonoverlapping(compute_blocks):
                 raise GTScriptSyntaxError(f"{error_message}: Overlapping intervals detected.")
 
             return compute_blocks
-        
+
         if self.parsing_context == ParsingContext.CONTROL_FLOW:
             return gt_utils.listify(self._visit_computation_node(node))
-        
-        raise GTScriptSyntaxError(f"{error_message}: Mixing nested `with` blocks and statements is not allowed.")
+
+        raise GTScriptSyntaxError(
+            f"{error_message}: Mixing nested `with` blocks and statements is not allowed."
+        )
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> List[nodes.ComputationBlock]:
         self.stencil_name = node.name
