@@ -359,6 +359,9 @@ class ReturnReplacer(gt_utils.meta.ASTTransformPass):
 class ForIndex(ast.AST):
     name: str
 
+    def __deepcopy__(self, memo: dict) -> "ForIndex":
+        return self
+
 
 @gt_datamodels.datamodel(frozen=True)
 class ForIndexTransformer(ast.NodeTransformer):
@@ -379,6 +382,13 @@ class For(ast.AST):
     def __post_init__(self) -> None:
         transformer = ForIndexTransformer(self.index_name)
         self.body = [transformer.visit(stmt) for stmt in self.body]
+
+    def __deepcopy__(self, memo: dict) -> "For":
+        return For(
+            index_name=self.index_name,
+            index_values=self.index_values,
+            body=copy.deepcopy(self.body),
+        )
 
 
 @gt_datamodels.datamodel(frozen=True)
