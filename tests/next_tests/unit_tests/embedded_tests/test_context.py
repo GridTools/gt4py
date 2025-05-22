@@ -6,61 +6,78 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import pytest
+
 import gt4py.next.embedded.context as ctx
-from gt4py import eve
+import gt4py.next.common as common
+from gt4py.next.errors import exceptions
+
+
+def test_getters():
+    DEFAULT = object()
+    assert ctx.get_closure_column_range(DEFAULT) is DEFAULT
+    assert ctx.get_offset_provider(DEFAULT) is DEFAULT
+
+    with pytest.raises(exceptions.EmbeddedExecutionError, match="closure execution context."):
+        assert ctx.get_closure_column_range()
+
+    with pytest.raises(exceptions.EmbeddedExecutionError, match="closure execution context."):
+        assert ctx.get_offset_provider()
 
 
 def test_update_with_both_parameters():
-    initial_column_range = "INITIAL_COLUMN_RANGE"
-    initial_offset_provider = "INITIAL_OFFSET_PROVIDER"
+    DEFAULT = object()
+    assert ctx.get_closure_column_range(DEFAULT) is DEFAULT
+    assert ctx.get_offset_provider(DEFAULT) is DEFAULT
 
-    assert ctx.closure_column_range.get() is eve.NOTHING
-    assert ctx.offset_provider.get() is eve.NOTHING
+    initial_column_range = common.NamedRange(common.Dimension("IDim"), common.UnitRange(0, 4))
+    initial_offset_provider = {}
 
     with ctx.update(
         closure_column_range=initial_column_range, offset_provider=initial_offset_provider
     ):
-        assert ctx.closure_column_range.get() == initial_column_range
-        assert ctx.offset_provider.get() == initial_offset_provider
+        assert ctx.get_closure_column_range() is initial_column_range
+        assert ctx.get_offset_provider() is initial_offset_provider
 
-        test_column_range = "TEST_COLUMN_RANGE"
-        test_offset_provider = "TEST_OFFSET_PROVIDER"
+        test_column_range = common.NamedRange(common.Dimension("NewDim"), common.UnitRange(-1, 1))
+        test_offset_provider = {"I": "NewDim"}
 
         with ctx.update(
             closure_column_range=test_column_range, offset_provider=test_offset_provider
         ):
-            assert ctx.closure_column_range.get() == test_column_range
-            assert ctx.offset_provider.get() == test_offset_provider
+            assert ctx.get_closure_column_range() is test_column_range
+            assert ctx.get_offset_provider() is test_offset_provider
 
-        assert ctx.closure_column_range.get() == initial_column_range
-        assert ctx.offset_provider.get() == initial_offset_provider
+        assert ctx.get_closure_column_range() is initial_column_range
+        assert ctx.get_offset_provider() is initial_offset_provider
 
-    assert ctx.closure_column_range.get() is eve.NOTHING
-    assert ctx.offset_provider.get() is eve.NOTHING
+    assert ctx.get_closure_column_range(DEFAULT) is DEFAULT
+    assert ctx.get_offset_provider(DEFAULT) is DEFAULT
 
 
 def test_update_with_no_parameters():
-    assert ctx.closure_column_range.get() is eve.NOTHING
-    assert ctx.offset_provider.get() is eve.NOTHING
+    DEFAULT = object()
+    assert ctx.get_closure_column_range(DEFAULT) is DEFAULT
+    assert ctx.get_offset_provider(DEFAULT) is DEFAULT
 
-    initial_column_range = "INITIAL_COLUMN_RANGE"
-    initial_offset_provider = "INITIAL_OFFSET_PROVIDER"
+    initial_column_range = common.NamedRange(common.Dimension("IDim"), common.UnitRange(0, 4))
+    initial_offset_provider = {}
 
     with ctx.update(
         closure_column_range=initial_column_range, offset_provider=initial_offset_provider
     ):
-        assert ctx.closure_column_range.get() == initial_column_range
-        assert ctx.offset_provider.get() == initial_offset_provider
+        assert ctx.get_closure_column_range() is initial_column_range
+        assert ctx.get_offset_provider() is initial_offset_provider
 
         with ctx.update():
-            assert ctx.closure_column_range.get() == initial_column_range
-            assert ctx.offset_provider.get() == initial_offset_provider
+            assert ctx.get_closure_column_range() is initial_column_range
+            assert ctx.get_offset_provider() is initial_offset_provider
 
-        assert ctx.closure_column_range.get() == initial_column_range
-        assert ctx.offset_provider.get() == initial_offset_provider
+        assert ctx.get_closure_column_range() is initial_column_range
+        assert ctx.get_offset_provider() is initial_offset_provider
 
-    assert ctx.closure_column_range.get() is eve.NOTHING
-    assert ctx.offset_provider.get() is eve.NOTHING
+    assert ctx.get_closure_column_range(DEFAULT) is DEFAULT
+    assert ctx.get_offset_provider(DEFAULT) is DEFAULT
 
 
 def test_within_valid_context():

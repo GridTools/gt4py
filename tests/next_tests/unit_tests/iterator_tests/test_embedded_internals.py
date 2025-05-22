@@ -39,15 +39,16 @@ def test_column_ufunc():
         assert np.array_equal(res.data, a.data + b.data)
         assert res.kstart == 1
 
-    # Setting an invalid column_range here shouldn't affect other contexts
-    embedded_context.closure_column_range.set(range(2, 999))
-    with embedded_context.update(
-        offset_provider={},
-        closure_column_range=common.NamedRange(
-            common.Dimension("K", kind=common.DimensionKind.VERTICAL), range(0, 3)
-        ),
-    ):
-        test_func(2, 3)
+    with embedded_context.update(closure_column_range=range(2, 999)):
+        # Setting an invalid column_range here shouldn't affect other contexts
+
+        with embedded_context.update(
+            offset_provider={},
+            closure_column_range=common.NamedRange(
+                common.Dimension("K", kind=common.DimensionKind.VERTICAL), range(0, 3)
+            ),
+        ):
+            test_func(2, 3)
 
 
 def test_column_ufunc_with_scalar():

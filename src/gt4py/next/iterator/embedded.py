@@ -297,7 +297,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
         assert isinstance(data, (np.ndarray, Scalar))
-        column_range: common.NamedRange = embedded_context.closure_column_range.get()
+        column_range: common.NamedRange = embedded_context.get_closure_column_range()
         self.data = (
             data if isinstance(data, np.ndarray) else np.full(len(column_range.unit_range), data)
         )
@@ -846,7 +846,7 @@ def _make_tuple(
             except embedded_exceptions.IndexOutOfBounds:
                 return _UNDEFINED
     else:
-        column_range = embedded_context.closure_column_range.get().unit_range
+        column_range = embedded_context.get_closure_column_range().unit_range
         assert column_range is not None
 
         col: list[
@@ -891,7 +891,7 @@ class MDIterator:
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
         complete_offsets = group_offsets(*offsets)
-        offset_provider = embedded_context.offset_provider.get()
+        offset_provider = embedded_context.get_offset_provider()
         assert offset_provider is not None
         return MDIterator(
             self.field,
@@ -917,7 +917,7 @@ class MDIterator:
                 raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = dict[Tag, range]()
         if self.column_axis is not None:
-            column_range = embedded_context.closure_column_range.get()
+            column_range = embedded_context.get_closure_column_range()
             assert column_range is not None
             k_pos = shifted_pos.pop(self.column_axis)
             assert isinstance(k_pos, int)
@@ -957,7 +957,7 @@ def make_in_iterator(
         init = [None] * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim.value] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_dimension is not None:
-        column_range = embedded_context.closure_column_range.get().unit_range
+        column_range = embedded_context.get_closure_column_range().unit_range
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert column_range is not None
         new_pos[column_dimension.value] = column_range.start
@@ -1418,7 +1418,7 @@ class _List(Generic[DT]):
         assert isinstance(offset_tag, str)
         element_type = type_translation.from_value(self.values[0])
         assert isinstance(element_type, ts.DataType)
-        offset_provider = embedded_context.offset_provider.get()
+        offset_provider = embedded_context.get_offset_provider()
         assert offset_provider is not None
         connectivity = offset_provider[offset_tag]
         assert common.is_neighbor_connectivity(connectivity)
@@ -1446,7 +1446,7 @@ class _ConstList(Generic[DT]):
 def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
     assert isinstance(offset_str, str)
-    offset_provider = embedded_context.offset_provider.get()
+    offset_provider = embedded_context.get_offset_provider()
     assert offset_provider is not None
     connectivity = offset_provider[offset_str]
     assert common.is_neighbor_connectivity(connectivity)
@@ -1522,7 +1522,7 @@ class SparseListIterator:
             return _ConstList(
                 value=self.it.shift(*self.offsets, SparseTag(self.list_offset), 0).deref()
             )
-        offset_provider = embedded_context.offset_provider.get()
+        offset_provider = embedded_context.get_offset_provider()
         assert offset_provider is not None
         connectivity = offset_provider[self.list_offset]
         assert common.is_neighbor_connectivity(connectivity)
@@ -1643,7 +1643,7 @@ def _elem_dtype(elem: Any) -> np.dtype:
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
-        column_range = embedded_context.closure_column_range.get().unit_range
+        column_range = embedded_context.get_closure_column_range().unit_range
         if column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
@@ -1716,7 +1716,7 @@ def _compute_at_position(
 
 
 def _extract_column_range(domain) -> common.NamedRange | eve.NothingType:
-    if (col_range_placeholder := embedded_context.closure_column_range.get(None)) is not None:
+    if (col_range_placeholder := embedded_context.get_closure_column_range(None)) is not None:
         assert (
             col_range_placeholder.unit_range.is_empty()
         )  # check it's just the placeholder with empty range
@@ -1760,7 +1760,7 @@ def _fieldspec_list_to_value(
                 len(domain), common.named_range((_CONST_DIM, 1))
             ), type_.element_type
         else:
-            offset_provider = embedded_context.offset_provider.get()
+            offset_provider = embedded_context.get_offset_provider()
             offset_type = type_.offset_type
             assert isinstance(offset_type, common.Dimension)
             connectivity = offset_provider[offset_type.value]
@@ -1801,7 +1801,7 @@ def closure(
     ins: list[common.Field | Scalar | tuple[common.Field | Scalar | tuple, ...]],
 ) -> None:
     assert embedded_context.within_valid_context()
-    offset_provider = embedded_context.offset_provider.get()
+    offset_provider = embedded_context.get_offset_provider()
     _validate_domain(domain_, common.offset_provider_to_type(offset_provider))
     domain: dict[Tag, range] = _dimension_to_tag(domain_)
     if not (isinstance(out, common.Field) or is_tuple_of_field(out)):

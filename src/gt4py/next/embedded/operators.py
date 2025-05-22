@@ -43,7 +43,7 @@ class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT 
         common.Field[Any, core_defs.ScalarT]
         | tuple[common.Field[Any, core_defs.ScalarT] | tuple, ...]
     ):
-        scan_range = embedded_context.closure_column_range.get()
+        scan_range = embedded_context.get_closure_column_range()
         assert self.axis == scan_range.dim
         scan_axis = scan_range.dim
         all_args = [*args, *kwargs.values()]
