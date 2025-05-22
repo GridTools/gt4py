@@ -180,7 +180,6 @@ def test_gtfn_file_cache_whole_workflow(cartesian_case_no_backend):
 
     assert cartesian_case.backend is not None
     assert cartesian_case.allocator is not None
-    # cartesian_case.backend = None
 
     @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:

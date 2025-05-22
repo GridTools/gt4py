@@ -19,10 +19,14 @@ import gt4py.next.embedded as gtx_embedded
 
 #: Column range used in column mode (`column_axis != None`) in the current embedded iterator
 #: closure execution context.
-closure_column_range: cvars.ContextVar[common.NamedRange] = cvars.ContextVar("column_range")
+closure_column_range: cvars.ContextVar[common.NamedRange] = cvars.ContextVar(
+    "column_range", default=eve.NOTHING
+)
 
 #: Offset provider dict in the current embedded execution context.
-offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar("offset_provider")
+offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar(
+    "offset_provider", default=eve.NOTHING
+)
 
 
 @contextlib.contextmanager
@@ -50,4 +54,4 @@ def update(
 
 
 def within_valid_context() -> bool:
-    return offset_provider.get(eve.NOTHING) is not eve.NOTHING
+    return offset_provider.get() is not eve.NOTHING
