@@ -535,7 +535,7 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_For(self, node: For) -> gtir.For:
         return gtir.For(
-            index=self.visit(node.index),
+            index_name=node.index_name,
             iter_start=node.iter_start,
             iter_stop=node.iter_stop,
             iter_step=node.iter_step,

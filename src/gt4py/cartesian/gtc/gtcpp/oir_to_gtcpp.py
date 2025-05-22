@@ -291,7 +291,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_For(self, node: common.For, **kwargs: Any) -> gtcpp.For:
         return gtcpp.For(
-            index=self.visit(node.index, **kwargs),
+            index_name=node.index_name,
             iter_start=node.iter_start,
             iter_stop=node.iter_stop,
             iter_step=node.iter_step,

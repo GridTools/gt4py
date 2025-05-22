@@ -149,7 +149,7 @@ class GTIRToOIR(eve.NodeTranslator):
             body.extend(utils.flatten_list(utils.listify(oir_statement)))
 
         return oir.For(
-            index=self.visit(node.index),
+            index_name=node.index_name,
             iter_start=node.iter_start,
             iter_stop=node.iter_stop,
             iter_step=node.iter_step,

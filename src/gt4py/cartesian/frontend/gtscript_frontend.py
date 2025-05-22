@@ -375,8 +375,12 @@ class ForIndexTransformer(ast.NodeTransformer):
 @gt_datamodels.datamodel
 class For(ast.AST):
     index_name: str
-    index_values: Optional[range]
+    iter_start: int
+    iter_stop: int
+    iter_step: int
     body: list[ast.AST]
+    lineno: Optional[int] = None
+    col_offset: Optional[int] = None
     _fields: ClassVar[tuple[str, ...]] = ("body",)
 
     def __post_init__(self) -> None:
@@ -386,8 +390,12 @@ class For(ast.AST):
     def __deepcopy__(self, memo: dict) -> "For":
         return For(
             index_name=self.index_name,
-            index_values=self.index_values,
+            iter_start=self.iter_start,
+            iter_stop=self.iter_stop,
+            iter_step=self.iter_step,
             body=copy.deepcopy(self.body),
+            lineno=self.lineno,
+            col_offset=self.col_offset,
         )
 
 
@@ -421,7 +429,6 @@ class ForTransformer(ast.NodeTransformer):
                     start, stop, step = *range_args, 1
                 else:
                     start, stop, step = range_args
-                index_values = range(start, stop, step)
             else:
                 raise GTScriptSyntaxError(
                     "For-loop index values can only be specified using range()."
@@ -429,8 +436,12 @@ class ForTransformer(ast.NodeTransformer):
 
             return For(
                 index_name=node.target.id,
-                index_values=index_values,
+                iter_start=start,
+                iter_stop=stop,
+                iter_step=step,
                 body=[self.visit(item) for item in node.body],
+                lineno=node.lineno,
+                col_offset=node.col_offset,
             )
         else:
             return node
@@ -1526,10 +1537,10 @@ class IRMaker(ast.NodeVisitor):
 
         result = [
             nodes.For(
-                index=nodes.ForIndex(name=node.index_name),
-                iter_start=node.index_values.start,
-                iter_stop=node.index_values.stop,
-                iter_step=node.index_values.step,
+                index_name=node.index_name,
+                iter_start=node.iter_start,
+                iter_stop=node.iter_stop,
+                iter_step=node.iter_step,
                 body=nodes.BlockStmt(stmts=stmts, loc=loc),
                 loc=nodes.Location.from_ast_node(node),
             )

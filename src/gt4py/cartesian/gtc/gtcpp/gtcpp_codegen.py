@@ -254,9 +254,9 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     ForIndex = as_mako("${name}")
     For = as_mako(
-        "for(std::size_t ${_this_node.index.name}=${iter_start}; "
-        "${_this_node.index.name}${'<' if _this_node.iter_step > 0 else '>'}${iter_stop}; "
-        "${_this_node.index.name}+=(${iter_step})) "
+        "for(std::size_t ${index_name}=${iter_start}; "
+        "${index_name}${'<' if _this_node.iter_step > 0 else '>'}${iter_stop}; "
+        "${index_name}+=(${iter_step})) "
         "{${''.join(body)}}"
     )
 

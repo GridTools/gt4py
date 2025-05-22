@@ -406,7 +406,7 @@ class ForIndex(eve.GenericNode, Expr):
 
 
 class For(eve.GenericNode, Generic[StmtT]):
-    index: ForIndex
+    index_name: str
     iter_start: int
     iter_stop: int
     iter_step: int

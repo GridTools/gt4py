@@ -661,7 +661,7 @@ class While(Statement):
 
 @attribclass
 class For(Statement):
-    index = attribute(of=ForIndex)
+    index_name = attribute(of=str)
     iter_start = attribute(of=int)
     iter_stop = attribute(of=int)
     iter_step = attribute(of=int)
