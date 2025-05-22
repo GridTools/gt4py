@@ -493,6 +493,21 @@ def cartesian_case(
 
 
 @pytest.fixture
+def cartesian_case_no_backend():
+    yield Case(
+        backend=None,
+        offset_provider={
+            "Ioff": IDim,
+            "Joff": JDim,
+            "Koff": KDim,
+        },
+        default_sizes={IDim: 10, JDim: 10, KDim: 10},
+        grid_type=common.GridType.CARTESIAN,
+        allocator=None,
+    )
+
+
+@pytest.fixture
 def unstructured_case(
     mesh_descriptor,
     exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
@@ -509,6 +524,21 @@ def unstructured_case(
         },
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=exec_alloc_descriptor.allocator,
+    )
+
+
+@pytest.fixture
+def unstructured_case_no_backend(mesh_descriptor):
+    yield Case(
+        None,
+        offset_provider=mesh_descriptor.offset_provider,
+        default_sizes={
+            Vertex: mesh_descriptor.num_vertices,
+            Edge: mesh_descriptor.num_edges,
+            Cell: mesh_descriptor.num_cells,
+        },
+        grid_type=common.GridType.UNSTRUCTURED,
+        allocator=None,
     )
 
 
