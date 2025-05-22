@@ -91,6 +91,9 @@ def make_sdfg_async(sdfg: dace.SDFG) -> None:
     # Loop over all states in the top-level SDFG
     is_nosync_used = False
     for state in sdfg.states():
+        if state.parent_graph is not sdfg:
+            # We ignore states that are used inside 'ControlFlowRegion' nodes
+            continue
         for oedge in sdfg.out_edges(state):
             # We check whether the expressions on an InterState edge (symbols assignment
             # and condition for state transition) do access any data descriptor.
