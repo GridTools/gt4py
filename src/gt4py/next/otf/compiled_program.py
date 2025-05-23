@@ -270,5 +270,5 @@ def _offset_provider_to_type_unsafe(
     offset_provider: common.OffsetProvider,
 ) -> common.OffsetProviderType:
     return _offset_provider_to_type_unsafe_impl(
-        eve_utils.hashable_by_id(offset_provider),
+        eve_utils.hashable_by(common.offset_provider_hash)(offset_provider),
     )
