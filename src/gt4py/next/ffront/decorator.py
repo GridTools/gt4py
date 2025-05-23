@@ -296,8 +296,8 @@ class Program:
                 stacklevel=2,
             )
             offset_provider = {**offset_provider, **self._implicit_offset_provider}
-            with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                ctx.run(self.definition_stage.definition, *args, **kwargs)
+            with next_embedded.context.update(offset_provider=offset_provider):
+                self.definition_stage.definition(*args, **kwargs)
 
     def compile(
         self,
