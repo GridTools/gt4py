@@ -26,5 +26,10 @@ def common_dace_config() -> Generator[None, None, None]:
     with dace.config.temporary_config():
         dace.Config.set("optimizer", "match_exception", value=True)
         dace.Config.set("compiler", "allow_view_arguments", value=True)
-        dace.Config.set("compiler.use_cache", value=False)
+
+        # TODO(phimuell/edopao): Remove as soon as we understand why the configuration
+        #  creeps in and sets this value.
+        #  This is not important is the SDFG is only compiled once but several time
+        #  in a function. This pattern mostly occurs inside the transformation tests.
+        dace.Config.set("compiler.use_cache", value=True)
         yield
