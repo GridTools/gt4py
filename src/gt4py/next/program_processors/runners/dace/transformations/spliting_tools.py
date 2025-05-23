@@ -329,16 +329,16 @@ def _perform_node_split_with_bypass_impl(
     # TODO ADDING PRODUCER TO THE SET OF PROCESSED NODES
 
     """
-    producer_edge_desc = next(edesc for edesc in edges_to_relocate)
+    producer_edge_desc = next(edesc for edesc in edges_to_relocate if describes_incoming_edge(edesc))
+    data_producer: dace_nodes.Node = get_other_node(producer_edge_desc)
     producer_edge = producer_edge_desc.edge
-    data_producer: dace_nodes.Node = get_other_node(producer_edge)
     assert producer_edge.dst is node_to_split
     assert isinstance(data_producer, dace_nodes.AccessNode)
 
     old_producer_read = producer_edge.data.src_subset.min_element()
     old_producer_write = producer_edge.data.dst_subset.min_element()
 
-    consumer_edges = [edesc for edesc in edges_to_relocate if edesc is not producer_edge]
+    consumer_edges = [edesc for edesc in edges_to_relocate if edesc is not producer_edge_desc]
     new_consumer_edges: list[dace_graph.MultiConnectorEdge] = []
     for consumer_edge_desc in consumer_edges:
         consumer_edge = consumer_edge_desc.edge
