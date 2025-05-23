@@ -33,9 +33,12 @@ from typing_extensions import deprecated
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import definitions as gt_definitions, utils as gt_utils
-
-from . import pyext_builder
-from .module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_gtir
+from gt4py.cartesian.backend import pyext_builder
+from gt4py.cartesian.backend.module_generator import (
+    BaseModuleGenerator,
+    ModuleData,
+    make_args_data_from_gtir,
+)
 
 
 if TYPE_CHECKING:
@@ -211,7 +214,6 @@ class CLIBackendMixin(Backend):
 
         This can now be automatically be turned into a folder hierarchy that makes sense
         and can be incorporated into an external build system.
-
         """
         raise NotImplementedError
 
@@ -229,8 +231,7 @@ class CLIBackendMixin(Backend):
         Raises
         ------
         RuntimeError
-            If the backend does not support the bindings language
-
+            If the backend does not support the bindings language.
         """
         languages = getattr(self, "languages", {"bindings": {}})
         name = getattr(self, "name", "")

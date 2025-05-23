@@ -95,34 +95,41 @@ def make_mesh_symbols(mesh: MeshDescriptor):
         __edges_stride_0=1,
         __vertices_0_range_1=mesh.num_vertices,
         __vertices_stride_0=1,
-        __connectivity_C2E_0_range_1=mesh.num_cells,
-        __connectivity_C2E_size_1=mesh.offset_provider_type["C2E"].max_neighbors,
-        __connectivity_C2E_stride_0=c2e_ndarray.strides[0] // c2e_ndarray.itemsize,
-        __connectivity_C2E_stride_1=c2e_ndarray.strides[1] // c2e_ndarray.itemsize,
-        __connectivity_C2V_0_range_1=mesh.num_cells,
-        __connectivity_C2V_size_1=mesh.offset_provider_type["C2V"].max_neighbors,
-        __connectivity_C2V_stride_0=c2v_ndarray.strides[0] // c2v_ndarray.itemsize,
-        __connectivity_C2V_stride_1=c2v_ndarray.strides[1] // c2v_ndarray.itemsize,
-        __connectivity_E2V_0_range_1=mesh.num_edges,
-        __connectivity_E2V_size_1=mesh.offset_provider_type["E2V"].max_neighbors,
-        __connectivity_E2V_stride_0=e2v_ndarray.strides[0] // e2v_ndarray.itemsize,
-        __connectivity_E2V_stride_1=e2v_ndarray.strides[1] // e2v_ndarray.itemsize,
-        __connectivity_V2E_0_range_1=mesh.num_vertices,
-        __connectivity_V2E_size_1=mesh.offset_provider_type["V2E"].max_neighbors,
-        __connectivity_V2E_stride_0=v2e_ndarray.strides[0] // v2e_ndarray.itemsize,
-        __connectivity_V2E_stride_1=v2e_ndarray.strides[1] // v2e_ndarray.itemsize,
+        __gt_conn_C2E_0_range_1=mesh.num_cells,
+        __gt_conn_C2E_size_1=mesh.offset_provider_type["C2E"].max_neighbors,
+        __gt_conn_C2E_stride_0=c2e_ndarray.strides[0] // c2e_ndarray.itemsize,
+        __gt_conn_C2E_stride_1=c2e_ndarray.strides[1] // c2e_ndarray.itemsize,
+        __gt_conn_C2V_0_range_1=mesh.num_cells,
+        __gt_conn_C2V_size_1=mesh.offset_provider_type["C2V"].max_neighbors,
+        __gt_conn_C2V_stride_0=c2v_ndarray.strides[0] // c2v_ndarray.itemsize,
+        __gt_conn_C2V_stride_1=c2v_ndarray.strides[1] // c2v_ndarray.itemsize,
+        __gt_conn_E2V_0_range_1=mesh.num_edges,
+        __gt_conn_E2V_size_1=mesh.offset_provider_type["E2V"].max_neighbors,
+        __gt_conn_E2V_stride_0=e2v_ndarray.strides[0] // e2v_ndarray.itemsize,
+        __gt_conn_E2V_stride_1=e2v_ndarray.strides[1] // e2v_ndarray.itemsize,
+        __gt_conn_V2E_0_range_1=mesh.num_vertices,
+        __gt_conn_V2E_size_1=mesh.offset_provider_type["V2E"].max_neighbors,
+        __gt_conn_V2E_stride_0=v2e_ndarray.strides[0] // v2e_ndarray.itemsize,
+        __gt_conn_V2E_stride_1=v2e_ndarray.strides[1] // v2e_ndarray.itemsize,
     )
 
 
 def build_dace_sdfg(
-    ir: gtir.Program, offset_provider_type: gtx_common.OffsetProviderType
+    ir: gtir.Program,
+    offset_provider_type: gtx_common.OffsetProviderType,
+    skip_domain_inference: bool = False,
 ) -> Callable[..., Any]:
-    # run domain inference in order to add the domain annex information to the IR nodes
-    ir = infer_domain.infer_program(
-        ir,
-        offset_provider=offset_provider_type,
-        symbolic_domain_sizes={IDim.value: "size", Edge.value: "nedges", Vertex.value: "nvertices"},
-    )
+    if not skip_domain_inference:
+        # run domain inference in order to add the domain annex information to the IR nodes
+        ir = infer_domain.infer_program(
+            ir,
+            offset_provider=offset_provider_type,
+            symbolic_domain_sizes={
+                IDim.value: "size",
+                Edge.value: "nedges",
+                Vertex.value: "nvertices",
+            },
+        )
     return dace_backend.build_sdfg_from_gtir(
         ir, offset_provider_type, disable_field_origin_on_program_arguments=True
     )
@@ -1120,8 +1127,8 @@ def test_gtir_connectivity_shift():
             ev,
             c2e_offset=np.full(SIMPLE_MESH.num_cells, C2E_neighbor_idx, dtype=np.int32),
             e2v_offset=np.full(SIMPLE_MESH.num_edges, E2V_neighbor_idx, dtype=np.int32),
-            connectivity_C2E=connectivity_C2E.ndarray,
-            connectivity_E2V=connectivity_E2V.ndarray,
+            gt_conn_C2E=connectivity_C2E.ndarray,
+            gt_conn_E2V=connectivity_E2V.ndarray,
             **FSYMBOLS,
             **make_mesh_symbols(SIMPLE_MESH),
             __ce_field_0_range_1=SIMPLE_MESH.num_cells,
@@ -1190,8 +1197,8 @@ def test_gtir_connectivity_shift_chain():
     sdfg(
         e,
         e_out,
-        connectivity_E2V=connectivity_E2V.ndarray,
-        connectivity_V2E=connectivity_V2E.ndarray,
+        gt_conn_E2V=connectivity_E2V.ndarray,
+        gt_conn_V2E=connectivity_V2E.ndarray,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
         __edges_out_0_range_1=SIMPLE_MESH.num_edges,
@@ -1249,7 +1256,7 @@ def test_gtir_neighbors_as_input():
         v2e_field,
         e,
         v,
-        connectivity_V2E=connectivity_V2E.ndarray,
+        gt_conn_V2E=connectivity_V2E.ndarray,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
         __v2e_field_0_range_1=SIMPLE_MESH.num_vertices,
@@ -1299,7 +1306,7 @@ def test_gtir_neighbors_as_output():
     sdfg(
         e,
         v2e_field,
-        connectivity_V2E=connectivity_V2E.ndarray,
+        gt_conn_V2E=connectivity_V2E.ndarray,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
         __v2e_field_0_range_1=SIMPLE_MESH.num_vertices,
@@ -1358,7 +1365,7 @@ def test_gtir_reduce():
         sdfg(
             e,
             v,
-            connectivity_V2E=connectivity_V2E.ndarray,
+            gt_conn_V2E=connectivity_V2E.ndarray,
             **FSYMBOLS,
             **make_mesh_symbols(SIMPLE_MESH),
         )
@@ -1417,7 +1424,7 @@ def test_gtir_reduce_with_skip_values():
         sdfg(
             e,
             v,
-            connectivity_V2E=connectivity_V2E.ndarray,
+            gt_conn_V2E=connectivity_V2E.ndarray,
             **FSYMBOLS,
             **make_mesh_symbols(SKIP_VALUE_MESH),
         )
@@ -1483,7 +1490,7 @@ def test_gtir_reduce_dot_product():
         v2e_field,
         e,
         v,
-        connectivity_V2E=connectivity_V2E.ndarray,
+        gt_conn_V2E=connectivity_V2E.ndarray,
         **make_mesh_symbols(SKIP_VALUE_MESH),
         __v2e_field_0_range_1=SKIP_VALUE_MESH.num_vertices,
         __v2e_field_size_1=connectivity_V2E.shape[1],
@@ -1558,7 +1565,7 @@ def test_gtir_reduce_with_cond_neighbors():
             v2e_field,
             e,
             v,
-            connectivity_V2E=connectivity_V2E.ndarray,
+            gt_conn_V2E=connectivity_V2E.ndarray,
             **FSYMBOLS,
             **make_mesh_symbols(SKIP_VALUE_MESH),
             __v2e_field_0_range_1=SKIP_VALUE_MESH.num_vertices,
@@ -1703,7 +1710,8 @@ def test_gtir_let_lambda():
 
 
 def test_gtir_let_lambda_scalar_expression():
-    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    domain_inner = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, "size_inner")})
+    domain_outer = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
         id="let_lambda_scalar_expression",
         function_definitions=[],
@@ -1717,10 +1725,19 @@ def test_gtir_let_lambda_scalar_expression():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.let("tmp", im.multiplies_("a", "b"))(
-                    im.op_as_fieldop("multiplies", domain)("x", im.multiplies_("tmp", "tmp"))
+                # we create an inner symbol that will be mapped to a scalar expression of the parent node
+                expr=im.let("size_inner", im.plus("size", 1))(
+                    im.let("tmp", im.multiplies_("a", "b"))(
+                        im.as_fieldop(
+                            im.lambda_("a")(im.deref(im.shift(IDim.value, 1)("a"))), domain_outer
+                        )(
+                            im.op_as_fieldop("multiplies", domain_inner)(
+                                "x", im.multiplies_("tmp", "tmp")
+                            )
+                        )
+                    )
                 ),
-                domain=domain,
+                domain=domain_outer,
                 target=gtir.SymRef(id="y"),
             )
         ],
@@ -1728,13 +1745,18 @@ def test_gtir_let_lambda_scalar_expression():
 
     a = np.random.rand()
     b = np.random.rand()
-    c = np.random.rand(N)
-    d = np.empty_like(c)
+    c = np.random.rand(N + 1)
+    d = np.zeros(N)
 
-    sdfg = build_dace_sdfg(testee, {})
+    # We use `skip_domain_inference=True` to avoid propagating the compute domain
+    # to the inner expression, so that the mapping of the scalar expression `size + 1`
+    # to the symbol `inner_size` is preserved, for which we want to test the lowering.
+    sdfg = build_dace_sdfg(
+        testee, offset_provider_type=CARTESIAN_OFFSETS, skip_domain_inference=True
+    )
 
-    sdfg(a, b, c, d, **FSYMBOLS)
-    assert np.allclose(d, (a * a * b * b * c))
+    sdfg(a, b, c, d, **(FSYMBOLS | {"__x_0_range_1": N + 1}))
+    assert np.allclose(d, (a * a * b * b * c[1 : N + 1]))
 
 
 def test_gtir_let_lambda_with_connectivity():
@@ -1792,8 +1814,8 @@ def test_gtir_let_lambda_with_connectivity():
         cells=c,
         edges=e,
         vertices=v,
-        connectivity_C2E=connectivity_C2E.ndarray,
-        connectivity_C2V=connectivity_C2V.ndarray,
+        gt_conn_C2E=connectivity_C2E.ndarray,
+        gt_conn_C2V=connectivity_C2V.ndarray,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
     )

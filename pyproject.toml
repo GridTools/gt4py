@@ -43,7 +43,7 @@ test = [
   'coverage[toml]>=7.5.0',
   'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
-  'nox>=2024.10.9',
+  'nox>=2025.02.09',
   'pytest>=8.0.1',
   'pytest-benchmark>=5.0.0',
   'pytest-cache>=1.0',
@@ -435,7 +435,7 @@ url = 'https://test.pypi.org/simple/'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/spcl/dace", branch = "main", extra = "dace-next"}
+dace = {git = "https://github.com/GridTools/dace", branch = "gt4py-next-integration", extra = "dace-next"}
 
 # -- versioningit --
 [tool.versioningit]

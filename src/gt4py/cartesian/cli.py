@@ -31,8 +31,7 @@ from typing import (
 import click
 import tabulate
 
-from gt4py import cartesian as gt4pyc
-from gt4py.cartesian import gtscript_imports
+from gt4py.cartesian import backend as gt_backend, gtscript_imports
 from gt4py.cartesian.backend.base import CLIBackendMixin
 from gt4py.cartesian.lazy_stencil import LazyStencil
 
@@ -67,12 +66,12 @@ class BackendChoice(click.Choice):
 
     @staticmethod
     def get_backend_names() -> KeysView:
-        return gt4pyc.backend.REGISTRY.keys()
+        return gt_backend.REGISTRY.keys()
 
     @staticmethod
     def enabled_backend_cls_from_name(backend_name: str) -> Optional[Type[CLIBackendMixin]]:
         """Check if a given backend is enabled for CLI."""
-        backend_cls = gt4pyc.backend.from_name(backend_name)
+        backend_cls = gt_backend.from_name(backend_name)
         if backend_cls is None or not issubclass(backend_cls, CLIBackendMixin):
             return None
         return backend_cls
@@ -143,9 +142,9 @@ class BackendOption(click.ParamType):
     def convert(
         self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context]
     ) -> Tuple[str, Any]:
-        backend = ctx.params["backend"] if ctx else gt4pyc.backend.from_name("numpy")
+        backend = ctx.params["backend"] if ctx else gt_backend.from_name("numpy")
         assert isinstance(backend, type)
-        assert issubclass(backend, gt4pyc.backend.Backend)
+        assert issubclass(backend, gt_backend.Backend)
         name, value = self._try_split(value)
         if name.strip() not in backend.options:
             self.fail(f"Backend {backend.name} received unknown option: {name}!")
@@ -194,8 +193,7 @@ class GTScriptBuilder:
         class of the backend that should be used.
 
     silent :
-        silence all reporting to stdout if True
-
+        silence all reporting to stdout if True.
     """
 
     def __init__(

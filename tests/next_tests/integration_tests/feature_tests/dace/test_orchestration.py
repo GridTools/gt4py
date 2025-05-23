@@ -59,7 +59,7 @@ def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
             tmp_field, out_field
         )
 
-    # use unique cache name based on process id to avoid clashes between parallel pytest workers
+    # use unique SDFG folder in dace cache to avoid clashes between parallel pytest workers
     with dace.config.set_temporary("cache", value="unique"):
         sdfg()
 
@@ -124,55 +124,55 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
     connectivities = {"E2V": e2v}  # replace 'e2v' with 'e2v.__gt_type__()' when GTIR is AOT
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
 
-    SDFG = sdfg.to_sdfg(connectivities=connectivities)
-    cSDFG = SDFG.compile()
-
     a = gtx.as_field([Vertex], xp.asarray([0.0, 1.0, 2.0]), allocator=allocator)
     out = gtx.zeros({Edge: 3}, allocator=allocator)
 
     def get_stride_from_numpy_to_dace(arg: core_defs.NDArrayObject, axis: int) -> int:
         # NumPy strides: number of bytes to jump
         # DaCe strides: number of elements to jump
-        return arg.strides[axis] // arg.itemsize
+        stride, remainder = divmod(arg.strides[axis], arg.itemsize)
+        assert remainder == 0
+        return stride
 
-    # use unique cache name based on process id to avoid clashes between parallel pytest workers
+    # use unique SDFG folder in dace cache to avoid clashes between parallel pytest workers
     with dace.config.set_temporary("cache", value="unique"):
+        SDFG = sdfg.to_sdfg(connectivities=connectivities)
+        cSDFG = SDFG.compile()
+
         cSDFG(
             a,
             out,
             offset_provider,
             rows=3,
             cols=2,
-            connectivity_E2V=e2v,
-            __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
-            __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
+            gt_conn_E2V=e2v,
+            __gt_conn_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
+            __gt_conn_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
         )
 
-    e2v_np = e2v.asnumpy()
-    assert np.allclose(out.asnumpy(), a.asnumpy()[e2v_np[:, 0]])
+        e2v_np = e2v.asnumpy()
+        assert np.allclose(out.asnumpy(), a.asnumpy()[e2v_np[:, 0]])
 
-    e2v = gtx.as_connectivity(
-        [Edge, E2VDim],
-        codomain=Vertex,
-        data=xp.asarray([[1, 0], [2, 1], [0, 2]]),
-        allocator=allocator,
-    )
-    offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
-    # use unique cache name based on process id to avoid clashes between parallel pytest workers
-    with dace.config.set_temporary("cache", value="unique"):
+        e2v = gtx.as_connectivity(
+            [Edge, E2VDim],
+            codomain=Vertex,
+            data=xp.asarray([[1, 0], [2, 1], [0, 2]]),
+            allocator=allocator,
+        )
+        offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
         cSDFG(
             a,
             out,
             offset_provider,
             rows=3,
             cols=2,
-            connectivity_E2V=e2v,
-            __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
-            __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
+            gt_conn_E2V=e2v,
+            __gt_conn_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
+            __gt_conn_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
         )
 
-    e2v_np = e2v.asnumpy()
-    assert np.allclose(out.asnumpy(), a.asnumpy()[e2v_np[:, 0]])
+        e2v_np = e2v.asnumpy()
+        assert np.allclose(out.asnumpy(), a.asnumpy()[e2v_np[:, 0]])
 
 
 def get_stride_from_numpy_to_dace(numpy_array: np.ndarray, axis: int) -> int:

@@ -646,7 +646,6 @@ def return_type_field(
             new_dims.append(d)
         else:
             new_dims.extend(target_dims)
-    new_dims = common._ordered_dims(new_dims)  # e.g. `Vertex, V2E, K` -> `Vertex, K, V2E`
     return ts.FieldType(dims=new_dims, dtype=field_type.dtype)
 
 
@@ -831,7 +830,6 @@ def function_signature_incompatibilities_field(
 
     source_dim = args[0].source  # type: ignore[attr-defined] # ensured by loop above
     target_dims = args[0].target  # type: ignore[attr-defined] # ensured by loop above
-    # TODO: This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     if field_type.dims and source_dim not in field_type.dims:
         yield (
@@ -842,6 +840,8 @@ def function_signature_incompatibilities_field(
         )
 
 
+# TODO(havogt): Consider inlining the usage of this function in the call sites
+# to get rid of the `raise_exception` case and because the error message here is possibly too specific.
 def accepts_args(
     callable_type: ts.CallableType,
     *,
