@@ -5,12 +5,12 @@ on:
   - cron: '0 4 * * *'
   workflow_dispatch:
 
-  # COMMENTED OUT: only for testing CI action changes.
-  # It only works for PRs to `main` branch from branches in the upstream gt4py repo.
-  pull_request:
-    branches:
-    - main
-  # END
+  ## COMMENTED OUT: only for testing CI action changes.
+  ## It only works for PRs to `main` branch from branches in the upstream gt4py repo.
+  # pull_request:
+  #   branches:
+  #   - main
+  ## END
 
 jobs:
   # First job to read Python versions from .python-versions file
@@ -32,8 +32,8 @@ jobs:
         # between the different compatible versions for a given package requirement
         # [arg: --resolution, env: UV_RESOLUTION=]
         dependencies-strategy: ["lowest-direct", "highest"]
-        gt4py-module: ["eve"] #["cartesian", "eve", "next", "storage"]
-        os: ["ubuntu-latest"] #, "macos-latest"]
+        gt4py-module: ["eve", "cartesian", "eve", "next", "storage"]
+        os: ["ubuntu-latest", "macos-latest"]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
 
