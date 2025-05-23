@@ -168,6 +168,7 @@ def _parse_gt_param(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.ndarray.shape[{i}]"
                         )
                 for i, array_stride in enumerate(sdfg_arg_desc.strides):
+                    value = f"{_cb_get_stride}({arg}.ndarray, {i})"
                     if (
                         isinstance(array_stride, dace.symbolic.SymbolicType)
                         and not array_stride.is_constant()
@@ -175,7 +176,6 @@ def _parse_gt_param(
                         assert array_stride.name == gtx_dace_utils.field_stride_symbol_name(
                             param_name, i
                         )
-                        value = f"{_cb_get_stride}({arg}.ndarray, {i})"
                         _parse_gt_param(
                             array_stride.name,
                             FIELD_SYMBOL_GT_TYPE,
