@@ -653,10 +653,12 @@ def test_gtir_sum3():
         assert np.allclose(d, (a + b + c))
 
 
-def test_gtir_cond():
+@pytest.mark.parametrize("s1", [1, 2])
+@pytest.mark.parametrize("s2", [1, 2])
+def test_gtir_cond(s1, s2):
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
-        id="cond_2sums",
+        id=f"cond_2sums_{s1}_{s2}",
         function_definitions=[],
         params=[
             gtir.Sym(id="x", type=IFTYPE),
@@ -688,13 +690,12 @@ def test_gtir_cond():
     a = np.random.rand(N)
     b = np.random.rand(N)
     c = np.random.rand(N)
+    d = np.empty_like(a)
 
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
-    for s1, s2 in [(1, 2), (2, 1)]:
-        d = np.empty_like(a)
-        sdfg(a, b, c, d, s1, s2, scalar=1.0, **FSYMBOLS)
-        assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
+    sdfg(a, b, c, d, s1, s2, scalar=1.0, **FSYMBOLS)
+    assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
 
 
 @pytest.mark.xfail(reason="requires function to retrieve the annex tuple domain")
@@ -748,10 +749,12 @@ def test_gtir_cond_with_tuple_return():
         assert np.allclose(z_fields[1], b if s else a)
 
 
-def test_gtir_cond_nested():
+@pytest.mark.parametrize("s1", [False, True])
+@pytest.mark.parametrize("s2", [False, True])
+def test_gtir_cond_nested(s1, s2):
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
-        id="cond_nested",
+        id=f"cond_nested_{int(s1)}_{int(s2)}",
         function_definitions=[],
         params=[
             gtir.Sym(id="x", type=IFTYPE),
@@ -778,15 +781,13 @@ def test_gtir_cond_nested():
         ],
     )
 
-    a = np.random.rand(N)
-
     sdfg = build_dace_sdfg(testee, {})
 
-    for s1 in [False, True]:
-        for s2 in [False, True]:
-            b = np.empty_like(a)
-            sdfg(a, b, pred_1=np.bool_(s1), pred_2=np.bool_(s2), **FSYMBOLS)
-            assert np.allclose(b, (a + 1.0) if s1 else (a + 2.0) if s2 else (a + 3.0))
+    a = np.random.rand(N)
+    b = np.empty_like(a)
+
+    sdfg(a, b, pred_1=np.bool_(s1), pred_2=np.bool_(s2), **FSYMBOLS)
+    assert np.allclose(b, (a + 1.0) if s1 else (a + 2.0) if s2 else (a + 3.0))
 
 
 def test_gtir_cartesian_shift_left():
@@ -1500,11 +1501,12 @@ def test_gtir_reduce_dot_product():
     assert np.allclose(v, v_ref)
 
 
-def test_gtir_reduce_with_cond_neighbors():
+@pytest.mark.parametrize("use_sparse", [False, True])
+def test_gtir_reduce_with_cond_neighbors(use_sparse):
     init_value = np.random.rand()
     vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
     testee = gtir.Program(
-        id="reduce_with_cond_neighbors",
+        id=f"reduce_with_cond_neighbors_{int(use_sparse)}",
         function_definitions=[],
         params=[
             gtir.Sym(id="pred", type=ts.ScalarType(ts.ScalarKind.BOOL)),
@@ -1536,44 +1538,42 @@ def test_gtir_reduce_with_cond_neighbors():
 
     connectivity_V2E = SKIP_VALUE_MESH.offset_provider["V2E"]
 
+    sdfg = build_dace_sdfg(testee, SKIP_VALUE_MESH.offset_provider_type)
+
     v2e_field = np.random.rand(*connectivity_V2E.shape)
     e = np.random.rand(SKIP_VALUE_MESH.num_edges)
-
-    for use_sparse in [False, True]:
-        sdfg = build_dace_sdfg(testee, SKIP_VALUE_MESH.offset_provider_type)
-
-        v = np.empty(SKIP_VALUE_MESH.num_vertices, dtype=e.dtype)
-        v_ref = [
-            functools.reduce(
-                lambda x, y: x + y,
-                [
-                    v if i != gtx_common._DEFAULT_SKIP_VALUE else 0.0
-                    for i, v in zip(v2e_neighbors, v2e_values, strict=True)
-                ],
-                init_value,
-            )
-            if use_sparse
-            else functools.reduce(
-                lambda x, y: x + y,
-                [e[i] if i != gtx_common._DEFAULT_SKIP_VALUE else 0.0 for i in v2e_neighbors],
-                init_value,
-            )
-            for v2e_neighbors, v2e_values in zip(connectivity_V2E.asnumpy(), v2e_field, strict=True)
-        ]
-        sdfg(
-            np.bool_(use_sparse),
-            v2e_field,
-            e,
-            v,
-            gt_conn_V2E=connectivity_V2E.ndarray,
-            **FSYMBOLS,
-            **make_mesh_symbols(SKIP_VALUE_MESH),
-            __v2e_field_0_range_1=SKIP_VALUE_MESH.num_vertices,
-            __v2e_field_size_1=connectivity_V2E.shape[1],
-            __v2e_field_stride_0=connectivity_V2E.shape[1],
-            __v2e_field_stride_1=1,
+    v = np.empty(SKIP_VALUE_MESH.num_vertices, dtype=e.dtype)
+    v_ref = [
+        functools.reduce(
+            lambda x, y: x + y,
+            [
+                v if i != gtx_common._DEFAULT_SKIP_VALUE else 0.0
+                for i, v in zip(v2e_neighbors, v2e_values, strict=True)
+            ],
+            init_value,
         )
-        assert np.allclose(v, v_ref)
+        if use_sparse
+        else functools.reduce(
+            lambda x, y: x + y,
+            [e[i] if i != gtx_common._DEFAULT_SKIP_VALUE else 0.0 for i in v2e_neighbors],
+            init_value,
+        )
+        for v2e_neighbors, v2e_values in zip(connectivity_V2E.asnumpy(), v2e_field, strict=True)
+    ]
+    sdfg(
+        np.bool_(use_sparse),
+        v2e_field,
+        e,
+        v,
+        gt_conn_V2E=connectivity_V2E.ndarray,
+        **FSYMBOLS,
+        **make_mesh_symbols(SKIP_VALUE_MESH),
+        __v2e_field_0_range_1=SKIP_VALUE_MESH.num_vertices,
+        __v2e_field_size_1=connectivity_V2E.shape[1],
+        __v2e_field_stride_0=connectivity_V2E.shape[1],
+        __v2e_field_stride_1=1,
+    )
+    assert np.allclose(v, v_ref)
 
 
 def test_gtir_symbolic_domain():
@@ -1822,10 +1822,11 @@ def test_gtir_let_lambda_with_connectivity():
     assert np.allclose(c, ref)
 
 
-def test_gtir_let_lambda_with_cond():
+@pytest.mark.parametrize("s", [False, True])
+def test_gtir_let_lambda_with_cond(s):
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
-        id="let_lambda_with_cond",
+        id=f"let_lambda_with_cond_{int(s)}",
         function_definitions=[],
         params=[
             gtir.Sym(id="x", type=IFTYPE),
@@ -1850,10 +1851,9 @@ def test_gtir_let_lambda_with_cond():
     sdfg = build_dace_sdfg(testee, {})
 
     a = np.random.rand(N)
-    for s in [False, True]:
-        b = np.empty_like(a)
-        sdfg(a, b, pred=np.bool_(s), **FSYMBOLS)
-        assert np.allclose(b, a if s else a * 2)
+    b = np.empty_like(a)
+    sdfg(a, b, pred=np.bool_(s), **FSYMBOLS)
+    assert np.allclose(b, a if s else a * 2)
 
 
 def test_gtir_let_lambda_with_tuple1():
@@ -1957,10 +1957,11 @@ def test_gtir_let_lambda_with_tuple2():
     assert np.allclose(z_fields[2], b)
 
 
-def test_gtir_if_scalars():
+@pytest.mark.parametrize("s", [False, True])
+def test_gtir_if_scalars(s):
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
-        id="if_scalars",
+        id=f"if_scalars_{int(s)}",
         function_definitions=[],
         params=[
             gtir.Sym(
@@ -2012,9 +2013,8 @@ def test_gtir_if_scalars():
         "__x_1_1_stride_0": 1,
     }
 
-    for s in [False, True]:
-        sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS, **tuple_symbols)
-        assert np.allclose(b, (a + d1 if s else a + d2))
+    sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS, **tuple_symbols)
+    assert np.allclose(b, (a + d1 if s else a + d2))
 
 
 def test_gtir_if_values():

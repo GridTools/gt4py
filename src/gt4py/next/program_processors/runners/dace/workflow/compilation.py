@@ -121,7 +121,13 @@ class DaCeCompiler(
 
         with dace.config.temporary_config():
             dace.config.Config.set("compiler.build_type", value=self.cmake_build_type.value)
-            dace.config.Config.set("compiler.use_cache", value=False)  # we use the gt4py cache
+
+            # We rely on dace cache to avoid recompiling the SDFG.
+            #   Note that the workflow step with the persistent `FileCache` store
+            #   is translating from `CompilableProgram` (ITIR.Program + CompileTimeArgs)
+            #   to `ProgramSource`, so this step is storing in cache only the result
+            #   of the SDFG transformations, not the compiled program binary.
+            dace.config.Config.set("compiler.use_cache", value=True)
 
             # dace dafault setting use fast-math in both cpu and gpu compilation, don't use it here
             dace.config.Config.set(

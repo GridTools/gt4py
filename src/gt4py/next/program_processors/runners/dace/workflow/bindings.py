@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from typing import Final, TypeVar
+from typing import Final
 
 import dace
 
@@ -19,8 +19,6 @@ from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 from gt4py.next.type_system import type_specifications as ts
 
-
-SrcL = TypeVar("SrcL", bound=languages.SDFG, covariant=True)
 
 FIELD_RANGE_PARAM_RE: Final[re.Pattern] = re.compile(r"^__(.+)_(\d+)_range$")
 FIELD_SYMBOL_GT_TYPE: Final[ts.ScalarType] = ts.ScalarType(
@@ -215,10 +213,10 @@ def _parse_gt_param(
 
 
 def _create_sdfg_bindings(
-    program_source: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
+    program_source: stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
     bind_func_name: str,
     make_persistent: bool,
-) -> stages.BindingSource[SrcL, languages.Python]:
+) -> stages.BindingSource[languages.SDFG, languages.Python]:
     """
     Creates a Python translation function to convert the GT4Py arguments list
     to the SDFG calling convention.
@@ -273,10 +271,10 @@ def {_cb_get_stride}(ndarray, dim_index):
 
 
 def bind_sdfg(
-    inp: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
+    inp: stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
     bind_func_name: str,
     make_persistent: bool,
-) -> stages.CompilableSource[SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python]:
+) -> stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python]:
     """
     Method to be used as workflow stage for generation of SDFG bindings.
 
