@@ -9,6 +9,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # /// script
+# requires-python = ">=3.10"
 # dependencies = ["nox>=2025.02.09", "uv>0.6.10"]
 # ///
 
