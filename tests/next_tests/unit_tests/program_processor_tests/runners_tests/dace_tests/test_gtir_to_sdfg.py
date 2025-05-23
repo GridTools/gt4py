@@ -653,10 +653,12 @@ def test_gtir_sum3():
         assert np.allclose(d, (a + b + c))
 
 
-def test_gtir_cond():
+@pytest.mark.parametrize("s1", [1, 2])
+@pytest.mark.parametrize("s2", [1, 2])
+def test_gtir_cond(s1, s2):
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     testee = gtir.Program(
-        id="cond_2sums",
+        id=f"cond_2sums_{s1}_{s2}",
         function_definitions=[],
         params=[
             gtir.Sym(id="x", type=IFTYPE),
@@ -688,13 +690,12 @@ def test_gtir_cond():
     a = np.random.rand(N)
     b = np.random.rand(N)
     c = np.random.rand(N)
+    d = np.empty_like(a)
 
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
-    for s1, s2 in [(1, 2), (2, 1)]:
-        d = np.empty_like(a)
-        sdfg(a, b, c, d, s1, s2, scalar=1.0, **FSYMBOLS)
-        assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
+    sdfg(a, b, c, d, s1, s2, scalar=1.0, **FSYMBOLS)
+    assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
 
 
 @pytest.mark.xfail(reason="requires function to retrieve the annex tuple domain")
