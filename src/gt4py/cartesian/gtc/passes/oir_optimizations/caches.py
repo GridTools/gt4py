@@ -12,8 +12,7 @@ from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-
-from .utils import AccessCollector, symbol_name_creator
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import AccessCollector, symbol_name_creator
 
 
 """Utilities for cache detection and modifications on the OIR level.

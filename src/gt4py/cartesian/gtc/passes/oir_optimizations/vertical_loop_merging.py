@@ -9,11 +9,11 @@
 import warnings
 from typing import Any
 
+from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-from gt4py.eve import NodeTranslator
 
 
-class AdjacentLoopMerging(NodeTranslator):
+class AdjacentLoopMerging(eve.NodeTranslator):
     @staticmethod
     def _mergeable(a: oir.VerticalLoop, b: oir.VerticalLoop) -> bool:
         if a.loop_order != b.loop_order:

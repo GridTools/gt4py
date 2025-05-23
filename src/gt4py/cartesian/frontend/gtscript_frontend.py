@@ -21,12 +21,9 @@ import numpy as np
 
 from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
 from gt4py.cartesian.frontend import node_util, nodes
+from gt4py.cartesian.frontend.base import Frontend, register
 from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
-from gt4py.cartesian.gtc import utils as gtc_utils
-from gt4py.cartesian.utils import NOTHING, meta as gt_meta
-
-from .base import Frontend, register
-from .exceptions import (
+from gt4py.cartesian.frontend.exceptions import (
     GTScriptAssertionError,
     GTScriptDataTypeError,
     GTScriptDefinitionError,
@@ -34,6 +31,7 @@ from .exceptions import (
     GTScriptSyntaxError,
     GTScriptValueError,
 )
+from gt4py.cartesian.utils import meta as gt_meta
 
 
 PYTHON_AST_VERSION: Final = (3, 8)
@@ -52,8 +50,8 @@ class AssertionChecker(ast.NodeTransformer):
         self.source = source
 
     def _process_assertion(self, expr_node: ast.Expr) -> None:
-        condition_value = gt_utils.meta.ast_eval(expr_node, self.context, default=NOTHING)
-        if condition_value is not NOTHING:
+        condition_value = gt_meta.ast_eval(expr_node, self.context, default=gt_utils.NOTHING)
+        if condition_value is not gt_utils.NOTHING:
             if not condition_value:
                 source_lines = textwrap.dedent(self.source).split("\n")
                 loc = nodes.Location.from_ast_node(expr_node)
@@ -305,7 +303,7 @@ class ValueInliner(ast.NodeTransformer):
         return node
 
 
-class ReturnReplacer(gt_utils.meta.ASTTransformPass):
+class ReturnReplacer(gt_meta.ASTTransformPass):
     @classmethod
     def apply(cls, ast_object: ast.AST, target_node: ast.AST) -> None:
         """Ensure that there is only a single return statement (can still return a tuple)."""
@@ -596,8 +594,8 @@ class CompiledIfInliner(ast.NodeTransformer):
             and len(node.test.args) == 1
         ):
             eval_node = node.test.args[0]
-            condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
-            if condition_value is not NOTHING:
+            condition_value = gt_meta.ast_eval(eval_node, self.context, default=gt_utils.NOTHING)
+            if condition_value is not gt_utils.NOTHING:
                 node = node.body if condition_value else node.orelse
             else:
                 raise GTScriptSyntaxError(
@@ -969,7 +967,7 @@ class IRMaker(ast.NodeVisitor):
         self.parsing_context = ParsingContext.COMPUTATION
         stmts = []
         for stmt in node.body:
-            stmts.extend(gtc_utils.listify(self.visit(stmt)))
+            stmts.extend(gt_utils.listify(self.visit(stmt)))
         self.parsing_context = ParsingContext.CONTROL_FLOW
 
         if intervals_dicts:
@@ -1107,7 +1105,7 @@ class IRMaker(ast.NodeVisitor):
         self, node: ast.Subscript, field_axes: Optional[Set[Literal["I", "J", "K"]]] = None
     ) -> Optional[List[int]]:
         tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
-        index_nodes = gtc_utils.listify(
+        index_nodes = gt_utils.listify(
             tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
         )
 
@@ -1317,13 +1315,13 @@ class IRMaker(ast.NodeVisitor):
 
         main_stmts = []
         for stmt in node.body:
-            main_stmts.extend(gtc_utils.listify(self.visit(stmt)))
+            main_stmts.extend(gt_utils.listify(self.visit(stmt)))
         assert all(isinstance(item, nodes.Statement) for item in main_stmts)
 
         else_stmts = []
         if node.orelse:
             for stmt in node.orelse:
-                else_stmts.extend(gtc_utils.listify(self.visit(stmt)))
+                else_stmts.extend(gt_utils.listify(self.visit(stmt)))
             assert all(isinstance(item, nodes.Statement) for item in else_stmts)
 
         result = []
@@ -1491,7 +1489,7 @@ class IRMaker(ast.NodeVisitor):
 
             target.append(self.visit(t))
 
-        value = gtc_utils.listify(self.visit(node.value))
+        value = gt_utils.listify(self.visit(node.value))
 
         assert len(target) == len(value)
         for left, right in zip(target, value):
@@ -1525,9 +1523,7 @@ class IRMaker(ast.NodeVisitor):
 
             self.parsing_horizontal_region = True
             intervals_dicts = self._visit_with_horizontal(node.items[0], loc)
-            all_stmts = gt_utils.flatten(
-                [gtc_utils.listify(self.visit(stmt)) for stmt in node.body]
-            )
+            all_stmts = gt_utils.flatten([gt_utils.listify(self.visit(stmt)) for stmt in node.body])
             self.parsing_horizontal_region = False
             stmts = list(filter(lambda stmt: isinstance(stmt, nodes.Decl), all_stmts))
             body_block = nodes.BlockStmt(
@@ -1593,7 +1589,7 @@ class IRMaker(ast.NodeVisitor):
 
                 return compute_blocks
             elif self.parsing_context == ParsingContext.CONTROL_FLOW:
-                return gtc_utils.listify(self._visit_computation_node(node))
+                return gt_utils.listify(self._visit_computation_node(node))
             else:
                 # Mixing nested `with` blocks with stmts not allowed
                 raise syntax_error
