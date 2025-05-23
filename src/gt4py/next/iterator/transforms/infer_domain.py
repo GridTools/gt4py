@@ -362,7 +362,6 @@ def _infer_concat_where(
     **kwargs: Unpack[InferenceOptions],
 ) -> tuple[itir.Expr, AccessedDomains]:
     assert cpm.is_call_to(expr, "concat_where")
-    # assert all(isinstance(domain, domain_utils.SymbolicDomain) for domain in utils.flatten_nested_tuple(domain))
     infered_args_expr = []
     actual_domains: AccessedDomains = {}
     cond, true_field, false_field = expr.args
@@ -376,7 +375,8 @@ def _infer_concat_where(
             if isinstance(d, DomainAccessDescriptor):
                 return d
             promoted_cond = domain_utils.promote_to_same_dimensions(
-                symbolic_cond if arg == true_field else cond_complement, d
+                symbolic_cond if arg == true_field else cond_complement,  # noqa: B023 # function is never used outside the loop
+                d,
             )
             return domain_utils.domain_intersection(d, promoted_cond)
 

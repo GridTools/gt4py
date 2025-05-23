@@ -6,12 +6,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 from gt4py.next import common
-import pytest
+
 from gt4py.next.iterator.ir_utils import ir_makers as im, domain_utils
-from gt4py.next.iterator.transforms import concat_where_transforms
-from gt4py.next.iterator.transforms import inline_lambdas
+from gt4py.next.iterator.transforms import concat_where, inline_lambdas
 from gt4py.next.type_system import type_specifications as ts
-from gt4py.next.iterator.type_system import type_specifications as it_ts
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
@@ -34,7 +32,7 @@ def test_trivial():
         domain,
     )(im.make_tuple(im.index(IDim)), "true_branch", "false_branch")
 
-    actual = concat_where_transforms.expand(testee)
+    actual = concat_where.transform_to_as_fieldop(testee)
     actual = inline_lambdas.InlineLambdas.apply(actual)  # simplify
 
     assert actual == expected
@@ -62,7 +60,7 @@ def test_capturing_cond():
         domain,
     )(im.make_tuple(im.index(IDim)), "true_branch", "false_branch", "start", "stop")
 
-    actual = concat_where_transforms.expand(testee)
+    actual = concat_where.transform_to_as_fieldop(testee)
     actual = inline_lambdas.InlineLambdas.apply(actual)  # simplify
 
     assert actual == expected

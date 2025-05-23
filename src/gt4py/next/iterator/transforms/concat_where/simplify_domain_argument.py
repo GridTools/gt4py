@@ -16,7 +16,18 @@ from gt4py.next.iterator.ir_utils import (
 from gt4py.next.iterator.ir_utils.domain_utils import SymbolicDomain
 
 
-class NestConcatWheres(PreserveLocationVisitor, NodeTranslator):
+def _range_complement(
+    range_: domain_utils.SymbolicRange,
+) -> tuple[domain_utils.SymbolicRange, domain_utils.SymbolicRange]:
+    # `[a, b[` -> `[-inf, a[` ∪ `[b, inf[`  # noqa: RUF003
+    assert not any(isinstance(b, itir.InfinityLiteral) for b in [range_.start, range_.stop])
+    return (
+        domain_utils.SymbolicRange(itir.InfinityLiteral.NEGATIVE, range_.start),
+        domain_utils.SymbolicRange(range_.stop, itir.InfinityLiteral.POSITIVE),
+    )
+
+
+class _SimplifyDomainArgument(PreserveLocationVisitor, NodeTranslator):
     @classmethod
     def apply(cls, node: ir.Node):
         return cls().visit(node)
@@ -37,12 +48,6 @@ class NestConcatWheres(PreserveLocationVisitor, NodeTranslator):
                 conds = cond_expr.args
                 return self.visit(
                     im.concat_where(conds[0], field_a, im.concat_where(conds[1], field_a, field_b))
-                )
-            if cpm.is_call_to(cond_expr, "eq"):
-                cond1 = im.less(cond_expr.args[0], cond_expr.args[1])
-                cond2 = im.greater(cond_expr.args[0], cond_expr.args[1])
-                return self.visit(
-                    im.concat_where(cond1, field_b, im.concat_where(cond2, field_b, field_a))
                 )
 
             # concat_where([1, 2[, a, b) -> concat_where([-inf, 1] | [2, inf[, b, a)
@@ -68,12 +73,4 @@ class NestConcatWheres(PreserveLocationVisitor, NodeTranslator):
         return node
 
 
-def _range_complement(
-    range_: domain_utils.SymbolicRange,
-) -> tuple[domain_utils.SymbolicRange, domain_utils.SymbolicRange]:
-    # `[a, b[` -> `[-inf, a[` ∪ `[b, inf[`
-    assert not any(isinstance(b, itir.InfinityLiteral) for b in [range_.start, range_.stop])
-    return (
-        domain_utils.SymbolicRange(itir.InfinityLiteral.NEGATIVE, range_.start),
-        domain_utils.SymbolicRange(range_.stop, itir.InfinityLiteral.POSITIVE),
-    )
+simplify_domain_argument = _SimplifyDomainArgument.apply
