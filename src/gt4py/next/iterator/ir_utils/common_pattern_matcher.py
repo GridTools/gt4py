@@ -108,8 +108,10 @@ def is_let(node: itir.Node) -> TypeGuard[_FunCallToLambda]:
     return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
 
 
-def is_ref_to(node, ref: str) -> TypeGuard[itir.SymRef]:
-    return isinstance(node, itir.SymRef) and node.id == ref
+def is_ref_to(node, ref: str | Iterable[str]) -> TypeGuard[itir.SymRef]:
+    if isinstance(ref, str):
+        return isinstance(node, itir.SymRef) and node.id == ref
+    return any(is_ref_to(node, el) for el in ref)
 
 
 def is_identity_as_fieldop(node: itir.Expr) -> TypeGuard[_FunCallToFunCallToRef]:

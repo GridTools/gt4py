@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import functools
+
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next import utils
 from gt4py.next.iterator import ir as itir
@@ -17,6 +19,24 @@ from gt4py.next.iterator.ir_utils import (
 from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_specifications as ts
+
+
+def _in(pos: itir.Expr, domain: itir.Expr) -> itir.Expr:
+    """
+    Given a position and a domain return an expression that evaluates to `True` if the position is inside the domain.
+
+    `in_({i, j, k}, u⟨ Iₕ: [i0, i1[, Iₕ: [j0, j1[, Iₕ: [k0, k1[ ⟩`
+    -> `i0 <= i < i1 & j0 <= j < j1 & k0 <= k < k1`
+    """
+    ret = []
+    for i, v in enumerate(domain_utils.SymbolicDomain.from_expr(domain).ranges.values()):
+        ret.append(
+            im.and_(
+                im.less_equal(v.start, im.tuple_get(i, pos)),
+                im.less(im.tuple_get(i, pos), v.stop),
+            )
+        )
+    return functools.reduce(im.and_, ret)
 
 
 class _TransformToAsFieldop(PreserveLocationVisitor, NodeTranslator):
@@ -46,7 +66,9 @@ class _TransformToAsFieldop(PreserveLocationVisitor, NodeTranslator):
             position = [im.index(dim) for dim in cond.type.dims]
             refs = symbol_ref_utils.collect_symbol_refs(cond)
 
-            domains = utils.flatten_nested_tuple(node.annex.domain)
+            domains: tuple[domain_utils.SymbolicDomain, ...] = utils.flatten_nested_tuple(
+                node.annex.domain
+            )
             assert all(
                 domain == domains[0] for domain in domains
             ), "At this point all `concat_where` arguments should be posed on the same domain."

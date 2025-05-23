@@ -1017,7 +1017,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return_dims = promote_dims(
                 mask_type.dims, type_info.extract_dims(type_info.promote(tb, fb))
             )
-            return_type = ts.FieldType(dims=return_dims, dtype=type_info.promote(t_dtype, f_dtype))
+            return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
             return return_type
 
         return_type = deduce_return_type(true_branch_type, false_branch_type)

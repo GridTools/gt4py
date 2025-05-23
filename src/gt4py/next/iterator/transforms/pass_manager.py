@@ -14,7 +14,6 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
     concat_where,
     dead_code_elimination,
-    expand_library_functions,
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
@@ -87,7 +86,7 @@ def apply_common_transforms(
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.simplify_domain_argument(ir)
 
-    ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)
+    ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
     ir = infer_domain.infer_program(
         ir,
         offset_provider=offset_provider,
@@ -96,7 +95,6 @@ def apply_common_transforms(
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
 
     ir = concat_where.transform_to_as_fieldop(ir)
-    ir = expand_library_functions.ExpandLibraryFunctions.apply(ir)
 
     for _ in range(10):
         inlined = ir
@@ -196,7 +194,7 @@ def apply_fieldview_transforms(
 
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.simplify_domain_argument(ir)
-    ir = ConstantFolding.apply(ir)
+    ir = ConstantFolding.apply(ir)  # type: ignore[assignment]  # always an itir.Program
 
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
