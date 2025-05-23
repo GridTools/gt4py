@@ -428,6 +428,15 @@ def test_multi_stage_reduction():
 
 
 def test_not_fully_copied():
+    try:
+        __test_not_fully_copied()
+    except BaseException as E:
+        raise ValueError(
+            f"`use_cache` status: {dace.config.Config.get('compiler.use_cache')}; Real Error: {str(E)}"
+        )
+
+
+def __test_not_fully_copied():
     sdfg = _make_not_fully_copied()
 
     # NOTE: In the unprocessed SDFG, especially in the `(d) -> (e)` Memlet.
