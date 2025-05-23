@@ -10,7 +10,7 @@
 #
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["nox>=2025.02.09", "uv>0.6.10"]
+# dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
 # ///
 
 from __future__ import annotations
