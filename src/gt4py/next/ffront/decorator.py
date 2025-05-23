@@ -306,14 +306,9 @@ class Program:
                 ),
                 stacklevel=2,
             )
+            offset_provider = {**offset_provider, **self._implicit_offset_provider}
             with next_embedded.context.update(offset_provider=offset_provider):
                 self.definition_stage.definition(*args, **kwargs)
-
-        if collect_metrics_level:
-            if collect_metrics:
-                program_metrics[metrics.TOTAL_METRIC].add_sample(time.time() - start)
-
-            metrics.active_metric_collection.set(None)
 
     def compile(
         self,

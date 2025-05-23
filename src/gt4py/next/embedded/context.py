@@ -27,9 +27,10 @@ _offset_provider: contextvars.ContextVar[common.OffsetProvider] = contextvars.Co
 )
 
 
-_NO_DEFAULT_SENTINEL: Any = object()
-
 _T = TypeVar("_T")
+
+
+_NO_DEFAULT_SENTINEL: Any = object()
 
 
 @overload
@@ -84,14 +85,15 @@ def update(
         assert not isinstance(offset_provider, eve.NothingType)
         offset_provider_token = gtx_embedded.context._offset_provider.set(offset_provider)
 
-    yield None
-
-    if closure_column_range is not eve.NOTHING:
-        assert closure_token is not None
-        gtx_embedded.context._closure_column_range.reset(closure_token)
-    if offset_provider is not eve.NOTHING:
-        assert offset_provider_token is not None
-        gtx_embedded.context._offset_provider.reset(offset_provider_token)
+    try:
+        yield None
+    finally:
+        if closure_column_range is not eve.NOTHING:
+            assert closure_token is not None
+            gtx_embedded.context._closure_column_range.reset(closure_token)
+        if offset_provider is not eve.NOTHING:
+            assert offset_provider_token is not None
+            gtx_embedded.context._offset_provider.reset(offset_provider_token)
 
 
 def within_valid_context() -> bool:
