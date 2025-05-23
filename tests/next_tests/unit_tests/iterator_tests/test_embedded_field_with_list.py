@@ -44,8 +44,8 @@ def test_write_neighbors():
         return as_fieldop(lambda it: neighbors(E2V, it), domain)(inp)
 
     inp = gtx.as_field([V], np.arange(3))
-    with embedded_context.new_context(offset_provider={"E2V": e2v_conn}) as ctx:
-        result = ctx.run(testee, inp)
+    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+        result = testee(inp)
 
     ref = e2v_arr
     np.testing.assert_array_equal(result.asnumpy(), ref)
@@ -56,8 +56,8 @@ def test_write_const_list():
         domain = runtime.UnstructuredDomain({E: range(2)})
         return as_fieldop(lambda: make_const_list(42.0), domain)()
 
-    with embedded_context.new_context(offset_provider={}) as ctx:
-        result = ctx.run(testee)
+    with embedded_context.update(offset_provider={}):
+        result = testee()
 
     ref = np.asarray([[42.0], [42.0]])
 
@@ -76,8 +76,8 @@ def test_write_map_neighbors_and_const_list():
         )
 
     inp = gtx.as_field([V], np.arange(3))
-    with embedded_context.new_context(offset_provider={"E2V": e2v_conn}) as ctx:
-        result = ctx.run(testee, inp)
+    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+        result = testee(inp)
 
     ref = e2v_arr + 42.0
     np.testing.assert_array_equal(result.asnumpy(), ref)
@@ -94,8 +94,8 @@ def test_write_map_conditional_neighbors_and_const_list():
 
     inp = gtx.as_field([V], np.arange(3))
     mask_field = gtx.as_field([E], np.array([True, False]))
-    with embedded_context.new_context(offset_provider={"E2V": e2v_conn}) as ctx:
-        result = ctx.run(testee, inp, mask_field)
+    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+        result = testee(inp, mask_field)
 
     ref = np.empty_like(e2v_arr, dtype=float)
     ref[0, :] = e2v_arr[0, :]
@@ -122,8 +122,8 @@ def test_write_non_mapped_conditional_neighbors_and_const_list():
 
     inp = gtx.as_field([V], np.arange(3))
     mask_field = gtx.as_field([E], np.array([True, False]))
-    with embedded_context.new_context(offset_provider={"E2V": e2v_conn}) as ctx:
-        result = ctx.run(testee, inp, mask_field)
+    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+        result = testee(inp, mask_field)
 
     ref = np.empty_like(e2v_arr, dtype=float)
     ref[0, :] = e2v_arr[0, :]
@@ -139,8 +139,8 @@ def test_write_map_const_list_and_const_list():
             as_fieldop(lambda: make_const_list(42.0), domain)(),
         )
 
-    with embedded_context.new_context(offset_provider={}) as ctx:
-        result = ctx.run(testee)
+    with embedded_context.update(offset_provider={}):
+        result = testee()
 
     ref = np.asarray([[43.0], [43.0]])
 

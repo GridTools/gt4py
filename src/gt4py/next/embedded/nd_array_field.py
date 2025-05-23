@@ -994,7 +994,7 @@ def _make_reduction(
                 "Reducing a field with more than one local dimension is not supported."
             )
         reduce_dim_index = field.domain.dims.index(axis)
-        current_offset_provider = embedded_context.offset_provider.get(None)
+        current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[
             axis.value

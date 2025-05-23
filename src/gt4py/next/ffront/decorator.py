@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import time
 import types
 import typing
 import warnings
@@ -31,6 +32,7 @@ from gt4py.next import (
     config,
     embedded as next_embedded,
     errors,
+    metrics,
 )
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -272,6 +274,14 @@ class Program:
         )
 
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
+        if collect_metrics_level := config.COLLECT_METRICS_LEVEL:
+            assert metrics.active_metric_collection.get() is None
+            metrics.active_metric_collection.set(
+                program_metrics := metrics.program_metrics[self.__name__]
+            )
+            if collect_metrics := (collect_metrics_level >= metrics.INFO):
+                start = time.time()
+
         if __debug__:
             # TODO: remove or make dependency on self.past_stage optional
             past_process_args._validate_args(
@@ -279,11 +289,12 @@ class Program:
                 arg_types=[type_translation.from_value(arg) for arg in args],
                 kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
             )
+
+        offset_provider = {
+            **offset_provider,
+            **self._implicit_offset_provider,  # TODO(havogt) cleanup implicit_offset_provider
+        }
         if self.backend is not None:
-            offset_provider = {  # TODO(havogt) cleanup implicit_offset_provider
-                **offset_provider,
-                **self._implicit_offset_provider,
-            }
             self._compiled_programs(
                 *args, **kwargs, offset_provider=offset_provider, enable_jit=self.enable_jit
             )
@@ -295,9 +306,14 @@ class Program:
                 ),
                 stacklevel=2,
             )
-            offset_provider = {**offset_provider, **self._implicit_offset_provider}
-            with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                ctx.run(self.definition_stage.definition, *args, **kwargs)
+            with next_embedded.context.update(offset_provider=offset_provider):
+                self.definition_stage.definition(*args, **kwargs)
+
+        if collect_metrics_level:
+            if collect_metrics:
+                program_metrics[metrics.TOTAL_METRIC].add_sample(time.time() - start)
+
+            metrics.active_metric_collection.set(None)
 
     def compile(
         self,

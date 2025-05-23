@@ -33,13 +33,11 @@ class CMakeBuildType(enum.Enum):
 
 
 def env_flag_to_bool(name: str, default: bool) -> bool:
-    """Recognize true or false signaling string values."""
-    flag_value = None
-    if name in os.environ:
-        flag_value = os.environ[name].lower()
-    match flag_value:
-        case None:
-            return default
+    """Convert environment variable string variable to a bool value."""
+    flag_value = os.environ.get(name, None)
+    if flag_value is None:
+        return default
+    match flag_value.lower():
         case "0" | "false" | "off":
             return False
         case "1" | "true" | "on":
@@ -48,6 +46,19 @@ def env_flag_to_bool(name: str, default: bool) -> bool:
             raise ValueError(
                 "Invalid GT4Py environment flag value: use '0 | false | off' or '1 | true | on'."
             )
+
+
+def env_flag_to_int(name: str, default: int) -> int:
+    """Convert environment variable string variable to an int value."""
+    flag_value = os.environ.get(name, None)
+    if flag_value is None:
+        return default
+    try:
+        return int(flag_value)
+    except ValueError:
+        raise ValueError(
+            f"Invalid GT4Py environment flag value: {flag_value} is not an integer."
+        ) from None
 
 
 #: Master debug flag
@@ -93,6 +104,11 @@ UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
 #: - if os.cpu_count() is None we are conservative and use 1 job,
 #: - if the number is huge (e.g. HPC system) we limit to a smaller number
 BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1, 32)))
+
+#: User-defined level to enable metrics at lower or equal level.
+#: Enabling metrics collection will do extra synchronization and will have
+#: impact on runtime performance.
+COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", default=0)
 
 #: The default for whether to allow jit-compilation for a compiled program.
 #: This default can be overriden per program.
