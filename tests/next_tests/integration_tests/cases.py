@@ -632,25 +632,6 @@ class Case:
         return constructors.as_field.partial(allocator=self.allocator)
 
     @classmethod
-    def from_mesh_descriptor(
-        cls,
-        mesh_descriptor: MeshDescriptor,
-        backend: Optional[next_backend.Backend] = None,
-        allocator: Optional[next_allocators.FieldBufferAllocatorFactoryProtocol] = None,
-    ) -> Case:
-        return cls(
-            backend=backend,
-            offset_provider=mesh_descriptor.offset_provider,
-            default_sizes={
-                Vertex: mesh_descriptor.num_vertices,
-                Edge: mesh_descriptor.num_edges,
-                Cell: mesh_descriptor.num_cells,
-            },
-            grid_type=common.GridType.UNSTRUCTURED,
-            allocator=allocator or next_allocators.FieldBufferAllocatorFactory(),
-        )
-
-    @classmethod
     def from_cartesian_grid_descriptor(
         cls,
         grid_descriptor: CartesianGridDescriptor,
@@ -666,5 +647,24 @@ class Case:
                 KDim: grid_descriptor.sizes[2],
             },
             grid_type=common.GridType.CARTESIAN,
-            allocator=allocator or next_allocators.FieldBufferAllocatorFactory(),
+            allocator=allocator,
+        )
+
+    @classmethod
+    def from_mesh_descriptor(
+        cls,
+        mesh_descriptor: MeshDescriptor,
+        backend: Optional[next_backend.Backend] = None,
+        allocator: Optional[next_allocators.FieldBufferAllocatorFactoryProtocol] = None,
+    ) -> Case:
+        return cls(
+            backend=backend,
+            offset_provider=mesh_descriptor.offset_provider,
+            default_sizes={
+                Vertex: mesh_descriptor.num_vertices,
+                Edge: mesh_descriptor.num_edges,
+                Cell: mesh_descriptor.num_cells,
+            },
+            grid_type=common.GridType.UNSTRUCTURED,
+            allocator=allocator,
         )
