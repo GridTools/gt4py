@@ -239,6 +239,19 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
     def visit_While(self, node: dcir.While, **kwargs: Any) -> Any:
         return self._visit_conditional(cond=node.cond, body=node.body, keyword="while", **kwargs)
 
+    ForIndex = as_fmt("{name}")
+
+    def visit_For(self, node: dcir.For, **kwargs: Any) -> str:
+        code = [
+            f"for {node.index_name} in {range(node.iter_start, node.iter_stop, node.iter_step)}:",
+            *(
+                "    " + line
+                for block in self.visit(node.body, **kwargs)
+                for line in block.split("\n")
+            ),
+        ]
+        return "\n".join(code)
+
     def visit_HorizontalMask(self, node: common.HorizontalMask, **kwargs: Any) -> str:
         clauses: List[str] = []
 

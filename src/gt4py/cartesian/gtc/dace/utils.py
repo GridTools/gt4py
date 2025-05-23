@@ -189,6 +189,9 @@ class AccessInfoCollector(eve.NodeVisitor):
     def visit_While(self, node: oir.While, *, is_conditional=False, **kwargs):
         self.generic_visit(node, is_conditional=True, **kwargs)
 
+    def visit_For(self, node: oir.For, *, is_conditional=False, **kwargs):
+        self.visit(node.body, is_conditional=False, **kwargs)
+
     @staticmethod
     def _global_grid_subset(
         region: common.HorizontalMask, he_grid: dcir.GridSubset, offset: List[Optional[int]]

@@ -394,6 +394,18 @@ class DaCeIRBuilder(eve.NodeTranslator):
             body=self.visit(node.body, **kwargs),
         )
 
+    def visit_ForIndex(self, node: oir.ForIndex, **kwargs: Any) -> dcir.ForIndex:
+        return dcir.ForIndex(name=node.name)
+
+    def visit_For(self, node: oir.For, **kwargs: Any) -> dcir.For:
+        return dcir.For(
+            index_name=node.index_name,
+            iter_start=node.iter_start,
+            iter_stop=node.iter_stop,
+            iter_step=node.iter_step,
+            body=self.visit(node.body, **kwargs),
+        )
+
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> dcir.Cast:
         return dcir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 

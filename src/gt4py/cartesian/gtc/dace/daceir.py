@@ -783,6 +783,14 @@ class While(common.While[Stmt, Expr], Stmt):
     pass
 
 
+class ForIndex(common.ForIndex, Expr):
+    pass
+
+
+class For(common.For[Stmt], Stmt):
+    pass
+
+
 class ScalarDecl(Decl):
     pass
 
