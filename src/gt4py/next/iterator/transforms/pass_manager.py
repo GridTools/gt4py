@@ -195,7 +195,7 @@ def apply_fieldview_transforms(
     )  # domain inference does not support dynamic offsets yet
 
     ir = infer_domain_ops.InferDomainOps.apply(ir)
-    ir = concat_where.simplify_domain_argument.apply(ir)
+    ir = concat_where.simplify_domain_argument(ir)
     ir = ConstantFolding.apply(ir)
 
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
