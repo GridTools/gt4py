@@ -187,7 +187,7 @@ def _parse_gt_param(
                     else:
                         # the array stride is set to constant value
                         code.append(
-                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == stride"
+                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {value}"
                         )
 
         elif isinstance(param_type, ts.ScalarType):
