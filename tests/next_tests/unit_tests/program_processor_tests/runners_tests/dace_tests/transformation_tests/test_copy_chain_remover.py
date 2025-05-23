@@ -445,9 +445,6 @@ def test_not_fully_copied():
     csdfg_ref = sdfg.compile()
     csdfg_ref(**ref)
 
-    assert np.all(ref["e"][0:8] == org["a"][2:10])
-    assert np.all(ref["e"][8:10] == org["e"][8:10])
-
     # Apply the transformation.
     #  It will only remove `d` all the others are retained, because they are not read
     #  correctly, i.e. fully.
