@@ -474,27 +474,8 @@ def verify_with_default_data(
 
 
 @pytest.fixture
-def cartesian_case(
-    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
-):
-    yield Case(
-        None
-        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
-        else exec_alloc_descriptor,
-        offset_provider={
-            "Ioff": IDim,
-            "Joff": JDim,
-            "Koff": KDim,
-        },
-        default_sizes={IDim: 10, JDim: 10, KDim: 10},
-        grid_type=common.GridType.CARTESIAN,
-        allocator=exec_alloc_descriptor.allocator,
-    )
-
-
-@pytest.fixture
 def cartesian_case_no_backend():
-    yield Case(
+    return Case(
         backend=None,
         offset_provider={
             "Ioff": IDim,
@@ -508,28 +489,24 @@ def cartesian_case_no_backend():
 
 
 @pytest.fixture
-def unstructured_case(
-    mesh_descriptor,
+def cartesian_case(
+    cartesian_case_no_backend: Case,
     exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
 ):
-    yield Case(
-        None
-        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
-        else exec_alloc_descriptor,
-        offset_provider=mesh_descriptor.offset_provider,
-        default_sizes={
-            Vertex: mesh_descriptor.num_vertices,
-            Edge: mesh_descriptor.num_edges,
-            Cell: mesh_descriptor.num_cells,
-        },
-        grid_type=common.GridType.UNSTRUCTURED,
+    return dataclasses.replace(
+        cartesian_case_no_backend,
+        backend=(
+            None
+            if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+            else exec_alloc_descriptor
+        ),
         allocator=exec_alloc_descriptor.allocator,
     )
 
 
 @pytest.fixture
 def unstructured_case_no_backend(mesh_descriptor):
-    yield Case(
+    return Case(
         None,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
@@ -539,6 +516,22 @@ def unstructured_case_no_backend(mesh_descriptor):
         },
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=None,
+    )
+
+
+@pytest.fixture
+def unstructured_case(
+    unstructured_case_no_backend: Case,
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
+):
+    return dataclasses.replace(
+        unstructured_case_no_backend,
+        backend=(
+            None
+            if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+            else exec_alloc_descriptor
+        ),
+        allocator=exec_alloc_descriptor.allocator,
     )
 
 
