@@ -43,6 +43,7 @@ class _ExpandTupleArgs(PreserveLocationVisitor, NodeTranslator):
         if cpm.is_call_to(node, "concat_where") and isinstance(node.args[1].type, ts.TupleType):
             cond, true_branch, false_branch = node.args
             new_els = []
+            assert isinstance(true_branch.type, ts.TupleType)
             for i in range(len(true_branch.type.types)):
                 new_els.append(
                     im.concat_where(cond, im.tuple_get(i, "__tb"), im.tuple_get(i, "__fb"))
