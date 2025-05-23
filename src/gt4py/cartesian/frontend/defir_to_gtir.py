@@ -531,7 +531,7 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_ForIndex(self, node: ForIndex) -> gtir.ForIndex:
-        return gtir.ForIndex(name=node.name)
+        return gtir.ForIndex(name=node.name, dtype=common.DataType(node.data_type.value))
 
     def visit_For(self, node: For) -> gtir.For:
         return gtir.For(

@@ -399,10 +399,9 @@ class While(eve.GenericNode, Generic[StmtT, ExprT]):
         verify_condition_is_boolean(self, value)
 
 
-class ForIndex(eve.GenericNode, Expr):
+class ForIndex(eve.Node):
     name: str
-    kind: ExprKind = ExprKind.SCALAR
-    dtype: DataType = DataType.INT64
+    dtype: DataType
 
 
 class For(eve.GenericNode, Generic[StmtT]):

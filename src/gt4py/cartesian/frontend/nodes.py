@@ -379,6 +379,7 @@ class AxisIndex(Expr):
 @attribclass
 class ForIndex(Expr):
     name = attribute(of=str)
+    data_type = attribute(of=DataType)
 
 
 @enum.unique

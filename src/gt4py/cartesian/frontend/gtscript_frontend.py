@@ -1524,7 +1524,12 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_ForIndex(self, node: ForIndex) -> nodes.ForIndex:
-        return nodes.ForIndex(name=node.name)
+        return nodes.ForIndex(
+            name=node.name,
+            data_type=nodes.DataType.from_dtype(
+                self.dtypes[int] if self.dtypes and int in self.dtypes else int
+            ),
+        )
 
     def visit_For(self, node: For) -> list:
         assert isinstance(node, For)

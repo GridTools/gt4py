@@ -140,7 +140,7 @@ class GTIRToOIR(eve.NodeTranslator):
         return oir.While(cond=condition, body=body, loc=node.loc)
 
     def visit_ForIndex(self, node: gtir.ForIndex, **kwargs: Any) -> oir.ForIndex:
-        return oir.ForIndex(name=node.name)
+        return oir.ForIndex(name=node.name, dtype=node.dtype)
 
     def visit_For(self, node: gtir.For, **kwargs: Any) -> oir.For:
         body: List[oir.Stmt] = []

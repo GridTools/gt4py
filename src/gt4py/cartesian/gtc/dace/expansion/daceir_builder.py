@@ -395,7 +395,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         )
 
     def visit_ForIndex(self, node: oir.ForIndex, **kwargs: Any) -> dcir.ForIndex:
-        return dcir.ForIndex(name=node.name)
+        return dcir.ForIndex(name=node.name, dtype=node.dtype)
 
     def visit_For(self, node: oir.For, **kwargs: Any) -> dcir.For:
         return dcir.For(
