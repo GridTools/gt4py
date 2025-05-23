@@ -426,6 +426,7 @@ conflicts = [
     {extra = 'dace-next'}
   ]
 ]
+required-version = ">=0.6.10"
 
 [[tool.uv.index]]
 explicit = true
