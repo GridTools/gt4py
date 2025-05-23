@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Iterator, Optional, Sequence, Union
+from typing import Iterator, Literal, Optional, Sequence, Union
 
 from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
 from gt4py.next import common
@@ -48,6 +48,9 @@ class VoidType(TypeSpec):
 
 class DimensionType(TypeSpec):
     dim: common.Dimension
+
+    def __str__(self) -> str:
+        return str(self.dim)
 
 
 class OffsetType(TypeSpec):
@@ -138,3 +141,9 @@ class FunctionType(TypeSpec, CallableType):
         kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
+
+
+class DomainType(DataType):
+    # TODO(tehrengruber): Remove "unknown" here again after the result type of `as_fieldop`
+    #  is always precisely known. This is the case after #1853.
+    dims: list[common.Dimension] | Literal["unknown"]
