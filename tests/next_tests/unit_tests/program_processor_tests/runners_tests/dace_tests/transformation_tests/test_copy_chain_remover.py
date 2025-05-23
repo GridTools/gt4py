@@ -408,14 +408,14 @@ def test_multi_stage_reduction():
     res = copy.deepcopy(ref)
 
     # Generate the reference solution.
-    csdfg_ref = util.compile_and_run_(sdfg, **ref)
+    csdfg_ref = util.compile_and_run_sdfg(sdfg, **ref)
     del csdfg_ref
 
     # Apply the transformation.
     nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
 
     # Run the processed SDFG
-    csdfg_res = util.compile_and_run_(sdfg, **res)
+    csdfg_res = util.compile_and_run_sdfg(sdfg, **res)
     del csdfg_res
 
     # Perform all the checks.
@@ -498,7 +498,7 @@ def test_a1_additional_output():
     }
     res = copy.deepcopy(ref)
 
-    csdfg_ref = util.compile_and_run_(sdfg, **ref)
+    csdfg_ref = util.compile_and_run_sdfg(sdfg, **ref)
     del csdfg_ref
 
     # Apply the transformation.
@@ -516,7 +516,7 @@ def test_a1_additional_output():
     # Now run the SDFG, which is essentially to check if the subsets were handled
     #  correctly. This is especially important for `o1` which is composed of both
     #  `i1` and `i2`.
-    csdfg_res = util.compile_and_run_(sdfg, **res)
+    csdfg_res = util.compile_and_run_sdfg(sdfg, **res)
     del csdfg_res
 
     breakpoint()
@@ -575,6 +575,6 @@ def test_linear_chain_with_nested_sdfg():
     assert inner_sdfg.arrays["o0"].strides == sdfg.arrays["e"].strides
 
     # Now run the transformed SDFG to see if the same output is generated.
-    csdfg_res = util.compile_and_run_(sdfg, **res)
+    csdfg_res = util.compile_and_run_sdfg(sdfg, **res)
     del csdfg_res
     assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
