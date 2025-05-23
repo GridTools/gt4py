@@ -26,7 +26,6 @@ from gt4py.next.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
     StringifyAnnotationsPass,
-    UnchainComparesPass,
 )
 from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
@@ -144,12 +143,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     """
 
     @classmethod
-    def _preprocess_definition_ast(cls, definition_ast: ast.AST) -> ast.AST:
-        sta = StringifyAnnotationsPass.apply(definition_ast)
-        ssa = SingleStaticAssignPass.apply(sta)
-        sat = SingleAssignTargetPass.apply(ssa)
-        ucc = UnchainComparesPass.apply(sat)
-        return ucc
+    def _preprocess_definition_ast(cls, ast: ast.AST) -> ast.AST:
+        ast = StringifyAnnotationsPass.apply(ast)
+        ast = SingleStaticAssignPass.apply(ast)
+        ast = SingleAssignTargetPass.apply(ast)
+        return ast
 
     @classmethod
     def _postprocess_dialect_ast(

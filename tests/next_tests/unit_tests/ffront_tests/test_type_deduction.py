@@ -145,6 +145,15 @@ def test_concat_where():
     assert compare_node.type == ts.DomainType(dims=[TDim])
 
 
+def test_concat_where_scalar():
+    def simple_concat_where(a: float, b: float):
+        return concat_where(TDim > 0, a, b)
+
+    parsed = FieldOperatorParser.apply_to_function(simple_concat_where)
+    compare_node = parsed.body.stmts[0].value.args[0]
+    assert compare_node.type == ts.DomainType(dims=[TDim])
+
+
 def test_domain_comparison_failure():
     def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
         return concat_where(TDim > 1.0, a, b)
@@ -174,6 +183,18 @@ def test_concat_where_invalid_dtype():
     with pytest.raises(
         errors.DSLError,
         match=re.escape("Field arguments must be of same dtype, got 'float64' != 'int32'."),
+    ):
+        _ = FieldOperatorParser.apply_to_function(domain_comparison)
+
+
+def test_domain_chained_comparison_failure():
+    def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
+        return concat_where(0 < TDim < 42, a, b)
+
+    # _ = FieldOperatorParser.apply_to_function(domain_comparison)
+    with pytest.raises(
+        errors.DSLError,
+        match=re.escape("TODO"),
     ):
         _ = FieldOperatorParser.apply_to_function(domain_comparison)
 

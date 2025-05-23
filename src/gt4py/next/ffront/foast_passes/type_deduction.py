@@ -429,7 +429,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not isinstance(new_node.condition.type, ts.ScalarType):
             raise errors.DSLError(
                 node.location,
-                "Condition for 'if' must be scalar, " f"got '{new_node.condition.type}' instead.",
+                f"Condition for 'if' must be scalar, got '{new_node.condition.type}' instead.",
             )
 
         if new_node.condition.type.kind != ts.ScalarKind.BOOL:
