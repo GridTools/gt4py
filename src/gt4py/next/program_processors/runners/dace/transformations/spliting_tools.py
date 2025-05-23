@@ -29,6 +29,9 @@ class EdgeConnectionSpec:
     subset: dace_sbs.Subset
     edge: dace_graph.MultiConnectorEdge
 
+    def __hash__(self) -> int:
+        return hash(self.edge)
+
 
 def describe_edges(
     state: dace.SDFG,
@@ -88,7 +91,7 @@ def split_node(
 
     desc_to_split = node_to_split.desc(sdfg)
     assert desc_to_split.transient
-    assert gtx_transformations.utils.is_view(desc_to_split)
+    assert not gtx_transformations.utils.is_view(desc_to_split)
     assert isinstance(desc_to_split, dace_data.Array)
 
     input_descriptions = describe_incoming_edges(state, node_to_split)
@@ -234,15 +237,16 @@ def _perform_node_split_impl(
     # Reconfigure the data flow on the other side.
     if (other_node, other_node_conn) not in already_reconfigured_nodes:
         already_reconfigured_nodes.add((other_node, other_node_conn))
-        if isinstance(other_node.desc(sdfg), dace_data.Scalar):
-            subset_correction = None
 
-        elif isinstance(
-            other_node, (dace_nodes.AccessNode, dace_nodes.MapExit, dace_nodes.NestedSDFG)
-        ):
+        if isinstance(other_node, (dace_nodes.MapExit, dace_nodes.NestedSDFG)):
             # There is nothing special to do. In case of a nested SDFG, we will also have to do
             #  stride propagation, but we will postpone that.
             pass
+
+        elif isinstance(other_node, dace_nodes.AccessNode):
+            # Required by `reconfigure_dataflow_after_rerouting()`.
+            if isinstance(other_node.desc(sdfg), dace_data.Scalar):
+                subset_correction = None
 
         else:
             raise TypeError(f"Can not handle a producer of type '{type(other_node).__name__}'")
