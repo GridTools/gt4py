@@ -33,9 +33,8 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
             node = self.generic_visit(node, **kwargs)
 
         # e.g. `IDim < a`
-        if (
-            cpm.is_call_to(node, builtins.BINARY_MATH_COMPARISON_BUILTINS)
-            and any(isinstance(arg, itir.AxisLiteral) for arg in node.args)
+        if cpm.is_call_to(node, builtins.BINARY_MATH_COMPARISON_BUILTINS) and any(
+            isinstance(arg, itir.AxisLiteral) for arg in node.args
         ):
             arg1, arg2 = node.args
             if isinstance(arg2, itir.AxisLiteral):

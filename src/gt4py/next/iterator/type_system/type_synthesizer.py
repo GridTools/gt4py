@@ -285,9 +285,12 @@ def concat_where(
         assert (
             tb_dtype == fb_dtype
         ), f"Field arguments must be of same dtype, got '{tb_dtype}' != '{fb_dtype}'."
+        dtype = tb_dtype
 
-        return_dims = common.promote_dims(domain.dims, type_info.promote(tb, fb).dims)
-        return_type = ts.FieldType(dims=return_dims, dtype=type_info.promote(tb_dtype, fb_dtype))
+        return_dims = common.promote_dims(
+            domain.dims, type_info.extract_dims(type_info.promote(tb, fb))
+        )
+        return_type = ts.FieldType(dims=return_dims, dtype=dtype)
         return return_type
 
     return deduce_return_type(true_field, false_field)
@@ -373,7 +376,7 @@ def _collect_and_check_dimensions(input_: ts.TypeSpec) -> list[common.Dimension]
 
 
 def _convert_as_fieldop_input_to_iterator(
-    domain: it_ts.DomainType, input_: ts.TypeSpec
+    domain: ts.DomainType, input_: ts.TypeSpec
 ) -> it_ts.IteratorType:
     """
     Convert a field operation input into an iterator type, preserving its dimensions and data type.
