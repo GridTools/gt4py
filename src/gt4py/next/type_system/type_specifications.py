@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Iterator, Optional, Sequence, Union
+from typing import Iterator, Literal, Optional, Sequence, Union
 
 from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
 from gt4py.next import common

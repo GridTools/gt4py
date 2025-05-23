@@ -79,7 +79,7 @@ class _TransformToAsFieldop(PreserveLocationVisitor, NodeTranslator):
                 im.lambda_("__tcw_pos", "__tcw_arg0", "__tcw_arg1", *refs)(
                     im.let(*zip(refs, map(im.deref, refs), strict=True))(
                         im.if_(
-                            im.call("in_")(im.deref("__tcw_pos"), cond),
+                            _in(im.deref("__tcw_pos"), cond),
                             im.deref("__tcw_arg0"),
                             im.deref("__tcw_arg1"),
                         )
