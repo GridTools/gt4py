@@ -53,13 +53,13 @@ class _ExpandTupleArgs(PreserveLocationVisitor, NodeTranslator):
                 im.make_tuple(*new_els)
             )
             # restore domain information
-            new_node, _ = infer_domain.infer_expr(
-                new_node,
-                node.annex.domain,
-                keep_existing_domains=True,
-                # offset provider not needed as all as_fieldop already have a domain
-                offset_provider={},
-            )
+            #new_node, _ = infer_domain.infer_expr(
+            #     new_node,
+            #     node.annex.domain,
+            #     keep_existing_domains=True,
+            #     # offset provider not needed as all as_fieldop already have a domain
+            #     offset_provider={},
+            # )
             return new_node
 
         return node
