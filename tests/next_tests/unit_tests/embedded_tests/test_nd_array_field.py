@@ -983,6 +983,7 @@ def test_hyperslice(index_array, expected):
     assert result == expected
 
 
+@pytest.mark.uses_concat_where
 @pytest.mark.parametrize(
     "mask_data, true_data, false_data, expected",
     [
