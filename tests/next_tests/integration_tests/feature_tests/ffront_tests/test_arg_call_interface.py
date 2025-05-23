@@ -301,8 +301,8 @@ def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_te
 @pytest.mark.uses_origin
 def test_direct_fo_call_with_domain_arg(cartesian_case):
     @field_operator
-    def testee(inp: IField) -> IField:
-        return inp
+    def testee(inp: IField) -> tuple[IField, IField]:
+        return (inp, inp)
 
     size = cartesian_case.default_sizes[IDim]
     inp = cases.allocate(cartesian_case, testee, "inp").unique()()

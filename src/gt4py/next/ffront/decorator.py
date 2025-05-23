@@ -31,6 +31,7 @@ from gt4py.next import (
     config,
     embedded as next_embedded,
     errors,
+    utils,
 )
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -704,7 +705,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             out = kwargs.pop("out")
             if "domain" in kwargs:
                 domain = common.domain(kwargs.pop("domain"))
-                out = out[domain]
+                out = utils.tree_map(lambda out_1: out_1[domain])(out)
 
             args, kwargs = type_info.canonicalize_arguments(
                 self.foast_stage.foast_node.type, args, kwargs
