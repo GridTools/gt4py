@@ -14,7 +14,7 @@ from typing import Any, Literal, Mapping, Optional
 
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
@@ -51,7 +51,7 @@ class SymbolicRange:
 
 @dataclasses.dataclass(frozen=True)
 class SymbolicDomain:
-    grid_type: Literal["unstructured_domain", "cartesian_domain"]
+    grid_type: common.GridType
     ranges: dict[
         common.Dimension, SymbolicRange
     ]  # TODO(havogt): remove `AxisLiteral` by `Dimension` everywhere
@@ -61,25 +61,19 @@ class SymbolicDomain:
 
     @classmethod
     def from_expr(cls, node: itir.Node) -> SymbolicDomain:
-        assert isinstance(node, itir.FunCall) and node.fun in [
-            im.ref("unstructured_domain"),
-            im.ref("cartesian_domain"),
-        ]
+        assert cpm.is_call_to(node, ("unstructured_domain", "cartesian_domain"))
+        grid_type = getattr(common.GridType, node.fun.id[: -len("_domain")].upper())
 
         ranges: dict[common.Dimension, SymbolicRange] = {}
         for named_range in node.args:
-            assert (
-                isinstance(named_range, itir.FunCall)
-                and isinstance(named_range.fun, itir.SymRef)
-                and named_range.fun.id == "named_range"
-            )
+            assert cpm.is_call_to(named_range, "named_range")
             axis_literal, lower_bound, upper_bound = named_range.args
             assert isinstance(axis_literal, itir.AxisLiteral)
 
             ranges[common.Dimension(value=axis_literal.value, kind=axis_literal.kind)] = (
                 SymbolicRange(lower_bound, upper_bound)
             )
-        return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
+        return cls(grid_type, ranges)
 
     def as_expr(self) -> itir.FunCall:
         converted_ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] = {

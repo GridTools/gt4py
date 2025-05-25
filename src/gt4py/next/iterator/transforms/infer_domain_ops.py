@@ -58,8 +58,8 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
             value: itir.Expr = arg2
 
             if cpm.is_call_to(node, ("less", "less_equal", "greater", "greater_equal", "eq")):
-                min_: int | itir.InfinityLiteral
-                max_: int | itir.InfinityLiteral
+                min_: itir.Expr
+                max_: itir.Expr
 
                 # `IDim < 1`
                 if cpm.is_call_to(node, "less"):

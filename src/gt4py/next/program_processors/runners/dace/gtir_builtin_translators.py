@@ -529,7 +529,7 @@ def extract_domain(node: gtir.Node) -> FieldopDomain:
             domain.append((dim, lower_bound, upper_bound))
 
     elif isinstance(node, domain_utils.SymbolicDomain):
-        assert str(node.grid_type) in {"cartesian_domain", "unstructured_domain"}
+        assert isinstance(node.grid_type, gtx_common.GridType)
         for dim, drange in node.ranges.items():
             domain.append(
                 (
