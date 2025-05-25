@@ -26,5 +26,4 @@ def common_dace_config() -> Generator[None, None, None]:
     with dace.config.temporary_config():
         dace.Config.set("optimizer", "match_exception", value=True)
         dace.Config.set("compiler", "allow_view_arguments", value=True)
-        dace.Config.set("compiler.use_cache", value=False)
         yield
