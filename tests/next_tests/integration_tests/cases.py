@@ -14,7 +14,7 @@ import functools
 import inspect
 import types
 import typing
-from typing import Any, Callable, Literal, Optional, Protocol, TypeAlias
+from typing import Any, Callable, Literal, Optional, Mapping, Protocol, TypeAlias
 
 import numpy as np
 import pytest
@@ -55,6 +55,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Vertex,
     exec_alloc_descriptor,
     mesh_descriptor,
+    MeshDescriptor,
+    simple_cartesian_grid,
+    CartesianGridDescriptor,
 )
 
 
@@ -491,40 +494,42 @@ def verify_with_default_data(
 
 
 @pytest.fixture
+def cartesian_case_no_backend():
+    return Case.from_cartesian_grid_descriptor(simple_cartesian_grid())
+
+
+@pytest.fixture
 def cartesian_case(
     exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
 ):
-    yield Case(
-        None
-        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
-        else exec_alloc_descriptor,
-        offset_provider={
-            "Ioff": IDim,
-            "Joff": JDim,
-            "Koff": KDim,
-        },
-        default_sizes={IDim: 10, JDim: 10, KDim: 10},
-        grid_type=common.GridType.CARTESIAN,
+    return Case.from_cartesian_grid_descriptor(
+        simple_cartesian_grid(),
+        backend=(
+            None
+            if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+            else exec_alloc_descriptor
+        ),
         allocator=exec_alloc_descriptor.allocator,
     )
 
 
 @pytest.fixture
+def unstructured_case_no_backend(mesh_descriptor: MeshDescriptor):
+    return Case.from_mesh_descriptor(mesh_descriptor)
+
+
+@pytest.fixture
 def unstructured_case(
-    mesh_descriptor,
+    mesh_descriptor: MeshDescriptor,
     exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
 ):
-    yield Case(
-        None
-        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
-        else exec_alloc_descriptor,
-        offset_provider=mesh_descriptor.offset_provider,
-        default_sizes={
-            Vertex: mesh_descriptor.num_vertices,
-            Edge: mesh_descriptor.num_edges,
-            Cell: mesh_descriptor.num_cells,
-        },
-        grid_type=common.GridType.UNSTRUCTURED,
+    return Case.from_mesh_descriptor(
+        mesh_descriptor,
+        backend=(
+            None
+            if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+            else exec_alloc_descriptor
+        ),
         allocator=exec_alloc_descriptor.allocator,
     )
 
@@ -653,3 +658,41 @@ class Case:
     @property
     def as_field(self):
         return constructors.as_field.partial(allocator=self.allocator)
+
+    @classmethod
+    def from_cartesian_grid_descriptor(
+        cls,
+        grid_descriptor: CartesianGridDescriptor,
+        backend: Optional[next_backend.Backend] = None,
+        allocator: Optional[next_allocators.FieldBufferAllocatorFactoryProtocol] = None,
+    ) -> Case:
+        return cls(
+            backend=backend,
+            offset_provider=grid_descriptor.offset_provider,
+            default_sizes={
+                IDim: grid_descriptor.sizes[0],
+                JDim: grid_descriptor.sizes[1],
+                KDim: grid_descriptor.sizes[2],
+            },
+            grid_type=common.GridType.CARTESIAN,
+            allocator=allocator,
+        )
+
+    @classmethod
+    def from_mesh_descriptor(
+        cls,
+        mesh_descriptor: MeshDescriptor,
+        backend: Optional[next_backend.Backend] = None,
+        allocator: Optional[next_allocators.FieldBufferAllocatorFactoryProtocol] = None,
+    ) -> Case:
+        return cls(
+            backend=backend,
+            offset_provider=mesh_descriptor.offset_provider,
+            default_sizes={
+                Vertex: mesh_descriptor.num_vertices,
+                Edge: mesh_descriptor.num_edges,
+                Cell: mesh_descriptor.num_cells,
+            },
+            grid_type=common.GridType.UNSTRUCTURED,
+            allocator=allocator,
+        )

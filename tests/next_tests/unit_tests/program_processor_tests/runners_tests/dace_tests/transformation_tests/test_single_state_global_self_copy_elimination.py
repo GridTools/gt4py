@@ -260,8 +260,7 @@ def test_direct_global_self_copy_used():
     }
     res = {k: np.copy(v, order="K") for k, v in ref.items()}
 
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.SingleStateGlobalDirectSelfCopyElimination,
@@ -274,9 +273,7 @@ def test_direct_global_self_copy_used():
     assert len(ac_nodes_after) == 4
     assert len(set(ac.data for ac in ac_nodes_after)) == 4
 
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
-
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.all(ref[k] == res[k]) for k in ref.keys())
 
 

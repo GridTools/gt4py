@@ -408,15 +408,13 @@ def test_multi_stage_reduction():
     res = copy.deepcopy(ref)
 
     # Generate the reference solution.
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     # Apply the transformation.
     nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
 
     # Run the processed SDFG
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
+    util.compile_and_run_sdfg(sdfg, **res)
 
     # Perform all the checks.
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
@@ -442,8 +440,7 @@ def test_not_fully_copied():
     org = copy.deepcopy(ref)
 
     # Compile and run the original SDFG
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     # Apply the transformation.
     #  It will only remove `d` all the others are retained, because they are not read
@@ -459,9 +456,7 @@ def test_not_fully_copied():
     assert "d" not in acnodes
 
     # Now run the test and compare the results, see above for the ranges.
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
-
+    util.compile_and_run_sdfg(sdfg, **res)
     assert np.all(ref["a"] == res["a"])
     assert np.all(org["a"] == res["a"])
     assert np.all(res["e"][0:8] == ref["e"][0:8])
@@ -498,8 +493,7 @@ def test_a1_additional_output():
     }
     res = copy.deepcopy(ref)
 
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     # Apply the transformation.
     #  The transformation removes `a1` and `a2`.
@@ -516,8 +510,8 @@ def test_a1_additional_output():
     # Now run the SDFG, which is essentially to check if the subsets were handled
     #  correctly. This is especially important for `o1` which is composed of both
     #  `i1` and `i2`.
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
+    util.compile_and_run_sdfg(sdfg, **res)
+
     assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
 
 
@@ -572,6 +566,5 @@ def test_linear_chain_with_nested_sdfg():
     assert inner_sdfg.arrays["o0"].strides == sdfg.arrays["e"].strides
 
     # Now run the transformed SDFG to see if the same output is generated.
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
