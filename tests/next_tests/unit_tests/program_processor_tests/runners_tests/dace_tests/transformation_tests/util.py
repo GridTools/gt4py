@@ -76,12 +76,14 @@ def compile_and_run_sdfg(
     regenerated and recompiled properly. It will also suppress warnings about
     shared objects that are loaded multiple times.
     """
-    sdfg_clone = copy.deepcopy(sdfg)
 
-    sdfg_clone.name = unique_name(sdfg_clone.name)
-    sdfg_clone._recompile = True
-    sdfg_clone._regenerate_code = True  # Does this anything?
-    csdfg = sdfg_clone.compile()
-    csdfg(*args, **kwargs)
+    with dace.config.set_temporary("compiler.use_cache", value=False):
+        sdfg_clone = copy.deepcopy(sdfg)
+
+        sdfg_clone.name = unique_name(sdfg_clone.name)
+        sdfg_clone._recompile = True
+        sdfg_clone._regenerate_code = True  # TODO(phimuell): Find out if it has an effect.
+        csdfg = sdfg_clone.compile()
+        csdfg(*args, **kwargs)
 
     return csdfg
