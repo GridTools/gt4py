@@ -227,9 +227,9 @@ def named_range(
 
 
 @_register_builtin_type_synthesizer(fun_names=["cartesian_domain", "unstructured_domain"])
-def _(*args: it_ts.NamedRangeType) -> it_ts.DomainType:
+def _(*args: it_ts.NamedRangeType) -> ts.DomainType:
     assert all(isinstance(arg, it_ts.NamedRangeType) for arg in args)
-    return it_ts.DomainType(dims=[arg.dim for arg in args])
+    return ts.DomainType(dims=[arg.dim for arg in args])
 
 
 @_register_builtin_type_synthesizer
@@ -473,7 +473,7 @@ def _resolve_dimensions(
 @_register_builtin_type_synthesizer
 def as_fieldop(
     stencil: TypeSynthesizer,
-    domain: Optional[it_ts.DomainType] = None,
+    domain: Optional[ts.DomainType] = None,
     *,
     offset_provider_type: common.OffsetProviderType,
 ) -> TypeSynthesizer:
