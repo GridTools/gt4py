@@ -19,7 +19,6 @@ import factory
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
-from gt4py.next.otf.compilation import cache
 
 
 def _get_sdfg_ctype_arglist_callback(
@@ -117,7 +116,6 @@ class DaCeCompiler(
         inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
     ) -> CompiledDaceProgram:
         sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-        sdfg.build_folder = cache.get_cache_folder(inp, self.cache_lifetime)
 
         with dace.config.temporary_config():
             dace.config.Config.set("compiler.build_type", value=self.cmake_build_type.value)
@@ -128,6 +126,10 @@ class DaCeCompiler(
             #   to `ProgramSource`, so this step is storing in cache only the result
             #   of the SDFG transformations, not the compiled program binary.
             dace.config.Config.set("compiler.use_cache", value=True)
+            dace.config.Config.set("cache", value="hash")  # use the SDFG hash as cache key
+            dace.config.Config.set(
+                "default_build_folder", value=str(config.BUILD_CACHE_DIR / "dace_cache")
+            )
 
             # dace dafault setting use fast-math in both cpu and gpu compilation, don't use it here
             dace.config.Config.set(
