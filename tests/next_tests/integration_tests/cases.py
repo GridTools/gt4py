@@ -380,6 +380,17 @@ def run(
     fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
 
 
+def tree_mapped_np_all_close(ref: np.ndarray, data: np.ndarray) -> bool:
+    """Compare two arrays or nested tuples of arrays using np.allclose."""
+    if (is_tuple := isinstance(ref, tuple)) == isinstance(data, tuple):
+        if is_tuple:
+            return all(gt_utils.tree_map(np.allclose)(ref, data))
+        else:
+            return np.allclose(ref, data)
+
+    return False
+
+
 def verify(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
@@ -389,7 +400,7 @@ def verify(
     out: Optional[FieldViewInout] = None,
     inout: Optional[FieldViewInout] = None,
     offset_provider: Optional[OffsetProvider] = None,
-    comparison: Callable[[Any, Any], bool] = np.allclose,
+    comparison: Callable[[Any, Any], bool] = tree_mapped_np_all_close,
 ) -> None:
     """
     Check the result of executing a fieldview program or operator against ref.
@@ -433,10 +444,11 @@ def verify(
     assert out_comp is not None
     out_comp_ndarray = field_utils.asnumpy(out_comp)
     ref_ndarray = field_utils.asnumpy(ref)
+
     assert comparison(ref_ndarray, out_comp_ndarray), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"
-        f"\tref = {ref_ndarray}\n\tout = {str(out_comp_ndarray)}"
+        f"\tref = {ref_ndarray!s}\n\tout = {out_comp_ndarray!s}"
     )
 
 
@@ -444,7 +456,7 @@ def verify_with_default_data(
     case: Case,
     fieldop: decorator.FieldOperator,
     ref: Callable,
-    comparison: Callable[[Any, Any], bool] = np.allclose,
+    comparison: Callable[[Any, Any], bool] = tree_mapped_np_all_close,
 ) -> None:
     """
     Check the fieldview code against a reference calculation.

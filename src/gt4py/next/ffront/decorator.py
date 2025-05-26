@@ -722,7 +722,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             out = kwargs.pop("out")
             if "domain" in kwargs:
                 domain = common.domain(kwargs.pop("domain"))
-                out = utils.tree_map(lambda out_1: out_1[domain])(out)
+                out = utils.tree_map(lambda f: f[domain])(out)
 
             args, kwargs = type_info.canonicalize_arguments(
                 self.foast_stage.foast_node.type, args, kwargs
