@@ -14,12 +14,10 @@ import textwrap
 import time
 from typing import TYPE_CHECKING, Any, Dict, Final, List, Optional, Tuple, Type, Union
 
-import gt4py.cartesian.gtc.utils
-import gt4py.cartesian.gtc.utils as gtc_utils
 from gt4py.cartesian import backend as gt_backend, config as gt_config, utils as gt_utils
 from gt4py.cartesian.backend import Backend
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
-from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.gtc import gtir, utils as gtc_utils
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_pipeline import OirPipeline
 from gt4py.eve.codegen import MakoTemplate as as_mako
@@ -32,9 +30,9 @@ if TYPE_CHECKING:
 
 def _get_unit_stride_dim(backend, domain_dim_flags, data_ndim):
     make_layout_map = backend.storage_info["layout_map"]
-    dimensions = list(
-        gt4py.cartesian.gtc.utils.dimension_flags_to_names(domain_dim_flags).upper()
-    ) + [str(d) for d in range(data_ndim)]
+    dimensions = list(gtc_utils.dimension_flags_to_names(domain_dim_flags).upper()) + [
+        str(d) for d in range(data_ndim)
+    ]
     layout_map = [x for x in make_layout_map(dimensions) if x is not None]
     return layout_map.index(max(layout_map))
 
