@@ -124,7 +124,6 @@ class DaCeCompiler(
             sdfg.instrument = dace.dtypes.InstrumentationType.Timer
 
         with dace.config.temporary_config():
-            utils.set_dace_cache_config()
             dace.config.Config.set("compiler.build_type", value=self.cmake_build_type.value)
 
             # We rely on dace cache to avoid recompiling the SDFG.
@@ -132,6 +131,7 @@ class DaCeCompiler(
             #   is translating from `CompilableProgram` (ITIR.Program + CompileTimeArgs)
             #   to `ProgramSource`, so this step is storing in cache only the result
             #   of the SDFG transformations, not the compiled program binary.
+            utils.set_dace_cache_config()
             dace.config.Config.set("compiler.use_cache", value=True)
 
             # dace dafault setting use fast-math in both cpu and gpu compilation, don't use it here
