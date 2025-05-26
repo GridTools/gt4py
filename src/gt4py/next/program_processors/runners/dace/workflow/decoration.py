@@ -8,19 +8,15 @@
 
 from __future__ import annotations
 
-import ctypes
-from typing import Any, Callable, Sequence
+import functools
+from typing import Any, Sequence
 
 import dace
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, config, field_utils, metrics, utils as gtx_utils
 from gt4py.next.otf import arguments, stages
-from gt4py.next.program_processors.runners.dace import (
-    sdfg_callable,
-    utils as gtx_dace_utils,
-    workflow as dace_worflow,
-)
+from gt4py.next.program_processors.runners.dace import sdfg_callable, workflow as dace_worflow
 
 
 def update_sdfg_args(
@@ -115,8 +111,16 @@ def inject_timer(
 def convert_args(
     fun: dace_worflow.compilation.CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
-    assume_immutable_offset_provider: bool = True,
 ) -> stages.CompiledProgram:
+    sdfg_program = fun.sdfg_program
+    sdfg = sdfg_program.sdfg
+    on_gpu = True if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM] else False
+
+    # We use the callback function provided by the compiled program to update the SDFG arglist.
+    update_sdfg_call_args = functools.partial(
+        fun.update_sdfg_ctype_arglist, device, fun.sdfg_argtypes
+    )
+
     @inject_timer(fun.name, fun.sdfg_program.sdfg)
     def decorated_program(
         *args: Any,
@@ -125,17 +129,16 @@ def convert_args(
     ) -> None:
         if out is not None:
             args = (*args, out)
-        flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
         if fun.implicit_domain:
             # Generate implicit domain size arguments only if necessary
             size_args = arguments.iter_size_args(args)
-            flat_size_args: Sequence[int] = gtx_utils.flatten_nested_tuple(tuple(size_args))
-            flat_args = (*flat_args, *flat_size_args)
+            args = (*args, *size_args)
 
         if not fun.sdfg_program._lastargs:
             # First call, the SDFG is not intitalized, so forward the call to `CompiledSDFG`
             # to proper initilize it. Later calls to this SDFG will be handled through
             # the `fast_call()` API.
+            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
             this_call_args = sdfg_callable.get_sdfg_args(
                 fun.sdfg_program.sdfg,
                 offset_provider,
@@ -149,9 +152,7 @@ def convert_args(
         else:
             # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
             #  so we just update it with the current call arguments.
-            update_sdfg_args(
-                fun, flat_args, device, offset_provider, assume_immutable_offset_provider
-            )
+            update_sdfg_call_args(args, sdfg_program._lastargs[0])
             return fun.fast_call()
 
     return decorated_program

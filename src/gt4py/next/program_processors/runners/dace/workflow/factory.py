@@ -9,13 +9,17 @@
 from __future__ import annotations
 
 import functools
+from typing import Final
 
 import factory
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import recipes, stages, workflow
-from gt4py.next.program_processors.runners.dace.workflow import decoration as decoration_step
+from gt4py.next.program_processors.runners.dace.workflow import (
+    bindings as bindings_step,
+    decoration as decoration_step,
+)
 from gt4py.next.program_processors.runners.dace.workflow.compilation import (
     DaCeCompilationStepFactory,
 )
@@ -25,8 +29,7 @@ from gt4py.next.program_processors.runners.dace.workflow.translation import (
 from gt4py.next.program_processors.runners.gtfn import FileCache
 
 
-def _no_bindings(inp: stages.ProgramSource) -> stages.CompilableSource:
-    return stages.CompilableSource(program_source=inp, binding_source=None)
+_GT_DACE_BINDING_FUNCTION_NAME: Final[str] = "update_sdfg_args"
 
 
 class DaCeWorkflowFactory(factory.Factory):
@@ -35,6 +38,7 @@ class DaCeWorkflowFactory(factory.Factory):
 
     class Params:
         auto_optimize: bool = False
+        make_persistent: bool = False
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
             lambda: config.CMAKE_BUILD_TYPE
@@ -54,12 +58,20 @@ class DaCeWorkflowFactory(factory.Factory):
             DaCeTranslationStepFactory,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
+            make_persistent=factory.SelfAttribute("..make_persistent"),
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
-    bindings = _no_bindings
+    bindings = factory.LazyAttribute(
+        lambda o: functools.partial(
+            bindings_step.bind_sdfg,
+            bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
+            make_persistent=o.make_persistent,
+        )
+    )
     compilation = factory.SubFactory(
         DaCeCompilationStepFactory,
+        bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )

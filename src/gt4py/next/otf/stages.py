@@ -147,14 +147,10 @@ class CompiledProgram(Protocol):
     def __call__(self, *args: Any, **kwargs: Any) -> None: ...
 
 
-class ExtendedCompiledProgram(CompiledProgram):
+class ExtendedCompiledProgram(CompiledProgram, Protocol):
     """Executable python representation of a program with extra info."""
 
     implicit_domain: bool
-
-    # TODO(havogt): consider removing this again.
-    # Currently used to determine the key in the metrics dictionary.
-    name: str
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

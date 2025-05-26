@@ -9,7 +9,7 @@
 import functools
 import pathlib
 import tempfile
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 import diskcache
 import factory
@@ -45,47 +45,38 @@ def convert_arg(arg: Any) -> Any:
     return arg
 
 
-def inject_timer(name: str) -> Callable[[stages.CompiledProgram], stages.CompiledProgram]:
-    def outer(fun: stages.CompiledProgram) -> stages.CompiledProgram:
-        if not config.COLLECT_METRICS:
-            return fun
-
-        def inner(*args: Any, **kwargs: Any) -> None:
-            exec_info: dict[str, float] = {}
-
-            fun(*args, **kwargs, exec_info=exec_info)
-
-            start = exec_info["run_cpp_start_time"]
-            end = exec_info["run_cpp_end_time"]
-            metrics.global_metric_container[name][metrics.CPP].append(end - start)
-
-        return inner
-
-    return outer
-
-
 def convert_args(
     inp: stages.ExtendedCompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
-    @inject_timer(inp.name)
     def decorated_program(
         *args: Any,
         offset_provider: dict[str, common.Connectivity | common.Dimension],
         out: Any = None,
-        exec_info: dict[str, float] | None = None,
     ) -> None:
         # Note: this function is on the hot path and needs to have minimal overhead.
         if out is not None:
             args = (*args, out)
         converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
+
+        opt_kwargs: dict[str, Any] = {}
+        if collect_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE):
+            exec_info: dict[str, float]
+            opt_kwargs["exec_info"] = (exec_info := {})
+
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
         inp(
             *converted_args,
             *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
             *conn_args,
-            exec_info,
+            **opt_kwargs,
         )
+
+        if collect_metrics:
+            metric_collection = metrics.active_metric_collection.get()
+            assert metric_collection is not None
+            value = exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"]
+            metric_collection.add_sample(metrics.COMPUTE_METRIC, value)
 
     return decorated_program
 
