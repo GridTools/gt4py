@@ -184,7 +184,8 @@ class DaCeTranslator(
                 gtx_transformations.gt_simplify(sdfg)
                 gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
-        if on_gpu and self.async_sdfg_call:
+        # Disable async SDFG call when collecting metrics
+        if on_gpu and self.async_sdfg_call and not config.COLLECT_METRICS_LEVEL:
             make_sdfg_async(sdfg)
 
         return sdfg
