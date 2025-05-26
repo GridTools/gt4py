@@ -9,13 +9,7 @@
 from typing import Any, Iterable, Optional
 
 import dace
-from dace import (
-    data as dace_data,
-    properties as dace_properties,
-    subsets as dace_sbs,
-    symbolic as dace_sym,
-    transformation as dace_transformation,
-)
+from dace import properties as dace_properties, transformation as dace_transformation
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -122,19 +116,9 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         if number_of_producers <= 1:
             return False
 
-        # We also require, that every producer is distinct.
-        # NOTE: That this is for simplifying the implementation.
-        if number_of_producers != len({producer for producer in graph.in_edges(access_node)}):
-            return False
-
         # To make sense there must also be different consumers.
         number_of_consumers = graph.out_degree(access_node)
         if number_of_consumers <= 1:
-            return False
-
-        # Furthermore, they must also be different distinct consumers.
-        # NOTE: This is for simplifying the implementation.
-        if number_of_consumers != len({consumer for consumer in graph.out_edges(access_node)}):
             return False
 
         # Now check if a decomposition exist.
@@ -164,15 +148,22 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         #  of the splitter functionality.
         split_description = [e.data.dst_subset for e in assignment.keys()]
 
-        gtx_transformations.spliting_tools.split_node(
-                state=graph,
-                sdfg=sdfg,
-                node_to_split=access_node,
-                split_description=split_description,
-                allow_to_bypass_nodes=True,
+        fragment_access_nodes = gtx_transformations.spliting_tools.split_node(
+            state=graph,
+            sdfg=sdfg,
+            node_to_split=access_node,
+            split_description=split_description,
+            allow_to_bypass_nodes=True,
         )
-        # Remove the old intermediate that is no longer needed.
+
+        # Split node will remove the AccessNode but does not remove the data.
         sdfg.remove_data(access_node.data, validate=False)
+
+        # We have to clean up, i.e. the isolated nodes that might be created.
+        for ac in fragment_access_nodes.values():
+            if graph.degree(ac) == 0:
+                graph.remove_node(ac)
+                sdfg.remove_data(ac.data, validate=False)
 
     def _match_consumers_to_producers(
         self,
