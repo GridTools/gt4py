@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any, Iterable, Optional, Sequence, Union
 
 import dace
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
@@ -53,6 +53,10 @@ def describe_edges(
         for e in edges
     ]
     assert not any(desc.subset is None for desc in description)
+    assert all(
+        all((r[2] == 1) == True for r in desc.subset)  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        for desc in description
+    )
     return description
 
 
@@ -152,6 +156,239 @@ def split_node(
     )
 
     return new_access_nodes
+
+
+def split_copy_edge(
+    state: dace.SDFGState,
+    sdfg: dace.SDFG,
+    edge_to_split: dace_graph.MultiConnectorEdge,
+    split_description: Sequence[dace_sbs.Subset],
+) -> dict[Union[dace_sbs.Range, None], set[dace_graph.MultiConnectorEdge]]:
+    """Tries to split `edge_to_split` into multiple edges.
+
+    How the edge is split is described by `split_description`, which is a
+    sequence of subsets. The function will decompose `edge_to_split` using
+    `decompose_subset()`.
+
+    The function returns a `dict` that maps a split subset to the set of
+    edges that were created. Note that the `dict` also contains a
+    key `None` which contains all the edges that are not associated to a
+    split.
+
+    Args:
+        state: The state in which we operate.
+        sdfg: The SDFG on which we operate.
+        edge_to_split: The edge that should be split.
+        split_description: How the split should be executed.
+    """
+
+    # NOTE: The implementation is written from the point of view that
+    #  `edge_to_split` is an outgoing edge. But this is an implementation
+    #  detail that does not limit the applicability of this function.
+    # TODO(phimuell): Implements some check that nothing is lost.
+
+    assert isinstance(edge_to_split.src, dace_nodes.AccessNode)
+    assert not isinstance(edge_to_split.src.desc(sdfg), dace_data.View)
+    assert isinstance(edge_to_split.src.desc(sdfg), dace_data.Array)
+    assert isinstance(edge_to_split.dst, dace_nodes.AccessNode)
+    assert not isinstance(edge_to_split.dst.desc(sdfg), dace_data.View)
+    assert isinstance(edge_to_split.dst.desc(sdfg), dace_data.Array)
+
+    memlet_to_split: dace.Memlet = edge_to_split.data
+    assert memlet_to_split.wcr is None
+    assert memlet_to_split.subset is not None
+    assert memlet_to_split.other_subset is not None
+    assert all((r[2] == 1) == True for r in memlet_to_split.subset)  # noqa: E712 [true-false-comparison]  # SymPy comparison
+
+    src: dace_nodes.AccessNode = edge_to_split.src
+    consumer_subset: dace_sbs.Subset = memlet_to_split.src_subset
+
+    # Perform the split of the `edge_to_split`, such that all producers are okay.
+    # TODO(phimuell): Find a better way.
+    fully_splitted_subsets: list[dace_sbs.Subset] = [consumer_subset]
+    for split in split_description:
+        new_fully_splitted_subsets: list[dace_sbs.Subset] = []
+        for consumer in fully_splitted_subsets:
+            split_res = decompose_subset(producer=split, consumer=consumer)
+            if split_res:
+                # It was possible to further split the consumer subset.
+                new_fully_splitted_subsets.extend(split_res)
+            else:
+                # It was not possible to further split the consumer subset. Thus
+                #  `consumer` is final.
+                new_fully_splitted_subsets.append(consumer)
+        fully_splitted_subsets = new_fully_splitted_subsets
+
+    new_edges: dict[Union[dace_sbs.Range, None], dace_graph.MultiConnectorEdge] = {
+        split: set() for split in split_description
+    }
+    new_edges[None] = set()
+
+    consumer_dest_subset: dace_sbs.Subset = memlet_to_split.dst_subset
+    consumer_dest_subset_start = consumer_dest_subset.min_element()
+    consumer_subset_start = consumer_subset.min_element()
+    for new_consumer_subset in fully_splitted_subsets:
+        new_consumer_subset_start = new_consumer_subset.min_element()
+        new_consumer_subset_size = new_consumer_subset.size()
+        new_consumer_offset = [
+            new_start - old_start
+            for new_start, old_start in zip(new_consumer_subset_start, consumer_subset_start)
+        ]
+
+        new_consumer_dest_subset = dace_sbs.Range(
+            [
+                (old_dst_start + offset, old_dst_start + offset + size - 1, 1)
+                for old_dst_start, size, offset in zip(
+                    consumer_dest_subset_start, new_consumer_subset_size, new_consumer_offset
+                )
+            ]
+        )
+        new_edge = state.add_edge(
+            src,
+            edge_to_split.src_conn,
+            edge_to_split.dst,
+            edge_to_split.dst_conn,
+            dace.Memlet(
+                data=src.data,
+                subset=new_consumer_subset,
+                other_subset=new_consumer_dest_subset,
+                dynamic=memlet_to_split.dynamic,
+            ),
+        )
+        new_edges[
+            next((split for split in split_description if split.covers(new_consumer_subset)), None)
+        ].add(new_edge)
+
+    state.remove_edge(edge_to_split)
+    return new_edges
+
+
+def decompose_subset(
+    producer: dace_sbs.Subset,
+    consumer: dace_sbs.Subset,
+) -> Union[list[dace_sbs.Subset], None]:
+    """This function performs is able to split `consumer` in one dimension.
+
+    The function decomposes `consumer` into fragments, each fragment is either
+    fully covered by `producer` or there has no intersection
+    with it.
+
+    The function returns the list of the fragments of `consumer`. However,
+    there are some special return values:
+    - `None`: If the split is not applicable, for example there is no
+        intersection in at least one dimensions.
+    - The empty `list`: Indicates that `producer` fully covers `consumer`.
+
+    Args:
+        producer: The subset that can not be split.
+        consumer: The subset that should be decomposed.
+    """
+    assert producer.dims() == consumer.dims()
+
+    # Currently we require that we have to split only along one dimension.
+    dimension_in_which_to_split: Optional[int] = None
+    splitted_subsets_in_dim: list[tuple[Any, ...]] = []
+    needs_further_spliting = False
+    for dim in range(producer.dims()):
+        prod_low = producer[dim][0]
+        prod_high = producer[dim][1]
+        consu_low = consumer[dim][0]
+        consu_high = consumer[dim][1]
+
+        # In this dimension the consumer consumes everything the producer
+        #  generates. Therefore no splitting is needed.
+        embedded_cond1 = (prod_low <= consu_low) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        embedded_cond2 = (consu_high <= prod_high) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        if embedded_cond1 and embedded_cond2:
+            continue
+
+        # Check if there is an intersection at all.
+        #  I am pretty sure that there is no strange `-1` correction needed here.
+        intersec_cond1 = consu_low <= prod_high
+        intersec_cond2 = prod_low <= consu_high
+        if intersec_cond1 == False or intersec_cond2 == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            return None
+        if not (intersec_cond1 == True and intersec_cond2 == True):  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            return None
+
+        # `consumer` must be split in multiple dimensions, we already found one,
+        #  stored in `dimension_in_which_to_split` but also found a new one, `dim`.
+        #  We will now pretend that we did not see this. Instead we will do the
+        #  split in the first dimension we found. We rely on the driver that it
+        #  subsequently calls this function.
+        if dimension_in_which_to_split is not None:
+            needs_further_spliting = True
+            continue
+        else:
+            dimension_in_which_to_split = dim
+
+        # Determine the splitting case that we have.
+        #  I am pretty sure about the `<` here.
+        read_right = (prod_high < consu_high) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        read_left = (consu_low < prod_low) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        assert read_right or read_left
+
+        # Now we determine the split mode. There are three cases.
+        if read_right and read_left:
+            # The consumer starts reading before the producer starts to write
+            #  and also reads more than the producer writes to, so it is split
+            #  into three parts.
+            splitted_subsets_in_dim = [
+                (consu_low, prod_low - 1, 1),
+                (prod_low, prod_high, 1),
+                (prod_high + 1, consu_high, 1),
+            ]
+        elif read_left:
+            # The consumer starts reading before the producer starts writing.
+            #  Thus there are two parts.
+            splitted_subsets_in_dim = [(consu_low, prod_low - 1, 1), (prod_low, consu_high, 1)]
+        elif read_right:
+            # The consumer starts reading inside the range the producer writes to
+            #  but reads more, so again two splits.
+            splitted_subsets_in_dim = [
+                (consu_low, prod_high, 1),
+                (prod_high + 1, consu_high, 1),
+            ]
+
+    # If we are here this means that no split is applicable, because `consumer` is
+    #  fully covered by `producer`. To indicate this we return the empty list.
+    if dimension_in_which_to_split is None:
+        assert not needs_further_spliting
+        assert producer.covers(consumer)
+        return []
+
+    assert dimension_in_which_to_split is not None
+    assert len(splitted_subsets_in_dim) > 0
+    assert all(((e - s) >= 0) == True for s, e, _ in splitted_subsets_in_dim)  # noqa: E712 [true-false-comparison]  # SymPy comparison
+
+    splitted_subsets: list[dace_sbs.Subset] = []
+    for splitted_subset_in_dim in splitted_subsets_in_dim:
+        splitted_subsets.append(
+            dace_sbs.Range(
+                [
+                    (
+                        splitted_subset_in_dim
+                        if dim == dimension_in_which_to_split
+                        else org_consumer_sbs
+                    )
+                    for dim, org_consumer_sbs in enumerate(consumer)
+                ]
+            )
+        )
+
+    # If we need further splitting then we must call the split subsets recursively.
+    if needs_further_spliting:
+        fully_splitted_subsets: list[dace_sbs.Subset] = []
+        for consumer_fragment in splitted_subsets:
+            next_decomposed_level = decompose_subset(producer=producer, consumer=consumer_fragment)
+            if next_decomposed_level:
+                fully_splitted_subsets.extend(next_decomposed_level)
+            else:
+                # There was nothing to split.
+                fully_splitted_subsets.append(consumer_fragment)
+        return fully_splitted_subsets
+    else:
+        return splitted_subsets
 
 
 def _perform_node_split(

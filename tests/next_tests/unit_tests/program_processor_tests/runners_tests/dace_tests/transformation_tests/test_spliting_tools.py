@@ -193,3 +193,86 @@ def test_simple_node_split():
     del csdfg_res
 
     assert all(np.allclose(ref[n], res[n]) for n in ref)
+
+
+def _make_split_edge_sdfg() -> (
+    tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode]
+):
+    sdfg = dace.SDFG(util.unique_name("split_edge"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "abt":
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=(name == "t"),
+        )
+
+    t = state.add_access("t")
+    b = state.add_access("b")
+    state.add_mapped_tasklet(
+        "comp1",
+        map_ranges={"__i": "0:5"},
+        inputs={"__in": dace.Memlet("a[__i]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("t[__i]")},
+        output_nodes={t},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "comp2",
+        map_ranges={"__i": "5:10"},
+        inputs={"__in": dace.Memlet("a[__i]")},
+        code="__out = __in - 1.0",
+        outputs={"__out": dace.Memlet("t[__i]")},
+        output_nodes={t},
+        external_edges=True,
+    )
+    state.add_nedge(t, b, dace.Memlet("t[0:10] -> [0:10]"))
+    sdfg.validate()
+
+    return sdfg, state, t, b
+
+
+def test_split_edge_oversized():
+    sdfg, state, t, b = _make_split_edge_sdfg()
+
+    assert state.out_degree(t) == 1
+    assert state.in_degree(t) == 2
+    assert state.degree(b) == 1
+
+    edge_to_split = next(iter(state.out_edges(t)))
+    assert edge_to_split.dst is b
+
+    # Note we only specify the first half, however, the other part `5:10` will
+    #  be maintained.
+    split = dace_sbs.Range.from_string("0:5")
+    split_description = [split]
+
+    new_edges_by_split = gtx_transformations.spliting_tools.split_copy_edge(
+        state=state,
+        sdfg=sdfg,
+        edge_to_split=edge_to_split,
+        split_description=split_description,
+    )
+    sdfg.validate()
+
+    explected_subsets = [
+        dace_sbs.Range.from_string("0:5"),
+        dace_sbs.Range.from_string("5:10"),
+    ]
+
+    assert len(new_edges_by_split) == 2
+    assert state.out_degree(t) == 2
+    assert state.in_degree(b) == 2
+    assert {split, None} == new_edges_by_split.keys()
+    assert len(new_edges_by_split[None]) == 1
+    assert len(new_edges_by_split[split]) == 1
+    assert all(
+        all(e.src is t and e.dst is b for e in new_edges)
+        for new_edges in new_edges_by_split.values()
+    )
+    assert new_edges_by_split[split].union(new_edges_by_split[None]) == set(state.out_edges(t))
+    assert set(explected_subsets) == {oedge.data.src_subset for oedge in state.out_edges(t)}
+    assert set(explected_subsets) == {iedge.data.dst_subset for iedge in state.in_edges(b)}
