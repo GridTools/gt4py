@@ -235,7 +235,7 @@ def _make_split_edge_sdfg() -> (
     return sdfg, state, t, b
 
 
-def test_split_edge_oversized():
+def test_split_edge():
     sdfg, state, t, b = _make_split_edge_sdfg()
 
     assert state.out_degree(t) == 1
@@ -248,13 +248,12 @@ def test_split_edge_oversized():
     # Note we only specify the first half, however, the other part `5:10` will
     #  be maintained.
     split = dace_sbs.Range.from_string("0:5")
-    split_description = [split]
 
     new_edges_by_split = gtx_transformations.spliting_tools.split_copy_edge(
         state=state,
         sdfg=sdfg,
         edge_to_split=edge_to_split,
-        split_description=split_description,
+        split_description=[split],
     )
     sdfg.validate()
 
@@ -276,3 +275,65 @@ def test_split_edge_oversized():
     assert new_edges_by_split[split].union(new_edges_by_split[None]) == set(state.out_edges(t))
     assert set(explected_subsets) == {oedge.data.src_subset for oedge in state.out_edges(t)}
     assert set(explected_subsets) == {iedge.data.dst_subset for iedge in state.in_edges(b)}
+
+
+def test_split_edge_2d():
+    sdfg = dace.SDFG(util.unique_name("split_edge_2d"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "ab":
+        sdfg.add_array(
+            name,
+            shape=(10, 10),
+            dtype=dace.float64,
+            transient=False,
+        )
+
+    a = state.add_access("a")
+    b = state.add_access("b")
+    state.add_nedge(a, b, dace.Memlet("a[0:9, 0:8] -> [1:10, 2:10]"))
+    assert state.degree(a) == 1
+    assert state.degree(b) == 1
+
+    edge_to_split = next(iter(state.out_edges(a)))
+    assert edge_to_split.dst is b
+
+    split = dace_sbs.Range.from_string("0:5, 0:4")
+
+    # There will be one edge that copies the split, and two edges for the rest.
+    #  However, there are two different possibilities how they are split.
+    new_edges_by_split = gtx_transformations.spliting_tools.split_copy_edge(
+        state=state,
+        sdfg=sdfg,
+        edge_to_split=edge_to_split,
+        split_description=[split],
+    )
+    sdfg.validate()
+
+    assert len(new_edges_by_split) == 2
+    assert state.out_degree(a) == 3
+    assert state.in_degree(b) == 3
+
+    new_edges_split = new_edges_by_split[split]
+    assert len(new_edges_split) == 1
+    new_edge_split = next(iter(new_edges_split))
+    assert new_edge_split.data.src_subset == split
+    assert new_edge_split.data.dst_subset == dace_sbs.Range.from_string("1:6, 2:6")
+
+    # We could now also inspect the subsets, but since there are multiple, ways how
+    #  they are split, we simply compile the SDFG and compare with a reference.
+    new_edges_None = new_edges_by_split[None]
+    assert len(new_edges_None) == 2
+    assert all(not new_edge.data.src_subset.intersects(split) for new_edge in new_edges_None)
+    assert all(
+        not new_edge.data.dst_subset.intersects(new_edge_split.data.dst_subset)
+        for new_edge in new_edges_None
+    )
+
+    a = np.array(np.random.rand(10, 10), copy=True, dtype=np.float64)
+    b = np.array(np.random.rand(10, 10), copy=True, dtype=np.float64)
+    b_ref = copy.deepcopy(b)
+    b_ref[1:10, 2:10] = a[0:9, 0:8]
+
+    util.compile_and_run_sdfg(sdfg, a=a, b=b)
+    assert np.all(b_ref == b)
