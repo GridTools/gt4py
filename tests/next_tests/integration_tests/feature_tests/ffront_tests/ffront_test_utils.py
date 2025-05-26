@@ -184,8 +184,6 @@ def simple_cartesian_grid(sizes: int | tuple[int, int, int] = 10) -> CartesianGr
     return types.SimpleNamespace(
         name="simple_cartesian_grid",
         sizes=sizes,
-        num_J_vertices=size,
-        num_levels=size,
         offset_provider=offset_provider,
         offset_provider_type=common.offset_provider_to_type(offset_provider),
     )
