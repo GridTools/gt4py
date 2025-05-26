@@ -12,5 +12,6 @@ from gt4py.next import config
 
 
 def set_dace_cache_config() -> None:
+    """Set configuration for dace cache, shared among multiple workflow stages."""
     dace.config.Config.set("cache", value="hash")  # use the SDFG hash as cache key
     dace.config.Config.set("default_build_folder", value=str(config.BUILD_CACHE_DIR / "dace_cache"))
