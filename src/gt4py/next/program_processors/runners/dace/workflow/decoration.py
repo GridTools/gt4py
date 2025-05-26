@@ -26,7 +26,6 @@ def convert_args(
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
 ) -> stages.CompiledProgram:
     sdfg_program = fun.sdfg_program
-    metric_collection = metrics.get_active_metric_collection()
 
     # We use the callback function provided by the compiled program to update the SDFG arglist.
     update_sdfg_call_args = functools.partial(
@@ -66,6 +65,7 @@ def convert_args(
             update_sdfg_call_args(args, sdfg_program._lastargs[0])
             fun.fast_call()
 
+        metric_collection = metrics.get_active_metric_collection()
         if (metric_collection is not None) and (
             config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
         ):
