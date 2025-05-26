@@ -99,5 +99,4 @@ def test_collect_metrics(cartesian_case_no_backend, metrics_level, expected_name
         args, kwargs = cases.get_default_data(cartesian_case, testee)
         testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
 
-    print(metrics_level, expected_names, metrics.program_metrics.metric_names)
     assert set(metrics.program_metrics.metric_names) == set(expected_names)

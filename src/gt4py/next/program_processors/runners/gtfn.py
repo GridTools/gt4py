@@ -61,8 +61,8 @@ def convert_args(
 
         opt_kwargs: dict[str, Any]
         metric_collection = metrics.get_active_metric_collection()
-        if metric_collection is not None and (
-            collect_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE)
+        if collect_metrics := (
+            metric_collection is not None and (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE)
         ):
             # If we are collecting metrics, we need to add the `exec_info` argument
             # to the `inp` call, which will be used to collect performance metrics.
@@ -79,7 +79,8 @@ def convert_args(
             **opt_kwargs,
         )
 
-        if metric_collection is not None and collect_metrics:
+        if collect_metrics:
+            assert metric_collection is not None
             value = exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"]
             metric_collection.add_sample(metrics.COMPUTE_METRIC, value)
 
