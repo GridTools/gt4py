@@ -280,9 +280,10 @@ class Program:
             else ""
         )
         with metrics.metrics_collection(program_name) as metrics_collection:
-            if metrics_collection is not None and (
-                collect_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.INFO)
-            ):
+            collect_metrics = metrics_collection is not None and (
+                config.COLLECT_METRICS_LEVEL >= metrics.INFO
+            )
+            if collect_metrics:
                 start = time.time()
 
             if __debug__:
