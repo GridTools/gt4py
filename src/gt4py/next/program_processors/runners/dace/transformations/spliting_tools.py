@@ -88,16 +88,31 @@ def split_node(
 ) -> dict[dace_sbs.Subset, dace_nodes.AccessNode]:
     """The function will split `node_to_split` into several smaller AccessNodes.
 
-    How the split is performed is described by `split_description`, essentially it
-    is a list of subsets that describes the sizes of the new AccessNodes.
-    There are some special cases in this function.
+    How the split is performed is described by `split_description`, which is a list
+    of subsets that describes how to partition `node_to_split`.
+    The function will then create new data descriptors for the for each of the fragment
+    and create new AccessNodes. Then it will relocate all edges from `node_to_split`
+    to the respective AccessNode of the fragment. The dataflow of the producer and
+    consumer region will be reconfigured appropriate and strides are propagated.
 
     In some cases it might be possible to avoid to create an intermediate AccessNode.
-    For example this happens when there is a Map that writes into `node_to_split`
-    and a consumer to that node happens to be an AccessNode. In that case, the
-    function might skip the creations of the intermediates.
-    """
+    For example, if there is a Map that writes into `node_to_split` and a consumer
+    to that node happens to be an AccessNode. In that case, the function will skip
+    the write into the fragment and write directly into the consumer. However,
+    for this `allow_to_bypass_nodes` must be `True`. Furthermore, note that the
+    function will still create the data descriptors and the AccessNodes associated
+    to the fragments.
 
+    The function returns a `dict` that maps the subset describing each split to the
+    AccessNode that was created for it.
+
+    Note:
+        - It is not required that`split_description` covers `node_to_split` completely.
+            It is only required that a read or write is fully covered by a single
+            fragment.
+        - It is the responsibility of the caller to remove the isolated AccessNodes
+            and remove the unused data descriptors.
+    """
     if already_reconfigured_nodes is None:
         already_reconfigured_nodes = set()
 
@@ -124,6 +139,8 @@ def split_node(
         state, sdfg, node_to_split, assignment
     )
 
+    # This will also remove the `node_to_split` node but not the data descriptor
+    #  it referred to.
     _perform_node_split(
         state=state,
         sdfg=sdfg,
@@ -133,14 +150,6 @@ def split_node(
         allow_to_bypass_nodes=allow_to_bypass_nodes,
         already_reconfigured_nodes=already_reconfigured_nodes,
     )
-
-    # If were allowed to bypass the split node, then we now clean up.
-    #  This might be not the ideal solution.
-    if allow_to_bypass_nodes:
-        for split in split_description:
-            if (split in new_access_nodes) and state.degree(new_access_nodes[split]) == 0:
-                # TODO(phimuell): What to do about the data descriptor?
-                new_access_nodes.pop(new_access_nodes[split])
 
     return new_access_nodes
 
@@ -175,11 +184,15 @@ def _perform_node_split(
     for split in new_access_nodes:
         edges_to_relocate = assignment[split]
         new_access_node = new_access_nodes[split]
-        assert state.degree(new_access_node) == 0
 
+        if len(edges_to_relocate) == 0:
+            continue
+
+        assert state.degree(new_access_node) == 0
         assert all(
             edge_to_relocate.edge not in handled_edges for edge_to_relocate in edges_to_relocate
         )
+
         if allow_to_bypass_nodes and _can_use_bypass_version_of_node_spliter(edges_to_relocate):
             _perform_node_split_with_bypass_impl(
                 state=state,
@@ -201,7 +214,12 @@ def _perform_node_split(
                     already_reconfigured_nodes=already_reconfigured_nodes,
                 )
         handled_edges.update(edesc.edge for edesc in edges_to_relocate)
+
+    # While we remove the AccessNode we do not remove the underlying data. We do this
+    #  because it might be that there is another node that is still referring to
+    #  it, which happens if we split across multiple states.
     assert state.degree(node_to_split) == 0
+    state.remove_node(node_to_split)
 
     # Propagate the strides starting from the new access nodes.
     # NOTE: If the bypass version was used then the propagation has been done there
@@ -214,11 +232,6 @@ def _perform_node_split(
             state=state,
             outer_node=new_access_node,
         )
-
-    # While we remove the AccessNode we do not remove the underlying data. We do this
-    #  because it might be that there is another node that is still referring to
-    #  it, which happens if we split across multiple states.
-    state.remove_node(node_to_split)
 
 
 def _perform_node_split_impl(
@@ -276,9 +289,15 @@ def _perform_node_split_impl(
     if (other_node, other_node_conn) not in already_reconfigured_nodes:
         already_reconfigured_nodes.add((other_node, other_node_conn))
 
-        if isinstance(other_node, (dace_nodes.MapExit, dace_nodes.NestedSDFG)):
+        if isinstance(other_node, dace_nodes.NestedSDFG):
             # There is nothing special to do. In case of a nested SDFG, we will also have to do
             #  stride propagation, but we will postpone that.
+            pass
+
+        elif is_producer_edge and isinstance(other_node, dace_nodes.MapExit):
+            pass
+
+        elif (not is_producer_edge) and isinstance(other_node, dace_nodes.MapEntry):
             pass
 
         elif isinstance(other_node, dace_nodes.AccessNode):
@@ -329,7 +348,9 @@ def _perform_node_split_with_bypass_impl(
     # TODO ADDING PRODUCER TO THE SET OF PROCESSED NODES
 
     """
-    producer_edge_desc = next(edesc for edesc in edges_to_relocate if describes_incoming_edge(edesc))
+    producer_edge_desc = next(
+        edesc for edesc in edges_to_relocate if describes_incoming_edge(edesc)
+    )
     data_producer: dace_nodes.Node = get_other_node(producer_edge_desc)
     producer_edge = producer_edge_desc.edge
     assert producer_edge.dst is node_to_split
@@ -487,16 +508,13 @@ def _generate_desc_and_access_nodes_for_split(
 ) -> dict[dace_sbs.Subset, dace_nodes.AccessNode]:
     """Creates the data container and AccessNodes for the split data.
 
-    The function will generate a data descriptor and AccessNode in `state`.
-    If there is no assignment for a split, then nothing is created.
+    The function will generate a data descriptor and AccessNode in `state` for every
+    split in `assignment`, even if there are no edges assigned to that split.
     """
     new_access_nodes: dict[dace_sbs.Subset, dace_nodes.AccessNode] = {}
     desc_to_split = node_to_split.desc(sdfg)
 
-    for i, (split_subset, edges_to_relocate) in enumerate(assignment.items()):
-        if len(edges_to_relocate) == 0:
-            continue
-
+    for i, split_subset in enumerate(assignment):
         tmp_shape = split_subset.size()
         tmp_name, tmp_desc = sdfg.add_transient(
             name=f"{node_to_split.data}_split_{i}",
