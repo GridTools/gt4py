@@ -18,6 +18,8 @@ from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
 from gt4py.next.otf import arguments, stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable, workflow as dace_worflow
 
+from . import utils
+
 
 def inject_timer(sdfg: dace.SDFG) -> Callable[[stages.CompiledProgram], stages.CompiledProgram]:
     def outer(fun: stages.CompiledProgram) -> stages.CompiledProgram:
@@ -31,14 +33,11 @@ def inject_timer(sdfg: dace.SDFG) -> Callable[[stages.CompiledProgram], stages.C
             # Observe that dace instrumentation adds runtime overhead:
             #  for each SDFG run, dace saves the instrumentation report to a file.
             with dace.config.temporary_config():
-                dace.config.Config.set("cache", value="hash")  # use the SDFG hash as cache key
-                dace.config.Config.set(
-                    "default_build_folder", value=str(config.BUILD_CACHE_DIR / "dace_cache")
-                )
+                utils.set_dace_cache_config()
                 sdfg_events = sdfg.get_latest_report().events
                 assert len(sdfg_events) == 1
-                # The event name get truncated, so we only check that it corresponds
-                # to the start of SDFG label.
+                # The event name gets truncated in dace, so we only check that
+                # it corresponds to the beginning of SDFG label.
                 assert f"SDFG {sdfg.label}".startswith(sdfg_events[0].name)
             duration_secs = (
                 sdfg_events[0].duration / 1e6
