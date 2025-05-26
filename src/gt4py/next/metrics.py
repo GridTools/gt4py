@@ -6,17 +6,19 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import contextlib
 import contextvars
 import dataclasses
 import json
 import pathlib
 import sys
-from collections.abc import MutableSequence, Sequence
+from collections.abc import Generator, MutableSequence, Sequence
 
 import numpy as np
 
 from gt4py.eve import utils
 from gt4py.eve.extended_typing import Final, TypeVar
+from gt4py.next import config
 
 
 # Common metric names
@@ -135,13 +137,35 @@ class MetricCollectionStore(utils.CustomDefaultDictBase[_KeyT, MetricCollection]
         )
 
 
+# Context variable storing the active metric collection of the current program.
+_active_metric_collection: contextvars.ContextVar[MetricCollection | None] = contextvars.ContextVar(
+    "active_metric_collection", default=None
+)
+
 #: Global metric collection store for the entire program.
 program_metrics: MetricCollectionStore[str] = MetricCollectionStore()
 
-#: Context variable to store the active metric collection of the current program.
-active_metric_collection: contextvars.ContextVar[MetricCollection | None] = contextvars.ContextVar(
-    "active_metric_collection", default=None
-)
+
+def get_active_metric_collection() -> MetricCollection | None:
+    """Retrieve the active metric collection for the current program."""
+    return _active_metric_collection.get()
+
+
+@contextlib.contextmanager
+def metrics_collection(key: str) -> Generator[MetricCollection | None, None, None]:
+    current_metrics: MetricCollection | None = None
+    reset_token: contextvars.Token | None = None
+    if config.COLLECT_METRICS_LEVEL:
+        current_metrics = program_metrics[key]
+        assert _active_metric_collection.get() in [None, current_metrics]
+        reset_token = _active_metric_collection.set(current_metrics)
+
+    try:
+        yield current_metrics
+
+    finally:
+        if reset_token is not None:
+            _active_metric_collection.reset(reset_token)
 
 
 def dumps(metric_cs: MetricCollectionStore | None = None) -> str:

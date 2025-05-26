@@ -59,10 +59,17 @@ def convert_args(
         converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
 
-        opt_kwargs: dict[str, Any] = {}
-        if collect_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE):
-            exec_info: dict[str, float]
-            opt_kwargs["exec_info"] = (exec_info := {})
+        opt_kwargs: dict[str, Any]
+        metric_collection = metrics.get_active_metric_collection()
+        if collect_metrics := (
+            metric_collection is not None and (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE)
+        ):
+            # If we are collecting metrics, we need to add the `exec_info` argument
+            # to the `inp` call, which will be used to collect performance metrics.
+            exec_info: dict[str, float] = {}
+            opt_kwargs = {"exec_info": exec_info}
+        else:
+            opt_kwargs = {}
 
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
         inp(
@@ -73,7 +80,6 @@ def convert_args(
         )
 
         if collect_metrics:
-            metric_collection = metrics.active_metric_collection.get()
             assert metric_collection is not None
             value = exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"]
             metric_collection.add_sample(metrics.COMPUTE_METRIC, value)

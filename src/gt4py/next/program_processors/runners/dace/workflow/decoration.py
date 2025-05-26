@@ -23,13 +23,12 @@ from . import utils
 
 def inject_timer(sdfg: dace.SDFG) -> Callable[[stages.CompiledProgram], stages.CompiledProgram]:
     def outer(fun: stages.CompiledProgram) -> stages.CompiledProgram:
-        if config.COLLECT_METRICS_LEVEL < metrics.PERFORMANCE:
+        metric_collection = metrics.get_active_metric_collection()
+        if (metric_collection is None) or (config.COLLECT_METRICS_LEVEL < metrics.PERFORMANCE):
             return fun
 
         def inner(*args: Any, **kwargs: Any) -> None:
             fun(*args, **kwargs)
-            metric_collection = metrics.active_metric_collection.get()
-            assert metric_collection is not None
             # Observe that dace instrumentation adds runtime overhead:
             #  for each SDFG run, dace saves the instrumentation report to a file.
             with dace.config.temporary_config():
