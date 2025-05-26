@@ -17,7 +17,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import config
+from gt4py.next import config, metrics
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache
 
@@ -62,13 +62,11 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
 
     def __init__(
         self,
-        name: str,
         program: dace.CompiledSDFG,
         bind_func_name: str,
         binding_source: stages.BindingSource[languages.SDFG, languages.Python],
         implicit_domain: bool,
     ):
-        self.name = name
         self.sdfg_program = program
         self.implicit_domain = implicit_domain
 
@@ -121,7 +119,7 @@ class DaCeCompiler(
         sdfg = dace.SDFG.from_json(inp.program_source.source_code)
         sdfg.build_folder = cache.get_cache_folder(inp, self.cache_lifetime)
 
-        if config.COLLECT_METRICS:
+        if config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE:
             # measure execution time of the top-level SDFG
             sdfg.instrument = dace.dtypes.InstrumentationType.Timer
 
@@ -158,7 +156,6 @@ class DaCeCompiler(
 
         assert inp.binding_source is not None
         return CompiledDaceProgram(
-            inp.program_source.entry_point.name,
             sdfg_program,
             self.bind_func_name,
             inp.binding_source,
