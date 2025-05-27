@@ -7,13 +7,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 # TODO(dropd): Remove as soon as `gt4py.next.ffront.decorator` is type checked.
+import unittest
+import unittest.mock as mock
+
 import numpy as np
 import pytest
 
 from gt4py import next as gtx
 from gt4py.next.iterator import ir as itir
-
-from next_tests import definitions as test_definitions
+from gt4py.next import common
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -64,3 +66,35 @@ def test_frozen(cartesian_case):
 
     # with_grid_type returns a new instance, which is frozen but not compiled yet
     assert testee.with_grid_type(cartesian_case.grid_type)._compiled_program is None
+
+
+def test_offset_provider_cache(cartesian_case):
+    @gtx.field_operator
+    def testee_op(a: cases.IField) -> cases.IField:
+        return a
+
+    @gtx.program(backend=cartesian_case.backend)
+    def testee(a: cases.IField, out: cases.IField):
+        testee_op(a, out=out)
+
+    testee.compile(
+        offset_provider=cartesian_case.offset_provider,
+    )
+
+    mock_offset_provider_to_type = unittest.mock.MagicMock()
+    impl_offset_provider_to_type = common.offset_provider_to_type
+
+    def mocked_offset_provider_to_type(
+        offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    ) -> common.OffsetProviderType:
+        mock_offset_provider_to_type.__call__(offset_provider)
+        return impl_offset_provider_to_type(offset_provider)
+
+    args_1, kwargs_1 = cases.get_default_data(cartesian_case, testee)
+    testee(*args_1, offset_provider=cartesian_case.offset_provider, **kwargs_1)
+
+    with mock.patch("gt4py.next.common.offset_provider_to_type", mocked_offset_provider_to_type):
+        args_2, kwargs_2 = cases.get_default_data(cartesian_case, testee)
+        testee(*args_2, offset_provider=cartesian_case.offset_provider, **kwargs_2)
+
+        mock_offset_provider_to_type.assert_not_called()

@@ -373,7 +373,7 @@ class HashableBy(Generic[_T]):
         return self.func(self.value)
 
     def __eq__(self, other: Any) -> bool:
-        return self.value is other.value and self.func is self.func
+        return self.value == other.value and self.func is self.func
 
 
 @overload
