@@ -77,12 +77,9 @@ def test_frozen(cartesian_case):
         (metrics.ALL, ("compute", "total")),
     ],
 )
-def test_collect_metrics(cartesian_case_no_backend, metrics_level, expected_names):
-    cartesian_case = dataclasses.replace(
-        cartesian_case_no_backend,
-        backend=gtfn.run_gtfn,
-        allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-    )
+def test_collect_metrics(cartesian_case, metrics_level, expected_names):
+    if cartesian_case.backend is None:
+        pytest.skip("Precompiled Program with embedded execution is not possible.")
 
     @gtx.field_operator
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
@@ -100,3 +97,4 @@ def test_collect_metrics(cartesian_case_no_backend, metrics_level, expected_name
         testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
 
     assert set(metrics.program_metrics.metric_names) == set(expected_names)
+    metrics.program_metrics.clear()

@@ -15,7 +15,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config
+from gt4py.next import common, config, metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
@@ -186,7 +186,11 @@ class DaCeTranslator(
 
         # Do not use async SDFG call when collecting metrics: we use SDFG instrumentatiom
         #   and therefore the SDFG execution has to complete before we can retrieve the report.
-        if on_gpu and self.async_sdfg_call and not config.COLLECT_METRICS_LEVEL:
+        if config.COLLECT_METRICS_LEVEL:
+            if config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE:
+                # Measure execution time of the top-level SDFG
+                sdfg.instrument = dace.dtypes.InstrumentationType.Timer
+        elif on_gpu and self.async_sdfg_call:
             make_sdfg_async(sdfg)
 
         return sdfg
