@@ -127,9 +127,7 @@ def test_offset_provider_cache(cartesian_case):
     args_1, kwargs_1 = cases.get_default_data(cartesian_case, testee)
     testee(*args_1, offset_provider=cartesian_case.offset_provider, **kwargs_1)
 
-    with mock.patch(
-        "gt4py.next.common.offset_provider_to_type", mocked_offset_provider_to_type
-    ):
+    with mock.patch("gt4py.next.common.offset_provider_to_type", mocked_offset_provider_to_type):
         args_2, kwargs_2 = cases.get_default_data(cartesian_case, testee)
         testee(*args_2, offset_provider=cartesian_case.offset_provider, **kwargs_2)
 
