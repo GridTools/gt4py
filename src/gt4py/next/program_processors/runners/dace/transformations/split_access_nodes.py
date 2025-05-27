@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import warnings
 from typing import Any, Iterable, Optional
 
 import dace
@@ -166,11 +167,23 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         # Split node will remove the AccessNode but does not remove the data.
         sdfg.remove_data(access_node.data, validate=False)
 
-        # We have to clean up, i.e. the isolated nodes that might be created.
+        # We have to clean up the isolated fragments. This is because we specified
+        #  `allow_to_bypass_nodes` in the call above.
         for ac in fragment_access_nodes.values():
             if graph.degree(ac) == 0:
                 graph.remove_node(ac)
                 sdfg.remove_data(ac.data, validate=False)
+
+        # NOTE: This is a very obscure case. It happens when a producer writes
+        #  something inside `access_node` and the data is never read. In that
+        #  case the original producer is becoming isolated, which we have to
+        #  avoid.
+        for old_producer_edge, assigned_consumers in assignment.items():
+            if len(assigned_consumers) == 0:
+                assert graph.degree(old_producer_edge.src) == 0
+                graph.remove_node(old_producer_edge.src)
+            else:
+                assert graph.degree(old_producer_edge.src) != 0
 
     def _match_consumers_to_producers(
         self,
@@ -201,10 +214,19 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 return None
             assignment[possible_producer].add(oedge)
 
-        # At least every producer should have at least one consumer. If this is not the
-        #  case then we compute something that is not needed.
-        # TODO(phimuell): Figuring out what we should actually do.
-        assert not any(len(assigned_consumers) == 0 for assigned_consumers in assignment.values())
+        # TODO(phimuell): Find out what this obscure case means.
+        unused_producers = [
+            producer
+            for producer, assigned_consumers in assignment.items()
+            if len(assigned_consumers) == 0
+        ]
+        if len(unused_producers) == 0:
+            warnings.warn(
+                "'SplitAccessNode': found producers "
+                + ", ".join((str(p) for p in unused_producers))
+                + " that generates data but that is never read.",
+                stacklevel=0,
+            )
 
         return assignment
 
