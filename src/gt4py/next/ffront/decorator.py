@@ -32,8 +32,8 @@ from gt4py.next import (
     config,
     embedded as next_embedded,
     errors,
-    utils,
     metrics,
+    utils,
 )
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
