@@ -8,15 +8,13 @@
 
 # TODO(dropd): Remove as soon as `gt4py.next.ffront.decorator` is type checked.
 import unittest.mock as mock
-import dataclasses
 
 import numpy as np
 import pytest
 
 from gt4py import next as gtx
 from gt4py.next.iterator import ir as itir
-from gt4py.next import metrics, allocators as next_allocators
-from gt4py.next.program_processors.runners import gtfn
+from gt4py.next import metrics
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, cartesian_case_no_backend
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -77,6 +75,7 @@ def test_frozen(cartesian_case):
         (metrics.ALL, ("compute", "total")),
     ],
 )
+@pytest.mark.serial  # check singleton metrics collector
 def test_collect_metrics(cartesian_case, metrics_level, expected_names):
     if cartesian_case.backend is None:
         pytest.skip("Precompiled Program with embedded execution is not possible.")
