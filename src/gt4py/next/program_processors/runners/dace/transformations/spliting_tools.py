@@ -20,11 +20,11 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 class EdgeConnectionSpec:
     """Describes an edge in an abstract way, that is kind of independent of the direction.
 
-    It is a tuple of length three. The first element is the node of interest, this can
-    either be the source or destination node. The second element is the subset of the
-    Memlet at the node. The third and last element is the actual edge.
+    It is always described in terms of a node, which is eader the `src` or the `dst`
+    of the edge, in terms of the subset the edge read or writes and the edge itself.
 
-    It has the same hash as an edge.
+    To construct `EdgeConnectionSpec` you can use the `describe_incoming_edges()`
+    and `describe_outgoing_edges()` function.
     """
 
     node: dace_nodes.Node
@@ -34,13 +34,29 @@ class EdgeConnectionSpec:
     def __hash__(self) -> int:
         return hash(self.edge)
 
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, EdgeConnectionSpec):
+            return self.edge.other.self
+        return self.edge == other
+
 
 def describe_edges(
     state: dace.SDFG,
     node: dace_nodes.Node,
     incoming_edges: bool,
 ) -> list[EdgeConnectionSpec]:
-    """Generate the description of the edge."""
+    """Generate the description of the edges.
+
+    Function will either describes the incoming edges on node `node`, if
+    `incoming_edges` is `True` or the out going edges of node `node` if
+    `incoming_edges` is `False`.
+
+    Args:
+        state: The state in which `node` is located.
+        node: The node whose edges should be described.
+        incoming_edges: Describe the incoming (`True`) or out going (`False`) edges
+            of `node`.
+    """
     get_sbs = lambda e: e.data.dst_subset if incoming_edges else e.data.src_subset  # noqa: E731 [lambda-assignment]
     get_node = lambda e: e.dst if incoming_edges else e.src  # noqa: E731 [lambda-assignment]
     edges = state.in_edges(node) if incoming_edges else state.out_edges(node)
@@ -64,6 +80,7 @@ def describe_incoming_edges(
     state: dace.SDFG,
     node: dace_nodes.Node,
 ) -> list[EdgeConnectionSpec]:
+    """Describes the incoming edges of `node`."""
     return describe_edges(state, node, True)
 
 
@@ -71,14 +88,25 @@ def describe_outgoing_edges(
     state: dace.SDFG,
     node: dace_nodes.Node,
 ) -> list[EdgeConnectionSpec]:
+    """Describes the out going edges of `node`."""
     return describe_edges(state, node, False)
 
 
+def describe_all_edges(
+    state: dace.SDFG,
+    node: dace_nodes.Node,
+) -> list[EdgeConnectionSpec]:
+    """Describes the all edges of `node`."""
+    return describe_edges(state, node, False) + describe_edges(state, node, True)
+
+
 def describes_incoming_edge(desc: EdgeConnectionSpec) -> bool:
+    """Test if `desc` describes an incoming edge."""
     return desc.node is desc.edge.dst
 
 
 def get_other_node(desc: EdgeConnectionSpec) -> dace_nodes.Node:
+    """Extract the "other" node of the edge."""
     return desc.edge.src if describes_incoming_edge(desc) else desc.edge.dst
 
 
@@ -116,6 +144,10 @@ def split_node(
             fragment.
         - It is the responsibility of the caller to remove the isolated AccessNodes
             and remove the unused data descriptors.
+
+    Todo:
+        Make it possible to pass the AccessNodes and/or data descriptors from the
+        outside.
     """
     if already_reconfigured_nodes is None:
         already_reconfigured_nodes = set()
@@ -135,13 +167,19 @@ def split_node(
         any(split.covers(desc.subset) for split in split_description) for desc in edge_descriptions
     ), "There is an edge that would be split."
 
+    # Assign the edges of the node to a split.
     assignment = _compute_assignement_for_split(edge_descriptions, split_description)
 
-    # We will always create the new AccessNodes even if we might skip them. In that
-    #  case we will simply remove them afterwards.
-    new_access_nodes = _generate_desc_and_access_nodes_for_split(
-        state, sdfg, node_to_split, assignment
+    # Now we create the data descriptors and the AccessNodes that we need.
+    new_data_descriptors = _generate_data_descriptors_for_split(
+        state=state,
+        sdfg=sdfg,
+        node_to_split=node_to_split,
+        split_description=split_description,
     )
+    new_access_nodes: dict[dace_sbs.Subset, dace_nodes.AccessNode] = {
+        split: state.add_access(dname) for split, dname in new_data_descriptors.items()
+    }
 
     # This will also remove the `node_to_split` node but not the data descriptor
     #  it referred to.
@@ -168,10 +206,10 @@ def split_copy_edge(
 
     How the edge is split is described by `split_description`, which is a
     sequence of subsets. The function will decompose `edge_to_split` using
-    `decompose_subset()`.
+    `decompose_subset()` and then create a new edge for each resulting subset.
 
     The function returns a `dict` that maps a split subset to the set of
-    edges that were created. Note that the `dict` also contains a
+    edges that were created. Note that the `dict` also contains the
     key `None` which contains all the edges that are not associated to a
     split.
 
@@ -203,7 +241,7 @@ def split_copy_edge(
     src: dace_nodes.AccessNode = edge_to_split.src
     consumer_subset: dace_sbs.Subset = memlet_to_split.src_subset
 
-    # Perform the split of the `edge_to_split`, such that all producers are okay.
+    # Fully split the consuming edge.
     # TODO(phimuell): Find a better way.
     fully_splitted_subsets: list[dace_sbs.Subset] = [consumer_subset]
     for split in split_description:
@@ -737,32 +775,32 @@ def _perform_node_split_with_bypass_impl(
     return new_consumer_edges
 
 
-def _generate_desc_and_access_nodes_for_split(
+def _generate_data_descriptors_for_split(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
     node_to_split: dace_nodes.AccessNode,
-    assignment: dict[dace_sbs.Subset, set[EdgeConnectionSpec]],
-) -> dict[dace_sbs.Subset, dace_nodes.AccessNode]:
-    """Creates the data container and AccessNodes for the split data.
+    split_description: Iterable[dace_sbs.Subset],
+) -> dict[dace_sbs.Subset, str]:
+    """Creates the data descriptor for every split.
 
-    The function will generate a data descriptor and AccessNode in `state` for every
-    split in `assignment`, even if there are no edges assigned to that split.
+    While the size is taken from `split_description` the other properties needed
+    for the data descriptor are taken from `node_to_split`.
     """
-    new_access_nodes: dict[dace_sbs.Subset, dace_nodes.AccessNode] = {}
     desc_to_split = node_to_split.desc(sdfg)
+    new_data_descriptors: dict[dace_sbs.Subset, str] = {}
 
-    for i, split_subset in enumerate(assignment):
+    for i, split_subset in enumerate(split_description):
         tmp_shape = split_subset.size()
-        tmp_name, tmp_desc = sdfg.add_transient(
+        tmp_name, _ = sdfg.add_transient(
             name=f"{node_to_split.data}_split_{i}",
             shape=tmp_shape,
             dtype=desc_to_split.dtype,
             storage=desc_to_split.storage,
             find_new_name=True,
         )
-        new_access_nodes[split_subset] = state.add_access(tmp_name, node_to_split.debuginfo)
+        new_data_descriptors[split_subset] = tmp_name
 
-    return new_access_nodes
+    return new_data_descriptors
 
 
 def _compute_assignement_for_split(
