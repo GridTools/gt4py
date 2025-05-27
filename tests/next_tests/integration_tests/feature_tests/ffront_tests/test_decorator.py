@@ -103,6 +103,9 @@ def test_collect_metrics(cartesian_case_no_backend, metrics_level, expected_name
 
 
 def test_offset_provider_cache(cartesian_case):
+    if cartesian_case.backend is None:
+        pytest.skip("Precompiled Program with embedded execution is not possible.")
+
     @gtx.field_operator
     def testee_op(a: cases.IField) -> cases.IField:
         return a

@@ -23,7 +23,7 @@ from typing import Any, Generic, Optional, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.eve.extended_typing import Self, override
 from gt4py.next import (
     allocators as next_allocators,
@@ -52,6 +52,13 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
+
+
+@functools.lru_cache(maxsize=128)
+def _offset_provider_extended_impl(
+    hashable_offset_provider: eve_utils.HashableBy[common.OffsetProvider],
+) -> common.OffsetProvider:
+    return hashable_offset_provider.value
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -274,6 +281,16 @@ class Program:
             static_params=self.static_params,
         )
 
+    def _offset_provider_extended(
+        self,
+        offset_provider: common.OffsetProvider,
+    ) -> common.OffsetProvider:
+        return _offset_provider_extended_impl(
+            eve_utils.hashable_by(common.offset_provider_hash)(
+                {**offset_provider, **self._implicit_offset_provider}
+            ),
+        )
+
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         program_name = (
             f"{self.__name__}[{getattr(self.backend, 'name', '<embedded>')}]"
@@ -295,10 +312,7 @@ class Program:
                     kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                 )
 
-            offset_provider = {
-                **offset_provider,
-                **self._implicit_offset_provider,  # TODO(havogt) cleanup implicit_offset_provider
-            }
+            offset_provider = self._offset_provider_extended(offset_provider)
             if self.backend is not None:
                 self._compiled_programs(
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=self.enable_jit
