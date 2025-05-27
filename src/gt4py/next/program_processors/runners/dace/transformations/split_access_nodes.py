@@ -67,9 +67,11 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         single_use_data: The list of data that is used only once.
 
     Todo:
-        Currently for every consumer there can only be one producer. In case the
-        consumer is a Map, this makes sense, but in case the consumer is an
-        AccessNode one could split the consumer.
+        - Currently for every consumer there can only be one producer. In case the
+            consumer is a Map, this makes sense, but in case the consumer is an
+            AccessNode one could split the consumer.
+        - Create a version that is able to split over multiple states. This is
+            mostly useful to enable more state fusion.
     """
 
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
@@ -104,18 +106,11 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         access_node: dace_nodes.AccessNode = self.access_node
         desc = access_node.desc(sdfg)
 
-        # The intermediate access node must be a single use data, because we will
-        #  get rid of it, and it must be a transient and a non-view element.
+        # To get rid of the intermediate it must be a single use transient.
+        #  We postpone the single use check.
         if not desc.transient:
             return False
         if gtx_transformations.utils.is_view(desc, sdfg):
-            return False
-        if self._single_use_data is None:
-            find_single_use_data = dace_analysis.FindSingleUseData()
-            single_use_data = find_single_use_data.apply_pass(sdfg, None)
-        else:
-            single_use_data = self._single_use_data
-        if access_node.data not in single_use_data[sdfg]:
             return False
 
         # There must be multiple producers, otherwise this transformation
@@ -138,6 +133,14 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
             sdfg=sdfg,
             assignment=assignment,
         ):
+            return False
+
+        if self._single_use_data is None:
+            find_single_use_data = dace_analysis.FindSingleUseData()
+            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+        else:
+            single_use_data = self._single_use_data
+        if access_node.data not in single_use_data[sdfg]:
             return False
 
         return True
@@ -308,12 +311,13 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 if not data_source.desc(sdfg).transient:
                     continue
 
-                # If the source is a transient then we distinguish between the cases
-                #  that there is only one consumer, in which case we require that what
-                #  produced must be read everything and multiple consumer, in which
-                #  case we do not impose further restrictions. We do this to ensure
-                #  the tightness of the temporaries, i.e. what is computed is also
-                #  read, which is core assumption of the `CopyChainRemover`.
+                # If the source is a transient then we distinguish between two cases.
+                #  In the first case there is only one consumer, in that case we
+                #  require that everything is read. In the second case, more than
+                #  one consumer, we do not impose any constraints.
+                #  We do this to ensure the tightness of the temporaries, i.e. what
+                #  is computed is also read, which is core assumption of the
+                #  `CopyChainRemover`.
                 # TODO(phimuell): Lift this limitation.
                 if len(consumer_edges) == 1:
                     if not next(iter(consumer_edges)).data.src_subset.covers(
