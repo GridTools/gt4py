@@ -18,7 +18,7 @@ from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
 from gt4py.next.otf import arguments, stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable, workflow as dace_worflow
 
-from . import utils as dace_worflow_utils
+from . import common as dace_common
 
 
 def convert_args(
@@ -74,7 +74,7 @@ def convert_args(
             with dace.config.temporary_config():
                 # We need to set the cache folder and key config in order to retrieve
                 # the SDFG report file.
-                dace_worflow_utils.set_dace_cache_config()
+                dace_common.set_dace_config(device_type=device)
                 sdfg_events = sdfg_program.sdfg.get_latest_report().events
                 assert len(sdfg_events) == 1
                 # The event name gets truncated in dace, so we only check that
