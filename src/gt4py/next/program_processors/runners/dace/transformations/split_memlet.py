@@ -28,7 +28,7 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
 
     The transformation matches an AccessNode and examines outgoing edges
     to other AccessNodes. The transformation will then check if these
-    edges such be split such that the matched AccessNode can be handled
+    edges could be split such that the matched AccessNode can be handled
     by the `SplitAccessNode` transformation.
 
     This transformation is also related to pattern that are generated
@@ -78,9 +78,9 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
         dst_node: dace_nodes.AccessNode = self.destination_node
         src_desc: dace_data.Data = src_node.desc(sdfg)
 
-        # This transformation is to prepare for the `SplitAccessNode` transformation.
-        #  Thus we have to meet its requirements. The test for single use data
-        #  is performed later.
+        # Since, this transformation is to prepare for the `SplitAccessNode`
+        #  transformation. Thus we have to meet its requirements. The test for
+        #  single use data is performed later.
         if not src_desc.transient:
             return False
         if gtx_transformations.utils.is_view(src_desc, sdfg):

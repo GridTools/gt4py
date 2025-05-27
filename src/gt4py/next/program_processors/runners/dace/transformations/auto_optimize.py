@@ -263,7 +263,7 @@ def _gt_auto_process_top_level_maps(
         # TODO(phimuell): Find out how to skip the propagation and integrating it
         #   into the split transformation.
         sdfg.apply_transformations_repeated(
-            gtx_transformations.SplitConsumerMemlet(),
+            gtx_transformations.SplitConsumerMemlet(single_use_data=single_use_data),
             validate=validate,
             validate_all=validate_all,
         )
