@@ -324,10 +324,15 @@ def test_conditional_nested_tuple(cartesian_case):
         a,
         b,
         out=cases.allocate(cartesian_case, conditional_nested_tuple, cases.RETURN)(),
-        ref=np.where(
-            mask.asnumpy(),
-            ((a.asnumpy(), b.asnumpy()), (b.asnumpy(), a.asnumpy())),
-            ((np.full(size, 5.0), np.full(size, 7.0)), (np.full(size, 7.0), np.full(size, 5.0))),
+        ref=tuple(
+            np.where(
+                mask.asnumpy(),
+                ((a.asnumpy(), b.asnumpy()), (b.asnumpy(), a.asnumpy())),
+                (
+                    (np.full(size, 5.0), np.full(size, 7.0)),
+                    (np.full(size, 7.0), np.full(size, 5.0)),
+                ),
+            )
         ),
     )
 
