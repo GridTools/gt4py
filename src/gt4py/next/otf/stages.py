@@ -144,7 +144,7 @@ class CompiledProgram(Protocol):
     def __call__(self, *args: Any, **kwargs: Any) -> None: ...
 
 
-class ExtendedCompiledProgram(CompiledProgram):
+class ExtendedCompiledProgram(CompiledProgram, Protocol):
     """Executable python representation of a program with extra info."""
 
     implicit_domain: bool

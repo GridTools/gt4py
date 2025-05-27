@@ -18,7 +18,7 @@ from flufl import lock
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
-from gt4py.next import backend, common, config, field_utils
+from gt4py.next import backend, common, config, field_utils, metrics
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.otf import arguments, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
@@ -58,12 +58,31 @@ def convert_args(
             args = (*args, out)
         converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
+
+        opt_kwargs: dict[str, Any]
+        metric_collection = metrics.get_active_metric_collection()
+        if collect_metrics := (
+            metric_collection is not None and (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE)
+        ):
+            # If we are collecting metrics, we need to add the `exec_info` argument
+            # to the `inp` call, which will be used to collect performance metrics.
+            exec_info: dict[str, float] = {}
+            opt_kwargs = {"exec_info": exec_info}
+        else:
+            opt_kwargs = {}
+
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
-        return inp(
+        inp(
             *converted_args,
             *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
             *conn_args,
+            **opt_kwargs,
         )
+
+        if collect_metrics:
+            assert metric_collection is not None
+            value = exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"]
+            metric_collection.add_sample(metrics.COMPUTE_METRIC, value)
 
     return decorated_program
 
