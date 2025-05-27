@@ -13,6 +13,8 @@ from dace import properties as dace_properties, transformation as dace_transform
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+
 
 AccessLocation: TypeAlias = tuple[dace.SDFGState, dace_nodes.AccessNode]
 """An AccessNode and the state it is located in.
@@ -212,8 +214,11 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
         #  `MultiStateGlobalSelfCopyElimination` does this in a quite sophisticated
         #  way. We do it cheap we require that the state in which the definition of
         #  the transient happens is the immediate predecessor of where it is used.
+        #  We now also hope that the transient is not used somewhere else.
         for defining_state, _ in write_locations:
-            successor_states = {oedge.dst for oedge in sdfg.out_edges(defining_state)}
+            # If we are in a nested CFR, we will go upward until we found some
+            #  outgoing edge.
+            successor_states = gtx_transformations.utils.find_successor_state(defining_state)
             if not all(
                 write_back_state in successor_states for write_back_state, _ in read_locations
             ):

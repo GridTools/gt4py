@@ -26,7 +26,8 @@ import dace
 def apply_distributed_self_copy_elimination(
     sdfg: dace.SDFG,
 ) -> Optional[dict[dace.SDFG, set[str]]]:
-    return gtx_transformations.gt_multi_state_global_self_copy_elimination(sdfg=sdfg, validate=True)
+    res = gtx_transformations.gt_multi_state_global_self_copy_elimination(sdfg=sdfg, validate=True)
+    return res if res is None else res[sdfg]
 
 
 def _make_not_apply_because_of_write_to_g_sdfg() -> dace.SDFG:
