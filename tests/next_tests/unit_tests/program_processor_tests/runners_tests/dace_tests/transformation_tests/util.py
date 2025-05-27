@@ -60,7 +60,35 @@ def count_nodes(
 
 def unique_name(name: str) -> str:
     """Adds a unique string to `name`."""
-    return f"{name}_{str(uuid.uuid1()).replace('-', '_')}"
+    maximal_length = 200
+    unique_sufix = str(uuid.uuid1()).replace("-", "_")
+    if len(name) > (maximal_length - len(unique_sufix)):
+        name = name[: (maximal_length - len(unique_sufix) - 1)]
+    return f"{name}_{unique_sufix}"
+
+
+def compile_and_run_sdfg(
+    sdfg: dace.SDFG,
+    *args: Any,
+    **kwargs: Any,
+) -> dace.codegen.CompiledSDFG:
+    """This function guarantees that the SDFG is compiled and run.
+
+    This function will modify the name of the SDFG to ensure that the code is
+    regenerated and recompiled properly. It will also suppress warnings about
+    shared objects that are loaded multiple times.
+    """
+
+    with dace.config.set_temporary("compiler.use_cache", value=False):
+        sdfg_clone = copy.deepcopy(sdfg)
+
+        sdfg_clone.name = unique_name(sdfg_clone.name)
+        sdfg_clone._recompile = True
+        sdfg_clone._regenerate_code = True  # TODO(phimuell): Find out if it has an effect.
+        csdfg = sdfg_clone.compile()
+        csdfg(*args, **kwargs)
+
+    return csdfg
 
 
 def make_sdfg_args(
@@ -78,15 +106,6 @@ def make_sdfg_args(
     }
     res = copy.deepcopy(ref)
     return ref, res
-
-
-def evaluate_sdfg(
-    sdfg: dace.SDFG,
-    args: dict[str, Any],
-) -> Any:
-    """Compile and evaluate the SDFG."""
-    csdfg = sdfg.compile()
-    return csdfg(**args)
 
 
 def compare_sdfg_res(

@@ -18,7 +18,7 @@ from typing import Callable, Dict, Final, List, Tuple, Type
 
 from packaging import version
 
-from .base import shashed_id
+from gt4py.cartesian.utils.base import shashed_id
 
 
 def get_closure(func, *, include_globals=True, included_nonlocals=True, include_builtins=True):

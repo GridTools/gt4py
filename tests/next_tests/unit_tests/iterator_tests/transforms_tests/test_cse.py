@@ -25,6 +25,22 @@ def offset_provider_type(request):
     return {"I": common.Dimension("I", kind=common.DimensionKind.HORIZONTAL)}
 
 
+@pytest.fixture
+def opaque_fun(request):
+    return im.ref(
+        "opaque_fun",
+        ts.FunctionType(
+            pos_only_args=[],
+            pos_or_kw_args={
+                "f": ts.DeferredType(constraint=None),
+                "g": ts.DeferredType(constraint=None),
+            },
+            kw_only_args={},
+            returns=ts.DeferredType(constraint=None),
+        ),
+    )
+
+
 def test_trivial():
     common = im.plus("x", "y")
     testee = im.plus(common, common)
@@ -292,10 +308,15 @@ def test_field_extraction_outside_asfieldop():
 
 
 def test_scalar_extraction_inside_as_fieldop():
-    common = im.plus(1, 2)
+    common_expr = im.plus(1, 2)
 
-    testee = im.as_fieldop(im.lambda_()(im.plus(common, common)))()
-    expected = im.as_fieldop(im.lambda_()(im.let("_cs_1", common)(im.plus("_cs_1", "_cs_1"))))()
+    testee = im.as_fieldop(
+        im.lambda_()(im.plus(common_expr, common_expr)), im.domain(common.GridType.CARTESIAN, {})
+    )()
+    expected = im.as_fieldop(
+        im.lambda_()(im.let("_cs_1", common_expr)(im.plus("_cs_1", "_cs_1"))),
+        im.domain(common.GridType.CARTESIAN, {}),
+    )()
 
     actual = CSE.apply(testee, within_stencil=False)
     assert actual == expected
@@ -321,3 +342,21 @@ def test_extraction_from_let_form():
 
     actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected
+
+
+def test_sym_ref_collection_from_lambda(opaque_fun):
+    # This is more a regression than a unit test. When `f` & `g` are collected, we don't want to
+    # collect subexpression from their body (as the pass does not recognize them to be evaluated),
+    # but still need to respect that `val` is used inside. Hence, when extracting `f` and `g,` the
+    # extracted lambda needs to be placed after the definition of `val`.
+    testee = im.let("val", 1)(
+        im.let(("f", im.lambda_()("val")), ("g", im.lambda_()("val")))(
+            im.call(opaque_fun)("f", "g")
+        )
+    )
+    expected = im.let("val", 1)(
+        im.let("_cs_1", im.lambda_()("val"))(im.call(opaque_fun)("_cs_1", "_cs_1"))
+    )
+
+    actual = CSE.apply(testee, within_stencil=True)
+    assert actual == expected  # no extraction should happen

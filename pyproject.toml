@@ -43,7 +43,7 @@ test = [
   'coverage[toml]>=7.5.0',
   'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
-  'nox>=2024.10.9',
+  'nox>=2025.02.09',
   'pytest>=8.0.1',
   'pytest-benchmark>=5.0.0',
   'pytest-cache>=1.0',
@@ -81,7 +81,7 @@ classifiers = [
 ]
 dependencies = [
   'attrs>=21.3',
-  'black>=22.3',
+  'black>=22.6',
   'boltons>=20.1',
   'cached-property>=1.5.1',
   'click>=8.0.0',
@@ -426,6 +426,7 @@ conflicts = [
     {extra = 'dace-next'}
   ]
 ]
+required-version = ">=0.6.10"
 
 [[tool.uv.index]]
 explicit = true

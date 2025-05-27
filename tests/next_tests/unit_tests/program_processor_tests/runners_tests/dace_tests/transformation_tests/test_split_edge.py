@@ -48,7 +48,7 @@ def test_split_edge_two_ac_producer_one_ac_consumer_1d():
     assert state.number_of_edges() == 3
 
     ref, res = util.make_sdfg_args(sdfg)
-    util.evaluate_sdfg(sdfg, ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     nb_apply = sdfg.apply_transformations_repeated(
         gtx_transformations.SplitMemlet,
@@ -70,7 +70,7 @@ def test_split_edge_two_ac_producer_one_ac_consumer_1d():
     }
     assert {(0, 10), (10, 10)} == reads_to_tmp
 
-    util.evaluate_sdfg(sdfg, res)
+    util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref, res)
 
 
@@ -113,7 +113,7 @@ def test_split_edge_mock_apply_diffusion_to_w():
     assert state.out_degree(tmp_ac) == 4
 
     ref, res = util.make_sdfg_args(sdfg)
-    util.evaluate_sdfg(sdfg, ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     nb_apply = sdfg.apply_transformations_repeated(
         gtx_transformations.SplitMemlet,
@@ -127,5 +127,5 @@ def test_split_edge_mock_apply_diffusion_to_w():
 
     assert gtx_transformations.SplitAccessNode.can_be_applied_to(sdfg=sdfg, access_node=tmp_ac)
 
-    util.evaluate_sdfg(sdfg, res)
+    util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref, res)

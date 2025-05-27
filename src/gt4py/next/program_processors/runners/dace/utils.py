@@ -18,8 +18,8 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 # arrays for connectivity tables use the following prefix
-CONNECTIVITY_INDENTIFIER_PREFIX: Final[str] = "connectivity_"
-CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^connectivity_(.+)$")
+CONNECTIVITY_INDENTIFIER_PREFIX: Final[str] = "gt_conn_"
+CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^gt_conn_(.+)$")
 
 
 # regex to match the symbols for field shape and strides

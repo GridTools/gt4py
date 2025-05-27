@@ -13,8 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Use a deep clone to get the correct version from tags
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -22,7 +20,7 @@ jobs:
         python-version-file: ".default-python-version"
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v5
+      uses: astral-sh/setup-uv@v6
       with:
         enable-cache: true
         cache-dependency-glob: "uv.lock"
