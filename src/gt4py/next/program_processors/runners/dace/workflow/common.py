@@ -21,8 +21,8 @@ def set_dace_config(
     """Set dace configuration, shared among all workflow stages.
 
     Args:
-        cmake_build_type: CMake build type, needed for compiler config.
         device_type: Target device type, needed for compiler config.
+        cmake_build_type: CMake build type, needed for compiler config.
     """
 
     # We rely on dace cache to avoid recompiling the SDFG.
