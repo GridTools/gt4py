@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import time
 import types
 import typing
 import warnings
@@ -32,6 +33,7 @@ from gt4py.next import (
     embedded as next_embedded,
     errors,
     utils,
+    metrics,
 )
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -273,32 +275,47 @@ class Program:
         )
 
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
-        if __debug__:
-            # TODO: remove or make dependency on self.past_stage optional
-            past_process_args._validate_args(
-                self.past_stage.past_node,
-                arg_types=[type_translation.from_value(arg) for arg in args],
-                kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
+        program_name = (
+            f"{self.__name__}[{getattr(self.backend, 'name', '<embedded>')}]"
+            if config.COLLECT_METRICS_LEVEL
+            else ""
+        )
+        with metrics.metrics_collection(program_name) as metrics_collection:
+            collect_metrics = metrics_collection is not None and (
+                config.COLLECT_METRICS_LEVEL >= metrics.INFO
             )
-        if self.backend is not None:
-            offset_provider = {  # TODO(havogt) cleanup implicit_offset_provider
+            if collect_metrics:
+                start = time.time()
+
+            if __debug__:
+                # TODO: remove or make dependency on self.past_stage optional
+                past_process_args._validate_args(
+                    self.past_stage.past_node,
+                    arg_types=[type_translation.from_value(arg) for arg in args],
+                    kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
+                )
+
+            offset_provider = {
                 **offset_provider,
-                **self._implicit_offset_provider,
+                **self._implicit_offset_provider,  # TODO(havogt) cleanup implicit_offset_provider
             }
-            self._compiled_programs(
-                *args, **kwargs, offset_provider=offset_provider, enable_jit=self.enable_jit
-            )
-        else:
-            # embedded
-            warnings.warn(
-                UserWarning(
-                    f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
-                ),
-                stacklevel=2,
-            )
-            offset_provider = {**offset_provider, **self._implicit_offset_provider}
-            with next_embedded.context.update(offset_provider=offset_provider):
-                self.definition_stage.definition(*args, **kwargs)
+            if self.backend is not None:
+                self._compiled_programs(
+                    *args, **kwargs, offset_provider=offset_provider, enable_jit=self.enable_jit
+                )
+            else:
+                # embedded
+                warnings.warn(
+                    UserWarning(
+                        f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
+                    ),
+                    stacklevel=2,
+                )
+                with next_embedded.context.update(offset_provider=offset_provider):
+                    self.definition_stage.definition(*args, **kwargs)
+
+            if metrics_collection is not None and collect_metrics:
+                metrics_collection[metrics.TOTAL_METRIC].add_sample(time.time() - start)
 
     def compile(
         self,

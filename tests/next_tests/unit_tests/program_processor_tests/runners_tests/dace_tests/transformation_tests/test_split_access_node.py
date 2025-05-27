@@ -42,8 +42,7 @@ def _perform_test(
         )
 
     if explected_applies != 0:
-        csdfg_ref = sdfg.compile()
-        csdfg_ref(**ref)
+        util.compile_and_run_sdfg(sdfg, **ref)
 
     nb_apply = gtx_transformations.gt_split_access_nodes(
         sdfg=sdfg,
@@ -55,9 +54,7 @@ def _perform_test(
     if explected_applies == 0:
         return
 
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
-
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
 
     if removed_transients is not None:
