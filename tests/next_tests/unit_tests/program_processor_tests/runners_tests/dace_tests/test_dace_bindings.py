@@ -10,14 +10,14 @@
 
 import pytest
 
-from gt4py.next.otf.binding import interface
-from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
-
 dace = pytest.importorskip("dace")
 
 from gt4py.next.otf import languages, stages
+from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace.workflow import bindings as dace_bindings_stage
 from gt4py.next.type_system import type_specifications as ts
+
+from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
 
 
 _bind_func_name = "dummy"
