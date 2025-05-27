@@ -111,7 +111,6 @@ def get_sdfg_args(
     offset_provider: gtx_common.OffsetProvider,
     *args: Any,
     filter_args: bool = False,
-    on_gpu: bool = False,
 ) -> dict[str, Any]:
     """Extracts the arguments needed to call the SDFG.
 

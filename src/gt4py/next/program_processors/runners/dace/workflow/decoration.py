@@ -70,8 +70,10 @@ def convert_args(
             config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
         ):
             # Observe that dace instrumentation adds runtime overhead:
-            #  for each SDFG run, dace saves the instrumentation report to a file.
+            # DaCe writes an instrumentation report file for each SDFG run.
             with dace.config.temporary_config():
+                # We need to set the cache folder and key config in order to retrieve
+                # the SDFG report file.
                 dace_worflow_utils.set_dace_cache_config()
                 sdfg_events = sdfg_program.sdfg.get_latest_report().events
                 assert len(sdfg_events) == 1
