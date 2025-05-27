@@ -384,7 +384,8 @@ def tree_mapped_np_all_close(ref: np.ndarray, data: np.ndarray) -> bool:
     """Compare two arrays or nested tuples of arrays using np.allclose."""
     if (is_tuple := isinstance(ref, tuple)) == isinstance(data, tuple):
         if is_tuple:
-            return all(gt_utils.tree_map(np.allclose)(ref, data))
+            all_closed_results = gt_utils.tree_map(np.allclose)(ref, data)
+            return all(gt_utils.flatten_nested_tuple(all_closed_results))
         else:
             return np.allclose(ref, data)
 
