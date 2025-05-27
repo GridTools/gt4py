@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 # TODO(dropd): Remove as soon as `gt4py.next.ffront.decorator` is type checked.
-from unittest import mock
+import unittest.mock as mock
 import dataclasses
 
 import numpy as np
