@@ -25,8 +25,6 @@ def convert_args(
     fun: dace_worflow.compilation.CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
 ) -> stages.CompiledProgram:
-    sdfg_program = fun.sdfg_program
-
     # We use the callback function provided by the compiled program to update the SDFG arglist.
     update_sdfg_call_args = functools.partial(
         fun.update_sdfg_ctype_arglist, device, fun.sdfg_argtypes
@@ -62,7 +60,7 @@ def convert_args(
         else:
             # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
             #  so we just update it with the current call arguments.
-            update_sdfg_call_args(args, sdfg_program._lastargs[0])
+            update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
             fun.fast_call()
 
         metric_collection = metrics.get_active_metric_collection()
@@ -75,11 +73,11 @@ def convert_args(
                 # We need to set the cache folder and key config in order to retrieve
                 # the SDFG report file.
                 dace_common.set_dace_config(device_type=device)
-                sdfg_events = sdfg_program.sdfg.get_latest_report().events
+                sdfg_events = fun.sdfg_program.sdfg.get_latest_report().events
                 assert len(sdfg_events) == 1
                 # The event name gets truncated in dace, so we only check that
                 # it corresponds to the beginning of SDFG label.
-                assert f"SDFG {sdfg_program.sdfg.label}".startswith(sdfg_events[0].name)
+                assert f"SDFG {fun.sdfg_program.sdfg.label}".startswith(sdfg_events[0].name)
             duration_secs = (
                 sdfg_events[0].duration / 1e6
             )  # dace timer returns the duration in microseconds

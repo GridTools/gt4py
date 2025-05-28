@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import functools
 from typing import TypeAlias
 
 import numpy as np
@@ -317,6 +318,8 @@ def test_conditional_nested_tuple(cartesian_case):
     a = cases.allocate(cartesian_case, conditional_nested_tuple, "a")()
     b = cases.allocate(cartesian_case, conditional_nested_tuple, "b")()
 
+    where_with_mask = functools.partial(np.where, mask.asnumpy())
+
     cases.verify(
         cartesian_case,
         conditional_nested_tuple,
@@ -324,15 +327,15 @@ def test_conditional_nested_tuple(cartesian_case):
         a,
         b,
         out=cases.allocate(cartesian_case, conditional_nested_tuple, cases.RETURN)(),
-        ref=tuple(
-            np.where(
-                mask.asnumpy(),
-                ((a.asnumpy(), b.asnumpy()), (b.asnumpy(), a.asnumpy())),
-                (
-                    (np.full(size, 5.0), np.full(size, 7.0)),
-                    (np.full(size, 7.0), np.full(size, 5.0)),
-                ),
-            )
+        ref=(
+            (
+                where_with_mask(a.asnumpy(), np.full(size, 5.0)),
+                where_with_mask(b.asnumpy(), np.full(size, 7.0)),
+            ),
+            (
+                where_with_mask(b.asnumpy(), np.full(size, 7.0)),
+                where_with_mask(a.asnumpy(), np.full(size, 5.0)),
+            ),
         ),
     )
 
