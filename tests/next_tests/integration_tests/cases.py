@@ -386,7 +386,7 @@ except AttributeError:
     RTOL, ATOL, EQUAL_NAN = (1e-05, 1e-08, False)
 
 
-def tree_mapped_np_all_close(
+def tree_mapped_np_allclose(
     ref: np.ndarray,
     data: np.ndarray,
     *,
@@ -417,7 +417,7 @@ def verify(
     out: Optional[FieldViewInout] = None,
     inout: Optional[FieldViewInout] = None,
     offset_provider: Optional[OffsetProvider] = None,
-    comparison: Callable[[Any, Any], bool] = tree_mapped_np_all_close,
+    comparison: Callable[[Any, Any], bool] = tree_mapped_np_allclose,
 ) -> None:
     """
     Check the result of executing a fieldview program or operator against ref.
@@ -473,7 +473,7 @@ def verify_with_default_data(
     case: Case,
     fieldop: decorator.FieldOperator,
     ref: Callable,
-    comparison: Callable[[Any, Any], bool] = tree_mapped_np_all_close,
+    comparison: Callable[[Any, Any], bool] = tree_mapped_np_allclose,
 ) -> None:
     """
     Check the fieldview code against a reference calculation.
