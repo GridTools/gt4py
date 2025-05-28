@@ -22,6 +22,7 @@ from gt4py.next.program_processors.runners.dace.transformations import map_fusio
 def gt_horizontal_map_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
+    consolidate_edges: bool,
     single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
     validate: bool = True,
     validate_all: bool = False,
@@ -45,6 +46,7 @@ def gt_horizontal_map_fusion(
             only_if_common_ancestor=True,
             only_inner_maps=False,
             only_toplevel_maps=True,
+            consolidate_edges=consolidate_edges,
         ),
     ]
     # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
@@ -58,10 +60,14 @@ def gt_horizontal_map_fusion(
     )
 
     if run_simplify:
+        skip = gtx_transformations.simplify.GT_SIMPLIFY_DEFAULT_SKIP_SET
+        if not consolidate_edges:
+            skip = skip.union(["ConsolidateEdges"])
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
             validate=validate,
             validate_all=validate_all,
+            skip=skip,
         )
 
     return ret
@@ -70,6 +76,7 @@ def gt_horizontal_map_fusion(
 def gt_vertical_map_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
+    consolidate_edges: bool,
     single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
     validate: bool = True,
     validate_all: bool = False,
@@ -88,6 +95,7 @@ def gt_vertical_map_fusion(
         gtx_transformations.MapFusionSerial(
             only_inner_maps=False,
             only_toplevel_maps=True,
+            consolidate_edges=consolidate_edges,
         ),
     ]
     # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
@@ -101,10 +109,14 @@ def gt_vertical_map_fusion(
     )
 
     if run_simplify:
+        skip = gtx_transformations.simplify.GT_SIMPLIFY_DEFAULT_SKIP_SET
+        if not consolidate_edges:
+            skip = skip.union(["ConsolidateEdges"])
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
             validate=validate,
             validate_all=validate_all,
+            skip=skip,
         )
 
     return ret
