@@ -75,11 +75,10 @@ def test_frozen(cartesian_case):
         (metrics.ALL, ("compute", "total")),
     ],
 )
+@pytest.mark.uses_program_metrics
 def test_collect_metrics(cartesian_case, metrics_level, expected_names):
     if cartesian_case.backend is None:
         pytest.skip("Precompiled program with embedded execution is not possible.")
-    if not any(cartesian_case.backend.name.startswith(f"run_{name}") for name in ["dace", "gtfn"]):
-        pytest.skip("Precompiled program requires a compile backend.")
 
     @gtx.field_operator
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
