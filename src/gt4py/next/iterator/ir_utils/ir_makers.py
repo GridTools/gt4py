@@ -243,6 +243,12 @@ def if_(cond, true_val, false_val):
     return call("if_")(cond, true_val, false_val)
 
 
+def concat_where(cond, true_field, false_field):
+    """Create a concat_where FunCall, shorthand for ``call("concat_where")(expr)``."""
+
+    return call("concat_where")(cond, true_field, false_field)
+
+
 def lift(expr):
     """Create a lift FunCall, shorthand for ``call(call("lift")(expr))``."""
     return call(call("lift")(expr))
@@ -437,18 +443,18 @@ def domain(
     """
     if isinstance(grid_type, common.GridType):
         grid_type = f"{grid_type!s}_domain"
-    return call(grid_type)(
+    expr = call(grid_type)(
         *[
             call("named_range")(
-                itir.AxisLiteral(value=d.value, kind=d.kind)
-                if isinstance(d, common.Dimension)
-                else itir.AxisLiteral(value=d),
+                axis_literal(d),
                 r[0],
                 r[1],
             )
             for d, r in ranges.items()
         ]
     )
+    expr.type = ts.DomainType(dims=list(ranges.keys()))
+    return expr
 
 
 def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Callable:
@@ -478,7 +484,8 @@ def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Cal
     def _populate_domain_annex_wrapper(*args, **kwargs):
         node = result(*args, **kwargs)
         # note: if the domain is not a direct construction, e.g. because it is only a reference
-        # to a domain defined in a let, don't populate the annex
+        # to a domain defined in a let, don't populate the annex, since we can not create a
+        # symbolic domain for it.
         if domain and cpm.is_call_to(domain, ("cartesian_domain", "unstructured_domain")):
             node.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)
         return node
@@ -513,6 +520,10 @@ def op_as_fieldop(
         return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
 
     return _impl
+
+
+def axis_literal(dim: common.Dimension) -> itir.AxisLiteral:
+    return itir.AxisLiteral(value=dim.value, kind=dim.kind)
 
 
 def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
