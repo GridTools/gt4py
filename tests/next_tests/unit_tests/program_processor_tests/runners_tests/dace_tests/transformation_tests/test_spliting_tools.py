@@ -337,3 +337,54 @@ def test_split_edge_2d():
 
     util.compile_and_run_sdfg(sdfg, a=a, b=b)
     assert np.all(b_ref == b)
+
+
+def test_subset_merging_1():
+    subsets = [
+        dace_sbs.Range.from_string("0:10, 0:5"),
+        dace_sbs.Range.from_string("0:5, 5:10"),
+        dace_sbs.Range.from_string("5:10, 5:10"),
+    ]
+
+    merged_subset = gtx_transformations.spliting_tools.subset_merger(subsets)
+
+    assert len(merged_subset) == 1
+    assert merged_subset[0] == dace_sbs.Range.from_string("0:10, 0:10")
+
+
+def test_subset_merging_2():
+    subsets = [
+        dace_sbs.Range.from_string("0:10"),
+        dace_sbs.Range.from_string("10:12"),
+    ]
+
+    merged_subset = gtx_transformations.spliting_tools.subset_merger(subsets)
+
+    assert len(merged_subset) == 1
+    assert merged_subset[0] == dace_sbs.Range.from_string("0:12")
+
+
+def test_subset_merging_3():
+    # Because they are not adjacent they should not be merged.
+    subsets = [
+        dace_sbs.Range.from_string("0:10"),
+        dace_sbs.Range.from_string("11:20"),
+    ]
+
+    merged_subset = gtx_transformations.spliting_tools.subset_merger(subsets)
+
+    assert len(merged_subset) == 2
+    assert set(subsets) == set(merged_subset)
+
+
+def test_subset_merging_4():
+    # Because they overlap they should not be merged.
+    subsets = [
+        dace_sbs.Range.from_string("0:10"),
+        dace_sbs.Range.from_string("11:20"),
+    ]
+
+    merged_subset = gtx_transformations.spliting_tools.subset_merger(subsets)
+
+    assert len(merged_subset) == 2
+    assert set(subsets) == set(merged_subset)

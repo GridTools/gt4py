@@ -6,7 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import copy
 import dataclasses
+import itertools
 from typing import Any, Iterable, Optional, Sequence, Union
 
 import dace
@@ -427,6 +429,97 @@ def decompose_subset(
         return fully_splitted_subsets
     else:
         return splitted_subsets
+
+
+def subset_merger(
+    subsets: Union[Sequence[EdgeConnectionSpec], Sequence[dace_sbs.Subset]],
+) -> list[dace_sbs.Subset]:
+    """Merges subsets together.
+
+    The function finds the largest continuous subsets based on subsets.
+    Note that the function does not guarantees that the largest and best
+    subsets are found. It uses an eager method. However, it _should_ be
+    deterministic.
+    """
+    assert len(subsets) > 0
+
+    if isinstance(subsets[0], EdgeConnectionSpec):
+        subsets = [copy.deepcopy(desc.subset) for desc in subsets]
+    else:
+        assert all(isinstance(sbs, dace_sbs.Subset) for sbs in subsets)
+        subsets = [copy.deepcopy(sbs) for sbs in subsets]
+
+    if len(subsets) == 1:
+        return subsets
+
+    return _subset_merger_impl(subsets)
+
+
+def _subset_merger_impl(
+    subsets: list[dace_sbs.Subset],
+) -> list[dace_sbs.Subset]:
+    """Implementation of the subset merger."""
+    performed_merge = True
+    while performed_merge and (len(subsets) > 1):
+        performed_merge = False
+
+        # Let's hope that `combinations()` is deterministic, because this is the only
+        #  non deterministic stuff.
+        for subset1, subset2 in itertools.combinations(list(subsets), 2):
+            merged_subset = _try_to_merge_subsets(subset1, subset2)
+            if merged_subset is not None:
+                subsets.remove(subset1)
+                subsets.remove(subset2)
+                subsets.append(merged_subset)
+                performed_merge = True
+                break
+            else:
+                pass
+    assert len(subsets) >= 1
+
+    return subsets
+
+
+def _try_to_merge_subsets(
+    subset1: dace_sbs.Subset,
+    subset2: dace_sbs.Subset,
+) -> Union[None, dace_sbs.Subset]:
+    """Tries to merge the subsets together, it it is impossible return `None`.
+
+    Two subset can only be merged if they have the same bounds in all but one
+    dimension. In that dimension the end index of one of the subset is the
+    same as the start index of the other.
+    """
+    if subset1.dims() != subset2.dims():
+        return None
+
+    has_found_merge_dim = False
+    merged_subset: list[dace_sym.SymbolicType] = []
+    for dim in range(subset1.dims()):
+        start1, end1, step1 = subset1[dim]
+        start2, end2, step2 = subset2[dim]
+
+        if (step1 != 1) == True or (step2 != 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            return None
+
+        elif (start1 == start2) == True and (end1 == end2) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            merged_subset.append((start1, end1, 1))
+
+        else:
+            # We found a possible merge dimension.
+            if has_found_merge_dim:
+                # It is only possible to merge, actually extend, along in one dimension.
+                return None
+
+            if ((end1 + 1) == start2) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                merged_subset.append((start1, end2, 1))
+            elif ((end2 + 1) == start1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                merged_subset.append((start2, end1, 1))
+            else:
+                return None
+            has_found_merge_dim = True
+
+    return dace_sbs.Range(merged_subset)
 
 
 def _perform_node_split(
