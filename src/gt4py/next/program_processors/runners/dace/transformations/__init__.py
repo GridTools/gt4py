@@ -27,10 +27,10 @@ from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
-from .multi_state_self_copy import MultiStateGlobalSelfCopyElimination2
 from .redundant_array_removers import (
     CopyChainRemover,
     MultiStateGlobalSelfCopyElimination,
+    MultiStateGlobalSelfCopyElimination2,
     SingleStateGlobalDirectSelfCopyElimination,
     SingleStateGlobalSelfCopyElimination,
     gt_multi_state_global_self_copy_elimination,
