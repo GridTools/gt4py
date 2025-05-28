@@ -380,14 +380,30 @@ def run(
     fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
 
 
-def tree_mapped_np_all_close(ref: np.ndarray, data: np.ndarray) -> bool:
+try:
+    RTOL, ATOL, EQUAL_NAN = np.allclose.__wrapped__.__defaults__
+except AttributeError:
+    RTOL, ATOL, EQUAL_NAN = (1e-05, 1e-08, False)
+
+
+def tree_mapped_np_all_close(
+    ref: np.ndarray,
+    data: np.ndarray,
+    *,
+    rtol: float = RTOL,
+    atol: float = ATOL,
+    equal_nan: bool = EQUAL_NAN,
+) -> bool:
     """Compare two arrays or nested tuples of arrays using np.allclose."""
     if (is_tuple := isinstance(ref, tuple)) == isinstance(data, tuple):
+        allclose_with_tols = functools.partial(
+            np.allclose, rtol=rtol, atol=atol, equal_nan=equal_nan
+        )
         if is_tuple:
-            all_closed_results = gt_utils.tree_map(np.allclose)(ref, data)
-            return all(gt_utils.flatten_nested_tuple(all_closed_results))
+            allclose_results = gt_utils.tree_map(allclose_with_tols)(ref, data)
+            return all(gt_utils.flatten_nested_tuple(allclose_results))
         else:
-            return np.allclose(ref, data)
+            return allclose_with_tols(ref, data)
 
     return False
 
