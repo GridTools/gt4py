@@ -75,7 +75,8 @@ def test_frozen(cartesian_case):
         (metrics.ALL, ("compute", "total")),
     ],
 )
-@pytest.mark.serial  # check singleton metrics collector
+# rely on dist loadgroup to execute in sequential order among different backends,  because it updates global metrics
+@pytest.mark.xdist_group(name="metrics")
 def test_collect_metrics(cartesian_case, metrics_level, expected_names):
     if cartesian_case.backend is None:
         pytest.skip("Precompiled Program with embedded execution is not possible.")
