@@ -360,24 +360,13 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         # Gather scalar writes in this Tasklet
         for access_node in node.walk_values().if_isinstance(dcir.AssignStmt):
             target_name = access_node.left.name
-
-            field_access = (
-                len(
-                    set(
-                        memlet.connector
-                        for memlet in [*node.write_memlets]
-                        if memlet.connector == target_name
-                    )
-                )
-                > 0
-            )
-            if field_access or target_name in scalar_outputs:
+            if not isinstance(access_node.left, dcir.ScalarAccess) or target_name in scalar_outputs:
                 continue
 
-            assert isinstance(access_node.left, dcir.ScalarAccess)
-            assert (
-                access_node.left.original_name is not None
-            ), "Original name not found for '{access_nodes.left.name}'. DaCeIR error."
+            if access_node.left.original_name is None:
+                raise ValueError(
+                    "Original name not found for '{access_nodes.left.name}'. DaCeIR error."
+                )
 
             original_name = access_node.left.original_name
             scalar_outputs.add(target_name)
@@ -391,21 +380,10 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         # Gather scalar reads in this Tasklet
         for access_node in node.walk_values().if_isinstance(dcir.ScalarAccess):
             read_name = access_node.name
-            field_access = (
-                len(
-                    set(
-                        memlet.connector
-                        for memlet in [*node.read_memlets, *node.write_memlets]
-                        if memlet.connector == read_name
-                    )
-                )
-                > 0
-            )
             defined_symbol = any(read_name in symbol_map for symbol_map in symtable.maps)
 
             if (
-                not field_access
-                and not defined_symbol
+                not defined_symbol
                 and not access_node.is_target
                 and read_name.startswith(prefix.TASKLET_IN)
                 and read_name not in scalar_inputs

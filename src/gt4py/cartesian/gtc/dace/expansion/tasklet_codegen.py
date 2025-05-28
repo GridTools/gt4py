@@ -83,6 +83,9 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         is_target: bool,
         sdfg: dace.SDFG,
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
+        # Not actually used, we just pull it out of kwargs here such that we can
+        # safely set it when visiting indices.
+        in_idx: bool = False,
         **kwargs: Any,
     ) -> str:
         if is_target:
@@ -105,32 +108,48 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             # Everything was packed in `explicit_indices` in `DaCeIRBuilder._fix_memlet_array_access()`
             # along the `reshape_memlet=True` code path.
             assert len(node.explicit_indices) == len(sdfg.arrays[memlet.field].shape)
+
+            # We are overwriting these below. Make sure we don't have them twice in the
+            # argument list.
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ["explicit"]}
+
             for idx in node.explicit_indices:
                 index_strs.append(
                     self.visit(
                         idx,
                         symtable=symtable,
+                        is_target=is_target,
+                        sdfg=sdfg,
                         in_idx=True,
                         explicit=True,
-                        **kwargs,
+                        **filtered_kwargs,
                     )
                 )
         else:
             # Grid-point access, I & J are unitary, K can be offsetted with variable
             # Resolve K offset (also resolves I & J)
             if node.offset is not None:
+                # We are overwriting these below. Make sure we don't have them twice in the
+                # argument list.
+                filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ["access_info"]}
+
                 index_strs.append(
                     self.visit(
                         node.offset,
-                        access_info=memlet.access_info,
                         symtable=symtable,
+                        is_target=is_target,
+                        sdfg=sdfg,
+                        access_info=memlet.access_info,
                         in_idx=True,
-                        **kwargs,
+                        **filtered_kwargs,
                     )
                 )
             # Add any data dimensions
             index_strs.extend(
-                self.visit(idx, symtable=symtable, in_idx=True, **kwargs) for idx in node.data_index
+                self.visit(
+                    idx, symtable=symtable, is_target=is_target, sdfg=sdfg, in_idx=True, **kwargs
+                )
+                for idx in node.data_index
             )
         # Filter empty strings
         non_empty_indices = list(filter(None, index_strs))
