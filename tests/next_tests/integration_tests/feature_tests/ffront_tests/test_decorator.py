@@ -79,7 +79,9 @@ def test_frozen(cartesian_case):
 @pytest.mark.xdist_group(name="metrics")
 def test_collect_metrics(cartesian_case, metrics_level, expected_names):
     if cartesian_case.backend is None:
-        pytest.skip("Precompiled Program with embedded execution is not possible.")
+        pytest.skip("Precompiled program with embedded execution is not possible.")
+    if not any(cartesian_case.backend.name.startswith(f"run_{name}") for name in ["dace", "gtfn"]):
+        pytest.skip("Precompiled program requires a compile backend.")
 
     @gtx.field_operator
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
@@ -89,12 +91,15 @@ def test_collect_metrics(cartesian_case, metrics_level, expected_names):
     def testee(a: cases.IField, out: cases.IField):
         testee_op(a, a, out=out)
 
-    with mock.patch("gt4py.next.config.COLLECT_METRICS_LEVEL", metrics_level):
-        testee = testee.with_backend(cartesian_case.backend).with_grid_type(
-            cartesian_case.grid_type
-        )
-        args, kwargs = cases.get_default_data(cartesian_case, testee)
-        testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+    try:
+        with mock.patch("gt4py.next.config.COLLECT_METRICS_LEVEL", metrics_level):
+            testee = testee.with_backend(cartesian_case.backend).with_grid_type(
+                cartesian_case.grid_type
+            )
+            args, kwargs = cases.get_default_data(cartesian_case, testee)
+            testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
 
-    assert set(metrics.program_metrics.metric_names) == set(expected_names)
-    metrics.program_metrics.clear()
+        assert set(metrics.program_metrics.metric_names) == set(expected_names)
+
+    finally:
+        metrics.program_metrics.clear()
