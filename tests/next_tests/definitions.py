@@ -125,6 +125,7 @@ USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
 USES_MAX_OVER = "uses_max_over"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
+USES_PROGRAM_METRICS = "uses_program_metrics"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
@@ -170,6 +171,7 @@ EMBEDDED_SKIP_LIST = [
     ),  # we can't extract the field type from scan args
 ]
 ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
+    (USES_PROGRAM_METRICS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
