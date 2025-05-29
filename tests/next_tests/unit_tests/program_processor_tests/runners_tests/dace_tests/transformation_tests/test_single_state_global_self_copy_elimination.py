@@ -113,17 +113,26 @@ def _make_self_copy_sdfg_with_multiple_paths() -> (
     return sdfg, state, g_read, tmp_node, g_write
 
 
-def _make_concat_where_like() -> (
-    tuple[
-        dace.SDFG,
-        dace.SDFGState,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-    ]
-):
-    sdfg = dace.SDFG(util.unique_name("self_copy_sdfg_concat_where_like"))
+def _make_concat_where_like(
+    handle_last_level: bool,
+) -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+]:
+    if handle_last_level:
+        j_desc = "last"
+        j_idx = 9
+        j_range = "0:9"
+    else:
+        j_desc = "first"
+        j_idx = 0
+        j_range = "1:10"
+
+    sdfg = dace.SDFG(util.unique_name(f"self_copy_sdfg_concat_where_like_{j_desc}_level"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(
@@ -147,16 +156,16 @@ def _make_concat_where_like() -> (
 
     g1, t, g2, o = (state.add_access(name) for name in "gtgo")
 
-    state.add_nedge(g1, t, dace.Memlet("g[2:10, 9] -> [0:8, 9]"))
-    state.add_nedge(t, g2, dace.Memlet("t[0:4, 0:9] -> [2:6, 0:9]"))
-    state.add_nedge(t, g2, dace.Memlet("t[4:8, 0:9] -> [6:10, 0:9]"))
+    state.add_nedge(g1, t, dace.Memlet(f"g[2:10, {j_idx}] -> [0:8, {j_idx}]"))
+    state.add_nedge(t, g2, dace.Memlet(f"t[0:4, {j_range}] -> [2:6, {j_range}]"))
+    state.add_nedge(t, g2, dace.Memlet(f"t[4:8, {j_range}] -> [6:10, {j_range}]"))
 
     state.add_mapped_tasklet(
-        "last_level",
+        f"{j_desc}_level",
         map_ranges={"__i": "2:10"},
         inputs={},
         code="__out = __i / 3.0",
-        outputs={"__out": dace.Memlet("g[__i, 9]")},
+        outputs={"__out": dace.Memlet(f"g[__i, {j_idx}]")},
         output_nodes={g1},
         external_edges=True,
     )
@@ -164,7 +173,7 @@ def _make_concat_where_like() -> (
         "bulk_value",
         map_ranges={
             "__i": "0:8",
-            "__j": "0:9",
+            "__j": j_range,
         },
         inputs={},
         code="__out = sin(__i + 0.5)**2 + cos(__j + 0.1) ** 2",
@@ -389,8 +398,11 @@ def test_global_self_copy_elimination_multi_path():
     assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 0
 
 
-def test_global_self_copy_elimination_concat_where_like():
-    sdfg, state, g1, t, g2, o = _make_concat_where_like()
+@pytest.mark.parametrize("handle_last_level", [True, False])
+def test_global_self_copy_elimination_concat_where_like(
+    handle_last_level: bool,
+) -> None:
+    sdfg, state, g1, t, g2, o = _make_concat_where_like(handle_last_level=handle_last_level)
     initial_ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert len(initial_ac_nodes) == 4
 
