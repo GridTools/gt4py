@@ -42,6 +42,23 @@ class EdgeConnectionSpec:
         return self.edge == other
 
 
+def describe_edge(
+    edge: dace_graph.MultiConnectorEdge,
+    incoming_edge: bool,
+) -> EdgeConnectionSpec:
+    """Create a description for a single edge."""
+    get_sbs = lambda e: e.data.dst_subset if incoming_edge else e.data.src_subset  # noqa: E731 [lambda-assignment]
+    get_node = lambda e: e.dst if incoming_edge else e.src  # noqa: E731 [lambda-assignment]
+    desc = EdgeConnectionSpec(
+        node=get_node(edge),
+        subset=get_sbs(edge),
+        edge=edge,
+    )
+    assert desc.subset is not None
+    assert all((r[2] == 1) == True for r in desc.subset)  # noqa: E712 [true-false-comparison]  # SymPy comparison
+    return desc
+
+
 def describe_edges(
     state: dace.SDFG,
     node: dace_nodes.Node,
@@ -59,23 +76,8 @@ def describe_edges(
         incoming_edges: Describe the incoming (`True`) or out going (`False`) edges
             of `node`.
     """
-    get_sbs = lambda e: e.data.dst_subset if incoming_edges else e.data.src_subset  # noqa: E731 [lambda-assignment]
-    get_node = lambda e: e.dst if incoming_edges else e.src  # noqa: E731 [lambda-assignment]
     edges = state.in_edges(node) if incoming_edges else state.out_edges(node)
-    description = [
-        EdgeConnectionSpec(
-            node=get_node(e),
-            subset=get_sbs(e),
-            edge=e,
-        )
-        for e in edges
-    ]
-    assert not any(desc.subset is None for desc in description)
-    assert all(
-        all((r[2] == 1) == True for r in desc.subset)  # noqa: E712 [true-false-comparison]  # SymPy comparison
-        for desc in description
-    )
-    return description
+    return [describe_edge(e, incoming_edges) for e in edges]
 
 
 def describe_incoming_edges(
@@ -110,6 +112,14 @@ def describes_incoming_edge(desc: EdgeConnectionSpec) -> bool:
 def get_other_node(desc: EdgeConnectionSpec) -> dace_nodes.Node:
     """Extract the "other" node of the edge."""
     return desc.edge.src if describes_incoming_edge(desc) else desc.edge.dst
+
+
+def get_other_subset(desc: EdgeConnectionSpec) -> dace_sbs.Subset:
+    """Get the subset of the other side of the edge.
+
+    Note, this is not the same as `desc.edge.data.other_subset`.
+    """
+    return desc.edge.data.src_subset if describes_incoming_edge(desc) else desc.edge.data.dst_subset
 
 
 def split_node(
