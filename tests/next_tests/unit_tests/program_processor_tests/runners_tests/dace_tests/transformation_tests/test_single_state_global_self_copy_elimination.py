@@ -115,6 +115,7 @@ def _make_self_copy_sdfg_with_multiple_paths() -> (
 
 def _make_concat_where_like(
     handle_last_level: bool,
+    whole_write_back: bool,
 ) -> tuple[
     dace.SDFG,
     dace.SDFGState,
@@ -157,8 +158,13 @@ def _make_concat_where_like(
     g1, t, g2, o = (state.add_access(name) for name in "gtgo")
 
     state.add_nedge(g1, t, dace.Memlet(f"g[2:10, {j_idx}] -> [0:8, {j_idx}]"))
-    state.add_nedge(t, g2, dace.Memlet(f"t[0:4, {j_range}] -> [2:6, {j_range}]"))
-    state.add_nedge(t, g2, dace.Memlet(f"t[4:8, {j_range}] -> [6:10, {j_range}]"))
+
+    if whole_write_back:
+        state.add_nedge(t, g2, dace.Memlet(f"t[0:4, 0:10] -> [2:6, 0:10]"))
+        state.add_nedge(t, g2, dace.Memlet(f"t[4:8, 0:10] -> [6:10, 0:10]"))
+    else:
+        state.add_nedge(t, g2, dace.Memlet(f"t[0:4, {j_range}] -> [2:6, {j_range}]"))
+        state.add_nedge(t, g2, dace.Memlet(f"t[4:8, {j_range}] -> [6:10, {j_range}]"))
 
     state.add_mapped_tasklet(
         f"{j_desc}_level",
@@ -402,7 +408,10 @@ def test_global_self_copy_elimination_multi_path():
 def test_global_self_copy_elimination_concat_where_like(
     handle_last_level: bool,
 ) -> None:
-    sdfg, state, g1, t, g2, o = _make_concat_where_like(handle_last_level=handle_last_level)
+    sdfg, state, g1, t, g2, o = _make_concat_where_like(
+        handle_last_level=handle_last_level,
+        whole_write_back=False,
+    )
     initial_ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert len(initial_ac_nodes) == 4
 
@@ -414,6 +423,35 @@ def test_global_self_copy_elimination_concat_where_like(
         validate=True,
         validate_all=True,
     )
+
+    ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert count == 1
+    assert {g2, o} == set(ac_nodes)
+    assert util.count_nodes(state, dace_nodes.MapExit) == 3
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref, res)
+
+
+def test_global_self_copy_elimination_concat_where_whole_write_back() -> None:
+    sdfg, state, g1, t, g2, o = _make_concat_where_like(
+        handle_last_level=True,
+        whole_write_back=True,
+    )
+    initial_ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert len(initial_ac_nodes) == 4
+
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    sdfg.view()
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.SingleStateGlobalSelfCopyElimination,
+        validate=True,
+        validate_all=True,
+    )
+    sdfg.view()
 
     ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert count == 1
