@@ -375,9 +375,9 @@ def test_global_self_copy_elimination_multi_path():
     gtx_transformations.SingleStateGlobalSelfCopyElimination.apply_to(
         sdfg=sdfg,
         verify=True,
-        node_read_g=node_read_g,
+        node_g1=node_read_g,
         node_tmp=node_tmp,
-        node_write_g=node_write_g,
+        node_g2=node_write_g,
     )
 
     sdfg.validate()
