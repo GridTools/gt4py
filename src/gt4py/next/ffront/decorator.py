@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import collections
 import dataclasses
 import functools
 import time
@@ -54,13 +55,6 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
-@functools.lru_cache(maxsize=128)
-def _offset_provider_extended_impl(
-    hashable_offset_provider: eve_utils.HashableBy[common.OffsetProvider],
-) -> common.OffsetProvider:
-    return hashable_offset_provider.value
-
-
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
@@ -93,6 +87,10 @@ class Program:
     static_params: (
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
+
+    _offset_provider_extended_cache: eve_utils.CustomMap = dataclasses.field(
+        default_factory=lambda: eve_utils.CustomMap(key_func=common.offset_provider_hash)
+    )
 
     @classmethod
     def from_function(
@@ -285,11 +283,15 @@ class Program:
         self,
         offset_provider: common.OffsetProvider,
     ) -> common.OffsetProvider:
-        return _offset_provider_extended_impl(
-            eve_utils.hashable_by(common.offset_provider_hash)(
-                {**offset_provider, **self._implicit_offset_provider}
-            ),
-        )
+        offset_provider_extended: common.OffsetProvider
+        try:
+            offset_provider_extended = self._offset_provider_extended_cache[offset_provider]
+        except KeyError:
+            offset_provider_extended = collections.ChainMap(
+                self._implicit_offset_provider, offset_provider
+            )
+            self._offset_provider_extended_cache[offset_provider] = offset_provider_extended
+        return offset_provider_extended
 
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         program_name = (

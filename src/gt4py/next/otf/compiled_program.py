@@ -37,7 +37,7 @@ class _CompiledProgramsKey:
 
     def __hash__(self) -> int:
         assert common.is_offset_provider_type(self.offset_provider_type)
-        return hash((self.values, frozenset(self.offset_provider_type.items())))
+        return hash((self.values, id(self.offset_provider_type)))
 
 
 def _validate_types(
@@ -136,6 +136,10 @@ class CompiledProgramsPool:
         stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
     ] = dataclasses.field(default_factory=dict)
 
+    offset_provider_type_cache: eve_utils.CustomMap = dataclasses.field(
+        default_factory=lambda: eve_utils.CustomMap(key_func=common.offset_provider_hash)
+    )
+
     def __postinit__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
@@ -153,7 +157,7 @@ class CompiledProgramsPool:
         it is an error.
         """
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
-        offset_provider_type = _offset_provider_to_type_unsafe(offset_provider)
+        offset_provider_type = self._offset_provider_to_type_unsafe(offset_provider)
         static_args_values = tuple(args[i] for i in self._static_arg_indices)
         key = _CompiledProgramsKey(static_args_values, offset_provider_type)
         try:
@@ -203,9 +207,7 @@ class CompiledProgramsPool:
 
         key = _CompiledProgramsKey(
             tuple(static_args[p] for p in self.static_params),
-            offset_provider
-            if common.is_offset_provider_type(offset_provider)
-            else common.offset_provider_to_type(offset_provider),
+            self._offset_provider_to_type_unsafe(offset_provider),
         )
         if key in self._compiled_programs:
             raise ValueError(f"Program with key {key} already exists.")
@@ -219,6 +221,22 @@ class CompiledProgramsPool:
         self._compiled_programs[key] = _async_compilation_pool.submit(
             self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
         )
+
+    def _offset_provider_to_type_unsafe(
+        self,
+        offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    ) -> common.OffsetProviderType:
+        offset_provider_type: common.OffsetProviderType
+        try:
+            offset_provider_type = self.offset_provider_type_cache[offset_provider]
+        except KeyError:
+            offset_provider_type = (
+                offset_provider
+                if common.is_offset_provider_type(offset_provider)
+                else common.offset_provider_to_type(offset_provider)
+            )
+            self.offset_provider_type_cache[offset_provider] = offset_provider_type
+        return offset_provider_type
 
     def compile(
         self,
@@ -257,18 +275,3 @@ class CompiledProgramsPool:
         result = program.result()
         self._compiled_programs[key] = result
         return result
-
-
-@functools.lru_cache(maxsize=128)
-def _offset_provider_to_type_unsafe_impl(
-    hashable_offset_provider: eve_utils.HashableBy[common.OffsetProvider],
-) -> common.OffsetProviderType:
-    return common.offset_provider_to_type(hashable_offset_provider.value)
-
-
-def _offset_provider_to_type_unsafe(
-    offset_provider: common.OffsetProvider,
-) -> common.OffsetProviderType:
-    return _offset_provider_to_type_unsafe_impl(
-        eve_utils.hashable_by_id(offset_provider),
-    )
