@@ -120,6 +120,7 @@ def _make_concat_where_like() -> (
         dace_nodes.AccessNode,
         dace_nodes.AccessNode,
         dace_nodes.AccessNode,
+        dace_nodes.AccessNode,
     ]
 ):
     sdfg = dace.SDFG(util.unique_name("self_copy_sdfg_concat_where_like"))
@@ -127,24 +128,24 @@ def _make_concat_where_like() -> (
 
     sdfg.add_array(
         "g",
-        shape=(
-            10,
-            10,
-        ),
+        shape=(10, 10),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "o",
+        shape=(10, 12),
         dtype=dace.float64,
         transient=False,
     )
     sdfg.add_array(
         "t",
-        shape=(
-            8,
-            10,
-        ),
+        shape=(8, 10),
         dtype=dace.float64,
         transient=True,
     )
 
-    g1, t, g2 = (state.add_access(name) for name in "gtg")
+    g1, t, g2, o = (state.add_access(name) for name in "gtgo")
 
     state.add_nedge(g1, t, dace.Memlet("g[2:10, 9] -> [0:8, 9]"))
     state.add_nedge(t, g2, dace.Memlet("t[0:4, 0:9] -> [2:6, 0:9]"))
@@ -171,9 +172,22 @@ def _make_concat_where_like() -> (
         output_nodes={t},
         external_edges=True,
     )
+    state.add_mapped_tasklet(
+        "consumer",
+        map_ranges={
+            "__i": "0:8",
+            "__j": "0:10",
+        },
+        inputs={"__in": dace.Memlet("t[__i, __j]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("o[__i + 1, __j + 1]")},
+        input_nodes={t},
+        output_nodes={o},
+        external_edges=True,
+    )
     sdfg.validate()
 
-    return sdfg, state, g1, t, g2
+    return sdfg, state, g1, t, g2, o
 
 
 def test_global_self_copy_elimination_only_pattern():
@@ -376,8 +390,9 @@ def test_global_self_copy_elimination_multi_path():
 
 
 def test_global_self_copy_elimination_concat_where_like():
-    sdfg, state, g1, t, g2 = _make_concat_where_like()
-    assert set(util.count_nodes(state, dace_nodes.AccessNode, True)) == {g1, t, g2}
+    sdfg, state, g1, t, g2, o = _make_concat_where_like()
+    initial_ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert len(initial_ac_nodes) == 4
 
     res, ref = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
@@ -390,9 +405,8 @@ def test_global_self_copy_elimination_concat_where_like():
 
     ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert count == 1
-    assert len(ac_nodes) == 1
-    assert ac_nodes[0].data == "g"
-    assert util.count_nodes(state, dace_nodes.MapExit) == 2
+    assert {g2, o} == set(ac_nodes)
+    assert util.count_nodes(state, dace_nodes.MapExit) == 3
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref, res)

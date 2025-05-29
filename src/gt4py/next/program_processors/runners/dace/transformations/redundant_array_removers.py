@@ -602,7 +602,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             if not refers_to_data(gtx_st.get_other_node(desc), node_g1.data)
         ]
         data_copied_into_g2 = self._merge_write_back_subsets(
-            graph, node_tmp, node_g2, for_test=True
+            state=graph, node_g1=node_g1, node_tmp=node_tmp, node_g2=node_g2, for_test=True
         )
         if data_copied_into_g2 is None:
             return False
@@ -674,6 +674,15 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_g2 = self.node_g2
         node_tmp = self.node_tmp
 
+        # We merge the subsets to know how to readjust the subsets such that
+        #  we can directly write into `g2`. There is also the possibility of
+        #  non deterministic behaviour, see `_merge_write_back_subsets()`.
+        subset_map = self._merge_write_back_subsets(
+            state=state, node_g1=node_g1, node_tmp=node_tmp, node_g2=node_g2, for_test=False
+        )
+        if subset_map is None:
+            raise RuntimeError("The subsets were merged differently in `can_be_applied()`.")
+
         # First we relocate all writes that go into `g1`. We can also relocate the
         #  other reads from `g1` to `g2`. See the `TODO` in the `can_be_applied()`
         #  function, at the empty Memlet check.
@@ -708,15 +717,6 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             for desc in gtx_st.describe_all_edges(state, node_tmp)
             if gtx_st.get_other_node(desc) is not node_g2
         ]
-
-        # We merge the subsets to know how to readjust the subsets such that
-        #  we can directly write into `g2`. There is also the possibility of
-        #  non deterministic behaviour, see `_merge_write_back_subsets()`.
-        subset_map = self._merge_write_back_subsets(
-            state=state, node_tmp=node_tmp, node_g2=node_g2, for_test=False
-        )
-        if subset_map is None:
-            raise RuntimeError("The subsets were merged differently in `can_be_applied()`.")
 
         # Now we have to relocate the reads/writes involving `tmp` to `g2`. This is
         #  a bit more complicated as the two might have different sizes and we have
@@ -788,6 +788,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
     def _merge_write_back_subsets(
         self,
         state: dace.SDFGState,
+        node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
         for_test: Literal[True],
@@ -797,6 +798,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
     def _merge_write_back_subsets(
         self,
         state: dace.SDFGState,
+        node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
         for_test: Literal[False],
@@ -805,6 +807,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
     def _merge_write_back_subsets(
         self,
         state: dace.SDFGState,
+        node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
         for_test: bool,
@@ -835,26 +838,39 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             - If the function returns `None` while `for_test` was `False`
                 indicates non deterministic behaviour, probably because
                 the order of the edges was different.
+            - If `for_test` is `False` this function must be called before
+                `g1` is modified.
         """
 
+        # Get everything that describes the write back. In the majority, this
+        #  is everything that is transferred from `tmp` to `g2`, but it also
+        #  includes the data that is moved from `g1` to `tmp`, it has to be
+        #  seen as "already written back".
+        # TODO(phimuell): What if the `g1 -> tmp` happens to intersect?
+        write_back_edges = [
+            gtx_st.describe_edge(e, False) for e in state.edges_between(node_tmp, node_g2)
+        ]
+        write_back_edges.extend(
+            gtx_st.describe_edge(e, True) for e in state.edges_between(node_g1, node_tmp)
+        )
+        assert len(write_back_edges) > 0
+        assert all(tedge.subset is not None for tedge in write_back_edges)
+
+        if len(write_back_edges) == 1:
+            return [write_back_edges[0].subset]
+        assert all(
+            desc.edge.data.src_subset is not None and desc.edge.data.dst_subset is not None
+            for desc in write_back_edges
+        )
+
+        # Now merge the subsets at the `tmp` side together.
         # NOTE: this is an ugly hack to make the function more deterministic.
         #   We order them according to their ID of the Memlet and if the
         #   Memlets have not been modified between `can_be_apply()` and
         #   `apply()` then this will ensure that the edges are obtained in
         #   the right order.
-        write_back_edges = list(state.edges_between(node_tmp, node_g2))
-        write_back_edges.sort(key=lambda e: id(e.data))
-        assert len(write_back_edges) > 0
-
-        if len(write_back_edges) == 1:
-            return [write_back_edges[0].data.src_subset]
-        assert all(
-            e.data.src_subset is not None and e.data.dst_subset is not None
-            for e in write_back_edges
-        )
-
-        # Now merge the subsets at the `tmp` side together.
-        merged_subsets_at_tmp = gtx_st.subset_merger([e.data.src_subset for e in write_back_edges])
+        write_back_edges.sort(key=lambda desc: id(desc.edge.data))
+        merged_subsets_at_tmp = gtx_st.subset_merger(write_back_edges)
 
         subset_map: dict[dace_sbs.Subset, dace_sbs.Subset] = {}
         for merged_subset_at_tmp in merged_subsets_at_tmp:
@@ -862,9 +878,9 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             #  that they can be merged to one consecutive domain.
             merged_subset_at_g2 = gtx_st.subset_merger(
                 [
-                    e.data.dst_subset
-                    for e in write_back_edges
-                    if merged_subset_at_tmp.covers(e.data.src_subset)
+                    gtx_st.get_other_subset(desc)
+                    for desc in write_back_edges
+                    if merged_subset_at_tmp.covers(desc.subset)
                 ]
             )
             if len(merged_subset_at_g2) != 1:
