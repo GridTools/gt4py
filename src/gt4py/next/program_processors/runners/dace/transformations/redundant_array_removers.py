@@ -556,6 +556,33 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         if gtx_transformations.utils.is_view(g_desc, sdfg):
             return False
 
+        if self._is_read_downstream(start_state=graph, sdfg=sdfg, data_to_look=node_tmp.data):
+            # The data is used downstream, this means that that we have to preserve
+            #  the temporary, thus the "replacement mode" must be used.
+            return self._can_replacement_mode_be_applied(graph, sdfg)
+        else:
+            # The data is not used downstream, thus we might be able to merge
+            #  the nodes, so check for the "merge mode"
+            return self._can_merge_mode_be_applied(graph, sdfg)
+
+    def _can_merge_mode_be_applied(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> bool:
+        """Checks if the "merge mode" can be used.
+
+        In the merge mode the nodes `g1`, `tmp` and `g2` are logically fused together.
+        This mode is implemented by `self._apply_merge_mode()`.
+
+        Note:
+            This function can not be called on its own, as it assumes that some
+            preliminary have been executed.
+        """
+        node_g1 = self.node_g1
+        node_g2 = self.node_g2
+        node_tmp = self.node_tmp
+
         # If there is an empty Memlet connected to any of the tree nodes we give
         #  up. We might be able to handle them, but it is too complicated.
         # TODO(phimuell): Figuring out if we have to check the reads more as this one.
@@ -564,7 +591,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         #   is executed before or after another potential read to `g1`. Thus, I think
         #   that there is no need for further checks.
         if any(
-            any(e.data.is_empty() for e in graph.out_edges(node) + graph.in_edges(node))
+            any(e.data.is_empty() for e in state.out_edges(node) + state.in_edges(node))
             for node in [node_g1, node_g2, node_tmp]
         ):
             return False
@@ -575,9 +602,9 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         #   get filtered out.
         # TODO(phimuell): The part below does not consider the case that something
         #   is written into `G1` copied to `T` and then copied to `G2`.
-        all_writes_into_g1 = set(gtx_st.describe_incoming_edges(graph, node_g1))
+        all_writes_into_g1 = set(gtx_st.describe_incoming_edges(state, node_g1))
         all_writes_into_g2: set[gtx_st.EdgeConnectionSpec] = set(
-            gtx_st.describe_incoming_edges(graph, node_g2)
+            gtx_st.describe_incoming_edges(state, node_g2)
         )
         if any(
             any(
@@ -599,11 +626,11 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         )
         non_g_writes_into_tmp = [
             desc
-            for desc in gtx_st.describe_incoming_edges(graph, node_tmp)
+            for desc in gtx_st.describe_incoming_edges(state, node_tmp)
             if not refers_to_data(gtx_st.get_other_node(desc), node_g1.data)
         ]
         data_copied_into_g2 = self._merge_write_back_subsets(
-            graph, node_tmp, node_g2, for_test=True
+            state, node_tmp, node_g2, for_test=True
         )
         if data_copied_into_g2 is None:
             return False
@@ -617,16 +644,36 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         #  `G` is inside this state.
         if any(
             dnode.data == node_g1.data
-            for dnode in graph.data_nodes()
+            for dnode in state.data_nodes()
             if not (dnode is node_g2 or dnode is node_g1)
         ):
             return False
 
         # Check if we can remove the transient.
+        # TODO(phimuell): I am actually not sure if this is a requirement. This mode
+        #   is only used if `tmp` is not accessed downstream. Since `tmp` is a
+        #   transient it must be defined in a parallel branch. So we can get rid
+        #   of it, as long as we do not delete it from the registry, or I am wrong?
         if not self._is_single_use_data(node_tmp, sdfg):
             return False
 
         return True
+
+    def _can_replacement_mode_be_applied(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> bool:
+        """Checks if the "replacement mode" can be used.
+
+        Essentially this mode replaces all occurrences of `tmp` with `g`.
+        The mode is implemented by `self._apply_replacement_mode()`.
+
+        Note:
+            This function can not be called on its own, as it assumes that some
+            preliminary have been executed.
+        """
+        return False
 
     def apply(
         self,
@@ -638,7 +685,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
         # TODO(phimuell): Maybe go back to is used downstream.
         if self._is_single_use_data(node_tmp, sdfg):
-            self._merge_g1_tmp_g1_nodes(graph, sdfg)
+            self._apply_merge_mode(graph, sdfg)
 
             assert graph.degree(node_g2) != 0
             gtx_transformations.gt_propagate_strides_from_access_node(
@@ -649,7 +696,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         else:
             assert False
 
-    def _merge_g1_tmp_g1_nodes(
+    def _apply_merge_mode(
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
@@ -857,6 +904,39 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             subset_map[merged_subset_at_tmp] = merged_subset_at_g2[0]
 
         return merged_subsets_at_tmp if for_test else subset_map
+
+    def _is_read_downstream(
+        self,
+        start_state: dace.SDFGState,
+        sdfg: dace.SDFG,
+        data_to_look: str,
+    ) -> bool:
+        """Scans for reads to `data_to_look`.
+
+        The function will go through states that are reachable from `start_state`
+        (including) and test if there is a read to the data container `data_to_look`.
+        It will return `True` the first time it finds such a node.
+        It is important that the matched nodes, i.e. `self.node_{read_g, write_g, tmp}`
+        are ignored.
+
+        Args:
+            start_state: The state where the scanning starts.
+            sdfg: The SDFG on which we operate.
+            data_to_look: The data that we want to look for.
+        """
+        node_g1 = self.node_g1
+        node_g2 = self.node_g2
+        node_tmp = self.node_tmp
+
+        # TODO(phimuell): Run the `StateReachability` pass in a pipeline and use
+        #  the `_pipeline_results` member to access the data.
+        return gtx_transformations.utils.is_accessed_downstream(
+            start_state=start_state,
+            sdfg=sdfg,
+            reachable_states=None,
+            data_to_look=data_to_look,
+            nodes_to_ignore={node_g1, node_g2, node_tmp},
+        )
 
     def old_apply(
         self,
