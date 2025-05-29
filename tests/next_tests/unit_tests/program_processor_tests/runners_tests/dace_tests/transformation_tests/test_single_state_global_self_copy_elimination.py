@@ -205,6 +205,98 @@ def _make_concat_where_like(
     return sdfg, state, g1, t, g2, o
 
 
+def _make_concat_where_like_with_silent_write_to_g1(
+    whole_write_back: bool,
+    bigger_silent_write: bool,
+) -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+]:
+    sdfg = dace.SDFG(util.unique_name(f"self_copy_sdfg_concat_where_like_multiple_writes_to_g1"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array(
+        "g",
+        shape=(10, 10),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "o",
+        shape=(10, 12),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "t",
+        shape=(8, 9),
+        dtype=dace.float64,
+        transient=True,
+    )
+
+    g1, t, g2, o = (state.add_access(name) for name in "gtgo")
+
+    state.add_nedge(g1, t, dace.Memlet("g[2:10, 0] -> [0:8, 0]"))
+
+    if whole_write_back:
+        state.add_nedge(t, g2, dace.Memlet("t[0:4, 0:9] -> [2:6, 0:9]"))
+        state.add_nedge(t, g2, dace.Memlet("t[4:8, 0:9] -> [6:10, 0:9]"))
+    else:
+        state.add_nedge(t, g2, dace.Memlet("t[0:4, 1:9] -> [2:6, 1:9]"))
+        state.add_nedge(t, g2, dace.Memlet("t[4:8, 1:9] -> [6:10, 1:9]"))
+
+    state.add_mapped_tasklet(
+        "silent_write_to_g1",
+        map_ranges={"__i": "0:10" if bigger_silent_write else "2:10"},
+        inputs={},
+        code="__out = -(__i / 4.0)",
+        outputs={"__out": dace.Memlet("g[__i, 9]")},
+        output_nodes={g1},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "first_level",
+        map_ranges={"__i": "2:10"},
+        inputs={},
+        code="__out = __i / 3.0",
+        outputs={"__out": dace.Memlet("g[__i, 0]")},
+        output_nodes={g1},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "bulk_value",
+        map_ranges={
+            "__i": "0:8",
+            "__j": "0:9",
+        },
+        inputs={},
+        code="__out = sin(__i + 0.5)**2 + cos(__j + 0.1) ** 2",
+        outputs={"__out": dace.Memlet("t[__i, __j]")},
+        output_nodes={t},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "consumer",
+        map_ranges={
+            "__i": "0:8",
+            "__j": "0:9",
+        },
+        inputs={"__in": dace.Memlet("t[__i, __j]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("o[__i + 1, __j + 1]")},
+        input_nodes={t},
+        output_nodes={o},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    return sdfg, state, g1, t, g2, o
+
+
 def test_global_self_copy_elimination_only_pattern():
     """Contains only the pattern -> Total elimination."""
     sdfg, state = _make_self_copy_sdfg()
@@ -444,14 +536,11 @@ def test_global_self_copy_elimination_concat_where_whole_write_back() -> None:
     res, ref = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
 
-    sdfg.view()
-
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.SingleStateGlobalSelfCopyElimination,
         validate=True,
         validate_all=True,
     )
-    sdfg.view()
 
     ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert count == 1
@@ -460,3 +549,31 @@ def test_global_self_copy_elimination_concat_where_whole_write_back() -> None:
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref, res)
+
+
+def test_global_self_copy_elimination_concat_where_like_silent_write_g1():
+    sdfg, state, g1, t, g2, o = _make_concat_where_like_with_silent_write_to_g1(
+        whole_write_back=False,
+        bigger_silent_write=False,
+    )
+    initial_ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert len(initial_ac_nodes) == 4
+
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.SingleStateGlobalSelfCopyElimination,
+        validate=True,
+        validate_all=True,
+    )
+
+    ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert count == 1
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref, res)
+
+
+def test_global_self_copy_elimination_concat_where_like_silent_write_g1_whole_write_back():
+    assert False
