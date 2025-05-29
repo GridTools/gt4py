@@ -510,7 +510,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
     #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
-    _single_use_data: dict[dace.SDFG, set[str]]
+    _single_use_data: Optional[dict[dace.SDFG, set[str]]]
 
     node_g1 = dace_transformation.PatternNode(dace_nodes.AccessNode)
     node_tmp = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
@@ -564,7 +564,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         #   is executed before or after another potential read to `g1`. Thus, I think
         #   that there is no need for further checks.
         if any(
-            any(e.data.is_empty() for e in graph.edges(node))
+            any(e.data.is_empty() for e in graph.out_edges(node) + graph.in_edges(node))
             for node in [node_g1, node_g2, node_tmp]
         ):
             return False
@@ -594,7 +594,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         # TODO(phimuell): Handle the case were we end up with more then one remaining
         #   subset. This either indicates that the merger was not optimal or that
         #   the copied domain is not a hypercube.
-        refers_to_data = (
+        refers_to_data = (  # noqa: E731 [lambda-assignment]
             lambda node, data: isinstance(node, dace_nodes.AccessNode) and node.data == data
         )
         non_g_writes_into_tmp = [
@@ -638,7 +638,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
         # TODO(phimuell): Maybe go back to is used downstream.
         if self._is_single_use_data(node_tmp, sdfg):
-            self._remove_tmp_node(graph, sdfg)
+            self._merge_g1_tmp_g1_nodes(graph, sdfg)
 
             assert graph.degree(node_g2) != 0
             gtx_transformations.gt_propagate_strides_from_access_node(
@@ -653,7 +653,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-    ) -> list[dace_graph.MultiConnectorEdge]:
+    ) -> None:
         """Subset propagation is done outside."""
         node_g1 = self.node_g1
         node_g2 = self.node_g2
@@ -672,8 +672,8 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
                 iedge.data,
             )
             state.remove_edge(iedge)
-        for oedge in list(state.out_edges(node_g2)):
-            if oedge.dst is node_g2:
+        for oedge in list(state.out_edges(node_g1)):
+            if oedge.dst is node_g2 or oedge.dst is node_tmp:
                 pass
             elif oedge.dst is not node_tmp:
                 state.add_edge(
@@ -707,7 +707,6 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         #  a bit more complicated as the two might have different sizes and we have
         #  to reconfigure the dataflow at the other side.
         already_reconfigured_dataflow: set[tuple[dace_nodes.Node, str]] = set()
-        new_edges: list[dace_graph.MultiConnectorEdge] = []
         for edge_to_relocate_desc in edges_to_relocate_desc:
             edge_subset = edge_to_relocate_desc.subset
 
@@ -734,12 +733,12 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
             if gtx_st.describes_incoming_edge(edge_to_relocate_desc):
                 is_producer_edge = True
-                relocate_key = (edge_to_relocate_desc.edge.src, edge_to_relocate_desc.src_conn)
+                relocate_key = (edge_to_relocate_desc.edge.src, edge_to_relocate_desc.edge.src_conn)
             else:
                 is_producer_edge = False
-                relocate_key = (edge_to_relocate_desc.edge.dst, edge_to_relocate_desc.dst_conn)
+                relocate_key = (edge_to_relocate_desc.edge.dst, edge_to_relocate_desc.edge.dst_conn)
 
-            new_edge = gtx_transformations.reroute_edge(
+            new_edge = gtx_transformations.utils.reroute_edge(
                 is_producer_edge=is_producer_edge,
                 current_edge=edge_to_relocate_desc.edge,
                 ss_offset=ss_offset,
@@ -748,12 +747,11 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
                 old_node=node_tmp,
                 new_node=node_g2,
             )
-            new_edges.append(new_edge)
 
             if relocate_key not in already_reconfigured_dataflow:
                 already_reconfigured_dataflow.add(relocate_key)
                 # Stride propagation is done outside.
-                gtx_transformations.reconfigure_dataflow_after_rerouting(
+                gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
                     is_producer_edge=is_producer_edge,
                     new_edge=new_edge,
                     ss_offset=ss_offset,
@@ -765,16 +763,11 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
             state.remove_edge(edge_to_relocate_desc.edge)
 
-        return new_edges
-
-    @overload
-    def _merge_write_back_subsets(
-        self,
-        state: dace.SDFGState,
-        node_tmp: dace_nodes.AccessNode,
-        node_g2: dace_nodes.AccessNode,
-        for_test: Literal[False],
-    ) -> Union[None, list[dace_sbs.Subset]]: ...
+        # Now remove the temporary node.
+        assert state.in_degree(node_tmp) == 0
+        assert all(oedge.dst is node_g2 for oedge in state.out_edges(node_tmp))
+        state.remove_node(node_tmp)
+        sdfg.remove_data(node_tmp.data, validate=False)
 
     @overload
     def _merge_write_back_subsets(
@@ -783,6 +776,15 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
         for_test: Literal[True],
+    ) -> Union[None, list[dace_sbs.Subset]]: ...
+
+    @overload
+    def _merge_write_back_subsets(
+        self,
+        state: dace.SDFGState,
+        node_tmp: dace_nodes.AccessNode,
+        node_g2: dace_nodes.AccessNode,
+        for_test: Literal[False],
     ) -> Union[None, dict[dace_sbs.Subset, dace_sbs.Subset]]: ...
 
     def _merge_write_back_subsets(
@@ -852,7 +854,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             )
             if len(merged_subset_at_g2) != 1:
                 return None
-            subset_map[merged_subset_at_tmp] = merged_subset_at_g2
+            subset_map[merged_subset_at_tmp] = merged_subset_at_g2[0]
 
         return merged_subsets_at_tmp if for_test else subset_map
 
