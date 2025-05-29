@@ -12,7 +12,6 @@
 
 from __future__ import annotations
 
-import collections
 import dataclasses
 import functools
 import time
@@ -287,9 +286,9 @@ class Program:
         try:
             offset_provider_extended = self._offset_provider_extended_cache[offset_provider]
         except KeyError:
-            offset_provider_extended = collections.ChainMap(
-                self._implicit_offset_provider, offset_provider
-            )
+            offset_provider_extended = {
+                **self._implicit_offset_provider, **offset_provider
+            }
             self._offset_provider_extended_cache[offset_provider] = offset_provider_extended
         return offset_provider_extended
 
