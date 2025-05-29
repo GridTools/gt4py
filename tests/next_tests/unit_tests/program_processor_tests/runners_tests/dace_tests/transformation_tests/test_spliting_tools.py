@@ -6,9 +6,12 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from typing import Optional
+
 import pytest
 import numpy as np
 import copy
+import itertools
 
 dace = pytest.importorskip("dace")
 from dace import symbolic as dace_symbolic, subsets as dace_sbs
@@ -388,3 +391,30 @@ def test_subset_merging_4():
 
     assert len(merged_subset) == 2
     assert set(subsets) == set(merged_subset)
+
+
+def test_subset_merging_stability():
+    # There are multiple possible results.
+    #   P1: {Range(0:15, 5:10), Range(0:10, 0:5)}
+    #   P2: {Range(0:10, 0:10), Range(10:15, 5:10)}
+    #  Because the merger is guaranteed to be stable, any order of the input
+    #  will produce the same result.
+    subsets = [
+        dace_sbs.Range.from_string("0:10, 0:5"),
+        dace_sbs.Range.from_string("0:5, 5:10"),
+        dace_sbs.Range.from_string("5:10, 5:10"),
+        dace_sbs.Range.from_string("10:15, 5:10"),
+    ]
+
+    stable_result: Optional[set[dace_sbs.Subset]] = None
+    for permut in itertools.permutations(subsets):
+        merged_subset = gtx_transformations.spliting_tools.subset_merger(list(permut))
+        print(merged_subset)
+
+        assert merged_subset is not None
+        assert len(merged_subset) == 2
+
+        if stable_result is None:
+            stable_result = {copy.deepcopy(ss) for ss in merged_subset}
+        else:
+            assert set(merged_subset) == stable_result

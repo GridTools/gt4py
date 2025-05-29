@@ -8,7 +8,6 @@
 
 import copy
 import dataclasses
-import itertools
 from typing import Any, Iterable, Optional, Sequence, Union
 
 import dace
@@ -446,13 +445,22 @@ def subset_merger(
 ) -> list[dace_sbs.Subset]:
     """Merges subsets together.
 
-    The function finds the largest continuous subsets based on subsets.
-    Note that the function does not guarantees that the largest and best
-    subsets are found. It uses an eager method. However, it _should_ be
-    deterministic.
+    The function tries the merge as many subsets together as possible.
+    While, the function does not guarantees to find the largest possible
+    subset, it guarantees that the result does not depend on the particular
+    order of the passed subsets.
+
+    Note:
+        The function achieves its stability by first order the subsets in
+        a particular order. For this it will serialize the subsets to strings
+        and then sort them alphabetical. As this is the only way that also
+        works in the presence of symbols.
     """
     assert len(subsets) > 0
 
+    # Bring everything down to subsets. Note that it is important, that
+    #  we do make a copy, because `_subset_merger_impl()` modifies its
+    #  argument inplace.
     if isinstance(subsets[0], EdgeConnectionSpec):
         subsets = [copy.deepcopy(desc.subset) for desc in subsets]
     else:
@@ -468,24 +476,35 @@ def subset_merger(
 def _subset_merger_impl(
     subsets: list[dace_sbs.Subset],
 ) -> list[dace_sbs.Subset]:
-    """Implementation of the subset merger."""
+    """Implementation of the subset merger.
+
+    The function will modify `subsets` inplace.
+    """
+
+    # The best we can do to ensure some kind of stability is sort them, however,
+    #  in case of symbols we can not do that. Thus as the _only_ solution, we
+    #  serialize them to string and order them accordingly.
+    # NOTE: We can modify it inplace.
+    subsets.sort(key=lambda sub: str(sub))
+
     performed_merge = True
     while performed_merge and (len(subsets) > 1):
         performed_merge = False
 
-        # Let's hope that `combinations()` is deterministic, because this is the only
-        #  non deterministic stuff.
-        for subset1, subset2 in itertools.combinations(list(subsets), 2):
-            merged_subset = _try_to_merge_subsets(subset1, subset2)
-            if merged_subset is not None:
-                subsets.remove(subset1)
-                subsets.remove(subset2)
-                subsets.append(merged_subset)
-                performed_merge = True
+        # We could use `itertools.combinations()` here, but to guarantee deterministic
+        #  processing, we will implement it yourselves.
+        for idx1 in range(len(subsets)):
+            for idx2 in range(idx1 + 1, len(subsets)):
+                subset1, subset2 = subsets[idx1], subsets[idx2]
+                merged_subset = _try_to_merge_subsets(subset1, subset2)
+                if merged_subset is not None:
+                    subsets.remove(subset1)
+                    subsets.remove(subset2)
+                    subsets.append(merged_subset)
+                    performed_merge = True
+                    break
+            if performed_merge:
                 break
-            else:
-                pass
-    assert len(subsets) >= 1
 
     return subsets
 
