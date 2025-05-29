@@ -37,8 +37,8 @@ def _make_self_copy_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
     sdfg.arrays["G"].transient = False
     g_read, tmp_node, g_write = (state.add_access(name) for name in "GTG")
 
-    state.add_nedge(g_read, tmp_node, dace.Memlet("G[0:10, 0:10]"))
-    state.add_nedge(tmp_node, g_write, dace.Memlet("G[0:10, 0:10]"))
+    state.add_nedge(g_read, tmp_node, dace.Memlet("G[0:10, 0:10] -> [0:10, 0:10]"))
+    state.add_nedge(tmp_node, g_write, dace.Memlet("G[0:10, 0:10] -> [0:10, 0:10]"))
     sdfg.validate()
 
     return sdfg, state
