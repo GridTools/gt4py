@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, Sequence, TypeAlias, Union
+from typing import Any, Literal, Optional, Sequence, TypeAlias, Union, overload
 
 import dace
 from dace import (
@@ -21,6 +21,7 @@ from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace.transformations import spliting_tools as gtx_st
 
 
 def gt_multi_state_global_self_copy_elimination(
@@ -506,20 +507,29 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         it should be read directly from `G`.
     """
 
-    node_read_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    # Name of all data that is used at only one place. Is computed by the
+    #  `FindSingleUseData` pass and be passed at construction time. Needed until
+    #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
+    _single_use_data: dict[dace.SDFG, set[str]]
+
+    node_g1 = dace_transformation.PatternNode(dace_nodes.AccessNode)
     node_tmp = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
-    node_write_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    node_g2 = dace_transformation.PatternNode(dace_nodes.AccessNode)
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [dace.sdfg.utils.node_path_graph(cls.node_g1, cls.node_tmp, cls.node_g2)]
 
     def __init__(
         self,
         *args: Any,
+        single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-
-    @classmethod
-    def expressions(cls) -> Any:
-        return [dace.sdfg.utils.node_path_graph(cls.node_read_g, cls.node_tmp, cls.node_write_g)]
+        self._single_use_data = None
+        if single_use_data is not None:
+            self._single_use_data = single_use_data
 
     def can_be_applied(
         self,
@@ -528,75 +538,325 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        read_g = self.node_read_g
-        write_g = self.node_write_g
-        tmp_node = self.node_tmp
-        g_desc = read_g.desc(sdfg)
-        tmp_desc = tmp_node.desc(sdfg)
+        node_g1 = self.node_g1
+        node_g2 = self.node_g2
+        node_tmp = self.node_tmp
+        g_desc = node_g1.desc(sdfg)
+        tmp_desc = node_tmp.desc(sdfg)
 
-        # NOTE: We do not check if `G` is read downstream.
-        if read_g.data != write_g.data:
+        if node_g1.data != node_g2.data:
             return False
-        if g_desc.transient:
-            return False
+        assert not g_desc.transient
         if not tmp_desc.transient:
             return False
-        if graph.scope_dict()[read_g] is not None:
+        if graph.scope_dict()[node_g1] is not None:
+            return False
+        if gtx_transformations.utils.is_view(tmp_desc, sdfg):
+            return False
+        if gtx_transformations.utils.is_view(g_desc, sdfg):
             return False
 
-        # For ease of implementation we require that only `G` defines `T`. This is
-        #  needed to ensure that `G` only depends on `G`.
-        if graph.in_degree(tmp_node) != 1:
+        # If there is an empty Memlet connected to any of the tree nodes we give
+        #  up. We might be able to handle them, but it is too complicated.
+        # TODO(phimuell): Figuring out if we have to check the reads more as this one.
+        #   I am pretty sure that this is enough, because the reads to `g1` would
+        #   be concurrent, thus there is no guarantee if the path `g1 -> tmp -> g2`
+        #   is executed before or after another potential read to `g1`. Thus, I think
+        #   that there is no need for further checks.
+        if any(
+            any(e.data.is_empty() for e in graph.edges(node))
+            for node in [node_g1, node_g2, node_tmp]
+        ):
             return False
 
-        # Now we look at all incoming connections of the second `G` nodes, they must
-        #  either come from `T` or from the first `G` node directly.
-        for iedge in graph.in_edges(write_g):
-            if iedge.src is read_g:
-                continue
-            if iedge.src is tmp_node:
-                continue
+        # Now we check if all writes into G1 and G2 are disjunct, i.e. they kind of
+        #  act like one big memory, thus this makes it possible to merge it.
+        # TODO(phimuell): Improve such that the parts that get overwritten
+        #   get filtered out.
+        # TODO(phimuell): The part below does not consider the case that something
+        #   is written into `G1` copied to `T` and then copied to `G2`.
+        all_writes_into_g1 = set(gtx_st.describe_incoming_edges(graph, node_g1))
+        all_writes_into_g2: set[gtx_st.EdgeConnectionSpec] = set(
+            gtx_st.describe_incoming_edges(graph, node_g2)
+        )
+        if any(
+            any(
+                write_into_g2.subset.intersects(write_into_g1.subset)
+                for write_into_g1 in all_writes_into_g1
+            )
+            for write_into_g2 in all_writes_into_g2
+        ):
+            return False
+
+        # Now we have to check that everything is written to `tmp` is also transferred
+        #  back to `G2`. However, we ignore all the writes that came from `G1`.
+        #  To maximize the success rate we also merge the reads from `tmp`.
+        # TODO(phimuell): Handle the case were we end up with more then one remaining
+        #   subset. This either indicates that the merger was not optimal or that
+        #   the copied domain is not a hypercube.
+        refers_to_data = (
+            lambda node, data: isinstance(node, dace_nodes.AccessNode) and node.data == data
+        )
+        non_g_writes_into_tmp = [
+            desc
+            for desc in gtx_st.describe_incoming_edges(graph, node_tmp)
+            if not refers_to_data(gtx_st.get_other_node(desc), node_g1.data)
+        ]
+        data_copied_into_g2 = self._merge_write_back_subsets(
+            graph, node_tmp, node_g2, for_test=True
+        )
+        if data_copied_into_g2 is None:
+            return False
+        if not all(
+            any(tmp_to_g2.covers(into_tmp.subset) for into_tmp in non_g_writes_into_tmp)
+            for tmp_to_g2 in data_copied_into_g2
+        ):
+            return False
+
+        # To avoid race conditions we require that no other node referring to
+        #  `G` is inside this state.
+        if any(
+            dnode.data == node_g1.data
+            for dnode in graph.data_nodes()
+            if not (dnode is node_g2 or dnode is node_g1)
+        ):
+            return False
+
+        # Check if we can remove the transient.
+        if not self._is_single_use_data(node_tmp, sdfg):
             return False
 
         return True
 
-    def _is_read_downstream(
+    def apply(
         self,
-        start_state: dace.SDFGState,
+        graph: dace.SDFGState,
         sdfg: dace.SDFG,
-        data_to_look: str,
-    ) -> bool:
-        """Scans for reads to `data_to_look`.
+    ) -> None:
+        node_tmp = self.node_tmp
+        node_g2 = self.node_g2
 
-        The function will go through states that are reachable from `start_state`
-        (including) and test if there is a read to the data container `data_to_look`.
-        It will return `True` the first time it finds such a node.
-        It is important that the matched nodes, i.e. `self.node_{read_g, write_g, tmp}`
-        are ignored.
+        # TODO(phimuell): Maybe go back to is used downstream.
+        if self._is_single_use_data(node_tmp, sdfg):
+            self._remove_tmp_node(graph, sdfg)
 
-        Args:
-            start_state: The state where the scanning starts.
-            sdfg: The SDFG on which we operate.
-            data_to_look: The data that we want to look for.
+            assert graph.degree(node_g2) != 0
+            gtx_transformations.gt_propagate_strides_from_access_node(
+                sdfg=sdfg,
+                state=graph,
+                outer_node=node_g2,
+            )
+        else:
+            assert False
 
-        Todo:
-            Port this function to use DaCe pass pipeline.
+    def _merge_g1_tmp_g1_nodes(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> list[dace_graph.MultiConnectorEdge]:
+        """Subset propagation is done outside."""
+        node_g1 = self.node_g1
+        node_g2 = self.node_g2
+        node_tmp = self.node_tmp
+
+        # First we relocate all writes that go into `g1`. We can also relocate the
+        #  other reads from `g1` to `g2`. See the `TODO` in the `can_be_applied()`
+        #  function, at the empty Memlet check.
+        #  This will isolate the `g1` node and we can remove it.
+        for iedge in list(state.in_edges(node_g1)):
+            state.add_edge(
+                iedge.src,
+                iedge.src_conn,
+                node_g2,
+                iedge.dst_conn,
+                iedge.data,
+            )
+            state.remove_edge(iedge)
+        for oedge in list(state.out_edges(node_g2)):
+            if oedge.dst is node_g2:
+                pass
+            elif oedge.dst is not node_tmp:
+                state.add_edge(
+                    node_g2,
+                    oedge.src_conn,
+                    oedge.dst,
+                    oedge.dst_conn,
+                    oedge.data,
+                )
+            state.remove_edge(oedge)
+        assert state.degree(node_g1) == 0
+        state.remove_node(node_g1)
+
+        # These are all (reads and writes) that we have to relocate from `tmp` to `g2`.
+        edges_to_relocate_desc = [
+            desc
+            for desc in gtx_st.describe_all_edges(state, node_tmp)
+            if gtx_st.get_other_node(desc) is not node_g2
+        ]
+
+        # We merge the subsets to know how to readjust the subsets such that
+        #  we can directly write into `g2`. There is also the possibility of
+        #  non deterministic behaviour, see `_merge_write_back_subsets()`.
+        subset_map = self._merge_write_back_subsets(
+            state=state, node_tmp=node_tmp, node_g2=node_g2, for_test=False
+        )
+        if subset_map is None:
+            raise RuntimeError("The subsets were merged differently in `can_be_applied()`.")
+
+        # Now we have to relocate the reads/writes involving `tmp` to `g2`. This is
+        #  a bit more complicated as the two might have different sizes and we have
+        #  to reconfigure the dataflow at the other side.
+        already_reconfigured_dataflow: set[tuple[dace_nodes.Node, str]] = set()
+        new_edges: list[dace_graph.MultiConnectorEdge] = []
+        for edge_to_relocate_desc in edges_to_relocate_desc:
+            edge_subset = edge_to_relocate_desc.subset
+
+            # Find the associated patch the edge writes or reads from and find the
+            #  subset that corresponds to the subset at the `g2` node.
+            associated_tmp_subset: Optional[dace_sbs.Subset] = next(
+                (
+                    merged_tmp_subset
+                    for merged_tmp_subset in subset_map.keys()
+                    if merged_tmp_subset.covers(edge_subset)
+                ),
+                None,
+            )
+            if associated_tmp_subset is None:
+                raise RuntimeError("The subsets were merged differently in `can_be_applied()`.")
+            associated_g2_subset = subset_map[associated_tmp_subset]
+
+            tmp_subset_start = associated_tmp_subset.min_element()
+            g2_subset_start = associated_g2_subset.min_element()
+            ss_offset = [
+                g2_patch_start - tmp_start
+                for g2_patch_start, tmp_start in zip(g2_subset_start, tmp_subset_start)
+            ]
+
+            if gtx_st.describes_incoming_edge(edge_to_relocate_desc):
+                is_producer_edge = True
+                relocate_key = (edge_to_relocate_desc.edge.src, edge_to_relocate_desc.src_conn)
+            else:
+                is_producer_edge = False
+                relocate_key = (edge_to_relocate_desc.edge.dst, edge_to_relocate_desc.dst_conn)
+
+            new_edge = gtx_transformations.reroute_edge(
+                is_producer_edge=is_producer_edge,
+                current_edge=edge_to_relocate_desc.edge,
+                ss_offset=ss_offset,
+                state=state,
+                sdfg=sdfg,
+                old_node=node_tmp,
+                new_node=node_g2,
+            )
+            new_edges.append(new_edge)
+
+            if relocate_key not in already_reconfigured_dataflow:
+                already_reconfigured_dataflow.add(relocate_key)
+                # Stride propagation is done outside.
+                gtx_transformations.reconfigure_dataflow_after_rerouting(
+                    is_producer_edge=is_producer_edge,
+                    new_edge=new_edge,
+                    ss_offset=ss_offset,
+                    state=state,
+                    sdfg=sdfg,
+                    old_node=node_tmp,
+                    new_node=node_g2,
+                )
+
+            state.remove_edge(edge_to_relocate_desc.edge)
+
+        return new_edges
+
+    @overload
+    def _merge_write_back_subsets(
+        self,
+        state: dace.SDFGState,
+        node_tmp: dace_nodes.AccessNode,
+        node_g2: dace_nodes.AccessNode,
+        for_test: Literal[False],
+    ) -> Union[None, list[dace_sbs.Subset]]: ...
+
+    @overload
+    def _merge_write_back_subsets(
+        self,
+        state: dace.SDFGState,
+        node_tmp: dace_nodes.AccessNode,
+        node_g2: dace_nodes.AccessNode,
+        for_test: Literal[True],
+    ) -> Union[None, dict[dace_sbs.Subset, dace_sbs.Subset]]: ...
+
+    def _merge_write_back_subsets(
+        self,
+        state: dace.SDFGState,
+        node_tmp: dace_nodes.AccessNode,
+        node_g2: dace_nodes.AccessNode,
+        for_test: bool,
+    ) -> Union[None, list[dace_sbs.Subset], dict[dace_sbs.Subset, dace_sbs.Subset]]:
+        """Merges the subsets of the edges that copy data from `node_tmp` to `node_g2`.
+
+        The main issue is that it is not enough to "just merge" the subsets
+        describing the read at `tmp`. In addition one also has to make sure
+        that the subsets at the destination, `g2`, can be merged in the same
+        way.
+        The example why this is important would be the following two Memlets
+        `tmp[0:5] -> [0:5]` and `tmp[5:10] -> [6:11]`. Although they can be
+        merged at the `tmp` side, they can not be merged at the destination
+        side.
+
+        The function has two modes, with are selected by setting `for_test`.
+        If it is `True` then, the function will only return the merged subsets
+        that read from `node_tmp`. In case it is `False` the function will
+        return a `dict` that maps a merged subset at `node_tmp` to the
+        corresponding merged subset at `node_g2`.
+        In case it is not possible to merge, the function returns `None`.
+        This should not happen if `for_test` is `False`, but it might happen.
+
+        Note:
+            - This function is currently not able to handle detect the case
+                `tmp[0:5] -> [5:10]` and `tmp[6:10] -> [0:5]` however, this
+                should not be important for GT4Py.
+            - If the function returns `None` while `for_test` was `False`
+                indicates non deterministic behaviour, probably because
+                the order of the edges was different.
         """
-        read_g: dace_nodes.AccessNode = self.node_read_g
-        write_g: dace_nodes.AccessNode = self.node_write_g
-        tmp_node: dace_nodes.AccessNode = self.node_tmp
 
-        # TODO(phimuell): Run the `StateReachability` pass in a pipeline and use
-        #  the `_pipeline_results` member to access the data.
-        return gtx_transformations.utils.is_accessed_downstream(
-            start_state=start_state,
-            sdfg=sdfg,
-            reachable_states=None,
-            data_to_look=data_to_look,
-            nodes_to_ignore={read_g, write_g, tmp_node},
+        # NOTE: this is an ugly hack to make the function more deterministic.
+        #   We order them according to their ID of the Memlet and if the
+        #   Memlets have not been modified between `can_be_apply()` and
+        #   `apply()` then this will ensure that the edges are obtained in
+        #   the right order.
+        write_back_edges = list(state.edges_between(node_tmp, node_g2))
+        write_back_edges.sort(key=lambda e: id(e.data))
+        assert len(write_back_edges) > 0
+
+        if len(write_back_edges) == 1:
+            return [write_back_edges[0].data.src_subset]
+        assert all(
+            e.data.src_subset is not None and e.data.dst_subset is not None
+            for e in write_back_edges
         )
 
-    def apply(
+        # Now merge the subsets at the `tmp` side together.
+        merged_subsets_at_tmp = gtx_st.subset_merger([e.data.src_subset for e in write_back_edges])
+
+        subset_map: dict[dace_sbs.Subset, dace_sbs.Subset] = {}
+        for merged_subset_at_tmp in merged_subsets_at_tmp:
+            # Find all edges that are involved in this subset and make sure
+            #  that they can be merged to one consecutive domain.
+            merged_subset_at_g2 = gtx_st.subset_merger(
+                [
+                    e.data.dst_subset
+                    for e in write_back_edges
+                    if merged_subset_at_tmp.covers(e.data.src_subset)
+                ]
+            )
+            if len(merged_subset_at_g2) != 1:
+                return None
+            subset_map[merged_subset_at_tmp] = merged_subset_at_g2
+
+        return merged_subsets_at_tmp if for_test else subset_map
+
+    def old_apply(
         self,
         graph: dace.SDFGState | dace.SDFG,
         sdfg: dace.SDFG,
@@ -648,6 +908,18 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             except ValueError as e:
                 if not str(e).startswith(f"Cannot remove data descriptor {tmp_node.data}:"):
                     raise
+
+    def _is_single_use_data(
+        self,
+        access_node: dace_nodes.AccessNode,
+        sdfg: dace.SDFG,
+    ) -> bool:
+        if self._single_use_data is None:
+            find_single_use_data = dace_analysis.FindSingleUseData()
+            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+        else:
+            single_use_data = self._single_use_data
+        return access_node.data in single_use_data[sdfg]
 
 
 @dace_properties.make_properties
