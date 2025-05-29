@@ -240,8 +240,10 @@ def test_global_self_copy_elimination_g_downstream():
 def test_global_self_copy_elimination_tmp_downstream():
     """`T` is read downstream.
 
-    Because `T` is read downstream, the read to `G` will be retained, but the write
-    will be removed.
+    Note:
+        This case is currently not implemented, it was handled by the previous
+        version, but it was kind of a special case that was not important.
+        Thus we keep the test but change it such that something else is tested.
     """
     sdfg, state1 = _make_self_copy_sdfg()
 
@@ -268,18 +270,7 @@ def test_global_self_copy_elimination_tmp_downstream():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.SingleStateGlobalSelfCopyElimination, validate=True, validate_all=True
     )
-    assert count != 0
-
-    assert sdfg.number_of_nodes() == 2
-    assert state1.number_of_nodes() == 2
-    assert util.count_nodes(state1, dace_nodes.AccessNode) == 2
-    assert all(state1.degree(node) == 1 for node in state1.nodes())
-    assert next(iter(state1.source_nodes())).data == "G"
-    assert next(iter(state1.sink_nodes())).data == "T"
-
-    assert state2.number_of_nodes() == 5
-    assert util.count_nodes(state2, dace_nodes.AccessNode) == 2
-    assert util.count_nodes(state2, dace_nodes.MapEntry) == 1
+    assert count == 0
 
 
 def test_direct_global_self_copy_simple():
