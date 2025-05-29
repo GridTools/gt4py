@@ -270,9 +270,14 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         if len(possible_producers) == 0:
             return None
         elif len(possible_producers) != 1:
-            raise ValueError(
-                f"Found an invalid SDFG, there are multiple producer for '{self.access_node.data}"
-            )
+            # This might indicate an error (the same memory location is written by
+            #  multiple producer. However, there are some cases where it is not an
+            #  error. For example a Map, with two Tasklets, writes to the node,
+            #  one Tasklet writes `T[__i, 0]` the other `T[__i, 10]`, where `__i`
+            #  is the iteration index. Then Memlet propagation will set the subset
+            #  to something like `T[:, 0:10]`. So it is not an error in that case.
+            return None
+
         return possible_producers[0]
 
     def _check_spliting_constraints(
