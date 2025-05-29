@@ -146,7 +146,7 @@ def _make_concat_where_like() -> (
 
     g1, t, g2 = (state.add_access(name) for name in "gtg")
 
-    state.add_nedge(g1, t, dace.Memlet("g[2:10, 9] -> [0:8, 0]"))
+    state.add_nedge(g1, t, dace.Memlet("g[2:10, 9] -> [0:8, 9]"))
     state.add_nedge(t, g2, dace.Memlet("t[0:4, 0:9] -> [2:6, 0:9]"))
     state.add_nedge(t, g2, dace.Memlet("t[4:8, 0:9] -> [6:10, 0:9]"))
 
