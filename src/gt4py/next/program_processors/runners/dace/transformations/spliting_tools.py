@@ -376,6 +376,14 @@ def decompose_subset(
         consu_low = consumer[dim][0]
         consu_high = consumer[dim][1]
 
+        # Check if the domains are the same.
+        #  It seems that this must be a special case, at least it is handled that
+        #  way in DaCe.
+        equal_cond1 = (prod_low == consu_low) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        equal_cond2 = (consu_high == prod_high) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        if equal_cond1 and equal_cond2:
+            continue
+
         # In this dimension the consumer consumes everything the producer
         #  generates. Therefore no splitting is needed.
         embedded_cond1 = (prod_low <= consu_low) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
