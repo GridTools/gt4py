@@ -15,9 +15,10 @@ from gt4py import next as gtx
 from gt4py.next.iterator import ir as itir
 from gt4py.next import common as gtx_common, metrics
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import cartesian_case, cartesian_case_no_backend
+from next_tests.integration_tests.cases import cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
+    simple_mesh,
 )
 
 
@@ -118,6 +119,9 @@ def test_offset_provider_cache(cartesian_case):
         offset_provider=cartesian_case.offset_provider,
     )
 
+    mesh = simple_mesh(None)
+    mesh_offset_provider = {"V2E": mesh.offset_provider["V2E"]}
+
     mock_offset_provider_to_type = mock.MagicMock()
     impl_offset_provider_to_type = gtx_common.offset_provider_to_type
 
@@ -127,11 +131,18 @@ def test_offset_provider_cache(cartesian_case):
         mock_offset_provider_to_type.__call__(offset_provider)
         return impl_offset_provider_to_type(offset_provider)
 
-    args_1, kwargs_1 = cases.get_default_data(cartesian_case, testee)
-    testee(*args_1, offset_provider=cartesian_case.offset_provider, **kwargs_1)
-
     with mock.patch("gt4py.next.common.offset_provider_to_type", mocked_offset_provider_to_type):
-        args_2, kwargs_2 = cases.get_default_data(cartesian_case, testee)
-        testee(*args_2, offset_provider=cartesian_case.offset_provider, **kwargs_2)
+        args_1, kwargs_1 = cases.get_default_data(cartesian_case, testee)
+        testee(*args_1, offset_provider=cartesian_case.offset_provider, **kwargs_1)
+        mock_offset_provider_to_type.assert_called()
+        mock_offset_provider_to_type.reset_mock()
 
+        args_2, kwargs_2 = cases.get_default_data(cartesian_case, testee)
+        testee(*args_2, offset_provider=mesh_offset_provider, **kwargs_2)
+        mock_offset_provider_to_type.assert_called()
+        mock_offset_provider_to_type.reset_mock()
+
+        args_3, kwargs_3 = cases.get_default_data(cartesian_case, testee)
+        testee(*args_3, offset_provider=cartesian_case.offset_provider, **kwargs_3)
         mock_offset_provider_to_type.assert_not_called()
+        mock_offset_provider_to_type.reset_mock()
