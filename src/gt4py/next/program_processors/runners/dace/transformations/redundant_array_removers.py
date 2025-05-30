@@ -568,6 +568,15 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         ):
             return False
 
+        # The dataflow must be acyclic.
+        if self._would_merge_create_cycle(
+            state=graph,
+            node_g1=node_g1,
+            node_tmp=node_tmp,
+            node_g2=node_g2,
+        ):
+            return False
+
         # Now we check if all writes into G1 and G2 are disjunct, i.e. they kind of
         #  act like one big memory, thus this makes it possible to merge it.
         # TODO(phimuell): Improve such that the parts that get overwritten
@@ -587,9 +596,9 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         ):
             return False
 
-        # Now we have to check that everything is written to `tmp` is also transferred
-        #  back to `G2`. However, we ignore all the writes that came from `G1`.
-        #  To maximize the success rate we also merge the reads from `tmp`.
+        # Now we have to check that everything that is written to `tmp` is also
+        #  transferred back to `G2`. However, we ignore all the writes that came
+        #  from `G1`. To maximize the success rate we also merge the reads from `tmp`.
         # TODO(phimuell): Handle the case were we end up with more then one remaining
         #   subset. This either indicates that the merger was not optimal or that
         #   the copied domain is not a hypercube.
@@ -911,6 +920,22 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         else:
             single_use_data = self._single_use_data
         return access_node.data in single_use_data[sdfg]
+
+    def _would_merge_create_cycle(
+        self,
+        state: dace.SDFGState,
+        node_g1: dace_nodes.AccessNode,
+        node_tmp: dace_nodes.AccessNode,
+        node_g2: dace_nodes.AccessNode,
+    ) -> bool:
+        for oedge in state.out_edges(node_g1):
+            if oedge.dst is node_tmp:
+                continue
+            if oedge.dst is node_g2:
+                continue
+            if gtx_transformations.utils.is_reachable(start=oedge.dst, target=node_g2, state=state):
+                return True
+        return False
 
 
 @dace_properties.make_properties
