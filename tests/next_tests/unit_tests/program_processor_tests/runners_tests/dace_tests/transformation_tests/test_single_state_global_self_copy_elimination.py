@@ -297,15 +297,15 @@ def _make_concat_where_like_with_silent_write_to_g1(
     return sdfg, state, g1, t, g2, o
 
 
-def _make_concat_where_like_41_to_60() -> (
-    tuple[
-        dace.SDFG,
-        dace.SDFGState,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-    ]
-):
+def _make_concat_where_like_41_to_60(
+    use_split_g1_t_transfer: bool,
+) -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+]:
     sdfg = dace.SDFG(util.unique_name(f"self_copy_sdfg_concat_where_like_41_to_60"))
     state = sdfg.add_state(is_start_block=True)
 
@@ -359,7 +359,12 @@ def _make_concat_where_like_41_to_60() -> (
 
     # Setting values of `t`.
     state.add_nedge(g1, t, dace.Memlet("g[2:10, 0] -> [0:8, 0]"))
-    state.add_nedge(g1, t, dace.Memlet("g[2:10, 14:81] -> [0:8, 14:81]"))
+    if use_split_g1_t_transfer:
+        state.add_nedge(g1, t, dace.Memlet("g[2:10, 14:80] -> [0:8, 14:80]"))
+        state.add_nedge(g1, t, dace.Memlet("g[2:10, 80] -> [0:8, 80]"))
+    else:
+        state.add_nedge(g1, t, dace.Memlet("g[2:10, 14:81] -> [0:8, 14:81]"))
+
     # This is kind of cyclic.
     state.add_mapped_tasklet(
         "cyclic_computation",
@@ -673,8 +678,13 @@ def test_global_self_copy_elimination_concat_where_like_silent_write_g1(
     assert util.compare_sdfg_res(ref, res)
 
 
-def test_global_self_copy_elimination_concat_where_like_41_to_60():
-    sdfg, state, g1, t, g2 = _make_concat_where_like_41_to_60()
+@pytest.mark.parametrize("use_split_g1_t_transfer", [True, False])
+def test_global_self_copy_elimination_concat_where_like_41_to_60(
+    use_split_g1_t_transfer: bool,
+) -> None:
+    sdfg, state, g1, t, g2 = _make_concat_where_like_41_to_60(
+        use_split_g1_t_transfer=use_split_g1_t_transfer,
+    )
     assert util.count_nodes(state, dace_nodes.AccessNode) == 3
     assert util.count_nodes(state, dace_nodes.MapExit) == 4
 
