@@ -23,7 +23,7 @@ from typing import Any, Generic, Optional, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.eve.extended_typing import Self, override
 from gt4py.next import (
     allocators as next_allocators,
@@ -86,6 +86,11 @@ class Program:
     static_params: (
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
+
+    _offset_provider_extended_cache: eve_utils.CustomMap = dataclasses.field(
+        default_factory=lambda: eve_utils.CustomMap(key_func=common.offset_provider_hash),
+        kw_only=True,
+    )
 
     @classmethod
     def from_function(
@@ -274,6 +279,18 @@ class Program:
             static_params=self.static_params,
         )
 
+    def _offset_provider_extended(
+        self,
+        offset_provider: common.OffsetProvider,
+    ) -> common.OffsetProvider:
+        offset_provider_extended: common.OffsetProvider
+        try:
+            offset_provider_extended = self._offset_provider_extended_cache[offset_provider]
+        except KeyError:
+            offset_provider_extended = {**self._implicit_offset_provider, **offset_provider}
+            self._offset_provider_extended_cache[offset_provider] = offset_provider_extended
+        return offset_provider_extended
+
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         program_name = (
             f"{self.__name__}[{getattr(self.backend, 'name', '<embedded>')}]"
@@ -295,10 +312,7 @@ class Program:
                     kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                 )
 
-            offset_provider = {
-                **offset_provider,
-                **self._implicit_offset_provider,  # TODO(havogt) cleanup implicit_offset_provider
-            }
+            offset_provider = self._offset_provider_extended(offset_provider)
             if self.backend is not None:
                 self._compiled_programs(
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=self.enable_jit
@@ -354,7 +368,7 @@ class Program:
             common.is_offset_provider(op) or common.is_offset_provider_type(op)
             for op in offset_provider
         )
-        offset_provider = [{**op, **self._implicit_offset_provider} for op in offset_provider]  # type: ignore[misc] # cleanup offset_provider vs offset_provider_type
+        offset_provider = [self._offset_provider_extended(op) for op in offset_provider]  # type: ignore[arg-type] # cleanup offset_provider vs offset_provider_type
 
         self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
         return self

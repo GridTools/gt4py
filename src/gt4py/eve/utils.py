@@ -412,7 +412,7 @@ class HashableBy(Generic[_T]):
         return self.func(self.value)
 
     def __eq__(self, other: Any) -> bool:
-        return self.value is other.value and self.func is self.func
+        return self.value == other.value and self.func is self.func
 
 
 @overload
@@ -1786,3 +1786,17 @@ class XIterable(Iterable[T]):
 
 
 xiter = XIterable
+
+
+class CustomMap(dict[_K, _V]):
+    """Extend the `dict` class with a key function to implement a custom map."""
+
+    def __init__(self, key_func: Callable[[_T], _K]):
+        super().__init__()
+        self.key_func = key_func
+
+    def __getitem__(self, key: _T) -> _V:
+        return super().__getitem__(self.key_func(key))
+
+    def __setitem__(self, key: _T, value: _V) -> None:
+        super().__setitem__(self.key_func(key), value)
