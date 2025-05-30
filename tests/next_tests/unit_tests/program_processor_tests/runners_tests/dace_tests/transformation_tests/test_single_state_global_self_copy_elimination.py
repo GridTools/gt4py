@@ -525,9 +525,12 @@ def test_global_self_copy_elimination_concat_where_like(
     assert util.compare_sdfg_res(ref, res)
 
 
-def test_global_self_copy_elimination_concat_where_like_whole_write_back() -> None:
+@pytest.mark.parametrize("handle_last_level", [True, False])
+def test_global_self_copy_elimination_concat_where_like_whole_write_back(
+    handle_last_level: bool,
+) -> None:
     sdfg, state, g1, t, g2, o = _make_concat_where_like(
-        handle_last_level=True,
+        handle_last_level=handle_last_level,
         whole_write_back=True,
     )
     initial_ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
@@ -551,10 +554,15 @@ def test_global_self_copy_elimination_concat_where_like_whole_write_back() -> No
     assert util.compare_sdfg_res(ref, res)
 
 
-def test_global_self_copy_elimination_concat_where_like_silent_write_g1():
+@pytest.mark.parametrize("whole_write_back", [True, False])
+@pytest.mark.parametrize("bigger_silent_write", [True, False])
+def test_global_self_copy_elimination_concat_where_like_silent_write_g1(
+    whole_write_back: bool,
+    bigger_silent_write: bool,
+) -> None:
     sdfg, state, g1, t, g2, o = _make_concat_where_like_with_silent_write_to_g1(
-        whole_write_back=False,
-        bigger_silent_write=False,
+        whole_write_back=whole_write_back,
+        bigger_silent_write=bigger_silent_write,
     )
     initial_ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert len(initial_ac_nodes) == 4
@@ -569,12 +577,10 @@ def test_global_self_copy_elimination_concat_where_like_silent_write_g1():
     )
 
     assert count == 1
-    assert set(util.count_nodes(state, dace_nodes.AccessNode, True)) == {g2, o}
+    ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert len(ac_nodes) == 2
+    assert set(ac_nodes) == {g2, o}
     assert util.count_nodes(state, dace_nodes.MapEntry) == 4
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref, res)
-
-
-def test_global_self_copy_elimination_concat_where_like_silent_write_g1_whole_write_back():
-    assert False
