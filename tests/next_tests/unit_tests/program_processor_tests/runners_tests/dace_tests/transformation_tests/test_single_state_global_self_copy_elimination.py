@@ -305,6 +305,8 @@ def _make_concat_where_like_41_to_60(
     dace_nodes.AccessNode,
     dace_nodes.AccessNode,
     dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
 ]:
     sdfg = dace.SDFG(util.unique_name(f"self_copy_sdfg_concat_where_like_41_to_60"))
     state = sdfg.add_state(is_start_block=True)
@@ -318,6 +320,20 @@ def _make_concat_where_like_41_to_60(
     sdfg.add_array(
         "t",
         shape=(8, 81),
+        dtype=dace.float64,
+        transient=True,
+    )
+
+    # These are consumer of the temporary.
+    sdfg.add_array(
+        "c1",
+        shape=(10, 14),
+        dtype=dace.float64,
+        transient=True,
+    )
+    sdfg.add_array(
+        "c2",
+        shape=(10, 67),
         dtype=dace.float64,
         transient=True,
     )
@@ -380,13 +396,42 @@ def _make_concat_where_like_41_to_60(
         external_edges=True,
     )
 
+    # Consumer of the temporary.
+    c1, c2 = (state.add_access(name) for name in ["c1", "c2"])
+    state.add_mapped_tasklet(
+        "consumer1",
+        map_ranges={
+            "__i": "2:8",
+            "__j": "1:15",
+        },
+        inputs={"__in": dace.Memlet("t[__i - 2, __j]")},
+        code="__out = __in + 2.3",
+        outputs={"__out": dace.Memlet("c1[__i, __j - 1]")},
+        input_nodes={t},
+        output_nodes={c1},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "consumer2",
+        map_ranges={
+            "__i": "2:8",
+            "__j": "14:81",
+        },
+        inputs={"__in": dace.Memlet("t[__i - 2, __j]")},
+        code="__out = __in - 2.3",
+        outputs={"__out": dace.Memlet("c2[__i, __j - 14]")},
+        input_nodes={t},
+        output_nodes={c2},
+        external_edges=True,
+    )
+
     # Now copy everything back into `g2`.
     state.add_nedge(t, g2, dace.Memlet("t[0:8, 1:14] -> [2:10, 1:14]"))
     state.add_nedge(t, g2, dace.Memlet("t[0:8, 14:80] -> [2:10, 14:80]"))
     state.add_nedge(t, g2, dace.Memlet("t[0:8, 0] -> [2:10, 0]"))
     sdfg.validate()
 
-    return sdfg, state, g1, t, g2
+    return sdfg, state, g1, t, g2, c1, c2
 
 
 def test_global_self_copy_elimination_only_pattern():
@@ -682,11 +727,11 @@ def test_global_self_copy_elimination_concat_where_like_silent_write_g1(
 def test_global_self_copy_elimination_concat_where_like_41_to_60(
     use_split_g1_t_transfer: bool,
 ) -> None:
-    sdfg, state, g1, t, g2 = _make_concat_where_like_41_to_60(
+    sdfg, state, g1, t, g2, c1, c2 = _make_concat_where_like_41_to_60(
         use_split_g1_t_transfer=use_split_g1_t_transfer,
     )
-    assert util.count_nodes(state, dace_nodes.AccessNode) == 3
-    assert util.count_nodes(state, dace_nodes.MapExit) == 4
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 5
+    assert util.count_nodes(state, dace_nodes.MapExit) == 6
 
     res, ref = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
@@ -699,9 +744,9 @@ def test_global_self_copy_elimination_concat_where_like_41_to_60(
 
     assert count == 1
     ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
-    assert len(ac_nodes) == 2
-    assert set(ac_nodes) == {g2, g1}
-    assert util.count_nodes(state, dace_nodes.MapEntry) == 4
+    assert len(ac_nodes) == 4
+    assert set(ac_nodes) == {g2, g1, c1, c2}
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 6
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref, res)
