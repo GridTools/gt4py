@@ -645,13 +645,19 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_g2: dace_nodes.AccessNode,
     ) -> bool:
         all_writes_into_g1 = gtx_st.describe_incoming_edges(state, node_g1)
-        all_writes_into_g2 = gtx_st.describe_incoming_edges(state, node_g2)
         g1_to_t_transfers = gtx_st.subset_merger(
             [
                 gtx_st.describe_edge(edge, incoming_edge=False)
                 for edge in state.edges_between(node_g1, node_tmp)
             ]
         )
+
+        # For the writes into `g2` we have to exclude the ones that comes from `tmp`.
+        all_writes_into_g2 = [
+            gtx_st.describe_edge(edge, incoming_edge=True)
+            for edge in state.in_edges(node_g2)
+            if edge.src is not node_tmp
+        ]
 
         for write_into_g2 in all_writes_into_g2:
             conflicts_with_g1 = [
