@@ -32,6 +32,10 @@ class EdgeConnectionSpec:
     subset: dace_sbs.Subset
     edge: dace_graph.MultiConnectorEdge
 
+    def __post_init__(self) -> None:
+        assert self.subset is not None
+        assert all((r[2] == 1) == True for r in self.subset)  # noqa: E712 [true-false-comparison]  # SymPy comparison
+
     def __hash__(self) -> int:
         return hash(self.edge)
 
@@ -39,6 +43,33 @@ class EdgeConnectionSpec:
         if isinstance(other, EdgeConnectionSpec):
             return self.edge.other.self
         return self.edge == other
+
+    @property
+    def is_incoming(self) -> bool:
+        """Checks if the edge describes an incoming edge.
+
+        An edge is incoming if `self.node` is the same as `self.edge.dst`.
+        """
+        return self.node is self.edge.dst
+
+    @property
+    def other_node(self) -> dace_nodes.Node:
+        """Returns the node at the other side of the edge."""
+        return self.edge.src if self.is_incoming else self.edge.dst
+
+    @property
+    def other_subset(self) -> Optional[dace_sbs.Subset]:
+        """Returns the subset at the other end of the edge.
+
+        It is important that there is no real connection with the `other_subset`
+        attribute of `dace.Memlet`, the differences are subtitle but important.
+        `self.subset` is always the subset the edge has at the node that it
+        describes, while `self.other_subset` is "the other one".
+
+        Note:
+            While `self.subset` is never `None`, this property might be `None`.
+        """
+        return self.edge.data.src_subset if self.is_incoming else self.edge.data.dst_subset
 
 
 def describe_edge(
@@ -48,14 +79,11 @@ def describe_edge(
     """Create a description for a single edge."""
     get_sbs = lambda e: e.data.dst_subset if incoming_edge else e.data.src_subset  # noqa: E731 [lambda-assignment]
     get_node = lambda e: e.dst if incoming_edge else e.src  # noqa: E731 [lambda-assignment]
-    desc = EdgeConnectionSpec(
+    return EdgeConnectionSpec(
         node=get_node(edge),
         subset=get_sbs(edge),
         edge=edge,
     )
-    assert desc.subset is not None
-    assert all((r[2] == 1) == True for r in desc.subset)  # noqa: E712 [true-false-comparison]  # SymPy comparison
-    return desc
 
 
 def describe_edges(
@@ -109,16 +137,20 @@ def describes_incoming_edge(desc: EdgeConnectionSpec) -> bool:
 
 
 def get_other_node(desc: EdgeConnectionSpec) -> dace_nodes.Node:
-    """Extract the "other" node of the edge."""
-    return desc.edge.src if describes_incoming_edge(desc) else desc.edge.dst
+    """Extract the "other" node of the edge.
+
+    Deprecated, use `desc.other_node` instead.
+    """
+    return desc.other_node
 
 
 def get_other_subset(desc: EdgeConnectionSpec) -> dace_sbs.Subset:
     """Get the subset of the other side of the edge.
 
     Note, this is not the same as `desc.edge.data.other_subset`.
+    Deprecated, use `desc.other_subset` instead.
     """
-    return desc.edge.data.src_subset if describes_incoming_edge(desc) else desc.edge.data.dst_subset
+    return desc.other_subset
 
 
 def split_node(
@@ -727,7 +759,7 @@ def _can_use_bypass_version_of_node_spliter(
     ]
     if len(producer_edges) != 1:
         return False
-    if not isinstance(get_other_node(producer_edges[0]), dace_nodes.AccessNode):
+    if not isinstance(producer_edges[0].other_node, dace_nodes.AccessNode):
         return False
     return True
 
@@ -748,7 +780,7 @@ def _perform_node_split_with_bypass_impl(
     producer_edge_desc = next(
         edesc for edesc in edges_to_relocate if describes_incoming_edge(edesc)
     )
-    data_producer: dace_nodes.Node = get_other_node(producer_edge_desc)
+    data_producer: dace_nodes.Node = producer_edge_desc.other_node
     producer_edge = producer_edge_desc.edge
     assert producer_edge.dst is node_to_split
     assert isinstance(data_producer, dace_nodes.AccessNode)
