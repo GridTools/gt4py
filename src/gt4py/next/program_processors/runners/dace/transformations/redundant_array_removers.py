@@ -579,21 +579,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
         # Now we check if all writes into G1 and G2 are disjunct, i.e. they kind of
         #  act like one big memory, thus this makes it possible to merge it.
-        # TODO(phimuell): Improve such that the parts that get overwritten
-        #   get filtered out.
-        # TODO(phimuell): The part below does not consider the case that something
-        #   is written into `G1` copied to `T` and then copied to `G2`.
-        all_writes_into_g1 = set(gtx_st.describe_incoming_edges(graph, node_g1))
-        all_writes_into_g2: set[gtx_st.EdgeConnectionSpec] = set(
-            gtx_st.describe_incoming_edges(graph, node_g2)
-        )
-        if any(
-            any(
-                write_into_g2.subset.intersects(write_into_g1.subset)
-                for write_into_g1 in all_writes_into_g1
-            )
-            for write_into_g2 in all_writes_into_g2
-        ):
+        if self._check_read_write_conflicts(state=graph, node_g1=node_g1, node_tmp=node_tmp, node_g2=node_g2):
             return False
 
         # Now we have to check that everything that is written to `tmp` is also
@@ -608,7 +594,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         non_g_writes_into_tmp = [
             desc
             for desc in gtx_st.describe_incoming_edges(graph, node_tmp)
-            if not refers_to_data(gtx_st.get_other_node(desc), node_g1.data)
+            if not refers_to_data(desc.other_node, node_g1.data)
         ]
         data_copied_into_g2 = self._merge_write_back_subsets(
             state=graph, node_g1=node_g1, node_tmp=node_tmp, node_g2=node_g2, for_test=True
@@ -640,6 +626,49 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             return False
 
         return True
+
+
+    def _check_read_write_conflicts(
+            self,
+            state: dace.SDFGState,
+            node_g1: dace_nodes.AccessNode,
+            node_tmp: dace_nodes.AccessNode,
+            node_g2: dace_nodes.AccessNode,
+    ) -> bool:
+        """Checks 
+        """
+        all_writes_into_g1 = gtx_st.describe_incoming_edges(state, node_g1)
+        all_writes_into_g2 = gtx_st.describe_incoming_edges(state, node_g2)
+        g1_to_t_transfers = gtx_st.subset_merger(
+            [
+                gtx_st.describe_edge(edge, incoming_edge=False)
+                for edge in state.edges_between(node_g1, node_tmp)
+            ]
+        )
+
+        for write_into_g2 in all_writes_into_g2:
+            conflicts_with_g1 = [
+                write_into_g1 for write_into_g1 in all_writes_into_g1
+                if write_into_g2.subset.intersects(write_into_g1.subset)
+            ]
+            if len(conflicts_with_g1) == 0:
+                continue
+
+            # We write something into `g2` that was also written into `g1`.
+            #  This might indicate that it should be overwritten. However,
+            #  if it was copied into `tmp` from `g1` then we assume that
+            #  it is an unnecessary write back. This is in accordance with
+            #  ADR-18.
+            # TODO(phimuell): We would also have to check that the data is
+            #   actually written back, but this is done later. Also there
+            #   might be some obscure cases where this is not sufficient.
+            if not all(
+                any(g1_trans.covers(conflict.subset) for g1_trans in g1_to_t_transfers)
+                for conflict in conflicts_with_g1
+            ):
+                return True
+
+        return False
 
     def apply(
         self,
@@ -722,7 +751,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         edges_to_relocate_desc = [
             desc
             for desc in gtx_st.describe_all_edges(state, node_tmp)
-            if gtx_st.get_other_node(desc) is not node_g2
+            if desc.other_node is not node_g2
         ]
 
         # Now we have to relocate the reads/writes involving `tmp` to `g2`. This is
@@ -896,7 +925,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         for merged_subset_at_tmp in merged_subsets_at_tmp:
             merged_subset_at_g2 = gtx_st.subset_merger(
                 [
-                    gtx_st.get_other_subset(desc)
+                    desc.other_subset
                     for desc in write_back_edges
                     if merged_subset_at_tmp.covers(desc.subset)
                 ]
