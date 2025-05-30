@@ -1789,6 +1789,8 @@ xiter = XIterable
 
 
 class CustomMap(dict[_K, _V]):
+    """Extend the `dict` class with a key function to implement a custom map."""
+
     def __init__(self, key_func: Callable[[_T], _K]):
         super().__init__()
         self.key_func = key_func
