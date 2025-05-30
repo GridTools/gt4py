@@ -88,7 +88,8 @@ class Program:
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
 
     _offset_provider_extended_cache: eve_utils.CustomMap = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMap(key_func=common.offset_provider_hash)
+        default_factory=lambda: eve_utils.CustomMap(key_func=common.offset_provider_hash),
+        kw_only=True,
     )
 
     @classmethod
@@ -286,9 +287,7 @@ class Program:
         try:
             offset_provider_extended = self._offset_provider_extended_cache[offset_provider]
         except KeyError:
-            offset_provider_extended = {
-                **self._implicit_offset_provider, **offset_provider
-            }
+            offset_provider_extended = {**self._implicit_offset_provider, **offset_provider}
             self._offset_provider_extended_cache[offset_provider] = offset_provider_extended
         return offset_provider_extended
 
@@ -369,7 +368,7 @@ class Program:
             common.is_offset_provider(op) or common.is_offset_provider_type(op)
             for op in offset_provider
         )
-        offset_provider = [{**op, **self._implicit_offset_provider} for op in offset_provider]  # type: ignore[misc] # cleanup offset_provider vs offset_provider_type
+        offset_provider = [self._offset_provider_extended(op) for op in offset_provider]  # type: ignore[arg-type] # cleanup offset_provider vs offset_provider_type
 
         self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
         return self

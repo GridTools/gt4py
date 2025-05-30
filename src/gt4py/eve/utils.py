@@ -1788,13 +1788,13 @@ class XIterable(Iterable[T]):
 xiter = XIterable
 
 
-class CustomMap(dict):
-    def __init__(self, key_func: Callable[[_T], int]):
+class CustomMap(dict[_K, _V]):
+    def __init__(self, key_func: Callable[[_T], _K]):
         super().__init__()
         self.key_func = key_func
 
-    def __getitem__(self, key: _T) -> Any:
+    def __getitem__(self, key: _T) -> _V:
         return super().__getitem__(self.key_func(key))
 
-    def __setitem__(self, key: _T, value: Any) -> None:
+    def __setitem__(self, key: _T, value: _V) -> None:
         super().__setitem__(self.key_func(key), value)
