@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Literal, Optional, Sequence, TypeAlias, Union, overload
+from typing import Any, Final, Literal, Optional, Sequence, TypeAlias, Union, overload
 
 import dace
 from dace import (
@@ -498,6 +498,10 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
     However, the transformation will only apply if `T` is not used anywhere else.
 
+    Depending on the situation, the function will all merge all three nodes together.
+    However, this is not possible if this would create cycles, in that case the
+    transformation tries to split the cycle.
+
     Todo:
         There are two interesting and related cases that should also be handled.
         - If `T` is accessed downstream, then one could replace `T` with `G`
@@ -514,6 +518,11 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
     node_g1 = dace_transformation.PatternNode(dace_nodes.AccessNode)
     node_tmp = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
     node_g2 = dace_transformation.PatternNode(dace_nodes.AccessNode)
+
+    # These are the different merging strategies, see `_check_merging_strategy()`
+    #  for more information:
+    _FULL_MERGE: Final[int] = 0
+    _MERGE_TMP_G2: Final[int] = 1
 
     @classmethod
     def expressions(cls) -> Any:
@@ -568,13 +577,21 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         ):
             return False
 
-        # The dataflow must be acyclic.
-        if self._would_merge_create_cycle(
+        # Determine which merging strategy should be used, if any.
+        # TODO(phimuell): Figuring out if we the strategy somehow has to influence
+        #   the checks? I do not think so because `can_be_apply()` essentially tries
+        #   to figuring out if we can consider the three nodes as a single one.
+        #   If we fully merge then every effect (write to global) will materialize
+        #   at the same time. But if we merge, then it will materialize again
+        #   in two steps, as it was already before. Thus I think we do not need
+        #   to consider the different strategies here.
+        merging_strategy = self._check_merging_strategy(
             state=graph,
             node_g1=node_g1,
             node_tmp=node_tmp,
             node_g2=node_g2,
-        ):
+        )
+        if merging_strategy is None:
             return False
 
         # To avoid race conditions we require that no other node referring to
@@ -666,57 +683,131 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         graph: dace.SDFGState,
         sdfg: dace.SDFG,
     ) -> None:
-        node_g2 = self.node_g2  # Have to be kept alive!
+        node_g1 = self.node_g1  # Have to be kept alive!
         node_tmp = self.node_tmp
-
-        # Now merge the nodes together such that only `g2` remains.
-        self._merge_g1_tmp_g2_nodes_together(graph, sdfg)
-
-        # In certain cases it will happen that `g2` has become isolated. In
-        #  that case we have to delete it, otherwise we have to propagate
-        #  the strides.
-        if graph.degree(node_g2) != 0:
-            gtx_transformations.gt_propagate_strides_from_access_node(
-                sdfg=sdfg,
-                state=graph,
-                outer_node=node_g2,
-            )
-        else:
-            graph.remove_node(node_g2)
-
-        # Now delete the descriptor of `tmp`.
-        sdfg.remove_data(node_tmp.data, validate=False)
-
-    def _merge_g1_tmp_g2_nodes_together(
-        self,
-        state: dace.SDFGState,
-        sdfg: dace.SDFG,
-    ) -> None:
-        """Merges the three nodes together, such that only `g2` remains.
-
-        The function will redirect all read and writes from `node_tmp` and
-        `node_g1` to `node_g2`. The `node_g1` and `node_tmp` AccessNodes
-        will be removed but the data descriptor will not be removed and no
-        stride propagation will take place.
-        """
-        node_g1 = self.node_g1
         node_g2 = self.node_g2
-        node_tmp = self.node_tmp
 
-        # We merge the subsets to know how to readjust the subsets such that
-        #  we can directly write into `g2`. There is also the possibility of
-        #  non deterministic behaviour, see `_merge_write_back_subsets()`.
+        merging_strategy = self._check_merging_strategy(
+            state=graph,
+            node_g1=node_g1,
+            node_tmp=node_tmp,
+            node_g2=node_g2,
+        )
+        assert merging_strategy is not None
+
         tmp_to_g_mapping = self._compute_tmp_to_g_mapping(
-            state=state,
+            state=graph,
             node_g1=node_g1,
             node_tmp=node_tmp,
             node_g2=node_g2,
             for_test=False,
         )
 
-        # First we relocate all writes that go into `g1`. We can also relocate the
-        #  other reads from `g1` to `g2`. See the `TODO` in the `can_be_applied()`
-        #  function, at the empty Memlet check.
+        if merging_strategy == self._FULL_MERGE:
+            self._full_merge_implementation(
+                state=graph,
+                sdfg=sdfg,
+                tmp_to_g_mapping=tmp_to_g_mapping,
+            )
+
+        elif merging_strategy == self._MERGE_TMP_G2:
+            self._merge_tmp_into_g2_implementation(
+                state=graph,
+                sdfg=sdfg,
+                tmp_to_g_mapping=tmp_to_g_mapping,
+            )
+
+        else:
+            raise NotImplementedError(f"The strategy '{merging_strategy}' is unknown.")
+
+    def _merge_tmp_into_g2_implementation(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+        tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
+    ) -> None:
+        """Merges `tmp` and `g2` together and remove all links with `g1`.
+
+        This is the implementation of the `_MERGE_TMP_G2` strategy. The
+        function will keep `g1` and `g2` alive, but without a direct
+        connection. `tmp` will be merged with `g2` and it will be removed
+        from the SDFG.
+        """
+        node_g1 = self.node_g1
+        node_g2 = self.node_g2
+        node_tmp = self.node_tmp
+
+        # As a first step we will remove all direct edges between `g1` and
+        #  the other two nodes, and then we are done with it. The node should
+        #  never become isolated.
+        for oedge in state.out_edges(node_g1):
+            if oedge.dst is node_tmp or oedge.dst is node_g2:
+                state.remove_edge(oedge)
+        assert state.degree(node_g1) != 0
+
+        # These are all (reads and writes) that we have to relocate from `tmp` to `g2`.
+        edges_to_relocate_desc = [
+            desc
+            for desc in gtx_st.describe_all_edges(state, node_tmp)
+            if desc.other_node is not node_g2
+        ]
+
+        # Now we relocate the edges from `tmp` to `g2`.
+        already_reconfigured_dataflow: set[tuple[dace_nodes.Node, str]] = set()
+        self._merge_tmp_node_with_a_g_node(
+            state=state,
+            sdfg=sdfg,
+            node_tmp=node_tmp,
+            node_g=node_g2,
+            tmp_to_g_mapping=tmp_to_g_mapping,
+            edges_to_relocate_desc=edges_to_relocate_desc,
+            already_reconfigured_dataflow=already_reconfigured_dataflow,
+        )
+
+        # After the temporary node has been isolated, remove the node and
+        #  the data descriptor.
+        assert state.in_degree(node_tmp) == 0
+        assert all(oedge.dst is node_g2 for oedge in state.out_edges(node_tmp))
+        state.remove_node(node_tmp)
+        sdfg.remove_data(node_tmp.data, validate=False)
+
+        # In this mode the `node_g2` should never become isolated, we now also
+        #  perform stride propagation from it, because of the edges that no
+        #  longer refer to `tmp`.
+        # TODO(phimuell): Use the edges here to restrict propagation only to
+        #   the minimum.
+        assert state.degree(node_g2) != 0
+        gtx_transformations.gt_propagate_strides_from_access_node(
+            sdfg=sdfg,
+            state=state,
+            outer_node=node_g2,
+        )
+
+    def _full_merge_implementation(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+        tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
+    ) -> bool:
+        """Merges the three nodes together, such that only `g2` remains.
+
+        The function implements the case for the `_FULL_MERGE` case.
+        It will redirect all writes from/to `tmp` and `g1` to `g2`
+        (with the exception of the copies between them). It will then
+        remove `node_g1` and `node_tmp` and remove `tmp` from the
+        registry. Furthermore it will perform stride propagation.
+
+        In certain cases `node_g2` will be isolated, in that case the
+        function will remove that node from the SDFG as well and it
+        will return `False`. In case `node_g2` has not become isolated
+        the function will return `True`.
+        """
+        node_g1 = self.node_g1
+        node_g2 = self.node_g2
+        node_tmp = self.node_tmp
+
+        # First we relocate the reads and writes from/to `g1`, that are not
+        #  needed to copy redundant information, to `g2`.
         #  This will isolate the `g1` node and we can remove it.
         for iedge in list(state.in_edges(node_g1)):
             state.add_edge(
@@ -749,15 +840,69 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             if desc.other_node is not node_g2
         ]
 
-        # Now we have to relocate the reads/writes involving `tmp` to `g2`. This is
+        # Now we relocate the edges from `tmp` to `g2`.
+        already_reconfigured_dataflow: set[tuple[dace_nodes.Node, str]] = set()
+        self._merge_tmp_node_with_a_g_node(
+            state=state,
+            sdfg=sdfg,
+            node_tmp=node_tmp,
+            node_g=node_g2,
+            tmp_to_g_mapping=tmp_to_g_mapping,
+            edges_to_relocate_desc=edges_to_relocate_desc,
+            already_reconfigured_dataflow=already_reconfigured_dataflow,
+        )
+
+        # After the temporary node has been isolated, remove the node and
+        #  the data descriptor.
+        assert state.in_degree(node_tmp) == 0
+        assert all(oedge.dst is node_g2 for oedge in state.out_edges(node_tmp))
+        state.remove_node(node_tmp)
+        sdfg.remove_data(node_tmp.data, validate=False)
+
+        # In certain cases it will happen that `g2` has become isolated. In
+        #  that case we have to delete it, otherwise we have to propagate
+        #  the strides.
+        if state.degree(node_g2) != 0:
+            gtx_transformations.gt_propagate_strides_from_access_node(
+                sdfg=sdfg,
+                state=state,
+                outer_node=node_g2,
+            )
+            return True
+        else:
+            state.remove_node(node_g2)
+            return False
+
+    def _merge_tmp_node_with_a_g_node(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+        node_tmp: dace_nodes.AccessNode,
+        node_g: dace_nodes.AccessNode,
+        tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
+        edges_to_relocate_desc: Sequence[gtx_st.EdgeConnectionSpec],
+        already_reconfigured_dataflow: set[tuple[dace_nodes.Node, str]],
+    ) -> list[dace_graph.MultiConnectorEdge]:
+        """This function merges `tmp_node` with one of two global nodes.
+
+        The function will relocate all edges, that are listed in
+        `edges_to_relocate_desc` to `node_g` and rewrite the subset as described
+        by `tmp_to_g_mapping`. The function will update the dataflow.
+
+        Note:
+            `edges_to_relocate_desc` can not contain edges that connects `tmp_node`
+            with a global node.
+        """
+
+        # Now we have to relocate the reads/writes involving `tmp` to `g`. This is
         #  a bit more complicated as the two might have different sizes and we have
         #  to reconfigure the dataflow at the other side.
-        already_reconfigured_dataflow: set[tuple[dace_nodes.Node, str]] = set()
+        new_edges: list[dace_graph.MultiConnectorEdge] = []
         for edge_to_relocate_desc in edges_to_relocate_desc:
             edge_subset = edge_to_relocate_desc.subset
 
             # Find the associated patch the edge writes or reads from and find the
-            #  subset that corresponds to the subset at the `g2` node.
+            #  subset that corresponds to the subset at the `g` node.
             associated_tmp_subset: Optional[dace_sbs.Subset] = next(
                 (
                     merged_tmp_subset
@@ -767,13 +912,13 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
                 None,
             )
             assert associated_tmp_subset is not None
-            associated_g2_subset = tmp_to_g_mapping[associated_tmp_subset]
+            associated_g_subset = tmp_to_g_mapping[associated_tmp_subset]
 
             tmp_subset_start = associated_tmp_subset.min_element()
-            g2_subset_start = associated_g2_subset.min_element()
+            g_subset_start = associated_g_subset.min_element()
             ss_offset = [
-                g2_patch_start - tmp_start
-                for g2_patch_start, tmp_start in zip(g2_subset_start, tmp_subset_start)
+                g_patch_start - tmp_start
+                for g_patch_start, tmp_start in zip(g_subset_start, tmp_subset_start)
             ]
 
             if gtx_st.describes_incoming_edge(edge_to_relocate_desc):
@@ -790,12 +935,13 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
                 state=state,
                 sdfg=sdfg,
                 old_node=node_tmp,
-                new_node=node_g2,
+                new_node=node_g,
             )
+            new_edges.append(new_edge)
 
             if relocate_key not in already_reconfigured_dataflow:
                 already_reconfigured_dataflow.add(relocate_key)
-                # Stride propagation is done outside.
+                # Stride propagation is done later.
                 gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
                     is_producer_edge=is_producer_edge,
                     new_edge=new_edge,
@@ -803,16 +949,12 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
                     state=state,
                     sdfg=sdfg,
                     old_node=node_tmp,
-                    new_node=node_g2,
+                    new_node=node_g,
                 )
 
             state.remove_edge(edge_to_relocate_desc.edge)
 
-        # Now remove the node that referred to the temporary node, but do not remove
-        #  the data descriptor yet.
-        assert state.in_degree(node_tmp) == 0
-        assert all(oedge.dst is node_g2 for oedge in state.out_edges(node_tmp))
-        state.remove_node(node_tmp)
+        return new_edges
 
     @overload
     def _compute_tmp_to_g_mapping(
@@ -969,21 +1111,57 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             single_use_data = self._single_use_data
         return access_node.data in single_use_data[sdfg]
 
-    def _would_merge_create_cycle(
+    def _check_merging_strategy(
         self,
         state: dace.SDFGState,
         node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
-    ) -> bool:
+    ) -> Union[None, int]:
+        """Tests which merging strategy should be used.
+
+        By default the transformation tries to merge the three nodes together,
+        but this is not always possible, if this would create cycles.
+
+        Currently the following modes are implemented:
+        - `_FULL_MERGE`: In this mode all three nodes are combined together.
+            This means that there are no cycles to begin with.
+        - `_MERGE_TMP_G2`: In this mode the `tmp` and the `g2` mode are merged.
+            Thus the `g1` node will remain.
+
+        If the cycle can not be resolved the function will return `None`.
+
+        Todo:
+            Handle more cases.
+        """
+
+        found_cycle_from_g1 = False
         for oedge in state.out_edges(node_g1):
             if oedge.dst is node_tmp:
                 continue
             if oedge.dst is node_g2:
                 continue
             if gtx_transformations.utils.is_reachable(start=oedge.dst, target=node_g2, state=state):
-                return True
-        return False
+                found_cycle_from_g1 = True
+                break
+
+        if not found_cycle_from_g1:
+            return self._FULL_MERGE
+
+        # We found a cycle from `g1` we will now check if we can merge `tmp` and `g2`.
+        #  For this we start a cycle test from `tmp`.
+        found_cycle_from_tmp = False
+        for oedge in state.out_edges(node_tmp):
+            if oedge.dst is node_g2:
+                continue
+            if gtx_transformations.utils.is_reachable(start=oedge.dst, target=node_g2, state=state):
+                found_cycle_from_tmp = True
+                break
+
+        if not found_cycle_from_tmp:
+            return self._MERGE_TMP_G2
+
+        return None
 
 
 @dace_properties.make_properties
