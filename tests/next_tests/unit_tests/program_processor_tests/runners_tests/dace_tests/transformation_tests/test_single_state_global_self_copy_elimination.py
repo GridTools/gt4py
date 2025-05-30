@@ -297,6 +297,93 @@ def _make_concat_where_like_with_silent_write_to_g1(
     return sdfg, state, g1, t, g2, o
 
 
+def _make_concat_where_like_41_to_60() -> (
+    tuple[
+        dace.SDFG,
+        dace.SDFGState,
+        dace_nodes.AccessNode,
+        dace_nodes.AccessNode,
+        dace_nodes.AccessNode,
+    ]
+):
+    sdfg = dace.SDFG(util.unique_name(f"self_copy_sdfg_concat_where_like_41_to_60"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array(
+        "g",
+        shape=(10, 81),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "t",
+        shape=(8, 81),
+        dtype=dace.float64,
+        transient=True,
+    )
+
+    g1, t, g2 = (state.add_access(name) for name in "gtg")
+
+    # Setting values of `g1`.
+    state.add_mapped_tasklet(
+        "g1_computation1",
+        map_ranges={
+            "__i": "2:10",
+            "__j": "1:80",
+        },
+        inputs={},
+        code="__out = __j / 2.0 + 10.0",
+        outputs={"__out": dace.Memlet("g[__i, __j]")},
+        output_nodes={g1},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "g1_set_first_level",
+        map_ranges={"__i": "2:10"},
+        inputs={},
+        code="__out = (-1.0) * __i",
+        outputs={"__out": dace.Memlet("g[__i, 0]")},
+        output_nodes={g1},
+        external_edges=True,
+    )
+
+    state.add_mapped_tasklet(
+        "g1_set_last_level",
+        map_ranges={"__i": "2:10"},
+        inputs={},
+        code="__out = 1.0 / __i",
+        outputs={"__out": dace.Memlet("g[__i, 80]")},
+        output_nodes={g1},
+        external_edges=True,
+    )
+
+    # Setting values of `t`.
+    state.add_nedge(g1, t, dace.Memlet("g[2:10, 0] -> [0:8, 0]"))
+    state.add_nedge(g1, t, dace.Memlet("g[2:10, 14:81] -> [0:8, 14:81]"))
+    # This is kind of cyclic.
+    state.add_mapped_tasklet(
+        "cyclic_computation",
+        map_ranges={
+            "__i": "2:10",
+            "__j": "1:14",
+        },
+        inputs={"__in": dace.Memlet("g[__i, __j]")},
+        code="__out = math.log(1.0 / __in)",
+        outputs={"__out": dace.Memlet("t[__i - 2, __j]")},
+        input_nodes={g1},
+        output_nodes={t},
+        external_edges=True,
+    )
+
+    # Now copy everything back into `g2`.
+    state.add_nedge(t, g2, dace.Memlet("t[0:8, 1:14] -> [2:10, 1:14]"))
+    state.add_nedge(t, g2, dace.Memlet("t[0:8, 14:80] -> [2:10, 14:80]"))
+    state.add_nedge(t, g2, dace.Memlet("t[0:8, 0] -> [2:10, 0]"))
+    sdfg.validate()
+
+    return sdfg, state, g1, t, g2
+
+
 def test_global_self_copy_elimination_only_pattern():
     """Contains only the pattern -> Total elimination."""
     sdfg, state = _make_self_copy_sdfg()
@@ -580,6 +667,30 @@ def test_global_self_copy_elimination_concat_where_like_silent_write_g1(
     ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert len(ac_nodes) == 2
     assert set(ac_nodes) == {g2, o}
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 4
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref, res)
+
+
+def test_global_self_copy_elimination_concat_where_like_41_to_60():
+    sdfg, state, g1, t, g2 = _make_concat_where_like_41_to_60()
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 3
+    assert util.count_nodes(state, dace_nodes.MapExit) == 4
+
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.SingleStateGlobalSelfCopyElimination,
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 1
+    ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert len(ac_nodes) == 2
+    assert set(ac_nodes) == {g2, g1}
     assert util.count_nodes(state, dace_nodes.MapEntry) == 4
 
     util.compile_and_run_sdfg(sdfg, **res)
