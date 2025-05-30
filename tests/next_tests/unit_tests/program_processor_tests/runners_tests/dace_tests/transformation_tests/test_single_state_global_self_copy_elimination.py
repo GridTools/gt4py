@@ -271,7 +271,7 @@ def _make_concat_where_like_with_silent_write_to_g1(
         "bulk_value",
         map_ranges={
             "__i": "0:8",
-            "__j": "0:9",
+            "__j": "1:9",
         },
         inputs={},
         code="__out = sin(__i + 0.5)**2 + cos(__j + 0.1) ** 2",
@@ -568,8 +568,9 @@ def test_global_self_copy_elimination_concat_where_like_silent_write_g1():
         validate_all=True,
     )
 
-    ac_nodes = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert count == 1
+    assert set(util.count_nodes(state, dace_nodes.AccessNode, True)) == {g2, o}
+    assert util.count_nodes(state, dace_nodes.MapEntry) == 4
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref, res)
