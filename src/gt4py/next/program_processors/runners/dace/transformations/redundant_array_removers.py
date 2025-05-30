@@ -577,43 +577,8 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         ):
             return False
 
-        # Now we check if all writes into G1 and G2 are disjunct, i.e. they kind of
-        #  act like one big memory, thus this makes it possible to merge it.
-        if self._check_read_write_conflicts(state=graph, node_g1=node_g1, node_tmp=node_tmp, node_g2=node_g2):
-            return False
-
-        # Now we have to check that everything that is written to `tmp` is also
-        #  transferred back to `G2`. However, we ignore all the writes that came
-        #  from `G1`. To maximize the success rate we also merge the reads from `tmp`.
-        # TODO(phimuell): Handle the case were we end up with more then one remaining
-        #   subset. This either indicates that the merger was not optimal or that
-        #   the copied domain is not a hypercube.
-        refers_to_data = (  # noqa: E731 [lambda-assignment]
-            lambda node, data: isinstance(node, dace_nodes.AccessNode) and node.data == data
-        )
-        non_g_writes_into_tmp = [
-            desc
-            for desc in gtx_st.describe_incoming_edges(graph, node_tmp)
-            if not refers_to_data(desc.other_node, node_g1.data)
-        ]
-        data_copied_into_g2 = self._merge_write_back_subsets(
-            state=graph, node_g1=node_g1, node_tmp=node_tmp, node_g2=node_g2, for_test=True
-        )
-        if data_copied_into_g2 is None:
-            return False
-
-        if len(non_g_writes_into_tmp) == 0:
-            # This is a special case, it means that `g1` fully defines `tmp`.
-            # TODO(phimuell): Can we already stop here?
-            pass
-        elif not all(
-            any(tmp_to_g2.covers(into_tmp.subset) for into_tmp in non_g_writes_into_tmp)
-            for tmp_to_g2 in data_copied_into_g2
-        ):
-            return False
-
         # To avoid race conditions we require that no other node referring to
-        #  `G` is inside this graph.
+        #  `G` is inside this state.
         if any(
             dnode.data == node_g1.data
             for dnode in graph.data_nodes()
@@ -621,22 +586,47 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         ):
             return False
 
+        # Get the mapping, i.e. subsets on `tmp` to subsets on `g`. The function will
+        #  also make sure that every `tmp` subset is translatable to `g` subset.
+        tmp_to_g_mapping = self._compute_tmp_to_g_mapping(
+            state=graph,
+            node_g1=node_g1,
+            node_tmp=node_tmp,
+            node_g2=node_g2,
+            for_test=True,
+        )
+        if tmp_to_g_mapping is None:
+            return False
+
+        # Now we check if all writes into G1 and G2 are disjunct, i.e. they kind of
+        #  act like one big memory, thus this makes it possible to merge it.
+        if self._check_read_write_conflicts(
+            state=graph,
+            node_g1=node_g1,
+            node_tmp=node_tmp,
+            node_g2=node_g2,
+        ):
+            return False
+
         # Check if we can remove the transient.
         if not self._is_single_use_data(node_tmp, sdfg):
             return False
 
+        # NOTE: We do not check for "silent writes", these are writes to `g` that
+        #   are not visible in `tmp`, for example because they are outside the
+        #   subset `tmp` represents. We could do that, but it is a little bit of
+        #   work and I am pretty sure, if we would have it we would have an
+        #   invalid, in the sense of GT4Py, SDFG to begin with.
+
         return True
 
-
     def _check_read_write_conflicts(
-            self,
-            state: dace.SDFGState,
-            node_g1: dace_nodes.AccessNode,
-            node_tmp: dace_nodes.AccessNode,
-            node_g2: dace_nodes.AccessNode,
+        self,
+        state: dace.SDFGState,
+        node_g1: dace_nodes.AccessNode,
+        node_tmp: dace_nodes.AccessNode,
+        node_g2: dace_nodes.AccessNode,
     ) -> bool:
-        """Checks 
-        """
         all_writes_into_g1 = gtx_st.describe_incoming_edges(state, node_g1)
         all_writes_into_g2 = gtx_st.describe_incoming_edges(state, node_g2)
         g1_to_t_transfers = gtx_st.subset_merger(
@@ -648,7 +638,8 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
         for write_into_g2 in all_writes_into_g2:
             conflicts_with_g1 = [
-                write_into_g1 for write_into_g1 in all_writes_into_g1
+                write_into_g1
+                for write_into_g1 in all_writes_into_g1
                 if write_into_g2.subset.intersects(write_into_g1.subset)
             ]
             if len(conflicts_with_g1) == 0:
@@ -715,8 +706,12 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         # We merge the subsets to know how to readjust the subsets such that
         #  we can directly write into `g2`. There is also the possibility of
         #  non deterministic behaviour, see `_merge_write_back_subsets()`.
-        subset_map = self._merge_write_back_subsets(
-            state=state, node_g1=node_g1, node_tmp=node_tmp, node_g2=node_g2, for_test=False
+        tmp_to_g_mapping = self._compute_tmp_to_g_mapping(
+            state=state,
+            node_g1=node_g1,
+            node_tmp=node_tmp,
+            node_g2=node_g2,
+            for_test=False,
         )
 
         # First we relocate all writes that go into `g1`. We can also relocate the
@@ -766,13 +761,13 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             associated_tmp_subset: Optional[dace_sbs.Subset] = next(
                 (
                     merged_tmp_subset
-                    for merged_tmp_subset in subset_map.keys()
+                    for merged_tmp_subset in tmp_to_g_mapping.keys()
                     if merged_tmp_subset.covers(edge_subset)
                 ),
                 None,
             )
             assert associated_tmp_subset is not None
-            associated_g2_subset = subset_map[associated_tmp_subset]
+            associated_g2_subset = tmp_to_g_mapping[associated_tmp_subset]
 
             tmp_subset_start = associated_tmp_subset.min_element()
             g2_subset_start = associated_g2_subset.min_element()
@@ -820,17 +815,17 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         state.remove_node(node_tmp)
 
     @overload
-    def _merge_write_back_subsets(
+    def _compute_tmp_to_g_mapping(
         self,
         state: dace.SDFGState,
         node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
         for_test: Literal[True],
-    ) -> Union[None, list[dace_sbs.Subset]]: ...
+    ) -> Union[None, dict[dace_sbs.Subset, dace_sbs.Subset]]: ...
 
     @overload
-    def _merge_write_back_subsets(
+    def _compute_tmp_to_g_mapping(
         self,
         state: dace.SDFGState,
         node_g1: dace_nodes.AccessNode,
@@ -839,104 +834,128 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         for_test: Literal[False],
     ) -> dict[dace_sbs.Subset, dace_sbs.Subset]: ...
 
-    def _merge_write_back_subsets(
+    def _compute_tmp_to_g_mapping(
         self,
         state: dace.SDFGState,
         node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
         for_test: bool,
-    ) -> Union[None, list[dace_sbs.Subset], dict[dace_sbs.Subset, dace_sbs.Subset]]:
-        """Merges the subsets of the edges that copy data from `node_tmp` to `node_g2`.
+    ) -> Union[None, dict[dace_sbs.Subset, dace_sbs.Subset]]:
+        """Computes a mapping that describes how `tmp` maps into `g`.
 
-        The main issue is that it is not enough to "just merge" the subsets
-        describing the read at `tmp`. In addition one also has to make sure
-        that the subsets at the destination, `g2`, can be merged in the same
-        way.
-        The example why this is important would be the following two Memlets
-        `tmp[0:5] -> [0:5]` and `tmp[5:10] -> [6:11]`. Although they can be
-        merged at the `tmp` side, they can not be merged at the destination
-        side.
+        The function returns a `dict`, that maps subsets of the `tmp_node`
+        to the corresponding subset at the `g`. If this mapping does
+        not exists then the function returns `None`. Each subsets
+        can be seen as a part of `g`.
 
-        The function has two modes, with are selected by setting `for_test`.
-        If it is `True` then, the function will only return the merged subsets
-        that read from `node_tmp`. In case it is `False` the function will
-        return a `dict` that maps a merged subset at `node_tmp` to the
-        corresponding merged subset at `node_g2`.
-        In case it is not possible to merge, the function returns `None`.
-        This should not happen if `for_test` is `False`, but it might happen.
+        The function has two modes, that are selected by specifying
+        `for_test`. If it is `True` then the function assumes that
+        it is called in the context of `can_be_applied()`. In that
+        mode the function might return `None` to indicate that the
+        mapping does not exits. In this mode the function will also
+        make sure that everything that is written into `tmp`, can
+        be translated to a subset inside `g`.
+
+        If `for_test` is `False` then the function assumes that it
+        is called by `apply()` and will only compute the mapping
+        and skip some tests.
 
         Note:
-            - This function is currently not able to handle detect the case
+            - The function must be called before any modification, which
+                is only important for `for_test=False`.
+            - This function is currently not able to detect the case
                 `tmp[0:5] -> [5:10]` and `tmp[6:10] -> [0:5]` however, this
                 should not be important for GT4Py.
-            - If the function returns `None` while `for_test` was `False`
-                indicates non deterministic behaviour, probably because
-                the order of the edges was different.
-            - If `for_test` is `False` this function must be called before
-                `g1` is modified.
         """
 
-        # Get everything that describes the write back. It is important that this
-        #  is not only what is copied from `tmp` back to `g2`, but also involves
-        #  data that is written to `g1`, if it is copied to `tmp`. We need to know
-        #  that such that we can then understand how we have to rewrite the
-        #  connections involving `tmp` to use `g2` instead.
-        write_back_edges = [  # This is always included.
+        # TODO(phimuell): Rewrite this function such that the mapping is computed
+        #   from G.
+
+        # This is the set of edges that link `tmp` with `g`. We need it to understand
+        #  how we have to rewrite the writes to `tmp` such that they go through `g`
+        #  instead. Note that the description here is always in terms of `tmp`.
+        t_descriptions: list[gtx_st.EdgeConnectionSpec] = []
+
+        # The first source of `t_descriptions` are the edges that copies data from
+        #  `tmp` to `g2`, i.e. write back. But they are not the only ones.
+        t_descriptions.extend(
             gtx_st.describe_edge(e, False) for e in state.edges_between(node_tmp, node_g2)
-        ]
-
-        # These are all the edges that writes into `g1`, they are described in
-        #  terms of `g1`, but `write_back_edges` is described in terms of `tmp`!
-        writes_into_g1 = gtx_st.describe_incoming_edges(state, node_g1)
-
-        for transfer_edge in state.edges_between(node_g1, node_tmp):
-            transfer_g1 = gtx_st.describe_edge(transfer_edge, incoming_edge=False)
-
-            # If the transfer edge is used to copy something that is directly
-            #  written into `g1`, to `tmp` then we add it to the set of the
-            #  write back edges, because it is implicitly also written back
-            #  even if it is not mentioned.
-            if any(
-                write_into_g1.subset.covers(transfer_g1.subset) for write_into_g1 in writes_into_g1
-            ):
-                transfer_tmp = gtx_st.describe_edge(transfer_edge, incoming_edge=True)
-
-                # TODO(phimuell): Find out what this test means.
-                assert not any(transfer_tmp.subset.intersects(wb.subset) for wb in write_back_edges)
-
-                write_back_edges.append(transfer_tmp)
-
-        assert len(write_back_edges) > 0
-        assert all(tedge.subset is not None for tedge in write_back_edges)
-
-        assert all(
-            desc.edge.data.src_subset is not None and desc.edge.data.dst_subset is not None
-            for desc in write_back_edges
         )
 
-        # Now merge the subsets at the `tmp` side together.
-        merged_subsets_at_tmp = gtx_st.subset_merger(write_back_edges)
+        # The second source of information are the initial writes from `g1` to `tmp`.
+        #  However, we have to be carefully here, as it might be already included
+        #  in the description trough the write back edges.
+        for transfer_edge in state.edges_between(node_g1, node_tmp):
+            transfer_g1_desc_t = gtx_st.describe_edge(transfer_edge, incoming_edge=True)
 
-        # Now merge the subsets at the `g2` node together. For that we have first
-        #  to identify the edges that are involved in that. Furthermore, they must
-        #  be merged into a single subset, this ensures a consecutive domain.
+            # Test if the edge writes into `tmp` at a location that is not yet known,
+            #  i.e. is not written back, if not known add it.
+            # TODO(phimuell): We use intersection here, because cover would be too
+            #   liberal. However, what we should actually do is, decompose the
+            #   subset and only add the parts that are not known.
+            if not any(
+                known_t_patch.subset.intersects(transfer_g1_desc_t.subset)
+                for known_t_patch in t_descriptions
+            ):
+                t_descriptions.append(transfer_g1_desc_t)
+
+        assert not any(tp.other_subset is None for tp in t_descriptions)
+
+        # Now merge all subsets we found together. This describes at `tmp`.
+        # TODO(phimuell): Figuring out what it means if the merge does not
+        #   result in a single subset. I think that the tests are strong
+        #   enough to handle that case.
+        # TODO(phimuell): Add a test for the case.
+        # TODO(edopao): Make sure that I added a test for that case!!
+        merged_subsets_at_tmp = gtx_st.subset_merger(t_descriptions)
+
+        # Now also merges the subsets at the `g` side, but we have to do it
+        #  in the same way. Thus we first find out which edges, were merged
+        #  together and then we merge their `other_subset`.
         subset_map: dict[dace_sbs.Subset, dace_sbs.Subset] = {}
         for merged_subset_at_tmp in merged_subsets_at_tmp:
             merged_subset_at_g2 = gtx_st.subset_merger(
                 [
                     desc.other_subset
-                    for desc in write_back_edges
+                    for desc in t_descriptions
                     if merged_subset_at_tmp.covers(desc.subset)
                 ]
             )
+
+            # If we do not find exactly one subset then it is not consecutive.
+            #  An example would be `tmp[0:5] -> g[0:5]` and `tmp[5:10] -> g[6:11]`.
+            #  However, the case `tmp[0:5] -> g[5:10]` and `tmp[5:10] -> g[0:5]`
+            #  is not detected.
             if len(merged_subset_at_g2) != 1:
                 if not for_test:
                     raise RuntimeError("Found indeterministic behaviour.")
                 return None
+
+            # Ensure that there is no intersection between the subsets.
+            assert not any(
+                merged_subset_at_tmp.intersects(known_tmp_subset)
+                for known_tmp_subset in subset_map.keys()
+            )
+            assert not any(
+                merged_subset_at_g2[0].intersects(known_g_subset)
+                for known_g_subset in subset_map.values()
+            )
+
             subset_map[merged_subset_at_tmp] = merged_subset_at_g2[0]
 
-        return merged_subsets_at_tmp if for_test else subset_map
+        # We now test that every subset on `tmp` can be translated to a subset
+        #  inside `g`. This is important that we can do the relocation of edges.
+        #  If we are not in test mode we assume that this is possible.
+        if for_test:
+            for edge_desc in gtx_st.describe_all_edges(state, node_tmp):
+                assert edge_desc.node is node_tmp
+                if not any(
+                    final_t_patch.covers(edge_desc.subset) for final_t_patch in subset_map.keys()
+                ):
+                    return None
+
+        return subset_map
 
     def _is_single_use_data(
         self,

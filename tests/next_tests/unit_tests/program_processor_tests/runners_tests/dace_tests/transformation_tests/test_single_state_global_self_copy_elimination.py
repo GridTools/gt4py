@@ -525,7 +525,7 @@ def test_global_self_copy_elimination_concat_where_like(
     assert util.compare_sdfg_res(ref, res)
 
 
-def test_global_self_copy_elimination_concat_where_whole_write_back() -> None:
+def test_global_self_copy_elimination_concat_where_like_whole_write_back() -> None:
     sdfg, state, g1, t, g2, o = _make_concat_where_like(
         handle_last_level=True,
         whole_write_back=True,
