@@ -29,6 +29,7 @@ from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
 from .redundant_array_removers import (
     CopyChainRemover,
     MultiStateGlobalSelfCopyElimination,
+    MultiStateGlobalSelfCopyElimination2,
     SingleStateGlobalDirectSelfCopyElimination,
     SingleStateGlobalSelfCopyElimination,
     gt_multi_state_global_self_copy_elimination,
@@ -69,6 +70,7 @@ __all__ = [
     "MapIterationOrder",
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
+    "MultiStateGlobalSelfCopyElimination2",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
     "SingleStateGlobalDirectSelfCopyElimination",
