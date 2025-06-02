@@ -23,6 +23,7 @@ from .gpu_utils import (
 from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
 from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
+from .map_fusion_extended import gt_horizontal_map_fusion, gt_vertical_map_fusion
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import SerialMapPromoter
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
@@ -81,6 +82,7 @@ __all__ = [
     "gt_find_constant_arguments",
     "gt_gpu_transform_non_standard_memlet",
     "gt_gpu_transformation",
+    "gt_horizontal_map_fusion",
     "gt_inline_nested_sdfg",
     "gt_make_transients_persistent",
     "gt_map_strides_to_dst_nested_sdfg",
@@ -95,4 +97,5 @@ __all__ = [
     "gt_simplify",
     "gt_split_access_nodes",
     "gt_substitute_compiletime_symbols",
+    "gt_vertical_map_fusion",
 ]
