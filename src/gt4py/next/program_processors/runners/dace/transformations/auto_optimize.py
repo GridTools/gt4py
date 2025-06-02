@@ -11,6 +11,7 @@
 from typing import Any, Optional, Sequence
 
 import dace
+from dace.sdfg import propagation as dace_propagation
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -115,7 +116,11 @@ def gt_auto_optimize(
             not if we have too much internal space (register pressure).
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
-    with dace.config.set_temporary("optimizer", "match_exception", value=True):
+
+    with dace.config.temporary_config():
+        dace.Config.set("optimizer", "match_exception", value=True)
+        dace.Config.set("store_history", value=False)
+
         # Initial Cleanup
         if constant_symbols:
             gtx_transformations.gt_substitute_compiletime_symbols(
@@ -209,6 +214,18 @@ def _gt_auto_process_top_level_maps(
         The function assumes that `gt_simplify()` has been called on the SDFG
         before it is passed to this function.
     """
+
+    # NOTE: Inside this function we have to disable the consolidation of edges.
+    #   This is because it might block the application of `SpliAccessNode`. As
+    #   an example consider a that writes `tmp[:, 80]` and a second map that
+    #   writes `tmp[:, 0]`, if these two maps are now horizontally fussed and
+    #   edge consolidation is on, then the resulting map would "write", at least
+    #   according to the subset, after Memlet propagation, into `tmp[:, 0:80]`.
+    #   For that reason we block edge consolidation inside this function.
+    # TODO(phimuell): Find a better way as blocking edge consolidation might
+    #   limit what MapFusion can do.
+    # TODO(phimuell): Maybe disable edge consolidation by default?
+
     # Compute the SDFG hash to see if something has changed.
     #  We use the hash instead of the return values of the transformation, because
     #  computing the hash invalidates some caches that are not properly updated in Dace.
@@ -226,6 +243,7 @@ def _gt_auto_process_top_level_maps(
 
         serial_map_fusion = gtx_transformations.MapFusionSerial(
             only_toplevel_maps=True,
+            consolidate_edges=False,
         )
         # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
         #   has been solved.
@@ -233,6 +251,7 @@ def _gt_auto_process_top_level_maps(
 
         parallel_map_fusion = gtx_transformations.MapFusionParallel(
             only_toplevel_maps=True,
+            consolidate_edges=False,
             # TODO(phimuell): Should we enable this flag?
             only_if_common_ancestor=False,
         )
@@ -252,28 +271,37 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        # Now do some cleanup task, that may enable further fusion opportunities.
-        #  Note for performance reasons simplify is deferred.
-        cleanup_stages = [
-            gtx_transformations.SplitAccessNode(
-                single_use_data=single_use_data,
-            ),
-            gtx_transformations.GT4PyMapBufferElimination(
-                assume_pointwise=assume_pointwise,
-            ),
-            # TODO(phimuell): Add a criteria to decide if we should promote or not.
-            gtx_transformations.SerialMapPromoter(
-                only_toplevel_maps=True,
-                promote_vertical=True,
-                promote_horizontal=False,
-                promote_local=False,
-            ),
-        ]
-
-        # Perform the clean up.
+        # Now perform some cleanup tasks to enable more fusion in a next step.
         gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+
+        # TODO(phimuell): Find out how to skip the propagation and integrating it
+        #   into the split transformation.
         sdfg.apply_transformations_repeated(
-            cleanup_stages,
+            gtx_transformations.SplitConsumerMemlet(single_use_data=single_use_data),
+            validate=validate,
+            validate_all=validate_all,
+        )
+        dace_propagation.propagate_memlets_sdfg(sdfg)
+
+        sdfg.apply_transformations_repeated(
+            [
+                # TODO(phimuell): The transformation is also active inside Maps.
+                #   Which is against the description of this function, but it should
+                #   not matter that much.
+                gtx_transformations.SplitAccessNode(
+                    single_use_data=single_use_data,
+                ),
+                gtx_transformations.GT4PyMapBufferElimination(
+                    assume_pointwise=assume_pointwise,
+                ),
+                # TODO(phimuell): Add a criteria to decide if we should promote or not.
+                gtx_transformations.SerialMapPromoter(
+                    only_toplevel_maps=True,
+                    promote_vertical=True,
+                    promote_horizontal=False,
+                    promote_local=False,
+                ),
+            ],
             validate=validate,
             validate_all=validate_all,
         )
@@ -285,7 +313,14 @@ def _gt_auto_process_top_level_maps(
 
         # The SDFG was modified by the transformations above. The SDFG was
         #  modified. Call Simplify and try again to further optimize.
-        gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+        gtx_transformations.gt_simplify(
+            sdfg,
+            validate=validate,
+            validate_all=validate_all,
+            skip=gtx_transformations.simplify.GT_SIMPLIFY_DEFAULT_SKIP_SET.union(
+                ["ConsolidateEdges"]
+            ),
+        )
 
     return sdfg
 
