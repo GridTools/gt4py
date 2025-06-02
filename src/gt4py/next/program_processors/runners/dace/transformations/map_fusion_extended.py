@@ -125,8 +125,16 @@ def gt_vertical_map_fusion(
 @dace_properties.make_properties
 class SplitMapRange(dace_transformation.SingleStateTransformation):
     """
-    Identify overlapping range between maps, and split the range in order to
-    promote map fusion.
+    Identify overlapping range between maps, and split the maps into
+    maps with smaller ranges in order to create two maps with common
+    range that can be fused together using the `HorizontalSplitMapRange`
+    or `VerticalSplitMapRange` transformations.
+    For example, given a map with range [0:10, 14:80] and a second map
+    with range [5:15, 0:80], this transformation will split the first map
+    into two maps with ranges [0:5, 14:80] and [5:10, 14:80], and the second
+    map into four maps with ranges [0:10, 0:14], [0:10, 14:80] [10:15, 0:14]
+    and [10:15, 14:80]. This will allow the `HorizontalSplitMapRange` or
+    `VerticalSplitMapRange` transformations to fuse the maps together.
     """
 
     only_toplevel_maps = dace_properties.Property(
