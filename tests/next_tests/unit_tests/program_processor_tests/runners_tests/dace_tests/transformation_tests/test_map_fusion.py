@@ -735,8 +735,7 @@ def test_multi_producer_sdfg():
     }
     res = copy.deepcopy(ref)
 
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     nb_applies = sdfg.apply_transformations_repeated(
         gtx_transformations.MapFusion(), validate=True, validate_all=True
@@ -754,8 +753,7 @@ def test_multi_producer_sdfg():
     )
     assert util.count_nodes(state, dace_nodes.MapEntry) == 3
 
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref)
 
 
@@ -773,8 +771,7 @@ def test_relocation_connectors():
     }
     res = copy.deepcopy(ref)
 
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     nb_applies = sdfg.apply_transformations_repeated(
         gtx_transformations.MapFusion(), validate=True, validate_all=True
@@ -807,7 +804,5 @@ def test_relocation_connectors():
     assert state.out_degree(inner_me) == 2
     assert len(inner_me.out_connectors) == 2
 
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
-
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in res)

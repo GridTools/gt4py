@@ -663,7 +663,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.0"
-source = { git = "https://github.com/GridTools/dace?branch=gt4py-next-integration#4b49068dfbd1d839a562c1d4535c7ea340597c07" }
+source = { git = "https://github.com/GridTools/dace?branch=gt4py-next-integration#2d85437fc1cbc9a1dde4661559246008bcd475fb" }
 resolution-markers = [
     "python_full_version >= '3.11'",
     "python_full_version < '3.11'",
@@ -1094,7 +1094,7 @@ dace = [
     { name = "dace", version = "1.0.2", source = { registry = "https://pypi.org/simple" } },
 ]
 dace-next = [
-    { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?branch=gt4py-next-integration#4b49068dfbd1d839a562c1d4535c7ea340597c07" } },
+    { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?branch=gt4py-next-integration#2d85437fc1cbc9a1dde4661559246008bcd475fb" } },
 ]
 formatting = [
     { name = "clang-format" },
@@ -1205,7 +1205,7 @@ typing = [
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=21.3" },
-    { name = "black", specifier = ">=22.3" },
+    { name = "black", specifier = ">=22.6" },
     { name = "boltons", specifier = ">=20.1" },
     { name = "cached-property", specifier = ">=1.5.1" },
     { name = "clang-format", marker = "extra == 'formatting'", specifier = ">=9.0" },

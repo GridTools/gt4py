@@ -9,6 +9,7 @@
 from abc import abstractmethod
 from typing import Callable, Optional, Protocol, Sequence, Type, Union
 
+from gt4py import eve
 from gt4py.cartesian.gtc import oir
 from gt4py.cartesian.gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,
@@ -31,10 +32,9 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.temporaries import (
     WriteBeforeReadTemporariesToScalars,
 )
 from gt4py.cartesian.gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
-from gt4py.eve.visitors import NodeVisitor
 
 
-PassT = Union[Callable[[oir.Stencil], oir.Stencil], Type[NodeVisitor]]
+PassT = Union[Callable[[oir.Stencil], oir.Stencil], Type[eve.NodeVisitor]]
 
 
 class OirPipeline(Protocol):
@@ -97,7 +97,7 @@ class DefaultPipeline(OirPipeline):
 
     def run(self, oir: oir.Stencil) -> oir.Stencil:
         for step in self.steps:
-            if isinstance(step, type) and issubclass(step, NodeVisitor):
+            if isinstance(step, type) and issubclass(step, eve.NodeVisitor):
                 oir = step().visit(oir)
             else:
                 oir = step(oir)  # type: ignore[call-arg, assignment]
