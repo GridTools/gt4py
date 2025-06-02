@@ -306,10 +306,10 @@ def track_view(
         raise RuntimeError(f"Failed to determine the direction of the view '{view}'.")
     if curr_edge.dst_conn == "views":
         # The view is used for reading.
-        next_node = lambda curr_edge: curr_edge.src  # noqa: E731
+        next_node = lambda curr_edge: curr_edge.src  # noqa: E731 [lambda-assignment]
     elif curr_edge.src_conn == "views":
         # The view is used for writing.
-        next_node = lambda curr_edge: curr_edge.dst  # noqa: E731
+        next_node = lambda curr_edge: curr_edge.dst  # noqa: E731 [lambda-assignment]
     else:
         raise RuntimeError(f"Failed to determine the direction of the view '{view}' | {curr_edge}.")
 
@@ -571,3 +571,30 @@ def find_upstream_nodes(
         to_visit.extend(iedge.src for iedge in state.in_edges(node) if iedge.src is not limit_node)
 
     return seen
+
+
+def find_successor_state(state: dace.SDFGState) -> list[dace.sdfg.sdfg.InterstateEdge]:
+    """Finds the set of next states after `state`.
+
+    The function considers the case of control flow region.
+    The behaviour depends on if `state` is a normal "top level state", i.e. if
+    `state.parent_graph` is the same as the enclosing SDFG. In that case the
+    function returns `state.sdfg.out_edges(state)`.
+    If `state` is inside a nested control flow region then it will call
+    `state.parent_graph.out_edges(state)`. If this set is empty the function will go
+    one nesting level up and redo the entire thing, until there are outgoing edges
+    or the top level has been reached.
+    """
+
+    def _impl(
+        state: dace.SDFGState, graph: dace.sdfg.state.AbstractControlFlowRegion
+    ) -> list[dace.sdfg.state.AbstractControlFlowRegion]:
+        assert state is not graph
+        if state.sdfg is state.parent_graph:
+            return [oedge.dst for oedge in graph.out_edges(state)]
+        curr_out_edges = [oedge.dst for oedge in graph.parent_graph.out_edges(state)]
+        if len(curr_out_edges) > 0 or graph.parent_graph is state.sdfg:
+            return curr_out_edges
+        return _impl(graph.parent_graph, graph.parent_graph.parent_graph)
+
+    return _impl(state, state.parent_graph)
