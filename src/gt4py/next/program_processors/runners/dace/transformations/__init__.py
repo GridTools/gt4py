@@ -31,8 +31,6 @@ from .redundant_array_removers import (
     CopyChainRemover,
     MultiStateGlobalSelfCopyElimination,
     MultiStateGlobalSelfCopyElimination2,
-    SingleStateGlobalDirectSelfCopyElimination,
-    SingleStateGlobalSelfCopyElimination,
     gt_multi_state_global_self_copy_elimination,
     gt_remove_copy_chain,
 )
@@ -44,6 +42,10 @@ from .simplify import (
     gt_reduce_distributed_buffering,
     gt_simplify,
     gt_substitute_compiletime_symbols,
+)
+from .single_state_global_self_copy_elimination import (
+    SingleStateGlobalDirectSelfCopyElimination,
+    SingleStateGlobalSelfCopyElimination,
 )
 from .split_access_nodes import SplitAccessNode, gt_split_access_nodes
 from .split_memlet import SplitConsumerMemlet
