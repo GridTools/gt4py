@@ -24,7 +24,7 @@ def copy_map_graph(
     map_exit: dace_nodes.MapExit,
     suffix: Optional[str] = None,
 ) -> tuple[dace_nodes.MapEntry, dace_nodes.MapExit]:
-    """Performs a full copy of the map graph.
+    """Performs a full copy of the dataflow inside the Map.
 
     It will perform a deep copy of all the nodes between the given `map_entry`
     and `map_exit` nodes, including these two.
@@ -173,8 +173,7 @@ def delete_map(
         map_entry: The entry node of the map graph.
         map_exit: The exit node of the map graph.
     """
-    for node in graph.scope_subgraph(map_entry, include_entry=True, include_exit=True).nodes():
-        graph.remove_node(node)
+    graph.remove_nodes_from(list(graph.scope_subgraph(map_entry, include_entry=True, include_exit=True).nodes()))
 
 
 def split_overlapping_map_range(

@@ -137,8 +137,7 @@ def _make_sdfg_with_multiple_maps_that_share_inputs(
     state.add_edge(b, None, mentry, "IN_b", sdfg.make_array_memlet("b"))
     state.add_edge(mexit, "OUT_out1", out1, None, sdfg.make_array_memlet("out1"))
     for name in ["a", "b"]:
-        mentry.add_in_connector("IN_" + name)
-        mentry.add_out_connector("OUT_" + name)
+        mentry.add_scope_connectors(name)
     mexit.add_in_connector("IN_out1")
     mexit.add_out_connector("OUT_out1")
     small_map_entry.add_in_connector("IN_tmp3")
