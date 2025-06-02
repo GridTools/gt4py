@@ -603,7 +603,7 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
             #  This time we look for the enclosing graph.
             # TODO(phimuell): Should loops be handled special?
             if isinstance(graph.parent_graph, dace.sdfg.state.ConditionalBlock):
-                return _impl(graph, graph.parent_graph.parent_graph)
+                return _impl(graph.parent_graph, graph.parent_graph.parent_graph)
             else:
                 return _impl(graph, graph.parent_graph)
 
