@@ -262,6 +262,8 @@ def _gt_auto_process_top_level_maps(
                 promote_horizontal=False,
                 promote_local=False,
             ),
+            validate=validate,
+            validate_all=validate_all,
         )
 
         # Now do some cleanup task, that may enable further fusion opportunities.
