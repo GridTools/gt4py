@@ -60,6 +60,9 @@ def copy_map_graph(
             data_desc = node.desc(sdfg)
             if isinstance(data_desc, (dace.data.Array, dace.data.Scalar)):
                 new_data_desc = data_desc.clone()
+                assert data_desc.transient, "Only transient data descriptors can be"
+                " copied otherwise global access nodes would require extra memory"
+                " allocated from the outside."
                 new_data_name = sdfg.add_datadesc(
                     _new_name(data_name), new_data_desc, find_new_name=True
                 )
