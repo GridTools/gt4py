@@ -85,7 +85,6 @@ def _get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
 def get_sdfg_conn_args(
     sdfg: dace.SDFG,
     offset_provider: gtx_common.OffsetProvider,
-    on_gpu: bool,
 ) -> dict[str, core_defs.NDArrayObject]:
     """
     Extracts the connectivity tables that are used in the sdfg and ensures
@@ -98,7 +97,9 @@ def get_sdfg_conn_args(
             assert gtx_common.is_neighbor_connectivity(connectivity)
             assert field_utils.verify_device_field_type(
                 connectivity,
-                core_defs.CUPY_DEVICE_TYPE if on_gpu else core_defs.DeviceType.CPU,  # type: ignore[arg-type] # if we are `on_gpu` we expect `CUPY_DEVICE_TYPE` to be not `None`
+                core_defs.CUPY_DEVICE_TYPE
+                if sdfg.arrays[name].storage == dace.dtypes.StorageType.GPU_Global
+                else core_defs.DeviceType.CPU,  # type: ignore[arg-type] # if we are `on_gpu` we expect `CUPY_DEVICE_TYPE` to be not `None`
             )
             connectivity_args[name] = connectivity.ndarray
 
@@ -110,7 +111,6 @@ def get_sdfg_args(
     offset_provider: gtx_common.OffsetProvider,
     *args: Any,
     filter_args: bool = False,
-    on_gpu: bool = False,
 ) -> dict[str, Any]:
     """Extracts the arguments needed to call the SDFG.
 
@@ -123,15 +123,13 @@ def get_sdfg_args(
         args:               The list of arguments passed to the dace runner.
         filter_args:        If True, return only the arguments that are expected
                             according to the SDFG signature.
-        on_gpu:             If True, this method ensures that the arrays for the
-                            connectivity tables are allocated in GPU memory.
 
     Returns:
         A dictionary of keyword arguments to be passed in the SDFG call.
     """
 
     call_args = _get_args(sdfg, args)
-    connectivity_args = get_sdfg_conn_args(sdfg, offset_provider, on_gpu)
+    connectivity_args = get_sdfg_conn_args(sdfg, offset_provider)
     for conn, ndarray in connectivity_args.items():
         call_args |= get_array_shape_symbols(sdfg.arrays[conn], ndarray)
         call_args |= get_array_stride_symbols(sdfg.arrays[conn], ndarray)

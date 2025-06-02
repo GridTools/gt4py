@@ -393,6 +393,42 @@ def _make_non_eligible_sdfg_with_branches():
     return sdfg
 
 
+def _make_write_into_global_at_t_definition() -> (
+    tuple[dace.SDFG, dace.SDFGState, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode]
+):
+    """
+    This SDFG is different from `_make_not_apply_because_of_write_to_g_sdfg` as the
+    write happens before we define `t`.
+    """
+    sdfg = dace.SDFG(util.unique_name("write_into_global_at_t_definition"))
+    state1 = sdfg.add_state(is_start_block=True)
+    state2 = sdfg.add_state_after(state1)
+
+    sdfg.add_array("a", shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_array("t", shape=(10,), dtype=dace.float64, transient=True)
+
+    a1, b1, t1 = (state1.add_access(name) for name in "abt")
+    state1.add_mapped_tasklet(
+        "comp_into_a",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("b[__i]")},
+        code="__out = __in + 10.0",
+        outputs={"__out": dace.Memlet("a[__i]")},
+        input_nodes={b1},
+        output_nodes={a1},
+        external_edges=True,
+    )
+    state1.add_nedge(a1, t1, dace.Memlet("a[0:10] -> [0:10]"))
+
+    a2, t2 = (state2.add_access(name) for name in "at")
+    state2.add_nedge(t2, a2, dace.Memlet("t[0:10] -> [0:10]"))
+
+    sdfg.validate()
+
+    return sdfg, state1, state2, b1, a1
+
+
 def test_not_apply_because_of_write_to_g():
     sdfg = _make_not_apply_because_of_write_to_g_sdfg()
     old_hash = sdfg.hash_sdfg()
@@ -513,3 +549,14 @@ def test_branches():
     assert res is None
     assert nb_access_nodes_initially == nb_access_nodes_after
     assert old_hash == sdfg.hash_sdfg()
+
+
+def test_write_into_global_at_t_definition():
+    sdfg, state1, state2, b1, a1 = _make_write_into_global_at_t_definition()
+    assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 5
+
+    res = apply_distributed_self_copy_elimination(sdfg)
+
+    assert res == {"t"}
+    assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 2
+    assert set(util.count_nodes(sdfg, dace_nodes.AccessNode, True)) == {a1, b1}

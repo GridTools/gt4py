@@ -380,6 +380,34 @@ def run(
     fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
 
 
+try:
+    RTOL, ATOL, EQUAL_NAN = np.allclose.__wrapped__.__defaults__
+except AttributeError:
+    RTOL, ATOL, EQUAL_NAN = (1e-05, 1e-08, False)
+
+
+def tree_mapped_np_allclose(
+    ref: np.ndarray,
+    data: np.ndarray,
+    *,
+    rtol: float = RTOL,
+    atol: float = ATOL,
+    equal_nan: bool = EQUAL_NAN,
+) -> bool:
+    """Compare two arrays or nested tuples of arrays using np.allclose."""
+    if (is_tuple := isinstance(ref, tuple)) == isinstance(data, tuple):
+        allclose_with_tols = functools.partial(
+            np.allclose, rtol=rtol, atol=atol, equal_nan=equal_nan
+        )
+        if is_tuple:
+            allclose_results = gt_utils.tree_map(allclose_with_tols)(ref, data)
+            return all(gt_utils.flatten_nested_tuple(allclose_results))
+        else:
+            return allclose_with_tols(ref, data)
+
+    return False
+
+
 def verify(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
@@ -389,7 +417,7 @@ def verify(
     out: Optional[FieldViewInout] = None,
     inout: Optional[FieldViewInout] = None,
     offset_provider: Optional[OffsetProvider] = None,
-    comparison: Callable[[Any, Any], bool] = np.allclose,
+    comparison: Callable[[Any, Any], bool] = tree_mapped_np_allclose,
 ) -> None:
     """
     Check the result of executing a fieldview program or operator against ref.
@@ -433,10 +461,11 @@ def verify(
     assert out_comp is not None
     out_comp_ndarray = field_utils.asnumpy(out_comp)
     ref_ndarray = field_utils.asnumpy(ref)
+
     assert comparison(ref_ndarray, out_comp_ndarray), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"
-        f"\tref = {ref_ndarray}\n\tout = {str(out_comp_ndarray)}"
+        f"\tref = {ref_ndarray!s}\n\tout = {out_comp_ndarray!s}"
     )
 
 
@@ -444,7 +473,7 @@ def verify_with_default_data(
     case: Case,
     fieldop: decorator.FieldOperator,
     ref: Callable,
-    comparison: Callable[[Any, Any], bool] = np.allclose,
+    comparison: Callable[[Any, Any], bool] = tree_mapped_np_allclose,
 ) -> None:
     """
     Check the fieldview code against a reference calculation.

@@ -573,7 +573,7 @@ def find_upstream_nodes(
     return seen
 
 
-def find_successor_state(state: dace.SDFGState) -> list[dace.sdfg.sdfg.InterstateEdge]:
+def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
     """Finds the set of next states after `state`.
 
     The function considers the case of control flow region.
@@ -587,14 +587,29 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.sdfg.sdfg.Interstat
     """
 
     def _impl(
-        state: dace.SDFGState, graph: dace.sdfg.state.AbstractControlFlowRegion
+        state: Union[dace.SDFGState, dace.sdfg.state.AbstractControlFlowRegion],
+        graph: dace.sdfg.state.AbstractControlFlowRegion,
     ) -> list[dace.sdfg.state.AbstractControlFlowRegion]:
         assert state is not graph
-        if state.sdfg is state.parent_graph:
-            return [oedge.dst for oedge in graph.out_edges(state)]
-        curr_out_edges = [oedge.dst for oedge in graph.parent_graph.out_edges(state)]
+        assert state in graph.nodes()
+
+        curr_out_edges = [oedge.dst for oedge in graph.out_edges(state)]
+
+        # End recursion if we found some successor edges or we have reached the top.
         if len(curr_out_edges) > 0 or graph.parent_graph is state.sdfg:
             return curr_out_edges
-        return _impl(graph.parent_graph, graph.parent_graph.parent_graph)
+        else:
+            # We have not found any successor edges, so we go one level up.
+            #  This time we look for the enclosing graph.
+            return _impl(graph, graph.parent_graph)
 
-    return _impl(state, state.parent_graph)
+    # Now look for all the next states, in the unpacking we would only need the
+    #  starting block.
+    all_successors: list[dace.SDFGState] = []
+    for successor in _impl(state, state.parent_graph):
+        if isinstance(successor, dace.SDFGState):
+            all_successors.append(successor)
+        else:
+            all_successors.extend(successor.all_states())
+
+    return all_successors
