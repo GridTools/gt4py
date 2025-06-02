@@ -12,7 +12,7 @@ import factory
 
 import gt4py.next.allocators as next_allocators
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend
+from gt4py.next import backend, common
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
@@ -66,6 +66,42 @@ class DaCeBackendFactory(factory.Factory):
     executor = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
+
+
+def make_dace_backend(
+    gpu: bool,
+    async_sdfg_call: bool,
+    make_persistent: bool,
+    blocking_dim: common.Dimension | None,
+    blocking_size: int = 10,
+) -> backend.Backend:
+    """Helper function to create a dace cached backend with custom config for SDFG
+    lowering and auto-optimize.
+
+    Args:
+        gpu: Flag to enable GPU transformations and code generation.
+        async_sdfg_call: Flag to enable asynchronous SDFG execution, only applicable
+            when `gpu=True`.
+        make_persistent: Flag to allocate persistent temporary arrays.
+        blocking_dim: When not 'None', apply 'LoopBlocking' SDFG transformation
+            on this dimension.
+        blocking_size: Block size to use in 'LoopBlocking' SDFG transformation,
+            when enabled.
+
+    Returns:
+        A custom dace backend object.
+    """
+    return DaCeBackendFactory(
+        gpu=gpu,
+        auto_optimize=True,
+        cached=True,
+        otf_workflow__cached_translation=True,
+        otf_workflow__bare_translation__async_sdfg_call=(gpu if async_sdfg_call else False),
+        otf_workflow__bare_translation__make_persistent=make_persistent,
+        otf_workflow__bare_translation__blocking_dim=blocking_dim,
+        otf_workflow__bare_translation__blocking_size=blocking_size,
+        otf_workflow__bindings__make_persistent=make_persistent,
+    )
 
 
 run_dace_cpu = DaCeBackendFactory(auto_optimize=True)
