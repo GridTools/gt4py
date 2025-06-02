@@ -173,7 +173,9 @@ def delete_map(
         map_entry: The entry node of the map graph.
         map_exit: The exit node of the map graph.
     """
-    graph.remove_nodes_from(list(graph.scope_subgraph(map_entry, include_entry=True, include_exit=True).nodes()))
+    graph.remove_nodes_from(
+        list(graph.scope_subgraph(map_entry, include_entry=True, include_exit=True).nodes())
+    )
 
 
 def split_overlapping_map_range(
