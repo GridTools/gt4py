@@ -11,7 +11,11 @@ from __future__ import annotations
 from typing import Any, Optional, Union
 
 import dace
-from dace import properties as dace_properties, transformation as dace_transformation
+from dace import (
+    properties as dace_properties,
+    subsets as dace_subsets,
+    transformation as dace_transformation,
+)
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes, propagation as dace_propagation
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -170,23 +174,32 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
 
         first_map_splitted_range, second_map_splitted_range = splitted_range
 
-        # make copies of the first map with splitted ranges
-        for i, r in enumerate(first_map_splitted_range):
-            map_fusion_utils.copy_map_graph_with_new_range(
-                sdfg, graph, first_map_entry, first_map_exit, r, str(i)
-            )
+        def _replace_ranged_map(
+            map_entry: dace_nodes.MapEntry,
+            map_exit: dace_nodes.MapExit,
+            new_ranges: list[dace_subsets.Range],
+        ) -> None:
+            """Replace a map with multiple maps based on new_ranges."""
 
-        # remove the original first map
-        map_fusion_utils.delete_map(graph, first_map_entry, first_map_exit)
+            # make copies of the map with splitted ranges
+            for i, r in enumerate(new_ranges):
+                map_fusion_utils.copy_map_graph_with_new_range(
+                    sdfg, graph, map_entry, map_exit, r, str(i)
+                )
 
-        # make copies of the second map with splitted ranges
-        for i, r in enumerate(second_map_splitted_range):
-            map_fusion_utils.copy_map_graph_with_new_range(
-                sdfg, graph, second_map_entry, second_map_exit, r, str(i)
-            )
+            # remove the original first map
+            map_fusion_utils.delete_map(graph, map_entry, map_exit)
 
-        # remove the original second map
-        map_fusion_utils.delete_map(graph, second_map_entry, second_map_exit)
+        _replace_ranged_map(
+            first_map_entry,
+            first_map_exit,
+            first_map_splitted_range,
+        )
+        _replace_ranged_map(
+            second_map_entry,
+            second_map_exit,
+            second_map_splitted_range,
+        )
 
         dace_propagation.propagate_memlets_state(sdfg, graph)
 
