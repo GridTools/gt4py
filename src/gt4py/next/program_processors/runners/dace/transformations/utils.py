@@ -576,14 +576,14 @@ def find_upstream_nodes(
 def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
     """Finds the set of next states after `state`.
 
-    The function considers the case of control flow region.
-    The behaviour depends on if `state` is a normal "top level state", i.e. if
-    `state.parent_graph` is the same as the enclosing SDFG. In that case the
-    function returns `state.sdfg.out_edges(state)`.
-    If `state` is inside a nested control flow region then it will call
-    `state.parent_graph.out_edges(state)`. If this set is empty the function will go
-    one nesting level up and redo the entire thing, until there are outgoing edges
-    or the top level has been reached.
+    In the simplest case the function will return something like this.
+    `[e.dst for e in state.sdfg.out_edges(state)`].
+    If this set is empty, the function will go up the hierarchy of the control flow
+    regions and inspect the outputs. This means if `state` is a terminal node of
+    a control flow region the function will find the successor states of the
+    region.
+    If the set of successors contains an control flow region, the region will be
+    expanded, such that the result set only consists of `SDFGState`s.
     """
 
     def _impl(
@@ -601,10 +601,14 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
         else:
             # We have not found any successor edges, so we go one level up.
             #  This time we look for the enclosing graph.
-            return _impl(graph, graph.parent_graph)
+            # TODO(phimuell): Should loops be handled special?
+            if isinstance(graph.parent_graph, dace.sdfg.state.ConditionalBlock):
+                return _impl(graph, graph.parent_graph.parent_graph)
+            else:
+                return _impl(graph, graph.parent_graph)
 
-    # Now look for all the next states, in the unpacking we would only need the
-    #  starting block.
+    # Expand the successors such that it contains only `SDFGState`s.
+    # TODO(phimuell): Only use the starting block instead of all.
     all_successors: list[dace.SDFGState] = []
     for successor in _impl(state, state.parent_graph):
         if isinstance(successor, dace.SDFGState):
