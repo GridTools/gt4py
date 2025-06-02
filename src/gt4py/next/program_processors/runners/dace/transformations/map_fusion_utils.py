@@ -214,6 +214,7 @@ def split_overlapping_map_range(
             return None
     except TypeError:
         # cannot determine truth value of Relational
+        # in case the ranges are defined with symbols we cannot determine the intersection
         return None
 
     if (first_map_sorted_range == second_map_sorted_range) == True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
@@ -236,6 +237,7 @@ def split_overlapping_map_range(
                 overlap_range_stop = min(first_map_range[1], second_map_range[1])
             except TypeError:
                 # cannot determine truth value of Relational
+                # in case the ranges are defined with symbols we cannot determine the intersection
                 return None
 
             first_map_splitted_dict[param] = [
