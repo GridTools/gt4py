@@ -240,29 +240,35 @@ def split_overlapping_map_range(
                 # in case the ranges are defined with symbols we cannot determine the intersection
                 return None
 
-            first_map_splitted_dict[param] = [
-                (overlap_range_start, overlap_range_stop, step),
-            ]
-            if first_map_range[0] < overlap_range_start:
-                first_map_splitted_dict[param].append(
-                    (first_map_range[0], overlap_range_start - step, step)
-                )
-            if overlap_range_stop < first_map_range[1]:
-                first_map_splitted_dict[param].append(
-                    (overlap_range_stop + step, first_map_range[1], step)
-                )
+            def _split_range(
+                range_: dace_subsets.Range, start: int, stop: int, step: int
+            ) -> list[tuple[int, int, int]]:
+                """Splits a range into sub-ranges based on the given start and stop.
 
-            second_map_splitted_dict[param] = [
-                (overlap_range_start, overlap_range_stop, step),
-            ]
-            if second_map_range[0] < overlap_range_start:
-                second_map_splitted_dict[param].append(
-                    (second_map_range[0], overlap_range_start - step, step)
-                )
-            if overlap_range_stop < second_map_range[1]:
-                second_map_splitted_dict[param].append(
-                    (overlap_range_stop + step, second_map_range[1], step)
-                )
+                Given a range (range_start, range_stop, range_step), and an overlap defined by
+                [start, stop], this function returns a list of sub-ranges that partition the original
+                range into: the part before the overlap, the overlap itself, and the part after.
+
+                Example:
+                    If range_ = (0, 9, 1), start = 3, stop = 6, step = 1,
+                    the result will be:
+                        [(0, 2, 1), (3, 6, 1), (7, 9, 1)]
+                """
+                splitted_ranges = []
+                if range_[0] < start:
+                    splitted_ranges.append((range_[0], start - step, step))
+                splitted_ranges.append((start, stop, step))
+                if stop < range_[1]:
+                    splitted_ranges.append((stop + step, range_[1], step))
+                return splitted_ranges
+
+            # split the ranges into sub-ranges based on the overlapping range
+            first_map_splitted_dict[param] = _split_range(
+                first_map_range, overlap_range_start, overlap_range_stop, step
+            )
+            second_map_splitted_dict[param] = _split_range(
+                second_map_range, overlap_range_start, overlap_range_stop, step
+            )
 
     first_map_combined_ranges = (first_map_splitted_dict[param] for param in first_map.params)
     second_map_combined_ranges = (second_map_splitted_dict[param] for param in second_map.params)
