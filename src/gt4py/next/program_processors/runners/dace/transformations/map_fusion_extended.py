@@ -309,12 +309,6 @@ class VerticalSplitMapRange(SplitMapRange):
 
     @classmethod
     def expressions(cls) -> Any:
-        """Get the match expressions.
-
-        The function generates two match expressions. The first match describes
-        the case where the top map must be promoted, while the second case is
-        the second/lower map must be promoted.
-        """
         return [
             dace.sdfg.utils.node_path_graph(
                 cls.first_map_exit, cls.access_node, cls.second_map_entry
