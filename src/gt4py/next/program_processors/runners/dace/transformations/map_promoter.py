@@ -21,32 +21,32 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 
 
 @dace_properties.make_properties
-class BaseMapPromoter(dace_transformation.SingleStateTransformation):
-    """Base transformation to add certain missing dimension to a map.
+class SerialMapPromoter(dace_transformation.SingleStateTransformation):
+    """Promotes a Map such that it can be fused together.
 
-    By adding certain dimension to a Map, it might became possible to use the Map
-    in more transformations. This class acts as a base and the actual matching and
-    checking must be implemented by a concrete implementation.
-    But it provides some basic check functionality and the actual promotion logic.
+    The transformation essentially matches `MapExit -> (Intermediate) -> MapEntry`
+    and modifies the first Map such that it can be fused. The transformation
+    essentially checks if the parameter of the first Map are a subset of the
+    second Map, in case they match they are checked for equality. If this is
+    the case the transformation will add the missing parameters to the first
+    map.
+    It is possible to influence what kind of dimensions can be added.
 
-    The transformation operates on two Maps, first the "source map". This map
-    describes the Map that should be used as template. The second one is "map to
-    promote". After the transformation the "map to promote" will have the same
-    map parameter as the "source map" has.
-
-    In order to properly work, the parameters of "source map" must be a strict
-    superset of the ones of "map to promote". Furthermore, this transformation
-    builds upon the structure defined [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/development/ADRs/0018-Canonical_SDFG_in_GT4Py_Transformations.md)
-    especially rule 11, regarding the names. Thus the function uses the names
-    of the map parameters to determine what a local, horizontal, vertical or
-    unknown dimension is. It also uses rule 12, therefore it will not perform
-    a renaming and iteration variables must be a match.
-
-    To influence what to promote the user must implement the `map_to_promote()`
-    and `source_map()` function. They have to return the map entry node.
-
-    The order of the parameter the map to promote has is unspecific, while the
-    source map is not modified.
+    As an example, the transformation will turn the following code:
+    ```python
+    for i in dace.map[0:N]:
+        a[i] = foo(i, ...)
+    for i, j in dace.map[0:N, 0:M]:
+        b[i, j] = bar(a[i], i, j, ...)
+    ```
+    into
+    ```python
+    for i, j in dace.map[0:N, 0:M]:
+        a[i] = foo(i, ...)
+    for i, j in dace.map[0:N, 0:M]:
+        b[i, j] = bar(a[i], i, j, ...)
+    ```
+    which can be fused together by map fusion.
 
     Args:
         only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
@@ -59,9 +59,12 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
             them to the map to promote; `False` by default.
         promote_all: Do not impose any restriction on what to promote. The only
             reasonable value is `True` or `None`.
+        fuse_after_promotion: If `True`, the default, then fuse the two maps together
+            immediately after promotion, i.e. inside `apply()`.
 
     Note:
-        This ignores tiling.
+        - The transformation will always promote the top Map never the lower Map.
+        - This ignores tiling.
     """
 
     only_toplevel_maps = dace_properties.Property(
@@ -96,26 +99,24 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
         default=False,
         desc="If `True` perform any promotion. Takes precedence over all other selectors.",
     )
+    fuse_after_promotion = dace_properties.Property(
+        dtype=bool,
+        default=True,
+        desc="If `True` fuse the maps together immediately after promotion.",
+    )
 
-    def map_to_promote(
-        self,
-        state: dace.SDFGState,
-        sdfg: dace.SDFG,
-    ) -> dace_nodes.MapEntry:
-        """Returns the map entry that should be promoted."""
-        raise NotImplementedError(f"{type(self).__name__} must implement 'map_to_promote'.")
-
-    def source_map(
-        self,
-        state: dace.SDFGState,
-        sdfg: dace.SDFG,
-    ) -> dace_nodes.MapEntry:
-        """Returns the map entry that is used as source/template."""
-        raise NotImplementedError(f"{type(self).__name__} must implement 'source_map'.")
+    # Pattern Matching
+    exit_first_map = dace_transformation.PatternNode(dace_nodes.MapExit)
+    access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    entry_second_map = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
     @classmethod
     def expressions(cls) -> Any:
-        raise TypeError("You must implement 'expressions' yourself.")
+        return [
+            dace.sdfg.utils.node_path_graph(
+                cls.exit_first_map, cls.access_node, cls.entry_second_map
+            )
+        ]
 
     def __init__(
         self,
@@ -125,22 +126,25 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
         promote_vertical: Optional[bool] = None,
         promote_horizontal: Optional[bool] = None,
         promote_all: Optional[bool] = None,
+        fuse_after_promotion: Optional[bool] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
+        if fuse_after_promotion is not None:
+            self.fuse_after_promotion = fuse_after_promotion
         if only_inner_maps is not None:
-            self.only_inner_maps = bool(only_inner_maps)
+            self.only_inner_maps = only_inner_maps
         if only_toplevel_maps is not None:
-            self.only_toplevel_maps = bool(only_toplevel_maps)
+            self.only_toplevel_maps = only_toplevel_maps
         if promote_local is not None:
-            self.promote_local = bool(promote_local)
+            self.promote_local = promote_local
         if promote_vertical is not None:
-            self.promote_vertical = bool(promote_vertical)
+            self.promote_vertical = promote_vertical
         if promote_horizontal is not None:
-            self.promote_horizontal = bool(promote_horizontal)
+            self.promote_horizontal = promote_horizontal
         if promote_all is not None:
-            self.promote_all = bool(promote_all)
+            self.promote_all = promote_all
             self.promote_horizontal = False
             self.promote_vertical = False
             self.promote_local = False
@@ -163,37 +167,20 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        """Perform some basic structural tests on the map.
+        first_map_exit: dace_nodes.MapExit = self.exit_first_map
+        second_map_entry: dace_nodes.MapEntry = self.entry_second_map
 
-        A subclass should call this function before checking anything else. If a
-        subclass has not called this function, the behaviour will be undefined.
-        The function checks:
-        - If the map to promote is in the right scope.
-        - If the parameter of the second map are compatible with each other.
-        - If a dimension would be promoted that should not.
-        """
-        assert self.expr_index == expr_index
-        map_to_promote_entry: dace_nodes.MapEntry = self.map_to_promote(state=graph, sdfg=sdfg)
-        map_to_promote: dace_nodes.Map = map_to_promote_entry.map
-        source_map_entry: dace_nodes.MapEntry = self.source_map(state=graph, sdfg=sdfg)
-        source_map: dace_nodes.Map = source_map_entry.map
-
-        # Test the scope of the promotee.
-        #  Because of the nature of the transformation, it is not needed that the
-        #  two maps are in the same scope. However, they should be in the same state
-        #  to ensure that the symbols are the same and all. But this is guaranteed by
-        #  the nature of this transformation (single state).
         if self.only_inner_maps or self.only_toplevel_maps:
             scope_dict: Mapping[dace_nodes.Node, Union[dace_nodes.Node, None]] = graph.scope_dict()
-            if self.only_inner_maps and (scope_dict[map_to_promote_entry] is None):
+            if self.only_inner_maps and (scope_dict[first_map_exit] is None):
                 return False
-            if self.only_toplevel_maps and (scope_dict[map_to_promote_entry] is not None):
+            if self.only_toplevel_maps and (scope_dict[first_map_exit] is not None):
                 return False
 
         # Test if the map ranges and parameter are compatible with each other
-        missing_map_parameters: list[str] | None = self.missing_map_params(
-            map_to_promote=map_to_promote,
-            source_map=source_map,
+        missing_map_parameters: list[str] | None = self._missing_map_params(
+            map_to_promote=first_map_exit.map,
+            source_map=second_map_entry.map,
             be_strict=True,
         )
         if not missing_map_parameters:
@@ -221,25 +208,58 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
                 ):
                     return False
 
+        # Technically the promotion create an invalid SDFG, going back to the example
+        #  in the doc string, after the promotion, but before the fusion, `a[i]` is
+        #  written `M` times. This is not an issue per see, since each time the same
+        #  value is written and if we fuse the write to `a` disappears, if `a` is
+        #  a single use transient. Thus we have to make sure that we do not write
+        #  into global memory.
+        # NOTE: We could accept the fact that we write into global memory multiple
+        #   times the same value, but we will not do it. Furthermore, we ignore the
+        #   case where `t` can not be removed.
+        for oedge in graph.out_edges(first_map_exit):
+            if not isinstance(oedge.dst, dace_nodes.AccessNode):
+                return False
+            if not oedge.dst.desc(sdfg).transient:
+                return False
+
+        # Test if after the promotion the maps could be fused.
+        if not self._test_if_promoted_maps_can_be_fused(graph, sdfg):
+            return False
+
         return True
 
+    def _promote_first_map(
+        self,
+        first_map_exit: dace_nodes.MapExit,
+        second_map_entry: dace_nodes.MapEntry,
+    ) -> None:
+        first_map_exit.map.params = copy.deepcopy(second_map_entry.map.params)
+        first_map_exit.map.range = copy.deepcopy(second_map_entry.map.range)
+
     def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
-        """Performs the actual Map promoting.
+        first_map_exit: dace_nodes.MapExit = self.exit_first_map
+        access_node: dace_nodes.AccessNode = self.access_node
+        second_map_entry: dace_nodes.MapEntry = self.entry_second_map
 
-        After this call the map to promote will have the same map parameters
-        and ranges as the source map has. The function assumes that `can_be_applied()`
-        returned `True`.
-        """
-        map_to_promote: dace_nodes.Map = self.map_to_promote(state=graph, sdfg=sdfg).map
-        source_map: dace_nodes.Map = self.source_map(state=graph, sdfg=sdfg).map
+        # Now promote the second map such that it maps the first map.
+        self._promote_first_map(first_map_exit, second_map_entry)
 
-        # The simplest implementation is just to copy the important parts.
-        #  Note that we only copy the ranges and parameters all other stuff in the
-        #  associated Map object is not modified.
-        map_to_promote.params = copy.deepcopy(source_map.params)
-        map_to_promote.range = copy.deepcopy(source_map.range)
+        # Now fuse the maps together.
+        if self.fuse_after_promotion:
+            gtx_transformations.MapFusionSerial.apply_to(
+                sdfg=sdfg,
+                expr_index=0,
+                options={
+                    "only_inner_maps": self.only_inner_maps,
+                    "only_toplevel_maps": self.only_toplevel_maps,
+                },
+                first_map_exit=first_map_exit,
+                array=access_node,
+                second_map_entry=second_map_entry,
+            )
 
-    def missing_map_params(
+    def _missing_map_params(
         self,
         map_to_promote: dace_nodes.Map,
         source_map: dace_nodes.Map,
@@ -274,68 +294,10 @@ class BaseMapPromoter(dace_transformation.SingleStateTransformation):
             for param_to_check in curr_params_set:
                 curr_range = curr_ranges[curr_param_to_idx[param_to_check]]
                 source_range = source_ranges[source_param_to_idx[param_to_check]]
-                # TODO(phimuell): Use simplify
+                # TODO(phimuell): Use simplify?
                 if curr_range != source_range:
                     return None
         return list(source_params_set - curr_params_set)
-
-
-@dace_properties.make_properties
-class SerialMapPromoter(BaseMapPromoter):
-    """Promote a map such that it can be fused serially.
-
-    A condition for fusing serial Maps is that they cover the same range. This
-    transformation is able to promote a Map, i.e. adding the missing dimensions,
-    such that the maps can be fused.
-    For more information see the `BaseMapPromoter` class.
-
-    Notes:
-        The transformation does not perform the fusing on its one.
-
-    Todo:
-        The map should do the fusing on its own directly.
-    """
-
-    # Pattern Matching
-    exit_first_map = dace_transformation.PatternNode(dace_nodes.MapExit)
-    access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
-    entry_second_map = dace_transformation.PatternNode(dace_nodes.MapEntry)
-
-    @classmethod
-    def expressions(cls) -> Any:
-        """Get the match expressions.
-
-        The function generates two match expressions. The first match describes
-        the case where the top map must be promoted, while the second case is
-        the second/lower map must be promoted.
-        """
-        return [
-            dace.sdfg.utils.node_path_graph(
-                cls.exit_first_map, cls.access_node, cls.entry_second_map
-            ),
-            dace.sdfg.utils.node_path_graph(
-                cls.exit_first_map, cls.access_node, cls.entry_second_map
-            ),
-        ]
-
-    def can_be_applied(
-        self,
-        graph: Union[dace.SDFGState, dace.SDFG],
-        expr_index: int,
-        sdfg: dace.SDFG,
-        permissive: bool = False,
-    ) -> bool:
-        """Tests if the Maps really can be fused."""
-
-        # Test if the promotion could be done.
-        if not super().can_be_applied(graph, expr_index, sdfg, permissive):
-            return False
-
-        # Test if after the promotion the maps could be fused.
-        if not self._test_if_promoted_maps_can_be_fused(graph, sdfg):
-            return False
-
-        return True
 
     def _test_if_promoted_maps_can_be_fused(
         self,
@@ -354,17 +316,17 @@ class SerialMapPromoter(BaseMapPromoter):
         access_node: dace_nodes.AccessNode = self.access_node
         second_map_entry: dace_nodes.MapEntry = self.entry_second_map
 
-        map_to_promote: dace_nodes.MapEntry = self.map_to_promote(state=state, sdfg=sdfg).map
-
         # Since we force a promotion of the map we have to store the old parameters
         #  of the map such that we can later restore them.
-        org_map_to_promote_params = copy.deepcopy(map_to_promote.params)
-        org_map_to_promote_ranges = copy.deepcopy(map_to_promote.range)
+        first_map = first_map_exit.map
+        org_first_map_params = copy.deepcopy(first_map.params)
+        org_first_map_ranges = copy.deepcopy(first_map.range)
 
         try:
             # This will lead to a promotion of the map, this is needed that
             #  Map fusion can actually inspect them.
-            self.apply(graph=state, sdfg=sdfg)
+            self._promote_first_map(first_map_exit, second_map_entry)
+
             if not gtx_transformations.MapFusionSerial.can_be_applied_to(
                 sdfg=sdfg,
                 expr_index=0,
@@ -380,34 +342,7 @@ class SerialMapPromoter(BaseMapPromoter):
 
         finally:
             # Restore the parameters of the map that we promoted before.
-            map_to_promote.params = org_map_to_promote_params
-            map_to_promote.range = org_map_to_promote_ranges
+            first_map.params = org_first_map_params
+            first_map.range = org_first_map_ranges
 
         return True
-
-    def map_to_promote(
-        self,
-        state: dace.SDFGState,
-        sdfg: dace.SDFG,
-    ) -> dace_nodes.MapEntry:
-        if self.expr_index == 0:
-            # The first the top map will be promoted.
-            return state.entry_node(self.exit_first_map)
-        assert self.expr_index == 1
-
-        # The second map will be promoted.
-        return self.entry_second_map
-
-    def source_map(
-        self,
-        state: dace.SDFGState,
-        sdfg: dace.SDFG,
-    ) -> dace_nodes.MapEntry:
-        """Returns the map entry that is used as source/template."""
-        if self.expr_index == 0:
-            # The first the top map will be promoted, so the second map is the source.
-            return self.entry_second_map
-        assert self.expr_index == 1
-
-        # The second map will be promoted, so the first is used as source
-        return state.entry_node(self.exit_first_map)
