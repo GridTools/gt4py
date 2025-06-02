@@ -109,7 +109,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
         # The intermediate access node must be a single use data, because we will
         #  get rid of it, and it must be a transient and a non-view element.
-        if access_node.data not in self._single_use_data[sdfg]:
+        if sdfg in self._single_use_data and access_node.data not in self._single_use_data[sdfg]:
             return False
         if not desc.transient:
             return False
