@@ -172,9 +172,9 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
 
         if self.only_inner_maps or self.only_toplevel_maps:
             scope_dict: Mapping[dace_nodes.Node, Union[dace_nodes.Node, None]] = graph.scope_dict()
-            if self.only_inner_maps and (scope_dict[first_map_exit] is None):
+            if self.only_inner_maps and (scope_dict[second_map_entry] is None):
                 return False
-            if self.only_toplevel_maps and (scope_dict[first_map_exit] is not None):
+            if self.only_toplevel_maps and (scope_dict[second_map_entry] is not None):
                 return False
 
         # Test if the map ranges and parameter are compatible with each other
