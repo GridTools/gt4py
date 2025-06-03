@@ -16,7 +16,7 @@ from dace import subsets as dace_subsets
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
-from gt4py.next.program_processors.runners.dace import gtir_sdfg_utils
+from gt4py.next.program_processors.runners.dace import gtir_python_codegen, gtir_sdfg_utils
 
 
 FieldopDomain: TypeAlias = list[tuple[gtx_common.Dimension, dace_subsets.Subset]]
@@ -25,6 +25,11 @@ Domain of a field operator represented as a list of tuples with 2 elements:
  - dimension definition
  - dimension range represented as a dace subset: start, stop (included), step
 """
+
+
+def parse_range_boundary(expr: gtir.Expr) -> dace.symbolic.SymbolicType:
+    """Lower a domain range to dace symbolic expression."""
+    return dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(expr))
 
 
 def extract_domain(node: gtir.Node) -> FieldopDomain:
@@ -43,9 +48,7 @@ def extract_domain(node: gtir.Node) -> FieldopDomain:
             assert len(named_range.args) == 3
             axis = named_range.args[0]
             assert isinstance(axis, gtir.AxisLiteral)
-            lower_bound, upper_bound = (
-                gtir_sdfg_utils.get_symbolic(arg) for arg in named_range.args[1:3]
-            )
+            lower_bound, upper_bound = (parse_range_boundary(arg) for arg in named_range.args[1:3])
             dim = gtx_common.Dimension(axis.value, axis.kind)
             domain_dims.append(dim)
             domain_range.append((lower_bound, upper_bound - 1, 1))
@@ -53,8 +56,8 @@ def extract_domain(node: gtir.Node) -> FieldopDomain:
     elif isinstance(node, domain_utils.SymbolicDomain):
         assert str(node.grid_type) in {"cartesian_domain", "unstructured_domain"}
         for dim, drange in node.ranges.items():
-            lower_bound = gtir_sdfg_utils.get_symbolic(drange.start)
-            upper_bound = gtir_sdfg_utils.get_symbolic(drange.stop)
+            lower_bound = parse_range_boundary(drange.start)
+            upper_bound = parse_range_boundary(drange.stop)
             domain_dims.append(dim)
             domain_range.append((lower_bound, upper_bound - 1, 1))
 
