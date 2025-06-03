@@ -35,6 +35,10 @@ def gt_multi_state_global_self_copy_elimination(
     """Runs `MultiStateGlobalSelfCopyElimination` on the SDFG recursively.
 
     For the return value see `MultiStateGlobalSelfCopyElimination.apply_pass()`.
+
+    Note:
+        The function will also run `MultiStateGlobalSelfCopyElimination2`, but the
+        results are merged together.
     """
     transforms = [
         gtx_transformations.MultiStateGlobalSelfCopyElimination(),
@@ -47,6 +51,7 @@ def gt_multi_state_global_self_copy_elimination(
     if validate:
         sdfg.validate()
 
+    # Merge the results of the two transformations together.
     res: dict[dace.SDFG, set[str]] = {}
     for trans in transforms:
         tname = trans.__class__.__name__
@@ -491,12 +496,12 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
     This function is very similar to `MultiStateGlobalSelfCopyElimination2`, however,
     it is a bit more restricted, as `MultiStateGlobalSelfCopyElimination` has a much
     better way to handle some edge cases.
-    The main difference is that `MultiStateGlobalSelfCopyElimination2` uses an other
-    way to locate the redundant data. Instead of focusing on the on the globals this
+    The main difference is that `MultiStateGlobalSelfCopyElimination2` uses another
+    way to locate the redundant data. Instead of focusing on the globals this
     transformation focuses on the transients.
 
     Todo:
-        Merge with the `MultiStateGlobalSelfCopyElimination2`.
+        Merge with the `MultiStateGlobalSelfCopyElimination`.
     """
 
     def modifies(self) -> dace_ppl.Modifies:
@@ -548,6 +553,28 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
 
         return set(redundant_transients.keys())
 
+    def _remove_transient_at_definition_point(
+        self,
+        global_data: str,
+        write_locations: list[AccessLocation],
+    ) -> None:
+        """Clean up the transient at its definition point.
+
+        The function removes the write from the global into the transient. The
+        function will also remove any node that has become isolated.
+        However, the function will not remove the transient data from the registry.
+        """
+        for state, transient_ac in write_locations:
+            assert state.in_degree(transient_ac) == 1
+            assert state.out_degree(transient_ac) == 0
+
+            transient_neighbours = [iedge.src for iedge in state.in_edges(transient_ac)]
+            state.remove_node(transient_ac)
+
+            for transient_neighbour in transient_neighbours:
+                if state.degree(transient_neighbour) == 0:
+                    state.remove_node(transient_neighbour)
+
     def _remove_transient_at_using_location(
         self,
         sdfg: dace.SDFG,
@@ -572,28 +599,6 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
 
             if transient_ac.data in sdfg.arrays:
                 sdfg.remove_data(transient_ac.data)
-
-    def _remove_transient_at_definition_point(
-        self,
-        global_data: str,
-        write_locations: list[AccessLocation],
-    ) -> None:
-        """Clean up the transient at its definition point.
-
-        The function removes the write from the global into the transient. The
-        function will also remove any node that has become isolated.
-        However, the function will not remove the transient data from the registry.
-        """
-        for state, transient_ac in write_locations:
-            assert state.in_degree(transient_ac) == 1
-            assert state.out_degree(transient_ac) == 0
-
-            transient_neighbours = [iedge.src for iedge in state.in_edges(transient_ac)]
-            state.remove_node(transient_ac)
-
-            for transient_neighbour in transient_neighbours:
-                if state.degree(transient_neighbour) == 0:
-                    state.remove_node(transient_neighbour)
 
     def _find_redundant_transients(
         self,
@@ -675,9 +680,9 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
         # We actually have to check if the global data is not modified between the
         #  location where the transient is defined and where it is written back.
         #  `MultiStateGlobalSelfCopyElimination` does this in a quite sophisticated
-        #  way. We do it cheap we require that the state in which the definition of
-        #  the transient happens is the immediate predecessor of where it is used.
-        #  We now also hope that the transient is not used somewhere else.
+        #  way. Here we do it in a cheap way: we require that the state in which the
+        #  definition of the transient happens is the immediate predecessor of where
+        #  it is used. We now also hope that the transient is not used somewhere else.
         for defining_state, _ in write_locations:
             # If we are in a nested CFR, we will go upward until we found some
             #  outgoing edge.
@@ -689,8 +694,7 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
 
         # We now must look at what defines the transient. For that we look at what
         #  defines it. For that there must be global data that writes into it.
-        # TODO(phimuell): To better handle `concat_where` also allows that more
-        #   producers are allowed, also differently.
+        # TODO(phimuell): To better handle `concat_where` also allow multiple producers.
         # TODO(phimuell): In `concat_where` we are using `dynamic` Memlets, they should
         #   also be checked.
         global_data: Union[None, str] = None
@@ -726,9 +730,9 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
             assert state.in_degree(transient_access_node) == 0
             if state.out_degree(transient_access_node) != 1:
                 return None
-            if not all(
-                isinstance(oedge.dst, dace_nodes.AccessNode) and oedge.dst.data == global_data
-                for oedge in state.out_edges(transient_access_node)
+            consumer = next(iter(oedge.dst for oedge in state.out_edges(transient_access_node)))
+            if not (
+                isinstance(consumer, dace_nodes.AccessNode) and consumer.dst.data == global_data
             ):
                 return None
 
