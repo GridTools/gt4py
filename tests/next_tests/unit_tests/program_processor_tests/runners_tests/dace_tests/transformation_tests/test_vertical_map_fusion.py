@@ -68,7 +68,7 @@ def test_vertical_map_fusion():
     ret = gtx_transformations.gt_vertical_map_fusion(
         sdfg=sdfg,
         run_simplify=True,
-        consolidate_edges=False,
+        consolidate_edges_only_if_not_extending=False,
         validate=True,
         validate_all=True,
     )
