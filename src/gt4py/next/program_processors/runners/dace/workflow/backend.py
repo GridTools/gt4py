@@ -69,6 +69,8 @@ class DaCeBackendFactory(factory.Factory):
 
 
 def make_dace_backend(
+    auto_optimize: bool,
+    cached: bool,
     gpu: bool,
     async_sdfg_call: bool,
     make_persistent: bool,
@@ -79,6 +81,8 @@ def make_dace_backend(
     lowering and auto-optimize.
 
     Args:
+        auto_optimize: Enable SDFG auto-optimize pipeline, default 'True'.
+        cached: Cache the SDFG lowering and the compiled programs, default 'True'.
         gpu: Flag to enable GPU transformations and code generation.
         async_sdfg_call: Flag to enable asynchronous SDFG execution, only applicable
             when `gpu=True`.
@@ -93,9 +97,9 @@ def make_dace_backend(
     """
     return DaCeBackendFactory(
         gpu=gpu,
-        auto_optimize=True,
-        cached=True,
-        otf_workflow__cached_translation=True,
+        auto_optimize=auto_optimize,
+        cached=cached,
+        otf_workflow__cached_translation=cached,
         otf_workflow__bare_translation__async_sdfg_call=(gpu if async_sdfg_call else False),
         otf_workflow__bare_translation__make_persistent=make_persistent,
         otf_workflow__bare_translation__blocking_dim=blocking_dim,
@@ -104,14 +108,52 @@ def make_dace_backend(
     )
 
 
-run_dace_cpu = DaCeBackendFactory(auto_optimize=True)
-run_dace_cpu_noopt = DaCeBackendFactory(auto_optimize=False)
-run_dace_cpu_cached = DaCeBackendFactory(
-    auto_optimize=True, cached=True, otf_workflow__cached_translation=True
+run_dace_cpu = make_dace_backend(
+    auto_optimize=True,
+    cached=False,
+    gpu=False,
+    async_sdfg_call=False,
+    make_persistent=False,
+    blocking_dim=None,
+)
+run_dace_cpu_noopt = make_dace_backend(
+    auto_optimize=False,
+    cached=False,
+    gpu=False,
+    async_sdfg_call=False,
+    make_persistent=False,
+    blocking_dim=None,
+)
+run_dace_cpu_cached = make_dace_backend(
+    auto_optimize=True,
+    cached=True,
+    gpu=False,
+    async_sdfg_call=False,
+    make_persistent=False,
+    blocking_dim=None,
 )
 
-run_dace_gpu = DaCeBackendFactory(gpu=True, auto_optimize=True)
-run_dace_gpu_noopt = DaCeBackendFactory(gpu=True, auto_optimize=False)
-run_dace_gpu_cached = DaCeBackendFactory(
-    gpu=True, auto_optimize=True, cached=True, otf_workflow__cached_translation=True
+run_dace_gpu = make_dace_backend(
+    auto_optimize=True,
+    cached=False,
+    gpu=True,
+    async_sdfg_call=False,
+    make_persistent=False,
+    blocking_dim=None,
+)
+run_dace_gpu_noopt = make_dace_backend(
+    auto_optimize=False,
+    cached=False,
+    gpu=True,
+    async_sdfg_call=False,
+    make_persistent=False,
+    blocking_dim=None,
+)
+run_dace_gpu_cached = make_dace_backend(
+    auto_optimize=True,
+    cached=True,
+    gpu=True,
+    async_sdfg_call=False,
+    make_persistent=False,
+    blocking_dim=None,
 )
