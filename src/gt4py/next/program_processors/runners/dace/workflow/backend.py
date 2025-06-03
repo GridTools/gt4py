@@ -81,12 +81,12 @@ def make_dace_backend(
     lowering and auto-optimize.
 
     Args:
-        auto_optimize: Enable SDFG auto-optimize pipeline, default 'True'.
-        cached: Cache the SDFG lowering and the compiled programs, default 'True'.
-        gpu: Flag to enable GPU transformations and code generation.
-        async_sdfg_call: Flag to enable asynchronous SDFG execution, only applicable
-            when `gpu=True`.
-        make_persistent: Flag to allocate persistent temporary arrays.
+        auto_optimize: Enable SDFG auto-optimize pipeline.
+        cached: Cache the lowered SDFG as a JSON file and the compiled programs.
+        gpu: Enable GPU transformations and code generation.
+        async_sdfg_call: Enable asynchronous SDFG execution, only applicable
+            when `gpu=True` because it relies on the gpu kernel queue.
+        make_persistent: Allocate persistent arrays with constant layout.
         blocking_dim: When not 'None', apply 'LoopBlocking' SDFG transformation
             on this dimension.
         blocking_size: Block size to use in 'LoopBlocking' SDFG transformation,
