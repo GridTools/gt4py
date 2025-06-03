@@ -1550,7 +1550,7 @@ class TestAssignmentSyntax:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="writing to an GlobalTable \('A' global indexation\) is forbidden",
+            match="writing to an GlobalTable \\('A' global indexation\\) is forbidden",
         ):
             parse_definition(at_write, name=inspect.stack()[0][3], module=self.__class__.__name__)
 

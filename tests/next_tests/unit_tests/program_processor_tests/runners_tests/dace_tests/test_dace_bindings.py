@@ -10,14 +10,14 @@
 
 import pytest
 
-from gt4py.next.otf.binding import interface
-from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
-
 dace = pytest.importorskip("dace")
 
 from gt4py.next.otf import languages, stages
+from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace.workflow import bindings as dace_bindings_stage
 from gt4py.next.type_system import type_specifications as ts
+
+from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
 
 
 _bind_func_name = "dummy"
@@ -71,7 +71,11 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
     last_call_args[2].value = args[2][1][0].data_ptr()
     last_call_args[5] = ctypes.c_double(args[2][1][1])
     last_call_args[6] = ctypes.c_double(args[3])
-    last_call_args[3].value = args[4].data_ptr()\
+    last_call_args[3].value = args[4].data_ptr()
+    last_call_args[12] = ctypes.c_int(args[4].domain.ranges[0].start)
+    last_call_args[13] = ctypes.c_int(args[4].domain.ranges[0].stop)
+    last_call_args[14] = ctypes.c_int(args[4].domain.ranges[1].start)
+    last_call_args[15] = ctypes.c_int(args[4].domain.ranges[1].stop)\
 """
 )
 

@@ -17,6 +17,7 @@ from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (  # noqa: F401 [unused-import]
     cartesian_case,
     exec_alloc_descriptor,
+    tree_mapped_np_allclose,
 )
 
 
@@ -62,6 +63,43 @@ def test_allocate_const(cartesian_case):
 
     b = cases.allocate(cartesian_case, mixed_args, "b").strategy(cases.ConstInitializer(42))()
     assert b == 42.0
+
+
+def test_tree_mapped_np_all_close_simple_arrays_close():
+    a = np.array([1.0, 2.0, 3.0])
+    b = a + 1e-05
+
+    assert tree_mapped_np_allclose(a, b)
+    assert not tree_mapped_np_allclose(a, b, rtol=1e-06)
+
+
+def test_tree_mapped_np_all_close_simple_arrays_different():
+    a = np.array([1.0, 2.0, 3.0])
+    b = np.array([1.1, 2.0, 3.0])
+    assert not tree_mapped_np_allclose(a, b)
+
+
+def test_tree_mapped_np_all_close_simple_tuples_close():
+    a = (np.array([1.0, 2.0]), np.array([3.0, 4.0]))
+    b = (a[0] + 1e-05, a[1] + 1e-05)
+
+    assert tree_mapped_np_allclose(a, b)
+    assert not tree_mapped_np_allclose(a, b, rtol=1e-06)
+
+
+def test_tree_mapped_np_all_close_nested_tuples():
+    a = (np.array([1.0]), (np.array([2.0]), np.array([3.0])))
+    b = (np.array([1.0]), (np.array([2.0]), np.array([3.0])))
+    c = (np.array([1.0]), (np.array([2.1]), np.array([3.0])))
+
+    assert tree_mapped_np_allclose(a, b)
+    assert not tree_mapped_np_allclose(a, c)
+
+
+def test_tree_mapped_np_all_close_different_types():
+    a = np.array([1.0, 2.0])
+    b = (np.array([1.0]), np.array([2.0]))
+    assert not tree_mapped_np_allclose(a, b)
 
 
 @pytest.mark.parametrize("exec_alloc_descriptor", [definitions.ProgramBackendId.ROUNDTRIP.load()])

@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import abc
+import collections
 import collections.abc
 import dataclasses
 import enum
@@ -254,6 +256,43 @@ class IndexerCallable(Generic[_S, _T]):
 
     def __getitem__(self, key: _S | Tuple[_S, ...]) -> _T:
         return self.func(*key) if isinstance(key, tuple) else self.func(key)
+
+
+_K = TypeVar("_K")
+_V = TypeVar("_V")
+
+
+class CustomDefaultDictBase(collections.UserDict[_K, _V]):
+    """
+    Base dict-like class using a value factory to compute default values per key.
+
+    This class is not intended to be used directly, but as a base for other classes.
+
+    Examples:
+        >>> class MyDefaultDict(CustomDefaultDictBase):
+        ...     def value_factory(self, key):
+        ...         return key * 2
+        >>> d = MyDefaultDict()
+        >>> d[1]
+        2
+        >>> d[2]
+        4
+        >>> d[1] = 10
+        >>> d[1]
+        10
+
+    """
+
+    @abc.abstractmethod
+    def value_factory(self, key: _K) -> _V:
+        raise NotImplementedError
+
+    def __getitem__(self, key: _K) -> _V:
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            self.data[key] = (value := self.value_factory(key))
+            return value
 
 
 class fluid_partial(functools.partial):

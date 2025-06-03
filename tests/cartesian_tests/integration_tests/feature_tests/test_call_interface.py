@@ -361,7 +361,7 @@ class TestAxesMismatch:
     def test_storage(self, sample_stencil):
         with pytest.raises(
             Exception,
-            match="Storage for '.*' has dimensions '.*' but the API signature expects '\[I, J\]'",
+            match="Storage for '.*' has dimensions '.*' but the API signature expects '\\[I, J\\]'",
         ):
             sample_stencil(
                 field_out=DimensionsWrapper(
@@ -392,7 +392,7 @@ class TestDataDimensions:
 
     def test_mismatch(self, sample_stencil):
         with pytest.raises(
-            ValueError, match="Field '.*' expects data dimensions \(2,\) but got \(3,\)"
+            ValueError, match="Field '.*' expects data dimensions \\(2,\\) but got \\(3,\\)"
         ):
             sample_stencil(
                 field_out=gt_storage.empty(

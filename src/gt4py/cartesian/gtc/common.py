@@ -29,8 +29,9 @@ from typing import (
 import numpy as np
 
 from gt4py import eve
+from gt4py.cartesian import utils
 from gt4py.cartesian.gtc import ufuncs
-from gt4py.cartesian.gtc.utils import dimension_flags_to_names, flatten_list
+from gt4py.cartesian.gtc.utils import dimension_flags_to_names
 from gt4py.eve import datamodels
 
 
@@ -563,7 +564,7 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
 def validate_dtype_is_set() -> datamodels.RootValidator:
     def _impl(cls: Type[ExprT], instance: ExprT) -> None:
         dtype_nodes: List[ExprT] = []
-        for v in flatten_list(datamodels.astuple(instance)):
+        for v in utils.flatten(datamodels.astuple(instance)):
             if isinstance(v, eve.Node):
                 dtype_nodes.extend(v.walk_values().if_hasattr("dtype"))
 

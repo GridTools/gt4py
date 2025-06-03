@@ -12,8 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.definitions import Extent
-
-from .utils import (
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
     AccessCollector,
     collect_symbol_names,
     compute_horizontal_block_extents,

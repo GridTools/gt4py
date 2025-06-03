@@ -21,9 +21,14 @@ from gt4py.next.type_system import type_specifications as ts
 CONNECTIVITY_INDENTIFIER_PREFIX: Final[str] = "gt_conn_"
 CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^gt_conn_(.+)$")
 
+# regex for domain range symbols
+RANGE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(.+)_\d+_range_[01]$")
 
-# regex to match the symbols for field shape and strides
-FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(.+)_((\d+_range_[01])|((size|stride)_\d+))$")
+# regex for field stride symbols
+SIZE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(.+)_size_\d+$")
+
+# regex for field stride symbols
+STRIDE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(.+)_stride_\d+$")
 
 
 def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
@@ -62,7 +67,7 @@ def is_connectivity_identifier(
 
 
 def is_connectivity_symbol(name: str, offset_provider_type: gtx_common.OffsetProviderType) -> bool:
-    m = FIELD_SYMBOL_RE.match(name)
+    m = SIZE_SYMBOL_RE.match(name) or STRIDE_SYMBOL_RE.match(name)
     if m is None:
         return False
     m = CONNECTIVITY_INDENTIFIER_RE.match(m[1])
@@ -93,8 +98,16 @@ def range_stop_symbol(field_name: str, axis: int) -> str:
     return f"__{field_name}_{axis}_range_1"
 
 
-def is_field_symbol(name: str) -> bool:
-    return FIELD_SYMBOL_RE.match(name) is not None
+def is_range_symbol(name: str) -> bool:
+    return RANGE_SYMBOL_RE.match(name) is not None
+
+
+def is_size_symbol(name: str) -> bool:
+    return SIZE_SYMBOL_RE.match(name) is not None
+
+
+def is_stride_symbol(name: str) -> bool:
+    return STRIDE_SYMBOL_RE.match(name) is not None
 
 
 def filter_connectivity_types(

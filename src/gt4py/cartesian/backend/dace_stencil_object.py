@@ -19,7 +19,7 @@ import dace.data
 import dace.frontend.python.common
 from dace.frontend.python.common import SDFGClosure, SDFGConvertible
 
-from gt4py import cartesian as gt4pyc
+from gt4py.cartesian import backend as gt_backend
 from gt4py.cartesian.backend.dace_backend import freeze_origin_domain_sdfg
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo
 from gt4py.cartesian.stencil_object import ArgsInfo, FrozenStencil, StencilObject
@@ -180,7 +180,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         origin: Optional[Dict[str, Tuple[int, ...]]] = None,
         **kwargs,
     ):
-        backend_cls = gt4pyc.backend.from_name(backend)
+        backend_cls = gt_backend.from_name(backend)
         assert backend_cls is not None
         args_iter = iter(args)
         args_as_kwargs = {

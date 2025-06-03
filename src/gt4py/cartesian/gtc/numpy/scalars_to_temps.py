@@ -11,10 +11,11 @@
 from dataclasses import dataclass
 from typing import Dict
 
-from gt4py.cartesian.gtc import common, utils
+from gt4py import eve
+from gt4py.cartesian import utils
+from gt4py.cartesian.gtc import common
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.numpy import npir
-from gt4py.eve import NodeTranslator
 
 
 @dataclass
@@ -25,7 +26,7 @@ class Temporary:
 
 
 def _all_local_scalars_are_unique_type(stencil: npir.Computation) -> bool:
-    all_declarations = utils.flatten_list(
+    all_declarations = utils.flatten(
         stencil.walk_values().if_isinstance(npir.HorizontalBlock).getattr("declarations").to_list()
     )
 
@@ -40,7 +41,7 @@ def _all_local_scalars_are_unique_type(stencil: npir.Computation) -> bool:
     return True
 
 
-class ScalarsToTemporaries(NodeTranslator):
+class ScalarsToTemporaries(eve.NodeTranslator):
     def visit_LocalScalarAccess(
         self, node: npir.LocalScalarAccess, *, temps_from_scalars: Dict[str, Temporary]
     ) -> npir.FieldSlice:

@@ -16,12 +16,15 @@ from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
 
+import copy
+
 
 from . import util
 
 
-def test_serial_map_promotion():
-    """Tests the serial Map promotion transformation."""
+def _make_serial_map_promotion_sdfg() -> (
+    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]
+):
     N = 10
     shape_1d = (N,)
     shape_2d = (N, N)
@@ -68,6 +71,12 @@ def test_serial_map_promotion():
         external_edges=True,
     )
 
+    return sdfg, state, map_entry_1d, map_entry_2d
+
+
+def test_serial_map_promotion_only_promote():
+    sdfg, state, map_entry_1d, map_entry_2d = _make_serial_map_promotion_sdfg()
+
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     assert len(map_entry_1d.map.params) == 1
     assert len(map_entry_1d.map.range) == 1
@@ -75,14 +84,17 @@ def test_serial_map_promotion():
     assert len(map_entry_2d.map.range) == 2
 
     # Now apply the promotion
-    sdfg.apply_transformations(
+    count = sdfg.apply_transformations(
         gtx_transformations.SerialMapPromoter(
             promote_all=True,
+            # Do not fuse to inspect that the promotion worked.
+            fuse_after_promotion=False,
         ),
         validate=True,
         validate_all=True,
     )
 
+    assert count == 1
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     assert len(map_entry_1d.map.params) == 2
     assert len(map_entry_1d.map.range) == 2
@@ -93,3 +105,37 @@ def test_serial_map_promotion():
         rng_1d == rng_2d
         for rng_1d, rng_2d in zip(map_entry_1d.map.range.ranges, map_entry_2d.map.range.ranges)
     )
+
+
+def test_serial_map_promotion_promote_and_merge():
+    sdfg, state, map_entry_1d, map_entry_2d = _make_serial_map_promotion_sdfg()
+
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert len(map_entry_1d.map.params) == 1
+    assert len(map_entry_1d.map.range) == 1
+    assert len(map_entry_2d.map.params) == 2
+    assert len(map_entry_2d.map.range) == 2
+
+    original_2d_params = list(map_entry_2d.map.params)
+    original_2d_range = copy.deepcopy(map_entry_2d.map.range)
+
+    # Now apply the promotion
+    count = sdfg.apply_transformations(
+        gtx_transformations.SerialMapPromoter(
+            promote_all=True,
+            fuse_after_promotion=True,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 1
+    mes = util.count_nodes(sdfg, dace_nodes.MapEntry, True)
+
+    assert len(mes) == 1
+    me = mes[0]
+
+    assert len(me.map.params) == 2
+    assert me.map.params == original_2d_params
+    assert len(me.map.range) == 2
+    assert me.map.range == original_2d_range

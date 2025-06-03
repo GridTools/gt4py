@@ -33,9 +33,12 @@ from typing_extensions import deprecated
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import definitions as gt_definitions, utils as gt_utils
-
-from . import pyext_builder
-from .module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_gtir
+from gt4py.cartesian.backend import pyext_builder
+from gt4py.cartesian.backend.module_generator import (
+    BaseModuleGenerator,
+    ModuleData,
+    make_args_data_from_gtir,
+)
 
 
 if TYPE_CHECKING:

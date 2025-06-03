@@ -303,10 +303,8 @@ def test_intermediate_access_node():
     state.remove_edge(edge)
 
     # Test if after the modification the SDFG still works
-    csdfg = sdfg.compile()
-    csdfg(a=a, b=b, c=c, N=N, M=M)
+    util.compile_and_run_sdfg(sdfg, a=a, b=b, c=c, N=N, M=M)
     assert np.allclose(ref, c)
-    del csdfg
 
     # Apply the transformation.
     count = sdfg.apply_transformations_repeated(
@@ -327,10 +325,8 @@ def test_intermediate_access_node():
     assert bottom_node is not top_node
 
     c[:] = 0
-    csdfg = sdfg.compile()
-    csdfg(a=a, b=b, c=c, N=N, M=M)
+    util.compile_and_run_sdfg(sdfg, a=a, b=b, c=c, N=N, M=M)
     assert np.allclose(ref, c)
-    del csdfg
 
 
 def test_chained_access() -> None:
@@ -345,10 +341,8 @@ def test_chained_access() -> None:
     ref = reff(a, b)
 
     # Before the optimization
-    csdfg = sdfg.compile()
-    csdfg(a=a, b=b, c=c, M=M, N=N)
+    util.compile_and_run_sdfg(sdfg, a=a, b=b, c=c, M=M, N=N)
     assert np.allclose(c, ref)
-    del csdfg
     c[:] = 0
 
     # Apply the transformation.
@@ -360,10 +354,8 @@ def test_chained_access() -> None:
     assert count == 1
 
     # Now run the SDFG to see if it is still the same
-    csdfg = sdfg.compile()
-    csdfg(a=a, b=b, c=c, M=M, N=N)
+    util.compile_and_run_sdfg(sdfg, a=a, b=b, c=c, M=M, N=N)
     assert np.allclose(c, ref)
-    del csdfg
 
     # Now look for the outer map.
     outer_map = None
@@ -1038,8 +1030,7 @@ def _apply_and_run_mixed_memlet_sdfg(
         "C": np.array(np.random.rand(10, 10), dtype=np.float64, copy=True),
     }
     res = copy.deepcopy(ref)
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     require_independent_nodes = True
     if not tskl1_independent:
@@ -1062,11 +1053,8 @@ def _apply_and_run_mixed_memlet_sdfg(
     )
     assert count == 1, f"Expected one application, but git {count}"
 
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref)
-
-    del csdfg_ref, csdfg_res
 
 
 def _make_conditional_block_sdfg(sdfg_label: str, sym: str, inp: str, out: str):
@@ -1282,9 +1270,7 @@ def test_only_last_two_elements_sdfg():
     res = copy.deepcopy(ref)
 
     ref_comp(**ref)
-    csdfg = sdfg.compile()
-    csdfg(**res)
-    del csdfg
+    util.compile_and_run_sdfg(sdfg, **res)
 
     assert np.allclose(ref["c"], res["c"])
 
@@ -1541,8 +1527,7 @@ def test_loop_blocking_direct_access_node_array():
         "B": np.array(np.random.rand(40, 10), dtype=np.float64, copy=True),
     }
     res = copy.deepcopy(ref)
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     # Because of the direct connection, of `t` with the Map exit node and the resulting
     #  removal of `tlet` from the set of independent node, the transformation will
@@ -1577,11 +1562,8 @@ def test_loop_blocking_direct_access_node_array():
     assert scope_dict_after[t] is not me
     assert util.count_nodes(state, dace_nodes.Tasklet) == 1
 
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref)
-
-    del csdfg_ref, csdfg_res
 
 
 def test_loop_blocking_direct_access_node_scalar():
@@ -1598,8 +1580,7 @@ def test_loop_blocking_direct_access_node_scalar():
         "B": np.array(np.random.rand(40, 10), dtype=np.float64, copy=True),
     }
     res = copy.deepcopy(ref)
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     # Because the intermediate is a scalar, it will be handled and both
     #  the scalar and the tasklet will be independent.
@@ -1626,8 +1607,5 @@ def test_loop_blocking_direct_access_node_scalar():
     assert new_copy_tlet.label.startswith("loop_blocking_copy_tlet_t_")
     assert new_copy_tlet.code == "__out = __in"
 
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref)
-
-    del csdfg_ref, csdfg_res

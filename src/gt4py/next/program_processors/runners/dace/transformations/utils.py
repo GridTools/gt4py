@@ -129,7 +129,7 @@ def gt_find_constant_arguments(
     ret_value: dict[str, Any] = {}
 
     for name, value in call_args.items():
-        if name in include or (gtx_dace_utils.is_field_symbol(name) and value == 1):
+        if name in include or (gtx_dace_utils.is_stride_symbol(name) and value == 1):
             ret_value[name] = value
 
     return ret_value

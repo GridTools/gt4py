@@ -13,7 +13,7 @@ import functools
 import inspect
 import types
 import typing
-from typing import Any, Callable, Literal, Optional, Protocol, TypeAlias
+from typing import Any, Callable, Literal, Optional, Mapping, Protocol, TypeAlias
 
 import numpy as np
 import pytest
@@ -54,6 +54,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Vertex,
     exec_alloc_descriptor,
     mesh_descriptor,
+    MeshDescriptor,
+    simple_cartesian_grid,
+    CartesianGridDescriptor,
 )
 
 
@@ -377,6 +380,34 @@ def run(
     fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
 
 
+try:
+    RTOL, ATOL, EQUAL_NAN = np.allclose.__wrapped__.__defaults__
+except AttributeError:
+    RTOL, ATOL, EQUAL_NAN = (1e-05, 1e-08, False)
+
+
+def tree_mapped_np_allclose(
+    ref: np.ndarray,
+    data: np.ndarray,
+    *,
+    rtol: float = RTOL,
+    atol: float = ATOL,
+    equal_nan: bool = EQUAL_NAN,
+) -> bool:
+    """Compare two arrays or nested tuples of arrays using np.allclose."""
+    if (is_tuple := isinstance(ref, tuple)) == isinstance(data, tuple):
+        allclose_with_tols = functools.partial(
+            np.allclose, rtol=rtol, atol=atol, equal_nan=equal_nan
+        )
+        if is_tuple:
+            allclose_results = gt_utils.tree_map(allclose_with_tols)(ref, data)
+            return all(gt_utils.flatten_nested_tuple(allclose_results))
+        else:
+            return allclose_with_tols(ref, data)
+
+    return False
+
+
 def verify(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
@@ -386,7 +417,7 @@ def verify(
     out: Optional[FieldViewInout] = None,
     inout: Optional[FieldViewInout] = None,
     offset_provider: Optional[OffsetProvider] = None,
-    comparison: Callable[[Any, Any], bool] = np.allclose,
+    comparison: Callable[[Any, Any], bool] = tree_mapped_np_allclose,
 ) -> None:
     """
     Check the result of executing a fieldview program or operator against ref.
@@ -430,10 +461,11 @@ def verify(
     assert out_comp is not None
     out_comp_ndarray = field_utils.asnumpy(out_comp)
     ref_ndarray = field_utils.asnumpy(ref)
+
     assert comparison(ref_ndarray, out_comp_ndarray), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"
-        f"\tref = {ref_ndarray}\n\tout = {str(out_comp_ndarray)}"
+        f"\tref = {ref_ndarray!s}\n\tout = {out_comp_ndarray!s}"
     )
 
 
@@ -441,7 +473,7 @@ def verify_with_default_data(
     case: Case,
     fieldop: decorator.FieldOperator,
     ref: Callable,
-    comparison: Callable[[Any, Any], bool] = np.allclose,
+    comparison: Callable[[Any, Any], bool] = tree_mapped_np_allclose,
 ) -> None:
     """
     Check the fieldview code against a reference calculation.
@@ -474,40 +506,42 @@ def verify_with_default_data(
 
 
 @pytest.fixture
+def cartesian_case_no_backend():
+    return Case.from_cartesian_grid_descriptor(simple_cartesian_grid())
+
+
+@pytest.fixture
 def cartesian_case(
     exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
 ):
-    yield Case(
-        None
-        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
-        else exec_alloc_descriptor,
-        offset_provider={
-            "Ioff": IDim,
-            "Joff": JDim,
-            "Koff": KDim,
-        },
-        default_sizes={IDim: 10, JDim: 10, KDim: 10},
-        grid_type=common.GridType.CARTESIAN,
+    return Case.from_cartesian_grid_descriptor(
+        simple_cartesian_grid(),
+        backend=(
+            None
+            if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+            else exec_alloc_descriptor
+        ),
         allocator=exec_alloc_descriptor.allocator,
     )
 
 
 @pytest.fixture
+def unstructured_case_no_backend(mesh_descriptor: MeshDescriptor):
+    return Case.from_mesh_descriptor(mesh_descriptor)
+
+
+@pytest.fixture
 def unstructured_case(
-    mesh_descriptor,
+    mesh_descriptor: MeshDescriptor,
     exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
 ):
-    yield Case(
-        None
-        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
-        else exec_alloc_descriptor,
-        offset_provider=mesh_descriptor.offset_provider,
-        default_sizes={
-            Vertex: mesh_descriptor.num_vertices,
-            Edge: mesh_descriptor.num_edges,
-            Cell: mesh_descriptor.num_cells,
-        },
-        grid_type=common.GridType.UNSTRUCTURED,
+    return Case.from_mesh_descriptor(
+        mesh_descriptor,
+        backend=(
+            None
+            if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+            else exec_alloc_descriptor
+        ),
         allocator=exec_alloc_descriptor.allocator,
     )
 
@@ -625,3 +659,41 @@ class Case:
     @property
     def as_field(self):
         return constructors.as_field.partial(allocator=self.allocator)
+
+    @classmethod
+    def from_cartesian_grid_descriptor(
+        cls,
+        grid_descriptor: CartesianGridDescriptor,
+        backend: Optional[next_backend.Backend] = None,
+        allocator: Optional[next_allocators.FieldBufferAllocatorFactoryProtocol] = None,
+    ) -> Case:
+        return cls(
+            backend=backend,
+            offset_provider=grid_descriptor.offset_provider,
+            default_sizes={
+                IDim: grid_descriptor.sizes[0],
+                JDim: grid_descriptor.sizes[1],
+                KDim: grid_descriptor.sizes[2],
+            },
+            grid_type=common.GridType.CARTESIAN,
+            allocator=allocator,
+        )
+
+    @classmethod
+    def from_mesh_descriptor(
+        cls,
+        mesh_descriptor: MeshDescriptor,
+        backend: Optional[next_backend.Backend] = None,
+        allocator: Optional[next_allocators.FieldBufferAllocatorFactoryProtocol] = None,
+    ) -> Case:
+        return cls(
+            backend=backend,
+            offset_provider=mesh_descriptor.offset_provider,
+            default_sizes={
+                Vertex: mesh_descriptor.num_vertices,
+                Edge: mesh_descriptor.num_edges,
+                Cell: mesh_descriptor.num_cells,
+            },
+            grid_type=common.GridType.UNSTRUCTURED,
+            allocator=allocator,
+        )

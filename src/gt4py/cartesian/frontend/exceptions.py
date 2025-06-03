@@ -7,8 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.cartesian import definitions as gt_definitions
-
-from . import gtscript_frontend
+from gt4py.cartesian.frontend import gtscript_frontend
 
 
 class GTScriptSyntaxError(gt_definitions.GTSyntaxError):

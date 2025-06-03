@@ -48,6 +48,10 @@ def is_identifier_name(value, namespaced=True):
         return False
 
 
+def listify(value):
+    return value if isinstance(value, collections.abc.Sequence) else [value]
+
+
 def flatten(nested_iterables, filter_none=False, *, skip_types=(str, bytes)):
     return list(flatten_iter(nested_iterables, filter_none, skip_types=skip_types))
 

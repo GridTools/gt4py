@@ -11,7 +11,6 @@ import pytest
 import copy
 
 from typing import Optional
-import gc
 
 
 dace = pytest.importorskip("dace")
@@ -100,9 +99,7 @@ def _perform_test(
     res = copy.deepcopy(ref)
 
     if explected_applies != 0:
-        csdfg_ref = sdfg.compile()
-        csdfg_ref(**ref)
-        del csdfg_ref  # See note below.
+        util.compile_and_run_sdfg(sdfg, **ref)
 
     nb_apply = sdfg.apply_transformations_repeated(
         gtx_transformations.MoveDataflowIntoIfBody(),
@@ -114,14 +111,8 @@ def _perform_test(
     if explected_applies == 0:
         return
 
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
-
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
-
-    # NOTE: This ensures that the SDFG gets properly unloaded.
-    del csdfg_res
-    gc.collect()
 
 
 def test_if_mover_independent_branches():

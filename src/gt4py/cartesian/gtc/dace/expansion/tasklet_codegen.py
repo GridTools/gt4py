@@ -12,8 +12,8 @@ from typing import Any, ChainMap, List, Optional, Union
 import dace
 import dace.subsets
 
-import gt4py.cartesian.gtc.common as common
 from gt4py import eve
+from gt4py.cartesian.gtc import common
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.symbol_utils import get_axis_bound_str
 from gt4py.cartesian.gtc.dace.utils import make_dace_subset

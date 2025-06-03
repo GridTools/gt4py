@@ -6,12 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.eve import NodeTranslator
+from gt4py import eve
+from gt4py.cartesian.gtc.cuir import cuir
 
-from . import cuir
 
-
-class FuseKernels(NodeTranslator):
+class FuseKernels(eve.NodeTranslator):
     """Fuse consecutive kernels into single kernel for better launch overhead.
 
     Fuse kernels that are directly translated from OIR vertical loops into separate kernels if no synchronization is required.

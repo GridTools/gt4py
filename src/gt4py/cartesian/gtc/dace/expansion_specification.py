@@ -20,7 +20,7 @@ from gt4py.cartesian.gtc.definitions import Extent
 
 
 if TYPE_CHECKING:
-    from .nodes import StencilComputation
+    from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 
 _EXPANSION_VALIDITY_CHECKS: List[Callable] = []
 

@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Any, Optional, Sequence, TypeVar, Union
 
 import gt4py.eve as eve
@@ -51,6 +52,10 @@ class ReturnStmt(eve.Node):
     expr: Expr
 
 
+class ExprStmt(eve.Node):
+    expr: Expr
+
+
 class FunctionParameter(eve.Node):
     name: str
     type_: ts.TypeSpec
@@ -59,13 +64,15 @@ class FunctionParameter(eve.Node):
 class WrapperFunction(eve.Node):
     name: str
     parameters: Sequence[FunctionParameter]
-    body: ReturnStmt
+    body: Union[ExprStmt, ReturnStmt]
+    on_device: bool = False
 
 
 class BindingFunction(eve.Node):
     exported_name: str
     wrapper_name: str
     doc: str
+    n_params: int
 
 
 class BindingModule(eve.Node):
@@ -114,20 +121,40 @@ class BindingCodeGenerator(TemplatedGenerator):
         """
     )
 
+    def visit_WrapperFunction(
+        self, node: WrapperFunction, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
+        return_stmt = "return _gt4py_return;" if isinstance(node.body, ReturnStmt) else ""
+        return self.generic_visit(node, return_stmt=return_stmt)
+
     WrapperFunction = as_jinja(
         """\
         decltype(auto) {{name}}(
-            {{"\n,".join(parameters)}}
+            {{"\n,".join(parameters + ["std::optional<nanobind::dict> exec_info"])}}
         )
         {
+            if (exec_info.has_value()) {                
+                exec_info->operator[]("run_cpp_start_time") = static_cast<double>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+            }
             {{body}}
+            if (exec_info.has_value()) {
+                {% if _this_node.on_device %}cudaDeviceSynchronize();{% endif %}
+                exec_info->operator[]("run_cpp_end_time") = static_cast<double>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+            }
+            {{return_stmt}}
         }\
         """
     )
 
     FunctionParameter = as_jinja("{{_this_module._type_string(_this_node.type_)}} {{name}}")
 
-    ReturnStmt = as_jinja("""return {{expr}};""")
+    ExprStmt = as_jinja("""{{expr}};""")
+
+    ReturnStmt = as_jinja("""auto _gt4py_return = {{expr}};""")
 
     BindingModule = as_jinja(
         """\
@@ -138,9 +165,11 @@ class BindingCodeGenerator(TemplatedGenerator):
         """
     )
 
-    BindingFunction = as_jinja("""module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}");""")
+    BindingFunction = as_jinja(
+        """module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}", {{", ".join(["nanobind::arg()"] * _this_node.n_params + ['nanobind::arg("exec_info") = nanobind::none()'])}});"""
+    )
 
-    def visit_FunctionCall(self, call: FunctionCall) -> str:
+    def visit_FunctionCall(self, call: FunctionCall, **kwargs: Any) -> str:
         args = [self.visit(arg) for arg in call.args]
         return cpp_interface.render_function_call(call.target, args)
 
@@ -216,12 +245,16 @@ def create_bindings(
         )
     wrapper_name = program_source.entry_point.name + "_wrapper"
 
+    Stmt = ReturnStmt if program_source.entry_point.returns else ExprStmt
     file_binding = BindingFile(
         callee_header_file=f"{program_source.entry_point.name}.{program_source.language_settings.header_extension}",
         header_files=[
+            "chrono",
+            "optional",
             "nanobind/nanobind.h",
             "nanobind/stl/tuple.h",
             "nanobind/stl/pair.h",
+            "nanobind/stl/optional.h",
             "nanobind/ndarray.h",
             "gridtools/sid/composite.hpp",
             "gridtools/sid/unknown_kind.hpp",
@@ -238,7 +271,7 @@ def create_bindings(
                 FunctionParameter(name=param.name, type_=param.type_)
                 for param in program_source.entry_point.parameters
             ],
-            body=ReturnStmt(
+            body=Stmt(
                 expr=FunctionCall(
                     target=program_source.entry_point,
                     args=[
@@ -247,13 +280,17 @@ def create_bindings(
                     ],
                 )
             ),
+            on_device=(program_source.language in [languages.CUDA, languages.HIP]),
         ),
         binding_module=BindingModule(
             name=program_source.entry_point.name,
             doc="",
             functions=[
                 BindingFunction(
-                    exported_name=program_source.entry_point.name, wrapper_name=wrapper_name, doc=""
+                    exported_name=program_source.entry_point.name,
+                    wrapper_name=wrapper_name,
+                    doc="",
+                    n_params=len(program_source.entry_point.parameters),
                 )
             ],
         ),
