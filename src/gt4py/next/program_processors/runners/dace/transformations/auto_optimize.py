@@ -269,12 +269,18 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        # Promote Maps.
-        gtx_transformations.SerialMapPromoter(
-            only_toplevel_maps=True,
-            promote_vertical=True,
-            promote_horizontal=False,
-            promote_local=False,
+        # We have to call it here, such that some other transformations, most
+        #  importantly the split transformations run.
+        # TODO(phimuell): Add a criteria to decide if we should promote or not.
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.SerialMapPromoter(
+                only_toplevel_maps=True,
+                promote_vertical=True,
+                promote_horizontal=False,
+                promote_local=False,
+            ),
+            validate=validate,
+            validate_all=validate_all,
         )
 
         # Now do some cleanup task, that may enable further fusion opportunities.
