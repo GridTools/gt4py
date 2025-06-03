@@ -100,6 +100,7 @@ def make_dace_backend(
         otf_workflow__bare_translation__make_persistent=make_persistent,
         otf_workflow__bare_translation__blocking_dim=blocking_dim,
         otf_workflow__bare_translation__blocking_size=blocking_size,
+        otf_workflow__bindings__make_persistent=make_persistent,
     )
 
 

@@ -70,6 +70,7 @@ def _parse_gt_param(
     arg: str,
     code: codegen.TextBlock,
     sdfg_arglist: dict[str, dace.data.Data],
+    make_persistent: bool,
 ) -> None:
     """Emit Python code to parse a program argument and set the required fields in the SDFG arglist.
 
@@ -98,6 +99,7 @@ def _parse_gt_param(
                     tuple_arg,
                     code,
                     sdfg_arglist,
+                    make_persistent,
                 )
         else:
             # For regular data tuples, each element of the tuple gets a name
@@ -112,6 +114,7 @@ def _parse_gt_param(
                     tuple_arg,
                     code,
                     sdfg_arglist,
+                    make_persistent,
                 )
 
     elif param_name not in sdfg_arglist:
@@ -157,6 +160,7 @@ def _parse_gt_param(
                                 value,
                                 code,
                                 sdfg_arglist,
+                                make_persistent,
                             )
                     else:
                         # the array shape is set to constant value
@@ -178,6 +182,7 @@ def _parse_gt_param(
                             value,
                             code,
                             sdfg_arglist,
+                            make_persistent,
                         )
                     else:
                         # the array stride is set to constant value
@@ -187,12 +192,21 @@ def _parse_gt_param(
 
         elif isinstance(param_type, ts.ScalarType):
             assert isinstance(sdfg_arg_desc, dace.data.Scalar)
-            _update_sdfg_scalar_arg(
-                code=code,
-                sdfg_arg_desc=sdfg_arg_desc,
-                sdfg_arg_index=sdfg_arg_index,
-                call_arg=arg,
-            )
+            if gtx_dace_utils.is_field_symbol(param_name) and make_persistent:
+                # only emit some debug code
+                _validate_sdfg_scalar_arg(
+                    code=code,
+                    sdfg_arg_desc=sdfg_arg_desc,
+                    sdfg_arg_index=sdfg_arg_index,
+                    call_arg=arg,
+                )
+            else:
+                _update_sdfg_scalar_arg(
+                    code=code,
+                    sdfg_arg_desc=sdfg_arg_desc,
+                    sdfg_arg_index=sdfg_arg_index,
+                    call_arg=arg,
+                )
 
         else:
             raise ValueError(f"Unexpected paramter type {param_type}")
@@ -201,6 +215,7 @@ def _parse_gt_param(
 def _create_sdfg_bindings(
     program_source: stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
     bind_func_name: str,
+    make_persistent: bool,
 ) -> stages.BindingSource[languages.SDFG, languages.Python]:
     """
     Creates a Python translation function to convert the GT4Py arguments list
@@ -209,6 +224,9 @@ def _create_sdfg_bindings(
     Args:
         program_source: The json representation of the SDFG.
         bind_func_name: Name to use for the translation function.
+        make_persistent: When True, it is safe to assume that the field layout does
+            not change across mutiple program calls. It implies that
+            the `make_persistent` flag can also be set on the SDFG auto-optimizer.
 
     Returns:
         The Python code to convert call arguments from gt4py canonical form to the
@@ -245,7 +263,7 @@ def {_cb_get_stride}(ndarray, dim_index):
     for i, param in enumerate(program_source.entry_point.parameters):
         arg = f"{_cb_args}[{i}]"
         assert isinstance(param.type_, ts.DataType)
-        _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist)
+        _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
     code.dedent()
 
     src = codegen.format_python_source(code.text)
@@ -255,6 +273,7 @@ def {_cb_get_stride}(ndarray, dim_index):
 def bind_sdfg(
     inp: stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
     bind_func_name: str,
+    make_persistent: bool,
 ) -> stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python]:
     """
     Method to be used as workflow stage for generation of SDFG bindings.
@@ -263,5 +282,5 @@ def bind_sdfg(
     """
     return stages.CompilableSource(
         program_source=inp,
-        binding_source=_create_sdfg_bindings(inp, bind_func_name),
+        binding_source=_create_sdfg_bindings(inp, bind_func_name, make_persistent),
     )

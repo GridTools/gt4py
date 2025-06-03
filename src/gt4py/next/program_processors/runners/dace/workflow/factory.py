@@ -66,6 +66,7 @@ class DaCeWorkflowFactory(factory.Factory):
         lambda o: functools.partial(
             bindings_step.bind_sdfg,
             bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
+            make_persistent=o.make_persistent,
         )
     )
     compilation = factory.SubFactory(
