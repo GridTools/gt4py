@@ -266,28 +266,32 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        # Now do some cleanup task, that may enable further fusion opportunities.
-        #  Note for performance reasons simplify is deferred.
-        cleanup_stages = [
-            gtx_transformations.SplitAccessNode(
-                single_use_data=single_use_data,
-            ),
-            gtx_transformations.GT4PyMapBufferElimination(
-                assume_pointwise=assume_pointwise,
-            ),
-            # TODO(phimuell): Add a criteria to decide if we should promote or not.
+        # We have to call it here, such that some other transformations, most
+        #  importantly the split transformations run.
+        # TODO(phimuell): Add a criteria to decide if we should promote or not.
+        sdfg.apply_transformations_repeated(
             gtx_transformations.SerialMapPromoter(
                 only_toplevel_maps=True,
                 promote_vertical=True,
                 promote_horizontal=False,
                 promote_local=False,
             ),
-        ]
+            validate=validate,
+            validate_all=validate_all,
+        )
 
-        # Perform the clean up.
+        # Now do some cleanup task, that may enable further fusion opportunities.
+        #  Note for performance reasons simplify is deferred.
         gtx_transformations.gt_reduce_distributed_buffering(sdfg)
         sdfg.apply_transformations_repeated(
-            cleanup_stages,
+            [
+                gtx_transformations.SplitAccessNode(
+                    single_use_data=single_use_data,
+                ),
+                gtx_transformations.GT4PyMapBufferElimination(
+                    assume_pointwise=assume_pointwise,
+                ),
+            ],
             validate=validate,
             validate_all=validate_all,
         )
