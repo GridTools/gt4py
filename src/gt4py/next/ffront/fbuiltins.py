@@ -340,7 +340,7 @@ class FieldOffset(runtime.Offset):
         from gt4py.next import embedded  # avoid circular import
 
         assert isinstance(self.value, str)
-        current_offset_provider = embedded.context.offset_provider.get(None)
+        current_offset_provider = embedded.context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[self.value]
 
@@ -361,7 +361,7 @@ class FieldOffset(runtime.Offset):
         from gt4py.next import embedded  # avoid circular import
 
         assert isinstance(self.value, str)
-        current_offset_provider = embedded.context.offset_provider.get(None)
+        current_offset_provider = embedded.context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[self.value]
 

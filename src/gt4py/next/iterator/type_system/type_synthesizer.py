@@ -329,7 +329,7 @@ def _collect_and_check_dimensions(input_: ts.TypeSpec) -> list[common.Dimension]
 
 
 def _convert_as_fieldop_input_to_iterator(
-    domain: it_ts.DomainType, input_: ts.TypeSpec
+    domain: ts.DomainType, input_: ts.TypeSpec
 ) -> it_ts.IteratorType:
     """
     Convert a field operation input into an iterator type, preserving its dimensions and data type.
@@ -448,7 +448,11 @@ def _resolve_dimensions(
         ... )
         >>> offset_provider_type = {
         ...     "V2E": common.NeighborConnectivityType(
-        ...         domain=(Vertex, V2E), codomain=Edge, skip_value=None, dtype=None, max_neighbors=4
+        ...         domain=(Vertex, V2E),
+        ...         codomain=Edge,
+        ...         skip_value=None,
+        ...         dtype=None,
+        ...         max_neighbors=4,
         ...     ),
         ...     "KOff": K,
         ... }
@@ -512,7 +516,7 @@ def as_fieldop(
                             )
 
                         assert all(isinstance(dim, common.Dimension) for dim in output_dims)
-                        deduced_domain = it_ts.DomainType(dims=output_dims)
+                        deduced_domain = ts.DomainType(dims=output_dims)
 
             if deduced_domain:
                 domain = deduced_domain

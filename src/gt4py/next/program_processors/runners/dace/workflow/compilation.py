@@ -17,9 +17,10 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import config
+from gt4py.next import config, metrics
 from gt4py.next.otf import languages, stages, step_types, workflow
-from gt4py.next.otf.compilation import cache
+
+from . import common as dace_common
 
 
 def _get_sdfg_ctype_arglist_callback(
@@ -117,34 +118,16 @@ class DaCeCompiler(
         inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
     ) -> CompiledDaceProgram:
         sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-        sdfg.build_folder = cache.get_cache_folder(inp, self.cache_lifetime)
+
+        if config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE:
+            # measure execution time of the top-level SDFG
+            sdfg.instrument = dace.dtypes.InstrumentationType.Timer
 
         with dace.config.temporary_config():
-            dace.config.Config.set("compiler.build_type", value=self.cmake_build_type.value)
-            dace.config.Config.set("compiler.use_cache", value=False)  # we use the gt4py cache
-
-            # dace dafault setting use fast-math in both cpu and gpu compilation, don't use it here
-            dace.config.Config.set(
-                "compiler.cpu.args",
-                value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
+            dace_common.set_dace_config(
+                device_type=self.device_type,
+                cmake_build_type=self.cmake_build_type,
             )
-            dace.config.Config.set(
-                "compiler.cuda.args",
-                value="-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
-            )
-            dace.config.Config.set(
-                "compiler.cuda.hip_args",
-                value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
-            )
-
-            # In some stencils, mostly in `apply_diffusion_to_w` the cuda codegen messes
-            #  up with the cuda streams, i.e. it allocates N streams but uses N+1.
-            #  This is a workaround until this issue if fixed in DaCe.
-            dace.config.Config.set("compiler.cuda.max_concurrent_streams", value=1)
-
-            if self.device_type == core_defs.DeviceType.ROCM:
-                dace.config.Config.set("compiler.cuda.backend", value="hip")
-
             sdfg_program = sdfg.compile(validate=False)
 
         assert inp.binding_source is not None

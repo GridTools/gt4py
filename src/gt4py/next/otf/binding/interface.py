@@ -29,6 +29,7 @@ class Parameter:
 class Function:
     name: str
     parameters: tuple[Parameter, ...]
+    returns: bool = False
 
 
 @dataclasses.dataclass(frozen=True)
