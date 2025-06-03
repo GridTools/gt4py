@@ -11,6 +11,7 @@
 from typing import Any, Optional, Sequence
 
 import dace
+from dace.sdfg import propagation as dace_propagation
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -115,7 +116,11 @@ def gt_auto_optimize(
             not if we have too much internal space (register pressure).
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
-    with dace.config.set_temporary("optimizer", "match_exception", value=True):
+
+    with dace.config.temporary_config():
+        dace.Config.set("optimizer", "match_exception", value=True)
+        dace.Config.set("store_history", value=False)
+
         # Initial Cleanup
         if constant_symbols:
             gtx_transformations.gt_substitute_compiletime_symbols(
@@ -217,6 +222,9 @@ def _gt_auto_process_top_level_maps(
     #   edge consolidation is on, then the resulting map would "write", at least
     #   according to the subset, after Memlet propagation, into `tmp[:, 0:80]`.
     #   For that reason we block edge consolidation inside this function.
+    #   However, we allow allow the consolidation, in MapFusion if this does
+    #   not lead to an extension. This is because it causes some issues with
+    #   MapFusion.
     # TODO(phimuell): Find a better way as blocking edge consolidation might
     #   limit what MapFusion can do.
     # TODO(phimuell): Maybe disable edge consolidation by default?
@@ -238,7 +246,7 @@ def _gt_auto_process_top_level_maps(
 
         serial_map_fusion = gtx_transformations.MapFusionSerial(
             only_toplevel_maps=True,
-            consolidate_edges=False,
+            consolidate_edges_only_if_not_extending=True,
         )
         # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
         #   has been solved.
@@ -246,7 +254,7 @@ def _gt_auto_process_top_level_maps(
 
         parallel_map_fusion = gtx_transformations.MapFusionParallel(
             only_toplevel_maps=True,
-            consolidate_edges=False,
+            consolidate_edges_only_if_not_extending=True,
             # TODO(phimuell): Should we enable this flag?
             only_if_common_ancestor=False,
         )
@@ -282,19 +290,29 @@ def _gt_auto_process_top_level_maps(
 
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.
-        cleanup_stages = [
-            gtx_transformations.SplitAccessNode(
-                single_use_data=single_use_data,
-            ),
-            gtx_transformations.GT4PyMapBufferElimination(
-                assume_pointwise=assume_pointwise,
-            ),
-        ]
-
-        # Perform the clean up.
         gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+
+        # TODO(phimuell): Find out how to skip the propagation and integrating it
+        #   into the split transformation.
         sdfg.apply_transformations_repeated(
-            cleanup_stages,
+            gtx_transformations.SplitConsumerMemlet(single_use_data=single_use_data),
+            validate=validate,
+            validate_all=validate_all,
+        )
+        dace_propagation.propagate_memlets_sdfg(sdfg)
+
+        sdfg.apply_transformations_repeated(
+            [
+                # TODO(phimuell): The transformation is also active inside Maps.
+                #   Which is against the description of this function, but it should
+                #   not matter that much.
+                gtx_transformations.SplitAccessNode(
+                    single_use_data=single_use_data,
+                ),
+                gtx_transformations.GT4PyMapBufferElimination(
+                    assume_pointwise=assume_pointwise,
+                ),
+            ],
             validate=validate,
             validate_all=validate_all,
         )
@@ -305,7 +323,7 @@ def _gt_auto_process_top_level_maps(
         gtx_transformations.gt_vertical_map_fusion(
             sdfg=sdfg,
             run_simplify=False,
-            consolidate_edges=False,
+            consolidate_edges_only_if_not_extending=True,
             single_use_data=single_use_data,
             validate=validate,
             validate_all=validate_all,
@@ -313,7 +331,7 @@ def _gt_auto_process_top_level_maps(
         gtx_transformations.gt_horizontal_map_fusion(
             sdfg=sdfg,
             run_simplify=False,
-            consolidate_edges=False,
+            consolidate_edges_only_if_not_extending=True,
             single_use_data=single_use_data,
             validate=validate,
             validate_all=validate_all,
