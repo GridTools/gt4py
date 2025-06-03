@@ -120,7 +120,11 @@ def _parse_gt_param(
     elif param_name not in sdfg_arglist:
         # symbols that are not used are removed from the SDFG arglist
         assert isinstance(param_type, ts.ScalarType)
-        assert gtx_dace_utils.is_field_symbol(param_name)
+        assert (
+            gtx_dace_utils.is_range_symbol(param_name)
+            or gtx_dace_utils.is_size_symbol(param_name)
+            or gtx_dace_utils.is_stride_symbol(param_name)
+        )
 
     else:
         sdfg_arg_desc = sdfg_arglist[param_name]
@@ -192,7 +196,10 @@ def _parse_gt_param(
 
         elif isinstance(param_type, ts.ScalarType):
             assert isinstance(sdfg_arg_desc, dace.data.Scalar)
-            if gtx_dace_utils.is_field_symbol(param_name) and make_persistent:
+            if make_persistent and (
+                gtx_dace_utils.is_size_symbol(param_name)
+                or gtx_dace_utils.is_stride_symbol(param_name)
+            ):
                 # only emit some debug code
                 _validate_sdfg_scalar_arg(
                     code=code,
