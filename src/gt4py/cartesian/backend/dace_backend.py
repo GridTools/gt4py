@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Tuple, Ty
 
 import dace
 import dace.data
+from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
 
 from gt4py import storage as gt_storage
@@ -36,6 +37,7 @@ from gt4py.cartesian.gtc import common, gtir
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.oir_to_dace import OirSDFGBuilder
+from gt4py.cartesian.gtc.dace.oir_to_stree import OIRToStree
 from gt4py.cartesian.gtc.dace.transformations import (
     NoEmptyEdgeTrivialMapElimination,
     nest_sequential_map_scopes,
@@ -321,6 +323,32 @@ class SDFGManager:
     def __init__(self, builder):
         self.builder = builder
 
+    def schedule_tree(self) -> tn.ScheduleTreeRoot:
+        """
+        Schedule tree representation of the gtir (taken from the builder).
+
+        This function is a two-step process:
+
+        oir = gtir_to_oir(self.builder.gtir)
+        schedule_tree = oir_to_stree(oir)
+        """
+
+        # Step 1: gtir to oir
+
+        # - gtir to oir lowering
+        oir = GTIRToOIR().visit(self.builder.gtir)
+
+        # - oir optimizations
+        oir_pipeline = self.builder.options.backend_opts.get("oir_pipeline", DefaultPipeline())
+        oir = oir_pipeline.run(oir)
+
+        # Step 2: oir to stree
+        visitor = OIRToStree()
+        visitor.visit(oir)
+        assert visitor.stree
+
+        return visitor.stree
+
     @staticmethod
     def _strip_history(sdfg):
         # strip history from SDFG for faster save/load
@@ -410,7 +438,9 @@ class DaCeExtGenerator(BackendCodegen):
 
     def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
         manager = SDFGManager(self.backend.builder)
-        sdfg = manager.expanded_sdfg()
+
+        stree = manager.schedule_tree()
+        sdfg = stree.as_sdfg(validate=True, simplify=True)
 
         sources: Dict[str, Dict[str, str]]
         implementation = DaCeComputationCodegen.apply(stencil_ir, self.backend.builder, sdfg)
