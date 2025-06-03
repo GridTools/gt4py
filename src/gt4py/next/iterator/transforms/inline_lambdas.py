@@ -11,9 +11,10 @@ from typing import Optional
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
-from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
-from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
+from gt4py.next.iterator.transforms import symbol_ref_utils
+from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs
 from gt4py.next.iterator.type_system import inference as itir_inference
 
 
@@ -33,7 +34,9 @@ def inline_lambda(  # see todo above
     assert len(eligible_params) == len(node.fun.params) == len(node.args)
 
     if opcount_preserving:
-        ref_counts = CountSymbolRefs.apply(node.fun.expr, [p.id for p in node.fun.params])
+        ref_counts = symbol_ref_utils.CountSymbolRefs.apply(
+            node.fun.expr, [p.id for p in node.fun.params]
+        )
 
         for i, param in enumerate(node.fun.params):
             # TODO(tehrengruber): allow inlining more complicated zero-op expressions like ignore_shift(...)(it_sym)
@@ -63,53 +66,24 @@ def inline_lambda(  # see todo above
     if node.fun.params and not any(eligible_params):
         return node
 
-    refs = set().union(
-        *(
-            arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
-            for arg, eligible in zip(node.args, eligible_params)
-            if eligible
-        )
-    )
-    syms = node.fun.expr.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
-    clashes = refs & syms
-    expr = node.fun.expr
-    if clashes:
-        # TODO(tehrengruber): find a better way of generating new symbols in `name_map` that don't collide with each other. E.g. this must still work:
-        # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: ERA001 [commented-out-code]
-        name_map: dict[ir.SymRef, str] = {}
-
-        def new_name(name):
-            while name in refs or name in syms or name in name_map.values():
-                name += "_"
-            return name
-
-        for sym in clashes:
-            name_map[sym] = new_name(sym)
-
-        expr = RenameSymbols().visit(expr, name_map=name_map)
-
     symbol_map = {
-        param.id: arg
+        str(param.id): arg
         for param, arg, eligible in zip(node.fun.params, node.args, eligible_params)
         if eligible
     }
-    new_expr = RemapSymbolRefs().visit(expr, symbol_map=symbol_map)
+
+    new_fun_proto = im.lambda_(
+        *(param for param, eligible in zip(node.fun.params, eligible_params) if not eligible)
+    )(node.fun.expr)
+    new_fun_proto = RemapSymbolRefs.apply(new_fun_proto, symbol_map=symbol_map)
+    new_expr = im.call(new_fun_proto)(
+        *(arg for arg, eligible in zip(node.args, eligible_params) if not eligible)
+    )
 
     if all(eligible_params):
+        new_expr = new_expr.fun.expr
         new_expr.location = node.location
-    else:
-        new_expr = ir.FunCall(
-            fun=ir.Lambda(
-                params=[
-                    param
-                    for param, eligible in zip(node.fun.params, eligible_params)
-                    if not eligible
-                ],
-                expr=new_expr,
-            ),
-            args=[arg for arg, eligible in zip(node.args, eligible_params) if not eligible],
-            location=node.location,
-        )
+
     for attr in ("type", "recorded_shifts", "domain"):
         if hasattr(node.annex, attr):
             setattr(new_expr.annex, attr, getattr(node.annex, attr))
