@@ -185,7 +185,10 @@ class DaCeTranslator(
                 gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
         if config.COLLECT_METRICS_LEVEL != metrics.DISABLED:
-            # measure execution time of the top-level SDFG
+            # We measure the execution time of one program by instrumenting the
+            #   top-level SDFG with a cpp timer (std::chrono). This timer measures
+            #   only the computation time, it does not include the overhead of
+            #   calling the SDFG from Python.
             sdfg.instrument = dace.dtypes.InstrumentationType.Timer
         elif on_gpu and self.async_sdfg_call:
             # Do not use async SDFG call when collecting metrics: we use SDFG instrumentatiom
@@ -219,6 +222,9 @@ class DaCeTranslator(
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
             stages.ProgramSource(
                 entry_point=interface.Function(program.id, program_parameters),
+                # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
+                #   We compute the hash in order to refresh `cfg_list` on the SDFG,
+                #   which makes the JSON serialization stable.
                 source_code=sdfg.to_json(hash=True),
                 library_deps=tuple(),
                 language=languages.SDFG,
