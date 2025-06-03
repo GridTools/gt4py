@@ -731,9 +731,7 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
             if state.out_degree(transient_access_node) != 1:
                 return None
             consumer = next(iter(oedge.dst for oedge in state.out_edges(transient_access_node)))
-            if not (
-                isinstance(consumer, dace_nodes.AccessNode) and consumer.dst.data == global_data
-            ):
+            if not (isinstance(consumer, dace_nodes.AccessNode) and consumer.data == global_data):
                 return None
 
         return global_data
