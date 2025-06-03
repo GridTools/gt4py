@@ -118,7 +118,7 @@ class DataflowBuilder(Protocol):
 
 
 @dataclasses.dataclass(frozen=True)
-class DataflowContext:
+class SDFGBuilderContext:
     """Represents the SDFG context in which to lower a GTIR node to dataflow.
 
     Note that each SDFG state requires its own `DataflowContext` object.
@@ -155,10 +155,10 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         self,
         node: gtir.Lambda,
         nested_sdfg_name: str,
-        parent_ctx: DataflowContext,
+        parent_ctx: SDFGBuilderContext,
         scope_symbols: dict[str, ts.DataType],
         state_name: Optional[str] = None,
-    ) -> tuple[SDFGBuilder, DataflowContext]:
+    ) -> tuple[SDFGBuilder, SDFGBuilderContext]:
         """
         Create an nested SDFG context to lower a lambda expression, indipendent
         from the current context where the parent expression is being translated.
@@ -394,10 +394,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self,
         node: gtir.Lambda,
         nested_sdfg_name: str,
-        parent_ctx: DataflowContext,
+        parent_ctx: SDFGBuilderContext,
         scope_symbols: dict[str, ts.DataType],
         state_name: Optional[str] = None,
-    ) -> tuple[SDFGBuilder, DataflowContext]:
+    ) -> tuple[SDFGBuilder, SDFGBuilderContext]:
         nested_sdfg = dace.SDFG(name=self.unique_nsdfg_name(parent_ctx.sdfg, nested_sdfg_name))
         nested_sdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=parent_ctx.sdfg.debuginfo)
 
@@ -415,7 +415,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         if state_name is None:
             state_name = "entry"
         start_state_in_nested_sdfg = nested_sdfg.add_state(state_name, is_start_block=True)
-        nested_sdfg_ctx = DataflowContext(nested_sdfg, start_state_in_nested_sdfg)
+        nested_sdfg_ctx = SDFGBuilderContext(nested_sdfg, start_state_in_nested_sdfg)
 
         return nested_sdfg_builder, nested_sdfg_ctx
 
@@ -593,7 +593,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             A list of array nodes containing the result fields.
         """
-        result = self.visit(node, ctx=DataflowContext(sdfg, head_state))
+        result = self.visit(node, ctx=SDFGBuilderContext(sdfg, head_state))
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
         # i.e. eventually only introduce internal branches, and keep the same head state
@@ -799,7 +799,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def visit_FunCall(
         self,
         node: gtir.FunCall,
-        ctx: DataflowContext,
+        ctx: SDFGBuilderContext,
     ) -> gtir_builtin_translators.FieldopResult:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node, "if_"):
@@ -824,7 +824,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def visit_Lambda(
         self,
         node: gtir.Lambda,
-        ctx: DataflowContext,
+        ctx: SDFGBuilderContext,
         args: Sequence[gtir_builtin_translators.FieldopResult],
     ) -> gtir_builtin_translators.FieldopResult:
         """
@@ -1010,14 +1010,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def visit_Literal(
         self,
         node: gtir.Literal,
-        ctx: DataflowContext,
+        ctx: SDFGBuilderContext,
     ) -> gtir_builtin_translators.FieldopResult:
         return gtir_builtin_translators.translate_literal(node, ctx, self)
 
     def visit_SymRef(
         self,
         node: gtir.SymRef,
-        ctx: DataflowContext,
+        ctx: SDFGBuilderContext,
     ) -> gtir_builtin_translators.FieldopResult:
         return gtir_builtin_translators.translate_symbol_ref(node, ctx, self)
 
