@@ -131,7 +131,7 @@ def get_field_subset(domain: DomainRange) -> dace_subsets.Range:
 
     The subset is limited to only the global dimensions. The remaining part of the
     subset (being it a local list or the scalar representing a zero-dimensional
-    field) should be handled outside by the caller.
+    field) must be handled outside by the caller.
 
     Args:
         domain: The field domain.

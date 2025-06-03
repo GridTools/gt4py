@@ -403,7 +403,7 @@ def _lower_lambda_to_nested_sdfg(
     # The 'update' state writes the value computed by the stencil into the scan carry variable,
     # in order to make it available to the next vertical level.
     compute_state = scan_loop.add_state("scan_compute")
-    lambda_compute_ctx = lambda_init_ctx.clone(compute_state)
+    lambda_compute_ctx = gtir_sdfg.DataflowContext(sdfg=lambda_init_ctx.sdfg, state=compute_state)
     update_state = scan_loop.add_state_after(compute_state, "scan_update")
 
     # inside the 'compute' state, visit the list of arguments to be passed to the stencil

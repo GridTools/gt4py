@@ -119,14 +119,13 @@ class DataflowBuilder(Protocol):
 
 @dataclasses.dataclass(frozen=True)
 class DataflowContext:
-    """Represents the SDFG context in which to lower a GTIR node to dataflow."""
+    """Represents the SDFG context in which to lower a GTIR node to dataflow.
+
+    Note that each SDFG state requires its own `DataflowContext` object.
+    """
 
     sdfg: dace.SDFG
     state: dace.SDFGState
-
-    def clone(self, state: dace.SDFGState) -> "DataflowContext":
-        """Create a new context for the given state."""
-        return DataflowContext(self.sdfg, state)
 
 
 class SDFGBuilder(DataflowBuilder, Protocol):
@@ -164,14 +163,15 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         Create an nested SDFG context to lower a lambda expression, indipendent
         from the current context where the parent expression is being translated.
 
-        The nested expression is a `Lambda` node, therefore it comes with a list
-        of parameters for mapping arguments from the parent scope.
+        The nested expression, passed through the argument `node`, is a `Lambda`,
+        therefore it comes with a parameter list for mapping arguments from the
+        parent scope.
 
         This method will setup the global symbols, that correspond to the parameters
         of the expression to be lowered, as well as the set of symbolic arguments.
 
         Args:
-            node: The expression to be lowered as a nested SDFG.
+            node: The GTIR expression to be lowered as a nested SDFG.
             nested_sdfg_name: Name for the nested SDFG where to lower the expression.
             parent_ctx: The parent SDFG context.
             scope_symbols: Mapping from symbol name to data type for the GTIR symbols

@@ -617,8 +617,12 @@ def translate_if(
     sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not ({if_stmt})")))
     sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
-    true_br_result = sdfg_builder.visit(true_expr, ctx=ctx.clone(true_state))
-    false_br_result = sdfg_builder.visit(false_expr, ctx=ctx.clone(false_state))
+    true_br_result = sdfg_builder.visit(
+        true_expr, ctx=gtir_sdfg.DataflowContext(sdfg=ctx.sdfg, state=true_state)
+    )
+    false_br_result = sdfg_builder.visit(
+        false_expr, ctx=gtir_sdfg.DataflowContext(sdfg=ctx.sdfg, state=false_state)
+    )
 
     if isinstance(node.type, ts.TupleType):
         symbol_tree = gtir_sdfg_utils.make_symbol_tree("x", node.type)
