@@ -110,7 +110,7 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
             if current_read_subset is None:
                 return False
             for known_read_subset in known_read_subsets:
-                if known_read_subset.intersects(current_read_subset):
+                if dace_sbs.intersects(known_read_subset, current_read_subset) != False:  # noqa: E712 [true-false-comparison]  # Handle incomparable.
                     return False
             known_read_subsets.append(current_read_subset)
         assert len(known_read_subsets) > 0
