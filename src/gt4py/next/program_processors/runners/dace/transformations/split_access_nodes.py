@@ -119,19 +119,23 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         if number_of_producers <= 1:
             return False
 
-        # To make sense there must also be different consumers.
+        # Since this transformation can not handle splitting over multiple state
+        #  it must be consumed directly, although single use data implies this
+        #  we do it here explicitly to avoid a scan.
+        #  It is also important that we explicitly allow one consumer. This case
+        #  might imply that we have dead data.
         number_of_consumers = graph.out_degree(access_node)
-        if number_of_consumers <= 1:
-            return False
+        if number_of_consumers == 0:
+            pass
 
         # Now check if a decomposition exist.
-        assignment = self._match_consumers_to_producers(graph)
-        if assignment is None:
+        assignments = self._match_consumers_to_producers(graph)
+        if assignments is None:
             return False
         if not self._check_spliting_constraints(
             state=graph,
             sdfg=sdfg,
-            assignment=assignment,
+            assignments=assignments,
         ):
             return False
 
@@ -152,12 +156,12 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
     ) -> None:
         access_node: dace_nodes.AccessNode = self.access_node
 
-        assignment = self._match_consumers_to_producers(graph)
-        assert assignment is not None
+        assignments = self._match_consumers_to_producers(graph)
+        assert assignments is not None
 
         # TODO(phimuell): Make it more general that it can take the full advantage
-        #  of the splitter functionality.
-        split_description = [e.data.dst_subset for e in assignment.keys()]
+        #   of the splitter functionality.
+        split_description = [e.data.dst_subset for e in assignments.keys()]
 
         fragment_access_nodes = gtx_transformations.spliting_tools.split_node(
             state=graph,
@@ -177,16 +181,11 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 graph.remove_node(ac)
                 sdfg.remove_data(ac.data, validate=False)
 
-        # NOTE: This is a very obscure case. It happens when a producer writes
-        #  something inside `access_node` and the data is never read. In that
-        #  case the original producer is becoming isolated, which we have to
-        #  avoid.
-        for old_producer_edge, assigned_consumers in assignment.items():
-            if len(assigned_consumers) == 0:
-                assert graph.degree(old_producer_edge.src) == 0
-                graph.remove_node(old_producer_edge.src)
-            else:
-                assert graph.degree(old_producer_edge.src) != 0
+        # NOTE: In some situation it happens that when a producer writes
+        #   something inside `access_node` and the data is never read. This is
+        #   not an error, but can be a side effect of MapFusion or similar
+        #   transformations. This will lead to dead data flow, that we will
+        #   not remove. Instead DDE should be run.
 
     def _match_consumers_to_producers(
         self,
@@ -202,25 +201,25 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         """
         access_node: dace_nodes.AccessNode = self.access_node
 
-        # Which input edge can cover which output edge assignment
-        assignment: dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]] = {}
+        # Which input edge can cover which output edge assignments
+        assignments: dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]] = {}
         for iedge in state.in_edges(access_node):
             # TODO(phimuell): Lift this.
             if iedge.data.dst_subset is None:
                 return None
-            assignment[iedge] = set()
+            assignments[iedge] = set()
 
         # Now match the outgoing edges to their incoming producers.
         for oedge in state.out_edges(access_node):
-            possible_producer = self._find_producer(oedge, assignment.keys())
+            possible_producer = self._find_producer(oedge, assignments.keys())
             if possible_producer is None:
                 return None
-            assignment[possible_producer].add(oedge)
+            assignments[possible_producer].add(oedge)
 
         # TODO(phimuell): Find out what this obscure case means.
         unused_producers = [
             producer
-            for producer, assigned_consumers in assignment.items()
+            for producer, assigned_consumers in assignments.items()
             if len(assigned_consumers) == 0
         ]
         if len(unused_producers) == 0:
@@ -231,7 +230,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 stacklevel=0,
             )
 
-        return assignment
+        return assignments
 
     def _find_producer(
         self,
@@ -284,7 +283,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-        assignment: dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]],
+        assignments: dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]],
     ) -> bool:
         """Checks if the decomposition can be handled.
 
@@ -293,7 +292,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         can be split.
         """
 
-        for producer_edge, consumer_edges in assignment.items():
+        for producer_edge, consumer_edges in assignments.items():
             data_source = producer_edge.src
 
             if len(consumer_edges) == 0:
