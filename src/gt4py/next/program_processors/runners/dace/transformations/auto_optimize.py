@@ -268,19 +268,16 @@ def _gt_auto_process_top_level_maps(
 
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.
-        cleanup_stages = [
-            gtx_transformations.SplitAccessNode(
-                single_use_data=single_use_data,
-            ),
-            gtx_transformations.GT4PyMapBufferElimination(
-                assume_pointwise=assume_pointwise,
-            ),
-        ]
-
-        # Perform the clean up.
         gtx_transformations.gt_reduce_distributed_buffering(sdfg)
         sdfg.apply_transformations_repeated(
-            cleanup_stages,
+            [
+                gtx_transformations.SplitAccessNode(
+                    single_use_data=single_use_data,
+                ),
+                gtx_transformations.GT4PyMapBufferElimination(
+                    assume_pointwise=assume_pointwise,
+                ),
+            ],
             validate=validate,
             validate_all=validate_all,
         )
