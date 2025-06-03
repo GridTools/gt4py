@@ -203,7 +203,8 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             conflicts_with_g1 = [
                 write_into_g1
                 for write_into_g1 in all_writes_into_g1
-                if write_into_g2.subset.intersects(write_into_g1.subset)
+                # TODO(phimuell): Figuring out what `None` means.
+                if dace_sbs.intersects(write_into_g2.subset, write_into_g1.subset)
             ]
             if len(conflicts_with_g1) == 0:
                 continue
@@ -583,7 +584,8 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             #   liberal. However, what we should actually do is, decompose the
             #   subset and only add the parts that are not known.
             if not any(
-                known_t_patch.subset.intersects(transfer_g1_desc_t.subset)
+                # TODO(phimuell): Figuring out what `None` means.
+                dace_sbs.intersects(known_t_patch.subset, transfer_g1_desc_t.subset)
                 for known_t_patch in t_descriptions
             ):
                 t_descriptions.append(transfer_g1_desc_t)
@@ -621,12 +623,13 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
                 return None
 
             # Ensure that there is no intersection between the subsets.
+            #  Handles "unable to compare" as not an intersection.
             assert not any(
-                merged_subset_at_tmp.intersects(known_tmp_subset)
+                dace_sbs.intersects(merged_subset_at_tmp, known_tmp_subset) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
                 for known_tmp_subset in subset_map.keys()
             )
             assert not any(
-                merged_subset_at_g2[0].intersects(known_g_subset)
+                dace_sbs.intersects(merged_subset_at_g2[0], known_g_subset) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
                 for known_g_subset in subset_map.values()
             )
 
