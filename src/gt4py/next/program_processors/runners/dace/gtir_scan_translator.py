@@ -49,7 +49,7 @@ def _parse_scan_fieldop_arg(
     node: gtir.Expr,
     ctx: gtir_sdfg.DataflowContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    domain: gtir_domain.DomainRange,
+    domain: gtir_domain.FieldopDomain,
 ) -> gtir_dataflow.MemletExpr | tuple[gtir_dataflow.MemletExpr | tuple[Any, ...], ...]:
     """Helper method to visit an expression passed as argument to a scan field operator.
 
@@ -85,7 +85,7 @@ def _create_scan_field_operator_impl(
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    domain: gtir_domain.DomainRange,
+    domain: gtir_domain.FieldopDomain,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
     map_exit: dace.nodes.MapExit,
@@ -173,7 +173,7 @@ def _create_scan_field_operator_impl(
 
 def _create_scan_field_operator(
     ctx: gtir_sdfg.DataflowContext,
-    domain: gtir_domain.DomainRange,
+    domain: gtir_domain.FieldopDomain,
     node_type: ts.FieldType | ts.TupleType,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     input_edges: Iterable[gtir_dataflow.DataflowInputEdge],
@@ -265,7 +265,7 @@ def _lower_lambda_to_nested_sdfg(
     lambda_node: gtir.Lambda,
     ctx: gtir_sdfg.DataflowContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    domain: gtir_domain.DomainRange,
+    domain: gtir_domain.FieldopDomain,
     init_data: gtir_translators.FieldopResult,
     lambda_symbols: dict[str, ts.DataType],
     scan_forward: bool,

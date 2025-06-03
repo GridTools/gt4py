@@ -101,7 +101,7 @@ class FieldopData:
         return FieldopData(outer_node, self.gt_type, tuple(outer_origin))
 
     def get_local_view(
-        self, domain: gtir_domain.DomainRange, sdfg: dace.SDFG
+        self, domain: gtir_domain.FieldopDomain, sdfg: dace.SDFG
     ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
         """Helper method to access a field in local view, given the compute domain of a field operator."""
         if isinstance(self.gt_type, ts.ScalarType):
@@ -268,7 +268,7 @@ def _parse_fieldop_arg(
     node: gtir.Expr,
     ctx: gtir_sdfg.DataflowContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    domain: gtir_domain.DomainRange,
+    domain: gtir_domain.FieldopDomain,
 ) -> (
     gtir_dataflow.IteratorExpr
     | gtir_dataflow.MemletExpr
@@ -288,7 +288,7 @@ def _parse_fieldop_arg(
 def _create_field_operator_impl(
     ctx: gtir_sdfg.DataflowContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    domain: gtir_domain.DomainRange,
+    domain: gtir_domain.FieldopDomain,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
     map_exit: dace.nodes.MapExit,
@@ -356,7 +356,7 @@ def _create_field_operator_impl(
 
 def _create_field_operator(
     ctx: gtir_sdfg.DataflowContext,
-    domain: gtir_domain.DomainRange,
+    domain: gtir_domain.FieldopDomain,
     node_type: ts.FieldType | ts.TupleType,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     input_edges: Iterable[gtir_dataflow.DataflowInputEdge],

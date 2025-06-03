@@ -19,7 +19,7 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_u
 from gt4py.next.program_processors.runners.dace import gtir_sdfg_utils
 
 
-DomainRange: TypeAlias = list[tuple[gtx_common.Dimension, dace_subsets.Subset]]
+FieldopDomain: TypeAlias = list[tuple[gtx_common.Dimension, dace_subsets.Subset]]
 """
 Domain of a field operator represented as a list of tuples with 2 elements:
  - dimension definition
@@ -27,7 +27,7 @@ Domain of a field operator represented as a list of tuples with 2 elements:
 """
 
 
-def extract_domain(node: gtir.Node) -> DomainRange:
+def extract_domain(node: gtir.Node) -> FieldopDomain:
     """
     Visits the domain of a field operator and returns a list of dimensions and
     the corresponding lower and upper bounds. The returned lower bound is inclusive,
@@ -92,7 +92,7 @@ def get_domain_indices(
 
 
 def get_field_layout(
-    domain: DomainRange,
+    domain: FieldopDomain,
 ) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
     """
     Parse the field operator domain and generates the shape of the result field.
@@ -125,7 +125,7 @@ def get_field_layout(
     return domain_dims, domain_lbs, domain_sizes
 
 
-def get_field_subset(domain: DomainRange) -> dace_subsets.Range:
+def get_field_subset(domain: FieldopDomain) -> dace_subsets.Range:
     """
     Construct the memlet subset to access a point in the field global domain.
 

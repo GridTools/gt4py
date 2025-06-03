@@ -224,7 +224,7 @@ def _collect_symbols_in_domain_expressions(
 
 
 def _make_access_index_for_field(
-    domain: gtir_domain.DomainRange, data: gtir_builtin_translators.FieldopData
+    domain: gtir_domain.FieldopDomain, data: gtir_builtin_translators.FieldopData
 ) -> dace.subsets.Range:
     """Helper method to build a memlet subset of a field over the given domain."""
     # convert domain expression to dictionary to ease access to the dimensions,
