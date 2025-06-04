@@ -163,6 +163,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             node_g1=node_g1,
             node_tmp=node_tmp,
             node_g2=node_g2,
+            tmp_to_g_mapping=tmp_to_g_mapping,
         ):
             return False
 
@@ -184,6 +185,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
+        tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
     ) -> bool:
         """
         The function checks if the three matched AccessNode (which means the
@@ -219,7 +221,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
                 if gtx_st.are_intersecting(write_into_g2.subset, write_into_g1.subset)
             ]
             if len(write_write_conflicts) != 0:
-                return False
+                return True
 
             # The second kind of conflict occurs if we read something from `g1`
             #  that is later overridden by a write to `g2`.
@@ -230,9 +232,23 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
                 if gtx_st.are_intersecting(conflicting_read.subset, write_into_g2.subset)
             ]
             if len(write_after_read_conflicts) != 0:
-                return False
+                return True
 
-        # TODO(phimuell): Checks about `tmp`.
+        # "Pure writes", as in not coming from `g1` into `tmp`; described in
+        #  terms of `tmp`.
+        pure_tmp_writes = [
+            gtx_st.describe_edge(edge, incoming_edge=True)
+            for edge in state.in_edges(node_tmp)
+            if edge.src is not node_g1
+        ]
+
+        # Ensure that everything that is written into `tmp` is also written back.
+        for tmp_write in pure_tmp_writes:
+            if not any(
+                tmp_write.subset.covers(tmp_to_g2_write_back)
+                for tmp_to_g2_write_back in tmp_to_g_mapping.keys()
+            ):
+                return True
 
         return False
 
@@ -564,6 +580,9 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
         # The first source of `t_descriptions` are the edges that copies data from
         #  `tmp` to `g2`, i.e. write back. But they are not the only ones.
+        # NOTE: It is important that the subset mapping is only build by the edges
+        #   between `tmp` and `g2`. Because it is used by `_check_read_write_conflicts()`
+        #   to identify conflicts!
         t_descriptions.extend(
             gtx_st.describe_edge(e, False) for e in state.edges_between(node_tmp, node_g2)
         )
