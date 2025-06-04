@@ -595,18 +595,21 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
         )
 
+        def error_msg(left: ts.TypeSpec, right: ts.TypeSpec) -> str:
+            return f"Dimension comparison needs to be between a 'Dimension' and index of type '{index_type}', got '{left}' and '{right}'."
+
         if isinstance(left.type, ts.DimensionType):
             if not right.type == index_type:
                 raise errors.DSLError(
                     right.location,
-                    f"Expected an {index_type}, but got '{right.type}' instead.",
+                    error_msg(left.type, right.type),
                 )
             return ts.DomainType(dims=[left.type.dim])
         elif isinstance(right.type, ts.DimensionType):
             if not left.type == index_type:
                 raise errors.DSLError(
                     left.location,
-                    f"Expected an {index_type}, but got '{right.type}' instead.",
+                    error_msg(left.type, right.type),
                 )
             return ts.DomainType(dims=[right.type.dim])
         else:
