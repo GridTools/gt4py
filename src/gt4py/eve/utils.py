@@ -367,6 +367,11 @@ class HashableBy(Generic[_T]):
         assert isinstance(other, HashableBy)
         return self.value is other.value or self.value == other.value
 
+    def __str__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(value={self.value!r}, hashed_value={self.hashed_value!r})"
+        )
+
 
 @overload
 def hashable_by(func: Callable[[_T], int], value: _T) -> HashableBy[_T]: ...
