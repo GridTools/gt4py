@@ -153,6 +153,54 @@ def get_other_subset(desc: EdgeConnectionSpec) -> dace_sbs.Subset:
     return desc.other_subset
 
 
+def are_intersecting(
+    sbs1: dace_sbs.Subset,
+    sbs2: dace_sbs.Subset,
+) -> bool:
+    """Returns `True` if `sbs1` and `sbs2` are intersecting for sure.
+
+    The intersect test might look like as it has a binary outcome (intersecting
+    or not intersecting), however, but there are three possible results:
+    - Provable intersecting.
+    - Provable not intersecting.
+    - Unable to determine.
+
+    This function will return `True` only if it can be shown that the two subsets
+    intersects in all other cases it will return `True`.
+    """
+    return dace_sbs.intersects(sbs1, sbs2) is True
+
+
+def never_intersecting(
+    sbs1: dace_sbs.Subset,
+    sbs2: dace_sbs.Subset,
+) -> bool:
+    """Returns `True` if `sbs1` and `sbs2` will never intersect.
+
+    As described in `are_intersecting()` the intersection test can have
+    three outcome. This function returns `True` if under no circumstance
+    the two subsets will ever intersect. This means either it can be
+    shown that the subsets will not intersect or it is impossible to
+    determine the answer.
+    """
+    return not are_intersecting(sbs1, sbs2)
+
+
+def maybe_intersecting(
+    sbs1: dace_sbs.Subset,
+    sbs2: dace_sbs.Subset,
+) -> bool:
+    """Returns `True` if `sbs1` and `sbs2` might be intersecting.
+
+    As described in `are_intersecting()` there are three possible
+    outcomes of the intersecting test. This function returns
+    `True` if it is not possible to show that they are not intersecting.
+    This means either they intersect or the question can not be
+    answered.
+    """
+    return dace_sbs.intersects(sbs1, sbs2) is not False
+
+
 def split_node(
     state: dace.SDFGState,
     sdfg: dace.SDFG,

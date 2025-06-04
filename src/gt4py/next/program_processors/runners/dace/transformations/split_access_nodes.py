@@ -126,7 +126,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         #  might imply that we have dead data.
         number_of_consumers = graph.out_degree(access_node)
         if number_of_consumers == 0:
-            pass
+            return False
 
         # Now check if a decomposition exist.
         assignments = self._match_consumers_to_producers(graph)

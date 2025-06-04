@@ -20,6 +20,7 @@ from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace.transformations import spliting_tools as gtx_st
 
 
 @dace_properties.make_properties
@@ -110,7 +111,7 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
             if current_read_subset is None:
                 return False
             for known_read_subset in known_read_subsets:
-                if dace_sbs.intersects(known_read_subset, current_read_subset) != False:  # noqa: E712 [true-false-comparison]  # Handle incomparable.
+                if gtx_st.maybe_intersecting(known_read_subset, current_read_subset):
                     return False
             known_read_subsets.append(current_read_subset)
         assert len(known_read_subsets) > 0
