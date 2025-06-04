@@ -246,7 +246,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         # Ensure that everything that is written into `tmp` is also written back.
         for tmp_write in pure_tmp_writes:
             if not any(
-                tmp_write.subset.covers(tmp_to_g2_write_back)
+                tmp_to_g2_write_back.covers(tmp_write.subset)
                 for tmp_to_g2_write_back in tmp_to_g_mapping.keys()
             ):
                 return True
