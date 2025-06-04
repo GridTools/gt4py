@@ -222,6 +222,9 @@ def _gt_auto_process_top_level_maps(
     #   edge consolidation is on, then the resulting map would "write", at least
     #   according to the subset, after Memlet propagation, into `tmp[:, 0:80]`.
     #   For that reason we block edge consolidation inside this function.
+    #   However, we allow allow the consolidation, in MapFusion if this does
+    #   not lead to an extension. This is because it causes some issues with
+    #   MapFusion.
     # TODO(phimuell): Find a better way as blocking edge consolidation might
     #   limit what MapFusion can do.
     # TODO(phimuell): Maybe disable edge consolidation by default?
@@ -243,7 +246,7 @@ def _gt_auto_process_top_level_maps(
 
         serial_map_fusion = gtx_transformations.MapFusionSerial(
             only_toplevel_maps=True,
-            consolidate_edges=False,
+            consolidate_edges_only_if_not_extending=True,
         )
         # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
         #   has been solved.
@@ -251,7 +254,7 @@ def _gt_auto_process_top_level_maps(
 
         parallel_map_fusion = gtx_transformations.MapFusionParallel(
             only_toplevel_maps=True,
-            consolidate_edges=False,
+            consolidate_edges_only_if_not_extending=True,
             # TODO(phimuell): Should we enable this flag?
             only_if_common_ancestor=False,
         )
@@ -285,7 +288,8 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        # Perform the clean up.
+        # Now do some cleanup task, that may enable further fusion opportunities.
+        #  Note for performance reasons simplify is deferred.
         gtx_transformations.gt_reduce_distributed_buffering(sdfg)
 
         # TODO(phimuell): Find out how to skip the propagation and integrating it
@@ -309,6 +313,26 @@ def _gt_auto_process_top_level_maps(
                     assume_pointwise=assume_pointwise,
                 ),
             ],
+            validate=validate,
+            validate_all=validate_all,
+        )
+
+        # Call vertical and horizontal map fusion to fuse together maps on partially
+        #  overlapping range. This is an iterative process that splits the maps to
+        #  expose overlapping range and applies serial/parallel map fusion.
+        gtx_transformations.gt_vertical_map_fusion(
+            sdfg=sdfg,
+            run_simplify=False,
+            consolidate_edges_only_if_not_extending=True,
+            single_use_data=single_use_data,
+            validate=validate,
+            validate_all=validate_all,
+        )
+        gtx_transformations.gt_horizontal_map_fusion(
+            sdfg=sdfg,
+            run_simplify=False,
+            consolidate_edges_only_if_not_extending=True,
+            single_use_data=single_use_data,
             validate=validate,
             validate_all=validate_all,
         )
