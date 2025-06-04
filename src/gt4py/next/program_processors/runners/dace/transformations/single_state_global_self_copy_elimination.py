@@ -12,6 +12,7 @@ import dace
 from dace import (
     properties as dace_properties,
     subsets as dace_sbs,
+    symbolic as dace_sym,
     transformation as dace_transformation,
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
@@ -184,44 +185,54 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
     ) -> bool:
+        """
+        The function checks if the three matched AccessNode (which means the
+        global data and the transient data) can be considered as one single
+        data.
+        """
+        # What is written into `g1`; described in terms of `g`.
         all_writes_into_g1 = gtx_st.describe_incoming_edges(state, node_g1)
-        g1_to_t_transfers = gtx_st.subset_merger(
-            [
-                gtx_st.describe_edge(edge, incoming_edge=False)
-                for edge in state.edges_between(node_g1, node_tmp)
-            ]
-        )
 
-        # For the writes into `g2` we have to exclude the ones that comes from `tmp`.
-        all_writes_into_g2 = [
+        # What is read from `g1`, ignoring the transfers to `tmp`,
+        #  see them as "pure reads"; described in terms of `g`.
+        pure_g1_reads = [
+            gtx_st.describe_edge(edge, incoming_edge=False)
+            for edge in state.out_edges(node_g1)
+            if edge.dst is not node_tmp
+        ]
+
+        # What is written into `g2`, that does not come from `tmp`, see it
+        #  as "pure writes"; described in terms of `g`.
+        pure_writes_into_g2 = [
             gtx_st.describe_edge(edge, incoming_edge=True)
             for edge in state.in_edges(node_g2)
             if edge.src is not node_tmp
         ]
 
-        for write_into_g2 in all_writes_into_g2:
-            conflicts_with_g1 = [
+        for write_into_g2 in pure_writes_into_g2:
+            # We have a conflict if there is a write at `g1` and `g2` that goes
+            #  to the same memory location.
+            # NOTE: We only consider it a conflict if we can show that it intersects.
+            write_write_conflicts = [
                 write_into_g1
                 for write_into_g1 in all_writes_into_g1
-                # TODO(phimuell): Figuring out what `None` means.
-                if dace_sbs.intersects(write_into_g2.subset, write_into_g1.subset)
+                if gtx_st.are_intersecting(write_into_g2.subset, write_into_g1.subset)
             ]
-            if len(conflicts_with_g1) == 0:
-                continue
+            if len(write_write_conflicts) != 0:
+                return False
 
-            # We write something into `g2` that was also written into `g1`.
-            #  This might indicate that it should be overwritten. However,
-            #  if it was copied into `tmp` from `g1` then we assume that
-            #  it is an unnecessary write back. This is in accordance with
-            #  ADR-18.
-            # TODO(phimuell): We would also have to check that the data is
-            #   actually written back, but this is done later. Also there
-            #   might be some obscure cases where this is not sufficient.
-            if not all(
-                any(g1_trans.covers(conflict.subset) for g1_trans in g1_to_t_transfers)
-                for conflict in conflicts_with_g1
-            ):
-                return True
+            # The second kind of conflict occurs if we read something from `g1`
+            #  that is later overridden by a write to `g2`.
+            # NOTE: We only consider it a conflict if we can show that it intersects.
+            write_after_read_conflicts = [
+                conflicting_read
+                for conflicting_read in pure_g1_reads
+                if gtx_st.are_intersecting(conflicting_read.subset, write_into_g2.subset)
+            ]
+            if len(write_after_read_conflicts) != 0:
+                return False
+
+        # TODO(phimuell): Checks about `tmp`.
 
         return False
 
@@ -446,27 +457,12 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         #  to reconfigure the dataflow at the other side.
         new_edges: list[dace_graph.MultiConnectorEdge] = []
         for edge_to_relocate_desc in edges_to_relocate_desc:
-            edge_subset = edge_to_relocate_desc.subset
-
-            # Find the associated patch the edge writes or reads from and find the
-            #  subset that corresponds to the subset at the `g` node.
-            associated_tmp_subset: Optional[dace_sbs.Subset] = next(
-                (
-                    merged_tmp_subset
-                    for merged_tmp_subset in tmp_to_g_mapping.keys()
-                    if merged_tmp_subset.covers(edge_subset)
-                ),
-                None,
+            # Get the offset for the edge correction
+            ss_offset = self._compute_offset(
+                tdesc=edge_to_relocate_desc,
+                tmp_to_g_mapping=tmp_to_g_mapping,
+                for_test=False,
             )
-            assert associated_tmp_subset is not None
-            associated_g_subset = tmp_to_g_mapping[associated_tmp_subset]
-
-            tmp_subset_start = associated_tmp_subset.min_element()
-            g_subset_start = associated_g_subset.min_element()
-            ss_offset = [
-                g_patch_start - tmp_start
-                for g_patch_start, tmp_start in zip(g_subset_start, tmp_subset_start)
-            ]
 
             if gtx_st.describes_incoming_edge(edge_to_relocate_desc):
                 is_producer_edge = True
@@ -635,14 +631,15 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
             subset_map[merged_subset_at_tmp] = merged_subset_at_g2[0]
 
-        # We now test that every subset on `tmp` can be translated to a subset
-        #  inside `g`. This is important that we can do the relocation of edges.
-        #  If we are not in test mode we assume that this is possible.
         if for_test:
+            # Make sure that every edge interfacing with `tmp` can be translated
+            #  into an edge that interfaces with `g`.
             for edge_desc in gtx_st.describe_all_edges(state, node_tmp):
                 assert edge_desc.node is node_tmp
-                if not any(
-                    final_t_patch.covers(edge_desc.subset) for final_t_patch in subset_map.keys()
+                if not self._compute_offset(
+                    tdesc=edge_desc,
+                    tmp_to_g_mapping=subset_map,
+                    for_test=True,
                 ):
                     return None
 
@@ -711,6 +708,65 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             return self._MERGE_TMP_G2
 
         return None
+
+    @overload
+    def _compute_offset(
+        self,
+        tdesc: gtx_st.EdgeConnectionSpec,
+        tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
+        for_test: Literal[True],
+    ) -> bool: ...
+
+    @overload
+    def _compute_offset(
+        self,
+        tdesc: gtx_st.EdgeConnectionSpec,
+        tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
+        for_test: Literal[False],
+    ) -> list[dace_sym.SymbolicType]: ...
+
+    def _compute_offset(
+        self,
+        tdesc: gtx_st.EdgeConnectionSpec,
+        tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
+        for_test: bool,
+    ) -> Union[list[dace_sym.SymbolicType], bool]:
+        """Computes the offset to turn a subset described in terms of `tmp` into a `g`.
+
+        `tdesc` describes an edge that interacts with `tmp`, the function returns
+        the offset that describes the how to turn the subset of `tmp` into one
+        that describes on `g`.
+        """
+
+        # First we have to identify the which patch on the `tmp` side describes
+        #  the matching. One idea would be to use `cover()`, however, there are
+        #  some rare cases where this is not possible. For that reason we use
+        #  the lower bound. This might be a bit dangerous.
+        lower_bound = dace_sbs.Indices(tdesc.subset.min_element())
+        associated_tmp_subset: Optional[dace_sbs.Subset] = next(
+            (
+                merged_tmp_subset
+                for merged_tmp_subset in tmp_to_g_mapping.keys()
+                if gtx_st.are_intersecting(merged_tmp_subset, lower_bound)
+            ),
+            None,
+        )
+        if for_test:
+            # NOTE: We could also test if the translation is unique.
+            return associated_tmp_subset is not None
+        assert associated_tmp_subset is not None
+
+        # Compute the offset between the lower bound of the t patch to the
+        #  g patch. This is also the offset of the `tdesc` that we have to
+        #  translate.
+        associated_g_subset = tmp_to_g_mapping[associated_tmp_subset]
+        tmp_subset_start = associated_tmp_subset.min_element()
+        g_subset_start = associated_g_subset.min_element()
+        ss_offset = [
+            g_patch_start - tmp_start
+            for g_patch_start, tmp_start in zip(g_subset_start, tmp_subset_start)
+        ]
+        return ss_offset
 
 
 @dace_properties.make_properties
