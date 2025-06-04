@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import pathlib
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
 from gt4py import storage as gt_storage
@@ -57,16 +56,6 @@ class ModuleGenerator(BaseModuleGenerator):
         return cast(NumpyBackend, self.builder.backend)
 
 
-def recursive_write(root_path: pathlib.Path, tree: Dict[str, Union[str, dict]]):
-    root_path.mkdir(parents=True, exist_ok=True)
-    for key, value in tree.items():
-        if isinstance(value, dict):
-            recursive_write(root_path / key, value)
-        else:
-            src_path = root_path / key
-            src_path.write_text(value)
-
-
 @register
 class NumpyBackend(BaseBackend, CLIBackendMixin):
     """NumPy backend using gtc."""
@@ -105,7 +94,7 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
         src_dir = self.builder.module_path.parent
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             src_dir.mkdir(parents=True, exist_ok=True)
-            recursive_write(src_dir, self.generate_computation())
+            self.recursive_write(src_dir, self.generate_computation())
         return self.make_module()
 
     def _make_npir(self) -> npir.Computation:
