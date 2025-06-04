@@ -57,19 +57,21 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
     """The transformation will split an AccessNode into multiple ones.
 
     If there is no interesection between a write and different reads,
-    i.e. if every read to the AccessNode can be satisfied by a single write
-    to the AccessNode and the AccessNode is only used at one location,
-    then the node is split.
+    i.e. if every read to the AccessNode can be satisfied by a single
+    write to the AccessNode and the AccessNode is only used at one
+    location, then the node is split.
     This means that the reads will be satisfied directly and the node
     does not have to materialize.
+
+    Before this transformation is run the `SplitConsumerMemlet` should
+    be run.
 
     Args:
         single_use_data: The list of data that is used only once.
 
     Todo:
-        - Currently for every consumer there can only be one producer. In case the
-            consumer is a Map, this makes sense, but in case the consumer is an
-            AccessNode one could split the consumer.
+        - Made it possible to merge splits, i.e. such that a fragment can
+            be described by two producers.
         - Create a version that is able to split over multiple states. This is
             mostly useful to enable more state fusion.
     """
@@ -201,7 +203,13 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         """
         access_node: dace_nodes.AccessNode = self.access_node
 
-        # Which input edge can cover which output edge assignments
+        # NOTE: Build the assignments based on the producers. Basing the split on
+        #  the producers has the advantages that it naturally takes "double use"
+        #  into account, i.e. one producer computes something and two different
+        #  reads it. However, it is also quite unnatural, because the consumer
+        #  should define the split (i.e. more than one producer are needed to
+        #  generate the data for a consumer). This is hard to handle, but should
+        #  be implemented at some point.
         assignments: dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]] = {}
         for iedge in state.in_edges(access_node):
             # TODO(phimuell): Lift this.
