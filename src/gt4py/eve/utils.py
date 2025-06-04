@@ -334,16 +334,16 @@ class CustomMapping(collections.abc.MutableMapping[_K, _V]):
         self.value_map[data_key] = value
 
     def __delitem__(self, key: _K) -> None:
-        data_key = self.key_func(key)
-        del self.key_map[data_key]
-        del self.value_map[data_key]
+        custom_key = self.key_func(key)
+        del self.key_map[custom_key]
+        del self.value_map[custom_key]
 
     def __len__(self) -> int:
         return len(self.key_map)
 
     def __iter__(self) -> Iterator[_K]:
-        for key in self.key_map:
-            yield self.key_map[key]
+        for custom_key in self.key_map:
+            yield self.key_map[custom_key]
 
     def __repr__(self) -> str:
         return (
