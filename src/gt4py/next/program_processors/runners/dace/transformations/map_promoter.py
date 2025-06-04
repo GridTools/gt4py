@@ -65,6 +65,14 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
     Note:
         - The transformation will always promote the top Map never the lower Map.
         - This ignores tiling.
+
+    Todo:
+        Promotion in vertical direction, i.e. adding a vertical dimension is
+        most likely all the time good, because it will create independent nodes
+        that `LoopBlocking` can move out of the inner loop. However, promotion
+        in horizontal, i.e. adding horizontal dimensions, is not necessarily
+        good. Empirical observations have shown that it is most likely, but
+        we should add a criteria to prevent the promotion in certain cases.
     """
 
     only_toplevel_maps = dace_properties.Property(
@@ -160,6 +168,10 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
                 "You must select at least one class of dimension that should be promoted."
             )
 
+        # This flag is only for testing. It allows to bypass the check if the
+        #  Maps can be fused after promotion.
+        self._bypass_fusion_test = False
+
     def can_be_applied(
         self,
         graph: Union[dace.SDFGState, dace.SDFG],
@@ -224,7 +236,9 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
                 return False
 
         # Test if after the promotion the maps could be fused.
-        if not self._test_if_promoted_maps_can_be_fused(graph, sdfg):
+        if self._bypass_fusion_test:
+            pass
+        elif not self._test_if_promoted_maps_can_be_fused(graph, sdfg):
             return False
 
         return True
