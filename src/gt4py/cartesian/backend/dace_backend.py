@@ -37,15 +37,17 @@ from gt4py.cartesian.gtc import common, gtir
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.oir_to_dace import OirSDFGBuilder
-from gt4py.cartesian.gtc.dace.oir_to_stree import OIRToStree
+from gt4py.cartesian.gtc.dace.oir_to_treeir import OIRToTreeIR
 from gt4py.cartesian.gtc.dace.transformations import (
     NoEmptyEdgeTrivialMapElimination,
     nest_sequential_map_scopes,
 )
+from gt4py.cartesian.gtc.dace.treeir_to_stree import TreeIRToScheduleTree
 from gt4py.cartesian.gtc.dace.utils import array_dimensions, replace_strides
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
+from gt4py.cartesian.gtc.passes.oir_optimizations import caches
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
@@ -339,15 +341,25 @@ class SDFGManager:
         oir = GTIRToOIR().visit(self.builder.gtir)
 
         # - oir optimizations
-        oir_pipeline = self.builder.options.backend_opts.get("oir_pipeline", DefaultPipeline())
+        oir_pipeline = self.builder.options.backend_opts.get(
+            "oir_pipeline",
+            DefaultPipeline(
+                skip=[
+                    caches.IJCacheDetection,
+                    caches.KCacheDetection,
+                ]
+            ),
+        )
         oir = oir_pipeline.run(oir)
 
-        # Step 2: oir to stree
-        visitor = OIRToStree()
-        visitor.visit(oir)
-        assert visitor.stree
+        # - convert oir.VerticalLoops and oir.VerticalLoopSections to MapScope / ForScope
+        # - split oir.HorizontalExecutions into oir.CodeBlocks
+        tir = OIRToTreeIR().visit(oir)
 
-        return visitor.stree
+        # Step 2: oir to stree
+        stree = TreeIRToScheduleTree().visit(tir)
+
+        return stree
 
     @staticmethod
     def _strip_history(sdfg):
