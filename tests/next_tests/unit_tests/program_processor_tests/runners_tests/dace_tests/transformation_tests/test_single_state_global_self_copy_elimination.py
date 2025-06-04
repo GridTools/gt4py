@@ -434,6 +434,61 @@ def _make_concat_where_like_41_to_60(
     return sdfg, state, g1, t, g2, c1, c2
 
 
+def _make_concat_where_like_not_possible() -> (
+    tuple[
+        dace.SDFG,
+        dace.SDFGState,
+        dace_nodes.AccessNode,
+        dace_nodes.AccessNode,
+        dace_nodes.AccessNode,
+    ]
+):
+    """Because the "Bulk Map" writes more into `tmp` than is written back
+    the transformation is not applicable.
+    """
+    sdfg = dace.SDFG(util.unique_name(f"self_copy_too_big_bulk_write"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array(
+        "g",
+        shape=(10, 5),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "a",
+        shape=(10, 5),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "t",
+        shape=(10, 5),
+        dtype=dace.float64,
+        transient=True,
+    )
+
+    g1, t, g2 = (state.add_access(name) for name in "gtg")
+
+    state.add_nedge(g1, t, dace.Memlet("g[0, 0:5] -> [0, 0:5]"))
+    state.add_nedge(t, g2, dace.Memlet("t[0:9, 0:5] -> [0:9, 0:5]"))
+    state.add_mapped_tasklet(
+        "bulk_map",
+        map_ranges={
+            "__i": "1:10",
+            "__j": "0:5",
+        },
+        inputs={"__in": dace.Memlet("a[__i, __j]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("t[__i, __j]")},
+        output_nodes={t},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    return sdfg, state, g1, t, g2
+
+
 def test_global_self_copy_elimination_only_pattern():
     """Contains only the pattern -> Total elimination."""
     sdfg, state = _make_self_copy_sdfg()
@@ -750,3 +805,15 @@ def test_global_self_copy_elimination_concat_where_like_41_to_60(
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref, res)
+
+
+def test_concat_where_like_not_possible():
+    sdfg, state, g1, t, g2 = _make_concat_where_like_not_possible()
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.SingleStateGlobalSelfCopyElimination,
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 0
