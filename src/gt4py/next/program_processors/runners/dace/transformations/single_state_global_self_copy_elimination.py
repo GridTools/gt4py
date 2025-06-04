@@ -203,12 +203,13 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             if edge.dst is not node_tmp
         ]
 
-        # What is written into `g2`, that does not come from `tmp`, see it
-        #  as "pure writes"; described in terms of `g`.
+        # What is written into `g2`, that does not come from `tmp` (checked
+        #  separately) or from `g1` (according to ADR-18 can only be the same
+        #  position). See it as "pure writes"; described in terms of `g`.
         pure_writes_into_g2 = [
             gtx_st.describe_edge(edge, incoming_edge=True)
             for edge in state.in_edges(node_g2)
-            if edge.src is not node_tmp
+            if edge.src not in [node_tmp, node_g1]
         ]
 
         for write_into_g2 in pure_writes_into_g2:
