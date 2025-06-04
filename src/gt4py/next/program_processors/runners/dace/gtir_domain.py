@@ -32,7 +32,7 @@ def parse_range_boundary(expr: gtir.Expr) -> dace.symbolic.SymbolicType:
     return dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(expr))
 
 
-def extract_domain(node: gtir.Node) -> FieldopDomain:
+def extract_domain(node: gtir.Expr) -> FieldopDomain:
     """
     Visits the domain of a field operator and returns a list of dimensions and
     the corresponding lower and upper bounds. The returned lower bound is inclusive,
@@ -98,25 +98,16 @@ def get_field_layout(
     domain: FieldopDomain,
 ) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
     """
-    Parse the field operator domain and generates the shape of the result field.
-
-    It should be enough to allocate an array with shape (upper_bound - lower_bound)
-    but this would require to use array offset for compensate for the start index.
-    Suppose that a field operator executes on domain [2,N-2], the dace array to store
-    the result only needs size (N-4), but this would require to compensate all array
-    accesses with offset -2 (which corresponds to -lower_bound). Instead, we choose
-    to allocate (N-2), leaving positions [0:2] unused. The reason is that array offset
-    is known to cause issues to SDFG inlining. Besides, map fusion will in any case
-    eliminate most of transient arrays.
+    Parse the field domain and generate the layout of the result dace array.
 
     Args:
         domain: The field domain.
 
     Returns:
-        A tuple of three lists containing:
-            - the domain dimensions
-            - the domain origin, that is the start indices in all dimensions
-            - the domain size in each dimension
+        A tuple representing the field array layout, which contains three lists with same length:
+            - the field dimensions
+            - the field origin, that is the start indices in each dimension
+            - the field size in each dimension
     """
     domain_dims, domain_lbs, domain_sizes = [], [], []
     for dim, dim_range in domain:

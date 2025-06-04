@@ -252,9 +252,10 @@ class PrimitiveTranslator(Protocol):
         for a specific GTIR primitive function.
 
         Args:
-            node: The GTIR node describing the primitive to be lowered.
+            node: The GTIR node containing the primitive to be lowered.
             ctx: The SDFG context where the GTIR node should be lowered.
-            sdfg_builder: The object responsible for visiting child nodes of the primitive node.
+            sdfg_builder: The object responsible for visiting the given GTIR node
+                and its child nodes.
 
         Returns:
             A list of data access nodes and the associated GT4Py data type, which provide
@@ -370,7 +371,7 @@ def _create_field_operator(
     fields: for each field, this method will call `_create_field_operator_impl()`.
 
     Args:
-        ctx: The SDFG context of the field operator.
+        ctx: The SDFG context where to instanciate the map scope of the field operator.
         domain: The domain of the field operator that computes the field.
         node_type: The GT4Py type of the IR node that produces this field.
         sdfg_builder: The object used to build the map scope in the provided SDFG.
