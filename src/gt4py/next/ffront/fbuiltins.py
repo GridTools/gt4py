@@ -137,14 +137,14 @@ class BuiltInFunction(Generic[_R, _P]):
         )
 
 
-MaskT = TypeVar("MaskT", bound=Union[common.Field, common.Domain])
+CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
 FieldT = TypeVar("FieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
 
 
 class WhereBuiltinFunction(
-    BuiltInFunction[_R, [MaskT, FieldT, FieldT]], Generic[_R, MaskT, FieldT]
+    BuiltInFunction[_R, [CondT, FieldT, FieldT]], Generic[_R, CondT, FieldT]
 ):
-    def __call__(self, mask: MaskT, true_field: FieldT, false_field: FieldT) -> _R:
+    def __call__(self, cond: CondT, true_field: FieldT, false_field: FieldT) -> _R:
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
@@ -155,8 +155,8 @@ class WhereBuiltinFunction(
                 raise ValueError(
                     "Tuple of different size not allowed."
                 )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
-            return tuple(self(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
-        return super().__call__(mask, true_field, false_field)
+            return tuple(self(cond, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
+        return super().__call__(cond, true_field, false_field)
 
 
 @BuiltInFunction
