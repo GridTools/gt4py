@@ -136,6 +136,25 @@ def test_notting_int():
         _ = FieldOperatorParser.apply_to_function(not_int)
 
 
+def test_compare():
+    def compare(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+        return a < b
+
+    parsed = FieldOperatorParser.apply_to_function(compare)
+
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    )
+
+
+def test_compare_wrong_dtype():
+    def compare(a: Field[[TDim], float64], b: Field[[TDim], float32]):
+        return a < b
+
+    with pytest.raises(errors.DSLError, match=r"Incompatible datatypes"):
+        _ = FieldOperatorParser.apply_to_function(compare)
+
+
 def test_concat_where():
     def simple_concat_where(a: Field[[TDim], float], b: Field[[TDim], float]):
         return concat_where(TDim > 0, a, b)
@@ -183,18 +202,6 @@ def test_concat_where_invalid_dtype():
     with pytest.raises(
         errors.DSLError,
         match=re.escape("Field arguments must be of same dtype, got 'float64' != 'int32'."),
-    ):
-        _ = FieldOperatorParser.apply_to_function(domain_comparison)
-
-
-def test_domain_chained_comparison_failure():
-    def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
-        return concat_where(0 < TDim < 42, a, b)
-
-    # _ = FieldOperatorParser.apply_to_function(domain_comparison)
-    with pytest.raises(
-        errors.DSLError,
-        match=re.escape("TODO"),
     ):
         _ = FieldOperatorParser.apply_to_function(domain_comparison)
 
