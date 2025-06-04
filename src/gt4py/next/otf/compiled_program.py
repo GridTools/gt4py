@@ -136,9 +136,9 @@ class CompiledProgramsPool:
         stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
     ] = dataclasses.field(default_factory=dict)
 
-    offset_provider_type_cache: eve_utils.CustomMapping = dataclasses.field(
+    _offset_provider_type_cache: eve_utils.CustomMapping = dataclasses.field(
         default_factory=lambda: eve_utils.CustomMapping(common.offset_provider_hash)
-    )
+    )  # cache the offset provider type in order to avoid recomputing it at each program call
 
     def __postinit__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
@@ -226,17 +226,16 @@ class CompiledProgramsPool:
         self,
         offset_provider: common.OffsetProvider | common.OffsetProviderType,
     ) -> common.OffsetProviderType:
-        offset_provider_type: common.OffsetProviderType
         try:
-            offset_provider_type = self.offset_provider_type_cache[offset_provider]
+            op_type = self._offset_provider_type_cache[offset_provider]
         except KeyError:
-            offset_provider_type = (
+            op_type = (
                 offset_provider
                 if common.is_offset_provider_type(offset_provider)
                 else common.offset_provider_to_type(offset_provider)
             )
-            self.offset_provider_type_cache[offset_provider] = offset_provider_type
-        return offset_provider_type
+            self._offset_provider_type_cache[offset_provider] = op_type
+        return op_type
 
     def compile(
         self,

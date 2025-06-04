@@ -90,7 +90,7 @@ class Program:
     _offset_provider_extended_cache: eve_utils.CustomMapping = dataclasses.field(
         default_factory=lambda: eve_utils.CustomMapping(common.offset_provider_hash),
         kw_only=True,
-    )
+    )  # cache the extended dictionary of offset providers that includes the implicitly defined ones
 
     @classmethod
     def from_function(
@@ -283,13 +283,12 @@ class Program:
         self,
         offset_provider: common.OffsetProvider,
     ) -> common.OffsetProvider:
-        offset_provider_extended: common.OffsetProvider
         try:
-            offset_provider_extended = self._offset_provider_extended_cache[offset_provider]
+            op_extended = self._offset_provider_extended_cache[offset_provider]
         except KeyError:
-            offset_provider_extended = {**self._implicit_offset_provider, **offset_provider}
-            self._offset_provider_extended_cache[offset_provider] = offset_provider_extended
-        return offset_provider_extended
+            op_extended = {**self._implicit_offset_provider, **offset_provider}
+            self._offset_provider_extended_cache[offset_provider] = op_extended
+        return op_extended
 
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         program_name = (
