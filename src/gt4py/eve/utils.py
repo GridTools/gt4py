@@ -364,6 +364,7 @@ class HashableBy(Generic[_T]):
         return self.hashed_value
 
     def __eq__(self, other: Any) -> bool:
+        assert isinstance(other, HashableBy)
         return self.value is other.value or self.value == other.value
 
 
@@ -521,12 +522,10 @@ def with_fluid_partial(
 
 
 @overload
-def with_fluid_partial(  # redefinition of unused function
-    func: Callable[_P, _T], *args: Any, **kwargs: Any
-) -> Callable[_P, _T]: ...
+def with_fluid_partial(func: Callable[_P, _T], *args: Any, **kwargs: Any) -> Callable[_P, _T]: ...
 
 
-def with_fluid_partial(  # redefinition of unused function
+def with_fluid_partial(
     func: Optional[Callable[..., Any]] = None, *args: Any, **kwargs: Any
 ) -> Union[Callable[..., Any], Callable[[Callable[..., Any]], Callable[..., Any]]]:
     """Add a `partial` attribute to the decorated function.
