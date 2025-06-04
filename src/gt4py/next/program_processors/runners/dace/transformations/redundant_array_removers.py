@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, TypeAlias, Union
 
 import dace
 from dace import (
@@ -23,6 +23,11 @@ from dace.transformation.passes import analysis as dace_analysis
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
+AccessLocation: TypeAlias = tuple[dace.SDFGState, dace_nodes.AccessNode]
+"""An AccessNode and the state it is located in.
+"""
+
+
 def gt_multi_state_global_self_copy_elimination(
     sdfg: dace.SDFG,
     validate: bool = False,
@@ -31,15 +36,24 @@ def gt_multi_state_global_self_copy_elimination(
 
     For the return value see `MultiStateGlobalSelfCopyElimination.apply_pass()`.
     """
-    pipeline = dace_ppl.Pipeline([gtx_transformations.MultiStateGlobalSelfCopyElimination()])
-    res = pipeline.apply_pass(sdfg, {})
+    transforms = [
+        gtx_transformations.MultiStateGlobalSelfCopyElimination(),
+        gtx_transformations.MultiStateGlobalSelfCopyElimination2(),
+    ]
+
+    pipeline = dace_ppl.Pipeline(transforms)
+    pip_res = pipeline.apply_pass(sdfg, {})
 
     if validate:
         sdfg.validate()
 
-    if "MultiStateGlobalSelfCopyElimination" not in res:
-        return None
-    return res["MultiStateGlobalSelfCopyElimination"][sdfg]
+    res: dict[dace.SDFG, set[str]] = {}
+    for trans in transforms:
+        tname = trans.__class__.__name__
+        if tname in pip_res:
+            for nsdfg, processed_data in pip_res[tname].items():
+                res.setdefault(nsdfg, set()).update(processed_data)
+    return res if res else None
 
 
 def gt_remove_copy_chain(
@@ -107,6 +121,7 @@ class MultiStateGlobalSelfCopyElimination(dace_transformation.Pass):
             `SingleStateGlobalSelfCopyElimination`, see `_classify_candidate()` and
             `_remove_writes_to_global()` for more.
         - Make it more efficient such that the SDFG is not scanned multiple times.
+        - Merge with the `MultiStateGlobalSelfCopyElimination2`.
     """
 
     def modifies(self) -> dace_ppl.Modifies:
@@ -471,323 +486,290 @@ class MultiStateGlobalSelfCopyElimination(dace_transformation.Pass):
 
 
 @dace_properties.make_properties
-class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransformation):
-    """Remove global self copy.
+class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
+    """Removes self copying across different states.
 
-    This transformation matches the following case `(G) -> (T) -> (G)`, i.e. `G`
-    is read from and written too at the same time, however, in between is `T`
-    used as a buffer. In the example above `G` is a global memory and `T` is a
-    temporary. The transformation applies if the only incoming edge of the second
-    `G` AccessNode comes from the `T` node.
-    In case there are direct connections between the two `G` nodes, they will
-    be removed as well.
-
-    The transformation will then remove the second `G` node, all reads from the
-    second `G` node will redirected such that they use the first `G` node.
-    Furthermore, if `T` is not used downstream then also the `T` node will be
-    removed as well.
-
-    This transformation assumes that the SDFG follows rule 3 of ADR-18, which
-    guarantees that there is only a point wise dependency of the output on the
-    input.
+    This function is very similar to `MultiStateGlobalSelfCopyElimination2`, however,
+    it is a bit more restricted, as `MultiStateGlobalSelfCopyElimination` has a much
+    better way to handle some edge cases.
+    The main difference is that `MultiStateGlobalSelfCopyElimination2` uses an other
+    way to locate the redundant data. Instead of focusing on the on the globals this
+    transformation focuses on the transients.
 
     Todo:
-        If `T` is only ready in this state, then `T` should not be created, instead
-        it should be read directly from `G`.
+        Merge with the `MultiStateGlobalSelfCopyElimination2`.
     """
 
-    node_read_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
-    node_tmp = dace_transformation.transformation.PatternNode(dace_nodes.AccessNode)
-    node_write_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    def modifies(self) -> dace_ppl.Modifies:
+        return dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes
 
-    def __init__(
-        self,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(*args, **kwargs)
+    def should_reapply(self, modified: dace_ppl.Modifies) -> bool:
+        return modified & (dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes)
 
-    @classmethod
-    def expressions(cls) -> Any:
-        return [dace.sdfg.utils.node_path_graph(cls.node_read_g, cls.node_tmp, cls.node_write_g)]
+    def apply_pass(
+        self, sdfg: dace.SDFG, pipeline_results: dict[str, Any]
+    ) -> Optional[dict[dace.SDFG, set[str]]]:
+        """Applies the pass.
 
-    def can_be_applied(
-        self,
-        graph: dace.SDFGState | dace.SDFG,
-        expr_index: int,
-        sdfg: dace.SDFG,
-        permissive: bool = False,
-    ) -> bool:
-        read_g = self.node_read_g
-        write_g = self.node_write_g
-        tmp_node = self.node_tmp
-        g_desc = read_g.desc(sdfg)
-        tmp_desc = tmp_node.desc(sdfg)
-
-        # NOTE: We do not check if `G` is read downstream.
-        if read_g.data != write_g.data:
-            return False
-        if g_desc.transient:
-            return False
-        if not tmp_desc.transient:
-            return False
-        if graph.scope_dict()[read_g] is not None:
-            return False
-
-        # For ease of implementation we require that only `G` defines `T`. This is
-        #  needed to ensure that `G` only depends on `G`.
-        if graph.in_degree(tmp_node) != 1:
-            return False
-
-        # Now we look at all incoming connections of the second `G` nodes, they must
-        #  either come from `T` or from the first `G` node directly.
-        for iedge in graph.in_edges(write_g):
-            if iedge.src is read_g:
-                continue
-            if iedge.src is tmp_node:
-                continue
-            return False
-
-        return True
-
-    def _is_read_downstream(
-        self,
-        start_state: dace.SDFGState,
-        sdfg: dace.SDFG,
-        data_to_look: str,
-    ) -> bool:
-        """Scans for reads to `data_to_look`.
-
-        The function will go through states that are reachable from `start_state`
-        (including) and test if there is a read to the data container `data_to_look`.
-        It will return `True` the first time it finds such a node.
-        It is important that the matched nodes, i.e. `self.node_{read_g, write_g, tmp}`
-        are ignored.
-
-        Args:
-            start_state: The state where the scanning starts.
-            sdfg: The SDFG on which we operate.
-            data_to_look: The data that we want to look for.
-
-        Todo:
-            Port this function to use DaCe pass pipeline.
+        The function will return a `dict` that contains for every SDFG, the name
+        of the processed data descriptors. If a name refers to a global memory,
+        then it means that all write backs, i.e. `(T) -> (G)` patterns, have
+        been removed for that `G`. If the name refers to a data descriptor that no
+        longer exists, then it means that the write `(G) -> (T)` was also eliminated.
+        Currently there is no possibility to identify which transient name belonged
+        to a global name.
         """
-        read_g: dace_nodes.AccessNode = self.node_read_g
-        write_g: dace_nodes.AccessNode = self.node_write_g
-        tmp_node: dace_nodes.AccessNode = self.node_tmp
+        result: dict[dace.SDFG, set[str]] = dict()
+        for nsdfg in sdfg.all_sdfgs_recursive():
+            single_level_res: set[str] = self._process_sdfg(nsdfg, pipeline_results)
+            if single_level_res:
+                result[nsdfg] = single_level_res
 
-        # TODO(phimuell): Run the `StateReachability` pass in a pipeline and use
-        #  the `_pipeline_results` member to access the data.
-        return gtx_transformations.utils.is_accessed_downstream(
-            start_state=start_state,
-            sdfg=sdfg,
-            reachable_states=None,
-            data_to_look=data_to_look,
-            nodes_to_ignore={read_g, write_g, tmp_node},
-        )
+        return result if result else None
 
-    def apply(
+    def _process_sdfg(
         self,
-        graph: dace.SDFGState | dace.SDFG,
         sdfg: dace.SDFG,
-    ) -> None:
-        read_g: dace_nodes.AccessNode = self.node_read_g
-        write_g: dace_nodes.AccessNode = self.node_write_g
-        tmp_node: dace_nodes.AccessNode = self.node_tmp
+        pipeline_results: dict[str, Any],
+    ) -> set[str]:
+        """Processes the SDFG in a not recursive way, it returns the set of transients
+        that have been eliminated.
+        """
+        redundant_transients = self._find_redundant_transients(sdfg)
+        if len(redundant_transients) == 0:
+            return set()
 
-        # First check if the `T` node is still needed. The node is needed if the data
-        #  is referenced downstream or if there are edges other than to the second
-        #  `G` node.
-        if not all(oedge.dst is write_g for oedge in graph.out_edges(tmp_node)):
-            tmp_node_is_still_needed = True
-        elif self._is_read_downstream(start_state=graph, sdfg=sdfg, data_to_look=tmp_node.data):
-            tmp_node_is_still_needed = True
-        else:
-            tmp_node_is_still_needed = False
-
-        # Redirect the reads from the second `G` node such that they now go through
-        #  the first `G` node. Because the names are the same there is no special
-        #  handling needed.
-        # NOTE: There are no writes to the second `G` nodes beside directly the one
-        #  coming from the first `G` node or the `T` node. Thus nothing to do.
-        for wg_oedge in list(graph.out_edges(write_g)):
-            graph.add_edge(
-                read_g,
-                wg_oedge.src_conn,
-                wg_oedge.dst,
-                wg_oedge.dst_conn,
-                wg_oedge.data,
+        for global_data, write_locations, read_locations in redundant_transients.values():
+            self._remove_transient_at_definition_point(global_data, write_locations)
+            self._remove_transient_at_using_location(
+                sdfg,
+                global_data,
+                read_locations,
             )
-            graph.remove_edge(wg_oedge)
 
-        # Now we remove the second `G` node as it is no longer needed.
-        graph.remove_node(write_g)
+        return set(redundant_transients.keys())
 
-        # If the `T` is no longer needed then remove it. If the first node has become
-        #  isolated, also remove it.
-        if not tmp_node_is_still_needed:
-            graph.remove_node(tmp_node)
-
-            if graph.degree(read_g) == 0:
-                graph.remove_node(read_g)
-
-            # If it fails then `T` is still used in a parallel controlflow path, for
-            #  example in `if` branches.
-            try:
-                sdfg.remove_data(tmp_node.data, validate=True)
-            except ValueError as e:
-                if not str(e).startswith(f"Cannot remove data descriptor {tmp_node.data}:"):
-                    raise
-
-
-@dace_properties.make_properties
-class SingleStateGlobalDirectSelfCopyElimination(dace_transformation.SingleStateTransformation):
-    """Removes an unbuffered self copy in a state.
-
-    This transformation is extremely similar to `SingleStateGlobalSelfCopyElimination`,
-    however, this transformation does not need a buffer between the two global
-    AccessNodes. Therefore it matches the pattern `(G) -> (G)`, where `G` refers to
-    global data. Note that the transformation only considers copies on global scope.
-    The transformation has two modes in how this is achieved, which one is chosen,
-    depends on if cycles are created or not. The first mode, which is selected if
-    cycles would be created, is to merge the two AccessNodes together. For this
-    the edges of the first AccessNode are reconnected to the second AccessNode.
-
-    In the second mode, which is selected if cycles would be created, for example in
-    case of `if` branches, then the edges are removed, which will create two
-    independent `G` AccessNodes.
-
-    Todo:
-        Merge this transformation with `SingleStateGlobalSelfCopyElimination`.
-    """
-
-    node_read_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
-    node_write_g = dace_transformation.PatternNode(dace_nodes.AccessNode)
-
-    def __init__(
+    def _remove_transient_at_using_location(
         self,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(*args, **kwargs)
-
-    @classmethod
-    def expressions(cls) -> Any:
-        return [dace.sdfg.utils.node_path_graph(cls.node_read_g, cls.node_write_g)]
-
-    def can_be_applied(
-        self,
-        graph: dace.SDFGState | dace.SDFG,
-        expr_index: int,
         sdfg: dace.SDFG,
-        permissive: bool = False,
-    ) -> bool:
-        read_g = self.node_read_g
-        write_g = self.node_write_g
-        g_desc = read_g.desc(sdfg)
-
-        # NOTE: We do not check if `G` is read downstream.
-        if read_g.data != write_g.data:
-            return False
-        if g_desc.transient:
-            return False
-        # Restrict to global scope.
-        if graph.scope_dict()[read_g] is not None:
-            return False
-
-        return True
-
-    def apply(
-        self,
-        graph: dace.SDFGState | dace.SDFG,
-        sdfg: dace.SDFG,
+        global_data: str,
+        read_locations: list[AccessLocation],
     ) -> None:
-        read_g: dace_nodes.AccessNode = self.node_read_g
-        write_g: dace_nodes.AccessNode = self.node_write_g
+        """Removes the write back from the transient into the global.
 
-        # Select in which mode the transformation should run, depending on
-        #  if this would lead to cycles.
-        merge_g_nodes = True
-        for oedge in graph.out_edges(read_g):
-            if oedge.dst is write_g:
+        If the global node has become isolated it will be removed. In addition the
+        function will also remove the transient data from the SDFG.
+        """
+        for state, transient_ac in read_locations:
+            assert state.in_degree(transient_ac) == 0
+            assert state.out_degree(transient_ac) == 1
+
+            transient_neighbours = [oedge.dst for oedge in state.out_edges(transient_ac)]
+            state.remove_node(transient_ac)
+
+            for transient_neighbour in transient_neighbours:
+                if state.degree(transient_neighbour) == 0:
+                    state.remove_node(transient_neighbour)
+
+            if transient_ac.data in sdfg.arrays:
+                sdfg.remove_data(transient_ac.data)
+
+    def _remove_transient_at_definition_point(
+        self,
+        global_data: str,
+        write_locations: list[AccessLocation],
+    ) -> None:
+        """Clean up the transient at its definition point.
+
+        The function removes the write from the global into the transient. The
+        function will also remove any node that has become isolated.
+        However, the function will not remove the transient data from the registry.
+        """
+        for state, transient_ac in write_locations:
+            assert state.in_degree(transient_ac) == 1
+            assert state.out_degree(transient_ac) == 0
+
+            transient_neighbours = [iedge.src for iedge in state.in_edges(transient_ac)]
+            state.remove_node(transient_ac)
+
+            for transient_neighbour in transient_neighbours:
+                if state.degree(transient_neighbour) == 0:
+                    state.remove_node(transient_neighbour)
+
+    def _find_redundant_transients(
+        self,
+        sdfg: dace.SDFG,
+    ) -> dict[str, tuple[str, list[AccessLocation], list[AccessLocation]]]:
+        """Find all redundant transients that can be eliminated.
+
+        The function returns a `dict` mapping the name of the transient data to a tuple
+        of length 3. The first element is the name of the global data that defines
+        the transient. The second element are the locations where the transient is
+        defined, i.e. written to and in the third element are the locations where the
+        transient is used.
+        """
+
+        # Scan all transients and find their location.
+        possible_redundant_transients: dict[
+            str, tuple[list[AccessLocation], list[AccessLocation]]
+        ] = {}
+        for data_name, desc in sdfg.arrays.items():
+            if not desc.transient:
                 continue
-            if gtx_transformations.utils.is_reachable(
-                start=oedge.dst,
-                target=write_g,
-                state=graph,
-            ):
-                merge_g_nodes = False
-                break
+            write_read_locations = self._find_exclusive_read_and_write_locations_of(sdfg, data_name)
+            if write_read_locations is None:
+                continue
+            if len(write_read_locations[1]) != 0:
+                possible_redundant_transients[data_name] = write_read_locations
 
-        if merge_g_nodes:
-            self._merge_g_nodes(state=graph, sdfg=sdfg)
-        else:
-            self._split_g_nodes(state=graph)
+        # Nothing was found.
+        if len(possible_redundant_transients) == 0:
+            return {}
 
-    def _split_g_nodes(
-        self,
-        state: dace.SDFGState,
-    ) -> None:
-        """Second mode of the transformation, i.e. the splitting.
-
-        All edges between the two nodes, will be removed. There is no longer a
-        direct connection between the two nodes.
-        """
-        read_g: dace_nodes.AccessNode = self.node_read_g
-        write_g: dace_nodes.AccessNode = self.node_write_g
-
-        for oedge in list(state.out_edges(read_g)):
-            if oedge.dst is write_g:
-                state.remove_edge(oedge)
-
-        assert state.degree(read_g) != 0
-        assert state.degree(write_g) != 0
-
-    def _merge_g_nodes(
-        self,
-        state: dace.SDFGState,
-        sdfg: dace.SDFG,
-    ) -> None:
-        """The first mode of the transformation, i.e. the merging of the nodes.
-
-        All incoming edges of the first node will be reconnected to the second node.
-        The outgoing edges will be reconnected to the second node, if they connect
-        the two nodes, they will be removed.
-        """
-        read_g: dace_nodes.AccessNode = self.node_read_g
-        write_g: dace_nodes.AccessNode = self.node_write_g
-
-        # Reconnect any incoming edges of the read AccessNode, aka. the first one.
-        for iedge in list(state.in_edges(read_g)):
-            # Since the names are the same, just creating a new edge is enough.
-            state.add_edge(
-                iedge.src,
-                iedge.src_conn,
-                write_g,
-                iedge.dst_conn,
-                iedge.data,
+        # Determine the associated global data.
+        redundant_transients_and_associated_data: dict[
+            str, tuple[str, list[AccessLocation], list[AccessLocation]]
+        ] = {}
+        involved_global_data: set[str] = set()
+        for transient_data, (
+            write_locations,
+            read_locations,
+        ) in possible_redundant_transients.items():
+            associated_global_data = self._filter_candidate(
+                sdfg,
+                transient_data,
+                write_locations,
+                read_locations,
             )
-            state.remove_edge(iedge)
-
-        # Now reconnect all edges that leave the first AccessNodes, with the
-        #  exception of the edges that connecting the two, they are just removed.
-        for oedge in list(state.out_edges(read_g)):
-            if oedge.dst is not write_g:
-                state.add_edge(
-                    write_g,
-                    oedge.src_conn,
-                    oedge.dst,
-                    oedge.dst_conn,
-                    oedge.data,
+            if associated_global_data is not None:
+                # This is for simplifying implementation.
+                assert associated_global_data not in involved_global_data
+                involved_global_data.add(associated_global_data)
+                redundant_transients_and_associated_data[transient_data] = (
+                    associated_global_data,
+                    write_locations,
+                    read_locations,
                 )
-            state.remove_edge(oedge)
 
-        # Now remove the first node to `G` and if the second has become isolated
-        #  then also remove it.
-        state.remove_node(read_g)
+        return redundant_transients_and_associated_data
 
-        if state.degree(write_g) == 0:
-            state.remove_node(write_g)
+    def _filter_candidate(
+        self,
+        sdfg: dace.SDFG,
+        transient_data: str,
+        write_locations: list[AccessLocation],
+        read_locations: list[AccessLocation],
+    ) -> Union[None, str]:
+        """Test if the transient can be eliminated.
+
+        The function tests if transient data can be eliminated and be replaced by a
+        global data. If this is the case the function returns the name of the data
+        and if this is not possible `None`.
+        """
+
+        # Currently we require that there is exactly one location where the temporary
+        #  is defined and written back. This is a simplification, that should be
+        #  removed.
+        if len(write_locations) != 1 and len(read_locations) != 1:
+            return None
+
+        # We actually have to check if the global data is not modified between the
+        #  location where the transient is defined and where it is written back.
+        #  `MultiStateGlobalSelfCopyElimination` does this in a quite sophisticated
+        #  way. We do it cheap we require that the state in which the definition of
+        #  the transient happens is the immediate predecessor of where it is used.
+        #  We now also hope that the transient is not used somewhere else.
+        for defining_state, _ in write_locations:
+            # If we are in a nested CFR, we will go upward until we found some
+            #  outgoing edge.
+            successor_states = gtx_transformations.utils.find_successor_state(defining_state)
+            if not all(
+                write_back_state in successor_states for write_back_state, _ in read_locations
+            ):
+                return None
+
+        # We now must look at what defines the transient. For that we look at what
+        #  defines it. For that there must be global data that writes into it.
+        # TODO(phimuell): To better handle `concat_where` also allows that more
+        #   producers are allowed, also differently.
+        # TODO(phimuell): In `concat_where` we are using `dynamic` Memlets, they should
+        #   also be checked.
+        global_data: Union[None, str] = None
+        for state, transient_access_node in write_locations:
+            for iedge in state.in_edges(transient_access_node):
+                src_node = iedge.src
+                if not isinstance(src_node, dace_nodes.AccessNode):
+                    return None
+
+                if src_node.desc(sdfg).transient:
+                    # Non global data writes into the transient.
+                    # TODO(phimuell): Lift this.
+                    return None
+
+                # TODO(phimuell): Extend this such that there could be multiple
+                #   connection from the same global.
+                if global_data is None:
+                    global_data = src_node.data
+                else:
+                    return None
+
+        # No global data defines the transient.
+        if global_data is None:
+            return None
+
+        # We now check that the transient is used to write back to the global.
+        #  Currently we only allow that there is a single connection.
+        #  The main issue with allowing multiple connections is that we can no
+        #  longer be sure that everything is written. I encountered some dead
+        #  writes once.
+        assert global_data is not None
+        for state, transient_access_node in read_locations:
+            assert state.in_degree(transient_access_node) == 0
+            if state.out_degree(transient_access_node) != 1:
+                return None
+            if not all(
+                isinstance(oedge.dst, dace_nodes.AccessNode) and oedge.dst.data == global_data
+                for oedge in state.out_edges(transient_access_node)
+            ):
+                return None
+
+        return global_data
+
+    def _find_exclusive_read_and_write_locations_of(
+        self,
+        sdfg: dace.SDFG,
+        data_name: str,
+    ) -> Union[None, tuple[list[AccessLocation], list[AccessLocation]]]:
+        """The function finds all locations were `data_name` is written and read.
+
+        The function will scan the SDFG and returns all places where `data_name` is
+        written and where it is read from. If there is however, a location where the
+        data is read and written to in the same place then the function returns
+        `None`.
+
+        In essence this function returns the set of all possible matches the
+        transformation is looking for, but further processing has to be performed.
+        """
+        read_locations: list[AccessLocation] = []
+        write_locations: list[AccessLocation] = []
+
+        for state in sdfg.states():
+            for dnode in state.data_nodes():
+                if dnode.data != data_name:
+                    continue
+                out_deg = state.out_degree(dnode)
+                in_deg = state.in_degree(dnode)
+
+                # This is not the pattern we are looking for.
+                if out_deg > 0 and in_deg > 0:
+                    return None
+                elif out_deg > 0:
+                    read_locations.append((state, dnode))
+                else:
+                    assert in_deg > 0
+                    write_locations.append((state, dnode))
+
+        return (write_locations, read_locations)
 
 
 @dace_properties.make_properties

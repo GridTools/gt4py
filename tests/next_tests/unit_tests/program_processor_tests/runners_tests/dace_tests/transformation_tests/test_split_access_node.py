@@ -29,6 +29,7 @@ def _perform_test(
     explected_applies: int,
     removed_transients: set[str] | None = None,
 ) -> None:
+    assert dace.Config.get("compiler.use_cache") == False
     ref = {
         name: np.array(np.random.rand(*desc.shape), copy=True, dtype=desc.dtype.as_numpy_dtype())
         for name, desc in sdfg.arrays.items()
@@ -389,3 +390,53 @@ def test_map_producer_multi_consumer_partialread():
     #  This might change in the future.
     sdfg = _make_map_producer_multiple_consumer(partial_read=True)
     _perform_test(sdfg, explected_applies=0)
+
+
+def test_same_producer():
+    sdfg = dace.SDFG(util.unique_name("same_producer"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "abt":
+        sdfg.add_array(
+            name,
+            shape=(20,),
+            dtype=dace.float64,
+            transient=(name == "t"),
+        )
+    a, b, t = (state.add_access(name) for name in "abt")
+
+    me, mx = state.add_map("map", ndrange={"__i": "0:10"})
+    tlet1 = state.add_tasklet(
+        "comp1",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = __in1 + __in2",
+    )
+    tlet2 = state.add_tasklet(
+        "comp2",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = __in1 - __in2",
+    )
+
+    state.add_edge(a, None, me, "IN_a1", dace.Memlet("a[0:10]"))
+    state.add_edge(a, None, me, "IN_a2", dace.Memlet("a[10:20]"))
+    state.add_edge(me, "OUT_a1", tlet1, "__in1", dace.Memlet("a[__i]"))
+    state.add_edge(me, "OUT_a2", tlet1, "__in2", dace.Memlet("a[__i + 10]"))
+    state.add_edge(me, "OUT_a1", tlet2, "__in1", dace.Memlet("a[__i]"))
+    state.add_edge(me, "OUT_a2", tlet2, "__in2", dace.Memlet("a[__i + 10]"))
+    me.add_scope_connectors("a1")
+    me.add_scope_connectors("a2")
+
+    state.add_edge(tlet1, "__out", mx, "IN_t1", dace.Memlet("t[__i]"))
+    state.add_edge(mx, "OUT_t1", t, None, dace.Memlet("t[0:10]"))
+    state.add_edge(tlet2, "__out", mx, "IN_t2", dace.Memlet("t[__i + 10]"))
+    state.add_edge(mx, "OUT_t2", t, None, dace.Memlet("t[10:20]"))
+    mx.add_scope_connectors("t1")
+    mx.add_scope_connectors("t2")
+
+    state.add_nedge(t, b, dace.Memlet("t[0:10] -> [10:20]"))
+    state.add_nedge(t, b, dace.Memlet("t[10:20] -> [0:10]"))
+    sdfg.validate()
+
+    _perform_test(sdfg, explected_applies=1, removed_transients={"t"})
