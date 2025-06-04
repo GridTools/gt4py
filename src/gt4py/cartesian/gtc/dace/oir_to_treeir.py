@@ -8,9 +8,11 @@
 
 from dataclasses import dataclass
 
+from dace import nodes
+
 from gt4py import eve
 from gt4py.cartesian.gtc import common, definitions, oir
-from gt4py.cartesian.gtc.dace import treeir as tir
+from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir
 from gt4py.cartesian.gtc.passes.oir_optimizations import utils as oir_utils
 
 
@@ -23,7 +25,26 @@ class Context:
     block_extents: dict[int, definitions.Extent]  # id(horizontal execution) -> Extent
 
 
+# This could (should?) be a NodeTranslator
+# (doesn't really matter for now)
 class OIRToTreeIR(eve.NodeVisitor):
+    def visit_CodeBlock(self, node: oir.CodeBlock, ctx: Context) -> None:
+        code, inputs, outputs = oir_to_tasklet.generate(node)
+        dace_tasklet = nodes.Tasklet(
+            label=node.label,
+            code=code,
+            inputs=inputs.keys(),
+            outputs=outputs.keys(),
+        )
+
+        tasklet = tir.Tasklet(
+            tasklet=dace_tasklet,
+            inputs=inputs,
+            outputs=outputs,
+            parent=ctx.current_scope,
+        )
+        ctx.current_scope.children.append(tasklet)
+
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, ctx: Context) -> None:
         # TODO
         # How do we get the domain in here?!
@@ -43,17 +64,21 @@ class OIRToTreeIR(eve.NodeVisitor):
                 start=f"{axis_start_j} + {extent[1][0]}",
                 end=f"{axis_end_j} + {extent[1][1]}",
             ),
-            children=[
-                # TODO
-                # Split horizontal executions into code blocks to group
-                # things like if-statements and while-loops.
-                # Remember: add support for regions (HorizontalRestrictions)
-                # from the start this time.
-                oir.CodeBlock(label=f"he_{id(node)}", body=node.body)
-            ],
+            children=[],
+            parent=ctx.current_scope,
         )
+
         ctx.current_scope.children.append(loop)
-        ctx.current_scope = loop  # <- not really necessary now (because we don't visit children)
+        ctx.current_scope = loop
+
+        # TODO
+        # Split horizontal executions into code blocks to group
+        # things like if-statements and while-loops.
+        # Remember: add support for regions (HorizontalRestrictions)
+        # from the start this time.
+        code_blocks = [oir.CodeBlock(label=f"he_{id(node)}", body=node.body)]
+
+        self.visit(code_blocks, ctx=ctx)
 
     def visit_AxisBound(self, node: oir.AxisBound, axis_start: str, axis_end: str) -> str:
         if node.level == common.LevelMarker.START:
@@ -80,9 +105,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         bounds = self.visit(node.interval, loop_order=loop_order, axis_start="0", axis_end="__K")
 
         loop = tir.VerticalLoop(
-            loop_order=loop_order,
-            bounds_k=bounds,
-            children=[],
+            loop_order=loop_order, bounds_k=bounds, children=[], parent=ctx.current_scope
         )
 
         ctx.current_scope.children.append(loop)
@@ -103,6 +126,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             arrays=[p for p in node.params if isinstance(p, oir.FieldDecl)],
             scalars=[p for p in node.params if isinstance(p, oir.ScalarDecl)],
             children=[],
+            parent=None,
         )
 
         field_extents, block_extents = oir_utils.compute_extents(node)

@@ -329,10 +329,11 @@ class SDFGManager:
         """
         Schedule tree representation of the gtir (taken from the builder).
 
-        This function is a two-step process:
+        This function is a three-step process:
 
         oir = gtir_to_oir(self.builder.gtir)
-        schedule_tree = oir_to_stree(oir)
+        tir = oir_to_tir(oir)
+        schedule_tree = oir_to_stree(tir)
         """
 
         # Step 1: gtir to oir
@@ -352,11 +353,12 @@ class SDFGManager:
         )
         oir = oir_pipeline.run(oir)
 
+        # Step 2: oir to tree ir (tir)
         # - convert oir.VerticalLoops and oir.VerticalLoopSections to MapScope / ForScope
         # - split oir.HorizontalExecutions into oir.CodeBlocks
         tir = OIRToTreeIR().visit(oir)
 
-        # Step 2: oir to stree
+        # Step 3: tree ir to tree
         stree = TreeIRToScheduleTree().visit(tir)
 
         return stree

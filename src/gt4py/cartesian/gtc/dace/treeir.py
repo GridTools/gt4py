@@ -6,6 +6,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
+from dace import Memlet, nodes
+
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 
@@ -15,8 +19,21 @@ class Bounds(eve.Node):
     end: str
 
 
-class TreeScope(eve.Node):
+class TreeNode(eve.Node):
+    parent: TreeScope | None
+
+
+class TreeScope(TreeNode):
     children: list
+
+
+class Tasklet(TreeNode):
+    tasklet: nodes.Tasklet
+
+    inputs: dict[str, Memlet]
+    """Mapping tasklet.in_connectors to Memlets"""
+    outputs: dict[str, Memlet]
+    """Mapping tasklet.out_connectors to Memlets"""
 
 
 class HorizontalLoop(TreeScope):
@@ -24,7 +41,7 @@ class HorizontalLoop(TreeScope):
     bounds_i: Bounds
     bounds_j: Bounds
 
-    children: list[oir.CodeBlock]
+    children: list[Tasklet]  # others to come (conditions, while loops, ...)
 
 
 class VerticalLoop(TreeScope):

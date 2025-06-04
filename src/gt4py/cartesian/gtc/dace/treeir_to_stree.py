@@ -21,12 +21,21 @@ from gt4py.cartesian.gtc.dace import treeir as tir
 @dataclass
 class Context:
     tree: tn.ScheduleTreeRoot
+    """A reference to the tree root."""
     current_scope: tn.ScheduleTreeScope
+    """A reference to the current scope node."""
 
 
 class TreeIRToScheduleTree(eve.NodeVisitor):
     # TODO
     # More visitors to come here
+
+    def visit_Tasklet(self, node: tir.Tasklet, ctx: Context) -> None:
+        tasklet = tn.TaskletNode(
+            node=node.tasklet, in_memlets=node.inputs, out_memlets=node.outputs
+        )
+        tasklet.parent = ctx.current_scope
+        ctx.current_scope.children.append(tasklet)
 
     def visit_HorizontalLoop(self, node: tir.HorizontalLoop, ctx: Context) -> None:
         # Define ij/loop
@@ -55,20 +64,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         ctx.current_scope.children.append(map_scope)
         ctx.current_scope = map_scope
 
-        # for each CodeBlock, add a Tasklet
-        for _block in node.children:
-            # TODO
-            # actually do stuff here
-            tasklet = nodes.Tasklet(label="my_tasklet")
-            inputs: dict = {}  # dict of connector_name -> memlet
-            outputs: dict = {}  # dict of connector_name -> memlet
-            tree_tasklet = tn.TaskletNode(
-                node=tasklet,
-                in_memlets=inputs,
-                out_memlets=outputs,
-            )
-            tree_tasklet.parent = ctx.current_scope
-            ctx.current_scope.children.append(tree_tasklet)
+        self.visit(node.children)
 
     def visit_VerticalLoop(self, node: tir.VerticalLoop, ctx: Context) -> None:
         if node.loop_order == common.LoopOrder.PARALLEL:
