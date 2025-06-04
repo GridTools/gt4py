@@ -303,13 +303,13 @@ class CustomMapping(collections.abc.MutableMapping[_K, _V]):
     retrieving values, while maintaining a mapping-like interface.
 
     Examples:
-        >>> mapping = CustomMapping(lambda x: hash(repr(x))
+        >>> mapping = CustomMapping(lambda x: hash(repr(x)))
         >>> mapping[[1, 2]] = "first"
         >>> mapping[[1, 2]]
-        "first"
+        'first'
         >>> mapping[{1, 2}] = "second"
         >>> mapping[{1, 2}]
-        "second"
+        'second'
         >>> len(mapping)
         2
     """
@@ -354,17 +354,17 @@ class CustomMapping(collections.abc.MutableMapping[_K, _V]):
 
 
 class HashableBy(Generic[_T]):
-    __slots__ = ["func", "value"]
+    __slots__ = ("hashed_value", "value")
 
-    def __init__(self, func: Callable[[_T], int], value: _T) -> None:
-        self.func = func
+    def __init__(self, hash_func: Callable[[_T], int], value: _T) -> None:
         self.value = value
+        self.hashed_value = hash_func(value)
 
     def __hash__(self) -> int:
-        return self.func(self.value)
+        return self.hashed_value
 
     def __eq__(self, other: Any) -> bool:
-        return (self.value is other.value or self.value == other.value) and self.func is self.func
+        return self.value is other.value or self.value == other.value
 
 
 @overload
@@ -391,6 +391,7 @@ def hashable_by(
 
 
 hashable_by_id = hashable_by(id)
+cached_hash = hashable_by(hash)
 
 
 @overload
