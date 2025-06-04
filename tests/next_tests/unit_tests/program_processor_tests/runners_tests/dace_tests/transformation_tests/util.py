@@ -13,6 +13,7 @@ import numpy as np
 import dace
 import copy
 from dace.sdfg import nodes as dace_nodes
+from dace import data as dace_data
 
 
 @overload
@@ -99,7 +100,11 @@ def make_sdfg_args(
     You can compare the two using `compar_sdfg_res()`.
     """
     ref = {
-        name: np.array(np.random.rand(*desc.shape), copy=True, dtype=desc.dtype.as_numpy_dtype())
+        name: (
+            np.array(np.random.rand(*desc.shape), copy=True, dtype=desc.dtype.as_numpy_dtype())
+            if isinstance(desc, dace_data.Array)
+            else np.array(np.random.rand(1), copy=True, dtype=desc.dtype.as_numpy_dtype())[0]
+        )
         for name, desc in sdfg.arrays.items()
         if not desc.transient
     }

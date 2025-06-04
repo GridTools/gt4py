@@ -51,7 +51,7 @@ def test_split_edge_two_ac_producer_one_ac_consumer_1d():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     nb_apply = sdfg.apply_transformations_repeated(
-        gtx_transformations.SplitMemlet,
+        gtx_transformations.SplitConsumerMemlet,
         validate=True,
         validate_all=True,
     )
@@ -116,7 +116,7 @@ def test_split_edge_mock_apply_diffusion_to_w():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     nb_apply = sdfg.apply_transformations_repeated(
-        gtx_transformations.SplitMemlet,
+        gtx_transformations.SplitConsumerMemlet(),
         validate=True,
         validate_all=True,
     )

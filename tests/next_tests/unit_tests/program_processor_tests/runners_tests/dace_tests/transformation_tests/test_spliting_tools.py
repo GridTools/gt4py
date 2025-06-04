@@ -73,6 +73,7 @@ def _make_distributed_split_sdfg() -> (
     return sdfg, state, tlet, mx, a, t, state2, t2
 
 
+@pytest.mark.xfail(reason="Distributed splitting is not implemented.")
 def test_distributed_split():
     sdfg, state, tlet, mx, a, t, state2, t2 = _make_distributed_split_sdfg()
 
