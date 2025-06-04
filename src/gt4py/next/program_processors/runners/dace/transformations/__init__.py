@@ -25,7 +25,6 @@ from .loop_blocking import LoopBlocking
 from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
 from .map_fusion_extended import gt_horizontal_map_fusion, gt_vertical_map_fusion
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
-from .map_promoter import SerialMapPromoter
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
 from .redundant_array_removers import (
     CopyChainRemover,
@@ -35,6 +34,7 @@ from .redundant_array_removers import (
     gt_multi_state_global_self_copy_elimination,
     gt_remove_copy_chain,
 )
+from .serial_map_promoter import SerialMapPromoter
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
     GT4PyMapBufferElimination,
