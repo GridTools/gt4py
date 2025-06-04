@@ -136,8 +136,8 @@ class CompiledProgramsPool:
         stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
     ] = dataclasses.field(default_factory=dict)
 
-    offset_provider_type_cache: eve_utils.CustomMap = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMap(key_func=common.offset_provider_hash)
+    offset_provider_type_cache: eve_utils.CustomMapping = dataclasses.field(
+        default_factory=lambda: eve_utils.CustomMapping(common.offset_provider_hash)
     )
 
     def __postinit__(self) -> None:

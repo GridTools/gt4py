@@ -87,8 +87,8 @@ class Program:
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
 
-    _offset_provider_extended_cache: eve_utils.CustomMap = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMap(key_func=common.offset_provider_hash),
+    _offset_provider_extended_cache: eve_utils.CustomMapping = dataclasses.field(
+        default_factory=lambda: eve_utils.CustomMapping(common.offset_provider_hash),
         kw_only=True,
     )
 

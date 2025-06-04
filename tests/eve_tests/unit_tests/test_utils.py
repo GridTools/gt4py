@@ -151,19 +151,66 @@ def unique_data_items(request):
     ]
 
 
-def test_fluid_partial():
-    from gt4py.eve.utils import fluid_partial
+def test_custom_default_dict_base():
+    from gt4py.eve.utils import CustomDefaultDictBase
 
-    def func(a, b, c):
-        return a + b + c
+    class TestDefaultDict(CustomDefaultDictBase):
+        def value_factory(self, key):
+            return key * 2
 
-    fp1 = fluid_partial(func, 1)
-    fp2 = fp1.partial(2)
-    fp3 = fp2.partial(3)
+    d = TestDefaultDict()
 
-    assert fp1(2, 3) == 6
-    assert fp2(3) == 6
-    assert fp3() == 6
+    # Test default value creation
+    assert d[5] == 10
+    assert d[3] == 6
+
+    # Test override
+    d[5] = 100
+    assert d[5] == 100
+
+    # Test length
+    assert len(d) == 2
+
+    # Test iteration
+    keys = list(d.keys())
+    assert 5 in keys and 3 in keys
+
+
+def test_custom_mapping():
+    from gt4py.eve.utils import CustomMapping
+
+    keys = [[1, 2], {"foo", "bar"}]
+    values = ["value1", "value2"]
+
+    mapping = CustomMapping(lambda x: hash(repr(x)))
+    for key, value in zip(keys, values):
+        mapping[key] = value
+
+    assert len(mapping) == 2
+    assert all(mapping[key] == value for key, value in zip(keys, values))
+
+    # Test iteration
+    assert keys == list(mapping)
+
+    # Test deletion
+    del mapping[keys[0]]
+    assert len(mapping) == 1
+    assert keys[-1] in mapping
+
+    with pytest.raises(KeyError):
+        _ = mapping[[3, 4]]
+
+    # Test with different key function
+    id_mapping = CustomMapping(id)
+    obj1 = [1, 2, 3]
+    obj2 = [1, 2, 3]
+
+    id_mapping[obj1] = "obj1"
+    id_mapping[obj2] = "obj2"
+
+    assert id_mapping[obj1] == "obj1"
+    assert id_mapping[obj2] == "obj2"
+    assert len(id_mapping) == 2
 
 
 def test_hashable_by():
@@ -182,6 +229,44 @@ def test_hashable_by_id():
     testee = {1: 2}
 
     assert hash(hashable_by_id(testee)) == id(testee)
+
+
+def test_lru_cache_key_id_called_once():
+    from gt4py.eve.utils import lru_cache
+
+    call_count = 0
+
+    def func(x):
+        nonlocal call_count
+        call_count += 1
+        return x
+
+    cached = lru_cache(func, key=id)
+
+    assert cached.__wrapped__ == func
+
+    obj = object()
+    assert cached(obj) is obj
+    assert cached(obj) is obj
+    assert call_count == 1
+
+    assert cached.cache_info().hits == 1
+    assert cached.cache_info().misses == 1
+
+
+def test_fluid_partial():
+    from gt4py.eve.utils import fluid_partial
+
+    def func(a, b, c):
+        return a + b + c
+
+    fp1 = fluid_partial(func, 1)
+    fp2 = fp1.partial(2)
+    fp3 = fp2.partial(3)
+
+    assert fp1(2, 3) == 6
+    assert fp2(3) == 6
+    assert fp3() == 6
 
 
 def test_noninstantiable_class():
@@ -369,26 +454,3 @@ def test_xenumerate():
     from gt4py.eve.utils import xenumerate
 
     assert list(xenumerate(string.ascii_letters[:3])) == [(0, "a"), (1, "b"), (2, "c")]
-
-
-def test_lru_cache_key_id_called_once():
-    from gt4py.eve.utils import lru_cache
-
-    call_count = 0
-
-    def func(x):
-        nonlocal call_count
-        call_count += 1
-        return x
-
-    cached = lru_cache(func, key=id)
-
-    assert cached.__wrapped__ == func
-
-    obj = object()
-    assert cached(obj) is obj
-    assert cached(obj) is obj
-    assert call_count == 1
-
-    assert cached.cache_info().hits == 1
-    assert cached.cache_info().misses == 1

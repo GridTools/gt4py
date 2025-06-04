@@ -15,7 +15,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config
+from gt4py.next import common, config, metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
@@ -184,9 +184,15 @@ class DaCeTranslator(
                 gtx_transformations.gt_simplify(sdfg)
                 gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
-        # Do not use async SDFG call when collecting metrics: we use SDFG instrumentatiom
-        #   and therefore the SDFG execution has to complete before we can retrieve the report.
-        if on_gpu and self.async_sdfg_call and not config.COLLECT_METRICS_LEVEL:
+        if config.COLLECT_METRICS_LEVEL != metrics.DISABLED:
+            # We measure the execution time of one program by instrumenting the
+            #   top-level SDFG with a cpp timer (std::chrono). This timer measures
+            #   only the computation time, it does not include the overhead of
+            #   calling the SDFG from Python.
+            sdfg.instrument = dace.dtypes.InstrumentationType.Timer
+        elif on_gpu and self.async_sdfg_call:
+            # Do not use async SDFG call when collecting metrics: we use SDFG instrumentatiom
+            #   and therefore the SDFG execution has to complete before we can retrieve the report.
             make_sdfg_async(sdfg)
 
         return sdfg
@@ -216,7 +222,10 @@ class DaCeTranslator(
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
             stages.ProgramSource(
                 entry_point=interface.Function(program.id, program_parameters),
-                source_code=sdfg.to_json(),
+                # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
+                #   We compute the hash in order to refresh `cfg_list` on the SDFG,
+                #   which makes the JSON serialization stable.
+                source_code=sdfg.to_json(hash=True),
                 library_deps=tuple(),
                 language=languages.SDFG,
                 language_settings=languages.LanguageSettings(
