@@ -213,6 +213,14 @@ def test_custom_mapping():
     assert len(id_mapping) == 2
 
 
+def test_HashableBy():
+    from gt4py.eve.utils import HashableBy
+
+    assert hash(HashableBy(id, 345)) == id(345)
+    assert "value=345" in str(HashableBy(lambda x: "FOO", 345))
+    assert "hashed_value='FOO'" in str(HashableBy(lambda x: "FOO", 345))
+
+
 def test_hashable_by():
     from gt4py.eve.utils import hashable_by
 
@@ -229,6 +237,14 @@ def test_hashable_by_id():
     testee = {1: 2}
 
     assert hash(hashable_by_id(testee)) == id(testee)
+
+
+def test_cached_hash():
+    from gt4py.eve.utils import cached_hash
+
+    testee = (1, 2)
+
+    assert hash(cached_hash(testee)) == hash(testee)
 
 
 def test_lru_cache_key_id_called_once():
