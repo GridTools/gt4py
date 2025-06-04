@@ -271,12 +271,17 @@ def _gt_auto_process_top_level_maps(
 
         # We have to call it here, such that some other transformations, most
         #  importantly the split transformations run.
+        #  We allow promotion of vertical (which is beneficial for Nabla4 type
+        #  stencils and if `LoopBlocking` is enabled. However, we also allow
+        #  horizontal promotion, this is an empirical choice. If the computation
+        #  on the horizontal are very complicated, it might degrade performance
+        #  but such cases should be rare.
         # TODO(phimuell): Add a criteria to decide if we should promote or not.
         sdfg.apply_transformations_repeated(
             gtx_transformations.SerialMapPromoter(
                 only_toplevel_maps=True,
                 promote_vertical=True,
-                promote_horizontal=False,
+                promote_horizontal=True,
                 promote_local=False,
             ),
             validate=validate,
