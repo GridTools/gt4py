@@ -118,9 +118,70 @@ class OIRToTasklet(eve.NodeVisitor):
     def visit_Literal(self, node: oir.Literal, **kwargs) -> str:
         return node.value
 
-    # TODO
-    # add a bunch more visitors below here to make sure that we raise issues
-    # when we visit something "above" a CodeBlock.
+    # Not implemented blocks - implement or pass ot generic visitor
+    def visit_AbsoluteKIndex(self, node, **kwargs):
+        raise NotImplementedError("visit_AbsoluteKIndex")
+
+    def visit_CacheDesc(self, node, **kwargs):
+        raise NotImplementedError("visit_CacheDesc")
+
+    def visit_Decl(self, node, **kwargs):
+        raise NotImplementedError("visit_Decl")
+
+    def visit_FieldDecl(self, node, **kwargs):
+        raise NotImplementedError("visit_FieldDecl")
+
+    def visit_HorizontalExecution(self, node, **kwargs):
+        raise NotImplementedError("visit_HorizontalExecution")
+
+    def visit_HorizontalRestriction(self, node, **kwargs):
+        raise NotImplementedError("visit_HorizontalRestriction")
+
+    def visit_IJCache(self, node, **kwargs):
+        raise NotImplementedError("visit_IJCache")
+
+    def visit_Interval(self, node, **kwargs):
+        raise NotImplementedError("visit_Interval")
+
+    def visit_IteratorAccess(self, node, **kwargs):
+        raise NotImplementedError("visit_IteratorAccess")
+
+    def visit_KCache(self, node, **kwargs):
+        raise NotImplementedError("visit_KCache")
+
+    def visit_LocalScalar(self, node, **kwargs):
+        raise NotImplementedError("visit_LocalScalar")
+
+    def visit_MaskStmt(self, node, **kwargs):
+        raise NotImplementedError("visit_MaskStmt")
+
+    def visit_NativeFuncCall(self, node, **kwargs):
+        raise NotImplementedError("visit_NativeFuncCall")
+
+    def visit_ScalarDecl(self, node, **kwargs):
+        raise NotImplementedError("visit_ScalarDecl")
+
+    def visit_Stencil(self, node, **kwargs):
+        raise NotImplementedError("visit_Stencil")
+
+    def visit_Temporary(self, node, **kwargs):
+        raise NotImplementedError("visit_Temporary")
+
+    def visit_TernaryOp(self, node, **kwargs):
+        raise NotImplementedError("visit_TernaryOp")
+
+    def visit_UnaryOp(self, node, **kwargs):
+        raise NotImplementedError("visit_UnaryOp")
+
+    def visit_UnboundedInterval(self, node, **kwargs):
+        raise NotImplementedError("visit_UnboundedInterval")
+
+    # Should _not_ be called
+    def visit_VerticalLoop(self, node, **kwargs):
+        raise NotImplementedError("[OIR_to_Tasklet] visit_VerticalLoop should not be called")
+
+    def visit_VerticalLoopSection(self, node, **kwargs):
+        raise NotImplementedError("[OIR_to_Tasklet] visit_VerticalLoopSection should not be called")
 
 
 def generate(node: oir.CodeBlock) -> tuple[str, dict[str, Memlet], dict[str, Memlet]]:
