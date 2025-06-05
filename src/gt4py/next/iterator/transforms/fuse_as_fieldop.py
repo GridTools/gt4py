@@ -231,7 +231,7 @@ def _make_tuple_element_inline_predicate(node: itir.Expr):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class FuseAsFieldOp(
-    fixed_point_transformation.FixedPointTransformation, eve.PreserveLocationVisitor
+    fixed_point_transformation.CombinedFixedPointTransform, eve.PreserveLocationVisitor
 ):
     """
     Merge multiple `as_fieldop` calls into one.

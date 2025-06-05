@@ -8,15 +8,12 @@
 from gt4py.next import common
 import pytest
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im, domain_utils
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import (
     concat_where,
     inline_lambdas,
-    infer_domain,
-    collapse_tuple,
 )
 from gt4py.next.type_system import type_specifications as ts
-from gt4py.next.iterator.type_system import type_specifications as it_ts
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
@@ -54,5 +51,6 @@ def test_data():
 @pytest.mark.parametrize("testee, expected", test_data())
 def test_nested_concat_where(testee, expected):
     actual = concat_where.simplify_domain_argument(testee)
+    actual = inline_lambdas.InlineLambdas.apply(actual, opcount_preserving=True)
 
     assert actual == expected

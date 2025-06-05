@@ -113,7 +113,7 @@ def _flattened_as_fieldop_param_el_name(param: str, idx: int) -> str:
 #  should revisit the pattern here and try to find a more general mechanism.
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class CollapseTuple(
-    fixed_point_transformation.FixedPointTransformation, eve.PreserveLocationVisitor
+    fixed_point_transformation.CombinedFixedPointTransform, eve.PreserveLocationVisitor
 ):
     """
     Simplifies `make_tuple`, `tuple_get` calls.
