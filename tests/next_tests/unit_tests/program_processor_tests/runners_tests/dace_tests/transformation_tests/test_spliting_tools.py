@@ -253,7 +253,7 @@ def test_split_edge():
     #  be maintained.
     split = dace_sbs.Range.from_string("0:5")
 
-    new_edges_by_split = gtx_transformations.spliting_tools.split_copy_edge(
+    new_edges_by_split = gtx_transformations.spliting_tools.split_edge(
         state=state,
         sdfg=sdfg,
         edge_to_split=edge_to_split,
@@ -306,7 +306,7 @@ def test_split_edge_2d():
 
     # There will be one edge that copies the split, and two edges for the rest.
     #  However, there are two different possibilities how they are split.
-    new_edges_by_split = gtx_transformations.spliting_tools.split_copy_edge(
+    new_edges_by_split = gtx_transformations.spliting_tools.split_edge(
         state=state,
         sdfg=sdfg,
         edge_to_split=edge_to_split,

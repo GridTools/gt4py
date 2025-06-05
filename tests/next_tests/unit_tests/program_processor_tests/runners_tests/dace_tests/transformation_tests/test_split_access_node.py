@@ -226,7 +226,7 @@ def test_simple_splitable_ac_source_multiple_consumer():
     sdfg = dace.SDFG(util.unique_name("simple_splitable_ac_source_multiple_consumer"))
     state = sdfg.add_state(is_start_block=True)
 
-    for name in "abtcd":
+    for name in "abtcde":
         sdfg.add_array(
             name,
             shape=(40,),
@@ -246,6 +246,7 @@ def test_simple_splitable_ac_source_multiple_consumer():
         dace.Memlet("t[7:12] -> [1:6]"),
     )
     state.add_nedge(t, state.add_access("d"), dace.Memlet("t[20:30] -> [22:32]"))
+    state.add_nedge(t, state.add_access("e"), dace.Memlet("t[20:30] -> [12:22]"))
     sdfg.validate()
 
     _perform_test(sdfg, explected_applies=1, removed_transients={"t"})
