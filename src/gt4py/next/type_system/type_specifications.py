@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Iterator, Literal, Optional, Sequence, Union
+from typing import Iterator, Optional, Sequence, Union
 
 from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
 from gt4py.next import common
@@ -144,6 +144,4 @@ class FunctionType(TypeSpec, CallableType):
 
 
 class DomainType(DataType):
-    # TODO(tehrengruber): Remove "unknown" here again after the result type of `as_fieldop`
-    #  is always precisely known. This is the case after #1853.
-    dims: list[common.Dimension] | Literal["unknown"]
+    dims: list[common.Dimension]

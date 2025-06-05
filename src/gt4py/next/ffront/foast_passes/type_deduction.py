@@ -691,8 +691,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"{err_msg} Operator "
                     f"must be one of {', '.join((str(op) for op in logical_ops))}.",
                 )
-            assert isinstance(right.type.dims, list)
-            assert isinstance(left.type.dims, list)
             return ts.DomainType(dims=promote_dims(left.type.dims, right.type.dims))
         else:
             raise errors.DSLError(node.location, err_msg)
@@ -1019,15 +1017,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     node.location,
                     f"Field arguments must be of same dtype, got '{t_dtype}' != '{f_dtype}'.",
                 )
-            assert isinstance(cond_type.dims, list)
-            promoted_branches = type_info.promote(tb, fb)
-            branches_dims = (
-                [] if isinstance(promoted_branches, ts.ScalarType) else promoted_branches.dims
+            return_dims = promote_dims(
+                cond_type.dims, type_info.extract_dims(type_info.promote(tb, fb))
             )
-            return_dims = promote_dims(cond_type.dims, branches_dims)
-            assert isinstance(t_dtype, ts.ScalarType)
-            assert isinstance(f_dtype, ts.ScalarType)
-            return_type = ts.FieldType(dims=return_dims, dtype=type_info.promote(t_dtype, f_dtype))
+            return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
             return return_type
 
         return_type = deduce_return_type(true_branch_type, false_branch_type)
