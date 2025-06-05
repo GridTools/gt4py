@@ -17,7 +17,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import config, metrics
+from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
 
 from . import common as dace_common
@@ -117,17 +117,12 @@ class DaCeCompiler(
         self,
         inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
     ) -> CompiledDaceProgram:
-        sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-
-        if config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE:
-            # measure execution time of the top-level SDFG
-            sdfg.instrument = dace.dtypes.InstrumentationType.Timer
-
         with dace.config.temporary_config():
             dace_common.set_dace_config(
                 device_type=self.device_type,
                 cmake_build_type=self.cmake_build_type,
             )
+            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
             sdfg_program = sdfg.compile(validate=False)
 
         assert inp.binding_source is not None
