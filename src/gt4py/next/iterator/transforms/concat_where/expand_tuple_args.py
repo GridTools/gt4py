@@ -40,7 +40,9 @@ class _ExpandTupleArgs(PreserveLocationVisitor, NodeTranslator):
 
         # `concat_where(cond, {a, b}, {c, d})`
         # -> `{concat_where(cond, a, c), concat_where(cond, a, c)}`
-        if cpm.is_call_to(node, "concat_where") and isinstance(type_inference.reinfer(node.args[1]).type, ts.TupleType):
+        if cpm.is_call_to(node, "concat_where") and isinstance(
+            type_inference.reinfer(node.args[1]).type, ts.TupleType
+        ):
             cond, true_branch, false_branch = node.args
             new_els = []
             assert isinstance(true_branch.type, ts.TupleType)
