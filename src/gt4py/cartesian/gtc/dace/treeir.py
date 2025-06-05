@@ -8,10 +8,15 @@
 
 from __future__ import annotations
 
-from dace import Memlet, data, nodes
+from typing import TypeAlias
+
+from dace import Memlet, data, nodes, symbolic
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
+
+
+SymbolDict: TypeAlias = dict[str, symbolic.symbol]
 
 
 class Bounds(eve.Node):
@@ -41,7 +46,13 @@ class HorizontalLoop(TreeScope):
     bounds_i: Bounds
     bounds_j: Bounds
 
-    children: list[Tasklet]  # others to come (conditions, while loops, ...)
+    children: list[Tasklet]  # others to come (horizontal restriction, conditions, while loops, ...)
+    # horizontal restriction:
+    # - touches the bounds of the (horizontal) loop
+    #  -> this can be important for scheduling
+    #     (we could do actual loops on CPU vs. masks in the horizontal loop on GPU)
+    # conditionals:
+    #  -> have no influence on scheduling
 
 
 class VerticalLoop(TreeScope):
@@ -58,5 +69,7 @@ class TreeRoot(TreeScope):
     # Descriptor repository
     containers: dict[str, data.Data]
     """Mapping field/scalar names to data descriptors."""
+    symbols: SymbolDict
+    """Mapping string symbol to dace symbol (same string)."""
 
     children: list[VerticalLoop]

@@ -15,7 +15,7 @@ from dace.sdfg.analysis.schedule_tree import treenodes as tn
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc.dace import treeir as tir
+from gt4py.cartesian.gtc.dace import daceir as dcir, treeir as tir
 
 
 @dataclass
@@ -39,10 +39,12 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
 
     def visit_HorizontalLoop(self, node: tir.HorizontalLoop, ctx: Context) -> None:
         # Define ij/loop
+        ctx.tree.symbols[dcir.Axis.I.iteration_symbol()] = dcir.Axis.I.iteration_dace_symbol()
+        ctx.tree.symbols[dcir.Axis.J.iteration_symbol()] = dcir.Axis.J.iteration_dace_symbol()
         map_entry = nodes.MapEntry(
             map=nodes.Map(
                 label=f"horizontal_loop_{id(node)}",
-                params=["__i", "__j"],
+                params=[dcir.Axis.I.iteration_dace_symbol(), dcir.Axis.J.iteration_dace_symbol()],
                 # TODO (later)
                 # Ranges have support support for tiling
                 ndrange=subsets.Range(
@@ -70,10 +72,11 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         if node.loop_order == common.LoopOrder.PARALLEL:
             # create map and add to tree
 
+            ctx.tree.symbols[dcir.Axis.K.iteration_symbol()] = dcir.Axis.K.iteration_dace_symbol()
             map_entry = nodes.MapEntry(
                 map=nodes.Map(
                     label=f"vertical_loop_{id(node)}",
-                    params=["__k"],
+                    params=[dcir.Axis.K.iteration_dace_symbol()],
                     # TODO (later)
                     # Ranges have support support for tiling
                     ndrange=subsets.Range(
@@ -99,15 +102,15 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         """
         Construct a schedule tree from TreeIR.
         """
-        # setup the descriptor repository}
-        symbols: dict = {}
+        # TODO
+        # Do we have (compile time) constants?
         constants: dict = {}
 
         # create an empty schedule tree
         tree = tn.ScheduleTreeRoot(
             name=node.name,
             containers=node.containers,
-            symbols=symbols,
+            symbols=node.symbols,
             constants=constants,
             children=[],
         )
