@@ -288,6 +288,7 @@ def _gt_auto_process_top_level_maps(
                 promote_vertical=True,
                 promote_horizontal=True,
                 promote_local=False,
+                promotion_callback=_check_if_horizontal_map_promotion_is_appropriate,
             ),
             validate=validate,
             validate_all=validate_all,
@@ -526,3 +527,73 @@ def _gt_auto_post_processing(
                     edge.data.wcr_nonatomic = False
 
     return sdfg
+
+
+def _check_if_horizontal_map_promotion_is_appropriate(
+    state: dace.SDFGState,
+    sdfg: dace.SDFG,
+    first_map_exit: dace_nodes.MapExit,
+    second_map_entry: dace_nodes.MapEntry,
+    missing_map_parameters: list[str],
+) -> bool:
+    """Helper function to check if horizontal Map promotion should be performed.
+
+    The function is used by `_gt_auto_process_top_level_maps()` to ensure that
+    only horizontal (the function will not check any other promotion) promotions
+    that are beneficial will be accepted.
+
+    The implementation checks if the complexity of the first map (the one that
+    lacks the horizontal dimension) is not too large, such that inlining is
+    beneficial. The rules, which are empirical, are summarized as follows:
+    - The number of nodes inside the Map scope is below a certain value (currently
+        20 nodes).
+    - The Map only contain Tasklets and AccessNodes refering to transient data.
+    - There are no WCR edges.
+
+    For arguments see the `MapPromotionCallBack`.
+    """
+
+    # We only apply the rule to horizontal promotion. Vertical promotion is known
+    #  to be beneficial, especially in conjunction with `LoopBloking`.
+    if not any(
+        missing_param.endswith("_gtx_horizontal") for missing_param in missing_map_parameters
+    ):
+        return True
+
+    # NOTE: Inclusion of the exit is important that we get the edges that
+    #   actually write the result.
+    first_map_entry = state.entry_node(first_map_exit)
+    first_map_scope = state.scope_subgraph(first_map_entry, include_entry=True, include_exit=True)
+
+    # If there are more than 20 nodes we assume that the promotion is not
+    #  beneficial. This is an arbitrary value.
+    if first_map_scope.number_of_nodes() > 22:
+        return False
+
+    for node in first_map_scope.nodes():
+        if node in (first_map_entry, first_map_exit):
+            continue
+
+        # All AccessNodes inside must be transient scalars. Because everything else
+        #  indicate (empirical consideration) a more complex computation.
+        if isinstance(node, dace_nodes.AccessNode):
+            desc = node.desc(sdfg)
+            if (not isinstance(desc, dace_data.Scalar)) and (not desc.transient):
+                return False
+            continue
+
+        # A tasklet is considered to be a cheap computation.
+        if isinstance(node, dace_nodes.Tasklet):
+            continue
+
+        # Everything else is considered to be a complex computation,
+        #  and thus the Map should not be promoted.
+        return False
+
+    for edge in first_map_scope.edges():
+        # If we have WCR then we have complex computations, most likely
+        #   reductions, thus we will refuse the fusing.
+        if edge.data.wcr is not None:
+            return False
+
+    return True
