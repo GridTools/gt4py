@@ -102,11 +102,11 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
         #  multiple times we can do that, but it is a very basic check.
         # TODO(phimuell): Improve this condition such that the split can be performed
         #   under the consideration of all consumer edges.
-        split_description, copy_edges_to_split = self._get_copy_edges_and_split_description(
+        split_description, edges_to_split = self._get_edges_and_split_description(
             src_node, graph, sdfg
         )
         known_read_subsets: list[dace_sbs.Subset] = []
-        for oedge in copy_edges_to_split:
+        for oedge in edges_to_split:
             current_read_subset = oedge.data.src_subset
             if current_read_subset is None:
                 return False
@@ -118,10 +118,10 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
 
         # We have to ensure that we can actually split something.
         found_edge_to_split = False
-        for copy_edge_to_split in copy_edges_to_split:
+        for edge_to_split in edges_to_split:
             for split in split_description:
                 if gtx_transformations.spliting_tools.decompose_subset(
-                    producer=split, consumer=copy_edge_to_split.data.src_subset
+                    producer=split, consumer=edge_to_split.data.src_subset
                 ):
                     found_edge_to_split = True
                     break
@@ -147,18 +147,18 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
         graph: dace.SDFGState,
         sdfg: dace.SDFG,
     ) -> None:
-        split_description, copy_edges_to_split = self._get_copy_edges_and_split_description(
+        split_description, edges_to_split = self._get_edges_and_split_description(
             self.source_node, graph, sdfg
         )
-        for copy_edge_to_split in copy_edges_to_split:
-            gtx_transformations.spliting_tools.split_copy_edge(
+        for edge_to_split in edges_to_split:
+            gtx_transformations.spliting_tools.split_edge(
                 state=graph,
                 sdfg=sdfg,
-                edge_to_split=copy_edge_to_split,
+                edge_to_split=edge_to_split,
                 split_description=split_description,
             )
 
-    def _get_copy_edges_and_split_description(
+    def _get_edges_and_split_description(
         self,
         node: dace_nodes.AccessNode,
         state: dace.SDFGState,
@@ -168,11 +168,11 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
             desc.subset
             for desc in gtx_transformations.spliting_tools.describe_incoming_edges(state, node)
         ]
-        copy_edges_to_split = [
+        edges_to_split = [
             oedge
             for oedge in state.out_edges(node)
             if isinstance(oedge.dst, dace_nodes.AccessNode)
             and (not gtx_transformations.utils.is_view(oedge.dst, sdfg))
             and (oedge.data.dst_subset is not None)
         ]
-        return split_description, copy_edges_to_split
+        return split_description, edges_to_split

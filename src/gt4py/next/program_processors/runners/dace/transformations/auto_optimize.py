@@ -217,9 +217,9 @@ def _gt_auto_process_top_level_maps(
 
     # NOTE: Inside this function we have to disable the consolidation of edges.
     #   This is because it might block the application of `SpliAccessNode`. As
-    #   an example consider a that writes `tmp[:, 80]` and a second map that
-    #   writes `tmp[:, 0]`, if these two maps are now horizontally fussed and
-    #   edge consolidation is on, then the resulting map would "write", at least
+    #   an example consider a Map that writes `tmp[:, 80]` and a second Map that
+    #   writes `tmp[:, 0]`, if these two Maps are now horizontally fussed and
+    #   edge consolidation is on, then the resulting Map would "write", at least
     #   according to the subset, after Memlet propagation, into `tmp[:, 0:80]`.
     #   For that reason we block edge consolidation inside this function.
     #   However, we allow allow the consolidation, in MapFusion if this does
