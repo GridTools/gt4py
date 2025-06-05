@@ -12,6 +12,10 @@ from dataclasses import dataclass
 
 from dace import nodes, subsets, dtypes
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
+import dace.codegen.control_flow as dcf
+from dace.properties import CodeBlock
+from dace import Language as lang
+from dace import SDFGState, __version__ as dace_version
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
@@ -98,8 +102,24 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
             ctx.current_scope.children.append(map_scope)
             ctx.current_scope = map_scope
         else:
-            # create loop and add it to tree.
-            raise NotImplementedError("#todo")
+            # create loop and add it to tree
+            if node.loop_order == common.LoopOrder.FORWARD:
+                start = node.bounds_k.start
+                end = node.bounds_k.end
+                update_ops = "+1"
+                cond_ops = f"< {end}"
+            elif node.loop_order == common.LoopOrder.BACKWARD:
+                end = node.bounds_k.start
+                start = node.bounds_k.end
+                update_ops = "-1"
+                cond_ops = f">= {end}"
+                breakpoint()
+            cfg_for_scope = _make_for_scope(cond_ops, start, update_ops)
+
+            for_scope = tn.ForScope(header=cfg_for_scope, children=[])
+            for_scope.parent = ctx.current_scope
+            ctx.current_scope.children.append(for_scope)
+            ctx.current_scope = for_scope
 
         self.visit(node.children, ctx=ctx)
         ctx.current_scope = parent_scope
@@ -125,3 +145,36 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         self.visit(node.children, ctx=ctx)
 
         return ctx.tree
+
+
+def _make_for_scope(condtional_op: str, bound_start: str, update_op) -> dcf.ForScope:
+    if not dace_version.startswith("1."):
+        raise NotImplementedError("DaCe 2.x detected - please fix below code")
+
+    for_scope = dcf.ForScope(
+        condition=CodeBlock(code=f"__k {condtional_op}", language=lang.Python),
+        itervar="__k",
+        init=f"{bound_start}",
+        update=f"__k{update_op}",
+        # Unused
+        parent=None,  # not Tree parent, CF parent
+        dispatch_state=lambda _state: "",
+        last_block=False,
+        guard=SDFGState(),
+        body=dcf.GeneralBlock(
+            lambda _state: "",
+            None,
+            True,
+            None,
+            [],
+            [],
+            [],
+            [],
+            [],
+            False,
+        ),
+        init_edges=[],
+    )
+    # Kill the loop_range test for memlet propgation check going in
+    dcf.ForScope.loop_range = lambda self: None
+    return for_scope
