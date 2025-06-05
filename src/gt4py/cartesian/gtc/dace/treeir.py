@@ -8,10 +8,10 @@
 
 from __future__ import annotations
 
-from dace import Memlet, nodes
+from dace import Memlet, data, nodes
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc import common
 
 
 class Bounds(eve.Node):
@@ -56,8 +56,7 @@ class TreeRoot(TreeScope):
     name: str
 
     # Descriptor repository
-    transients: list[oir.Temporary]
-    arrays: list[oir.FieldDecl]
-    scalars: list[oir.ScalarDecl]
+    containers: dict[str, data.Data]
+    """Mapping field/scalar names to data descriptors."""
 
     children: list[VerticalLoop]

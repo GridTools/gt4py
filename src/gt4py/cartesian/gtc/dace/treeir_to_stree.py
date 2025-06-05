@@ -99,23 +99,17 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         """
         Construct a schedule tree from TreeIR.
         """
-        # setup the descriptor repository
-        containers: dict = {}
+        # setup the descriptor repository}
         symbols: dict = {}
         constants: dict = {}
 
-        # map node.transients to transient arrays in containers
-
-        # map node.arrays to non-transient arrays in containers
-
-        # map scalars to 1d arrays in containers
-
-        # TODO
-        # Do we have (compile time) constants?
-
         # create an empty schedule tree
         tree = tn.ScheduleTreeRoot(
-            name=node.name, containers=containers, symbols=symbols, constants=constants, children=[]
+            name=node.name,
+            containers=node.containers,
+            symbols=symbols,
+            constants=constants,
+            children=[],
         )
         ctx = Context(tree=tree, current_scope=tree)
 

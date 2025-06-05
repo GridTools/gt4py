@@ -8,11 +8,13 @@
 
 from dataclasses import dataclass
 
-from dace import nodes
+from dace import data, dtypes, nodes, symbolic
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, definitions, oir
-from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir
+from gt4py.cartesian.gtc.dace import daceir as dcir, oir_to_tasklet, treeir as tir
+from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
+from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo
 from gt4py.cartesian.gtc.passes.oir_optimizations import utils as oir_utils
 
 
@@ -48,6 +50,10 @@ class OIRToTreeIR(eve.NodeVisitor):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, ctx: Context) -> None:
         # TODO
         # How do we get the domain in here?!
+        # use a dace symbol:
+        # axis = daceir.Axis.dims_horizontal() #noqa
+        # axis.iteration_dace_symbol() axis.domain_dace_symbol()
+        # start is always 0
         axis_start_i = "0"
         axis_end_i = "__I"
         axis_start_j = "0"
@@ -102,6 +108,8 @@ class OIRToTreeIR(eve.NodeVisitor):
     ) -> None:
         # TODO
         # How do we get the domain in here?!
+        # Axis.domain_dace_symbol() #noqa
+        # start is always 0
         bounds = self.visit(node.interval, loop_order=loop_order, axis_start="0", axis_end="__K")
 
         loop = tir.VerticalLoop(
@@ -120,11 +128,41 @@ class OIRToTreeIR(eve.NodeVisitor):
         self.visit(node.sections, ctx=ctx, loop_order=node.loop_order)
 
     def visit_Stencil(self, node: oir.Stencil) -> tir.TreeRoot:
+        # question
+        # define domain as a symbol here and then pass it down to
+        # TreeRoot -> stree's symbols
+
+        # TODO
+        # Do we have (compile time) constants?
+
+        containers: dict[str, data.Data] = {}
+
+        for field in node.params:
+            if not isinstance(field, oir.FieldDecl):
+                # TODO
+                # include scalar stencil parameters
+                raise NotImplementedError("#todo")
+
+            containers[field.name] = data.Array(
+                data_type_to_dace_typeclass(field.dtype),  # dtype
+                get_dace_shape(field),  # shape
+                strides=get_dace_strides(field),
+                debuginfo=get_dace_debuginfo(field),
+            )
+
+        for field in node.declarations:
+            containers[field.name] = data.Array(
+                data_type_to_dace_typeclass(field.dtype),  # dtype
+                get_dace_shape(field),  # shape
+                strides=get_dace_strides(field),
+                transient=True,
+                lifetime=dtypes.AllocationLifetime.Persistent,
+                debuginfo=get_dace_debuginfo(field),
+            )
+
         tree = tir.TreeRoot(
             name=node.name,
-            transients=node.declarations,
-            arrays=[p for p in node.params if isinstance(p, oir.FieldDecl)],
-            scalars=[p for p in node.params if isinstance(p, oir.ScalarDecl)],
+            containers=containers,
             children=[],
             parent=None,
         )
@@ -138,3 +176,19 @@ class OIRToTreeIR(eve.NodeVisitor):
         self.visit(node.vertical_loops, ctx=ctx)
 
         return ctx.root
+
+
+def get_dace_shape(field: oir.FieldDecl) -> list:
+    return [
+        axis.domain_dace_symbol() for axis in dcir.Axis.dims_3d() if field.dimensions[axis.to_idx()]
+    ] + [d for d in field.data_dims]
+
+
+def get_dace_strides(field: oir.FieldDecl) -> list:
+    dimension_strings = [d for i, d in enumerate("IJK") if field.dimensions[i]]
+    data_dimenstion_strings = [f"d{ddim}" for ddim in range(len(field.data_dims))]
+
+    return [
+        symbolic.pystr_to_symbolic(f"__{field.name}_{dim}_stride")
+        for dim in dimension_strings + data_dimenstion_strings
+    ]
