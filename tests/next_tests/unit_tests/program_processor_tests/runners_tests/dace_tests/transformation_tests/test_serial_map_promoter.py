@@ -403,7 +403,7 @@ def test_map_promotion_different_parameter_names():
     assert util.count_nodes(sdfg_i, dace_nodes.MapEntry) == 2
     count = sdfg_i.apply_transformations_repeated(
         gtx_transformations.SerialMapPromoter(
-            promote_all=True,
+            promote_everything=True,
             fuse_after_promotion=True,
         ),
         validate=True,
