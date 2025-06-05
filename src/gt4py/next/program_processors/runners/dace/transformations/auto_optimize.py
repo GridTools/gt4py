@@ -11,7 +11,8 @@
 from typing import Any, Optional, Sequence
 
 import dace
-from dace.sdfg import data as dace_data, nodes as dace_nodes
+from dace import data as dace_data
+from dace.sdfg import nodes as dace_nodes
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
