@@ -27,17 +27,15 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
 
 ScalarOrTupleOfScalars: TypeAlias = extended_typing.MaybeNestedInTuple[core_defs.Scalar]
+CompiledProgramsKey: TypeAlias = tuple[
+    tuple[ScalarOrTupleOfScalars, ...], common.OffsetProviderType
+]
 
 
-# TODO(havogt): We should look at the hash related codepaths again when tuning Python overheads.
-@dataclasses.dataclass
-class _CompiledProgramsKey:
-    values: tuple[ScalarOrTupleOfScalars, ...]  # in the same order as 'static_params'
-    offset_provider_type: common.OffsetProviderType
-
-    def __hash__(self) -> int:
-        assert common.is_offset_provider_type(self.offset_provider_type)
-        return hash((self.values, id(self.offset_provider_type)))
+def _hash_compiled_program_unsafe(cp_key: CompiledProgramsKey) -> int:
+    values, offset_provider = cp_key
+    assert common.is_offset_provider_type(offset_provider)
+    return hash((values, id(offset_provider)))
 
 
 def _validate_types(
@@ -131,13 +129,14 @@ class CompiledProgramsPool:
 
     # TODO(havogt): This dict could be replaced by a `functools.cache`d method
     # and appropriate hashing of the arguments.
-    _compiled_programs: dict[
-        _CompiledProgramsKey,
-        stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
-    ] = dataclasses.field(default_factory=dict)
+    _compiled_programs: eve_utils.CustomMapping = dataclasses.field(
+        default_factory=lambda: eve_utils.CustomMapping(_hash_compiled_program_unsafe),
+        kw_only=True,
+        init=False,
+    )
 
     _offset_provider_type_cache: eve_utils.CustomMapping = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMapping(common.offset_provider_hash)
+        default_factory=lambda: eve_utils.CustomMapping(common.hash_offset_provider_unsafe)
     )  # cache the offset provider type in order to avoid recomputing it at each program call
 
     def __postinit__(self) -> None:
@@ -157,11 +156,10 @@ class CompiledProgramsPool:
         it is an error.
         """
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
-        offset_provider_type = self._offset_provider_to_type_unsafe(offset_provider)
         static_args_values = tuple(args[i] for i in self._static_arg_indices)
-        key = _CompiledProgramsKey(static_args_values, offset_provider_type)
+        key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
         try:
-            self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator] # for performance: try to call first...
+            self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)
         except TypeError:  # 'Future' object is not callable
             # ... otherwise we resolve the future and call again
             program = self._resolve_future(key)
@@ -205,7 +203,7 @@ class CompiledProgramsPool:
             for name, type_ in self.program_type.definition.pos_or_kw_args.items()
         )
 
-        key = _CompiledProgramsKey(
+        key = (
             tuple(static_args[p] for p in self.static_params),
             self._offset_provider_to_type_unsafe(offset_provider),
         )
@@ -268,7 +266,7 @@ class CompiledProgramsPool:
                     offset_provider=offset_provider,
                 )
 
-    def _resolve_future(self, key: _CompiledProgramsKey) -> stages.CompiledProgram:
+    def _resolve_future(self, key: CompiledProgramsKey) -> stages.CompiledProgram:
         program = self._compiled_programs[key]
         assert isinstance(program, concurrent.futures.Future)
         result = program.result()

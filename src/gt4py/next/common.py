@@ -1035,8 +1035,8 @@ def offset_provider_to_type(
     }
 
 
-def offset_provider_hash(offset_provider: OffsetProvider) -> int:
-    """Compute hash of an offset provider.
+def hash_offset_provider_unsafe(offset_provider: OffsetProvider) -> int:
+    """Compute hash of an offset provider on the tuples of key and value id.
 
     Directly using the `id` of the offset provider is not possible as the decorator adds
     the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
