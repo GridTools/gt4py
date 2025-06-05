@@ -72,7 +72,6 @@ __all__ = [
     "MapIterationOrder",
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
-    "MultiStateGlobalSelfCopyElimination2",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
     "SingleStateGlobalDirectSelfCopyElimination",
