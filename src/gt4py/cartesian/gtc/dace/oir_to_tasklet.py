@@ -13,6 +13,7 @@ from dace import Memlet, subsets
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
+from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 
 
 # oir to tasklet notes
@@ -104,6 +105,18 @@ class OIRToTasklet(eve.NodeVisitor):
         self.visit(node.body, ctx=ctx)
 
         return ("\n".join(ctx.code), ctx.inputs, ctx.outputs)
+
+    def visit_BinaryOp(self, node: oir.BinaryOp, ctx: Context, **kwargs) -> str:
+        right = self.visit(node.right, ctx=ctx, **kwargs)
+        left = self.visit(node.left, ctx=ctx, **kwargs)
+        return f"{left} {node.op.value} {right}"
+
+    def visit_Cast(self, node: oir.Cast, **kwargs) -> str:
+        dtype = data_type_to_dace_typeclass(node.dtype)
+        return f"{dtype}({self.visit(node.expr)})"
+
+    def visit_Literal(self, node: oir.Literal, **kwargs) -> str:
+        return node.value
 
     # TODO
     # add a bunch more visitors below here to make sure that we raise issues
