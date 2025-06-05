@@ -186,7 +186,7 @@ def test_serial_map_promotion_2d_top_1d_bottom():
     sdfg.validate()
 
     map_promoter = gtx_transformations.SerialMapPromoter(
-        promote_all=True,
+        promote_everything=True,
         fuse_after_promotion=False,
     )
     # Because of the near nonsensical SDFG we are bypassing the test.
