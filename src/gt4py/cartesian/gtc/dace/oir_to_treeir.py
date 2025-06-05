@@ -121,10 +121,13 @@ class OIRToTreeIR(eve.NodeVisitor):
             loop_order=loop_order, bounds_k=bounds, children=[], parent=ctx.current_scope
         )
 
+        parent_scope = ctx.current_scope
         ctx.current_scope.children.append(loop)
         ctx.current_scope = loop
 
         self.visit(node.horizontal_executions, ctx=ctx)
+
+        ctx.current_scope = parent_scope
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, ctx: Context) -> None:
         if node.caches:

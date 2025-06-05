@@ -72,6 +72,8 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         self.visit(node.children, ctx=ctx)
 
     def visit_VerticalLoop(self, node: tir.VerticalLoop, ctx: Context) -> None:
+        parent_scope = ctx.current_scope
+
         if node.loop_order == common.LoopOrder.PARALLEL:
             # create map and add to tree
 
@@ -100,6 +102,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
             raise NotImplementedError("#todo")
 
         self.visit(node.children, ctx=ctx)
+        ctx.current_scope = parent_scope
 
     def visit_TreeRoot(self, node: tir.TreeRoot) -> tn.ScheduleTreeRoot:
         """
