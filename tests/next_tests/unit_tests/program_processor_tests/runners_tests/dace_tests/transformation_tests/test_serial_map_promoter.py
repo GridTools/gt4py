@@ -88,7 +88,7 @@ def test_serial_map_promotion_only_promote():
     # Now apply the promotion
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.SerialMapPromoter(
-            promote_all=True,
+            promote_everything=True,
             # Do not fuse to inspect that the promotion worked.
             fuse_after_promotion=False,
         ),
@@ -124,7 +124,7 @@ def test_serial_map_promotion_promote_and_merge():
     # Now apply the promotion
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.SerialMapPromoter(
-            promote_all=True,
+            promote_everything=True,
             fuse_after_promotion=True,
         ),
         validate=True,
@@ -390,7 +390,7 @@ def test_map_promotion_different_parameter_names():
     assert util.count_nodes(sdfg_k, dace_nodes.MapEntry) == 2
     count = sdfg_k.apply_transformations_repeated(
         gtx_transformations.SerialMapPromoter(
-            promote_all=True,
+            promote_everything=True,
             fuse_after_promotion=True,
         ),
         validate=True,
