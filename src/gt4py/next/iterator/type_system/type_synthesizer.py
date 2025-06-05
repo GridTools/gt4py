@@ -495,7 +495,11 @@ def _resolve_dimensions(
         ... )
         >>> offset_provider_type = {
         ...     "V2E": common.NeighborConnectivityType(
-        ...         domain=(Vertex, V2E), codomain=Edge, skip_value=None, dtype=None, max_neighbors=4
+        ...         domain=(Vertex, V2E),
+        ...         codomain=Edge,
+        ...         skip_value=None,
+        ...         dtype=None,
+        ...         max_neighbors=4,
         ...     ),
         ...     "KOff": K,
         ... }

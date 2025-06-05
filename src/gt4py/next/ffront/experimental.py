@@ -6,16 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Tuple, TypeVar
+from typing import Tuple
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.ffront.fbuiltins import (
-    BuiltInFunction,
-    FieldOffset,
-    FieldT,
-    WhereLikeBuiltinFunction,
-)
+from gt4py.next.ffront.fbuiltins import BuiltInFunction, FieldOffset, WhereBuiltinFunction
 
 
 @BuiltInFunction
@@ -23,14 +18,9 @@ def as_offset(offset_: FieldOffset, field: common.Field, /) -> common.Connectivi
     raise NotImplementedError()
 
 
-_R = TypeVar("_R")
-DomainT = TypeVar("DomainT", bound=common.Field)
-ConcatWhereBuiltinFunction = WhereLikeBuiltinFunction[_R, DomainT, FieldT]
-
-
-@ConcatWhereBuiltinFunction
+@WhereBuiltinFunction
 def concat_where(
-    mask: common.Domain,
+    cond: common.Domain,
     true_field: common.Field | core_defs.ScalarT | Tuple,
     false_field: common.Field | core_defs.ScalarT | Tuple,
     /,
