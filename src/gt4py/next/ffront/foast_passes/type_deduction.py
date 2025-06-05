@@ -998,9 +998,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
-        mask_type, true_branch_type, false_branch_type = (arg.type for arg in node.args)
+        cond_type, true_branch_type, false_branch_type = (arg.type for arg in node.args)
 
-        assert isinstance(mask_type, ts.DomainType)
+        assert isinstance(cond_type, ts.DomainType)
         assert all(
             isinstance(el, (ts.FieldType, ts.ScalarType))
             for arg in (true_branch_type, false_branch_type)
@@ -1019,12 +1019,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     node.location,
                     f"Field arguments must be of same dtype, got '{t_dtype}' != '{f_dtype}'.",
                 )
-            assert isinstance(mask_type.dims, list)
+            assert isinstance(cond_type.dims, list)
             promoted_branches = type_info.promote(tb, fb)
             branches_dims = (
                 [] if isinstance(promoted_branches, ts.ScalarType) else promoted_branches.dims
             )
-            return_dims = promote_dims(mask_type.dims, branches_dims)
+            return_dims = promote_dims(cond_type.dims, branches_dims)
             assert isinstance(t_dtype, ts.ScalarType)
             assert isinstance(f_dtype, ts.ScalarType)
             return_type = ts.FieldType(dims=return_dims, dtype=type_info.promote(t_dtype, f_dtype))

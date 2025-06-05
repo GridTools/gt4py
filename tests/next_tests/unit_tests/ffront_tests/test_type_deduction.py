@@ -34,7 +34,9 @@ from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_info, type_specifications as ts
 
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+# Meaningless dimensions, used for tests.
+TDim = Dimension("TDim")
+SDim = Dimension("SDim")
 
 
 def test_unpack_assign():
@@ -171,6 +173,28 @@ def test_concat_where_scalar():
     parsed = FieldOperatorParser.apply_to_function(simple_concat_where)
     compare_node = parsed.body.stmts[0].value.args[0]
     assert compare_node.type == ts.DomainType(dims=[TDim])
+
+
+def test_concat_where_promotion0():
+    def concat_where_promotion(a: Field[[SDim], float], b: Field[[SDim], float]):
+        return concat_where(TDim > 0, a, b)
+
+    parsed = FieldOperatorParser.apply_to_function(concat_where_promotion)
+    _concat_where_expr = parsed.body.stmts[0].value
+    assert _concat_where_expr.type == ts.FieldType(
+        dims=[SDim, TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
+
+
+def test_concat_where_promotion1():
+    def concat_where_promotion(a: Field[[TDim], float], b: Field[[SDim], float]):
+        return concat_where(TDim > 0, a, b)
+
+    parsed = FieldOperatorParser.apply_to_function(concat_where_promotion)
+    _concat_where_expr = parsed.body.stmts[0].value
+    assert _concat_where_expr.type == ts.FieldType(
+        dims=[SDim, TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
 
 
 def test_domain_comparison_failure():
