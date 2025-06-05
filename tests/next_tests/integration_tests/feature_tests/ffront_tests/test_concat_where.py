@@ -19,7 +19,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
 )
 
-pytestmark = pytest.mark.uses_frontend_concat_where
+pytestmark = pytest.mark.uses_concat_where
 
 
 def test_concat_where_simple(cartesian_case):
