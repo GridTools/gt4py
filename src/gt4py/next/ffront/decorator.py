@@ -87,7 +87,7 @@ class Program:
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
 
-    _offset_provider_extended_cache: eve_utils.CustomMapping = dataclasses.field(
+    _extended_offset_provider_cache: eve_utils.CustomMapping = dataclasses.field(
         default_factory=lambda: eve_utils.CustomMapping(common.hash_offset_provider_unsafe),
         kw_only=True,
         init=False,
@@ -285,11 +285,11 @@ class Program:
         offset_provider: common.OffsetProvider,
     ) -> common.OffsetProvider:
         try:
-            op_extended = self._offset_provider_extended_cache[offset_provider]
+            extended_op = self._extended_offset_provider_cache[offset_provider]
         except KeyError:
-            op_extended = {**self._implicit_offset_provider, **offset_provider}
-            self._offset_provider_extended_cache[offset_provider] = op_extended
-        return op_extended
+            extended_op = {**self._implicit_offset_provider, **offset_provider}
+            self._extended_offset_provider_cache[offset_provider] = extended_op
+        return extended_op
 
     def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
         program_name = (
