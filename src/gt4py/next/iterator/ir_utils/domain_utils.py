@@ -14,7 +14,7 @@ from typing import Any, Literal, Mapping, Optional
 
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
@@ -51,7 +51,7 @@ class SymbolicRange:
 
 @dataclasses.dataclass(frozen=True)
 class SymbolicDomain:
-    grid_type: Literal["unstructured_domain", "cartesian_domain"]
+    grid_type: common.GridType
     ranges: dict[
         common.Dimension, SymbolicRange
     ]  # TODO(havogt): remove `AxisLiteral` by `Dimension` everywhere
@@ -61,25 +61,19 @@ class SymbolicDomain:
 
     @classmethod
     def from_expr(cls, node: itir.Node) -> SymbolicDomain:
-        assert isinstance(node, itir.FunCall) and node.fun in [
-            im.ref("unstructured_domain"),
-            im.ref("cartesian_domain"),
-        ]
+        assert cpm.is_call_to(node, ("unstructured_domain", "cartesian_domain"))
+        grid_type = getattr(common.GridType, node.fun.id[: -len("_domain")].upper())
 
         ranges: dict[common.Dimension, SymbolicRange] = {}
         for named_range in node.args:
-            assert (
-                isinstance(named_range, itir.FunCall)
-                and isinstance(named_range.fun, itir.SymRef)
-                and named_range.fun.id == "named_range"
-            )
+            assert cpm.is_call_to(named_range, "named_range")
             axis_literal, lower_bound, upper_bound = named_range.args
             assert isinstance(axis_literal, itir.AxisLiteral)
 
             ranges[common.Dimension(value=axis_literal.value, kind=axis_literal.kind)] = (
                 SymbolicRange(lower_bound, upper_bound)
             )
-        return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
+        return cls(grid_type, ranges)
 
     def as_expr(self) -> itir.FunCall:
         converted_ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] = {
@@ -183,3 +177,74 @@ def domain_union(*domains: SymbolicDomain) -> SymbolicDomain:
         new_domain_ranges[dim] = SymbolicRange(start, stop)
 
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
+
+
+def domain_intersection(*domains: SymbolicDomain) -> SymbolicDomain:
+    """Return the (set) intersection of a list of domains."""
+    new_domain_ranges = {}
+    assert all(domain.grid_type == domains[0].grid_type for domain in domains)
+    for dim in domains[0].ranges.keys():
+        start = functools.reduce(
+            lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
+            [domain.ranges[dim].start for domain in domains],
+        )
+        stop = functools.reduce(
+            lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
+            [domain.ranges[dim].stop for domain in domains],
+        )
+        # constant fold expression to keep the tree small
+        start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.Expr
+        new_domain_ranges[dim] = SymbolicRange(start, stop)
+
+    return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
+
+
+def domain_complement(domain: SymbolicDomain) -> SymbolicDomain:
+    """Return the (set) complement of a domain."""
+    dims_dict = {}
+    for dim in domain.ranges.keys():
+        lb, ub = domain.ranges[dim].start, domain.ranges[dim].stop
+        # `]-inf, a[` -> `[a, inf[`
+        if lb == itir.InfinityLiteral.NEGATIVE:
+            dims_dict[dim] = SymbolicRange(start=ub, stop=itir.InfinityLiteral.POSITIVE)
+        # `[a, inf]` -> `]-inf, a]`
+        elif ub == itir.InfinityLiteral.POSITIVE:
+            dims_dict[dim] = SymbolicRange(start=itir.InfinityLiteral.NEGATIVE, stop=lb)
+        else:
+            raise ValueError("Invalid domain ranges")
+    return SymbolicDomain(domain.grid_type, dims_dict)
+
+
+def promote_to_same_dimensions(
+    domain_small: SymbolicDomain, domain_large: SymbolicDomain
+) -> SymbolicDomain:
+    """Return an extended domain based on a smaller input domain and a larger domain containing the target dimensions."""
+    dims_dict = {}
+    for dim in domain_large.ranges.keys():
+        if dim in domain_small.ranges.keys():
+            lb, ub = domain_small.ranges[dim].start, domain_small.ranges[dim].stop
+            dims_dict[dim] = SymbolicRange(lb, ub)
+        else:
+            dims_dict[dim] = SymbolicRange(
+                itir.InfinityLiteral.NEGATIVE, itir.InfinityLiteral.POSITIVE
+            )
+    return SymbolicDomain(domain_small.grid_type, dims_dict)  # TODO: fix for unstructured
+
+
+def is_finite(range_or_domain: SymbolicRange | SymbolicDomain) -> bool:
+    """
+    Return whether a range is unbounded in (at least) one direction.
+
+    The expression is required to be constant folded before for the result to be reliable.
+    """
+    if isinstance(range_ := range_or_domain, SymbolicRange):
+        # TODO: assert no infinity literal in here
+        if any(
+            v in [itir.InfinityLiteral.POSITIVE, itir.InfinityLiteral.NEGATIVE]
+            for v in [range_.start, range_.stop]
+        ):
+            return False
+        return True
+    elif isinstance(domain := range_or_domain, SymbolicDomain):
+        return all(is_finite(range_) for range_ in domain.ranges.values())
+    raise ValueError("Expected a SymbolicRange or SymbolicDomain.")
