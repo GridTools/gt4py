@@ -140,7 +140,7 @@ def _tasklet_name(field: oir.FieldAccess, is_target: bool) -> str:
         raise NotImplementedError("Data dimensions aren't supported yet.")
 
     offset_indicators = [
-        f"{k}{'p' if v > 0 else 'm'}{v}" for k, v in field.offset.to_dict().items() if v != 0
+        f"{k}{'p' if v > 0 else 'm'}{abs(v)}" for k, v in field.offset.to_dict().items() if v != 0
     ]
 
     return f"{base}_{'_'.join(offset_indicators)}" if offset_indicators else base
