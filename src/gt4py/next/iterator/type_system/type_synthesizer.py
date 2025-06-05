@@ -618,7 +618,7 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
         assert isinstance(el_type, ts.DataType)
         offset_types = [arg.offset_type for arg in args if arg.offset_type]
         offset_type = offset_types[0] if offset_types else None
-        assert all(offset_type == arg for arg in offset_types)  # type: ignore[operator] # mypy not smart enough
+        assert all(offset_type == arg for arg in offset_types)
         return ts.ListType(element_type=el_type, offset_type=offset_type)
 
     return applied_map
