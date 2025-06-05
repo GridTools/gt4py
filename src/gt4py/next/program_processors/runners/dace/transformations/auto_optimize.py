@@ -281,7 +281,7 @@ def _gt_auto_process_top_level_maps(
             gtx_transformations.SerialMapPromoter(
                 only_toplevel_maps=True,
                 promote_vertical=True,
-                promote_horizontal=True, # in general this is not beneficial but for 19_to_20 it is.
+                promote_horizontal=False,
                 promote_local=False,
             ),
             validate=validate,
