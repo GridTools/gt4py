@@ -64,7 +64,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         ctx.current_scope.children.append(map_scope)
         ctx.current_scope = map_scope
 
-        self.visit(node.children)
+        self.visit(node.children, ctx=ctx)
 
     def visit_VerticalLoop(self, node: tir.VerticalLoop, ctx: Context) -> None:
         if node.loop_order == common.LoopOrder.PARALLEL:

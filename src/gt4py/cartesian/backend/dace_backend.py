@@ -456,6 +456,11 @@ class DaCeExtGenerator(BackendCodegen):
         stree = manager.schedule_tree()
         sdfg = stree.as_sdfg(validate=True, simplify=True)
 
+        # NOTE
+        # The glue code in DaCeComputationCodegen.apply() (just below) will define all the
+        # symbols. Our job creating the sdfg/stree is to make sure we use the same symbols
+        # and to be sure that these symbols are added as dace symbols.
+
         sources: Dict[str, Dict[str, str]]
         implementation = DaCeComputationCodegen.apply(stencil_ir, self.backend.builder, sdfg)
 
