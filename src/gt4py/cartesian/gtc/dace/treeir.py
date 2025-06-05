@@ -10,13 +10,13 @@ from __future__ import annotations
 
 from typing import TypeAlias
 
-from dace import Memlet, data, nodes, symbolic
+from dace import Memlet, data, nodes, dtypes
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
 
 
-SymbolDict: TypeAlias = dict[str, symbolic.symbol]
+SymbolDict: TypeAlias = dict[str, dtypes.typeclass]
 
 
 class Bounds(eve.Node):
@@ -70,6 +70,6 @@ class TreeRoot(TreeScope):
     containers: dict[str, data.Data]
     """Mapping field/scalar names to data descriptors."""
     symbols: SymbolDict
-    """Mapping string symbol to dace symbol (same string)."""
+    """Mapping between type and symbol name."""
 
     children: list[VerticalLoop]

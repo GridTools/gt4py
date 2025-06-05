@@ -189,7 +189,7 @@ def get_dace_shape(field: oir.FieldDecl, symbols: tir.SymbolDict) -> list:
     for axis in dcir.Axis.dims_3d():
         if field.dimensions[axis.to_idx()]:
             symbol = axis.domain_dace_symbol()
-            symbols[axis.domain_symbol()] = symbol
+            symbols[axis.domain_symbol()] = dtypes.int32
             shape.append(symbol)
 
     shape.extend([d for d in field.data_dims])
@@ -204,6 +204,6 @@ def get_dace_strides(field: oir.FieldDecl, symbols: tir.SymbolDict) -> list[symb
     for dim in dimension_strings + data_dimenstion_strings:
         stride = f"__{field.name}_{dim}_stride"
         symbol = symbolic.pystr_to_symbolic(stride)
-        symbols[stride] = symbol
+        symbols[stride] = dtypes.int32
         strides.append(symbol)
     return strides

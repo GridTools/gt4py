@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from dace import nodes, subsets
+from dace import nodes, subsets, dtypes
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 
 from gt4py import eve
@@ -39,12 +39,15 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
 
     def visit_HorizontalLoop(self, node: tir.HorizontalLoop, ctx: Context) -> None:
         # Define ij/loop
-        ctx.tree.symbols[dcir.Axis.I.iteration_symbol()] = dcir.Axis.I.iteration_dace_symbol()
-        ctx.tree.symbols[dcir.Axis.J.iteration_symbol()] = dcir.Axis.J.iteration_dace_symbol()
+        ctx.tree.symbols[dcir.Axis.I.iteration_symbol()] = dtypes.int32
+        ctx.tree.symbols[dcir.Axis.J.iteration_symbol()] = dtypes.int32
         map_entry = nodes.MapEntry(
             map=nodes.Map(
                 label=f"horizontal_loop_{id(node)}",
-                params=[dcir.Axis.I.iteration_dace_symbol(), dcir.Axis.J.iteration_dace_symbol()],
+                params=[
+                    str(dcir.Axis.I.iteration_symbol()),
+                    str(dcir.Axis.J.iteration_symbol()),
+                ],
                 # TODO (later)
                 # Ranges have support support for tiling
                 ndrange=subsets.Range(
@@ -72,11 +75,11 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         if node.loop_order == common.LoopOrder.PARALLEL:
             # create map and add to tree
 
-            ctx.tree.symbols[dcir.Axis.K.iteration_symbol()] = dcir.Axis.K.iteration_dace_symbol()
+            ctx.tree.symbols[dcir.Axis.K.iteration_symbol()] = dtypes.int32
             map_entry = nodes.MapEntry(
                 map=nodes.Map(
                     label=f"vertical_loop_{id(node)}",
-                    params=[dcir.Axis.K.iteration_dace_symbol()],
+                    params=[dcir.Axis.K.iteration_symbol()],
                     # TODO (later)
                     # Ranges have support support for tiling
                     ndrange=subsets.Range(
