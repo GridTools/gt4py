@@ -237,7 +237,7 @@ def test_next(
     session.run(
         *"pytest --cache-clear -sv --dist loadgroup".split(),
         *("-m", f"{markers}"),
-        ("-n auto" if device == "cpu" else ""),
+        *(["-n", "auto"] if device == "cpu" else []),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
