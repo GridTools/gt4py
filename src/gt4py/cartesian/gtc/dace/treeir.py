@@ -46,8 +46,6 @@ class IfElse(TreeScope):
     # to see it before my bodily demise
     if_condition_code: str
     """Condition as ScheduleTree worthy code"""
-    children: list[Tasklet]
-    """Body of if"""
 
 
 class HorizontalLoop(TreeScope):
@@ -55,7 +53,6 @@ class HorizontalLoop(TreeScope):
     bounds_i: Bounds
     bounds_j: Bounds
 
-    children: list[Tasklet]  # others to come (horizontal restriction, conditions, while loops, ...)
     # horizontal restriction:
     # - touches the bounds of the (horizontal) loop
     #  -> this can be important for scheduling
@@ -69,8 +66,6 @@ class VerticalLoop(TreeScope):
     loop_order: common.LoopOrder
     bounds_k: Bounds
 
-    children: list[HorizontalLoop]
-
 
 class TreeRoot(TreeScope):
     name: str
@@ -80,5 +75,3 @@ class TreeRoot(TreeScope):
     """Mapping field/scalar names to data descriptors."""
     symbols: SymbolDict
     """Mapping between type and symbol name."""
-
-    children: list[VerticalLoop]
