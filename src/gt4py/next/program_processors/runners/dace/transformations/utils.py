@@ -306,10 +306,10 @@ def track_view(
         raise RuntimeError(f"Failed to determine the direction of the view '{view}'.")
     if curr_edge.dst_conn == "views":
         # The view is used for reading.
-        next_node = lambda curr_edge: curr_edge.src  # noqa: E731
+        next_node = lambda curr_edge: curr_edge.src  # noqa: E731 [lambda-assignment]
     elif curr_edge.src_conn == "views":
         # The view is used for writing.
-        next_node = lambda curr_edge: curr_edge.dst  # noqa: E731
+        next_node = lambda curr_edge: curr_edge.dst  # noqa: E731 [lambda-assignment]
     else:
         raise RuntimeError(f"Failed to determine the direction of the view '{view}' | {curr_edge}.")
 
@@ -571,3 +571,52 @@ def find_upstream_nodes(
         to_visit.extend(iedge.src for iedge in state.in_edges(node) if iedge.src is not limit_node)
 
     return seen
+
+
+def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
+    """Finds the set of next states after `state`.
+
+    In the simplest case the function will return something like this.
+    `[e.dst for e in state.sdfg.out_edges(state)`].
+    If this set is empty, the function will go up the hierarchy of the control flow
+    regions and inspect the outputs. This means if `state` is a terminal node of
+    a control flow region the function will find the successor states of the
+    region.
+    If the set of successors contains an control flow region, the region will be
+    expanded, such that the result set only consists of `SDFGState`s.
+    """
+
+    def _impl(
+        state: Union[dace.SDFGState, dace.sdfg.state.AbstractControlFlowRegion],
+        graph: dace.sdfg.state.AbstractControlFlowRegion,
+    ) -> list[dace.sdfg.state.AbstractControlFlowRegion]:
+        assert state is not graph
+        assert state in graph.nodes()
+
+        curr_out_edges = [oedge.dst for oedge in graph.out_edges(state)]
+
+        # End recursion if we found some successor edges or we have reached the top.
+        if len(curr_out_edges) > 0 or graph.parent_graph is state.sdfg:
+            return curr_out_edges
+        elif isinstance(graph.parent_graph, dace.sdfg.state.ConditionalBlock):
+            # For conditional we go two levels up, because there is nothing
+            #  interesting inside it.
+            return _impl(graph.parent_graph, graph.parent_graph.parent_graph)
+        else:
+            # We have not found any successor edges, so we go one level up.
+            #  This time we look for the enclosing graph.
+            # NOTE: We do not handle the `LoopRegion` specially, as the successor
+            #   state could either be the one following the region or the first
+            #   state of the loop body.
+            return _impl(graph, graph.parent_graph)
+
+    # Expand the successors such that it contains only `SDFGState`s.
+    # TODO(phimuell): Only use the starting block instead of all.
+    all_successors: list[dace.SDFGState] = []
+    for successor in _impl(state, state.parent_graph):
+        if isinstance(successor, dace.SDFGState):
+            all_successors.append(successor)
+        else:
+            all_successors.extend(successor.all_states())
+
+    return all_successors
