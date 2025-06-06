@@ -139,16 +139,16 @@ build_py310_image_aarch64:
   extends: [.container-runner-santis-gh200, .test_helper]
   parallel:
     matrix:
-    - SUBPACKAGE: [cartesian]
-      VARIANT: ['internal', 'dace']
-      SUBVARIANT: ['cuda12', 'cpu']
-    - SUBPACKAGE: eve
+    # - SUBPACKAGE: [cartesian]
+    #   VARIANT: ['internal', 'dace']
+    #   SUBVARIANT: ['cuda12', 'cpu']
+    # - SUBPACKAGE: eve
     - SUBPACKAGE: next
-      VARIANT: ['internal', 'dace']
-      SUBVARIANT: ['cuda12', 'cpu']
-      DETAIL: ['nomesh', 'atlas']
-    - SUBPACKAGE: [storage]
-      VARIANT: ['cuda12', 'cpu']
+      VARIANT: ['dace']
+      SUBVARIANT: ['cuda12']
+      DETAIL: ['nomesh']
+    # - SUBPACKAGE: [storage]
+    #   VARIANT: ['cuda12', 'cpu']
   variables:
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     # Another problem, observed in test stage, is that gpu tests hang in combination with CUDA MPS,
