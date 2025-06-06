@@ -287,7 +287,7 @@ def split_node(
     return new_access_nodes
 
 
-def split_copy_edge(
+def split_edge(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
     edge_to_split: dace_graph.MultiConnectorEdge,
@@ -303,6 +303,9 @@ def split_copy_edge(
     edges that were created. Note that the `dict` also contains the
     key `None` which contains all the edges that are not associated to a
     split.
+
+    It is important that this function is only able to split edges between
+    AccessNodes.
 
     Args:
         state: The state in which we operate.
@@ -396,14 +399,11 @@ def decompose_subset(
     producer: dace_sbs.Subset,
     consumer: dace_sbs.Subset,
 ) -> Union[list[dace_sbs.Subset], None]:
-    """This function performs is able to split `consumer` in one dimension.
+    """
+    Decompose `consumer` into pieces either covered by `producer` or have no intersection.
 
-    The function decomposes `consumer` into fragments, each fragment is either
-    fully covered by `producer` or there has no intersection
-    with it.
-
-    The function returns the list of the fragments of `consumer`. However,
-    there are some special return values:
+    If the decomposition exists the function returns a `list` containing the
+    fragments, there are some special return values:
     - `None`: If the split is not applicable, for example there is no
         intersection in at least one dimensions.
     - The empty `list`: Indicates that `producer` fully covers `consumer`.
