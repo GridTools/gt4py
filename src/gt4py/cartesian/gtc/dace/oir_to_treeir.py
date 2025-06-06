@@ -10,6 +10,8 @@ from dataclasses import dataclass
 
 from dace import data, dtypes, nodes, symbolic
 
+from typing import TypeAlias
+
 from gt4py import eve
 from gt4py.cartesian.gtc import common, definitions, oir
 from gt4py.cartesian.gtc.dace import daceir as dcir, oir_to_tasklet, treeir as tir
@@ -25,6 +27,11 @@ class Context:
 
     field_extents: dict[str, definitions.Extent]  # field_name -> Extent
     block_extents: dict[int, definitions.Extent]  # id(horizontal execution) -> Extent
+
+
+ControlFlow: TypeAlias = (
+    oir.HorizontalExecution | oir.While | oir.MaskStmt | oir.HorizontalRestriction
+)
 
 
 # This could (should?) be a NodeTranslator
@@ -46,6 +53,27 @@ class OIRToTreeIR(eve.NodeVisitor):
             parent=ctx.current_scope,
         )
         ctx.current_scope.children.append(tasklet)
+
+    def _group_statements(self, node: ControlFlow) -> list[oir.CodeBlock]:
+        """Group the body of a control flow node into CodeBlocks and other ControlFlow
+
+        Visitor on statements is left to the caller.
+        """
+        statements = []
+        groups = []
+        for stmt in node.body:
+            if isinstance(stmt, (oir.MaskStmt, oir.While, oir.HorizontalRestriction)):
+                if statements != []:
+                    groups.append(
+                        oir.CodeBlock(label=f"he_{id(node)}_{len(groups)}", body=statements)
+                    )
+                groups.append(stmt)
+                statements = []
+            else:
+                statements.append(stmt)
+        if statements != []:
+            groups.append(oir.CodeBlock(label=f"he_{id(node)}_{len(groups)}", body=statements))
+        return groups
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, ctx: Context) -> None:
         # TODO
@@ -75,6 +103,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         )
 
         ctx.current_scope.children.append(loop)
+        parent_scope = ctx.current_scope
         ctx.current_scope = loop
 
         for local_scalar in node.declarations:
@@ -89,9 +118,34 @@ class OIRToTreeIR(eve.NodeVisitor):
         # things like if-statements and while-loops.
         # Remember: add support for regions (HorizontalRestrictions)
         # from the start this time.
-        code_blocks = [oir.CodeBlock(label=f"he_{id(node)}", body=node.body)]
+        code_blocks = self._group_statements(node)
+
+        # Visit codeblocks - make sure to reset context
+        self.visit(code_blocks, ctx=ctx)
+        ctx.current_scope = parent_scope
+
+    def visit_MaskStmt(self, node: oir.MaskStmt, ctx: Context) -> None:
+        if not isinstance(node.mask, (oir.ScalarAccess, oir.UnaryOp)):
+            raise RuntimeError(
+                f"Expect ScalarAccess referencing computation of a previous Mask got {node.mask}"
+            )
+        if isinstance(node.mask, oir.ScalarAccess):
+            mask_name = node.mask.name
+        elif isinstance(node.mask, oir.UnaryOp) and node.mask.op == common.UnaryOperator.NOT:
+            mask_name = f"not {node.mask.expr.name}"
+        else:
+            raise NotImplementedError("Unexpected mask IR")
+
+        if_else = tir.IfElse(if_condition_code=mask_name, children=[], parent=ctx.current_scope)
+
+        ctx.current_scope.children.append(if_else)
+        parent = ctx.current_scope
+        ctx.current_scope = if_else
+
+        code_blocks = self._group_statements(node)
 
         self.visit(code_blocks, ctx=ctx)
+        ctx.current_scope = parent
 
     def visit_AxisBound(self, node: oir.AxisBound, axis_start: str, axis_end: str) -> str:
         if node.level == common.LevelMarker.START:

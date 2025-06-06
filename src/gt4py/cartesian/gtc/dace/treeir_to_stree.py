@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from dace import __version__ as dace_version, dtypes, nodes, sdfg, subsets
 from dace.codegen import control_flow as dcf
@@ -28,6 +29,27 @@ class Context:
     """A reference to the current scope node."""
 
 
+class ScopeManager:
+    """Push/Pop the scope into the context, append given node to the parent scope"""
+
+    def __init__(self, ctx: Context, node: Any):
+        self._ctx = ctx
+        self._parent_scope = ctx.current_scope
+        self._node = node
+
+    def __enter__(self):
+        self._node.parent = self._parent_scope
+        self._parent_scope.children.append(self._node)
+        self._ctx.current_scope = self._node
+
+    def __exit__(self, _exc_type, _exc_value, _traceback):
+        self._ctx.current_scope = self._parent_scope
+
+    @property
+    def children(self):
+        return self._ctx.current_scope.children
+
+
 class TreeIRToScheduleTree(eve.NodeVisitor):
     # TODO
     # More visitors to come here
@@ -40,8 +62,6 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         ctx.current_scope.children.append(tasklet)
 
     def visit_HorizontalLoop(self, node: tir.HorizontalLoop, ctx: Context) -> None:
-        parent_scope = ctx.current_scope
-
         # Define ij/loop
         ctx.tree.symbols[dcir.Axis.I.iteration_symbol()] = dtypes.int32
         ctx.tree.symbols[dcir.Axis.J.iteration_symbol()] = dtypes.int32
@@ -69,16 +89,10 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
             node=map_entry,
             children=[],
         )
-        map_scope.parent = ctx.current_scope
-        ctx.current_scope.children.append(map_scope)
-        ctx.current_scope = map_scope
-
-        self.visit(node.children, ctx=ctx)
-        ctx.current_scope = parent_scope
+        with ScopeManager(ctx, map_scope):
+            self.visit(node.children, ctx=ctx)
 
     def visit_VerticalLoop(self, node: tir.VerticalLoop, ctx: Context) -> None:
-        parent_scope = ctx.current_scope
-
         if node.loop_order == common.LoopOrder.PARALLEL:
             # create map and add to tree
 
@@ -99,18 +113,21 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
                 node=map_entry,
                 children=[],
             )
-            map_scope.parent = ctx.current_scope
-            ctx.current_scope.children.append(map_scope)
-            ctx.current_scope = map_scope
+            with ScopeManager(ctx, map_scope):
+                self.visit(node.children, ctx=ctx)
         else:
             # create loop and add it to tree
             for_scope = tn.ForScope(header=_for_scope_header(node), children=[])
-            for_scope.parent = ctx.current_scope
-            ctx.current_scope.children.append(for_scope)
-            ctx.current_scope = for_scope
+            with ScopeManager(ctx, for_scope):
+                self.visit(node.children, ctx=ctx)
 
-        self.visit(node.children, ctx=ctx)
-        ctx.current_scope = parent_scope
+    def visit_IfElse(self, node: tir.IfElse, ctx: Context) -> None:
+        if_scope = tn.IfScope(
+            condition=tn.CodeBlock(node.if_condition_code),
+            children=[],
+        )
+        with ScopeManager(ctx, if_scope):
+            self.visit(node.children, ctx=ctx)
 
     def visit_TreeRoot(self, node: tir.TreeRoot) -> tn.ScheduleTreeRoot:
         """

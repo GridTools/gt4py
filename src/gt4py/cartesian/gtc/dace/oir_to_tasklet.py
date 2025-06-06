@@ -66,6 +66,16 @@ class OIRToTasklet(eve.NodeVisitor):
 
         raise NotImplementedError(f"_memlet_subset(): unknown offset type {type(node.offset)}")
 
+    def visit_CodeBlock(
+        self, node: oir.CodeBlock, root: tir.TreeRoot
+    ) -> tuple[str, dict[str, Memlet], dict[str, Memlet]]:
+        """Entry point to gather all code, input and outputs"""
+        ctx = Context(code=[], targets=set(), inputs={}, outputs={}, tree=root)
+
+        self.visit(node.body, ctx=ctx)
+
+        return ("\n".join(ctx.code), ctx.inputs, ctx.outputs)
+
     def visit_CartesianOffset(self, _node: common.CartesianOffset, **_kwargs: Any) -> None:
         raise ValueError("Cartesian Offset should be dealt in Access IRs.")
 
@@ -145,15 +155,6 @@ class OIRToTasklet(eve.NodeVisitor):
 
         ctx.code.append(f"{left} = {right}")
 
-    def visit_CodeBlock(
-        self, node: oir.CodeBlock, root: tir.TreeRoot
-    ) -> tuple[str, dict[str, Memlet], dict[str, Memlet]]:
-        ctx = Context(code=[], targets=set(), inputs={}, outputs={}, tree=root)
-
-        self.visit(node.body, ctx=ctx)
-
-        return ("\n".join(ctx.code), ctx.inputs, ctx.outputs)
-
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> str:
         left = self.visit(node.left, **kwargs)
         right = self.visit(node.right, **kwargs)
@@ -210,6 +211,10 @@ class OIRToTasklet(eve.NodeVisitor):
         print(node.func)
         return f"{self.visit(node.func, **kwargs)}({','.join([self.visit(a, **kwargs) for a in node.args])})"
 
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs):
+        # Skip here, OIR to TreeIR will catch
+        pass
+
     # Not implemented blocks - implement or pass to generic visitor
     def visit_AbsoluteKIndex(self, node, **kwargs):
         raise NotImplementedError("To be implemented: Absolute K")
@@ -231,9 +236,6 @@ class OIRToTasklet(eve.NodeVisitor):
 
     def visit_While(self, node, **kwargs):
         raise NotImplementedError("To be implemented: while")
-
-    def visit_MaskStmt(self, node, **kwargs):
-        raise NotImplementedError("To be implemented: if/else")
 
     def visit_TernaryOp(self, node, **kwargs):
         raise NotImplementedError("To be implemented: ops")

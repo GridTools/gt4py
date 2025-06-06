@@ -41,6 +41,15 @@ class Tasklet(TreeNode):
     """Mapping tasklet.out_connectors to Memlets"""
 
 
+class IfElse(TreeScope):
+    # This should become an if/else, someday, so I am naming it if/else in hope
+    # to see it before my bodily demise
+    if_condition_code: str
+    """Condition as ScheduleTree worthy code"""
+    children: list[Tasklet]
+    """Body of if"""
+
+
 class HorizontalLoop(TreeScope):
     # stuff for ij/loop bounds
     bounds_i: Bounds
