@@ -46,7 +46,7 @@ class UnchainComparesPass(ast.NodeTransformer):
 
         # the remainder of the chain -> right branch of the new tree
         # example: ``b > c > d``
-        remaining_chain = copy.copy(node)
+        remaining_chain = copy.deepcopy(node)
         remaining_chain.left = remaining_chain.comparators.pop(0)
         remaining_chain.ops.pop(0)
 
