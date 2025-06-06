@@ -466,7 +466,7 @@ def translate_as_fieldop(
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     input_edges, output_edges = gtir_dataflow.translate_lambda_to_dataflow(
-        ctx.sdfg, ctx.state, sdfg_builder, stencil_expr, fieldop_args
+        ctx, sdfg_builder, stencil_expr, fieldop_args
     )
 
     return _create_field_operator(ctx, domain, node.type, sdfg_builder, input_edges, output_edges)

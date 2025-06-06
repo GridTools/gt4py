@@ -760,9 +760,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             lambda_params.append(psymbol)
 
         # visit each branch of the if-statement as if it was a Lambda node
+        if_branch_ctx = gtir_sdfg.LoweringContext(if_sdfg, if_branch_state)
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
         input_edges, output_tree = translate_lambda_to_dataflow(
-            if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, lambda_args
+            if_branch_ctx, self.subgraph_builder, lambda_node, lambda_args
         )
 
         for data_node in if_branch_state.data_nodes():
@@ -1861,8 +1862,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
 
 def translate_lambda_to_dataflow(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.LoweringContext,
     sdfg_builder: gtir_sdfg.DataflowBuilder,
     node: gtir.Lambda,
     args: Sequence[
@@ -1884,8 +1884,7 @@ def translate_lambda_to_dataflow(
     nodes. Finally, the visitor returns the output edge of the dataflow.
 
     Args:
-        sdfg: The SDFG where the dataflow graph will be instantiated.
-        state: The SDFG state where the dataflow graph will be instantiated.
+        ctx: The SDFG context where the `Lambda` expression should be lowered.
         sdfg_builder: Helper class to build the dataflow inside the given SDFG.
         node: Lambda node to visit.
         args: Arguments passed to lambda node.
@@ -1895,7 +1894,7 @@ def translate_lambda_to_dataflow(
         - List of connections for data inputs to the dataflow.
         - Tree representation of output data connections.
     """
-    taskgen = LambdaToDataflow(sdfg, state, sdfg_builder)
+    taskgen = LambdaToDataflow(ctx.sdfg, ctx.state, sdfg_builder)
     lambda_output = taskgen.visit_let(node, args)
 
     if isinstance(lambda_output, DataflowOutputEdge):
