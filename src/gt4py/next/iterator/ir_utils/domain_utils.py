@@ -247,4 +247,3 @@ def is_finite(range_or_domain: SymbolicRange | SymbolicDomain) -> bool:
     elif isinstance(domain := range_or_domain, SymbolicDomain):
         return all(is_finite(range_) for range_ in domain.ranges.values())
     raise ValueError("Expected a 'SymbolicRange' or 'SymbolicDomain'.")
-
