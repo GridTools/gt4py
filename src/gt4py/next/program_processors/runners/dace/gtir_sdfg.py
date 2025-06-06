@@ -56,19 +56,19 @@ class DataflowBuilder(Protocol):
     def unique_tasklet_name(self, name: str) -> str: ...
 
     def add_temp_array(
-        self, ctx: SDFGBuilderContext, shape: Sequence[Any], dtype: dace.dtypes.typeclass
+        self, ctx: LoweringContext, shape: Sequence[Any], dtype: dace.dtypes.typeclass
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary array to the SDFG."""
         return ctx.sdfg.add_temp_transient(shape, dtype)
 
     def add_temp_array_like(
-        self, ctx: SDFGBuilderContext, datadesc: dace.data.Array
+        self, ctx: LoweringContext, datadesc: dace.data.Array
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary array to the SDFG."""
         return ctx.sdfg.add_temp_transient_like(datadesc)
 
     def add_temp_scalar(
-        self, ctx: SDFGBuilderContext, dtype: dace.dtypes.typeclass
+        self, ctx: LoweringContext, dtype: dace.dtypes.typeclass
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary scalar to the SDFG."""
         temp_name = ctx.sdfg.temp_data_name()
@@ -76,7 +76,7 @@ class DataflowBuilder(Protocol):
 
     def add_map(
         self,
-        ctx: SDFGBuilderContext,
+        ctx: LoweringContext,
         name: str,
         ndrange: Union[
             Dict[str, Union[str, dace.subsets.Subset]],
@@ -90,7 +90,7 @@ class DataflowBuilder(Protocol):
 
     def add_tasklet(
         self,
-        ctx: SDFGBuilderContext,
+        ctx: LoweringContext,
         name: str,
         inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
         outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
@@ -103,7 +103,7 @@ class DataflowBuilder(Protocol):
 
     def add_mapped_tasklet(
         self,
-        ctx: SDFGBuilderContext,
+        ctx: LoweringContext,
         name: str,
         map_ranges: Dict[str, str | dace.subsets.Subset]
         | List[Tuple[str, str | dace.subsets.Subset]],
@@ -120,7 +120,7 @@ class DataflowBuilder(Protocol):
 
 
 @dataclasses.dataclass(frozen=True)
-class SDFGBuilderContext:
+class LoweringContext:
     """Represents the SDFG context in which to lower a GTIR node to dataflow.
 
     Note that each SDFG state requires its own `DataflowContext` object.
@@ -165,10 +165,10 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         self,
         node: gtir.Lambda,
         nested_sdfg_name: str,
-        parent_ctx: SDFGBuilderContext,
+        parent_ctx: LoweringContext,
         scope_symbols: dict[str, ts.DataType],
         state_name: Optional[str] = None,
-    ) -> tuple[SDFGBuilder, SDFGBuilderContext]:
+    ) -> tuple[SDFGBuilder, LoweringContext]:
         """
         Create an nested SDFG context to lower a lambda expression, indipendent
         from the current context where the parent expression is being translated.
@@ -404,10 +404,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self,
         node: gtir.Lambda,
         nested_sdfg_name: str,
-        parent_ctx: SDFGBuilderContext,
+        parent_ctx: LoweringContext,
         scope_symbols: dict[str, ts.DataType],
         state_name: Optional[str] = None,
-    ) -> tuple[SDFGBuilder, SDFGBuilderContext]:
+    ) -> tuple[SDFGBuilder, LoweringContext]:
         nested_sdfg = dace.SDFG(name=self.unique_nsdfg_name(parent_ctx.sdfg, nested_sdfg_name))
         nested_sdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=parent_ctx.sdfg.debuginfo)
 
@@ -425,7 +425,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         if state_name is None:
             state_name = "entry"
         start_state_in_nested_sdfg = nested_sdfg.add_state(state_name, is_start_block=True)
-        nested_sdfg_ctx = SDFGBuilderContext(nested_sdfg, start_state_in_nested_sdfg)
+        nested_sdfg_ctx = LoweringContext(nested_sdfg, start_state_in_nested_sdfg)
 
         return nested_sdfg_builder, nested_sdfg_ctx
 
@@ -590,7 +590,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def _visit_expression(
         self,
         node: gtir.Expr,
-        ctx: SDFGBuilderContext,
+        ctx: LoweringContext,
         use_temp: bool = True,
     ) -> list[gtir_builtin_translators.FieldopData]:
         """
@@ -751,7 +751,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # visit the domain expression
         domain = gtir_domain.extract_domain(stmt.domain)
-        ctx = SDFGBuilderContext(sdfg, state)
+        ctx = LoweringContext(sdfg, state)
 
         # lower the GTIR expression to a dataflow that computes some temporary fields
         source_fields = self._visit_expression(stmt.expr, ctx)
@@ -809,7 +809,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def visit_FunCall(
         self,
         node: gtir.FunCall,
-        ctx: SDFGBuilderContext,
+        ctx: LoweringContext,
     ) -> gtir_builtin_translators.FieldopResult:
         # use specialized dataflow builder classes for each builtin function
         if cpm.is_call_to(node, "if_"):
@@ -834,7 +834,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def visit_Lambda(
         self,
         node: gtir.Lambda,
-        ctx: SDFGBuilderContext,
+        ctx: LoweringContext,
         args: Sequence[gtir_builtin_translators.FieldopResult],
     ) -> gtir_builtin_translators.FieldopResult:
         """
@@ -1020,14 +1020,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def visit_Literal(
         self,
         node: gtir.Literal,
-        ctx: SDFGBuilderContext,
+        ctx: LoweringContext,
     ) -> gtir_builtin_translators.FieldopResult:
         return gtir_builtin_translators.translate_literal(node, ctx, self)
 
     def visit_SymRef(
         self,
         node: gtir.SymRef,
-        ctx: SDFGBuilderContext,
+        ctx: LoweringContext,
     ) -> gtir_builtin_translators.FieldopResult:
         return gtir_builtin_translators.translate_symbol_ref(node, ctx, self)
 

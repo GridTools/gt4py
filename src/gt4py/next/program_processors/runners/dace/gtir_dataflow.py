@@ -412,7 +412,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         The subgraph builder ensures that the map receives a unique name,
         by adding a unique suffix to the provided name.
         """
-        ctx = gtir_sdfg.SDFGBuilderContext(self.sdfg, self.state)
+        ctx = gtir_sdfg.LoweringContext(self.sdfg, self.state)
         return self.subgraph_builder.add_map(ctx, name, ndrange, **kwargs)
 
     def _add_tasklet(
@@ -429,7 +429,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         The subgraph builder ensures that the tasklet receives a unique name,
         by adding a unique suffix to the provided name.
         """
-        ctx = gtir_sdfg.SDFGBuilderContext(self.sdfg, self.state)
+        ctx = gtir_sdfg.LoweringContext(self.sdfg, self.state)
         tasklet_node = self.subgraph_builder.add_tasklet(ctx, name, inputs, outputs, code, **kwargs)
         if len(inputs) == 0:
             # All nodes inside a map scope must have an in/out path that traverses
@@ -455,7 +455,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         The subgraph builder ensures that the tasklet receives a unique name,
         by adding a unique suffix to the provided name.
         """
-        ctx = gtir_sdfg.SDFGBuilderContext(self.sdfg, self.state)
+        ctx = gtir_sdfg.LoweringContext(self.sdfg, self.state)
         return self.subgraph_builder.add_mapped_tasklet(
             ctx, name, map_ranges, inputs, code, outputs, **kwargs
         )
