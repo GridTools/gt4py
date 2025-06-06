@@ -13,7 +13,7 @@ from dace import Memlet, subsets
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
+from gt4py.cartesian.gtc.dace import daceir as dcir, prefix, treeir as tir
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 
 
@@ -38,17 +38,41 @@ class Context:
     outputs: dict[str, Memlet]
     """Mapping connector names to memlets flowing out of this code block."""
 
+    tree: tir.TreeRoot
+    """Schedule tree in which this tasklet will be inserted."""
+
 
 class OIRToTasklet(eve.NodeVisitor):
+    def _memlet_subset(self, node: oir.FieldAccess, ctx: Context) -> subsets.Subset:
+        if isinstance(node.offset, common.CartesianOffset):
+            offset_dict = node.offset.to_dict()
+            # TODO
+            # This has to be reworked with support for data dimensions
+            return subsets.Indices(
+                [
+                    f"{axis.iteration_dace_symbol()} + {offset_dict[axis.lower()]}"
+                    for i, axis in enumerate(dcir.Axis.dims_3d())
+                    if i < len(ctx.tree.containers[node.name].shape)
+                ]
+            )
+
+        if isinstance(node.offset, oir.VariableKOffset):
+            # TODO
+            # This has to be reworked with support for data dimensions
+            i = dcir.Axis.I.iteration_symbol()
+            j = dcir.Axis.J.iteration_symbol()
+            K = dcir.Axis.K.domain_symbol()
+            return subsets.Range([(i, i, 1), (j, j, 1), (0, K, 1)])
+
+        raise NotImplementedError(f"_memlet_subset(): unknown offset type {type(node.offset)}")
+
     def visit_CartesianOffset(self, _node: common.CartesianOffset, **_kwargs: Any) -> None:
         raise ValueError("We shouldn't end up here.")
 
-    def visit_VariableKOffset(self, node: oir.VariableKOffset, ctx: Context) -> None:
-        raise NotImplementedError("#todo")
+    def visit_VariableKOffset(self, node: oir.VariableKOffset, **_kwargs: Any) -> None:
+        raise ValueError("#todo")
 
-    def visit_ScalarAccess(
-        self, node: oir.ScalarAccess, ctx: Context, is_target: bool, **_kwargs: Any
-    ) -> str:
+    def visit_ScalarAccess(self, node: oir.ScalarAccess, ctx: Context, is_target: bool) -> str:
         target = is_target or node.name in ctx.targets
         tasklet_name = _tasklet_name(node, target)
 
@@ -77,8 +101,8 @@ class OIRToTasklet(eve.NodeVisitor):
         # 2. build tasklet_name
         # 3. make memlet (if needed, check for read-after-write)
         # 4. return f"{tasklet_name}{offset_string}" (where offset_string is optional)
-        if not isinstance(node.offset, common.CartesianOffset):
-            raise NotImplementedError("Non-cartesian offsets aren't supported yet.")
+        if not isinstance(node.offset, (common.CartesianOffset, oir.VariableKOffset)):
+            raise NotImplementedError(f"Unexpected offsets offset type: {type(node.offset)}.")
         if node.data_index:
             raise NotImplementedError("Data dimensions aren't supported yet.")
 
@@ -86,22 +110,22 @@ class OIRToTasklet(eve.NodeVisitor):
         key = f"{node.name}_{postfix}"
         target = is_target or key in ctx.targets
         tasklet_name = _tasklet_name(node, target, postfix)
+        # recurse down
+        var_k = (
+            self.visit(node.offset.k, ctx=ctx, is_target=False)
+            if isinstance(node.offset, oir.VariableKOffset)
+            else None
+        )
 
         if (
             key in ctx.targets  # (read or write) after write
             or tasklet_name in ctx.inputs  # read after read
         ):
-            return tasklet_name
+            return tasklet_name if var_k is None else f"{tasklet_name}[{var_k}]"
 
-        offset_dict = node.offset.to_dict()
         memlet = Memlet(
             data=node.name,
-            subset=subsets.Indices(
-                [
-                    f"{axis.iteration_dace_symbol()} + {offset_dict[axis.lower()]}"
-                    for axis in dcir.Axis.dims_3d()
-                ]
-            ),
+            subset=self._memlet_subset(node, ctx=ctx),
         )
         if is_target:
             # note: it doesn't matter if we use is_target or target here because if they
@@ -112,7 +136,7 @@ class OIRToTasklet(eve.NodeVisitor):
         else:
             ctx.inputs[tasklet_name] = memlet
 
-        return tasklet_name
+        return tasklet_name if var_k is None else f"{tasklet_name}[{var_k}]"
 
     def visit_AssignStmt(self, node: oir.AssignStmt, ctx: Context) -> None:
         # order matters: evaluate right side of the assignment first
@@ -122,9 +146,9 @@ class OIRToTasklet(eve.NodeVisitor):
         ctx.code.append(f"{left} = {right}")
 
     def visit_CodeBlock(
-        self, node: oir.CodeBlock
+        self, node: oir.CodeBlock, root: tir.TreeRoot
     ) -> tuple[str, dict[str, Memlet], dict[str, Memlet]]:
-        ctx = Context(code=[], targets=set(), inputs={}, outputs={})
+        ctx = Context(code=[], targets=set(), inputs={}, outputs={}, tree=root)
 
         self.visit(node.body, ctx=ctx)
 
@@ -208,12 +232,14 @@ class OIRToTasklet(eve.NodeVisitor):
         raise NotImplementedError("[OIR_to_Tasklet] visit_VerticalLoopSection should not be called")
 
 
-def generate(node: oir.CodeBlock) -> tuple[str, dict[str, Memlet], dict[str, Memlet]]:
+def generate(
+    node: oir.CodeBlock, tree: tir.TreeRoot
+) -> tuple[str, dict[str, Memlet], dict[str, Memlet]]:
     # This function is basically only here to be able to easily type-hint the
     # return value of the CodeBlock visitor.
     # (OIRToTasklet().visit(node) returns an Any type, which looks ugly in the
     #  CodeBlock visitor of OIRToTreeIR)
-    return OIRToTasklet().visit(node)
+    return OIRToTasklet().visit(node, root=tree)
 
 
 def _tasklet_name(
@@ -224,10 +250,11 @@ def _tasklet_name(
 
 
 def _field_offset_postfix(node: oir.FieldAccess) -> str:
-    if not isinstance(node.offset, common.CartesianOffset):
-        raise NotImplementedError("Non-cartesian offsets aren't supported yet.")
     if node.data_index:
         raise NotImplementedError("Data dimensions aren't supported yet.")
+
+    if isinstance(node.offset, oir.VariableKOffset):
+        return "var_k"
 
     offset_indicators = [
         f"{k}{'p' if v > 0 else 'm'}{abs(v)}" for k, v in node.offset.to_dict().items() if v != 0

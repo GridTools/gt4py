@@ -31,7 +31,7 @@ class Context:
 # (doesn't really matter for now)
 class OIRToTreeIR(eve.NodeVisitor):
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: Context) -> None:
-        code, inputs, outputs = oir_to_tasklet.generate(node)
+        code, inputs, outputs = oir_to_tasklet.generate(node, tree=ctx.root)
         dace_tasklet = nodes.Tasklet(
             label=node.label,
             code=code,
