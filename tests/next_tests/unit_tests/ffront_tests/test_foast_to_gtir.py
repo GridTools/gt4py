@@ -705,7 +705,7 @@ def test_compare_chain():
     def foo(
         a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64], c: gtx.Field[[TDim], float64]
     ) -> gtx.Field[[TDim], bool]:
-        return a > b > c
+        return (a > b) & (b > c)
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)

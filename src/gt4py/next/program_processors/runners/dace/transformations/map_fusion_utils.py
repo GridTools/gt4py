@@ -16,6 +16,8 @@ import dace
 from dace import subsets as dace_subsets
 from dace.sdfg import nodes as dace_nodes
 
+from gt4py.next.program_processors.runners.dace.transformations import spliting_tools as gtx_st
+
 
 def copy_map_graph(
     sdfg: dace.SDFG,
@@ -213,15 +215,8 @@ def split_overlapping_map_range(
         [second_map_dict[param] for param in sorted(second_map_params)]
     )
 
-    try:
-        if first_map_sorted_range.intersects(second_map_sorted_range) == False:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
-            # in case of disjoint ranges, we cannot find an overlapping range
-            return None
-    except TypeError:
-        # cannot determine truth value of Relational
-        # in case the ranges are defined with symbols we cannot determine the intersection
+    if gtx_st.never_intersecting(first_map_sorted_range, second_map_sorted_range):
         return None
-
     if (first_map_sorted_range == second_map_sorted_range) == True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
         return None
 

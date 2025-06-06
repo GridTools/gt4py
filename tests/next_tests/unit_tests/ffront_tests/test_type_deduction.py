@@ -28,12 +28,15 @@ from gt4py.next import (
     neighbor_sum,
     where,
 )
+from gt4py.next.ffront.experimental import concat_where
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_info, type_specifications as ts
 
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+# Meaningless dimensions, used for tests.
+TDim = Dimension("TDim")
+SDim = Dimension("SDim")
 
 
 def test_unpack_assign():
@@ -75,7 +78,12 @@ def test_adding_bool():
         return a + b
 
     with pytest.raises(
-        errors.DSLError, match=(r"Type 'Field\[\[TDim\], bool\]' can not be used in operator '\+'.")
+        errors.DSLError,
+        match=(
+            re.escape(
+                "Unsupported operand type(s) for +: 'Field[[TDim], bool]' and 'Field[[TDim], bool]'."
+            )
+        ),
     ):
         _ = FieldOperatorParser.apply_to_function(add_bools)
 
@@ -95,13 +103,15 @@ def test_binop_nonmatching_dims():
     )
 
 
-def test_bitopping_float():
+def test_bitop_float():
     def float_bitop(a: Field[[TDim], float], b: Field[[TDim], float]):
         return a & b
 
     with pytest.raises(
         errors.DSLError,
-        match=(r"Type 'Field\[\[TDim\], float64\]' can not be used in operator '\&'."),
+        match=re.escape(
+            "Unsupported operand type(s) for &: 'Field[[TDim], float64]' and 'Field[[TDim], float64]'."
+        ),
     ):
         _ = FieldOperatorParser.apply_to_function(float_bitop)
 
@@ -126,6 +136,109 @@ def test_notting_int():
         match=r"Incompatible type for unary operator 'not': 'Field\[\[TDim\], int64\]'.",
     ):
         _ = FieldOperatorParser.apply_to_function(not_int)
+
+
+def test_compare():
+    def compare(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+        return a < b
+
+    parsed = FieldOperatorParser.apply_to_function(compare)
+
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    )
+
+
+def test_compare_wrong_dtype():
+    def compare(a: Field[[TDim], float64], b: Field[[TDim], float32]):
+        return a < b
+
+    with pytest.raises(errors.DSLError, match=r"Incompatible datatypes"):
+        _ = FieldOperatorParser.apply_to_function(compare)
+
+
+def test_concat_where():
+    def simple_concat_where(a: Field[[TDim], float], b: Field[[TDim], float]):
+        return concat_where(TDim > 0, a, b)
+
+    parsed = FieldOperatorParser.apply_to_function(simple_concat_where)
+    compare_node = parsed.body.stmts[0].value.args[0]
+    assert compare_node.type == ts.DomainType(dims=[TDim])
+
+
+def test_concat_where_scalar():
+    def simple_concat_where(a: float, b: float):
+        return concat_where(TDim > 0, a, b)
+
+    parsed = FieldOperatorParser.apply_to_function(simple_concat_where)
+    compare_node = parsed.body.stmts[0].value.args[0]
+    assert compare_node.type == ts.DomainType(dims=[TDim])
+
+
+def test_concat_where_promotion0():
+    def concat_where_promotion(a: Field[[SDim], float], b: Field[[SDim], float]):
+        return concat_where(TDim > 0, a, b)
+
+    parsed = FieldOperatorParser.apply_to_function(concat_where_promotion)
+    _concat_where_expr = parsed.body.stmts[0].value
+    assert _concat_where_expr.type == ts.FieldType(
+        dims=[SDim, TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
+
+
+def test_concat_where_promotion1():
+    def concat_where_promotion(a: Field[[TDim], float], b: Field[[SDim], float]):
+        return concat_where(TDim > 0, a, b)
+
+    parsed = FieldOperatorParser.apply_to_function(concat_where_promotion)
+    _concat_where_expr = parsed.body.stmts[0].value
+    assert _concat_where_expr.type == ts.FieldType(
+        dims=[SDim, TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
+
+
+def test_domain_comparison_failure():
+    def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
+        return concat_where(TDim > 1.0, a, b)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=r".*int32.*got.*float64.*",
+    ):
+        _ = FieldOperatorParser.apply_to_function(domain_comparison)
+
+
+def test_domain_comparison_checkerboard_failure():
+    def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
+        return concat_where(TDim % 2.0, a, b)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=re.escape("Unsupported operand type(s) for %"),
+    ):
+        _ = FieldOperatorParser.apply_to_function(domain_comparison)
+
+
+def test_domain_comparison_with_dimension_failure():
+    def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
+        return concat_where(TDim > TDim, a, b)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=r".*int32.*got.*TDim.*TDim.*",
+    ):
+        _ = FieldOperatorParser.apply_to_function(domain_comparison)
+
+
+def test_concat_where_invalid_dtype():
+    def domain_comparison(a: Field[[TDim], float], b: Field[[TDim], float]):
+        return concat_where(TDim > 0, 1.0, 2)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=re.escape("Field arguments must be of same dtype, got 'float64' != 'int32'."),
+    ):
+        _ = FieldOperatorParser.apply_to_function(domain_comparison)
 
 
 @pytest.fixture

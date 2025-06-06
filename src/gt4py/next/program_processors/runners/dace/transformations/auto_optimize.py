@@ -11,6 +11,7 @@
 from typing import Any, Optional, Sequence
 
 import dace
+from dace.sdfg import propagation as dace_propagation
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -115,7 +116,11 @@ def gt_auto_optimize(
             not if we have too much internal space (register pressure).
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
-    with dace.config.set_temporary("optimizer", "match_exception", value=True):
+
+    with dace.config.temporary_config():
+        dace.Config.set("optimizer", "match_exception", value=True)
+        dace.Config.set("store_history", value=False)
+
         # Initial Cleanup
         if constant_symbols:
             gtx_transformations.gt_substitute_compiletime_symbols(
@@ -212,9 +217,9 @@ def _gt_auto_process_top_level_maps(
 
     # NOTE: Inside this function we have to disable the consolidation of edges.
     #   This is because it might block the application of `SpliAccessNode`. As
-    #   an example consider a that writes `tmp[:, 80]` and a second map that
-    #   writes `tmp[:, 0]`, if these two maps are now horizontally fussed and
-    #   edge consolidation is on, then the resulting map would "write", at least
+    #   an example consider a Map that writes `tmp[:, 80]` and a second Map that
+    #   writes `tmp[:, 0]`, if these two Maps are now horizontally fussed and
+    #   edge consolidation is on, then the resulting Map would "write", at least
     #   according to the subset, after Memlet propagation, into `tmp[:, 0:80]`.
     #   For that reason we block edge consolidation inside this function.
     #   However, we allow allow the consolidation, in MapFusion if this does
@@ -286,8 +291,21 @@ def _gt_auto_process_top_level_maps(
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.
         gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+
+        # TODO(phimuell): Find out how to skip the propagation and integrating it
+        #   into the split transformation.
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.SplitConsumerMemlet(single_use_data=single_use_data),
+            validate=validate,
+            validate_all=validate_all,
+        )
+        dace_propagation.propagate_memlets_sdfg(sdfg)
+
         sdfg.apply_transformations_repeated(
             [
+                # TODO(phimuell): The transformation is also active inside Maps.
+                #   Which is against the description of this function, but it should
+                #   not matter that much.
                 gtx_transformations.SplitAccessNode(
                     single_use_data=single_use_data,
                 ),
