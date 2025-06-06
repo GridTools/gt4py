@@ -127,16 +127,14 @@ class CompiledProgramsPool:
     program_type: ts_ffront.ProgramType
     static_params: Sequence[str] | None = None  # not ordered
 
-    # TODO(havogt): This dict could be replaced by a `functools.cache`d method
-    # and appropriate hashing of the arguments.
     _compiled_programs: eve_utils.CustomMapping = dataclasses.field(
         default_factory=lambda: eve_utils.CustomMapping(_hash_compiled_program_unsafe),
-        kw_only=True,
         init=False,
     )
 
     _offset_provider_type_cache: eve_utils.CustomMapping = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMapping(common.hash_offset_provider_unsafe)
+        default_factory=lambda: eve_utils.CustomMapping(common.hash_offset_provider_unsafe),
+        init=False,
     )  # cache the offset provider type in order to avoid recomputing it at each program call
 
     def __postinit__(self) -> None:
