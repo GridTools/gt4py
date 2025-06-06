@@ -238,7 +238,6 @@ def is_finite(range_or_domain: SymbolicRange | SymbolicDomain) -> bool:
     The expression is required to be constant folded before for the result to be reliable.
     """
     if isinstance(range_ := range_or_domain, SymbolicRange):
-        # TODO: assert no infinity literal in here
         if any(
             v in [itir.InfinityLiteral.POSITIVE, itir.InfinityLiteral.NEGATIVE]
             for v in [range_.start, range_.stop]
