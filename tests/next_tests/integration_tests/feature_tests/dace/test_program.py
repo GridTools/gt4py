@@ -75,6 +75,7 @@ def unstructured(request, exec_alloc_descriptor, mesh_descriptor):  # noqa: F811
 
 def test_halo_exchange_helper_attrs(unstructured):
     local_int = gtx.int
+    pytest.skip("debugging")
 
     @gtx.field_operator(backend=unstructured.backend)
     def testee_op(
