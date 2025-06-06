@@ -663,7 +663,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.1"
-source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-to-sdfg#04d442bbfc3cad024255e0878d30fe5c78da2365" }
+source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-to-sdfg#954c088d26276d214f26f3f4fdee4f74088e9da9" }
 resolution-markers = [
     "python_full_version >= '3.11'",
     "python_full_version < '3.11'",
@@ -1094,7 +1094,7 @@ dace = [
     { name = "dace", version = "1.0.2", source = { registry = "https://pypi.org/simple" } },
 ]
 dace-stree = [
-    { name = "dace", version = "1.0.1", source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-to-sdfg#04d442bbfc3cad024255e0878d30fe5c78da2365" } },
+    { name = "dace", version = "1.0.1", source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-to-sdfg#954c088d26276d214f26f3f4fdee4f74088e9da9" } },
 ]
 formatting = [
     { name = "clang-format" },
