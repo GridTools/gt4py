@@ -99,7 +99,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         end = self.visit(node.end, axis_start=axis_start, axis_end=axis_end)
 
         if loop_order == common.LoopOrder.BACKWARD:
-            return tir.Bounds(start=f"{end} - 1", end=f"{start} - 1")
+            return tir.Bounds(start=f"{end} - 1", end=start)
 
         return tir.Bounds(start=start, end=end)
 

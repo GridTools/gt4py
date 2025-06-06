@@ -10,12 +10,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from dace import nodes, subsets, dtypes
-from dace.sdfg.analysis.schedule_tree import treenodes as tn
-import dace.codegen.control_flow as dcf
+from dace import __version__ as dace_version, dtypes, nodes, sdfg, subsets
+from dace.codegen import control_flow as dcf
 from dace.properties import CodeBlock
-from dace import Language as lang
-from dace import SDFGState, __version__ as dace_version
+from dace.sdfg.analysis.schedule_tree import treenodes as tn
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
@@ -42,6 +40,8 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         ctx.current_scope.children.append(tasklet)
 
     def visit_HorizontalLoop(self, node: tir.HorizontalLoop, ctx: Context) -> None:
+        parent_scope = ctx.current_scope
+
         # Define ij/loop
         ctx.tree.symbols[dcir.Axis.I.iteration_symbol()] = dtypes.int32
         ctx.tree.symbols[dcir.Axis.J.iteration_symbol()] = dtypes.int32
@@ -56,7 +56,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
                 # Ranges have support support for tiling
                 ndrange=subsets.Range(
                     [
-                        # -1 because bounds are inclusive
+                        # -1 because range bounds are inclusive
                         (node.bounds_i.start, f"{node.bounds_i.end} - 1", 1),
                         (node.bounds_j.start, f"{node.bounds_j.end} - 1", 1),
                     ]
@@ -74,6 +74,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         ctx.current_scope = map_scope
 
         self.visit(node.children, ctx=ctx)
+        ctx.current_scope = parent_scope
 
     def visit_VerticalLoop(self, node: tir.VerticalLoop, ctx: Context) -> None:
         parent_scope = ctx.current_scope
@@ -89,7 +90,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
                     # TODO (later)
                     # Ranges have support support for tiling
                     ndrange=subsets.Range(
-                        # -1 because bounds are inclusive
+                        # -1 because range bounds are inclusive
                         [(node.bounds_k.start, f"{node.bounds_k.end} - 1", 1)]
                     ),
                 )
@@ -103,20 +104,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
             ctx.current_scope = map_scope
         else:
             # create loop and add it to tree
-            if node.loop_order == common.LoopOrder.FORWARD:
-                start = node.bounds_k.start
-                end = node.bounds_k.end
-                update_ops = "+1"
-                cond_ops = f"< {end}"
-            elif node.loop_order == common.LoopOrder.BACKWARD:
-                end = node.bounds_k.start
-                start = node.bounds_k.end
-                update_ops = "-1"
-                cond_ops = f">= {end}"
-                breakpoint()
-            cfg_for_scope = _make_for_scope(cond_ops, start, update_ops)
-
-            for_scope = tn.ForScope(header=cfg_for_scope, children=[])
+            for_scope = tn.ForScope(header=_for_scope_header(node), children=[])
             for_scope.parent = ctx.current_scope
             ctx.current_scope.children.append(for_scope)
             ctx.current_scope = for_scope
@@ -147,20 +135,29 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         return ctx.tree
 
 
-def _make_for_scope(condtional_op: str, bound_start: str, update_op) -> dcf.ForScope:
+def _for_scope_header(node: tir.VerticalLoop) -> dcf.ForScope:
     if not dace_version.startswith("1."):
         raise NotImplementedError("DaCe 2.x detected - please fix below code")
+    if node.loop_order == common.LoopOrder.PARALLEL:
+        raise ValueError("Parallel vertical loops should be translated to maps instead.")
+
+    plus_minus = "+" if node.loop_order == common.LoopOrder.FORWARD else "-"
+    comparison = "<" if node.loop_order == common.LoopOrder.FORWARD else ">="
+    iteration_var = dcir.Axis.K.iteration_symbol()
 
     for_scope = dcf.ForScope(
-        condition=CodeBlock(code=f"__k {condtional_op}", language=lang.Python),
-        itervar="__k",
-        init=f"{bound_start}",
-        update=f"__k{update_op}",
+        condition=CodeBlock(
+            code=f"{iteration_var} {comparison} {node.bounds_k.end}",
+            language=dtypes.Language.Python,
+        ),
+        itervar=iteration_var,
+        init=node.bounds_k.start,
+        update=f"{iteration_var} {plus_minus} 1",
         # Unused
         parent=None,  # not Tree parent, CF parent
         dispatch_state=lambda _state: "",
         last_block=False,
-        guard=SDFGState(),
+        guard=sdfg.SDFGState(),
         body=dcf.GeneralBlock(
             lambda _state: "",
             None,
@@ -175,6 +172,6 @@ def _make_for_scope(condtional_op: str, bound_start: str, update_op) -> dcf.ForS
         ),
         init_edges=[],
     )
-    # Kill the loop_range test for memlet propgation check going in
+    # Kill the loop_range test for memlet propagation check going in
     dcf.ForScope.loop_range = lambda self: None
     return for_scope
