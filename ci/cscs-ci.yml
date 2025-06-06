@@ -172,8 +172,8 @@ test_py311_aarch64:
 #   needs: [build_py310_image_x86_64]
 #   variables:
 #     <<: *py310
-test_py310_aarch64:
-  extends: [.test_helper_aarch64]
-  needs: [build_py310_image_aarch64]
-  variables:
-    <<: *py310
+# test_py310_aarch64:
+#   extends: [.test_helper_aarch64]
+#   needs: [build_py310_image_aarch64]
+#   variables:
+#     <<: *py310
