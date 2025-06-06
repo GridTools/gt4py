@@ -455,6 +455,10 @@ class DaCeExtGenerator(BackendCodegen):
 
         stree = manager.schedule_tree()
         sdfg = stree.as_sdfg(validate=True, simplify=True)
+        _specialize_transient_strides(
+            sdfg,
+            layout_map=self.backend.storage_info["layout_map"],
+        )
 
         # NOTE
         # The glue code in DaCeComputationCodegen.apply() (just below) will define all the

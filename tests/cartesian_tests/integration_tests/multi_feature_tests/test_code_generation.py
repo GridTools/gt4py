@@ -50,8 +50,8 @@ def test_generation(name, backend):
                 dtype=(v.dtype, v.data_dims) if v.data_dims else v.dtype,
                 dimensions=v.axes,
                 backend=backend,
-                shape=(23, 23, 23),
-                aligned_index=(10, 10, 10),
+                shape=(23,) * len(v.axes),
+                aligned_index=(10,) * len(v.axes),
             )
         else:
             args[k] = v(1.5)

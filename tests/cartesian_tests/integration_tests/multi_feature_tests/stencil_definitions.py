@@ -62,6 +62,7 @@ def register(func=None, *, externals=None, name=None):
 
 
 Field3D = gtscript.Field[np.float64]
+Field2D = gtscript.Field[gtscript.IJ, np.float64]
 Field3DBool = gtscript.Field[np.bool_]
 
 
@@ -92,6 +93,15 @@ def scalar_inputs(field_a: Field3D, scalar_in: float):
 def unary_operation(field_a: Field3D, scalar_in: float):
     with computation(PARALLEL), interval(...):
         field_a = -scalar_in
+
+
+@register
+def temporary_stencil(field_a: Field3D, field_b: Field2D, scalar_in: float):
+    with computation(PARALLEL), interval(...):
+        tmp = field_a * scalar_in
+
+    with computation(FORWARD), interval(0, 1):
+        field_b += tmp
 
 
 @register
