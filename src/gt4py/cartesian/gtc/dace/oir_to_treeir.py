@@ -144,18 +144,24 @@ class OIRToTreeIR(eve.NodeVisitor):
         containers: dict[str, data.Data] = {}
         symbols: tir.SymbolDict = {}
 
-        for field in node.params:
-            if not isinstance(field, oir.FieldDecl):
-                # TODO
-                # include scalar stencil parameters
-                raise NotImplementedError("#todo")
+        for param in node.params:
+            if isinstance(param, oir.ScalarDecl):
+                containers[param.name] = data.Scalar(
+                    data_type_to_dace_typeclass(param.dtype),  # dtype
+                    debuginfo=get_dace_debuginfo(param),
+                )
+                continue
 
-            containers[field.name] = data.Array(
-                data_type_to_dace_typeclass(field.dtype),  # dtype
-                get_dace_shape(field, symbols),  # shape
-                strides=get_dace_strides(field, symbols),
-                debuginfo=get_dace_debuginfo(field),
-            )
+            if isinstance(param, oir.FieldDecl):
+                containers[param.name] = data.Array(
+                    data_type_to_dace_typeclass(param.dtype),  # dtype
+                    get_dace_shape(param, symbols),  # shape
+                    strides=get_dace_strides(param, symbols),
+                    debuginfo=get_dace_debuginfo(param),
+                )
+                continue
+
+            raise ValueError(f"Unexpected parameter type {type(param)}.")
 
         for field in node.declarations:
             containers[field.name] = data.Array(

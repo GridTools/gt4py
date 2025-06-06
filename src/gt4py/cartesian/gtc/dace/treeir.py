@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TypeAlias
 
-from dace import Memlet, data, nodes, dtypes
+from dace import Memlet, data, dtypes, nodes
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common

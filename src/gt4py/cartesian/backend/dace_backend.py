@@ -641,6 +641,10 @@ namespace gt = gridtools;
             if array.transient:
                 continue
 
+            if isinstance(array, dace.data.Scalar):
+                # will be passed by name (as variable) by the catch all below
+                continue
+
             dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
             data_ndim = len(array.shape) - len(dims)
 
@@ -682,6 +686,7 @@ namespace gt = gridtools;
             symbols[name] = fmt.format(
                 name=name, ndim=len(array.shape), origin=",".join(str(o) for o in origin)
             )
+
         # the remaining arguments are variables and can be passed by name
         for sym in sdfg.signature_arglist(with_types=False, for_call=True):
             if sym not in symbols:
@@ -695,7 +700,13 @@ namespace gt = gridtools;
         for name, array in sdfg.arrays.items():
             if array.transient:
                 continue
-            res.append(f"auto && __{name}_sid")
+            if isinstance(array, dace.data.Scalar):
+                res.append(f"auto {name}")
+                continue
+            if isinstance(array, dace.data.Array):
+                res.append(f"auto && __{name}_sid")
+                continue
+            raise NotImplementedError(f"generate_functor_args(): unexpected type {type(array)}")
         for name, dtype in ((n, d) for n, d in sdfg.symbols.items() if not n.startswith("__")):
             res.append(dtype.as_arg(name))
         return res
@@ -718,19 +729,27 @@ class DaCeBindingsCodegen:
         for name in sdfg.signature_arglist(with_types=False, for_call=True):
             if name in sdfg.arrays:
                 data = sdfg.arrays[name]
-                assert isinstance(data, dace.data.Array)
-                res[name] = (
-                    "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
-                        pybind_type=(
-                            "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
-                        ),
-                        name=name,
-                        ndim=len(data.shape),
+                if isinstance(data, dace.data.Scalar):
+                    res[name] = f"{data.ctype} {name}"
+                elif isinstance(data, dace.data.Array):
+                    res[name] = (
+                        "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
+                            pybind_type=(
+                                "object"
+                                if self.backend.storage_info["device"] == "gpu"
+                                else "buffer"
+                            ),
+                            name=name,
+                            ndim=len(data.shape),
+                        )
                     )
-                )
+                else:
+                    raise NotImplementedError(
+                        f"generate_entry_params(): unexpected type {type(data)}"
+                    )
             elif name in sdfg.symbols and not name.startswith("__"):
                 assert name in sdfg.symbols
-                res[name] = "{dtype} {name}".format(dtype=sdfg.symbols[name].ctype, name=name)
+                res[name] = f"{sdfg.symbols[name].ctype} {name}"
         return list(res[node.name] for node in stencil_ir.params if node.name in res)
 
     def generate_sid_params(self, sdfg: dace.SDFG) -> List[str]:
@@ -739,6 +758,14 @@ class DaCeBindingsCodegen:
         for name, array in sdfg.arrays.items():
             if array.transient:
                 continue
+
+            if isinstance(array, dace.data.Scalar):
+                res.append(name)
+                continue
+
+            if not isinstance(array, dace.data.Array):
+                raise NotImplementedError(f"generate_sid_params(): unexpected type {type(array)}")
+
             domain_dim_flags = array_dimensions(array)
             data_ndim = len(array.shape) - sum(domain_dim_flags)
             sid_def = pybuffer_to_sid(

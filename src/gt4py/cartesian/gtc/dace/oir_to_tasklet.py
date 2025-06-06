@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import dataclass
+from typing import Any
 
 from dace import Memlet, subsets
 
@@ -39,17 +40,35 @@ class Context:
 
 
 class OIRToTasklet(eve.NodeVisitor):
-    def visit_CartesianOffset(self, node: common.CartesianOffset, ctx: Context) -> None:
-        raise NotImplementedError("#todo")
+    def visit_CartesianOffset(self, _node: common.CartesianOffset, **_kwargs: Any) -> None:
+        raise ValueError("We shouldn't end up here.")
 
     def visit_VariableKOffset(self, node: oir.VariableKOffset, ctx: Context) -> None:
         raise NotImplementedError("#todo")
 
-    def visit_ScalarAccess(self, node: oir.ScalarAccess, ctx: Context) -> str:
-        # 1. build tasklet_name
-        # 2. make memlet (if needed)
-        # 3. return tasklet_name
-        raise NotImplementedError("#todo")
+    def visit_ScalarAccess(
+        self, node: oir.ScalarAccess, ctx: Context, is_target: bool, **_kwargs: Any
+    ) -> str:
+        target = is_target or node.name in ctx.targets
+        tasklet_name = _tasklet_name(node, target)
+
+        if (
+            node.name in ctx.targets  # (read or write) after write
+            or tasklet_name in ctx.inputs  # read after read
+        ):
+            return tasklet_name
+
+        memlet = Memlet(data=node.name, subset=subsets.Range([(0, 0, 1)]))  # Memlet(node.name)
+        if is_target:
+            # note: it doesn't matter if we use is_target or target here because if they
+            # were different, we had a read-after-write situation, which was already
+            # handled above.
+            ctx.targets.add(node.name)
+            ctx.outputs[tasklet_name] = memlet
+        else:
+            ctx.inputs[tasklet_name] = memlet
+
+        return tasklet_name
 
     def visit_FieldAccess(self, node: oir.FieldAccess, ctx: Context, is_target: bool) -> str:
         # 1. recurse down into offset (because we could offset with another field access)
@@ -63,13 +82,14 @@ class OIRToTasklet(eve.NodeVisitor):
         if node.data_index:
             raise NotImplementedError("Data dimensions aren't supported yet.")
 
-        target = is_target or node.name in ctx.targets
-        tasklet_name = _tasklet_name(node, target)
+        postfix = _field_offset_postfix(node)
+        key = f"{node.name}_{postfix}"
+        target = is_target or key in ctx.targets
+        tasklet_name = _tasklet_name(node, target, postfix)
 
         if (
-            tasklet_name in ctx.targets  # read after write
+            key in ctx.targets  # (read or write) after write
             or tasklet_name in ctx.inputs  # read after read
-            or tasklet_name in ctx.outputs  # write after write
         ):
             return tasklet_name
 
@@ -84,7 +104,10 @@ class OIRToTasklet(eve.NodeVisitor):
             ),
         )
         if is_target:
-            ctx.targets.add(tasklet_name)
+            # note: it doesn't matter if we use is_target or target here because if they
+            # were different, we had a read-after-write situation, which was already
+            # handled above.
+            ctx.targets.add(key)
             ctx.outputs[tasklet_name] = memlet
         else:
             ctx.inputs[tasklet_name] = memlet
@@ -92,6 +115,7 @@ class OIRToTasklet(eve.NodeVisitor):
         return tasklet_name
 
     def visit_AssignStmt(self, node: oir.AssignStmt, ctx: Context) -> None:
+        # order matters: evaluate right side of the assignment first
         right = self.visit(node.right, ctx=ctx, is_target=False)
         left = self.visit(node.left, ctx=ctx, is_target=True)
 
@@ -106,19 +130,19 @@ class OIRToTasklet(eve.NodeVisitor):
 
         return ("\n".join(ctx.code), ctx.inputs, ctx.outputs)
 
-    def visit_BinaryOp(self, node: oir.BinaryOp, ctx: Context, **kwargs) -> str:
-        right = self.visit(node.right, ctx=ctx, **kwargs)
-        left = self.visit(node.left, ctx=ctx, **kwargs)
+    def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> str:
+        left = self.visit(node.left, **kwargs)
+        right = self.visit(node.right, **kwargs)
         return f"{left} {node.op.value} {right}"
 
-    def visit_Cast(self, node: oir.Cast, **kwargs) -> str:
+    def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> str:
         dtype = data_type_to_dace_typeclass(node.dtype)
-        return f"{dtype}({self.visit(node.expr)})"
+        return f"{dtype}({self.visit(node.expr, **kwargs)})"
 
-    def visit_Literal(self, node: oir.Literal, **kwargs) -> str:
+    def visit_Literal(self, node: oir.Literal, **_kwargs: Any) -> str:
         return node.value
 
-    # Not implemented blocks - implement or pass ot generic visitor
+    # Not implemented blocks - implement or pass to generic visitor
     def visit_AbsoluteKIndex(self, node, **kwargs):
         raise NotImplementedError("visit_AbsoluteKIndex")
 
@@ -192,16 +216,20 @@ def generate(node: oir.CodeBlock) -> tuple[str, dict[str, Memlet], dict[str, Mem
     return OIRToTasklet().visit(node)
 
 
-def _tasklet_name(field: oir.FieldAccess, is_target: bool) -> str:
-    base = f"{prefix.TASKLET_OUT if is_target else prefix.TASKLET_IN}{field.name}"
+def _tasklet_name(
+    node: oir.FieldAccess | oir.ScalarAccess, is_target: bool, postfix: str = ""
+) -> str:
+    name_prefix = prefix.TASKLET_OUT if is_target else prefix.TASKLET_IN
+    return "_".join(filter(None, [name_prefix, node.name, postfix]))
 
-    if not isinstance(field.offset, common.CartesianOffset):
+
+def _field_offset_postfix(node: oir.FieldAccess) -> str:
+    if not isinstance(node.offset, common.CartesianOffset):
         raise NotImplementedError("Non-cartesian offsets aren't supported yet.")
-    if field.data_index:
+    if node.data_index:
         raise NotImplementedError("Data dimensions aren't supported yet.")
 
     offset_indicators = [
-        f"{k}{'p' if v > 0 else 'm'}{abs(v)}" for k, v in field.offset.to_dict().items() if v != 0
+        f"{k}{'p' if v > 0 else 'm'}{abs(v)}" for k, v in node.offset.to_dict().items() if v != 0
     ]
-
-    return f"{base}_{'_'.join(offset_indicators)}" if offset_indicators else base
+    return "_".join(offset_indicators)

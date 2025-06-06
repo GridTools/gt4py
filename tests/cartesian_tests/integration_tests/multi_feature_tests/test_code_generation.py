@@ -368,6 +368,17 @@ def test_input_order(backend):
         with computation(PARALLEL), interval(...):
             out_field[0, 0, 0] = in_field * parameter
 
+    field_in = gt_storage.ones(
+        dtype=np.float64, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
+    )
+
+    stencil(field_in, 3.1415, field_out)
+
+    np.testing.assert_allclose(field_out[:, :, :], 3.1415)
+
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_variable_offsets(backend):
