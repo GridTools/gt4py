@@ -235,8 +235,9 @@ def test_next(
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
 
     session.run(
-        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        *"pytest --cache-clear -sv".split(),
         *("-m", f"{markers}"),
+        *(" --dist loadgroup -n auto".split() if device == "cpu" else []),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
