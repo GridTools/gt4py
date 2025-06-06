@@ -116,7 +116,7 @@ build_py310_image_aarch64:
   - export CI_NOX_RUN_ONLY_IF_CHANGED_FROM="gh/$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.base.ref')"
   - echo "CI_NOX_RUN_ONLY_IF_CHANGED_FROM=${CI_NOX_RUN_ONLY_IF_CHANGED_FROM}"
   - NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
-  - nox -s "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS"
+  - nox --add-timestamp -s "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS" --durations=0 -vv
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
@@ -124,6 +124,7 @@ build_py310_image_aarch64:
     PYENV_VERSION: $PYVERSION
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
     CI_NOX_VERBOSE: 1
+    FF_TIMESTAMPS: true
 # .test_helper_x86_64:
 #   extends: [.container-runner-daint-gpu, .test_helper]
 #   parallel:
@@ -144,7 +145,7 @@ build_py310_image_aarch64:
     #   SUBVARIANT: ['cuda12', 'cpu']
     # - SUBPACKAGE: eve
     - SUBPACKAGE: next
-      VARIANT: ['dace']
+      VARIANT: ['internal', 'dace']
       SUBVARIANT: ['cuda12']
       DETAIL: ['nomesh']
     # - SUBPACKAGE: [storage]
