@@ -13,7 +13,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Any, Final, Iterable, Optional, Protocol, TypeAlias
 
 import dace
-from dace import subsets as dace_subsets
+from dace import subsets as dace_sbs
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
@@ -66,9 +66,8 @@ class FieldopData:
     def map_to_parent_sdfg(
         self,
         sdfg_builder: gtir_sdfg.SDFGBuilder,
-        inner_sdfg: dace.SDFG,
-        outer_sdfg: dace.SDFG,
-        outer_sdfg_state: dace.SDFGState,
+        inner_ctx: gtir_sdfg.SDFGBuilderContext,
+        outer_ctx: gtir_sdfg.SDFGBuilderContext,
         symbol_mapping: dict[str, dace.symbolic.SymbolicType],
     ) -> FieldopData:
         """
@@ -78,15 +77,15 @@ class FieldopData:
         Thus, it turns 'self' into a non-transient array and creates a new data
         descriptor inside the parent SDFG, with same shape and strides.
         """
-        inner_desc = self.dc_node.desc(inner_sdfg)
+        inner_desc = inner_ctx.desc(self.dc_node)
         assert inner_desc.transient
         inner_desc.transient = False
 
         if isinstance(self.gt_type, ts.ScalarType):
-            outer, outer_desc = sdfg_builder.add_temp_scalar(outer_sdfg, inner_desc.dtype)
+            outer, outer_desc = sdfg_builder.add_temp_scalar(outer_ctx, inner_desc.dtype)
             outer_origin = []
         else:
-            outer, outer_desc = sdfg_builder.add_temp_array_like(outer_sdfg, inner_desc)
+            outer, outer_desc = sdfg_builder.add_temp_array_like(outer_ctx, inner_desc)
             # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
             dace.symbolic.safe_replace(
                 symbol_mapping,
@@ -97,7 +96,7 @@ class FieldopData:
                 gtx_dace_utils.safe_replace_symbolic(val, symbol_mapping) for val in self.origin
             ]
 
-        outer_node = outer_sdfg_state.add_access(outer)
+        outer_node = outer_ctx.add_access(outer)
         return FieldopData(outer_node, self.gt_type, tuple(outer_origin))
 
     def get_local_view(
@@ -109,7 +108,7 @@ class FieldopData:
             return gtir_dataflow.MemletExpr(
                 dc_node=self.dc_node,
                 gt_dtype=self.gt_type,
-                subset=dace_subsets.Range.from_string("0"),
+                subset=dace_sbs.Range.from_string("0"),
             )
 
         if isinstance(self.gt_type, ts.FieldType):
@@ -312,8 +311,7 @@ def _create_field_operator_impl(
         The field data descriptor, which includes the field access node in the
         given `state` and the field domain offset.
     """
-    sdfg, state = ctx.sdfg, ctx.state
-    dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
+    dataflow_output_desc = ctx.desc(output_edge.result.dc_node)
 
     # the memory layout of the output field follows the field operator compute domain
     field_dims, field_origin, field_shape = gtir_domain.get_field_layout(domain)
@@ -337,15 +335,15 @@ def _create_field_operator_impl(
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         assert output_edge.result.gt_dtype.offset_type is not None
         field_shape = [*field_shape, dataflow_output_desc.shape[0]]
-        field_subset = field_subset + dace_subsets.Range.from_array(dataflow_output_desc)
+        field_subset = field_subset + dace_sbs.Range.from_array(dataflow_output_desc)
 
     # allocate local temporary storage
     if len(field_shape) == 0:  # zero-dimensional field
-        field_name, _ = sdfg_builder.add_temp_scalar(sdfg, dataflow_output_desc.dtype)
-        field_subset = dace_subsets.Range.from_string("0")
+        field_name, _ = sdfg_builder.add_temp_scalar(ctx, dataflow_output_desc.dtype)
+        field_subset = dace_sbs.Range.from_string("0")
     else:
-        field_name, _ = sdfg_builder.add_temp_array(sdfg, field_shape, dataflow_output_desc.dtype)
-    field_node = state.add_access(field_name)
+        field_name, _ = sdfg_builder.add_temp_array(ctx, field_shape, dataflow_output_desc.dtype)
+    field_node = ctx.add_access(field_name)
 
     # and here the edge writing the dataflow result data through the map exit node
     output_edge.connect(map_exit, field_node, field_subset)
@@ -391,7 +389,7 @@ def _create_field_operator(
     else:
         # create map range corresponding to the field operator domain
         map_range = {gtir_sdfg_utils.get_map_variable(dim): dim_range for dim, dim_range in domain}
-    map_entry, map_exit = sdfg_builder.add_map("fieldop", ctx.state, map_range)
+    map_entry, map_exit = sdfg_builder.add_map(ctx, "fieldop", map_range)
 
     # here we setup the edges passing through the map entry node
     for edge in input_edges:
@@ -487,16 +485,14 @@ def _construct_if_branch_output(
     the result of an if expression.
     """
 
-    sdfg, state = ctx.sdfg, ctx.state
-
     assert true_br.gt_type == false_br.gt_type
     out_type = true_br.gt_type
 
     if isinstance(sym.type, ts.ScalarType):
         assert sym.type == out_type
         dtype = gtx_dace_utils.as_dace_type(sym.type)
-        out, _ = sdfg_builder.add_temp_scalar(sdfg, dtype)
-        out_node = state.add_access(out)
+        out, _ = sdfg_builder.add_temp_scalar(ctx, dtype)
+        out_node = ctx.add_access(out)
         return FieldopData(out_node, sym.type, origin=())
 
     assert isinstance(out_type, ts.FieldType)
@@ -517,15 +513,14 @@ def _construct_if_branch_output(
         assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
         shape = [*shape, offset_provider_type.max_neighbors]
 
-    out, _ = sdfg_builder.add_temp_array(sdfg, shape, dtype)
-    out_node = state.add_access(out)
+    out, _ = sdfg_builder.add_temp_array(ctx, shape, dtype)
+    out_node = ctx.add_access(out)
 
     return FieldopData(out_node, out_type, tuple(origin))
 
 
 def _write_if_branch_output(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGBuilderContext,
     src: FieldopData,
     dst: FieldopData,
 ) -> None:
@@ -538,11 +533,11 @@ def _write_if_branch_output(
         raise ValueError(
             f"Source and destination type mismatch, '{dst.gt_type}' vs '{src.gt_type}'."
         )
-    dst_node = state.add_access(dst.dc_node.data)
-    dst_shape = dst_node.desc(sdfg).shape
+    dst_node = ctx.add_access(dst.dc_node.data)
+    dst_shape = ctx.desc(dst_node).shape
 
     if isinstance(src.gt_type, ts.ScalarType):
-        state.add_nedge(
+        ctx.state.add_nedge(
             src.dc_node,
             dst_node,
             dace.Memlet(data=src.dc_node.data, subset="0"),
@@ -555,7 +550,7 @@ def _write_if_branch_output(
             src_origin = [*src.origin]
             dst_origin = [*dst.origin]
 
-        data_subset = dace_subsets.Range(
+        data_subset = dace_sbs.Range(
             (
                 f"{dst_start - src_start}",
                 f"{dst_start - src_start + size - 1}",  # subtract 1 because the range boundaries are included
@@ -564,13 +559,13 @@ def _write_if_branch_output(
             for src_start, dst_start, size in zip(src_origin, dst_origin, dst_shape, strict=True)
         )
 
-        state.add_nedge(
+        ctx.state.add_nedge(
             src.dc_node,
             dst_node,
             dace.Memlet(
                 data=src.dc_node.data,
                 subset=data_subset,
-                other_subset=dace_subsets.Range.from_array(dst_node.desc(sdfg)),
+                other_subset=dace_sbs.Range.from_array(ctx.desc(dst_node)),
             ),
         )
 
@@ -584,8 +579,6 @@ def translate_if(
     assert cpm.is_call_to(node, "if_")
     assert len(node.args) == 3
     cond_expr, true_expr, false_expr = node.args
-
-    sdfg, state = ctx.sdfg, ctx.state
 
     # expect condition as first argument
     if_stmt = gtir_python_codegen.get_source(cond_expr)
@@ -605,25 +598,23 @@ def translate_if(
     #           ==> |   head   | <==
     #               ------------
     #
-    cond_state = sdfg.add_state_before(state, state.label + "_cond")
-    sdfg.remove_edge(sdfg.out_edges(cond_state)[0])
+    cond_state = ctx.sdfg.add_state_before(ctx.state, ctx.state.label + "_cond")
+    ctx.sdfg.remove_edge(ctx.sdfg.out_edges(cond_state)[0])
 
     # expect true branch as second argument
-    true_state = sdfg.add_state(state.label + "_true_branch")
-    sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=f"{if_stmt}"))
-    sdfg.add_edge(true_state, state, dace.InterstateEdge())
+    true_state = ctx.sdfg.add_state(ctx.state.label + "_true_branch")
+    ctx.sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=f"{if_stmt}"))
+    ctx.sdfg.add_edge(true_state, ctx.state, dace.InterstateEdge())
 
     # and false branch as third argument
-    false_state = sdfg.add_state(state.label + "_false_branch")
-    sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not ({if_stmt})")))
-    sdfg.add_edge(false_state, state, dace.InterstateEdge())
+    false_state = ctx.sdfg.add_state(ctx.state.label + "_false_branch")
+    ctx.sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not ({if_stmt})")))
+    ctx.sdfg.add_edge(false_state, ctx.state, dace.InterstateEdge())
 
-    true_br_result = sdfg_builder.visit(
-        true_expr, ctx=gtir_sdfg.SDFGBuilderContext(sdfg=ctx.sdfg, state=true_state)
-    )
-    false_br_result = sdfg_builder.visit(
-        false_expr, ctx=gtir_sdfg.SDFGBuilderContext(sdfg=ctx.sdfg, state=false_state)
-    )
+    true_br_ctx = gtir_sdfg.SDFGBuilderContext(sdfg=ctx.sdfg, state=true_state)
+    true_br_result = sdfg_builder.visit(true_expr, ctx=true_br_ctx)
+    false_br_ctx = gtir_sdfg.SDFGBuilderContext(sdfg=ctx.sdfg, state=false_state)
+    false_br_result = sdfg_builder.visit(false_expr, ctx=false_br_ctx)
 
     if isinstance(node.type, ts.TupleType):
         symbol_tree = gtir_sdfg_utils.make_symbol_tree("x", node.type)
@@ -654,14 +645,10 @@ def translate_if(
             false_br_result,
         )
         gtx_utils.tree_map(
-            lambda src, dst, sdfg=ctx.sdfg, state=true_state: _write_if_branch_output(
-                sdfg, state, src, dst
-            )
+            lambda src, dst, ctx=true_br_ctx: _write_if_branch_output(ctx, src, dst)
         )(true_br_result, node_output)
         gtx_utils.tree_map(
-            lambda src, dst, sdfg=ctx.sdfg, state=false_state: _write_if_branch_output(
-                sdfg, state, src, dst
-            )
+            lambda src, dst, ctx=false_br_ctx: _write_if_branch_output(ctx, src, dst)
         )(false_br_result, node_output)
     else:
         node_output = _construct_if_branch_output(
@@ -672,8 +659,8 @@ def translate_if(
             true_br_result,
             false_br_result,
         )
-        _write_if_branch_output(sdfg, true_state, true_br_result, node_output)
-        _write_if_branch_output(sdfg, false_state, false_br_result, node_output)
+        _write_if_branch_output(true_br_ctx, true_br_result, node_output)
+        _write_if_branch_output(false_br_ctx, false_br_result, node_output)
 
     return node_output
 
@@ -691,28 +678,26 @@ def translate_index(
     assert cpm.is_call_to(node, "index")
     assert isinstance(node.type, ts.FieldType)
 
-    sdfg, state = ctx.sdfg, ctx.state
-
     assert "domain" in node.annex
     domain = gtir_domain.extract_domain(node.annex.domain)
     assert len(domain) == 1
     dim, _ = domain[0]
     dim_index = gtir_sdfg_utils.get_map_variable(dim)
 
-    index_data, _ = sdfg_builder.add_temp_scalar(sdfg, INDEX_DTYPE)
-    index_node = state.add_access(index_data)
+    index_data, _ = sdfg_builder.add_temp_scalar(ctx, INDEX_DTYPE)
+    index_node = ctx.add_access(index_data)
     index_value = gtir_dataflow.ValueExpr(
         dc_node=index_node,
         gt_dtype=gtx_dace_utils.as_itir_type(INDEX_DTYPE),
     )
     index_write_tasklet = sdfg_builder.add_tasklet(
+        ctx,
         "index",
-        state,
         inputs={},
         outputs={"__val"},
         code=f"__val = {dim_index}",
     )
-    state.add_edge(
+    ctx.state.add_edge(
         index_write_tasklet,
         "__val",
         index_node,
@@ -721,65 +706,63 @@ def translate_index(
     )
 
     input_edges = [
-        gtir_dataflow.EmptyInputEdge(state, index_write_tasklet),
+        gtir_dataflow.EmptyInputEdge(ctx.state, index_write_tasklet),
     ]
-    output_edge = gtir_dataflow.DataflowOutputEdge(state, index_value)
+    output_edge = gtir_dataflow.DataflowOutputEdge(ctx.state, index_value)
     return _create_field_operator(ctx, domain, node.type, sdfg_builder, input_edges, (output_edge,))
 
 
 def _get_data_nodes(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGBuilderContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     data_name: str,
     data_type: ts.DataType,
 ) -> FieldopResult:
     if isinstance(data_type, ts.FieldType):
-        data_node = state.add_access(data_name)
+        data_node = ctx.add_access(data_name)
         return sdfg_builder.make_field(data_node, data_type)
 
     elif isinstance(data_type, ts.ScalarType):
-        if data_name in sdfg.symbols:
+        if data_name in ctx.sdfg.symbols:
             data_node = _get_symbolic_value(
-                sdfg, state, sdfg_builder, data_name, data_type, temp_name=f"__{data_name}"
+                ctx, sdfg_builder, data_name, data_type, temp_name=f"__{data_name}"
             )
         else:
-            data_node = state.add_access(data_name)
+            data_node = ctx.add_access(data_name)
         return FieldopData(data_node, data_type, origin=())
 
     elif isinstance(data_type, ts.TupleType):
         symbol_tree = gtir_sdfg_utils.make_symbol_tree(data_name, data_type)
-        return gtx_utils.tree_map(
-            lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, sym.id, sym.type)
-        )(symbol_tree)
+        return gtx_utils.tree_map(lambda sym: _get_data_nodes(ctx, sdfg_builder, sym.id, sym.type))(
+            symbol_tree
+        )
 
     else:
         raise NotImplementedError(f"Symbol type {type(data_type)} not supported.")
 
 
 def _get_symbolic_value(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGBuilderContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     symbolic_expr: dace.symbolic.SymExpr,
     scalar_type: ts.ScalarType,
     temp_name: Optional[str] = None,
 ) -> dace.nodes.AccessNode:
     tasklet_node = sdfg_builder.add_tasklet(
+        ctx,
         "get_value",
-        state,
         {},
         {"__out"},
         f"__out = {symbolic_expr}",
     )
-    temp_name, _ = sdfg.add_scalar(
-        temp_name or sdfg.temp_data_name(),
+    temp_name, _ = ctx.sdfg.add_scalar(
+        temp_name or ctx.sdfg.temp_data_name(),
         gtx_dace_utils.as_dace_type(scalar_type),
         find_new_name=True,
         transient=True,
     )
-    data_node = state.add_access(temp_name)
-    state.add_edge(
+    data_node = ctx.add_access(temp_name)  # type: ignore[arg-type]
+    ctx.state.add_edge(
         tasklet_node,
         "__out",
         data_node,
@@ -798,7 +781,7 @@ def translate_literal(
     assert isinstance(node, gtir.Literal)
 
     data_type = node.type
-    data_node = _get_symbolic_value(ctx.sdfg, ctx.state, sdfg_builder, node.value, data_type)
+    data_node = _get_symbolic_value(ctx, sdfg_builder, node.value, data_type)
 
     return FieldopData(data_node, data_type, origin=())
 
@@ -878,8 +861,8 @@ def translate_scalar_expr(
     scalar_node = gtir.FunCall(fun=node.fun, args=scalar_expr_args)
     python_code = gtir_python_codegen.get_source(scalar_node)
     tasklet_node = sdfg_builder.add_tasklet(
+        ctx=ctx,
         name="scalar_expr",
-        state=ctx.state,
         inputs=set(connectors),
         outputs={"__out"},
         code=f"__out = {python_code}",
@@ -894,7 +877,7 @@ def translate_scalar_expr(
             dace.Memlet(data=arg_node.data, subset="0"),
         )
     # finally, create temporary for the result value
-    temp_name, _ = sdfg_builder.add_temp_scalar(ctx.sdfg, gtx_dace_utils.as_dace_type(node.type))
+    temp_name, _ = sdfg_builder.add_temp_scalar(ctx, gtx_dace_utils.as_dace_type(node.type))
     temp_node = ctx.state.add_access(temp_name)
     ctx.state.add_edge(
         tasklet_node,
@@ -922,7 +905,7 @@ def translate_symbol_ref(
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
     # We rely on the dace simplify pass to remove duplicated access nodes.
-    return _get_data_nodes(ctx.sdfg, ctx.state, sdfg_builder, symbol_name, gt_symbol_type)
+    return _get_data_nodes(ctx, sdfg_builder, symbol_name, gt_symbol_type)
 
 
 if TYPE_CHECKING:

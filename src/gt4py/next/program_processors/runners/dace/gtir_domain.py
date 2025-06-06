@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Sequence, TypeAlias
 
 import dace
-from dace import subsets as dace_subsets
+from dace import subsets as dace_sbs
 
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
@@ -19,7 +19,7 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_u
 from gt4py.next.program_processors.runners.dace import gtir_python_codegen, gtir_sdfg_utils
 
 
-FieldopDomain: TypeAlias = list[tuple[gtx_common.Dimension, dace_subsets.Subset]]
+FieldopDomain: TypeAlias = list[tuple[gtx_common.Dimension, dace_sbs.Range]]
 """
 Domain of a field operator represented as a list of tuples with 2 elements:
  - dimension definition
@@ -64,14 +64,14 @@ def extract_domain(node: gtir.Expr) -> FieldopDomain:
     else:
         raise ValueError(f"Invalid domain {node}.")
 
-    return list(zip(domain_dims, dace_subsets.Range(domain_range), strict=True))
+    return list(zip(domain_dims, dace_sbs.Range(domain_range), strict=True))
 
 
 def get_domain_indices(
     dims: Sequence[gtx_common.Dimension], origin: Sequence[dace.symbolic.SymExpr] | None
-) -> dace_subsets.Indices:
+) -> dace_sbs.Indices:
     """
-    Construct the list of indices for a field domain, applying an optional origin
+    Construct the list of indices for a field domain, applying the given `origin`
     in each dimension as start index.
 
     Args:
@@ -89,7 +89,7 @@ def get_domain_indices(
         dace.symbolic.pystr_to_symbolic(gtir_sdfg_utils.get_map_variable(dim)) for dim in dims
     ]
     origin = [0] * len(index_variables) if origin is None else origin
-    return dace_subsets.Indices(
+    return dace_sbs.Indices(
         [index - start_index for index, start_index in zip(index_variables, origin, strict=True)]
     )
 
@@ -119,7 +119,7 @@ def get_field_layout(
     return domain_dims, domain_lbs, domain_sizes
 
 
-def get_field_subset(domain: FieldopDomain) -> dace_subsets.Range:
+def get_field_subset(domain: FieldopDomain) -> dace_sbs.Range:
     """
     Construct the memlet subset to access a point in the field global domain.
 
@@ -134,7 +134,7 @@ def get_field_subset(domain: FieldopDomain) -> dace_subsets.Range:
         Range to be used as memlet subset.
     """
     if len(domain) == 0:
-        return dace_subsets.Range([])
+        return dace_sbs.Range([])
     dims, origin = zip(*[(dim, dim_range[0]) for dim, dim_range in domain])
     field_indices = get_domain_indices(dims, origin)
-    return dace_subsets.Range.from_indices(field_indices)
+    return dace_sbs.Range.from_indices(field_indices)

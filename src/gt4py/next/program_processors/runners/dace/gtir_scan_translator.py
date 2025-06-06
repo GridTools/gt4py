@@ -26,7 +26,7 @@ import itertools
 from typing import TYPE_CHECKING, Any, Iterable
 
 import dace
-from dace import subsets as dace_subsets
+from dace import subsets as dace_sbs
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
@@ -83,8 +83,7 @@ def _parse_scan_fieldop_arg(
 
 def _create_scan_field_operator_impl(
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_sdfg.SDFGBuilderContext,
     domain: gtir_domain.FieldopDomain,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
@@ -105,7 +104,7 @@ def _create_scan_field_operator_impl(
     Refer to `gtir_builtin_translators._create_field_operator_impl()` for
     the description of function arguments and return values.
     """
-    dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
+    dataflow_output_desc = ctx.desc(output_edge.result.dc_node)
     assert isinstance(dataflow_output_desc, dace.data.Array)
 
     # the memory layout of the output field follows the field operator compute domain
@@ -118,9 +117,9 @@ def _create_scan_field_operator_impl(
 
     # the map scope writes the full-shape dimension corresponding to the scan column
     field_subset = (
-        dace_subsets.Range(field_subset[:scan_dim_index])
-        + dace_subsets.Range.from_string(f"0:{dataflow_output_desc.shape[0]}")
-        + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
+        dace_sbs.Range(field_subset[:scan_dim_index])
+        + dace_sbs.Range.from_string(f"0:{dataflow_output_desc.shape[0]}")
+        + dace_sbs.Range(field_subset[scan_dim_index + 1 :])
     )
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
@@ -146,13 +145,13 @@ def _create_scan_field_operator_impl(
         # the lines below extend the array with the local dimension added by the field operator
         assert output_edge.result.gt_dtype.offset_type is not None
         field_shape = [*field_shape, dataflow_output_desc.shape[1]]
-        field_subset = field_subset + dace_subsets.Range.from_string(
+        field_subset = field_subset + dace_sbs.Range.from_string(
             f"0:{dataflow_output_desc.shape[1]}"
         )
 
     # allocate local temporary storage
     field_name, field_desc = sdfg_builder.add_temp_array(
-        sdfg, field_shape, dataflow_output_desc.dtype
+        ctx, field_shape, dataflow_output_desc.dtype
     )
     # the inner and outer strides have to match
     scan_output_stride = field_desc.strides[scan_dim_index]
@@ -163,7 +162,7 @@ def _create_scan_field_operator_impl(
     dataflow_output_desc.set_shape(dataflow_output_desc.shape, new_inner_strides)
 
     # and here the edge writing the dataflow result data through the map exit node
-    field_node = state.add_access(field_name)
+    field_node = ctx.add_access(field_name)
     output_edge.connect(map_exit, field_node, field_subset)
 
     return gtir_translators.FieldopData(
@@ -192,7 +191,6 @@ def _create_scan_field_operator(
     Refer to `gtir_builtin_translators._create_field_operator()` for the
     description of function arguments and return values.
     """
-    sdfg, state = ctx.sdfg, ctx.state
     domain_dims, _, _ = gtir_domain.get_field_layout(domain)
 
     # create a map scope to execute the `LoopRegion` over the horizontal domain
@@ -208,8 +206,8 @@ def _create_scan_field_operator(
     else:
         # create map range corresponding to the field operator domain
         map_entry, map_exit = sdfg_builder.add_map(
+            ctx,
             "fieldop",
-            state,
             ndrange={
                 gtir_sdfg_utils.get_map_variable(dim): dim_range
                 for dim, dim_range in domain
@@ -224,7 +222,7 @@ def _create_scan_field_operator(
     if isinstance(node_type, ts.FieldType):
         assert isinstance(output_tree, gtir_dataflow.DataflowOutputEdge)
         return _create_scan_field_operator_impl(
-            sdfg_builder, sdfg, state, domain, output_tree, node_type, map_exit
+            sdfg_builder, ctx, domain, output_tree, node_type, map_exit
         )
     else:
         # handle tuples of fields
@@ -235,8 +233,7 @@ def _create_scan_field_operator(
             lambda output_edge, output_sym: (
                 _create_scan_field_operator_impl(
                     sdfg_builder,
-                    sdfg,
-                    state,
+                    ctx,
                     domain,
                     output_edge,
                     output_sym.type,
@@ -318,7 +315,9 @@ def _lower_lambda_to_nested_sdfg(
     # to skip those transformations that do not yet support control flow blocks.
     nsdfg.using_explicit_control_flow = True
 
-    # use the vertical dimension in the domain as scan dimension
+    # Use the vertical dimension in the domain as scan dimension.
+    # Note that the domain has not-included upper boundary, while the range has
+    # included boundary. Thus, we add the step value to the range upper boundary.
     scan_domain = [
         (dim, dim_range[0], dim_range[1] + dim_range[2])
         for dim, dim_range in domain
@@ -435,13 +434,13 @@ def _lower_lambda_to_nested_sdfg(
             assert scan_result.gt_dtype == scan_carry_sym.type
             # the scan field operator computes a column of scalar values
             assert len(scan_output_shape) == 1
-            output_subset = dace_subsets.Range.from_string(str(output_column_index))
+            output_subset = dace_sbs.Range.from_string(str(output_column_index))
         else:
             assert isinstance(scan_carry_sym.type, ts.ListType)
             assert scan_result.gt_dtype.element_type == scan_carry_sym.type.element_type
             # the scan field operator computes a list of scalar values for each column level
             assert len(scan_output_shape) == 2
-            output_subset = dace_subsets.Range.from_string(
+            output_subset = dace_sbs.Range.from_string(
                 f"{output_column_index}, 0:{scan_output_shape[1]}"
             )
         scan_result_data = scan_result.dc_node.data
@@ -654,7 +653,7 @@ def translate_scan(
     lambda_input_edges = []
     for input_connector, outer_arg in lambda_arg_nodes.items():
         arg_desc = outer_arg.dc_node.desc(ctx.sdfg)
-        input_subset = dace_subsets.Range.from_array(arg_desc)
+        input_subset = dace_sbs.Range.from_array(arg_desc)
         input_edge = gtir_dataflow.MemletInputEdge(
             ctx.state, outer_arg.dc_node, input_subset, nsdfg_node, input_connector
         )

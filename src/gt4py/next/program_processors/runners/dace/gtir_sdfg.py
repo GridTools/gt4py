@@ -56,28 +56,28 @@ class DataflowBuilder(Protocol):
     def unique_tasklet_name(self, name: str) -> str: ...
 
     def add_temp_array(
-        self, sdfg: dace.SDFG, shape: Sequence[Any], dtype: dace.dtypes.typeclass
+        self, ctx: SDFGBuilderContext, shape: Sequence[Any], dtype: dace.dtypes.typeclass
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary array to the SDFG."""
-        return sdfg.add_temp_transient(shape, dtype)
+        return ctx.sdfg.add_temp_transient(shape, dtype)
 
     def add_temp_array_like(
-        self, sdfg: dace.SDFG, datadesc: dace.data.Array
+        self, ctx: SDFGBuilderContext, datadesc: dace.data.Array
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary array to the SDFG."""
-        return sdfg.add_temp_transient_like(datadesc)
+        return ctx.sdfg.add_temp_transient_like(datadesc)
 
     def add_temp_scalar(
-        self, sdfg: dace.SDFG, dtype: dace.dtypes.typeclass
+        self, ctx: SDFGBuilderContext, dtype: dace.dtypes.typeclass
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary scalar to the SDFG."""
-        temp_name = sdfg.temp_data_name()
-        return sdfg.add_scalar(temp_name, dtype, transient=True)
+        temp_name = ctx.sdfg.temp_data_name()
+        return ctx.sdfg.add_scalar(temp_name, dtype, transient=True)
 
     def add_map(
         self,
+        ctx: SDFGBuilderContext,
         name: str,
-        state: dace.SDFGState,
         ndrange: Union[
             Dict[str, Union[str, dace.subsets.Subset]],
             List[Tuple[str, Union[str, dace.subsets.Subset]]],
@@ -86,12 +86,12 @@ class DataflowBuilder(Protocol):
     ) -> Tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
         """Wrapper of `dace.SDFGState.add_map` that assigns unique name."""
         unique_name = self.unique_map_name(name)
-        return state.add_map(unique_name, ndrange, **kwargs)
+        return ctx.state.add_map(unique_name, ndrange, **kwargs)
 
     def add_tasklet(
         self,
+        ctx: SDFGBuilderContext,
         name: str,
-        state: dace.SDFGState,
         inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
         outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
         code: str,
@@ -99,12 +99,12 @@ class DataflowBuilder(Protocol):
     ) -> dace.nodes.Tasklet:
         """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name."""
         unique_name = self.unique_tasklet_name(name)
-        return state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
+        return ctx.state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
 
     def add_mapped_tasklet(
         self,
+        ctx: SDFGBuilderContext,
         name: str,
-        state: dace.SDFGState,
         map_ranges: Dict[str, str | dace.subsets.Subset]
         | List[Tuple[str, str | dace.subsets.Subset]],
         inputs: Dict[str, dace.Memlet],
@@ -114,7 +114,9 @@ class DataflowBuilder(Protocol):
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
         """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name."""
         unique_name = self.unique_tasklet_name(name)
-        return state.add_mapped_tasklet(unique_name, map_ranges, inputs, code, outputs, **kwargs)
+        return ctx.state.add_mapped_tasklet(
+            unique_name, map_ranges, inputs, code, outputs, **kwargs
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -126,6 +128,14 @@ class SDFGBuilderContext:
 
     sdfg: dace.SDFG
     state: dace.SDFGState
+
+    def desc(self, node: dace.nodes.AccessNode) -> dace.data.Data:
+        """Wrapper of dace method `dace.nodes.AccessNode.desc()`."""
+        return node.desc(self.sdfg)
+
+    def add_access(self, dataname: str) -> dace.nodes.AccessNode:
+        """Wrapper of dace method `dace.sdfg.state.SDFGState.add_access()`."""
+        return self.state.add_access(dataname)
 
 
 class SDFGBuilder(DataflowBuilder, Protocol):
@@ -580,8 +590,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def _visit_expression(
         self,
         node: gtir.Expr,
-        sdfg: dace.SDFG,
-        head_state: dace.SDFGState,
+        ctx: SDFGBuilderContext,
         use_temp: bool = True,
     ) -> list[gtir_builtin_translators.FieldopData]:
         """
@@ -593,24 +602,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             A list of array nodes containing the result fields.
         """
-        result = self.visit(node, ctx=SDFGBuilderContext(sdfg, head_state))
+        result = self.visit(node, ctx=ctx)
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
         # i.e. eventually only introduce internal branches, and keep the same head state
-        sink_states = sdfg.sink_nodes()
+        sink_states = ctx.sdfg.sink_nodes()
         assert len(sink_states) == 1
-        assert sink_states[0] == head_state
+        assert sink_states[0] == ctx.state
 
         def make_temps(
             src: gtir_builtin_translators.FieldopData,
         ) -> gtir_builtin_translators.FieldopData:
-            src_desc = sdfg.arrays[src.dc_node.data]
+            src_desc = ctx.desc(src.dc_node)
             if src_desc.transient or not use_temp:
                 return src
             else:
-                dst, dst_desc = self.add_temp_array_like(sdfg, src_desc)
-                dst_node = head_state.add_access(dst)
-                head_state.add_nedge(
+                dst, dst_desc = self.add_temp_array_like(ctx, src_desc)
+                dst_node = ctx.add_access(dst)
+                ctx.state.add_nedge(
                     src.dc_node,
                     dst_node,
                     dace.Memlet(
@@ -742,13 +751,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # visit the domain expression
         domain = gtir_domain.extract_domain(stmt.domain)
+        ctx = SDFGBuilderContext(sdfg, state)
 
         # lower the GTIR expression to a dataflow that computes some temporary fields
-        source_fields = self._visit_expression(stmt.expr, sdfg, state)
+        source_fields = self._visit_expression(stmt.expr, ctx)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        target_fields = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
+        target_fields = self._visit_expression(stmt.target, ctx, use_temp=False)
 
         expr_input_args = {
             sym_id
@@ -977,7 +987,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # that is externally allocated, as required by the SDFG IR. An output edge will write the result
                 # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
                 outer_data = inner_data.map_to_parent_sdfg(
-                    self, lambda_ctx.sdfg, ctx.sdfg, ctx.state, nsdfg_symbols_mapping
+                    self, lambda_ctx, ctx, nsdfg_symbols_mapping
                 )
                 ctx.state.add_edge(
                     nsdfg_node,
