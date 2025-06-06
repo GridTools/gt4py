@@ -83,6 +83,18 @@ def arithmetic_ops(field_a: Field3D, field_b: Field3D):
 
 
 @register
+def scalar_inputs(field_a: Field3D, scalar_in: float):
+    with computation(PARALLEL), interval(...):
+        field_a = field_a * scalar_in
+
+
+@register
+def unary_operation(field_a: Field3D, scalar_in: float):
+    with computation(PARALLEL), interval(...):
+        field_a = -scalar_in
+
+
+@register
 def data_types(
     bool_field: gtscript.Field[bool],
     npbool_field: gtscript.Field[np.bool_],
