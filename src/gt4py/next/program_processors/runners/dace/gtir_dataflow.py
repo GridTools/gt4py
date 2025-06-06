@@ -412,7 +412,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         The subgraph builder ensures that the map receives a unique name,
         by adding a unique suffix to the provided name.
         """
-        ctx = gtir_sdfg.LoweringContext(self.sdfg, self.state)
+        ctx = gtir_sdfg.InStateContext(self.sdfg, self.state)
         return self.subgraph_builder.add_map(ctx, name, ndrange, **kwargs)
 
     def _add_tasklet(
@@ -429,7 +429,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         The subgraph builder ensures that the tasklet receives a unique name,
         by adding a unique suffix to the provided name.
         """
-        ctx = gtir_sdfg.LoweringContext(self.sdfg, self.state)
+        ctx = gtir_sdfg.InStateContext(self.sdfg, self.state)
         tasklet_node = self.subgraph_builder.add_tasklet(ctx, name, inputs, outputs, code, **kwargs)
         if len(inputs) == 0:
             # All nodes inside a map scope must have an in/out path that traverses
@@ -455,7 +455,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         The subgraph builder ensures that the tasklet receives a unique name,
         by adding a unique suffix to the provided name.
         """
-        ctx = gtir_sdfg.LoweringContext(self.sdfg, self.state)
+        ctx = gtir_sdfg.InStateContext(self.sdfg, self.state)
         return self.subgraph_builder.add_mapped_tasklet(
             ctx, name, map_ranges, inputs, code, outputs, **kwargs
         )
@@ -760,7 +760,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             lambda_params.append(psymbol)
 
         # visit each branch of the if-statement as if it was a Lambda node
-        if_branch_ctx = gtir_sdfg.LoweringContext(if_sdfg, if_branch_state)
+        if_branch_ctx = gtir_sdfg.InStateContext(if_sdfg, if_branch_state)
         lambda_node = gtir.Lambda(params=lambda_params, expr=expr)
         input_edges, output_tree = translate_lambda_to_dataflow(
             if_branch_ctx, self.subgraph_builder, lambda_node, lambda_args
@@ -1862,7 +1862,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
 
 def translate_lambda_to_dataflow(
-    ctx: gtir_sdfg.LoweringContext,
+    ctx: gtir_sdfg.InStateContext,
     sdfg_builder: gtir_sdfg.DataflowBuilder,
     node: gtir.Lambda,
     args: Sequence[

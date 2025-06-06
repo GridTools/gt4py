@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
 def _parse_scan_fieldop_arg(
     node: gtir.Expr,
-    ctx: gtir_sdfg.LoweringContext,
+    ctx: gtir_sdfg.InStateContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     domain: gtir_domain.FieldopDomain,
 ) -> gtir_dataflow.MemletExpr | tuple[gtir_dataflow.MemletExpr | tuple[Any, ...], ...]:
@@ -83,7 +83,7 @@ def _parse_scan_fieldop_arg(
 
 def _create_scan_field_operator_impl(
     sdfg_builder: gtir_sdfg.SDFGBuilder,
-    ctx: gtir_sdfg.LoweringContext,
+    ctx: gtir_sdfg.InStateContext,
     domain: gtir_domain.FieldopDomain,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
@@ -171,7 +171,7 @@ def _create_scan_field_operator_impl(
 
 
 def _create_scan_field_operator(
-    ctx: gtir_sdfg.LoweringContext,
+    ctx: gtir_sdfg.InStateContext,
     domain: gtir_domain.FieldopDomain,
     node_type: ts.FieldType | ts.TupleType,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
@@ -260,7 +260,7 @@ def _scan_output_name(input_name: str) -> str:
 
 def _lower_lambda_to_nested_sdfg(
     lambda_node: gtir.Lambda,
-    ctx: gtir_sdfg.LoweringContext,
+    ctx: gtir_sdfg.InStateContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
     domain: gtir_domain.FieldopDomain,
     init_data: gtir_translators.FieldopResult,
@@ -405,7 +405,7 @@ def _lower_lambda_to_nested_sdfg(
     # The 'update' state writes the value computed by the stencil into the scan carry variable,
     # in order to make it available to the next vertical level.
     compute_state = scan_loop.add_state("scan_compute")
-    lambda_compute_ctx = gtir_sdfg.LoweringContext(sdfg=lambda_init_ctx.sdfg, state=compute_state)
+    lambda_compute_ctx = gtir_sdfg.InStateContext(sdfg=lambda_init_ctx.sdfg, state=compute_state)
     update_state = scan_loop.add_state_after(compute_state, "scan_update")
 
     # inside the 'compute' state, visit the list of arguments to be passed to the stencil
@@ -415,7 +415,7 @@ def _lower_lambda_to_nested_sdfg(
     ]
     # stil inside the 'compute' state, generate the dataflow representing the stencil
     # to be applied on the horizontal domain
-    lambda_compute_ctx = gtir_sdfg.LoweringContext(lambda_init_ctx.sdfg, compute_state)
+    lambda_compute_ctx = gtir_sdfg.InStateContext(lambda_init_ctx.sdfg, compute_state)
     lambda_input_edges, lambda_result = gtir_dataflow.translate_lambda_to_dataflow(
         lambda_compute_ctx, lambda_translator, lambda_node, stencil_args
     )
@@ -540,7 +540,7 @@ def _connect_nested_sdfg_output_to_temporaries(
 
 def translate_scan(
     node: gtir.Node,
-    ctx: gtir_sdfg.LoweringContext,
+    ctx: gtir_sdfg.InStateContext,
     sdfg_builder: gtir_sdfg.SDFGBuilder,
 ) -> gtir_translators.FieldopResult:
     """
