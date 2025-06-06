@@ -458,10 +458,13 @@ def infer_expr(
       name that evaluates to the length of that axis.
     - allow_uninferred: Allow `as_fieldop` expressions whose domain is either unknown (e.g.
       because of a dynamic shift) or never accessed.
-    # TODO: describe why this is needed with concat_where (if inside as_fieldop might shrinken the
     actually access domain)
     - keep_existing_domains: If `True`, keep existing domains in `as_fieldop` expressions and
-        use them to propagate the domain further.
+      use them to propagate the domain further. This is useful in cases where after a
+      transformation some nodes are missing domain information that needs to be repopulated,
+      but we can't reinfer everything because some domain access information has been lost.
+      For example when a `concat_where` is transformed into an `as_fieldop` with an if we lose
+      some information that could lead to unnecessary overcomputation and out-of-bounds accesses.
 
     Returns:
       A tuple containing the inferred expression with all applied `as_fieldop` (that are accessed)
@@ -548,7 +551,6 @@ def infer_program(
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     allow_uninferred: bool = False,
-    # TODO: add test
     keep_existing_domains: bool = False,
 ) -> itir.Program:
     """
