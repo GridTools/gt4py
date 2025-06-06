@@ -72,7 +72,7 @@ def copy_stencil(field_a: Field3D, field_b: Field3D):
 
 
 @gtscript.function
-def afunc(b):
+def a_gtscript_function(b):
     return sqrt(abs(b[0, 1, 0]))
 
 
@@ -139,8 +139,8 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         acosh_res = acosh(cosh_res)
         tanh_res = tanh(acosh_res)
         atanh_res = atanh(tanh_res)
-        sqrt_res = afunc(atanh_res)
-        pow10_res = 10 ** (sqrt_res)
+        sqrt_res = a_gtscript_function(atanh_res)
+        pow10_res = 10 ** (atanh_res)
         log10_res = log10(pow10_res)
         exp_res = exp(log10_res)
         log_res = log(exp_res)

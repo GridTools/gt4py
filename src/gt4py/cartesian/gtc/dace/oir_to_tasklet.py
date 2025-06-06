@@ -170,6 +170,46 @@ class OIRToTasklet(eve.NodeVisitor):
     def visit_Literal(self, node: oir.Literal, **_kwargs: Any) -> str:
         return node.value
 
+    def visit_NativeFunction(self, func: common.NativeFunction, **kwargs: Any) -> str:
+        try:
+            return {
+                common.NativeFunction.ABS: "abs",
+                common.NativeFunction.MIN: "min",
+                common.NativeFunction.MAX: "max",
+                common.NativeFunction.MOD: "fmod",
+                common.NativeFunction.SIN: "dace.math.sin",
+                common.NativeFunction.COS: "dace.math.cos",
+                common.NativeFunction.TAN: "dace.math.tan",
+                common.NativeFunction.ARCSIN: "asin",
+                common.NativeFunction.ARCCOS: "acos",
+                common.NativeFunction.ARCTAN: "atan",
+                common.NativeFunction.SINH: "dace.math.sinh",
+                common.NativeFunction.COSH: "dace.math.cosh",
+                common.NativeFunction.TANH: "dace.math.tanh",
+                common.NativeFunction.ARCSINH: "asinh",
+                common.NativeFunction.ARCCOSH: "acosh",
+                common.NativeFunction.ARCTANH: "atanh",
+                common.NativeFunction.SQRT: "dace.math.sqrt",
+                common.NativeFunction.POW: "dace.math.pow",
+                common.NativeFunction.EXP: "dace.math.exp",
+                common.NativeFunction.LOG: "dace.math.log",
+                common.NativeFunction.LOG10: "log10",
+                common.NativeFunction.GAMMA: "tgamma",
+                common.NativeFunction.CBRT: "cbrt",
+                common.NativeFunction.ISFINITE: "isfinite",
+                common.NativeFunction.ISINF: "isinf",
+                common.NativeFunction.ISNAN: "isnan",
+                common.NativeFunction.FLOOR: "dace.math.ifloor",
+                common.NativeFunction.CEIL: "ceil",
+                common.NativeFunction.TRUNC: "trunc",
+            }[func]
+        except KeyError as error:
+            raise NotImplementedError("Not implemented NativeFunction encountered.") from error
+
+    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> str:
+        print(node.func)
+        return f"{self.visit(node.func, **kwargs)}({','.join([self.visit(a, **kwargs) for a in node.args])})"
+
     # Not implemented blocks - implement or pass to generic visitor
     def visit_AbsoluteKIndex(self, node, **kwargs):
         raise NotImplementedError("To be implemented: Absolute K")
@@ -189,25 +229,22 @@ class OIRToTasklet(eve.NodeVisitor):
     def visit_HorizontalRestriction(self, node, **kwargs):
         raise NotImplementedError("To be implemented: Regions")
 
-    def visit_LocalScalar(self, node, **kwargs):
-        raise NotImplementedError("To be implemented: Temp")
-
-    def visit_Temporary(self, node, **kwargs):
-        raise NotImplementedError("To be implemented: Temp")
-
     def visit_While(self, node, **kwargs):
         raise NotImplementedError("To be implemented: while")
 
     def visit_MaskStmt(self, node, **kwargs):
         raise NotImplementedError("To be implemented: if/else")
 
-    def visit_NativeFuncCall(self, node, **kwargs):
-        raise NotImplementedError("To be implemented: native func")
-
     def visit_TernaryOp(self, node, **kwargs):
         raise NotImplementedError("To be implemented: ops")
 
     # Should _not_ be called
+    def visit_LocalScalar(self, node, **kwargs):
+        raise NotImplementedError("visit_LocalScalar should not be called")
+
+    def visit_Temporary(self, node, **kwargs):
+        raise NotImplementedError("visit_LocalScalar should not be called")
+
     def visit_Stencil(self, node, **kwargs):
         raise NotImplementedError("visit_Stencil should not be called")
 

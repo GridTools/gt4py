@@ -77,6 +77,13 @@ class OIRToTreeIR(eve.NodeVisitor):
         ctx.current_scope.children.append(loop)
         ctx.current_scope = loop
 
+        for local_scalar in node.declarations:
+            ctx.root.containers[local_scalar.name] = data.Scalar(
+                data_type_to_dace_typeclass(local_scalar.dtype),  # dtype
+                transient=True,
+                debuginfo=get_dace_debuginfo(local_scalar),
+            )
+
         # TODO
         # Split horizontal executions into code blocks to group
         # things like if-statements and while-loops.
@@ -134,6 +141,15 @@ class OIRToTreeIR(eve.NodeVisitor):
             raise NotImplementedError("we don't do caches in this prototype")
 
         self.visit(node.sections, ctx=ctx, loop_order=node.loop_order)
+
+    def visit_Decl(self, node: oir.Decl):
+        raise RuntimeError("visit_Decl should not be called")
+
+    def visit_FieldDecl(self, node: oir.FieldDecl):
+        raise RuntimeError("visit_FieldDecl should not be called")
+
+    def visit_LocalScalar(self, node: oir.LocalScalar):
+        raise RuntimeError("visit_LocalScalar should not be called")
 
     def visit_Stencil(self, node: oir.Stencil) -> tir.TreeRoot:
         # question
