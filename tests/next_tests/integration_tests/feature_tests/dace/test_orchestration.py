@@ -34,7 +34,6 @@ dace = pytest.importorskip("dace")
 
 
 def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
-    pytest.skip("debugging")
     if not cartesian_case.backend or "dace" not in cartesian_case.backend.name:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
@@ -82,7 +81,6 @@ def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Ed
 
 @pytest.mark.uses_unstructured_shift
 def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
-    pytest.skip("debugging")
     if not unstructured_case.backend or "dace" not in unstructured_case.backend.name:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
