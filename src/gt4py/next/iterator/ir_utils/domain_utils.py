@@ -228,7 +228,7 @@ def promote_to_same_dimensions(
             dims_dict[dim] = SymbolicRange(
                 itir.InfinityLiteral.NEGATIVE, itir.InfinityLiteral.POSITIVE
             )
-    return SymbolicDomain(domain_small.grid_type, dims_dict)  # TODO: fix for unstructured
+    return SymbolicDomain(domain_small.grid_type, dims_dict)
 
 
 def is_finite(range_or_domain: SymbolicRange | SymbolicDomain) -> bool:
