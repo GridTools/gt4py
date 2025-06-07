@@ -29,26 +29,25 @@ class Context:
     """A reference to the current scope node."""
 
 
-class ScopeManager:
-    """Push/Pop the scope into the context, append given node to the parent scope"""
-
-    def __init__(self, ctx: Context, node: Any):
-        self._ctx = ctx
-        self._parent_scope = ctx.current_scope
-        self._node = node
-
-    def __enter__(self):
-        self._node.parent = self._parent_scope
-        self._parent_scope.children.append(self._node)
-        self._ctx.current_scope = self._node
-
-    def __exit__(self, _exc_type, _exc_value, _traceback):
-        self._ctx.current_scope = self._parent_scope
-
-
 class TreeIRToScheduleTree(eve.NodeVisitor):
     # TODO
     # More visitors to come here
+
+    class ContextPushPop:
+        """Append the node to the scope, then Push/Pop the scope"""
+
+        def __init__(self, ctx: Context, node: Any):
+            self._ctx = ctx
+            self._parent_scope = ctx.current_scope
+            self._node = node
+
+        def __enter__(self):
+            self._node.parent = self._parent_scope
+            self._parent_scope.children.append(self._node)
+            self._ctx.current_scope = self._node
+
+        def __exit__(self, _exc_type, _exc_value, _traceback):
+            self._ctx.current_scope = self._parent_scope
 
     def visit_Tasklet(self, node: tir.Tasklet, ctx: Context) -> None:
         tasklet = tn.TaskletNode(
@@ -85,7 +84,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
             node=map_entry,
             children=[],
         )
-        with ScopeManager(ctx, map_scope):
+        with TreeIRToScheduleTree.ContextPushPop(ctx, map_scope):
             self.visit(node.children, ctx=ctx)
 
     def visit_VerticalLoop(self, node: tir.VerticalLoop, ctx: Context) -> None:
@@ -109,12 +108,12 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
                 node=map_entry,
                 children=[],
             )
-            with ScopeManager(ctx, map_scope):
+            with TreeIRToScheduleTree.ContextPushPop(ctx, map_scope):
                 self.visit(node.children, ctx=ctx)
         else:
             # create loop and add it to tree
             for_scope = tn.ForScope(header=_for_scope_header(node), children=[])
-            with ScopeManager(ctx, for_scope):
+            with TreeIRToScheduleTree.ContextPushPop(ctx, for_scope):
                 self.visit(node.children, ctx=ctx)
 
     def visit_IfElse(self, node: tir.IfElse, ctx: Context) -> None:
@@ -122,13 +121,13 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
             condition=tn.CodeBlock(node.if_condition_code),
             children=[],
         )
-        with ScopeManager(ctx, if_scope):
+        with TreeIRToScheduleTree.ContextPushPop(ctx, if_scope):
             self.visit(node.children, ctx=ctx)
 
     def visit_While(self, node: tir.While, ctx: Context) -> None:
         while_scope = tn.WhileScope(children=[], header=_while_scope_header(node))
 
-        with ScopeManager(ctx, while_scope):
+        with TreeIRToScheduleTree.ContextPushPop(ctx, while_scope):
             self.visit(node.children, ctx=ctx)
 
     def visit_TreeRoot(self, node: tir.TreeRoot) -> tn.ScheduleTreeRoot:

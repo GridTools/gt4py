@@ -38,7 +38,7 @@ class Context:
 # (doesn't really matter for now)
 class OIRToTreeIR(eve.NodeVisitor):
     class ContextPushPop:
-        """Bundle the behavior of add to child, push, pop"""
+        """Append the node to the scope, then Push/Pop the scope"""
 
         def __init__(self, ctx: Context, node: Any):
             self._ctx = ctx
