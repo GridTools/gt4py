@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from dace import data, dtypes, nodes, symbolic
 
-from typing import TypeAlias
+from typing import Any, TypeAlias
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, definitions, oir
@@ -18,6 +18,11 @@ from gt4py.cartesian.gtc.dace import daceir as dcir, oir_to_tasklet, treeir as t
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo
 from gt4py.cartesian.gtc.passes.oir_optimizations import utils as oir_utils
+
+ControlFlow: TypeAlias = (
+    oir.HorizontalExecution | oir.While | oir.MaskStmt | oir.HorizontalRestriction
+)
+"""All control flow OIR nodes"""
 
 
 @dataclass
@@ -29,14 +34,25 @@ class Context:
     block_extents: dict[int, definitions.Extent]  # id(horizontal execution) -> Extent
 
 
-ControlFlow: TypeAlias = (
-    oir.HorizontalExecution | oir.While | oir.MaskStmt | oir.HorizontalRestriction
-)
-
-
 # This could (should?) be a NodeTranslator
 # (doesn't really matter for now)
 class OIRToTreeIR(eve.NodeVisitor):
+    class ContextPushPop:
+        """Bundle the behavior of add to child, push, pop"""
+
+        def __init__(self, ctx: Context, node: Any):
+            self._ctx = ctx
+            self._parent_scope = ctx.current_scope
+            self._node = node
+
+        def __enter__(self):
+            self._node.parent = self._parent_scope
+            self._parent_scope.children.append(self._node)
+            self._ctx.current_scope = self._node
+
+        def __exit__(self, _exc_type, _exc_value, _traceback):
+            self._ctx.current_scope = self._parent_scope
+
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: Context) -> None:
         code, inputs, outputs = oir_to_tasklet.generate(node, tree=ctx.root)
         dace_tasklet = nodes.Tasklet(
@@ -54,7 +70,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         )
         ctx.current_scope.children.append(tasklet)
 
-    def _group_statements(self, node: ControlFlow) -> list[oir.CodeBlock]:
+    def _group_statements(self, node: ControlFlow) -> list[oir.CodeBlock | ControlFlow]:
         """Group the body of a control flow node into CodeBlocks and other ControlFlow
 
         Visitor on statements is left to the caller.
@@ -102,29 +118,20 @@ class OIRToTreeIR(eve.NodeVisitor):
             parent=ctx.current_scope,
         )
 
-        ctx.current_scope.children.append(loop)
-        parent_scope = ctx.current_scope
-        ctx.current_scope = loop
+        with OIRToTreeIR.ContextPushPop(ctx, loop):
+            # Push local scalars to the tree repository
+            for local_scalar in node.declarations:
+                ctx.root.containers[local_scalar.name] = data.Scalar(
+                    data_type_to_dace_typeclass(local_scalar.dtype),  # dtype
+                    transient=True,
+                    debuginfo=get_dace_debuginfo(local_scalar),
+                )
 
-        for local_scalar in node.declarations:
-            ctx.root.containers[local_scalar.name] = data.Scalar(
-                data_type_to_dace_typeclass(local_scalar.dtype),  # dtype
-                transient=True,
-                debuginfo=get_dace_debuginfo(local_scalar),
-            )
-
-        # TODO
-        # Split horizontal executions into code blocks to group
-        # things like if-statements and while-loops.
-        # Remember: add support for regions (HorizontalRestrictions)
-        # from the start this time.
-        code_blocks = self._group_statements(node)
-
-        # Visit codeblocks - make sure to reset context
-        self.visit(code_blocks, ctx=ctx)
-        ctx.current_scope = parent_scope
+            groups = self._group_statements(node)
+            self.visit(groups, ctx=ctx)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, ctx: Context) -> None:
+        # TODO: revisit the node.mask with a plain self.visit(node.mask)
         if not isinstance(node.mask, (oir.ScalarAccess, oir.UnaryOp)):
             raise RuntimeError(
                 f"Expect ScalarAccess referencing computation of a previous Mask got {node.mask}"
@@ -138,14 +145,20 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         if_else = tir.IfElse(if_condition_code=mask_name, children=[], parent=ctx.current_scope)
 
-        ctx.current_scope.children.append(if_else)
-        parent = ctx.current_scope
-        ctx.current_scope = if_else
+        with OIRToTreeIR.ContextPushPop(ctx, if_else):
+            groups = self._group_statements(node)
+            self.visit(groups, ctx=ctx)
 
-        code_blocks = self._group_statements(node)
+    def visit_While(self, node: oir.While, ctx: Context) -> None:
+        while_ = tir.While(
+            condition_code=self.visit(node.cond),
+            children=[],
+            parent=ctx.current_scope,
+        )
 
-        self.visit(code_blocks, ctx=ctx)
-        ctx.current_scope = parent
+        with OIRToTreeIR.ContextPushPop(ctx, while_):
+            groups = self._group_statements(node)
+            self.visit(groups, ctx=ctx)
 
     def visit_AxisBound(self, node: oir.AxisBound, axis_start: str, axis_end: str) -> str:
         if node.level == common.LevelMarker.START:
@@ -182,13 +195,8 @@ class OIRToTreeIR(eve.NodeVisitor):
             loop_order=loop_order, bounds_k=bounds, children=[], parent=ctx.current_scope
         )
 
-        parent_scope = ctx.current_scope
-        ctx.current_scope.children.append(loop)
-        ctx.current_scope = loop
-
-        self.visit(node.horizontal_executions, ctx=ctx)
-
-        ctx.current_scope = parent_scope
+        with OIRToTreeIR.ContextPushPop(ctx, loop):
+            self.visit(node.horizontal_executions, ctx=ctx)
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, ctx: Context) -> None:
         if node.caches:
@@ -261,6 +269,28 @@ class OIRToTreeIR(eve.NodeVisitor):
         self.visit(node.vertical_loops, ctx=ctx)
 
         return ctx.root
+
+    # Visit expressions for condition code in ControlFlow
+    def visit_CartesianOffset(self, node: common.CartesianOffset):
+        return f"__i+{node.i}, __j+{node.j}, __k+{node.k}"
+
+    def visit_VariableKOffset(self, node: oir.VariableKOffset):
+        return f"__i, __j, __k+{self.visit(node.k)}"
+
+    def visit_ScalarAccess(self, node: oir.ScalarAccess):
+        return NotImplementedError("TODO")
+
+    def visit_FieldAccess(self, node: oir.FieldAccess) -> str:
+        return f"{node.name}[{self.visit(node.offset)}]"
+
+    def visit_Literal(self, node: oir.Literal) -> str:
+        return node.value
+
+    def visit_BinaryOp(self, node: oir.BinaryOp) -> str:
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+
+        return f"{left} {node.op.value} {right}"
 
 
 def get_dace_shape(field: oir.FieldDecl, symbols: tir.SymbolDict) -> list:

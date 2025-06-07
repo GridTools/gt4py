@@ -48,6 +48,11 @@ class IfElse(TreeScope):
     """Condition as ScheduleTree worthy code"""
 
 
+class While(TreeScope):
+    condition_code: str
+    """Condition as ScheduleTree worthy code"""
+
+
 class HorizontalLoop(TreeScope):
     # stuff for ij/loop bounds
     bounds_i: Bounds

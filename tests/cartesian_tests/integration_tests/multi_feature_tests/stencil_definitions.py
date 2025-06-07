@@ -188,6 +188,14 @@ def runtime_if(field_a: Field3D, field_b: Field3D):
 
 
 @register
+def while_stencil(field_a: Field3D, field_b: Field3D):
+    with computation(BACKWARD), interval(...):
+        while field_a > 2.0:
+            field_b = -1
+            field_a = -field_b
+
+
+@register
 def simple_horizontal_diffusion(in_field: Field3D, coeff: Field3D, out_field: Field3D):
     with computation(PARALLEL), interval(...):
         lap_field = 4.0 * in_field[0, 0, 0] - (

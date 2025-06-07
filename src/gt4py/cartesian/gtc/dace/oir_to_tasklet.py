@@ -215,6 +215,10 @@ class OIRToTasklet(eve.NodeVisitor):
         # Skip here, OIR to TreeIR will catch
         pass
 
+    def visit_While(self, node, **kwargs):
+        # Skip here, OIR to TreeIR will catch
+        pass
+
     # Not implemented blocks - implement or pass to generic visitor
     def visit_AbsoluteKIndex(self, node, **kwargs):
         raise NotImplementedError("To be implemented: Absolute K")
@@ -233,9 +237,6 @@ class OIRToTasklet(eve.NodeVisitor):
 
     def visit_HorizontalRestriction(self, node, **kwargs):
         raise NotImplementedError("To be implemented: Regions")
-
-    def visit_While(self, node, **kwargs):
-        raise NotImplementedError("To be implemented: while")
 
     def visit_TernaryOp(self, node, **kwargs):
         raise NotImplementedError("To be implemented: ops")

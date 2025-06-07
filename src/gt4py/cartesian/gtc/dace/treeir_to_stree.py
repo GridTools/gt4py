@@ -45,10 +45,6 @@ class ScopeManager:
     def __exit__(self, _exc_type, _exc_value, _traceback):
         self._ctx.current_scope = self._parent_scope
 
-    @property
-    def children(self):
-        return self._ctx.current_scope.children
-
 
 class TreeIRToScheduleTree(eve.NodeVisitor):
     # TODO
@@ -129,6 +125,12 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         with ScopeManager(ctx, if_scope):
             self.visit(node.children, ctx=ctx)
 
+    def visit_While(self, node: tir.While, ctx: Context) -> None:
+        while_scope = tn.WhileScope(children=[], header=_while_scope_header(node))
+
+        with ScopeManager(ctx, while_scope):
+            self.visit(node.children, ctx=ctx)
+
     def visit_TreeRoot(self, node: tir.TreeRoot) -> tn.ScheduleTreeRoot:
         """
         Construct a schedule tree from TreeIR.
@@ -153,6 +155,13 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
 
 
 def _for_scope_header(node: tir.VerticalLoop) -> dcf.ForScope:
+    """Header for the tn.ForScope re-using DaCe codegen ForScope.
+
+    Only setup the required data, default or mock the rest.
+
+    TODO: In DaCe 2.x this will be replaced by an SDFG concept which should
+    be closer and required less mockup.
+    """
     if not dace_version.startswith("1."):
         raise NotImplementedError("DaCe 2.x detected - please fix below code")
     if node.loop_order == common.LoopOrder.PARALLEL:
@@ -192,3 +201,36 @@ def _for_scope_header(node: tir.VerticalLoop) -> dcf.ForScope:
     # Kill the loop_range test for memlet propagation check going in
     dcf.ForScope.loop_range = lambda self: None
     return for_scope
+
+
+def _while_scope_header(node: tir.While) -> dcf.WhileScope:
+    """Header for the tn.WhileScope re-using DaCe codegen WhileScope.
+
+    Only setup the required data, default or mock the rest.
+
+    TODO: In DaCe 2.x this will be replaced by an SDFG concept which should
+    be closer and required less mockup.
+    """
+    if not dace_version.startswith("1."):
+        raise NotImplementedError("DaCe 2.x detected - please fix below code")
+
+    return dcf.WhileScope(
+        test=CodeBlock(node.condition_code),
+        # Unused
+        guard=sdfg.SDFGState(),
+        dispatch_state=lambda _state: "",
+        parent=None,
+        body=dcf.GeneralBlock(
+            lambda _state: "",
+            None,
+            True,
+            None,
+            [],
+            [],
+            [],
+            [],
+            [],
+            False,
+        ),
+        last_block=False,
+    )
