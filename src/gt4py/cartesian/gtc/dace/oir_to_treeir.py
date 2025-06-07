@@ -311,10 +311,18 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     # Visit expressions for condition code in ControlFlow
     def visit_CartesianOffset(self, node: common.CartesianOffset):
-        return f"__i+{node.i}, __j+{node.j}, __k+{node.k}"
+        return (
+            f"{dcir.Axis.I.iteration_symbol}+{node.i}, "
+            f"{dcir.Axis.J.iteration_symbol}+{node.j}, "
+            f"{dcir.Axis.K.iteration_symbol}+{node.k}"
+        )
 
     def visit_VariableKOffset(self, node: oir.VariableKOffset):
-        return f"__i, __j, __k+{self.visit(node.k)}"
+        return (
+            f"{dcir.Axis.I.iteration_symbol}, "
+            f"{dcir.Axis.J.iteration_symbol}, "
+            f"{dcir.Axis.K.iteration_symbol}+{self.visit(node.k)}"
+        )
 
     def visit_ScalarAccess(self, node: oir.ScalarAccess):
         return NotImplementedError("TODO")
