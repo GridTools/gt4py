@@ -149,6 +149,45 @@ class OIRToTreeIR(eve.NodeVisitor):
             groups = self._group_statements(node)
             self.visit(groups, ctx=ctx)
 
+    def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, ctx: Context) -> None:
+        """Translate `region` concept into If control flow in TreeIR"""
+        condition_code = self.visit(node.mask, ctx=ctx)
+        if_else = tir.IfElse(
+            if_condition_code=condition_code, children=[], parent=ctx.current_scope
+        )
+        with OIRToTreeIR.ContextPushPop(ctx, if_else):
+            groups = self._group_statements(node)
+            self.visit(groups, ctx=ctx)
+
+    def visit_HorizontalMask(self, node: common.HorizontalMask, ctx: Context) -> str:
+        # TODO: probably a nope
+        loop_i = dcir.Axis.I.iteration_symbol()
+        axis_start_i = "0"
+        axis_end_i = dcir.Axis.I.domain_symbol()
+        loop_j = dcir.Axis.J.iteration_symbol()
+        axis_start_j = "0"
+        axis_end_j = dcir.Axis.J.domain_symbol()
+
+        cond = ""
+        if node.i.start is not None:
+            cond += f"{loop_i} >= {self.visit(node.i.start, axis_start=axis_start_i, axis_end=axis_end_i)}"
+        if node.i.end is not None:
+            if cond != "":
+                cond += " and "
+            cond += (
+                f"{loop_i} < {self.visit(node.i.end, axis_start=axis_start_i, axis_end=axis_end_i)}"
+            )
+        if node.j.start is not None:
+            if cond != "":
+                cond += " and "
+            cond += f"{loop_j} >= {self.visit(node.j.start, axis_start=axis_start_j, axis_end=axis_end_j)}"
+        if node.j.start is not None:
+            if cond != "":
+                cond += " and "
+            cond += f"{loop_j} >= {self.visit(node.j.end, axis_start=axis_start_j, axis_end=axis_end_j)}"
+
+        return cond
+
     def visit_While(self, node: oir.While, ctx: Context) -> None:
         while_ = tir.While(
             condition_code=self.visit(node.cond),

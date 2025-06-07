@@ -232,9 +232,6 @@ class OIRToTasklet(eve.NodeVisitor):
     def visit_KCache(self, node, **kwargs):
         raise NotImplementedError("To be implemented: Caches")
 
-    def visit_HorizontalExecution(self, node, **kwargs):
-        raise NotImplementedError("To be implemented: Regions")
-
     def visit_HorizontalRestriction(self, node, **kwargs):
         raise NotImplementedError("To be implemented: Regions")
 
@@ -265,6 +262,9 @@ class OIRToTasklet(eve.NodeVisitor):
 
     def visit_UnboundedInterval(self, node, **kwargs):
         raise NotImplementedError("visit_UnboundedInterval should not be called")
+
+    def visit_HorizontalExecution(self, node, **kwargs):
+        raise NotImplementedError("visit_HorizontalExecution should not be called")
 
     def visit_VerticalLoop(self, node, **kwargs):
         raise NotImplementedError("visit_VerticalLoop should not be called")
