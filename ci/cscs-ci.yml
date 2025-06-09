@@ -33,7 +33,7 @@ stages:
   variables:
     DOCKERFILE: ci/base.Dockerfile
     # change to 'always' if you want to rebuild, even if target tag exists already (if-not-exists is the default, i.e. we could also skip the variable)
-    CSCS_REBUILD_POLICY: if-not-exists
+    CSCS_REBUILD_POLICY: always
     DOCKER_BUILD_ARGS: '["CUDA_VERSION=$CUDA_VERSION", "CUPY_PACKAGE=$CUPY_PACKAGE", "CUPY_VERSION=$CUPY_VERSION", "UBUNTU_VERSION=$UBUNTU_VERSION", "PYVERSION=$PYVERSION"]'
 .build_baseimage_x86_64:
   extends: [.container-builder-cscs-zen2, .build_baseimage]
@@ -118,7 +118,7 @@ build_py310_image_aarch64:
   - NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
   - nox -s "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS"
   variables:
-    CRAY_CUDA_MPS: 1
+    CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 20
     PYENV_VERSION: $PYVERSION
