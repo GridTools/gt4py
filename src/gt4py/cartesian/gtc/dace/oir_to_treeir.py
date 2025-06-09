@@ -310,6 +310,10 @@ class OIRToTreeIR(eve.NodeVisitor):
         return ctx.root
 
     # Visit expressions for condition code in ControlFlow
+    def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> str:
+        dtype = data_type_to_dace_typeclass(node.dtype)
+        return f"{dtype}({self.visit(node.expr, **kwargs)})"
+
     def visit_CartesianOffset(self, node: common.CartesianOffset):
         return (
             f"{dcir.Axis.I.iteration_symbol}+{node.i}, "

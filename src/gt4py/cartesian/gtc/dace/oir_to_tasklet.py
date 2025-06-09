@@ -155,6 +155,12 @@ class OIRToTasklet(eve.NodeVisitor):
 
         ctx.code.append(f"{left} = {right}")
 
+    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs):
+        cond = self.visit(node.cond, **kwargs)
+        if_code = self.visit(node.true_expr, **kwargs)
+        else_code = self.visit(node.false_expr, **kwargs)
+        return f"{if_code} if {cond} else {else_code}"
+
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> str:
         left = self.visit(node.left, **kwargs)
         right = self.visit(node.right, **kwargs)
@@ -232,13 +238,10 @@ class OIRToTasklet(eve.NodeVisitor):
     def visit_KCache(self, node, **kwargs):
         raise NotImplementedError("To be implemented: Caches")
 
-    def visit_HorizontalRestriction(self, node, **kwargs):
-        raise NotImplementedError("To be implemented: Regions")
-
-    def visit_TernaryOp(self, node, **kwargs):
-        raise NotImplementedError("To be implemented: ops")
-
     # Should _not_ be called
+    def visit_HorizontalRestriction(self, node, **kwargs):
+        raise NotImplementedError("visit_HorizontalRestriction: should be dealt in TreeIR")
+
     def visit_LocalScalar(self, node, **kwargs):
         raise NotImplementedError("visit_LocalScalar should not be called")
 
