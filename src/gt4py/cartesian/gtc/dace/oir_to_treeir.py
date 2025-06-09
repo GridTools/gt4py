@@ -7,10 +7,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import dataclass
+from typing import Any, TypeAlias
 
 from dace import data, dtypes, nodes, symbolic
-
-from typing import Any, TypeAlias
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, definitions, oir
@@ -18,6 +17,7 @@ from gt4py.cartesian.gtc.dace import daceir as dcir, oir_to_tasklet, treeir as t
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo
 from gt4py.cartesian.gtc.passes.oir_optimizations import utils as oir_utils
+
 
 ControlFlow: TypeAlias = (
     oir.HorizontalExecution | oir.While | oir.MaskStmt | oir.HorizontalRestriction
