@@ -109,6 +109,8 @@ build_py310_image_aarch64:
   stage: test
   image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
+  - pwd
+  - ls -la
   - cd /gt4py.src
   - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
   - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
