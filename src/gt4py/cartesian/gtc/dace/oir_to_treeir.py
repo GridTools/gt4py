@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import dataclass
-from typing import Any, TypeAlias
+from typing import Any, List, TypeAlias
 
 from dace import data, dtypes, nodes, symbolic
 
@@ -70,13 +70,15 @@ class OIRToTreeIR(eve.NodeVisitor):
         )
         ctx.current_scope.children.append(tasklet)
 
-    def _group_statements(self, node: ControlFlow) -> list[oir.CodeBlock | ControlFlow]:
+    def _group_statements(
+        self, node: ControlFlow
+    ) -> list[oir.CodeBlock | ControlFlow | common.Stmt]:
         """Group the body of a control flow node into CodeBlocks and other ControlFlow
 
         Visitor on statements is left to the caller.
         """
-        statements = []
-        groups = []
+        statements: List[ControlFlow | oir.CodeBlock | common.Stmt] = []
+        groups: List[ControlFlow | oir.CodeBlock | common.Stmt] = []
         for stmt in node.body:
             if isinstance(stmt, (oir.MaskStmt, oir.While, oir.HorizontalRestriction)):
                 if statements != []:
@@ -131,19 +133,9 @@ class OIRToTreeIR(eve.NodeVisitor):
             self.visit(groups, ctx=ctx)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, ctx: Context) -> None:
-        # TODO: revisit the node.mask with a plain self.visit(node.mask)
-        if not isinstance(node.mask, (oir.ScalarAccess, oir.UnaryOp)):
-            raise RuntimeError(
-                f"Expect ScalarAccess referencing computation of a previous Mask got {node.mask}"
-            )
-        if isinstance(node.mask, oir.ScalarAccess):
-            mask_name = node.mask.name
-        elif isinstance(node.mask, oir.UnaryOp) and node.mask.op == common.UnaryOperator.NOT:
-            mask_name = f"not {node.mask.expr.name}"
-        else:
-            raise NotImplementedError("Unexpected mask IR")
-
-        if_else = tir.IfElse(if_condition_code=mask_name, children=[], parent=ctx.current_scope)
+        if_else = tir.IfElse(
+            if_condition_code=self.visit(node.mask), children=[], parent=ctx.current_scope
+        )
 
         with OIRToTreeIR.ContextPushPop(ctx, if_else):
             groups = self._group_statements(node)
@@ -329,7 +321,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         )
 
     def visit_ScalarAccess(self, node: oir.ScalarAccess):
-        return NotImplementedError("TODO")
+        return f"{node.name}"
 
     def visit_FieldAccess(self, node: oir.FieldAccess) -> str:
         return f"{node.name}[{self.visit(node.offset)}]"
