@@ -151,7 +151,7 @@ build_py310_image_aarch64:
       VARIANT: ['cuda12', 'cpu']
   variables:
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
-    GT4PY_BUILD_JOBS: 8
+    GT4PY_BUILD_JOBS: 1
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
 
 # test_py311_x86_64:
