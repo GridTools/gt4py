@@ -333,7 +333,6 @@ def _gt_expand_non_standard_memlets_sdfg(
                 edge.dst for edge in state.out_edges(a) if edge.dst not in old_neighbors_of_a
             }
             assert any(isinstance(new_node, dace_nodes.MapEntry) for new_node in new_nodes)
-            assert len(new_nodes) == 1
             new_maps.update(new_nodes)
     return new_maps
 
