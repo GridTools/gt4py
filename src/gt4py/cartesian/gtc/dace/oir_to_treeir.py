@@ -151,7 +151,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             groups = self._group_statements(node)
             self.visit(groups, ctx=ctx)
 
-    def visit_HorizontalMask(self, node: common.HorizontalMask, _ctx: Context) -> str:
+    def visit_HorizontalMask(self, node: common.HorizontalMask, ctx: Context) -> str:
         # TODO: probably a nope
         loop_i = dcir.Axis.I.iteration_symbol()
         axis_start_i = "0"
