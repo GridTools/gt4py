@@ -251,6 +251,7 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         # setup the descriptor repository
         containers: dict[str, data.Data] = {}
+        dimensions: dict[str, tuple[bool, bool, bool]] = {}
         symbols: tir.SymbolDict = {}
 
         for param in node.params:
@@ -268,6 +269,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                     strides=get_dace_strides(param, symbols),
                     debuginfo=get_dace_debuginfo(param),
                 )
+                dimensions[param.name] = param.dimensions
                 continue
 
             raise ValueError(f"Unexpected parameter type {type(param)}.")
@@ -285,6 +287,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         tree = tir.TreeRoot(
             name=node.name,
             containers=containers,
+            dimensions=dimensions,
             symbols=symbols,
             children=[],
             parent=None,

@@ -78,5 +78,7 @@ class TreeRoot(TreeScope):
     # Descriptor repository
     containers: dict[str, data.Data]
     """Mapping field/scalar names to data descriptors."""
+    dimensions: dict[str, tuple[bool, bool, bool]]
+    """Mapping field names to shape-axis."""
     symbols: SymbolDict
     """Mapping between type and symbol name."""

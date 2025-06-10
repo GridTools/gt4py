@@ -52,7 +52,7 @@ class OIRToTasklet(eve.NodeVisitor):
                 [
                     f"{axis.iteration_dace_symbol()} + {offset_dict[axis.lower()]}"
                     for i, axis in enumerate(dcir.Axis.dims_3d())
-                    if i < len(ctx.tree.containers[node.name].shape)
+                    if ctx.tree.dimensions[node.name][i]
                 ]
             )
 
