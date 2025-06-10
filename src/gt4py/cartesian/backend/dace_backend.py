@@ -62,7 +62,12 @@ if TYPE_CHECKING:
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
     replacement_dictionary = replace_strides(
-        [array for array in sdfg.arrays.values() if array.transient], layout_map
+        [
+            array
+            for array in sdfg.arrays.values()
+            if isinstance(array, dace.data.Array) and array.transient
+        ],
+        layout_map,
     )
     sdfg.replace_dict(replacement_dictionary)
     for state in sdfg.nodes():
