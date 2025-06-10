@@ -146,10 +146,12 @@ def test_serial_map_promotion_promote_and_merge(use_symbolic_range):
     assert me.map.range == original_2d_range
 
 
-def test_serial_map_promotion_not_apply():
-    sdfg, state, map_entry_1d, map_entry_2d = _make_serial_map_promotion_sdfg(
-        use_symbolic_range=True
-    )
+@pytest.mark.parametrize(
+    "use_symbolic_range",
+    [False, True],
+)
+def test_serial_map_promotion_on_symbolic_range(use_symbolic_range):
+    sdfg, state, map_entry_1d, map_entry_2d = _make_serial_map_promotion_sdfg(use_symbolic_range)
 
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     assert len(map_entry_1d.map.params) == 1
@@ -181,9 +183,6 @@ def test_serial_map_promotion_not_apply():
         external_edges=True,
     )
 
-    # The promotion should not apply because there are two consumer maps, with symbolic range.
-    #   If the symbolic range happens to be empty, there won't be valid data in the temporay
-    #   for the other consumer map.
     count = sdfg.apply_transformations(
         gtx_transformations.SerialMapPromoter(
             promote_all=True,
@@ -193,6 +192,15 @@ def test_serial_map_promotion_not_apply():
         validate_all=True,
     )
 
-    assert count == 0
     mes = util.count_nodes(sdfg, dace_nodes.MapEntry, True)
-    assert len(mes) == 3
+    if use_symbolic_range:
+        # The promotion should not apply because there are two consumer maps, both
+        # with symbolic range. If the symbolic range happens to be empty, there won't
+        # be valid data in the temporay for the other consumer map.
+        assert count == 0
+        assert len(mes) == 3
+    else:
+        # One the of the two consumer maps has compile-time size, with not-empty range.
+        # We can apply map promotion because we know that the temporary will be computed.
+        assert count == 1
+        assert len(mes) == 2
