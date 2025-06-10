@@ -25,6 +25,11 @@ to get the stree branch of dace into gt4py. With that, we are able to run gt4py 
 
 This is all duck-tape, let's see how far we get fast ...
 
+Note to myself: because we are hijacking dace-next, whenever they update dace-next, we'll get a merge conflict. To resolve that merge conflict,
+
+1. checkout the `uv.lock` file from `main`: `git checkout origin/main uv.lock`
+2. (force) update the dace dependency: `uv sync -P dace-stree`
+
 _Your standard README continues now._
 
 # GT4Py: GridTools for Python
