@@ -38,7 +38,7 @@ rng = np.random.default_rng(1337)
 
 
 @pytest.mark.parametrize("name", stencil_definitions)
-@pytest.mark.parametrize("backend", ["dace:cpu"])
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_generation(name, backend):
     stencil_definition = stencil_definitions[name]
     externals = externals_registry[name]
