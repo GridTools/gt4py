@@ -329,6 +329,9 @@ class OIRToTreeIR(eve.NodeVisitor):
     def visit_Literal(self, node: oir.Literal, **_kwargs: Any) -> str:
         return node.value
 
+    def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> str:
+        return f"{node.op}({self.visit(node.expr, **kwargs)})"
+
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> str:
         left = self.visit(node.left, **kwargs)
         right = self.visit(node.right, **kwargs)
