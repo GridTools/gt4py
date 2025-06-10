@@ -174,8 +174,21 @@ class OIRToTasklet(eve.NodeVisitor):
         dtype = data_type_to_dace_typeclass(node.dtype)
         return f"{dtype}({self.visit(node.expr, **kwargs)})"
 
-    def visit_Literal(self, node: oir.Literal, **_kwargs: Any) -> str:
-        return node.value
+    def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> str:
+        if type(node.value) is str:
+            # Note: isinstance(node.value, str) also matches the string enum `BuiltInLiteral`
+            # which we don't want to match because it returns lower-case `true`, which isn't
+            # defined in (python) tasklet code.
+            return node.value
+
+        return self.visit(node.value, **kwargs)
+
+    def visit_BuiltInLiteral(self, builtin: common.BuiltInLiteral, **_kwargs: Any) -> str:
+        if builtin == common.BuiltInLiteral.TRUE:
+            return "True"
+        if builtin == common.BuiltInLiteral.FALSE:
+            return "False"
+        raise NotImplementedError("Not implemented BuiltInLiteral encountered.")
 
     def visit_NativeFunction(self, func: common.NativeFunction, **kwargs: Any) -> str:
         try:
