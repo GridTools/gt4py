@@ -214,17 +214,27 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
         #  value is written and if we fuse the write to `a` disappears, if `a` is
         #  a single use transient. Thus we have to make sure that we do not write
         #  into global memory.
+        # We also collect all maps that consume the data produced by the first map.
         # NOTE: We could accept the fact that we write into global memory multiple
         #   times the same value, but we will not do it. Furthermore, we ignore the
         #   case where `t` can not be removed.
+        consumer_maps = set()
         for oedge in graph.out_edges(first_map_exit):
             if not isinstance(oedge.dst, dace_nodes.AccessNode):
                 return False
             if not oedge.dst.desc(sdfg).transient:
                 return False
-
+            # If present, store the map on this edge that consume the transient.
+            for oedge_next in graph.out_edges(oedge.dst):
+                if isinstance(oedge_next.dst, dace_nodes.MapEntry):
+                    consumer_maps.add(oedge_next.dst)
         # Test if after the promotion the maps could be fused.
         if not self._test_if_promoted_maps_can_be_fused(graph, sdfg):
+            return False
+
+        if len(consumer_maps) > 1 and (second_map_entry.map.range.num_elements() > 0) != True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
+            # If several maps consume the data produced by the first map, we have to
+            # ensure that the range of the second map (used in promotion) is not empty.
             return False
 
         return True

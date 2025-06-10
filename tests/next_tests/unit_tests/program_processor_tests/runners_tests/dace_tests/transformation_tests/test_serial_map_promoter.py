@@ -21,11 +21,12 @@ import copy
 
 from . import util
 
+N = 10
 
-def _make_serial_map_promotion_sdfg() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]
-):
-    N = 10
+
+def _make_serial_map_promotion_sdfg(
+    use_symbolic_range: bool = False,
+) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]:
     shape_1d = (N,)
     shape_2d = (N, N)
     sdfg = dace.SDFG(util.unique_name("serial_promotable_sdfg"))
@@ -63,7 +64,7 @@ def _make_serial_map_promotion_sdfg() -> (
 
     _, map_entry_2d, _ = state.add_mapped_tasklet(
         name="two_d_map",
-        map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{N}")],
+        map_ranges=[("__i0", f"0:{N}"), ("__i1", "R0:R1" if use_symbolic_range else f"0:{N}")],
         input_nodes={"tmp": tmp},
         inputs={"__in0": dace.Memlet("tmp[__i0]"), "__in1": dace.Memlet("b[__i0, __i1]")},
         code="__out = __in0 + __in1",
@@ -107,8 +108,12 @@ def test_serial_map_promotion_only_promote():
     )
 
 
-def test_serial_map_promotion_promote_and_merge():
-    sdfg, state, map_entry_1d, map_entry_2d = _make_serial_map_promotion_sdfg()
+@pytest.mark.parametrize(
+    "use_symbolic_range",
+    [False, True],
+)
+def test_serial_map_promotion_promote_and_merge(use_symbolic_range):
+    sdfg, state, map_entry_1d, map_entry_2d = _make_serial_map_promotion_sdfg(use_symbolic_range)
 
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
     assert len(map_entry_1d.map.params) == 1
@@ -139,3 +144,55 @@ def test_serial_map_promotion_promote_and_merge():
     assert me.map.params == original_2d_params
     assert len(me.map.range) == 2
     assert me.map.range == original_2d_range
+
+
+def test_serial_map_promotion_not_apply():
+    sdfg, state, map_entry_1d, map_entry_2d = _make_serial_map_promotion_sdfg(
+        use_symbolic_range=True
+    )
+
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert len(map_entry_1d.map.params) == 1
+    assert len(map_entry_1d.map.range) == 1
+    assert len(map_entry_2d.map.params) == 2
+    assert len(map_entry_2d.map.range) == 2
+
+    # Now add a nother map that consumes the temporary array
+    S = dace.symbol("S", dace.int32)
+    tmp_nodes = list(
+        iedge.src
+        for iedge in state.in_edges(map_entry_2d)
+        if isinstance(iedge.src, dace_nodes.AccessNode) and iedge.src.desc(sdfg).transient
+    )
+    assert len(tmp_nodes) == 1
+    sdfg.add_array(
+        name="d",
+        shape=(N, S),
+        dtype=dace.float64,
+        transient=False,
+    )
+    state.add_mapped_tasklet(
+        name="another_two_d_map",
+        map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{S}")],
+        input_nodes={"tmp": tmp_nodes[0]},
+        inputs={"__in0": dace.Memlet("tmp[__i0]"), "__in1": dace.Memlet("b[__i0, __i1]")},
+        code="__out = __in0 + __in1",
+        outputs={"__out": dace.Memlet("d[__i0, __i1]")},
+        external_edges=True,
+    )
+
+    # The promotion should not apply because there are two consumer maps, with symbolic range.
+    #   If the symbolic range happens to be empty, there won't be valid data in the temporay
+    #   for the other consumer map.
+    count = sdfg.apply_transformations(
+        gtx_transformations.SerialMapPromoter(
+            promote_all=True,
+            fuse_after_promotion=True,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 0
+    mes = util.count_nodes(sdfg, dace_nodes.MapEntry, True)
+    assert len(mes) == 3
