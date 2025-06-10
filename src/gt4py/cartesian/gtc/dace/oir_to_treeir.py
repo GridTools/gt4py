@@ -306,12 +306,17 @@ class OIRToTreeIR(eve.NodeVisitor):
         dtype = data_type_to_dace_typeclass(node.dtype)
         return f"{dtype}({self.visit(node.expr, **kwargs)})"
 
-    def visit_CartesianOffset(self, node: common.CartesianOffset, **_kwargs: Any) -> str:
-        return (
-            f"{dcir.Axis.I.iteration_symbol()} + {node.i}, "
-            f"{dcir.Axis.J.iteration_symbol()} + {node.j}, "
-            f"{dcir.Axis.K.iteration_symbol()} + {node.k}"
-        )
+    def visit_CartesianOffset(
+        self, node: common.CartesianOffset, field: oir.FieldAccess, ctx: Context, **_kwargs: Any
+    ) -> str:
+        indices: list[str] = []
+
+        offset_dict = node.to_dict()
+        for index, axis in enumerate(dcir.Axis.dims_3d()):
+            if index < len(ctx.root.containers[field.name].shape):
+                indices.append(f"{axis.iteration_symbol()} + {offset_dict[axis.lower()]}")
+
+        return ", ".join(indices)
 
     def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs: Any) -> str:
         return (
@@ -324,7 +329,12 @@ class OIRToTreeIR(eve.NodeVisitor):
         return f"{node.name}"
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> str:
-        return f"{node.name}[{self.visit(node.offset, **kwargs)}]"
+        if node.data_index:
+            raise NotImplementedError("Data dimensions aren't supported yet.")
+
+        if "field" in kwargs:
+            kwargs.pop("field")
+        return f"{node.name}[{self.visit(node.offset, field=node, **kwargs)}]"
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> str:
         if type(node.value) is str:
