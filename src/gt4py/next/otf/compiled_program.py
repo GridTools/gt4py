@@ -19,9 +19,8 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing, utils as eve_utils
 from gt4py.next import backend as gtx_backend, common, config, errors
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
-from gt4py.next.otf import arguments, stages
+from gt4py.next.otf import arguments, stages, options
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
-
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
 _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
@@ -125,9 +124,10 @@ class CompiledProgramsPool:
     """
 
     backend: gtx_backend.Backend
-    definition_stage: ffront_stages.ProgramDefinition
-    program_type: ts_ffront.ProgramType
-    static_params: Sequence[str] | None = None  # not ordered
+    definition_stage: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition
+    program_type: ts_ffront.ProgramType | ts_ffront.FieldOperatorType
+    compilation_options: options.CompilationOptions
+    static_params: Sequence[str] | None = dataclasses.field(init=False)
 
     # TODO(havogt): This dict could be replaced by a `functools.cache`d method
     # and appropriate hashing of the arguments.
@@ -136,7 +136,11 @@ class CompiledProgramsPool:
         stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
     ] = dataclasses.field(default_factory=dict)
 
-    def __postinit__(self) -> None:
+    def __post_init__(self) -> None:
+        if self.backend is None:
+            raise RuntimeError("Cannot compile a program without backend.")
+        
+        self.static_params = self.compilation_options.static_params
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
         assert not self.program_type.definition.kw_only_args
@@ -203,6 +207,7 @@ class CompiledProgramsPool:
 
         key = _CompiledProgramsKey(
             tuple(static_args[p] for p in self.static_params),
+            # TODO(tehrengruber): This is wrong
             offset_provider
             if common.is_offset_provider_type(offset_provider)
             else common.offset_provider_to_type(offset_provider),
@@ -210,6 +215,7 @@ class CompiledProgramsPool:
         if key in self._compiled_programs:
             raise ValueError(f"Program with key {key} already exists.")
 
+        # TODO: this can be the key
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
             column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
@@ -222,14 +228,16 @@ class CompiledProgramsPool:
 
     def compile(
         self,
-        offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
+        offset_provider: common.OffsetProviderType
+                         | common.OffsetProvider
+                         | None = None,
         **static_args: list[ScalarOrTupleOfScalars],
     ) -> None:
         """
         Compiles the program for all combinations of static arguments and the given 'OffsetProviderType'.
 
         Note: In case you want to compile for specific combinations of static arguments (instead
-        of the combinatoral), you can call compile multiples times.
+        of the combinatorial), you can call compile multiples times.
 
         Examples:
             pool.compile(static_arg0=[0,1], static_arg1=[2,3], ...)
@@ -237,6 +245,22 @@ class CompiledProgramsPool:
             pool.compile(static_arg0=[0], static_arg1=[2]).compile(static_arg=[1], static_arg1=[3])
                 will compile for (0,2), (1,3)
         """
+        # TODO(havogt): we should reconsider if we want to return a new program on `compile` (and
+        # rename to `with_static_args` or similar) once we have a better understanding of the
+        # use-cases.
+        if self.compilation_options.connectivities is None and offset_provider is None:
+            raise ValueError(
+                "Cannot compile a program without connectivities / OffsetProviderType."
+            )
+        if not all(isinstance(v, list) for v in static_args.values()):
+            raise TypeError(
+                "Please provide the static arguments as lists."
+            )  # To avoid confusion with tuple args
+
+        if offset_provider is None:
+            offset_provider = self.compilation_options.connectivities
+        assert common.is_offset_provider(offset_provider) or common.is_offset_provider_type(offset_provider)
+
         if self.static_params is None:
             self.static_params = tuple(static_args.keys())
         elif set(self.static_params) != set(static_args.keys()):
@@ -244,12 +268,11 @@ class CompiledProgramsPool:
                 f"Static arguments must be the same for all compiled programs. Got {list(static_args.keys())}, expected {self.static_params}."
             )
 
-        for offset_provider in offset_providers:  # not included in product for better type checking
-            for static_values in itertools.product(*static_args.values()):
-                self._compile_variant(
-                    dict(zip(static_args.keys(), static_values, strict=True)),
-                    offset_provider=offset_provider,
-                )
+        for static_values in itertools.product(*static_args.values()):
+            self._compile_variant(
+                dict(zip(static_args.keys(), static_values, strict=True)),
+                offset_provider=offset_provider,
+            )
 
     def _resolve_future(self, key: _CompiledProgramsKey) -> stages.CompiledProgram:
         program = self._compiled_programs[key]

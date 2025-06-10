@@ -35,22 +35,24 @@ _raise_on_compile = mock.Mock()
 _raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
 
 
-@pytest.fixture
-def compile_testee(cartesian_case):
-    @gtx.field_operator
+@pytest.fixture(params=[True, False], ids=["field_operator", "program"])
+def compile_testee(request, cartesian_case):
+    @gtx.field_operator(backend=cartesian_case.backend)
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
         return a + b
+
+    if request.param:
+        return testee_op
 
     @gtx.program(backend=cartesian_case.backend)
     def testee(a: cases.IField, b: cases.IField, out: cases.IField):
         testee_op(a, b, out=out)
-
     return testee
 
 
 @pytest.fixture
 def compile_testee_domain(cartesian_case):
-    @gtx.field_operator
+    @gtx.field_operator(backend=cartesian_case.backend)
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
         return a + b
 
@@ -61,11 +63,14 @@ def compile_testee_domain(cartesian_case):
     return testee
 
 
-@pytest.fixture
-def compile_testee_scan(cartesian_case):
-    @gtx.scan_operator(axis=cases.KDim, forward=True, init=0)
+@pytest.fixture(params=[True, False])
+def compile_testee_scan(request, cartesian_case):
+    @gtx.scan_operator(axis=cases.KDim, forward=True, init=0, backend=cartesian_case.backend)
     def testee_op(carry: gtx.int32, inp: gtx.int32) -> gtx.int32:
         return carry + inp
+
+    if request.param:
+        return testee_op
 
     @gtx.program(backend=cartesian_case.backend)
     def testee(a: cases.KField, out: cases.KField):
@@ -157,7 +162,7 @@ def compile_testee_unstructured(unstructured_case):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    @gtx.field_operator
+    @gtx.field_operator(backend=unstructured_case.backend)
     def testee_op(
         e: cases.EField,
     ) -> cases.VField:
@@ -211,7 +216,7 @@ def test_compile_unstructured_jit(
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
-    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
+    object.__setattr__(compile_testee_unstructured.compilation_options, "enable_jit", False)
 
     # compiled for skip_value_mesh, simple_mesh
     compile_testee_unstructured.compile(
@@ -237,7 +242,7 @@ def test_compile_unstructured_wrong_offset_provider(
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
-    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
+    object.__setattr__(compile_testee_unstructured.compilation_options, "enable_jit", False)
 
     # compiled for skip_value_mesh
     compile_testee_unstructured.compile(
@@ -261,7 +266,7 @@ def test_compile_unstructured_modified_offset_provider(
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
-    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
+    object.__setattr__(compile_testee_unstructured.compilation_options, "enable_jit", False)
 
     # compiled for skip_value_mesh
     compile_testee_unstructured.compile(
@@ -285,7 +290,7 @@ def test_compile_unstructured_for_two_offset_providers(
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
-    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
+    object.__setattr__(compile_testee_unstructured.compilation_options, "enable_jit", False)
 
     # compiled for skip_value_mesh and simple_mesh
     compile_testee_unstructured.compile(
@@ -310,7 +315,7 @@ def test_compile_unstructured_for_two_offset_providers(
 
 @pytest.fixture
 def compile_variants_field_operator():
-    @gtx.field_operator
+    @gtx.field_operator(backend=unstructured_case.backend)
     def compile_variants_field_operator(
         field_a: cases.IField,
         scalar_int: int32,
@@ -364,7 +369,7 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
 
-    assert compile_variants_testee.static_params == ("scalar_int", "scalar_float", "scalar_bool")
+    assert compile_variants_testee._compiled_programs.static_params == ("scalar_int", "scalar_float", "scalar_bool")
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -418,7 +423,7 @@ def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_teste
 
 
 def test_compile_variants_not_compiled(cartesian_case, compile_variants_testee):
-    object.__setattr__(compile_variants_testee, "enable_jit", False)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", False)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -440,20 +445,22 @@ def test_compile_variants_not_compiled_then_reset_static_params(
     cartesian_case, compile_variants_testee
 ):
     """
-    This test ensures that after calling ".with_static_params(None)" the previously compiled programs are gone
-    and we can compile for the generic version.
+    This test ensures that after calling ".with_compilation_options(static_params=None)" the
+    previously compiled programs are gone and we can compile for the generic version.
     """
-    object.__setattr__(compile_variants_testee, "enable_jit", True)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", True)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
 
-    # the compile_variants_testee has static_params set and is compiled (in a previous test)
-    assert len(compile_variants_testee.static_params) > 0
     assert compile_variants_testee._compiled_programs is not None
+    # the compile_variants_testee has static_params set and is compiled (in a previous test)
+    assert len(compile_variants_testee._compiled_programs.static_params) > 0
 
     # but now we reset the compiled programs
-    testee_static_float_static_bool = compile_variants_testee.with_static_params(None)
+    testee_static_float_static_bool = compile_variants_testee.with_compilation_options(
+        static_params=None
+    )
 
     # Here we jit the generic version (because not static params are set)
     out = cases.allocate(cartesian_case, testee_static_float_static_bool, "out")()
@@ -469,7 +476,7 @@ def test_compile_variants_not_compiled_then_reset_static_params(
     assert np.allclose(out[0].ndarray, field_a.ndarray - 3)
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
-    # make sure the backend is never called form here on
+    # make sure the backend is never called from here on
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
 
     # calling it again will not recompile
@@ -491,21 +498,21 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
     cartesian_case, compile_variants_testee
 ):
     """
-    This test ensures that after calling `with_static_params("scalar_float", "scalar_bool")`
+    This test ensures that after calling `.with_compilation_options(static_params=["scalar_float", "scalar_bool"])`
     the previously compiled programs are gone and we can compile for the new `static_params`.
     """
-    object.__setattr__(compile_variants_testee, "enable_jit", False)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", False)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
 
-    # the compile_variants_testee has static_params set and is compiled (in a previous test)
-    assert len(compile_variants_testee.static_params) > 0
     assert compile_variants_testee._compiled_programs is not None
+    # the compile_variants_testee has static_params set and is compiled (in a previous test)
+    assert len(compile_variants_testee._compiled_programs.static_params) > 0
 
     # but now we reset the compiled programs and fix to other static params
-    testee_static_float_static_bool = compile_variants_testee.with_static_params(
-        "scalar_float", "scalar_bool"
+    testee_static_float_static_bool = compile_variants_testee.with_compilation_options(
+        static_params=["scalar_float", "scalar_bool"]
     )
     testee_static_float_static_bool.compile(
         scalar_float=[4.0], scalar_bool=[False], offset_provider=cartesian_case.offset_provider
@@ -540,7 +547,7 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
 
 
 def test_compile_variants_jit(cartesian_case, compile_variants_testee):
-    object.__setattr__(compile_variants_testee, "enable_jit", True)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", True)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -577,9 +584,9 @@ def test_compile_variants_jit(cartesian_case, compile_variants_testee):
 def test_compile_variants_with_static_params_jit(
     cartesian_case, compile_variants_testee_not_compiled
 ):
-    object.__setattr__(compile_variants_testee_not_compiled, "enable_jit", True)
-    testee_with_static_params = compile_variants_testee_not_compiled.with_static_params(
-        "scalar_int", "scalar_float", "scalar_bool"
+    object.__setattr__(compile_variants_testee_not_compiled.compilation_options, "enable_jit", True)
+    testee_with_static_params = compile_variants_testee_not_compiled.with_compilation_options(
+        static_params=["scalar_int", "scalar_float", "scalar_bool"]
     )
 
     field_a = cases.allocate(cartesian_case, testee_with_static_params, "field_a")()
