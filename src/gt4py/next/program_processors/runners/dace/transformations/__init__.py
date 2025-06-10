@@ -27,12 +27,15 @@ from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
 from .map_fusion_extended import gt_horizontal_map_fusion, gt_vertical_map_fusion
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
+from .multi_state_global_self_copy_elimination import (
+    MultiStateGlobalSelfCopyElimination,
+    MultiStateGlobalSelfCopyElimination2,
+    gt_multi_state_global_self_copy_elimination,
+)
 from .redundant_array_removers import (
     CopyChainRemover,
-    MultiStateGlobalSelfCopyElimination,
     SingleStateGlobalDirectSelfCopyElimination,
     SingleStateGlobalSelfCopyElimination,
-    gt_multi_state_global_self_copy_elimination,
     gt_remove_copy_chain,
 )
 from .serial_map_promoter import SerialMapPromoter
@@ -72,6 +75,7 @@ __all__ = [
     "MapIterationOrder",
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
+    "MultiStateGlobalSelfCopyElimination2",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
     "SingleStateGlobalDirectSelfCopyElimination",
