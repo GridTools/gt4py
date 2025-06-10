@@ -663,7 +663,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.0"
-source = { git = "https://github.com/GridTools/dace?branch=gt4py-next-integration#1c56acc04b9d544182cc79b4778fb0c0a201b77d" }
+source = { git = "https://github.com/GridTools/dace?branch=gt4py-next-integration#88c99f4eb4aa50f3e076a686547a64d84edabe11" }
 resolution-markers = [
     "python_full_version >= '3.11'",
     "python_full_version < '3.11'",
@@ -1105,7 +1105,7 @@ dace = [
     { name = "dace", version = "1.0.2", source = { registry = "https://pypi.org/simple" } },
 ]
 dace-next = [
-    { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?branch=gt4py-next-integration#1c56acc04b9d544182cc79b4778fb0c0a201b77d" } },
+    { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?branch=gt4py-next-integration#88c99f4eb4aa50f3e076a686547a64d84edabe11" } },
 ]
 formatting = [
     { name = "clang-format" },
