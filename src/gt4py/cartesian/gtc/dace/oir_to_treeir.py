@@ -151,7 +151,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             groups = self._group_statements(node)
             self.visit(groups, ctx=ctx)
 
-    def visit_HorizontalMask(self, node: common.HorizontalMask, ctx: Context) -> str:
+    def visit_HorizontalMask(self, node: common.HorizontalMask, _ctx: Context) -> str:
         # TODO: probably a nope
         loop_i = dcir.Axis.I.iteration_symbol()
         axis_start_i = "0"
@@ -182,7 +182,7 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     def visit_While(self, node: oir.While, ctx: Context) -> None:
         while_ = tir.While(
-            condition_code=self.visit(node.cond),
+            condition_code=self.visit(node.cond, ctx=ctx),
             children=[],
             parent=ctx.current_scope,
         )
@@ -306,32 +306,32 @@ class OIRToTreeIR(eve.NodeVisitor):
         dtype = data_type_to_dace_typeclass(node.dtype)
         return f"{dtype}({self.visit(node.expr, **kwargs)})"
 
-    def visit_CartesianOffset(self, node: common.CartesianOffset):
+    def visit_CartesianOffset(self, node: common.CartesianOffset, **_kwargs: Any) -> str:
         return (
-            f"{dcir.Axis.I.iteration_symbol}+{node.i}, "
-            f"{dcir.Axis.J.iteration_symbol}+{node.j}, "
-            f"{dcir.Axis.K.iteration_symbol}+{node.k}"
+            f"{dcir.Axis.I.iteration_symbol()} + {node.i}, "
+            f"{dcir.Axis.J.iteration_symbol()} + {node.j}, "
+            f"{dcir.Axis.K.iteration_symbol()} + {node.k}"
         )
 
-    def visit_VariableKOffset(self, node: oir.VariableKOffset):
+    def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs: Any) -> str:
         return (
-            f"{dcir.Axis.I.iteration_symbol}, "
-            f"{dcir.Axis.J.iteration_symbol}, "
-            f"{dcir.Axis.K.iteration_symbol}+{self.visit(node.k)}"
+            f"{dcir.Axis.I.iteration_symbol()}, "
+            f"{dcir.Axis.J.iteration_symbol()}, "
+            f"{dcir.Axis.K.iteration_symbol()} + {self.visit(node.k, **kwargs)}"
         )
 
-    def visit_ScalarAccess(self, node: oir.ScalarAccess):
+    def visit_ScalarAccess(self, node: oir.ScalarAccess, **_kwargs: Any) -> str:
         return f"{node.name}"
 
-    def visit_FieldAccess(self, node: oir.FieldAccess) -> str:
-        return f"{node.name}[{self.visit(node.offset)}]"
+    def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> str:
+        return f"{node.name}[{self.visit(node.offset, **kwargs)}]"
 
-    def visit_Literal(self, node: oir.Literal) -> str:
+    def visit_Literal(self, node: oir.Literal, **_kwargs: Any) -> str:
         return node.value
 
-    def visit_BinaryOp(self, node: oir.BinaryOp) -> str:
-        left = self.visit(node.left)
-        right = self.visit(node.right)
+    def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> str:
+        left = self.visit(node.left, **kwargs)
+        right = self.visit(node.right, **kwargs)
 
         return f"{left} {node.op.value} {right}"
 

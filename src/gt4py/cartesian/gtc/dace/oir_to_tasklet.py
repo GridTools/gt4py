@@ -214,7 +214,6 @@ class OIRToTasklet(eve.NodeVisitor):
             raise NotImplementedError("Not implemented NativeFunction encountered.") from error
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> str:
-        print(node.func)
         return f"{self.visit(node.func, **kwargs)}({','.join([self.visit(a, **kwargs) for a in node.args])})"
 
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs):
