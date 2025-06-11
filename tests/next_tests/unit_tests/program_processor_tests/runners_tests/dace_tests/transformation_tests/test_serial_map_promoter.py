@@ -92,6 +92,7 @@ def test_serial_map_promotion_only_promote():
             promote_everything=True,
             # Do not fuse to inspect that the promotion worked.
             fuse_after_promotion=False,
+            single_use_data={sdfg: {"tmp"}},
         ),
         validate=True,
         validate_all=True,
@@ -131,6 +132,7 @@ def test_serial_map_promotion_promote_and_merge(use_symbolic_range):
         gtx_transformations.SerialMapPromoter(
             promote_everything=True,
             fuse_after_promotion=True,
+            single_use_data={sdfg: {"tmp"}},
         ),
         validate=True,
         validate_all=True,
@@ -189,6 +191,7 @@ def test_serial_map_promotion_on_symbolic_range(use_symbolic_range):
         gtx_transformations.SerialMapPromoter(
             promote_everything=True,
             fuse_after_promotion=True,
+            single_use_data={sdfg: {"tmp"}},
         ),
         validate=True,
         validate_all=True,
@@ -253,6 +256,7 @@ def test_serial_map_promotion_2d_top_1d_bottom():
     map_promoter = gtx_transformations.SerialMapPromoter(
         promote_everything=True,
         fuse_after_promotion=False,
+        single_use_data={sdfg: {"t"}},
     )
     # Because of the near nonsensical SDFG we are bypassing the test.
     map_promoter._bypass_fusion_test = True
@@ -348,6 +352,7 @@ def test_horizonal_promotion_only_promotion(d1_map_is_vertical: bool):
             promote_vertical=False,
             promote_local=True,
             fuse_after_promotion=False,
+            single_use_data={sdfg: {"t"}},
         ),
         validate=True,
         validate_all=True,
@@ -361,6 +366,7 @@ def test_horizonal_promotion_only_promotion(d1_map_is_vertical: bool):
             promote_vertical=not d1_map_is_vertical,
             promote_local=False,
             fuse_after_promotion=False,
+            single_use_data={sdfg: {"t"}},
         ),
         validate=True,
         validate_all=True,
@@ -389,6 +395,7 @@ def test_horizonal_promotion_promotion_and_merge(d1_map_is_vertical: bool):
             promote_horizontal=d1_map_is_vertical,
             promote_vertical=not d1_map_is_vertical,
             promote_local=False,
+            single_use_data={sdfg: {"t"}},
         ),
         validate=True,
         validate_all=True,
@@ -457,6 +464,7 @@ def test_map_promotion_different_parameter_names():
         gtx_transformations.SerialMapPromoter(
             promote_everything=True,
             fuse_after_promotion=True,
+            single_use_data={sdfg_k: {"t"}},
         ),
         validate=True,
         validate_all=True,
@@ -470,6 +478,7 @@ def test_map_promotion_different_parameter_names():
         gtx_transformations.SerialMapPromoter(
             promote_everything=True,
             fuse_after_promotion=True,
+            single_use_data={sdfg_i: {"t"}},
         ),
         validate=True,
         validate_all=True,
