@@ -981,7 +981,7 @@ def _concat_where(
     return _concat(*f_slices, *t_slices, dim=mask_dim)
 
 
-NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)
+NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[arg-type] # TODO(havogt): this is still the "old" concat_where, needs to be replaced in a next PR
 
 
 def _make_reduction(

@@ -495,7 +495,11 @@ def _resolve_dimensions(
         ... )
         >>> offset_provider_type = {
         ...     "V2E": common.NeighborConnectivityType(
-        ...         domain=(Vertex, V2E), codomain=Edge, skip_value=None, dtype=None, max_neighbors=4
+        ...         domain=(Vertex, V2E),
+        ...         codomain=Edge,
+        ...         skip_value=None,
+        ...         dtype=None,
+        ...         max_neighbors=4,
         ...     ),
         ...     "KOff": K,
         ... }
@@ -614,7 +618,7 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
         assert isinstance(el_type, ts.DataType)
         offset_types = [arg.offset_type for arg in args if arg.offset_type]
         offset_type = offset_types[0] if offset_types else None
-        assert all(offset_type == arg for arg in offset_types)  # type: ignore[operator] # mypy not smart enough
+        assert all(offset_type == arg for arg in offset_types)
         return ts.ListType(element_type=el_type, offset_type=offset_type)
 
     return applied_map

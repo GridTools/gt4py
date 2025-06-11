@@ -47,7 +47,7 @@ def test_trivial():
     expected = im.as_fieldop(
         im.lambda_("__tcw_pos", "__tcw_arg0", "__tcw_arg1")(
             im.if_(
-                im.call("in_")(im.deref("__tcw_pos"), cond),
+                _in(im.deref("__tcw_pos"), cond),
                 im.deref("__tcw_arg0"),
                 im.deref("__tcw_arg1"),
             )
@@ -70,7 +70,7 @@ def test_capturing_cond():
     expected = im.as_fieldop(
         im.lambda_("__tcw_pos", "__tcw_arg0", "__tcw_arg1", "start", "stop")(
             im.if_(
-                im.call("in_")(
+                _in(
                     im.deref("__tcw_pos"),
                     im.domain(
                         common.GridType.CARTESIAN, {IDim: (im.deref("start"), im.deref("stop"))}
