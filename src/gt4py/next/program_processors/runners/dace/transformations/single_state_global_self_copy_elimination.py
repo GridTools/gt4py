@@ -39,7 +39,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
     However, the transformation will only apply if `T` is not used anywhere else.
 
-    Depending on the situation, the function will all merge all three nodes together.
+    Depending on the situation, the function will merge all three nodes together.
     However, this is not possible if this would create cycles, in that case the
     transformation tries to split the cycle.
 
@@ -52,8 +52,8 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
     """
 
     # Name of all data that is used at only one place. Is computed by the
-    #  `FindSingleUseData` pass and be passed at construction time. Needed until
-    #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
+    #  `FindSingleUseData` pass and must be passed at construction time. Needed
+    #  until [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
     _single_use_data: Optional[dict[dace.SDFG, set[str]]]
 
     node_g1 = dace_transformation.PatternNode(dace_nodes.AccessNode)
@@ -119,9 +119,9 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             return False
 
         # Determine which merging strategy should be used, if any.
-        # TODO(phimuell): Figuring out if we the strategy somehow has to influence
-        #   the checks? I do not think so because `can_be_apply()` essentially tries
-        #   to figuring out if we can consider the three nodes as a single one.
+        # TODO(phimuell): Figuring out if the strategy somehow has to influence
+        #   the checks? I do not think so because `can_be_applied()` essentially
+        #   tries to figure out if we can consider the three nodes as a single one.
         #   If we fully merge then every effect (write to global) will materialize
         #   at the same time. But if we merge, then it will materialize again
         #   in two steps, as it was already before. Thus I think we do not need
@@ -145,13 +145,14 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             return False
 
         # Get the mapping, i.e. subsets on `tmp` to subsets on `g`. The function will
-        #  also make sure that every `tmp` subset is translatable to `g` subset.
+        #  check that every `tmp` subset is translatable to `g` subset, `None` if this
+        #  mapping does not exist.
         tmp_to_g_mapping = self._compute_tmp_to_g_mapping(
             state=graph,
             node_g1=node_g1,
             node_tmp=node_tmp,
             node_g2=node_g2,
-            for_test=True,
+            check_only=True,
         )
         if tmp_to_g_mapping is None:
             return False
@@ -212,6 +213,8 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             if edge.src not in [node_tmp, node_g1]
         ]
 
+        # TODO(phimuell): Add tests for this case.
+        # TODO(edopao): Make sure that I added the tests.
         for write_into_g2 in pure_writes_into_g2:
             # We have a conflict if there is a write at `g1` and `g2` that goes
             #  to the same memory location.
@@ -244,10 +247,12 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         ]
 
         # Ensure that everything that is written into `tmp` is also written back.
+        # TODO(phimuell): Improve this, maybe also checking with swapped order
+        #   for `covered()`?
         for tmp_write in pure_tmp_writes:
             if not any(
-                tmp_to_g2_write_back.covers(tmp_write.subset)
-                for tmp_to_g2_write_back in tmp_to_g_mapping.keys()
+                tmp_to_g2_transfer.covers(tmp_write.subset)
+                for tmp_to_g2_transfer in tmp_to_g_mapping.keys()
             ):
                 return True
 
@@ -275,7 +280,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             node_g1=node_g1,
             node_tmp=node_tmp,
             node_g2=node_g2,
-            for_test=False,
+            check_only=False,
         )
 
         if merging_strategy == self._FULL_MERGE:
@@ -478,7 +483,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             ss_offset = self._compute_offset(
                 tdesc=edge_to_relocate_desc,
                 tmp_to_g_mapping=tmp_to_g_mapping,
-                for_test=False,
+                check_only=False,
             )
 
             if gtx_st.describes_incoming_edge(edge_to_relocate_desc):
@@ -523,7 +528,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
-        for_test: Literal[True],
+        check_only: Literal[True],
     ) -> Union[None, dict[dace_sbs.Subset, dace_sbs.Subset]]: ...
 
     @overload
@@ -533,7 +538,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
-        for_test: Literal[False],
+        check_only: Literal[False],
     ) -> dict[dace_sbs.Subset, dace_sbs.Subset]: ...
 
     def _compute_tmp_to_g_mapping(
@@ -542,7 +547,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
-        for_test: bool,
+        check_only: bool,
     ) -> Union[None, dict[dace_sbs.Subset, dace_sbs.Subset]]:
         """Computes a mapping that describes how `tmp` maps into `g`.
 
@@ -552,20 +557,20 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         can be seen as a part of `g`.
 
         The function has two modes, that are selected by specifying
-        `for_test`. If it is `True` then the function assumes that
+        `check_only`. If it is `True` then the function assumes that
         it is called in the context of `can_be_applied()`. In that
         mode the function might return `None` to indicate that the
         mapping does not exits. In this mode the function will also
         make sure that everything that is written into `tmp`, can
         be translated to a subset inside `g`.
 
-        If `for_test` is `False` then the function assumes that it
+        If `check_only` is `False` then the function assumes that it
         is called by `apply()` and will only compute the mapping
         and skip some tests.
 
         Note:
             - The function must be called before any modification, which
-                is only important for `for_test=False`.
+                is only important for `check_only=False`.
             - This function is currently not able to detect the case
                 `tmp[0:5] -> [5:10]` and `tmp[6:10] -> [0:5]` however, this
                 should not be important for GT4Py.
@@ -634,7 +639,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             #  However, the case `tmp[0:5] -> g[5:10]` and `tmp[5:10] -> g[0:5]`
             #  is not detected.
             if len(merged_subset_at_g2) != 1:
-                if not for_test:
+                if not check_only:
                     raise RuntimeError("Found indeterministic behaviour.")
                 return None
 
@@ -651,7 +656,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
             subset_map[merged_subset_at_tmp] = merged_subset_at_g2[0]
 
-        if for_test:
+        if check_only:
             # Make sure that every edge interfacing with `tmp` can be translated
             #  into an edge that interfaces with `g`.
             for edge_desc in gtx_st.describe_all_edges(state, node_tmp):
@@ -659,7 +664,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
                 if not self._compute_offset(
                     tdesc=edge_desc,
                     tmp_to_g_mapping=subset_map,
-                    for_test=True,
+                    check_only=True,
                 ):
                     return None
 
@@ -734,7 +739,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         self,
         tdesc: gtx_st.EdgeConnectionSpec,
         tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
-        for_test: Literal[True],
+        check_only: Literal[True],
     ) -> bool: ...
 
     @overload
@@ -742,14 +747,14 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         self,
         tdesc: gtx_st.EdgeConnectionSpec,
         tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
-        for_test: Literal[False],
+        check_only: Literal[False],
     ) -> list[dace_sym.SymbolicType]: ...
 
     def _compute_offset(
         self,
         tdesc: gtx_st.EdgeConnectionSpec,
         tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
-        for_test: bool,
+        check_only: bool,
     ) -> Union[list[dace_sym.SymbolicType], bool]:
         """Computes the offset to turn a subset described in terms of `tmp` into a `g`.
 
@@ -771,7 +776,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             ),
             None,
         )
-        if for_test:
+        if check_only:
             # NOTE: We could also test if the translation is unique.
             return associated_tmp_subset is not None
         assert associated_tmp_subset is not None
