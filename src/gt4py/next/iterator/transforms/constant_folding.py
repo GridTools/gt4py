@@ -56,7 +56,7 @@ _COMMUTATIVE_OPS = ("plus", "multiplies", "minimum", "maximum")
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ConstantFolding(
-    fixed_point_transformation.FixedPointTransformation, eve.PreserveLocationVisitor
+    fixed_point_transformation.CombinedFixedPointTransform, eve.PreserveLocationVisitor
 ):
     PRESERVED_ANNEX_ATTRS = (
         "type",
