@@ -307,7 +307,9 @@ class OIRToTreeIR(eve.NodeVisitor):
     # Visit expressions for condition code in ControlFlow
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> str:
         dtype = data_type_to_dace_typeclass(node.dtype)
-        return f"{dtype}({self.visit(node.expr, **kwargs)})"
+        expression = self.visit(node.expr, **kwargs)
+
+        return f"{dtype}({expression})"
 
     def visit_CartesianOffset(
         self, node: common.CartesianOffset, field: oir.FieldAccess, ctx: Context, **_kwargs: Any
@@ -337,7 +339,10 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         if "field" in kwargs:
             kwargs.pop("field")
-        return f"{node.name}[{self.visit(node.offset, field=node, **kwargs)}]"
+
+        field_name = node.name
+        offsets = self.visit(node.offset, field=node, **kwargs)
+        return f"{field_name}[{offsets}]"
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> str:
         if type(node.value) is str:
@@ -348,21 +353,30 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return self.visit(node.value, **kwargs)
 
-    def visit_BuiltInLiteral(self, builtin: common.BuiltInLiteral, **_kwargs: Any) -> str:
-        if builtin == common.BuiltInLiteral.TRUE:
+    def visit_BuiltInLiteral(self, node: common.BuiltInLiteral, **_kwargs: Any) -> str:
+        if node == common.BuiltInLiteral.TRUE:
             return "True"
-        if builtin == common.BuiltInLiteral.FALSE:
+        if node == common.BuiltInLiteral.FALSE:
             return "False"
-        raise NotImplementedError("Not implemented BuiltInLiteral encountered.")
+        raise NotImplementedError(f"Not implemented BuiltInLiteral '{node}' encountered.")
 
     def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> str:
-        return f"{node.op}({self.visit(node.expr, **kwargs)})"
+        expression = self.visit(node.expr, **kwargs)
+
+        return f"{node.op}({expression})"
 
     def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> str:
         left = self.visit(node.left, **kwargs)
         right = self.visit(node.right, **kwargs)
 
-        return f"{left} {node.op.value} {right}"
+        return f"({left} {node.op.value} {right})"
+
+    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs):
+        condition = self.visit(node.cond, **kwargs)
+        if_code = self.visit(node.true_expr, **kwargs)
+        else_code = self.visit(node.false_expr, **kwargs)
+
+        return f"({if_code} if {condition} else {else_code})"
 
 
 def get_dace_shape(field: oir.FieldDecl, symbols: tir.SymbolDict) -> list:
@@ -379,10 +393,10 @@ def get_dace_shape(field: oir.FieldDecl, symbols: tir.SymbolDict) -> list:
 
 def get_dace_strides(field: oir.FieldDecl, symbols: tir.SymbolDict) -> list[symbolic.symbol]:
     dimension_strings = [d for i, d in enumerate("IJK") if field.dimensions[i]]
-    data_dimenstion_strings = [f"d{ddim}" for ddim in range(len(field.data_dims))]
+    data_dimension_strings = [f"d{ddim}" for ddim in range(len(field.data_dims))]
 
     strides = []
-    for dim in dimension_strings + data_dimenstion_strings:
+    for dim in dimension_strings + data_dimension_strings:
         stride = f"__{field.name}_{dim}_stride"
         symbol = symbolic.pystr_to_symbolic(stride)
         symbols[stride] = dtypes.int32
