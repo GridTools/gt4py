@@ -13,7 +13,7 @@ import enum
 import functools
 import operator
 import re
-from typing import Literal, Optional
+from typing import Literal, Optional, Sequence
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
@@ -104,6 +104,13 @@ def _flattened_as_fieldop_param_el_name(param: str, idx: int) -> str:
         suffix = param
 
     return f"{prefix}{idx}_{suffix}"
+
+
+def _unique_symbol(reserved_names: Sequence[str], sym: itir.Sym):
+    name: str = sym.id
+    while name in reserved_names:
+        name = name + "_"
+    return im.sym(name, sym.type)
 
 
 # TODO(tehrengruber): Conceptually the structure of this pass makes sense: Visit depth first,
@@ -477,16 +484,25 @@ class CollapseTuple(
     def transform_propagate_nested_let(self, node: itir.FunCall, **kwargs) -> Optional[itir.Node]:
         if cpm.is_let(node):
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
-            outer_vars = {}
-            inner_vars = {}
+            outer_vars: dict[itir.Sym, itir.Expr] = {}
+            inner_vars: dict[itir.Sym, itir.Expr] = {}
             original_inner_expr = node.fun.expr
             for arg_sym, arg in zip(node.fun.params, node.args):
-                assert arg_sym not in inner_vars  # TODO(tehrengruber): fix collisions
+                assert arg_sym not in inner_vars
                 if cpm.is_let(arg):
+                    rename_map: dict[str, str] = {}
                     for sym, val in zip(arg.fun.params, arg.args):
-                        assert sym not in outer_vars  # TODO(tehrengruber): fix collisions
-                        outer_vars[sym] = val
-                    inner_vars[arg_sym] = arg.fun.expr
+                        unique_sym = _unique_symbol([s.id for s in outer_vars.keys()], sym)
+                        if sym != unique_sym:
+                            rename_map[sym.id] = unique_sym.id
+
+                        outer_vars[unique_sym] = val
+
+                    new_expr = arg.fun.expr
+                    if rename_map:
+                        new_expr = inline_lambda(im.let(*rename_map.items())(new_expr))
+
+                    inner_vars[arg_sym] = new_expr
                 else:
                     inner_vars[arg_sym] = arg
             if outer_vars:
