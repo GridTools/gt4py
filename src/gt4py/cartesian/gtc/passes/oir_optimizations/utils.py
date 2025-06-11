@@ -50,10 +50,9 @@ class GenericAccess(Generic[OffsetT]):
         if self.horizontal_mask:
             if dist_from_edge := mask_overlap_with_extent(self.horizontal_mask, horizontal_extent):
                 return ((horizontal_extent - dist_from_edge) + offset_as_extent) | zeros
-            else:
-                return None
-        else:
-            return horizontal_extent + offset_as_extent
+            return None
+
+        return horizontal_extent + offset_as_extent
 
 
 class CartesianAccess(GenericAccess[Tuple[int, int, int]]):

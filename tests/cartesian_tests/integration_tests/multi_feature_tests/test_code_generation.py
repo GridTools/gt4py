@@ -780,21 +780,7 @@ def test_function_inline_in_while(backend):
     assert (out_arr[:, :, :] == 388.0).all()
 
 
-def _xfail_dace_backends(param):
-    if param.values[0].startswith("dace:"):
-        marks = [
-            *param.marks,
-            pytest.mark.xfail(
-                raises=ValueError,
-                reason="Missing support in DaCe backends, see https://github.com/GridTools/gt4py/issues/1881.",
-            ),
-        ]
-        # make a copy because otherwise we are operating in-place
-        return pytest.param(*param.values, marks=marks)
-    return param
-
-
-@pytest.mark.parametrize("backend", map(_xfail_dace_backends, ALL_BACKENDS))
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_cast_in_index(backend):
     @gtscript.stencil(backend)
     def cast_in_index(

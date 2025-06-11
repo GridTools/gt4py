@@ -60,8 +60,7 @@ class OIRToTasklet(eve.NodeVisitor):
                         f"{axis.iteration_dace_symbol()}{shift_str} + {offset_dict[axis.lower()]}"
                     )
 
-            retval = subsets.Indices(indices)
-            return retval
+            return subsets.Indices(indices)
 
         if isinstance(node.offset, oir.VariableKOffset):
             # TODO
@@ -70,9 +69,9 @@ class OIRToTasklet(eve.NodeVisitor):
             shift = ctx.tree.shift[node.name]
             i = f"{dcir.Axis.I.iteration_symbol()} + {shift[0]}"
             j = f"{dcir.Axis.J.iteration_symbol()} + {shift[1]}"
-            K = dcir.Axis.K.domain_symbol()
-            retval = subsets.Range([(i, i, 1), (j, j, 1), (0, K, 1)])
-            return retval
+            K = f"{dcir.Axis.K.domain_symbol()} - 1"  # because ranges are inclusive
+
+            return subsets.Range([(i, i, 1), (j, j, 1), (0, K, 1)])
 
         raise NotImplementedError(f"_memlet_subset(): unknown offset type {type(node.offset)}")
 
