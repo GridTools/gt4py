@@ -627,7 +627,7 @@ def _make_concat_field_slice(
     shape = tuple([*f_desc.shape[:concat_dim_index], 1, *f_desc.shape[concat_dim_index:]])
     strides = tuple([*f_desc.strides[:concat_dim_index], 1, *f_desc.strides[concat_dim_index:]])
     slice_data, slice_data_desc = sdfg.add_view(
-        f"view_{f.dc_node.data}", shape, f_desc.dtype, strides=strides
+        f"view_{f.dc_node.data}", shape, f_desc.dtype, strides=strides, find_new_name=True
     )
     slice_node = state.add_access(slice_data)
     state.add_nedge(
