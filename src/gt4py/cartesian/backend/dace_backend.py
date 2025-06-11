@@ -342,6 +342,7 @@ class SDFGManager:
         """
 
         # Step 1: gtir to oir
+        k_bounds = compute_k_boundary(self.builder.gtir)
 
         # - gtir to oir lowering
         oir = GTIRToOIR().visit(self.builder.gtir)
@@ -361,7 +362,7 @@ class SDFGManager:
         # Step 2: oir to tree ir (tir)
         # - convert oir.VerticalLoops and oir.VerticalLoopSections to MapScope / ForScope
         # - split oir.HorizontalExecutions into oir.CodeBlocks
-        tir = OIRToTreeIR().visit(oir)
+        tir = OIRToTreeIR().visit(oir, k_bounds=k_bounds)
 
         # Step 3: tree ir to tree
         stree = TreeIRToScheduleTree().visit(tir)

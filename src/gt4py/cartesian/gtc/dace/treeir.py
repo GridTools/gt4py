@@ -14,6 +14,7 @@ from dace import Memlet, data, dtypes, nodes
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.dace import daceir as dcir
 
 
 SymbolDict: TypeAlias = dict[str, dtypes.typeclass]
@@ -81,8 +82,8 @@ class TreeRoot(TreeScope):
     dimensions: dict[str, tuple[bool, bool, bool]]
     """Mapping field names to shape-axis."""
 
-    shift: dict[str, tuple[int, int]]
-    """Mapping field names to i/j shifts."""
+    shift: dict[str, dict[dcir.Axis, int]]
+    """Mapping field names to dict[axis] -> shift."""
 
     symbols: SymbolDict
     """Mapping between type and symbol name."""

@@ -55,9 +55,8 @@ class OIRToTasklet(eve.NodeVisitor):
             indices = []
             for index, axis in enumerate(dcir.Axis.dims_3d()):
                 if dimensions[index]:
-                    shift_str = f" + {shift[index]}" if index < 2 else ""
                     indices.append(
-                        f"{axis.iteration_dace_symbol()}{shift_str} + {offset_dict[axis.lower()]}"
+                        f"{axis.iteration_dace_symbol()} + {shift[axis]} + {offset_dict[axis.lower()]}"
                     )
 
             return subsets.Indices(indices)
@@ -67,9 +66,9 @@ class OIRToTasklet(eve.NodeVisitor):
             # This has to be reworked with support for data dimensions
 
             shift = ctx.tree.shift[node.name]
-            i = f"{dcir.Axis.I.iteration_symbol()} + {shift[0]}"
-            j = f"{dcir.Axis.J.iteration_symbol()} + {shift[1]}"
-            K = f"{dcir.Axis.K.domain_symbol()} - 1"  # because ranges are inclusive
+            i = f"{dcir.Axis.I.iteration_symbol()} + {shift[dcir.Axis.I]}"
+            j = f"{dcir.Axis.J.iteration_symbol()} + {shift[dcir.Axis.J]}"
+            K = f"{dcir.Axis.K.domain_symbol()} + {shift[dcir.Axis.K]} - 1"  # because ranges are inclusive
 
             return subsets.Range([(i, i, 1), (j, j, 1), (0, K, 1)])
 
