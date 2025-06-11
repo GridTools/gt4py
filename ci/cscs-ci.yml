@@ -118,7 +118,7 @@ build_py310_image_aarch64:
   - NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
   - nox -s "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS"
   variables:
-    CRAY_CUDA_MPS: 1
+    CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 20
     PYENV_VERSION: $PYVERSION
@@ -150,9 +150,9 @@ build_py310_image_aarch64:
     - SUBPACKAGE: [storage]
       VARIANT: ['cuda12', 'cpu']
   variables:
+    # TODO: Fix issue with compile parallelism that causes tests to hang
+    GT4PY_BUILD_JOBS: 2
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
-    # Another problem, observed in test stage, is that gpu tests hang in combination with CUDA MPS,
-    # when high test parallelism is used.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
 
 # test_py311_x86_64:
