@@ -115,7 +115,11 @@ def test_serial_map_promotion_only_promote():
     "use_symbolic_range",
     [False, True],
 )
-def test_serial_map_promotion_promote_and_merge(use_symbolic_range):
+@pytest.mark.parametrize(
+    "single_use_data",
+    [{"tmp"}, {}],
+)
+def test_serial_map_promotion_promote_and_merge(use_symbolic_range, single_use_data):
     sdfg, state, map_entry_1d, map_entry_2d = _make_serial_map_promotion_sdfg(use_symbolic_range)
 
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
@@ -132,22 +136,32 @@ def test_serial_map_promotion_promote_and_merge(use_symbolic_range):
         gtx_transformations.SerialMapPromoter(
             promote_everything=True,
             fuse_after_promotion=True,
-            single_use_data={sdfg: {"tmp"}},
+            single_use_data={sdfg: single_use_data},
         ),
         validate=True,
         validate_all=True,
     )
 
-    assert count == 1
     mes = util.count_nodes(sdfg, dace_nodes.MapEntry, True)
 
-    assert len(mes) == 1
-    me = mes[0]
+    if use_symbolic_range and len(single_use_data) == 0:
+        # The range of the second map is purely symbolic, therefore it is unknown
+        # whether the range is empty or not at compile time. Besides, the temporary
+        # produced by the first map (1d) is not single-use data, thus it is needed
+        # in another state of the SDFG. Since the temporary is needed in another
+        # location and we are not sure that the extended range will be not-empty,
+        # map promotion should not be applied.
+        assert count == 0
+        assert len(mes) == 2
+    else:
+        assert count == 1
+        assert len(mes) == 1
+        me = mes[0]
 
-    assert len(me.map.params) == 2
-    assert me.map.params == original_2d_params
-    assert len(me.map.range) == 2
-    assert me.map.range == original_2d_range
+        assert len(me.map.params) == 2
+        assert me.map.params == original_2d_params
+        assert len(me.map.range) == 2
+        assert me.map.range == original_2d_range
 
 
 @pytest.mark.parametrize(
