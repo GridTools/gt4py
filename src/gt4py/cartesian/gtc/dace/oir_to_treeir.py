@@ -333,7 +333,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         return (
             f"{dcir.Axis.I.iteration_symbol()}{i_shift}, "
             f"{dcir.Axis.J.iteration_symbol()}{j_shift}, "
-            f"{dcir.Axis.K.iteration_symbol()} + {self.visit(node.k, **kwargs)}"
+            f"{dcir.Axis.K.iteration_symbol()} + {self.visit(node.k, ctx=ctx, **kwargs)}"
         )
 
     def visit_ScalarAccess(self, node: oir.ScalarAccess, **_kwargs: Any) -> str:
