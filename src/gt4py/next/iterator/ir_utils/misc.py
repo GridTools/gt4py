@@ -8,7 +8,7 @@
 
 import dataclasses
 from collections import ChainMap
-from typing import Callable, Sequence, TypeVar
+from typing import Callable, Iterable, TypeVar
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
@@ -221,7 +221,7 @@ def extract_projector(
 SymOrStr = TypeVar("SymOrStr", itir.Sym, str)
 
 
-def unique_symbol(sym: SymOrStr, reserved_names: Sequence[str]) -> SymOrStr:
+def unique_symbol(sym: SymOrStr, reserved_names: Iterable[str]) -> SymOrStr:
     """
     Give a symbol and a list of reserved names return a unique symbol with similar or equal name.
     """

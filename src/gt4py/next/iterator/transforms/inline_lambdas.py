@@ -64,20 +64,20 @@ def inline_lambda(  # see todo above
     if node.fun.params and not any(eligible_params):
         return node
 
-    refs = set().union(
+    refs: set[str] = set().union(
         *(
             arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
             for arg, eligible in zip(node.args, eligible_params)
             if eligible
         )
     )
-    syms = node.fun.expr.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
+    syms: set[str] = node.fun.expr.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
     clashes = refs & syms
     expr = node.fun.expr
     if clashes:
         # TODO(tehrengruber): find a better way of generating new symbols in `name_map` that don't collide with each other. E.g. this must still work:
         # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: ERA001 [commented-out-code]
-        name_map: dict[ir.SymRef, str] = {}
+        name_map: dict[str, str] = {}
 
         for sym in clashes:
             name_map[sym] = ir_misc.unique_symbol(sym, refs | syms | {*name_map.values()})
