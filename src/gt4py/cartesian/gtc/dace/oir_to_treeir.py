@@ -283,6 +283,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                 lifetime=dtypes.AllocationLifetime.Persistent,
                 debuginfo=get_dace_debuginfo(field),
             )
+            dimensions[field.name] = field.dimensions
 
         tree = tir.TreeRoot(
             name=node.name,
