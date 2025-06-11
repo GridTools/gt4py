@@ -492,7 +492,7 @@ class CollapseTuple(
                 if cpm.is_let(arg):
                     rename_map: dict[str, str] = {}
                     for sym, val in zip(arg.fun.params, arg.args):
-                        unique_sym = _unique_symbol([s.id for s in outer_vars.keys()], sym)
+                        unique_sym = ir_misc.unique_symbol(sym, [s.id for s in outer_vars.keys()])
                         if sym != unique_sym:
                             rename_map[sym.id] = unique_sym.id
 

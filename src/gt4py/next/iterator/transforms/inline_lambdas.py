@@ -11,6 +11,7 @@ from typing import Optional
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import misc as ir_misc
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
@@ -78,13 +79,8 @@ def inline_lambda(  # see todo above
         # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: ERA001 [commented-out-code]
         name_map: dict[ir.SymRef, str] = {}
 
-        def new_name(name):
-            while name in refs or name in syms or name in name_map.values():
-                name += "_"
-            return name
-
         for sym in clashes:
-            name_map[sym] = new_name(sym)
+            name_map[sym] = ir_misc.unique_symbol(sym, refs | syms | {*name_map.values()})
 
         expr = RenameSymbols().visit(expr, name_map=name_map)
 
