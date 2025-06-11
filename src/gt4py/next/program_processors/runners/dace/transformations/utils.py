@@ -598,14 +598,17 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
         # End recursion if we found some successor edges or we have reached the top.
         if len(curr_out_edges) > 0 or graph.parent_graph is state.sdfg:
             return curr_out_edges
+        elif isinstance(graph.parent_graph, dace.sdfg.state.ConditionalBlock):
+            # For conditional we go two levels up, because there is nothing
+            #  interesting inside it.
+            return _impl(graph.parent_graph, graph.parent_graph.parent_graph)
         else:
             # We have not found any successor edges, so we go one level up.
             #  This time we look for the enclosing graph.
-            # TODO(phimuell): Should loops be handled special?
-            if isinstance(graph.parent_graph, dace.sdfg.state.ConditionalBlock):
-                return _impl(graph.parent_graph, graph.parent_graph.parent_graph)
-            else:
-                return _impl(graph, graph.parent_graph)
+            # NOTE: We do not handle the `LoopRegion` specially, as the successor
+            #   state could either be the one following the region or the first
+            #   state of the loop body.
+            return _impl(graph, graph.parent_graph)
 
     # Expand the successors such that it contains only `SDFGState`s.
     # TODO(phimuell): Only use the starting block instead of all.
