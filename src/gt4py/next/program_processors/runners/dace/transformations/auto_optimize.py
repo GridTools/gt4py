@@ -290,6 +290,7 @@ def _gt_auto_process_top_level_maps(
                 promote_horizontal=True,
                 promote_local=False,
                 promotion_callback=_check_if_horizontal_map_promotion_is_appropriate,
+                single_use_data=single_use_data,
             ),
             validate=validate,
             validate_all=validate_all,
