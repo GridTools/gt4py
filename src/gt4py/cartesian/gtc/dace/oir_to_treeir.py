@@ -235,24 +235,15 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         self.visit(node.sections, ctx=ctx, loop_order=node.loop_order)
 
-    def visit_Decl(self, node: oir.Decl):
-        raise RuntimeError("visit_Decl should not be called")
-
-    def visit_FieldDecl(self, node: oir.FieldDecl):
-        raise RuntimeError("visit_FieldDecl should not be called")
-
-    def visit_LocalScalar(self, node: oir.LocalScalar):
-        raise RuntimeError("visit_LocalScalar should not be called")
-
     def visit_Stencil(self, node: oir.Stencil) -> tir.TreeRoot:
-        # question
-        # define domain as a symbol here and then pass it down to
-        # TreeRoot -> stree's symbols
-
         # setup the descriptor repository
         containers: dict[str, data.Data] = {}
         dimensions: dict[str, tuple[bool, bool, bool]] = {}
         symbols: tir.SymbolDict = {}
+        shift: dict[str, tuple[int, int]] = {}
+
+        # this is ij blocks = horizontal execution
+        field_extents, block_extents = oir_utils.compute_extents(node)
 
         for param in node.params:
             if isinstance(param, oir.ScalarDecl):
@@ -263,9 +254,11 @@ class OIRToTreeIR(eve.NodeVisitor):
                 continue
 
             if isinstance(param, oir.FieldDecl):
+                extent = field_extents[param.name]
+                shift[param.name] = (-extent[0][0], -extent[1][0])
                 containers[param.name] = data.Array(
                     data_type_to_dace_typeclass(param.dtype),  # dtype
-                    get_dace_shape(param, symbols),  # shape
+                    get_dace_shape(param, extent, symbols),  # shape
                     strides=get_dace_strides(param, symbols),
                     debuginfo=get_dace_debuginfo(param),
                 )
@@ -275,9 +268,11 @@ class OIRToTreeIR(eve.NodeVisitor):
             raise ValueError(f"Unexpected parameter type {type(param)}.")
 
         for field in node.declarations:
+            extent = field_extents[field.name]
+            shift[field.name] = (-extent[0][0], -extent[1][0])
             containers[field.name] = data.Array(
                 data_type_to_dace_typeclass(field.dtype),  # dtype
-                get_dace_shape(field, symbols),  # shape
+                get_dace_shape(field, extent, symbols),  # shape
                 strides=get_dace_strides(field, symbols),
                 transient=True,
                 lifetime=dtypes.AllocationLifetime.Persistent,
@@ -289,16 +284,17 @@ class OIRToTreeIR(eve.NodeVisitor):
             name=node.name,
             containers=containers,
             dimensions=dimensions,
+            shift=shift,
             symbols=symbols,
             children=[],
             parent=None,
         )
 
-        # this is ij blocks = horizontal execution
-        field_extents, block_extents = oir_utils.compute_extents(node)
-
         ctx = Context(
-            root=tree, current_scope=tree, field_extents=field_extents, block_extents=block_extents
+            root=tree,
+            current_scope=tree,
+            field_extents=field_extents,
+            block_extents=block_extents,
         )
 
         self.visit(node.vertical_loops, ctx=ctx)
@@ -315,19 +311,28 @@ class OIRToTreeIR(eve.NodeVisitor):
     def visit_CartesianOffset(
         self, node: common.CartesianOffset, field: oir.FieldAccess, ctx: Context, **_kwargs: Any
     ) -> str:
+        shift = ctx.root.shift[field.name]
         indices: list[str] = []
 
         offset_dict = node.to_dict()
         for index, axis in enumerate(dcir.Axis.dims_3d()):
-            if index < len(ctx.root.containers[field.name].shape):
-                indices.append(f"{axis.iteration_symbol()} + {offset_dict[axis.lower()]}")
+            if ctx.root.dimensions[field.name][index]:
+                shift_str = f" + {shift[index]}" if index < 2 and shift[index] != 0 else ""
+                indices.append(
+                    f"{axis.iteration_symbol()}{shift_str} + {offset_dict[axis.lower()]}"
+                )
 
         return ", ".join(indices)
 
-    def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs: Any) -> str:
+    def visit_VariableKOffset(
+        self, node: oir.VariableKOffset, field: oir.FieldAccess, ctx: Context, **kwargs: Any
+    ) -> str:
+        shift = ctx.root.shift[field.name]
+        i_shift = f" + {shift[0]}" if shift[0] != 0 else ""
+        j_shift = f" + {shift[1]}" if shift[1] != 0 else ""
         return (
-            f"{dcir.Axis.I.iteration_symbol()}, "
-            f"{dcir.Axis.J.iteration_symbol()}, "
+            f"{dcir.Axis.I.iteration_symbol()}{i_shift}, "
+            f"{dcir.Axis.J.iteration_symbol()}{j_shift}, "
             f"{dcir.Axis.K.iteration_symbol()} + {self.visit(node.k, **kwargs)}"
         )
 
@@ -379,13 +384,39 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return f"({if_code} if {condition} else {else_code})"
 
+    # visitor that should _not_ be called
 
-def get_dace_shape(field: oir.FieldDecl, symbols: tir.SymbolDict) -> list:
+    def visit_Decl(self, node: oir.Decl):
+        raise RuntimeError("visit_Decl should not be called")
+
+    def visit_FieldDecl(self, node: oir.FieldDecl):
+        raise RuntimeError("visit_FieldDecl should not be called")
+
+    def visit_LocalScalar(self, node: oir.LocalScalar):
+        raise RuntimeError("visit_LocalScalar should not be called")
+
+
+def get_dace_shape(
+    field: oir.FieldDecl, extent: definitions.Extent, symbols: tir.SymbolDict
+) -> list:
     shape = []
-    for axis in dcir.Axis.dims_3d():
-        if field.dimensions[axis.to_idx()]:
+    for index, axis in enumerate(dcir.Axis.dims_3d()):
+        if field.dimensions[index]:
             symbol = axis.domain_dace_symbol()
             symbols[axis.domain_symbol()] = dtypes.int32
+
+            if axis == dcir.Axis.I:
+                i_padding = extent[0][1] - extent[0][0]
+                if i_padding != 0:
+                    shape.append(symbol + i_padding)
+                    continue
+
+            if axis == dcir.Axis.J:
+                j_padding = extent[1][1] - extent[1][0]
+                if j_padding != 0:
+                    shape.append(symbol + j_padding)
+                    continue
+
             shape.append(symbol)
 
     shape.extend([d for d in field.data_dims])

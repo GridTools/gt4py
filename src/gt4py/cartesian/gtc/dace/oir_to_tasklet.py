@@ -45,24 +45,34 @@ class Context:
 class OIRToTasklet(eve.NodeVisitor):
     def _memlet_subset(self, node: oir.FieldAccess, ctx: Context) -> subsets.Subset:
         if isinstance(node.offset, common.CartesianOffset):
-            offset_dict = node.offset.to_dict()
             # TODO
             # This has to be reworked with support for data dimensions
-            return subsets.Indices(
-                [
-                    f"{axis.iteration_dace_symbol()} + {offset_dict[axis.lower()]}"
-                    for i, axis in enumerate(dcir.Axis.dims_3d())
-                    if ctx.tree.dimensions[node.name][i]
-                ]
-            )
+
+            offset_dict = node.offset.to_dict()
+            dimensions = ctx.tree.dimensions[node.name]
+            shift = ctx.tree.shift[node.name]
+
+            indices = []
+            for index, axis in enumerate(dcir.Axis.dims_3d()):
+                if dimensions[index]:
+                    shift_str = f" + {shift[index]}" if index < 2 else ""
+                    indices.append(
+                        f"{axis.iteration_dace_symbol()}{shift_str} + {offset_dict[axis.lower()]}"
+                    )
+
+            retval = subsets.Indices(indices)
+            return retval
 
         if isinstance(node.offset, oir.VariableKOffset):
             # TODO
             # This has to be reworked with support for data dimensions
-            i = dcir.Axis.I.iteration_symbol()
-            j = dcir.Axis.J.iteration_symbol()
+
+            shift = ctx.tree.shift[node.name]
+            i = f"{dcir.Axis.I.iteration_symbol()} + {shift[0]}"
+            j = f"{dcir.Axis.J.iteration_symbol()} + {shift[1]}"
             K = dcir.Axis.K.domain_symbol()
-            return subsets.Range([(i, i, 1), (j, j, 1), (0, K, 1)])
+            retval = subsets.Range([(i, i, 1), (j, j, 1), (0, K, 1)])
+            return retval
 
         raise NotImplementedError(f"_memlet_subset(): unknown offset type {type(node.offset)}")
 

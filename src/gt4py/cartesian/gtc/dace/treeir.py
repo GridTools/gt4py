@@ -75,10 +75,14 @@ class VerticalLoop(TreeScope):
 class TreeRoot(TreeScope):
     name: str
 
-    # Descriptor repository
     containers: dict[str, data.Data]
     """Mapping field/scalar names to data descriptors."""
+
     dimensions: dict[str, tuple[bool, bool, bool]]
     """Mapping field names to shape-axis."""
+
+    shift: dict[str, tuple[int, int]]
+    """Mapping field names to i/j shifts."""
+
     symbols: SymbolDict
     """Mapping between type and symbol name."""
