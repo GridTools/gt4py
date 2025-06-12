@@ -254,7 +254,8 @@ def _map_args_to_symbols_on_nested_sdfg(
         return {}
     warnings.warn(
         "SDFG WITH POSSIBLE PERFORMANCE DEGRADATION: Mapping a scalar data descriptor "
-        + "to a symbol on a nested SDFG by means of an InterState edge assignment.",
+        + "to a symbol on a nested SDFG by means of an InterState edge assignment. "
+        + f"Problematic symbols: {nested_sdfg_symbols}",
         stacklevel=2,
     )
 
