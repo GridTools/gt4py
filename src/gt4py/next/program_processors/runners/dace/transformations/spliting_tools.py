@@ -132,7 +132,6 @@ def describe_incoming_edges(
 def describe_outgoing_edges(
     state: dace.SDFGState,
     node: dace_nodes.Node,
-    state: Optional[dace.SDFGState] = None,
 ) -> list[EdgeConnectionSpec]:
     """Describes the out going edges of `node`."""
     return describe_edges(state, node, False)
@@ -141,7 +140,6 @@ def describe_outgoing_edges(
 def describe_all_edges(
     state: dace.SDFGState,
     node: dace_nodes.Node,
-    state: Optional[dace.SDFGState] = None,
 ) -> list[EdgeConnectionSpec]:
     """Describes the all edges of `node`."""
     return describe_edges(state, node, False) + describe_edges(state, node, True)
