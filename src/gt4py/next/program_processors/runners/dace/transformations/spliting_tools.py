@@ -81,10 +81,11 @@ def describe_edge(
 
     Args:
         edge: The edge to describe.
-        incoming_edge: Describe whether it is an incoming (`True`) or outgoing (`False`) edge.
-        state: The state in which `edge` is located, when the state is valid.
-            Set to `None` when the state is invalid, which can happen in the middle
-            of an SDFG transformation.
+        incoming_edge: Describe whether it is an incoming (`True`) or outgoing (`False`)
+            edge, used to select the destination or source subset.
+        state: If it is passed, the memlet subset will be extracted using `get_{src, dst}_subset()`.
+            If `None`, the default, the `{src, dst}_subset` property will be used.
+            Only pass `state` if the state is not inconsistent.
     """
     get_sbs = lambda e: e.data.dst_subset if incoming_edge else e.data.src_subset  # noqa: E731 [lambda-assignment]
     get_node = lambda e: e.dst if incoming_edge else e.src  # noqa: E731 [lambda-assignment]
@@ -131,6 +132,7 @@ def describe_incoming_edges(
 def describe_outgoing_edges(
     state: dace.SDFGState,
     node: dace_nodes.Node,
+    state: Optional[dace.SDFGState] = None,
 ) -> list[EdgeConnectionSpec]:
     """Describes the out going edges of `node`."""
     return describe_edges(state, node, False)
@@ -139,6 +141,7 @@ def describe_outgoing_edges(
 def describe_all_edges(
     state: dace.SDFGState,
     node: dace_nodes.Node,
+    state: Optional[dace.SDFGState] = None,
 ) -> list[EdgeConnectionSpec]:
     """Describes the all edges of `node`."""
     return describe_edges(state, node, False) + describe_edges(state, node, True)
