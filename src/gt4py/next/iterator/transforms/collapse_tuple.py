@@ -24,8 +24,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_misc,
 )
-from gt4py.next.iterator.transforms import fixed_point_transformation, inline_lifts
-from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
+from gt4py.next.iterator.transforms import fixed_point_transformation, inline_lambdas, inline_lifts
 from gt4py.next.iterator.type_system import (
     inference as itir_type_inference,
     type_specifications as it_ts,
@@ -237,7 +236,7 @@ class CollapseTuple(
         # TODO(tehrengruber): test case for `scan(lambda carry: {1, 2})`
         #  (see solve_nonhydro_stencil_52_like_z_q_tup)
         if remove_letified_make_tuple_elements:
-            new_node = InlineLambdas.apply(
+            new_node = inline_lambdas.InlineLambdas.apply(
                 new_node, opcount_preserving=True, force_inline_lambda_args=False
             )
 
@@ -347,7 +346,9 @@ class CollapseTuple(
             #  -> `foo(make_tuple(trivial_expr1, trivial_expr2))`
             eligible_params = [_is_trivial_make_tuple_call(arg) for arg in node.args]
             if any(eligible_params):
-                return self.visit(inline_lambda(node, eligible_params=eligible_params), **kwargs)
+                return self.visit(
+                    inline_lambdas.inline_lambda(node, eligible_params=eligible_params), **kwargs
+                )
         return None
 
     def transform_propagate_to_if_on_tuples(
@@ -466,7 +467,7 @@ class CollapseTuple(
 
                 # assemble everything together
                 new_node = im.let(f_var, f)(im.if_(cond, *new_branches))
-                new_node = inline_lambda(new_node, eligible_params=[True])
+                new_node = inline_lambdas.inline_lambda(new_node, eligible_params=[True])
                 assert cpm.is_call_to(new_node, "if_")
                 new_node = im.if_(
                     cond, *(self.fp_transform(branch, **kwargs) for branch in new_node.args[1:])
@@ -478,16 +479,27 @@ class CollapseTuple(
     def transform_propagate_nested_let(self, node: itir.FunCall, **kwargs) -> Optional[itir.Node]:
         if cpm.is_let(node):
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
-            outer_vars = {}
-            inner_vars = {}
+            outer_vars: dict[itir.Sym, itir.Expr] = {}
+            inner_vars: dict[itir.Sym, itir.Expr] = {}
             original_inner_expr = node.fun.expr
             for arg_sym, arg in zip(node.fun.params, node.args):
-                assert arg_sym not in inner_vars  # TODO(tehrengruber): fix collisions
+                assert arg_sym not in inner_vars
                 if cpm.is_let(arg):
+                    rename_map: dict[
+                        str, ir.SymRef
+                    ] = {}  # mapping from symbol with a collision to its new (unique) name
                     for sym, val in zip(arg.fun.params, arg.args):
-                        assert sym not in outer_vars  # TODO(tehrengruber): fix collisions
-                        outer_vars[sym] = val
-                    inner_vars[arg_sym] = arg.fun.expr
+                        unique_sym = ir_misc.unique_symbol(sym, [s.id for s in outer_vars.keys()])
+                        if sym != unique_sym:  # name collision, rename symbol to unique_sym later
+                            rename_map[sym.id] = im.ref(unique_sym.id, sym.type)
+
+                        outer_vars[unique_sym] = val
+
+                    new_expr = arg.fun.expr
+                    if rename_map:
+                        new_expr = inline_lambdas.rename_symbols(new_expr, rename_map)
+
+                    inner_vars[arg_sym] = new_expr
                 else:
                     inner_vars[arg_sym] = arg
             if outer_vars:
@@ -511,14 +523,14 @@ class CollapseTuple(
             if any(
                 trivial_args := [isinstance(arg, (itir.SymRef, itir.Literal)) for arg in node.args]
             ):
-                return inline_lambda(node, eligible_params=trivial_args)
+                return inline_lambdas.inline_lambda(node, eligible_params=trivial_args)
 
         return None
 
     def transform_inline_trivial_tuple_let_var(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
         if cpm.is_let(node):
             if any(trivial_args := [_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args]):
-                return inline_lambda(node, eligible_params=trivial_args)
+                return inline_lambdas.inline_lambda(node, eligible_params=trivial_args)
         return None
 
     # TODO(tehrengruber): This is a transformation that should be executed before visiting the children. Then
@@ -584,7 +596,7 @@ class CollapseTuple(
 
                 new_body = im.let(param.id, param_substitute)(new_body)
                 # note: the lift is trivial so inlining it is not an issue with respect to tree size
-                new_body = inline_lambda(new_body, force_inline_lift_args=True)
+                new_body = inline_lambdas.inline_lambda(new_body, force_inline_lift_args=True)
 
                 new_params.extend(new_params_inner)
             else:
