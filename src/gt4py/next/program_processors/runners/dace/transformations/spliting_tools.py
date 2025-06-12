@@ -75,10 +75,24 @@ class EdgeConnectionSpec:
 def describe_edge(
     edge: dace_graph.MultiConnectorEdge,
     incoming_edge: bool,
+    state: Optional[dace.SDFGState] = None,
 ) -> EdgeConnectionSpec:
-    """Create a description for a single edge."""
+    """Create a description for a single edge.
+
+    Args:
+        edge: The edge to describe.
+        incoming_edge: Describe whether it is an incoming (`True`) or outgoing (`False`)
+            edge, used to select the destination or source subset.
+        state: If it is passed, the memlet subset will be extracted using `get_{src, dst}_subset()`.
+            If `None`, the default, the `{src, dst}_subset` property will be used.
+            Only pass `state` if the state is not inconsistent.
+    """
     get_sbs = lambda e: e.data.dst_subset if incoming_edge else e.data.src_subset  # noqa: E731 [lambda-assignment]
     get_node = lambda e: e.dst if incoming_edge else e.src  # noqa: E731 [lambda-assignment]
+    if state is not None:
+        # To ensures that the `{src,dst}_subset` are properly set, run initialization.
+        #  See [issue 1708](https://github.com/spcl/dace/issues/1703)
+        edge.data.try_initialize(state.sdfg, state, edge)
     return EdgeConnectionSpec(
         node=get_node(edge),
         subset=get_sbs(edge),
@@ -87,7 +101,7 @@ def describe_edge(
 
 
 def describe_edges(
-    state: dace.SDFG,
+    state: dace.SDFGState,
     node: dace_nodes.Node,
     incoming_edges: bool,
 ) -> list[EdgeConnectionSpec]:
@@ -104,11 +118,11 @@ def describe_edges(
             of `node`.
     """
     edges = state.in_edges(node) if incoming_edges else state.out_edges(node)
-    return [describe_edge(e, incoming_edges) for e in edges]
+    return [describe_edge(e, incoming_edges, state) for e in edges]
 
 
 def describe_incoming_edges(
-    state: dace.SDFG,
+    state: dace.SDFGState,
     node: dace_nodes.Node,
 ) -> list[EdgeConnectionSpec]:
     """Describes the incoming edges of `node`."""
@@ -116,7 +130,7 @@ def describe_incoming_edges(
 
 
 def describe_outgoing_edges(
-    state: dace.SDFG,
+    state: dace.SDFGState,
     node: dace_nodes.Node,
 ) -> list[EdgeConnectionSpec]:
     """Describes the out going edges of `node`."""
@@ -124,7 +138,7 @@ def describe_outgoing_edges(
 
 
 def describe_all_edges(
-    state: dace.SDFG,
+    state: dace.SDFGState,
     node: dace_nodes.Node,
 ) -> list[EdgeConnectionSpec]:
     """Describes the all edges of `node`."""
