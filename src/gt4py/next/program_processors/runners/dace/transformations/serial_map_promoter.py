@@ -137,6 +137,11 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
 
     _promotion_callback: Optional[MapPromotionCallBack]
 
+    # Name of all data that is used at only one place. Is computed by the
+    #  `FindSingleUseData` pass and be passed at construction time. Needed until
+    #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
+    _single_use_data: dict[dace.SDFG, set[str]]
+
     # Pattern Matching
     exit_first_map = dace_transformation.PatternNode(dace_nodes.MapExit)
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
@@ -161,6 +166,7 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
         fuse_after_promotion: Optional[bool] = None,
         promotion_callback: Optional[MapPromotionCallBack] = None,
         *args: Any,
+        single_use_data: dict[dace.SDFG, set[str]],
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -197,9 +203,22 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
         if promotion_callback is not None:
             self._promotion_callback = promotion_callback
 
+        self._single_use_data = single_use_data
+
         # This flag is only for testing. It allows to bypass the check if the
         #  Maps can be fused after promotion.
         self._bypass_fusion_test = False
+
+    def is_single_use_data(
+        self,
+        sdfg: dace.SDFG,
+        data: str | dace_nodes.AccessNode,
+    ) -> bool:
+        """Checks if `data` is used in a single location."""
+        assert sdfg in self._single_use_data
+        if isinstance(data, dace_nodes.AccessNode):
+            data = data.data
+        return data in self._single_use_data[sdfg]
 
     def can_be_applied(
         self,
@@ -249,12 +268,27 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
                 ):
                     return False
 
+        # We need to know - at compile time - whether the range of the second map
+        # is not empty. Without this certainty (that is when the map range is purely
+        # symbolic), we cannot promote the first map, because it could potentially
+        # get an empty range from the second map. With an empty range, the temporary
+        # data would never be produced, and any other consumer - either in current
+        # state or in a different state - would get uninitialized data.
+        is_second_map_range_unknown = (second_map_entry.map.range.num_elements() > 0) != True  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
+
         # Technically the promotion creates an invalid SDFG, going back to the example
         #  in the doc string, after the promotion, but before the fusion, `a[i]` is
         #  written `M` times. This is not an issue per see, since each time the same
         #  value is written and if we fuse the write to `a` disappears, if `a` is
         #  a single use transient. Thus we have to make sure that we do not write
         #  into global memory.
+        # We also check if any node other than the second map is consuming the data
+        #  produced by the first map. We consider both the consumers directly connected
+        #  to the temporary node in current state and the nodes consuming this data
+        #  in a different state. If so, and the range of the second map is unknown
+        #  at compile time - because purely symbolic - we cannot promote the first
+        #  map, because it could happen that the range of the map is empty and the
+        #  data - actually needed by other SDFG nodes - is never produced.
         # NOTE: We could accept the fact that we write into global memory multiple
         #   times the same value, but we will not do it. Furthermore, we ignore the
         #   case where `t` can not be removed.
@@ -263,7 +297,16 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
                 return False
             if not oedge.dst.desc(sdfg).transient:
                 return False
-
+            if is_second_map_range_unknown:
+                # Here we check whether the data is used within the state
+                if any(
+                    oedge_next.dst is not second_map_entry
+                    for oedge_next in graph.out_edges(oedge.dst)
+                ):
+                    return False
+                # Here we check whether the data is used in other states.
+                if not self.is_single_use_data(sdfg, oedge.dst):
+                    return False
         # Test if after the promotion the maps could be fused.
         if self._bypass_fusion_test:
             pass
