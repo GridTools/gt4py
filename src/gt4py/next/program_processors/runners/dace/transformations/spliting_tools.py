@@ -74,10 +74,15 @@ class EdgeConnectionSpec:
 
 def describe_edge(
     edge: dace_graph.MultiConnectorEdge,
+    state: dace.SDFGState,
     incoming_edge: bool,
 ) -> EdgeConnectionSpec:
     """Create a description for a single edge."""
-    get_sbs = lambda e: e.data.dst_subset if incoming_edge else e.data.src_subset  # noqa: E731 [lambda-assignment]
+    get_sbs = (
+        lambda e: e.data.get_dst_subset(e, state)
+        if incoming_edge
+        else e.data.get_src_subset(e, state)
+    )  # noqa: E731 [lambda-assignment]
     get_node = lambda e: e.dst if incoming_edge else e.src  # noqa: E731 [lambda-assignment]
     return EdgeConnectionSpec(
         node=get_node(edge),
@@ -104,7 +109,7 @@ def describe_edges(
             of `node`.
     """
     edges = state.in_edges(node) if incoming_edges else state.out_edges(node)
-    return [describe_edge(e, incoming_edges) for e in edges]
+    return [describe_edge(e, state, incoming_edges) for e in edges]
 
 
 def describe_incoming_edges(
