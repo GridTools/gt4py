@@ -381,6 +381,33 @@ class SDFGManager:
         SDFGManager._strip_history(sdfg)
         sdfg.save(path)
 
+    def sdfg_via_schedule_tree(self) -> dace.SDFG:
+        """Lower OIR into an SDFG via Schedule Tree transpile first.
+
+        Cache the SDFG inot the manager for re-use.
+        """
+        filename = f"{self.builder.module_name}.sdfg"
+        path = (
+            pathlib.Path(os.path.relpath(self.builder.module_path.parent, pathlib.Path.cwd()))
+            / filename
+        )
+        if path not in SDFGManager._loaded_sdfgs:
+            try:
+                sdfg = dace.SDFG.from_file(path)
+            except FileNotFoundError:
+                # Create SDFG
+                stree = self.schedule_tree()
+                sdfg = stree.as_sdfg(validate=True, simplify=True)
+                # Swap residency to device
+                _to_device(sdfg, self.builder.backend.storage_info["device"])
+                # Cache SDFG
+                self._save_sdfg(sdfg, path)
+            SDFGManager._loaded_sdfgs[path] = sdfg
+
+        return SDFGManager._loaded_sdfgs[path]
+
+    # TODO: OLD CODE - TORCH WHEN STREE -> SDFG PIPELINE GETS THE OK. APPLY CARE BEFORE AND DURING TORCHING
+
     def _unexpanded_sdfg(self):
         filename = self.builder.module_name + ".sdfg"
         path = (
@@ -459,8 +486,7 @@ class DaCeExtGenerator(BackendCodegen):
     def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
         manager = SDFGManager(self.backend.builder)
 
-        stree = manager.schedule_tree()
-        sdfg = stree.as_sdfg(validate=True, simplify=True)
+        sdfg = manager.sdfg_via_schedule_tree()
         _specialize_transient_strides(
             sdfg,
             layout_map=self.backend.storage_info["layout_map"],
