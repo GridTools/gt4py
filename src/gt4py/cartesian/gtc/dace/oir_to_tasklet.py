@@ -6,7 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import operator
 from dataclasses import dataclass
+from functools import reduce
 from typing import Any
 
 from dace import Memlet, subsets
@@ -45,32 +47,46 @@ class Context:
 class OIRToTasklet(eve.NodeVisitor):
     def _memlet_subset(self, node: oir.FieldAccess, ctx: Context) -> subsets.Subset:
         if isinstance(node.offset, common.CartesianOffset):
-            # TODO
-            # This has to be reworked with support for data dimensions
-
             offset_dict = node.offset.to_dict()
             dimensions = ctx.tree.dimensions[node.name]
             shift = ctx.tree.shift[node.name]
 
-            indices = []
+            ranges: list[tuple[str, str, int]] = []
+            # handle cartesian indices
             for index, axis in enumerate(dcir.Axis.dims_3d()):
                 if dimensions[index]:
-                    indices.append(
-                        f"{axis.iteration_dace_symbol()} + {shift[axis]} + {offset_dict[axis.lower()]}"
-                    )
+                    i = f"{axis.iteration_dace_symbol()} + {shift[axis]} + {offset_dict[axis.lower()]}"
+                    ranges.append((i, i, 1))
 
-            return subsets.Indices(indices)
+            # handle data dimensions
+            data_domains = (
+                ctx.tree.containers[node.name].shape[-len(node.data_index) :]
+                if node.data_index
+                else ()
+            )
+            for domain_size in data_domains:
+                ranges.append(("0", f"{domain_size}-1", 1))  # ranges are inclusive
+
+            return subsets.Range(ranges)
 
         if isinstance(node.offset, oir.VariableKOffset):
-            # TODO
-            # This has to be reworked with support for data dimensions
-
+            # handle cartesian indices
             shift = ctx.tree.shift[node.name]
             i = f"{dcir.Axis.I.iteration_symbol()} + {shift[dcir.Axis.I]}"
             j = f"{dcir.Axis.J.iteration_symbol()} + {shift[dcir.Axis.J]}"
-            K = f"{dcir.Axis.K.domain_symbol()} + {shift[dcir.Axis.K]} - 1"  # because ranges are inclusive
+            K = f"{dcir.Axis.K.domain_symbol()} + {shift[dcir.Axis.K]} - 1"  # ranges are inclusive
+            ranges = [(i, i, 1), (j, j, 1), ("0", K, 1)]
 
-            return subsets.Range([(i, i, 1), (j, j, 1), (0, K, 1)])
+            # handle data dimensions
+            data_domains = (
+                ctx.tree.containers[node.name].shape[-len(node.data_index) :]
+                if node.data_index
+                else ()
+            )
+            for domain_size in data_domains:
+                ranges.append(("0", f"{domain_size}-1", 1))  # ranges are inclusive
+
+            return subsets.Range(ranges)
 
         raise NotImplementedError(f"_memlet_subset(): unknown offset type {type(node.offset)}")
 
@@ -115,32 +131,43 @@ class OIRToTasklet(eve.NodeVisitor):
         # 4. return f"{tasklet_name}{offset_string}" (where offset_string is optional)
         if not isinstance(node.offset, (common.CartesianOffset, oir.VariableKOffset)):
             raise NotImplementedError(f"Unexpected offsets offset type: {type(node.offset)}.")
-        if node.data_index:
-            raise NotImplementedError("Data dimensions aren't supported yet.")
 
         postfix = _field_offset_postfix(node)
         key = f"{node.name}_{postfix}"
         target = is_target or key in ctx.targets
         tasklet_name = _tasklet_name(node, target, postfix)
-        # recurse down
-        var_k = (
-            self.visit(node.offset.k, ctx=ctx, is_target=False)
-            if isinstance(node.offset, oir.VariableKOffset)
-            else None
-        )
-        if var_k is not None:
-            var_k = f"{dcir.Axis.K.iteration_dace_symbol()} + {ctx.tree.shift[node.name][dcir.Axis.K]} + {var_k}"
+
+        # gather all parts of the variable name in this list
+        name_parts = [tasklet_name]
+
+        # Variable K offset
+        if isinstance(node.offset, oir.VariableKOffset):
+            symbol = dcir.Axis.K.iteration_dace_symbol()
+            shift = ctx.tree.shift[node.name][dcir.Axis.K]
+            offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
+            name_parts.append(f"[{symbol} + {shift} + {offset}]")
+
+        # Data dimensions
+        data_indices: list[str] = []
+        for index in node.data_index:
+            data_indices.append(self.visit(index, ctx=ctx, is_target=False))
+
+        if data_indices:
+            name_parts.append(f"[{', '.join(data_indices)}]")
 
         if (
             key in ctx.targets  # (read or write) after write
             or tasklet_name in ctx.inputs  # read after read
         ):
-            return tasklet_name if var_k is None else f"{tasklet_name}[{var_k}]"
+            return "".join(filter(None, name_parts))
 
+        data_domains = (
+            ctx.tree.containers[node.name].shape[-len(node.data_index) :] if node.data_index else []
+        )
         memlet = Memlet(
             data=node.name,
             subset=self._memlet_subset(node, ctx=ctx),
-            volume=1,
+            volume=reduce(operator.mul, data_domains, 1),
         )
         if is_target:
             # note: it doesn't matter if we use is_target or target here because if they
@@ -151,7 +178,7 @@ class OIRToTasklet(eve.NodeVisitor):
         else:
             ctx.inputs[tasklet_name] = memlet
 
-        return tasklet_name if var_k is None else f"{tasklet_name}[{var_k}]"
+        return "".join(filter(None, name_parts))
 
     def visit_AssignStmt(self, node: oir.AssignStmt, ctx: Context) -> None:
         # order matters: evaluate right side of the assignment first
@@ -323,9 +350,6 @@ def _tasklet_name(
 
 
 def _field_offset_postfix(node: oir.FieldAccess) -> str:
-    if node.data_index:
-        raise NotImplementedError("Data dimensions aren't supported yet.")
-
     if isinstance(node.offset, oir.VariableKOffset):
         return "var_k"
 
