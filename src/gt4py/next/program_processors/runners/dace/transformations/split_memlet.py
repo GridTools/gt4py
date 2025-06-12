@@ -166,7 +166,9 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
     ) -> tuple[list[dace_sbs.Subset], list[dace_graph.MultiConnectorEdge]]:
         split_description = [
             desc.subset
-            for desc in gtx_transformations.spliting_tools.describe_incoming_edges(state, node)
+            for desc in gtx_transformations.spliting_tools.describe_incoming_edges(
+                sdfg, state, node
+            )
         ]
         edges_to_split = [
             oedge

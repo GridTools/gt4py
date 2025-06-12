@@ -74,15 +74,10 @@ class EdgeConnectionSpec:
 
 def describe_edge(
     edge: dace_graph.MultiConnectorEdge,
-    state: dace.SDFGState,
     incoming_edge: bool,
 ) -> EdgeConnectionSpec:
     """Create a description for a single edge."""
-    get_sbs = (
-        lambda e: e.data.get_dst_subset(e, state)
-        if incoming_edge
-        else e.data.get_src_subset(e, state)
-    )  # noqa: E731 [lambda-assignment]
+    get_sbs = lambda e: e.data.dst_subset if incoming_edge else e.data.src_subset  # noqa: E731 [lambda-assignment]
     get_node = lambda e: e.dst if incoming_edge else e.src  # noqa: E731 [lambda-assignment]
     return EdgeConnectionSpec(
         node=get_node(edge),
@@ -92,7 +87,8 @@ def describe_edge(
 
 
 def describe_edges(
-    state: dace.SDFG,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
     node: dace_nodes.Node,
     incoming_edges: bool,
 ) -> list[EdgeConnectionSpec]:
@@ -109,31 +105,38 @@ def describe_edges(
             of `node`.
     """
     edges = state.in_edges(node) if incoming_edges else state.out_edges(node)
-    return [describe_edge(e, state, incoming_edges) for e in edges]
+    # To ensures that the `{src,dst}_subset` are properly set, run initialization.
+    #  See [issue 1708](https://github.com/spcl/dace/issues/1703)
+    for edge in edges:
+        edge.data.try_initialize(sdfg, state, edge)
+    return [describe_edge(e, incoming_edges) for e in edges]
 
 
 def describe_incoming_edges(
-    state: dace.SDFG,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
     node: dace_nodes.Node,
 ) -> list[EdgeConnectionSpec]:
     """Describes the incoming edges of `node`."""
-    return describe_edges(state, node, True)
+    return describe_edges(sdfg, state, node, True)
 
 
 def describe_outgoing_edges(
-    state: dace.SDFG,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
     node: dace_nodes.Node,
 ) -> list[EdgeConnectionSpec]:
     """Describes the out going edges of `node`."""
-    return describe_edges(state, node, False)
+    return describe_edges(sdfg, state, node, False)
 
 
 def describe_all_edges(
-    state: dace.SDFG,
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
     node: dace_nodes.Node,
 ) -> list[EdgeConnectionSpec]:
     """Describes the all edges of `node`."""
-    return describe_edges(state, node, False) + describe_edges(state, node, True)
+    return describe_edges(sdfg, state, node, False) + describe_edges(sdfg, state, node, True)
 
 
 def describes_incoming_edge(desc: EdgeConnectionSpec) -> bool:
@@ -253,8 +256,8 @@ def split_node(
     assert not gtx_transformations.utils.is_view(desc_to_split)
     assert isinstance(desc_to_split, dace_data.Array)
 
-    input_descriptions = describe_incoming_edges(state, node_to_split)
-    output_descriptions = describe_outgoing_edges(state, node_to_split)
+    input_descriptions = describe_incoming_edges(sdfg, state, node_to_split)
+    output_descriptions = describe_outgoing_edges(sdfg, state, node_to_split)
     edge_descriptions = input_descriptions + output_descriptions
 
     # Ensure that no edge is on multiple new fragments and that every edge
