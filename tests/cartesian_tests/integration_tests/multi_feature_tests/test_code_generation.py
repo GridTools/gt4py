@@ -717,8 +717,8 @@ def test_K_offset_write_conditional(backend):
     # - lev = 2
     # - A[2] == 42 && B[2] == -1 => False
     # End of iteration state
-    # - A[...] = A[40, 2.0, 2.0, -1]
-    # - B[...] = A[1, 1, -1, 42]
+    # - A[...] = A[40, 2.0, 42, -1]
+    # - B[...] = B[1, 1, -1, 42]
     # ITERATION k = 1 of [2:1]
     # if condition
     # - A[1] == 2.0 && B[1] == 1 => True
@@ -730,10 +730,10 @@ def test_K_offset_write_conditional(backend):
     # - A[2] = -1
     # - B[1] = -1
     # - lev = 2
-    # - A[1] == 2.0 && B[2] == -1 => False
+    # - A[1] == 2.0 && B[1] == -1 => False
     # End of stencil state
     # - A[...] = A[2.0, 2.0, -1, -1]
-    # - B[...] = A[1, -1, 2.0, 42]
+    # - B[...] = B[1, -1, 2.0, 42]
 
     assert (A[0, 0, :] == arraylib.array([2, 2, -1, -1])).all()
     assert (B[0, 0, :] == arraylib.array([1, -1, 2, 42])).all()

@@ -128,6 +128,8 @@ class OIRToTasklet(eve.NodeVisitor):
             if isinstance(node.offset, oir.VariableKOffset)
             else None
         )
+        if var_k is not None:
+            var_k = f"{dcir.Axis.K.iteration_dace_symbol()} + {var_k}"
 
         if (
             key in ctx.targets  # (read or write) after write
@@ -138,6 +140,7 @@ class OIRToTasklet(eve.NodeVisitor):
         memlet = Memlet(
             data=node.name,
             subset=self._memlet_subset(node, ctx=ctx),
+            volume=1,
         )
         if is_target:
             # note: it doesn't matter if we use is_target or target here because if they

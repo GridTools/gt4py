@@ -211,10 +211,6 @@ class OIRToTreeIR(eve.NodeVisitor):
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, ctx: Context, loop_order: common.LoopOrder
     ) -> None:
-        # TODO
-        # How do we get the domain in here?!
-        # Axis.domain_dace_symbol() #noqa
-        # start is always 0
         bounds = self.visit(
             node.interval,
             loop_order=loop_order,
