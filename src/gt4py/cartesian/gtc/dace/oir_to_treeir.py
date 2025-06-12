@@ -245,7 +245,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         shift: dict[str, dict[dcir.Axis, int]] = {}  # dict of field_name -> (dict of axis -> shift)
 
         # this is ij blocks = horizontal execution
-        field_extents, block_extents = oir_utils.compute_extents(node)
+        field_extents, block_extents = oir_utils.compute_extents(node, centered_extent=True)
 
         for param in node.params:
             if isinstance(param, oir.ScalarDecl):
