@@ -7,11 +7,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Optional
+from typing import Mapping, Optional, TypeVar
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import misc as ir_misc
+from gt4py.next.iterator.ir_utils import ir_makers as im, misc as ir_misc
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
@@ -111,6 +111,19 @@ def inline_lambda(  # see todo above
             setattr(new_expr.annex, attr, getattr(node.annex, attr))
     itir_inference.copy_type(from_=node, to=new_expr, allow_untyped=True)
     return new_expr
+
+
+T = TypeVar("T", bound=ir.Expr)
+
+
+def rename_symbols(node: T, rename_map: Mapping[str, str | ir.SymRef]) -> T:
+    """
+    Given a node and a mapping from old symbol names to new symbol names, rename symbols.
+
+    >>> str(rename_symbols(im.plus("old_name", 1), {"old_name": "new_name"}))
+    'new_name + 1'
+    """
+    return inline_lambda(im.let(*rename_map.items())(node))
 
 
 @dataclasses.dataclass
