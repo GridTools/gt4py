@@ -126,6 +126,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                 ctx.root.containers[local_scalar.name] = data.Scalar(
                     data_type_to_dace_typeclass(local_scalar.dtype),  # dtype
                     transient=True,
+                    storage=dtypes.StorageType.Register,
                     debuginfo=get_dace_debuginfo(local_scalar),
                 )
 
@@ -181,8 +182,23 @@ class OIRToTreeIR(eve.NodeVisitor):
         return cond
 
     def visit_While(self, node: oir.While, ctx: Context) -> None:
+        # Break conditional out of while into a mask + assign
+        mask_name = f"mask_while_cond_{id(node)}"
+        ctx.root.containers[mask_name] = data.Scalar(
+            data_type_to_dace_typeclass(common.DataType.BOOL),
+            transient=True,
+            storage=dtypes.StorageType.Register,
+            debuginfo=get_dace_debuginfo(node),
+        )
+        assign = oir.AssignStmt(left=oir.ScalarAccess(name=mask_name), right=node.cond)
+        self.visit(oir.CodeBlock(label=f"he_cond_{id(node)}", body=[assign]), ctx=ctx)
+
+        # Add as a last step to the while for re-evaluation
+        node.body.append(assign)
+
+        # Use the mask created for conditional check
         while_ = tir.While(
-            condition_code=self.visit(node.cond, ctx=ctx),
+            condition_code=mask_name,
             children=[],
             parent=ctx.current_scope,
         )
