@@ -192,7 +192,7 @@ def _post_expand_transformations(sdfg: dace.SDFG):
 
 
 def _sdfg_add_arrays_and_edges(
-    field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origins
+    field_info, wrapper_sdfg: dace.SDFG, state, inner_sdfg, nsdfg, inputs, outputs, origins
 ):
     for name, array in inner_sdfg.arrays.items():
         if isinstance(array, dace.data.Array) and not array.transient:
@@ -235,6 +235,10 @@ def _sdfg_add_arrays_and_edges(
                     None,
                     dace.Memlet(name, subset=dace.subsets.Range(ranges)),
                 )
+        elif isinstance(array, dace.data.Scalar):
+            wrapper_sdfg.add_scalar(
+                name, dtype=array.dtype, storage=array.storage, lifetime=array.lifetime
+            )
 
 
 def _sdfg_specialize_symbols(wrapper_sdfg, domain: Tuple[int, ...]):
