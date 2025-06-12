@@ -80,12 +80,11 @@ def describe_edge(
     """Create a description for a single edge.
 
     Args:
-        state: The state in which `node` is located, when the state is valid.
+        edge: The edge to describe.
+        incoming_edge: Describe whether it is an incoming (`True`) or outgoing (`False`) edge.
+        state: The state in which `edge` is located, when the state is valid.
             Set to `None` when the state is invalid, which can happen in the middle
             of an SDFG transformation.
-        node: The node whose edges should be described.
-        incoming_edges: Describe the incoming (`True`) or out going (`False`) edges
-            of `node`.
     """
     get_sbs = lambda e: e.data.dst_subset if incoming_edge else e.data.src_subset  # noqa: E731 [lambda-assignment]
     get_node = lambda e: e.dst if incoming_edge else e.src  # noqa: E731 [lambda-assignment]
