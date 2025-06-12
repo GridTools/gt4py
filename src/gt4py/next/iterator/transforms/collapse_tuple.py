@@ -106,13 +106,6 @@ def _flattened_as_fieldop_param_el_name(param: str, idx: int) -> str:
     return f"{prefix}{idx}_{suffix}"
 
 
-def _unique_symbol(reserved_names: Sequence[str], sym: itir.Sym):
-    name: str = sym.id
-    while name in reserved_names:
-        name = name + "_"
-    return im.sym(name, sym.type)
-
-
 # TODO(tehrengruber): Conceptually the structure of this pass makes sense: Visit depth first,
 #  transform each node until no transformations apply anymore, whenever a node is to be transformed
 #  go through all available transformation and apply them. However the final result here still
