@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import builtins
+import textwrap
 import typing
 from typing import Any, Callable, Iterable, Mapping, Type
 
@@ -144,12 +145,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     """
 
     @classmethod
-    def _preprocess_definition_ast(cls, definition_ast: ast.AST) -> ast.AST:
-        sta = StringifyAnnotationsPass.apply(definition_ast)
-        ssa = SingleStaticAssignPass.apply(sta)
-        sat = SingleAssignTargetPass.apply(ssa)
-        ucc = UnchainComparesPass.apply(sat)
-        return ucc
+    def _preprocess_definition_ast(cls, ast: ast.AST) -> ast.AST:
+        ast = StringifyAnnotationsPass.apply(ast)
+        ast = SingleStaticAssignPass.apply(ast)
+        ast = SingleAssignTargetPass.apply(ast)
+        return ast
 
     @classmethod
     def _postprocess_dialect_ast(
@@ -474,10 +474,20 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_Compare(self, node: ast.Compare, **kwargs: Any) -> foast.Compare:
         loc = self.get_location(node)
+
         if len(node.ops) != 1 or len(node.comparators) != 1:
-            # Remove comparison chains in a preprocessing pass
-            # TODO: maybe add a note to the error about preprocessing passes?
-            raise errors.UnsupportedPythonFeatureError(loc, "comparison chains")
+            refactored = UnchainComparesPass.apply(node)
+            raise errors.DSLError(
+                loc,
+                textwrap.dedent(
+                    f"""
+                    Comparison chains are not allowed. Please replace
+                        {ast.unparse(node)}
+                    by
+                        {ast.unparse(refactored)}
+                    """,
+                ),
+            )
         return foast.Compare(
             op=self.visit(node.ops[0]),
             left=self.visit(node.left),
