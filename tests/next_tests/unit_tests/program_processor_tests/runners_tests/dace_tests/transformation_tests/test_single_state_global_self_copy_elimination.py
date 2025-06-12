@@ -509,6 +509,83 @@ def test_global_self_copy_elimination_only_pattern():
     ), f"Expected that 0 access nodes remained, but {state.number_of_nodes()} were there."
 
 
+def _make_multi_t_patch_sdfg() -> (
+    tuple[
+        dace.SDFG,
+        dace.SDFGState,
+        dace_nodes.AccessNode,
+        dace_nodes.AccessNode,
+        dace_nodes.AccessNode,
+    ]
+):
+    """An SDFG where the initialization of `tmp` is not a single transaction.
+
+    Note that the content of the temporary in the patch `[2:10, 9]` is
+    uninitialized because it is not read.
+    """
+
+    sdfg = dace.SDFG(util.unique_name(f"multi_t_patch_description_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "gabt":
+        sdfg.add_array(
+            name,
+            shape=(10, 10),
+            dtype=dace.float64,
+            transient=(name == "t"),
+        )
+
+    g1, t, g2, a, b = (state.add_access(name) for name in "gtgab")
+
+    state.add_nedge(g1, t, dace.Memlet("g[0:2, 2:10] -> [0:2, 2:10]"))
+    state.add_nedge(g1, t, dace.Memlet("g[2:10, 0:9] -> [2:10, 0:9]"))
+
+    state.add_mapped_tasklet(
+        "patch_computation",
+        map_ranges={
+            "__i": "0:2",
+            "__j": "0:2",
+        },
+        inputs={},
+        code="__out = (__i + 1) ** __j",
+        outputs={"__out": dace.Memlet("t[__i, __j]")},
+        external_edges=True,
+        output_nodes={t},
+    )
+
+    state.add_mapped_tasklet(
+        "consumer1",
+        map_ranges={
+            "__i": "0:2",
+            "__j": "0:10",
+        },
+        inputs={"__in": dace.Memlet("t[__i, __j]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("a[__i, __j]")},
+        external_edges=True,
+        input_nodes={t},
+        output_nodes={a},
+    )
+    state.add_mapped_tasklet(
+        "consumer2",
+        map_ranges={
+            "__i": "2:10",
+            "__j": "0:9",
+        },
+        inputs={"__in": dace.Memlet("t[__i, __j]")},
+        code="__out = __in + 3.0",
+        outputs={"__out": dace.Memlet("b[__i, __j]")},
+        external_edges=True,
+        input_nodes={t},
+        output_nodes={b},
+    )
+
+    state.add_nedge(t, g2, dace.Memlet("t[0:2, 0:2] -> [0:2, 0:2]"))
+    sdfg.validate()
+
+    return sdfg, state, g1, t, g2
+
+
 def test_global_self_copy_elimination_g_downstream():
     """`G` is read downstream.
 
@@ -818,3 +895,30 @@ def test_concat_where_like_not_possible():
     )
 
     assert count == 0
+
+
+def test_multi_t_patch():
+    sdfg, state, g1, t, g2 = _make_multi_t_patch_sdfg()
+
+    assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 5
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 3
+
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.SingleStateGlobalSelfCopyElimination,
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 1
+    assert util.count_nodes(sdfg, dace_nodes.MapExit) == 3
+
+    ac_nodes = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(ac_nodes) == 3
+    assert g2 in ac_nodes
+    assert {"a", "b", "g"} == {ac.data for ac in ac_nodes}
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref, res)

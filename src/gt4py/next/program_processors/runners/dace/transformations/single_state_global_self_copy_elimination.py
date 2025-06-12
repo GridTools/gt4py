@@ -605,8 +605,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             #   liberal. However, what we should actually do is, decompose the
             #   subset and only add the parts that are not known.
             if not any(
-                # TODO(phimuell): Figuring out what `None` means.
-                dace_sbs.intersects(known_t_patch.subset, transfer_g1_desc_t.subset)
+                gtx_st.are_intersecting(known_t_patch.subset, transfer_g1_desc_t.subset)
                 for known_t_patch in t_descriptions
             ):
                 t_descriptions.append(transfer_g1_desc_t)
@@ -617,8 +616,6 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         # TODO(phimuell): Figuring out what it means if the merge does not
         #   result in a single subset. I think that the tests are strong
         #   enough to handle that case.
-        # TODO(phimuell): Add a test for the case.
-        # TODO(edopao): Make sure that I added a test for that case!!
         merged_subsets_at_tmp = gtx_st.subset_merger(t_descriptions)
 
         # Now also merges the subsets at the `g` side, but we have to do it
@@ -646,11 +643,11 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             # Ensure that there is no intersection between the subsets.
             #  Handles "unable to compare" as not an intersection.
             assert not any(
-                dace_sbs.intersects(merged_subset_at_tmp, known_tmp_subset) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                gtx_st.are_intersecting(merged_subset_at_tmp, known_tmp_subset) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
                 for known_tmp_subset in subset_map.keys()
             )
             assert not any(
-                dace_sbs.intersects(merged_subset_at_g2[0], known_g_subset) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                gtx_st.are_intersecting(merged_subset_at_g2[0], known_g_subset) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
                 for known_g_subset in subset_map.values()
             )
 
