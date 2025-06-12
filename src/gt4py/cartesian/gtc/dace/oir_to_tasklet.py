@@ -129,7 +129,7 @@ class OIRToTasklet(eve.NodeVisitor):
             else None
         )
         if var_k is not None:
-            var_k = f"{dcir.Axis.K.iteration_dace_symbol()} + {var_k}"
+            var_k = f"{dcir.Axis.K.iteration_dace_symbol()} + {ctx.tree.shift[node.name][dcir.Axis.K]} + {var_k}"
 
         if (
             key in ctx.targets  # (read or write) after write
