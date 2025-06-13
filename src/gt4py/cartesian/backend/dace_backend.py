@@ -82,6 +82,7 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
 
 
 def _get_expansion_priority_cpu(node: StencilComputation):
+    raise RuntimeError("To be torched. We shouldn't end up here.")
     expansion_priority = []
     if node.has_splittable_regions():
         expansion_priority.append(["Sections", "Stages", "I", "J", "K"])
@@ -109,6 +110,7 @@ def _get_expansion_priority_gpu(node: StencilComputation):
 
 
 def _set_expansion_orders(sdfg: dace.SDFG):
+    raise RuntimeError("To be torched. We shouldn't end up here.")
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
     ):
@@ -130,6 +132,7 @@ def _set_expansion_orders(sdfg: dace.SDFG):
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
+    raise RuntimeError("To be torched. We shouldn't end up here.")
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
     ):
@@ -153,6 +156,7 @@ def _to_device(sdfg: dace.SDFG, device: str) -> None:
 
 
 def _pre_expand_transformations(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map):
+    raise RuntimeError("To be torched. We shouldn't end up here.")
     args_data = make_args_data_from_gtir(gtir_pipeline)
 
     # stencils without effect
@@ -170,6 +174,7 @@ def _pre_expand_transformations(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, la
 
 
 def _post_expand_transformations(sdfg: dace.SDFG):
+    raise RuntimeError("To be torched. We shouldn't end up here.")
     # DaCe "standard" clean-up transformations
     sdfg.simplify(validate=False)
 
