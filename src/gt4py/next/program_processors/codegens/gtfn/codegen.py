@@ -241,14 +241,21 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         new_sizes = []
         for size, offset in zip(node.domain.tagged_offsets.values, node.domain.tagged_sizes.values):
             new_sizes.append(gtfn_ir.BinaryExpr(op="+", lhs=size, rhs=offset))
+
+        new_offsets = [
+            gtfn_ir.Literal(value=f"- {offset.value}", type=offset.type)
+            for offset in node.domain.tagged_offsets.values
+        ]
+
         return self.generic_visit(
             node,
             tmp_sizes=self.visit(gtfn_ir.TaggedValues(tags=tags, values=new_sizes), **kwargs),
+            shifts=self.visit(gtfn_ir.TaggedValues(tags=tags, values=new_offsets), **kwargs),
             **kwargs,
         )
 
     TemporaryAllocation = as_fmt(
-        "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {tmp_sizes});"
+        "auto {id} = gridtools::sid::shift_sid_origin(gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {tmp_sizes}), {shifts});"
     )
 
     def visit_Program(self, node: gtfn_ir.Program, **kwargs: Any) -> Union[str, Collection[str]]:
