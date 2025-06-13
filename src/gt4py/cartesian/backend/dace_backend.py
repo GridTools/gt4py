@@ -32,7 +32,7 @@ from gt4py.cartesian.backend.gtc_common import (
     bindings_main_template,
     pybuffer_to_sid,
 )
-from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
+from gt4py.cartesian.backend.module_generator import FieldInfo, make_args_data_from_gtir
 from gt4py.cartesian.gtc import common, gtir
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
@@ -283,7 +283,29 @@ def _sdfg_specialize_symbols(wrapper_sdfg, domain: Tuple[int, ...]):
                         sdfg.add_symbol(str(fsym), stype=dace.dtypes.int32)
 
 
-def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, domain):
+def freeze_origin_domain_sdfg(
+    inner_sdfg_unfrozen: dace.SDFG,
+    arg_names: list[str],
+    field_info: Dict[str, FieldInfo],
+    *,
+    origin: Tuple[int, ...],
+    domain: Tuple[int, ...],
+):
+    """Create a new SDFG by wrapping a _copy_ of the original SDFG and freezing it's
+    origin and domain
+
+    Dev note: we need to wrap a copy to make sure we can use caching with no side effect
+    in other parts of the SDFG making pipeline
+
+    Args:
+        inner_sdfg_unfrozen: SDFG with cartesian bounds as symbols
+        arg_names: names of arguments to freeze
+        field_info: full info stack on arguments
+        origin: tuple of offset into the memory
+        domain: tuple of size for the memory wrote by the stencil
+    """
+    inner_sdfg = copy.deepcopy(inner_sdfg_unfrozen)
+
     wrapper_sdfg = dace.SDFG("frozen_" + inner_sdfg.name)
     state = wrapper_sdfg.add_state("frozen_" + inner_sdfg.name + "_state")
 
@@ -473,18 +495,18 @@ class SDFGManager:
         if path in SDFGManager._loaded_sdfgs:
             return SDFGManager._loaded_sdfgs[path]
 
-        # otherwise, wrap and save sdfg from scratch
-        sdfg = freeze_origin_domain_sdfg(
+        # Otherwise, wrap and save sdfg from scratch
+        frozen_sdfg = freeze_origin_domain_sdfg(
             self.sdfg_via_schedule_tree(),
             arg_names=[arg.name for arg in self.builder.gtir.api_signature],
             field_info=make_args_data_from_gtir(self.builder.gtir_pipeline).field_info,
             origin=origin,
             domain=domain,
         )
-        self._save_sdfg(sdfg, path)
-        SDFGManager._loaded_sdfgs[path] = sdfg
+        self._save_sdfg(frozen_sdfg, path)
+        SDFGManager._loaded_sdfgs[path] = frozen_sdfg
 
-        return sdfg
+        return frozen_sdfg
 
     def frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
         return copy.deepcopy(self._frozen_sdfg(origin=origin, domain=domain))
