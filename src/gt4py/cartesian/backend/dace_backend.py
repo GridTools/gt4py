@@ -329,9 +329,9 @@ def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, doma
 
 class SDFGManager:
     # Cache loaded SDFGs across all instances
-    _loaded_sdfgs: ClassVar[Dict[str, dace.SDFG]] = dict()
+    _loaded_sdfgs: ClassVar[dict[str | pathlib.Path, dace.SDFG]] = dict()
 
-    def __init__(self, builder):
+    def __init__(self, builder: StencilBuilder):
         self.builder = builder
 
     def schedule_tree(self) -> tn.ScheduleTreeRoot:
@@ -374,41 +374,43 @@ class SDFGManager:
         return stree
 
     @staticmethod
-    def _strip_history(sdfg):
+    def _strip_history(sdfg: dace.SDFG) -> None:
         # strip history from SDFG for faster save/load
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
             tmp_sdfg.transformation_hist = []
             tmp_sdfg.orig_sdfg = None
 
     @staticmethod
-    def _save_sdfg(sdfg, path):
+    def _save_sdfg(sdfg: dace.SDFG, path: str) -> None:
         SDFGManager._strip_history(sdfg)
         sdfg.save(path)
 
     def sdfg_via_schedule_tree(self) -> dace.SDFG:
         """Lower OIR into an SDFG via Schedule Tree transpile first.
 
-        Cache the SDFG inot the manager for re-use.
+        Cache the SDFG into the manager for re-use.
         """
         filename = f"{self.builder.module_name}.sdfg"
         path = (
             pathlib.Path(os.path.relpath(self.builder.module_path.parent, pathlib.Path.cwd()))
             / filename
         )
-        if path not in SDFGManager._loaded_sdfgs:
-            try:
-                sdfg = dace.SDFG.from_file(path)
-            except FileNotFoundError:
-                # Create SDFG
-                stree = self.schedule_tree()
-                sdfg = stree.as_sdfg(validate=True, simplify=True)
-                # Swap residency to device
-                _to_device(sdfg, self.builder.backend.storage_info["device"])
-                # Cache SDFG
-                self._save_sdfg(sdfg, path)
-            SDFGManager._loaded_sdfgs[path] = sdfg
 
-        return SDFGManager._loaded_sdfgs[path]
+        if path in SDFGManager._loaded_sdfgs:
+            return SDFGManager._loaded_sdfgs[path]
+
+        # Create SDFG
+        stree = self.schedule_tree()
+        sdfg = stree.as_sdfg(validate=True, simplify=True)
+
+        # Swap residency to device
+        _to_device(sdfg, self.builder.backend.storage_info["device"])
+
+        # Cache SDFG
+        self._save_sdfg(sdfg, str(path))
+        SDFGManager._loaded_sdfgs[path] = sdfg
+
+        return sdfg
 
     # TODO: OLD CODE - TORCH WHEN STREE -> SDFG PIPELINE GETS THE OK. APPLY CARE BEFORE AND DURING TORCHING
 
@@ -456,9 +458,8 @@ class SDFGManager:
     def _frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
         frozen_hash = shash(origin, domain)
         # check if same sdfg already cached on disk
-        path = self.builder.module_path
-        basename = os.path.splitext(path)[0]
-        path = basename + "_" + str(frozen_hash) + ".sdfg"
+        basename: str = os.path.splitext(self.builder.module_path)[0]
+        path = f"{basename}_{frozen_hash!s}.sdfg"
         if path not in SDFGManager._loaded_sdfgs:
             try:
                 sdfg = dace.SDFG.from_file(path)
@@ -482,12 +483,12 @@ class SDFGManager:
 
 
 class DaCeExtGenerator(BackendCodegen):
-    def __init__(self, class_name, module_name, backend):
+    def __init__(self, class_name: str, module_name: str, backend: BaseDaceBackend):
         self.class_name = class_name
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+    def __call__(self, stencil_ir: gtir.Stencil) -> dict[str, dict[str, str]]:
         manager = SDFGManager(self.backend.builder)
 
         sdfg = manager.sdfg_via_schedule_tree()

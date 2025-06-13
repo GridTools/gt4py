@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
 
 class CudaExtGenerator(BackendCodegen):
-    def __init__(self, class_name, module_name, backend):
+    def __init__(self, class_name: str, module_name: str, backend: CudaBackend):
         self.class_name = class_name
         self.module_name = module_name
         self.backend = backend
