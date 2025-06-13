@@ -145,7 +145,8 @@ def _to_device(sdfg: dace.SDFG, device: str) -> None:
     """Update sdfg in place."""
     if device == "gpu":
         for array in sdfg.arrays.values():
-            array.storage = dace.StorageType.GPU_Global
+            if not isinstance(array, dace.data.Scalar):
+                array.storage = dace.StorageType.GPU_Global
         for node, _ in sdfg.all_nodes_recursive():
             if isinstance(node, StencilComputation):
                 node.device = dace.DeviceType.GPU
