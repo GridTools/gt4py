@@ -180,7 +180,6 @@ class OIRToTreeIR(eve.NodeVisitor):
             self.visit(groups, ctx=ctx)
 
     def visit_HorizontalMask(self, node: common.HorizontalMask, ctx: Context) -> str:
-        # TODO: probably a nope
         loop_i = dcir.Axis.I.iteration_symbol()
         axis_start_i = "0"
         axis_end_i = dcir.Axis.I.domain_symbol()
@@ -188,25 +187,25 @@ class OIRToTreeIR(eve.NodeVisitor):
         axis_start_j = "0"
         axis_end_j = dcir.Axis.J.domain_symbol()
 
-        cond = ""
+        conditions: list[str] = []
         if node.i.start is not None:
-            cond += f"{loop_i} >= {self.visit(node.i.start, axis_start=axis_start_i, axis_end=axis_end_i)}"
+            conditions.append(
+                f"{loop_i} >= {self.visit(node.i.start, axis_start=axis_start_i, axis_end=axis_end_i)}"
+            )
         if node.i.end is not None:
-            if cond != "":
-                cond += " and "
-            cond += (
+            conditions.append(
                 f"{loop_i} < {self.visit(node.i.end, axis_start=axis_start_i, axis_end=axis_end_i)}"
             )
         if node.j.start is not None:
-            if cond != "":
-                cond += " and "
-            cond += f"{loop_j} >= {self.visit(node.j.start, axis_start=axis_start_j, axis_end=axis_end_j)}"
-        if node.j.start is not None:
-            if cond != "":
-                cond += " and "
-            cond += f"{loop_j} >= {self.visit(node.j.end, axis_start=axis_start_j, axis_end=axis_end_j)}"
+            conditions.append(
+                f"{loop_j} >= {self.visit(node.j.start, axis_start=axis_start_j, axis_end=axis_end_j)}"
+            )
+        if node.j.end is not None:
+            conditions.append(
+                f"{loop_j} < {self.visit(node.j.end, axis_start=axis_start_j, axis_end=axis_end_j)}"
+            )
 
-        return cond
+        return " and ".join(conditions)
 
     def visit_While(self, node: oir.While, ctx: Context) -> None:
         condition_name, assignment = self._insert_evaluation_tasklet(node, ctx)
