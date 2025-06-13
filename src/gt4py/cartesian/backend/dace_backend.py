@@ -32,7 +32,8 @@ from gt4py.cartesian.backend.gtc_common import (
     bindings_main_template,
     pybuffer_to_sid,
 )
-from gt4py.cartesian.backend.module_generator import FieldInfo, make_args_data_from_gtir
+from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
+from gt4py.cartesian.definitions import FieldInfo
 from gt4py.cartesian.gtc import common, gtir
 from gt4py.cartesian.gtc.dace import daceir as dcir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
@@ -288,7 +289,7 @@ def freeze_origin_domain_sdfg(
     arg_names: list[str],
     field_info: Dict[str, FieldInfo],
     *,
-    origin: Tuple[int, ...],
+    origin: Dict[str, Tuple[int, ...]],
     domain: Tuple[int, ...],
 ):
     """Create a new SDFG by wrapping a _copy_ of the original SDFG and freezing it's
