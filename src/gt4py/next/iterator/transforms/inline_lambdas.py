@@ -11,11 +11,22 @@ from typing import Mapping, Optional, TypeVar
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import ir_makers as im, misc as ir_misc
-from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    ir_makers as im,
+    misc as ir_misc,
+)
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 from gt4py.next.iterator.type_system import inference as itir_inference
+
+
+def _is_trivial_as_fieldop(node: ir.FunCall) -> bool:
+    if cpm.is_applied_as_fieldop(node):
+        as_fieldopped_expr = node.fun.args[0].expr
+        if cpm.is_call_to(as_fieldopped_expr, "cast_"):
+            return True
+    return False
 
 
 # TODO(tehrengruber): Reduce complexity of the function by removing the different options here
@@ -38,21 +49,23 @@ def inline_lambda(  # see todo above
 
         for i, param in enumerate(node.fun.params):
             # TODO(tehrengruber): allow inlining more complicated zero-op expressions like ignore_shift(...)(it_sym)
-            if ref_counts[param.id] > 1 and not isinstance(
-                node.args[i], (ir.SymRef, ir.Literal, ir.OffsetLiteral)
+            if (
+                ref_counts[param.id] > 1
+                and not isinstance(node.args[i], (ir.SymRef, ir.Literal, ir.OffsetLiteral))
+                and not _is_trivial_as_fieldop(node.args[i])
             ):
                 eligible_params[i] = False
 
     # inline lifts, i.e. `lift(λ(...) → ...)(...)`
     if force_inline_lift_args:
         for i, arg in enumerate(node.args):
-            if is_applied_lift(arg):
+            if cpm.is_applied_lift(arg):
                 eligible_params[i] = True
 
     # inline trivial lifts, i.e. `lift(λ() → 1)()`
     if force_inline_trivial_lift_args:
         for i, arg in enumerate(node.args):
-            if is_applied_lift(arg) and len(arg.args) == 0:
+            if cpm.is_applied_lift(arg) and len(arg.args) == 0:
                 eligible_params[i] = True
 
     # inline lambdas passed as arguments
