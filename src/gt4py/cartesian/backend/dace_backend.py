@@ -415,6 +415,7 @@ class SDFGManager:
     # TODO: OLD CODE - TORCH WHEN STREE -> SDFG PIPELINE GETS THE OK. APPLY CARE BEFORE AND DURING TORCHING
 
     def _unexpanded_sdfg(self):
+        raise RuntimeError("To be torched. We shouldn't end up here.")
         filename = self.builder.module_name + ".sdfg"
         path = (
             pathlib.Path(os.path.relpath(self.builder.module_path.parent, pathlib.Path.cwd()))
@@ -444,18 +445,22 @@ class SDFGManager:
         return SDFGManager._loaded_sdfgs[path]
 
     def unexpanded_sdfg(self):
+        raise RuntimeError("To be torched. We shouldn't end up here.")
         return copy.deepcopy(self._unexpanded_sdfg())
 
     def _expanded_sdfg(self):
+        raise RuntimeError("To be torched. We shouldn't end up here.")
         sdfg = self._unexpanded_sdfg()
         sdfg.expand_library_nodes()
         _post_expand_transformations(sdfg)
         return sdfg
 
     def expanded_sdfg(self):
+        raise RuntimeError("To be torched. We shouldn't end up here.")
         return copy.deepcopy(self._expanded_sdfg())
 
     def _frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
+        raise RuntimeError("To be torched. We shouldn't end up here.")
         frozen_hash = shash(origin, domain)
         # check if same sdfg already cached on disk
         basename: str = os.path.splitext(self.builder.module_path)[0]
@@ -479,6 +484,7 @@ class SDFGManager:
         return SDFGManager._loaded_sdfgs[path]
 
     def frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
+        raise RuntimeError("To be torched. We shouldn't end up here.")
         return copy.deepcopy(self._frozen_sdfg(origin=origin, domain=domain))
 
 
