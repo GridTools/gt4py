@@ -93,6 +93,31 @@ class OIRToTreeIR(eve.NodeVisitor):
             groups.append(oir.CodeBlock(label=f"he_{id(node)}_{len(groups)}", body=statements))
         return groups
 
+    def _insert_evaluation_tasklet(
+        self, node: oir.MaskStmt | oir.While, ctx: Context
+    ) -> tuple[str, oir.AssignStmt]:
+        """Evaluate condition in a separate tasklet to avoid sympy problems down the line."""
+
+        prefix = "while" if isinstance(node, oir.While) else "if"
+        condition_name = f"{prefix}_condition_{id(node)}"
+
+        ctx.root.containers[condition_name] = data.Scalar(
+            data_type_to_dace_typeclass(common.DataType.BOOL),
+            transient=True,
+            storage=dtypes.StorageType.Register,
+            debuginfo=get_dace_debuginfo(node),
+        )
+
+        assignment = oir.AssignStmt(
+            left=oir.ScalarAccess(name=condition_name),
+            right=node.cond if isinstance(node, oir.While) else node.mask,
+        )
+
+        code_block = oir.CodeBlock(label=f"masklet_{id(node)}", body=[assignment])
+        self.visit(code_block, ctx=ctx)
+
+        return (condition_name, assignment)
+
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, ctx: Context) -> None:
         # TODO
         # How do we get the domain in here?!
@@ -134,8 +159,10 @@ class OIRToTreeIR(eve.NodeVisitor):
             self.visit(groups, ctx=ctx)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, ctx: Context) -> None:
+        condition_name, _ = self._insert_evaluation_tasklet(node, ctx)
+
         if_else = tir.IfElse(
-            if_condition_code=self.visit(node.mask), children=[], parent=ctx.current_scope
+            if_condition_code=condition_name, children=[], parent=ctx.current_scope
         )
 
         with OIRToTreeIR.ContextPushPop(ctx, if_else):
@@ -182,23 +209,14 @@ class OIRToTreeIR(eve.NodeVisitor):
         return cond
 
     def visit_While(self, node: oir.While, ctx: Context) -> None:
-        # Break conditional out of while into a mask + assign
-        mask_name = f"mask_while_cond_{id(node)}"
-        ctx.root.containers[mask_name] = data.Scalar(
-            data_type_to_dace_typeclass(common.DataType.BOOL),
-            transient=True,
-            storage=dtypes.StorageType.Register,
-            debuginfo=get_dace_debuginfo(node),
-        )
-        assign = oir.AssignStmt(left=oir.ScalarAccess(name=mask_name), right=node.cond)
-        self.visit(oir.CodeBlock(label=f"he_cond_{id(node)}", body=[assign]), ctx=ctx)
+        condition_name, assignment = self._insert_evaluation_tasklet(node, ctx)
 
-        # Add as a last step to the while for re-evaluation
-        node.body.append(assign)
+        # Re-evaluate the condition as last step of the while loop
+        node.body.append(assignment)
 
         # Use the mask created for conditional check
         while_ = tir.While(
-            condition_code=mask_name,
+            condition_code=condition_name,
             children=[],
             parent=ctx.current_scope,
         )

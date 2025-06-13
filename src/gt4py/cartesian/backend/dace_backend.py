@@ -401,7 +401,7 @@ class SDFGManager:
 
         # Create SDFG
         stree = self.schedule_tree()
-        sdfg = stree.as_sdfg(validate=True, simplify=True)
+        sdfg = stree.as_sdfg(validate=True, simplify=True, skip={"ScalarToSymbolPromotion"})
 
         # Swap residency to device
         _to_device(sdfg, self.builder.backend.storage_info["device"])
