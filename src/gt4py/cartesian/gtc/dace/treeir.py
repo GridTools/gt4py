@@ -8,16 +8,43 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TypeAlias
 
 from dace import Memlet, data, dtypes, nodes
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc import common, definitions
 from gt4py.cartesian.gtc.dace import daceir as dcir
 
 
 SymbolDict: TypeAlias = dict[str, dtypes.typeclass]
+
+
+@dataclass
+class Context:
+    root: TreeRoot
+    current_scope: TreeScope
+
+    field_extents: dict[str, definitions.Extent]  # field_name -> Extent
+    block_extents: dict[int, definitions.Extent]  # id(horizontal execution) -> Extent
+
+
+class ContextPushPop:
+    """Append the node to the scope, then push/pop the scope."""
+
+    def __init__(self, ctx: Context, node: TreeScope) -> None:
+        self._ctx = ctx
+        self._parent_scope = ctx.current_scope
+        self._node = node
+
+    def __enter__(self):
+        self._node.parent = self._parent_scope
+        self._parent_scope.children.append(self._node)
+        self._ctx.current_scope = self._node
+
+    def __exit__(self, _exc_type, _exc_value, _traceback):
+        self._ctx.current_scope = self._parent_scope
 
 
 class Bounds(eve.Node):
@@ -30,7 +57,10 @@ class TreeNode(eve.Node):
 
 
 class TreeScope(TreeNode):
-    children: list
+    children: list[TreeScope | TreeNode]
+
+    def scope(self, ctx: Context) -> ContextPushPop:
+        return ContextPushPop(ctx, self)
 
 
 class Tasklet(TreeNode):
@@ -55,20 +85,11 @@ class While(TreeScope):
 
 
 class HorizontalLoop(TreeScope):
-    # stuff for ij/loop bounds
     bounds_i: Bounds
     bounds_j: Bounds
 
-    # horizontal restriction:
-    # - touches the bounds of the (horizontal) loop
-    #  -> this can be important for scheduling
-    #     (we could do actual loops on CPU vs. masks in the horizontal loop on GPU)
-    # conditionals:
-    #  -> have no influence on scheduling
-
 
 class VerticalLoop(TreeScope):
-    # header
     loop_order: common.LoopOrder
     bounds_k: Bounds
 
