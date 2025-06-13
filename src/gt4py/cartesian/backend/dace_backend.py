@@ -460,31 +460,27 @@ class SDFGManager:
         return copy.deepcopy(self._expanded_sdfg())
 
     def _frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
-        raise RuntimeError("To be torched. We shouldn't end up here.")
         frozen_hash = shash(origin, domain)
         # check if same sdfg already cached on disk
         basename: str = os.path.splitext(self.builder.module_path)[0]
         path = f"{basename}_{frozen_hash!s}.sdfg"
-        if path not in SDFGManager._loaded_sdfgs:
-            try:
-                sdfg = dace.SDFG.from_file(path)
-            except FileNotFoundError:
-                # otherwise, wrap and save sdfg from scratch
-                inner_sdfg = self.unexpanded_sdfg()
+        if path in SDFGManager._loaded_sdfgs:
+            return SDFGManager._loaded_sdfgs[path]
 
-                sdfg = freeze_origin_domain_sdfg(
-                    inner_sdfg,
-                    arg_names=[arg.name for arg in self.builder.gtir.api_signature],
-                    field_info=make_args_data_from_gtir(self.builder.gtir_pipeline).field_info,
-                    origin=origin,
-                    domain=domain,
-                )
-                self._save_sdfg(sdfg, path)
-            SDFGManager._loaded_sdfgs[path] = sdfg
-        return SDFGManager._loaded_sdfgs[path]
+        # otherwise, wrap and save sdfg from scratch
+        sdfg = freeze_origin_domain_sdfg(
+            self.sdfg_via_schedule_tree(),
+            arg_names=[arg.name for arg in self.builder.gtir.api_signature],
+            field_info=make_args_data_from_gtir(self.builder.gtir_pipeline).field_info,
+            origin=origin,
+            domain=domain,
+        )
+        self._save_sdfg(sdfg, path)
+        SDFGManager._loaded_sdfgs[path] = sdfg
+
+        return sdfg
 
     def frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
-        raise RuntimeError("To be torched. We shouldn't end up here.")
         return copy.deepcopy(self._frozen_sdfg(origin=origin, domain=domain))
 
 
