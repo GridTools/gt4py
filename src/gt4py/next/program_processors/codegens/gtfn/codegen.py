@@ -238,9 +238,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         assert isinstance(node.domain, (gtfn_ir.CartesianDomain, gtfn_ir.UnstructuredDomain))
         assert node.domain.tagged_offsets.tags == node.domain.tagged_sizes.tags
         tags = node.domain.tagged_offsets.tags
-        new_sizes = []
-        for size, offset in zip(node.domain.tagged_offsets.values, node.domain.tagged_sizes.values):
-            new_sizes.append(gtfn_ir.BinaryExpr(op="+", lhs=size, rhs=offset))
 
         new_offsets = [
             gtfn_ir.Literal(value=f"- {offset.value}", type=offset.type)
@@ -249,7 +246,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
         return self.generic_visit(
             node,
-            tmp_sizes=self.visit(gtfn_ir.TaggedValues(tags=tags, values=new_sizes), **kwargs),
+            tmp_sizes=self.visit(node.domain.tagged_sizes, **kwargs),
             shifts=self.visit(gtfn_ir.TaggedValues(tags=tags, values=new_offsets), **kwargs),
             **kwargs,
         )
