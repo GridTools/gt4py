@@ -236,7 +236,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         tags = node.domain.tagged_offsets.tags
 
         new_offsets = [
-            gtfn_ir.Literal(value=f"- {offset.value}", type=offset.type)
+            gtfn_ir.UnaryExpr(op="-", expr=offset)
             for offset in node.domain.tagged_offsets.values
         ]
 
