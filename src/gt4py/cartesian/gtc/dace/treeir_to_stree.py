@@ -30,9 +30,6 @@ class Context:
 
 
 class TreeIRToScheduleTree(eve.NodeVisitor):
-    # TODO
-    # More visitors to come here
-
     class ContextPushPop:
         """Append the node to the scope, then Push/Pop the scope"""
 
