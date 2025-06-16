@@ -231,10 +231,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_TemporaryAllocation(self, node: gtfn_ir.TemporaryAllocation, **kwargs: Any) -> str:
-        # TODO(tehrengruber): Revisit. We are currently converting an itir.NamedRange with
-        #  start and stop values into an gtfn_ir.(Cartesian|Unstructured)Domain with
-        #  size and offset values, just to here convert back in order to obtain stop values again.
-        # TODO(tehrengruber): Fix memory alignment.
         assert isinstance(node.domain, (gtfn_ir.CartesianDomain, gtfn_ir.UnstructuredDomain))
         assert node.domain.tagged_offsets.tags == node.domain.tagged_sizes.tags
         tags = node.domain.tagged_offsets.tags
