@@ -23,24 +23,8 @@ ControlFlow: TypeAlias = (
 )
 """All control flow OIR nodes"""
 
-DEFAULT_STORAGE_TYPE = {
-    dtypes.DeviceType.CPU: dtypes.StorageType.Default,
-    dtypes.DeviceType.GPU: dtypes.StorageType.GPU_Global,
-}
-"""Default dace residency types for device type"""
-
 
 class OIRToTreeIR(eve.NodeVisitor):
-    def __init__(self, device_type: str) -> None:
-        device_type_translate = {
-            "CPU": dtypes.DeviceType.CPU,
-            "GPU": dtypes.DeviceType.GPU,
-        }
-        try:
-            self._device_type = device_type_translate[device_type.upper()]
-        except KeyError as e:
-            raise ValueError(f"Device {e} is unknown") from e
-
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         code, inputs, outputs = oir_to_tasklet.generate(node, tree=ctx.root)
         dace_tasklet = nodes.Tasklet(
@@ -284,7 +268,6 @@ class OIRToTreeIR(eve.NodeVisitor):
                     data_type_to_dace_typeclass(param.dtype),  # dtype
                     get_dace_shape(param, extent, k_bound, symbols),  # shape
                     strides=get_dace_strides(param, symbols),
-                    storage=DEFAULT_STORAGE_TYPE[self._device_type],
                     debuginfo=get_dace_debuginfo(param),
                 )
                 dimensions[param.name] = param.dimensions
