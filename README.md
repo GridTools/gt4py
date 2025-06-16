@@ -18,12 +18,10 @@
 Getting started: Run
 
 ```bash
-uv sync --group dev --extra dace-stree
+uv sync --group dev --extra dace-cartesian
 ```
 
 to get the stree branch of dace into gt4py. With that, we are able to run gt4py tests against that dace branch (which we need for the stree -> sdfg back transformation).
-
-This is all duck-tape, let's see how far we get fast ...
 
 Note to myself: because we are hijacking dace-next, whenever they update dace-next, we'll get a merge conflict. To resolve that merge conflict,
 
