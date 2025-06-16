@@ -12,7 +12,7 @@ import copy
 import os
 import pathlib
 import re
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Set, Tuple, Type, Union
 
 import dace
 import dace.data
@@ -61,25 +61,26 @@ if TYPE_CHECKING:
     from gt4py.cartesian.stencil_object import StencilObject
 
 
-def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
-    replacement_dictionary = replace_strides(
-        [
-            array
-            for array in sdfg.arrays.values()
-            if isinstance(array, dace.data.Array) and array.transient
-        ],
-        layout_map,
-    )
-    sdfg.replace_dict(replacement_dictionary)
-    for state in sdfg.nodes():
-        for node in state.nodes():
-            if isinstance(node, dace.nodes.NestedSDFG):
-                for k, v in replacement_dictionary.items():
-                    if k in node.symbol_mapping:
-                        node.symbol_mapping[k] = v
-    for k in replacement_dictionary.keys():
-        if k in sdfg.symbols:
-            sdfg.remove_symbol(k)
+def _specialize_transient_strides(top_sdfg: dace.SDFG, layout_map):
+    for sdfg in top_sdfg.all_sdfgs_recursive():
+        replacement_dictionary = replace_strides(
+            [
+                array
+                for array in sdfg.arrays.values()
+                if isinstance(array, dace.data.Array) and array.transient
+            ],
+            layout_map,
+        )
+        sdfg.replace_dict(replacement_dictionary)
+        for state in sdfg.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.NestedSDFG):
+                    for k, v in replacement_dictionary.items():
+                        if k in node.symbol_mapping:
+                            node.symbol_mapping[k] = v
+        for k in replacement_dictionary.keys():
+            if k in sdfg.symbols:
+                sdfg.remove_symbol(k)
 
 
 def _get_expansion_priority_cpu(node: StencilComputation):
@@ -199,7 +200,14 @@ def _post_expand_transformations(sdfg: dace.SDFG):
 
 
 def _sdfg_add_arrays_and_edges(
-    field_info, wrapper_sdfg: dace.SDFG, state, inner_sdfg, nsdfg, inputs, outputs, origins
+    field_info: Dict[str, FieldInfo],
+    wrapper_sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    inner_sdfg: dace.SDFG,
+    nsdfg: dace.nodes.NestedSDFG,
+    inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+    outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+    origins,
 ):
     for name, array in inner_sdfg.arrays.items():
         if isinstance(array, dace.data.Array) and not array.transient:
@@ -210,7 +218,11 @@ def _sdfg_add_arrays_and_edges(
             ]
 
             wrapper_sdfg.add_array(
-                name, dtype=array.dtype, strides=array.strides, shape=shape, storage=array.storage
+                name,
+                dtype=array.dtype,
+                strides=array.strides,
+                shape=shape,
+                storage=array.storage,
             )
             if isinstance(origins, tuple):
                 origin = [o for a, o in zip("IJK", origins) if a in axes]
@@ -222,7 +234,9 @@ def _sdfg_add_arrays_and_edges(
             ranges = [
                 (o - max(0, e), o - max(0, e) + s - 1, 1)
                 for o, e, s in zip(
-                    origin, field_info[name].boundary.lower_indices, inner_sdfg.arrays[name].shape
+                    origin,
+                    field_info[name].boundary.lower_indices,
+                    inner_sdfg.arrays[name].shape,
                 )
             ]
             ranges += [(0, d, 1) for d in field_info[name].data_dims]
@@ -289,6 +303,7 @@ def freeze_origin_domain_sdfg(
     arg_names: list[str],
     field_info: Dict[str, FieldInfo],
     *,
+    layout_map,
     origin: Dict[str, Tuple[int, ...]],
     domain: Tuple[int, ...],
 ):
@@ -327,7 +342,14 @@ def freeze_origin_domain_sdfg(
     nsdfg = state.add_nested_sdfg(inner_sdfg, None, inputs, outputs)
 
     _sdfg_add_arrays_and_edges(
-        field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origins=origin
+        field_info,
+        wrapper_sdfg,
+        state,
+        inner_sdfg,
+        nsdfg,
+        inputs,
+        outputs,
+        origins=origin,
     )
 
     # in special case of empty domain, remove entire SDFG.
@@ -346,6 +368,10 @@ def freeze_origin_domain_sdfg(
     inline_sdfgs(wrapper_sdfg)
 
     _sdfg_specialize_symbols(wrapper_sdfg, domain)
+    _specialize_transient_strides(
+        wrapper_sdfg,
+        layout_map,
+    )
 
     for _, _, array in wrapper_sdfg.arrays_recursive():
         if array.transient:
@@ -497,10 +523,12 @@ class SDFGManager:
             return SDFGManager._loaded_sdfgs[path]
 
         # Otherwise, wrap and save sdfg from scratch
+        sdfg = self.sdfg_via_schedule_tree()
         frozen_sdfg = freeze_origin_domain_sdfg(
-            self.sdfg_via_schedule_tree(),
+            sdfg,
             arg_names=[arg.name for arg in self.builder.gtir.api_signature],
             field_info=make_args_data_from_gtir(self.builder.gtir_pipeline).field_info,
+            layout_map=self.builder.backend.storage_info["layout_map"],
             origin=origin,
             domain=domain,
         )
