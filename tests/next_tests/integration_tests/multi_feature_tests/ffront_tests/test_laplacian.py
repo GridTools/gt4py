@@ -47,6 +47,11 @@ def laplap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JDim]
     return lap(lap(in_field))
 
 
+@gtx.field_operator
+def laplaplaplap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JDim], "float"]:
+    return laplap(laplap(in_field))
+
+
 @gtx.program
 def lap_program(
     in_field: gtx.Field[[IDim, JDim], "float"], out_field: gtx.Field[[IDim, JDim], "float"]
@@ -67,6 +72,13 @@ def laplap_program(
     in_field: gtx.Field[[IDim, JDim], "float"], out_field: gtx.Field[[IDim, JDim], "float"]
 ):
     laplap(in_field, out=out_field[2:-2, 2:-2])
+
+
+@gtx.program
+def laplaplaplap_program_no_output_halo(
+    in_field: gtx.Field[[IDim, JDim], "float"], out_field: gtx.Field[[IDim, JDim], "float"]
+):
+    laplaplaplap(in_field, out=out_field)
 
 
 def square(inp):
@@ -126,4 +138,32 @@ def test_ffront_laplap(cartesian_case):
         out_field,
         inout=out_field[2:-2, 2:-2],
         ref=lap_ref(lap_ref(in_field.array_ns.asarray(in_field.ndarray))),
+    )
+
+
+def test_ffront_laplaplaplap_no_output_halo(cartesian_case):
+    halolines = 4
+    in_field = cases.allocate(
+        cartesian_case,
+        laplaplaplap_program_no_output_halo,
+        "in_field",
+        extend={IDim: (-halolines, halolines), JDim: (-halolines, halolines)},
+    )()
+    shifted_domain = gtx.domain(
+        {
+            IDim: in_field.domain[0].unit_range - halolines,
+            JDim: in_field.domain[1].unit_range - halolines,
+        }
+    )
+    in_field = cartesian_case.as_field(domain=shifted_domain, data=in_field.ndarray)
+    in_field = square(square(in_field))
+    out_field = cases.allocate(cartesian_case, laplaplaplap_program_no_output_halo, "out_field")()
+
+    cases.verify(
+        cartesian_case,
+        laplaplaplap_program_no_output_halo,
+        in_field,
+        out_field,
+        inout=out_field,
+        ref=lap_ref(lap_ref(lap_ref(lap_ref(in_field.asnumpy())))),
     )
