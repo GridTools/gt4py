@@ -306,6 +306,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                 strides=get_dace_strides(field, symbols),
                 transient=True,
                 lifetime=dtypes.AllocationLifetime.Persistent,
+                storage=DEFAULT_STORAGE_TYPE[self._device_type],
                 debuginfo=get_dace_debuginfo(field),
             )
             dimensions[field.name] = field.dimensions
