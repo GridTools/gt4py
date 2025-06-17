@@ -23,10 +23,11 @@ uv sync --group dev --extra dace-cartesian
 
 to get the stree branch of dace into gt4py. With that, we are able to run gt4py tests against that dace branch (which we need for the stree -> sdfg back transformation).
 
-Note to myself: because we are hijacking dace-next, whenever they update dace-next, we'll get a merge conflict. To resolve that merge conflict,
+Note to myself: to update the DaCe branch in the `uv.lock` file
 
-1. checkout the `uv.lock` file from `main`: `git checkout origin/main uv.lock`
-2. (force) update the dace dependency: `uv sync -P dace-stree`
+```bash
+uv sync -P dace --group dev --extra dace-cartesian --extra cuda12
+```
 
 _Your standard README continues now._
 

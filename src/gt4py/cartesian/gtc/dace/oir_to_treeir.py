@@ -246,6 +246,18 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return tir.Bounds(start=start, end=end)
 
+    def _vertical_loop_schedule(self) -> dtypes.ScheduleType:
+        """Defines the vertical loop schedule.
+
+        Current strategy is to
+          - keep the vertical loop on the host for both, CPU and GPU targets
+          - run in parallel on CPU and sequential on GPU
+        """
+        if self._device_type == dtypes.DeviceType.GPU:
+            return dtypes.ScheduleType.Sequential
+
+        return DEFAULT_MAP_SCHEDULE[self._device_type]
+
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, ctx: tir.Context, loop_order: common.LoopOrder
     ) -> None:
@@ -256,18 +268,10 @@ class OIRToTreeIR(eve.NodeVisitor):
             axis_end=dcir.Axis.K.domain_dace_symbol(),
         )
 
-        # Current strategy is to keep vertical loop on the host as a parallel
-        # loop on CPU and a sequential on GPU
-        vertical_schedule = (
-            dtypes.ScheduleType.Sequential
-            if self._device_type is dtypes.DeviceType.GPU
-            else dtypes.ScheduleType.Default
-        )
-
         loop = tir.VerticalLoop(
             loop_order=loop_order,
             bounds_k=bounds,
-            schedule=vertical_schedule,
+            schedule=self._vertical_loop_schedule(),
             children=[],
             parent=ctx.current_scope,
         )
@@ -277,7 +281,7 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, ctx: tir.Context) -> None:
         if node.caches:
-            raise NotImplementedError("we don't do caches in this prototype")
+            raise NotImplementedError("Caches are not supported in this prototype.")
 
         self.visit(node.sections, ctx=ctx, loop_order=node.loop_order)
 
