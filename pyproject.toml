@@ -213,10 +213,6 @@ module = 'gt4py.cartesian.*'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
-module = 'gt4py.cartesian.backend.pyext_builder'
-
-[[tool.mypy.overrides]]
-ignore_errors = true
 module = 'gt4py.cartesian.frontend.nodes'
 
 [[tool.mypy.overrides]]
