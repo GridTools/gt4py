@@ -430,7 +430,7 @@ class SDFGManager:
         # Step 2: oir to tree ir (tir)
         # - convert oir.VerticalLoops and oir.VerticalLoopSections to MapScope / ForScope
         # - split oir.HorizontalExecutions into oir.CodeBlocks
-        tir = OIRToTreeIR().visit(oir, k_bounds=k_bounds)
+        tir = OIRToTreeIR(self.builder.backend.storage_info["device"]).visit(oir, k_bounds=k_bounds)
 
         # Step 3: tree ir to tree
         stree = TreeIRToScheduleTree().visit(tir)
@@ -466,9 +466,6 @@ class SDFGManager:
         # Create SDFG
         stree = self.schedule_tree()
         sdfg = stree.as_sdfg(validate=True, simplify=True, skip={"ScalarToSymbolPromotion"})
-
-        # Swap residency to device
-        _to_device(sdfg, self.builder.backend.storage_info["device"])
 
         # Cache SDFG
         self._save_sdfg(sdfg, str(path))
