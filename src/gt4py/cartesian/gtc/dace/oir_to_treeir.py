@@ -351,7 +351,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             f"{dcir.Axis.K.iteration_symbol()}{k_shift} + {self.visit(node.k, ctx=ctx, **kwargs)}"
         )
 
-    def visit_ScalarAccess(self, node: oir.ScalarAccess, **_kwargs: Any) -> str:
+    def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs: Any) -> str:
         return f"{node.name}"
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> str:
@@ -375,7 +375,7 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return self.visit(node.value, **kwargs)
 
-    def visit_BuiltInLiteral(self, node: common.BuiltInLiteral, **_kwargs: Any) -> str:
+    def visit_BuiltInLiteral(self, node: common.BuiltInLiteral, **kwargs: Any) -> str:
         if node == common.BuiltInLiteral.TRUE:
             return "True"
 
@@ -395,22 +395,22 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return f"({left} {node.op.value} {right})"
 
-    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs):
+    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> str:
         condition = self.visit(node.cond, **kwargs)
         if_code = self.visit(node.true_expr, **kwargs)
         else_code = self.visit(node.false_expr, **kwargs)
 
         return f"({if_code} if {condition} else {else_code})"
 
-    # visitor that should _not_ be called
+    # visitors that should _not_ be called
 
-    def visit_Decl(self, node: oir.Decl):
+    def visit_Decl(self, node: oir.Decl, **kwargs: Any) -> None:
         raise RuntimeError("visit_Decl should not be called")
 
-    def visit_FieldDecl(self, node: oir.FieldDecl):
+    def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> None:
         raise RuntimeError("visit_FieldDecl should not be called")
 
-    def visit_LocalScalar(self, node: oir.LocalScalar):
+    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> None:
         raise RuntimeError("visit_LocalScalar should not be called")
 
 
@@ -419,7 +419,7 @@ def get_dace_shape(
     extent: definitions.Extent,
     k_bound: tuple[int, int],
     symbols: tir.SymbolDict,
-) -> list:
+) -> list[symbolic.symbol]:
     shape = []
     for index, axis in enumerate(dcir.Axis.dims_3d()):
         if field.dimensions[index]:

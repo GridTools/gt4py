@@ -187,7 +187,7 @@ class OIRToTasklet(eve.NodeVisitor):
 
         ctx.code.append(f"{left} = {right}")
 
-    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs):
+    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> str:
         condition = self.visit(node.cond, **kwargs)
         if_code = self.visit(node.true_expr, **kwargs)
         else_code = self.visit(node.false_expr, **kwargs)
@@ -223,8 +223,10 @@ class OIRToTasklet(eve.NodeVisitor):
     def visit_BuiltInLiteral(self, node: common.BuiltInLiteral, **_kwargs: Any) -> str:
         if node == common.BuiltInLiteral.TRUE:
             return "True"
+
         if node == common.BuiltInLiteral.FALSE:
             return "False"
+
         raise NotImplementedError(f"Not implemented BuiltInLiteral '{node}' encountered.")
 
     def visit_NativeFunction(self, func: common.NativeFunction, **_kwargs: Any) -> str:
@@ -269,66 +271,67 @@ class OIRToTasklet(eve.NodeVisitor):
 
         return f"{function_name}({arguments})"
 
-    # Not implemented blocks - implement or pass to generic visitor
-    def visit_AbsoluteKIndex(self, node, **kwargs):
-        raise NotImplementedError("To be implemented: Absolute K")
+    # TODO to be ported from experimental branch
+    # def visit_AbsoluteKIndex(self, node: oir.AbsoluteKIdex, **kwargs: Any) -> None:
+    #     raise NotImplementedError("To be implemented: Absolute K") # noqa: ERA001 [commented-out-code]
 
-    def visit_CacheDesc(self, node, **kwargs):
+    # Not (yet) supported section
+    def visit_CacheDesc(self, node: oir.CacheDesc, **kwargs: Any) -> None:
         raise NotImplementedError("To be implemented: Caches")
 
-    def visit_IJCache(self, node, **kwargs):
+    def visit_IJCache(self, node: oir.IJCache, **kwargs: Any) -> None:
         raise NotImplementedError("To be implemented: Caches")
 
-    def visit_KCache(self, node, **kwargs):
+    def visit_KCache(self, node: oir.KCache, **kwargs: Any) -> None:
         raise NotImplementedError("To be implemented: Caches")
 
     # Should _not_ be called
-    def visit_CartesianOffset(self, _node: common.CartesianOffset, **_kwargs: Any) -> None:
+    def visit_CartesianOffset(self, node: common.CartesianOffset, **kwargs: Any) -> None:
         raise RuntimeError("Cartesian Offset should be dealt in Access IRs.")
 
-    def visit_VariableKOffset(self, _node: oir.VariableKOffset, **_kwargs: Any) -> None:
+    def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs: Any) -> None:
         raise RuntimeError("Variable K Offset should be dealt in Access IRs.")
 
-    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs):
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
         raise RuntimeError("visit_MaskStmt should not be called")
 
-    def visit_While(self, node, **kwargs):
+    def visit_While(self, node: oir.While, **kwargs: Any) -> None:
         raise RuntimeError("visit_While should not be called")
 
-    def visit_HorizontalRestriction(self, node, **kwargs):
+    def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs: Any) -> None:
         raise RuntimeError("visit_HorizontalRestriction: should be dealt in TreeIR")
 
-    def visit_LocalScalar(self, node, **kwargs):
+    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> None:
         raise RuntimeError("visit_LocalScalar should not be called")
 
-    def visit_Temporary(self, node, **kwargs):
+    def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> None:
         raise RuntimeError("visit_LocalScalar should not be called")
 
-    def visit_Stencil(self, node, **kwargs):
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> None:
         raise RuntimeError("visit_Stencil should not be called")
 
-    def visit_Decl(self, node, **kwargs):
+    def visit_Decl(self, node: oir.Decl, **kwargs: Any) -> None:
         raise RuntimeError("visit_Decl should not be called")
 
-    def visit_FieldDecl(self, node, **kwargs):
+    def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> None:
         raise RuntimeError("visit_FieldDecl should not be called")
 
-    def visit_ScalarDecl(self, node, **kwargs):
+    def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> None:
         raise RuntimeError("visit_ScalarDecl should not be called")
 
-    def visit_Interval(self, node, **kwargs):
+    def visit_Interval(self, node: oir.Interval, **kwargs: Any) -> None:
         raise RuntimeError("visit_Interval should not be called")
 
-    def visit_UnboundedInterval(self, node, **kwargs):
+    def visit_UnboundedInterval(self, node: oir.UnboundedInterval, **kwargs: Any) -> None:
         raise RuntimeError("visit_UnboundedInterval should not be called")
 
-    def visit_HorizontalExecution(self, node, **kwargs):
+    def visit_HorizontalExecution(self, node: oir.HorizontalExecution, **kwargs: Any) -> None:
         raise RuntimeError("visit_HorizontalExecution should not be called")
 
-    def visit_VerticalLoop(self, node, **kwargs):
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> None:
         raise RuntimeError("visit_VerticalLoop should not be called")
 
-    def visit_VerticalLoopSection(self, node, **kwargs):
+    def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection, **kwargs: Any) -> None:
         raise RuntimeError("visit_VerticalLoopSection should not be called")
 
 
