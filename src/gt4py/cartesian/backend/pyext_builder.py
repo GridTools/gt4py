@@ -11,7 +11,7 @@ import copy
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, TypedDict, Union
 
 import pybind11
 import setuptools
@@ -20,6 +20,12 @@ from setuptools.command.build_ext import build_ext
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
+
+
+class SetuptoolsArgs(TypedDict):
+    name: str
+    ext_modules: list[setuptools.Extension]
+    script_args: list[str]
 
 
 def get_dace_module_path() -> Optional[str]:
@@ -225,7 +231,7 @@ def build_pybind_ext(
         extra_link_args=extra_link_args,
     )
 
-    setuptools_args = dict(
+    setuptools_args = SetuptoolsArgs(
         name=name,
         ext_modules=[py_extension],
         script_args=[
@@ -237,10 +243,10 @@ def build_pybind_ext(
     )
 
     if verbose:
-        setuptools_args["script_args"].append("-v")  # type: ignore
+        setuptools_args["script_args"].append("-v")
         setuptools_setup(**setuptools_args, build_ext_class=build_ext_class)
     else:
-        setuptools_args["script_args"].append("-q")  # type: ignore
+        setuptools_args["script_args"].append("-q")
         io_out, io_err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(io_out), contextlib.redirect_stderr(io_err):
             setuptools_setup(**setuptools_args, build_ext_class=build_ext_class)
