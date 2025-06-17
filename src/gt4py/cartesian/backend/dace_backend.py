@@ -424,14 +424,18 @@ class SDFGManager:
         oir = GTIRToOIR().visit(self.builder.gtir)
 
         # - oir optimizations
-        oir_pipeline = self.builder.options.backend_opts.get(
-            "oir_pipeline",
-            DefaultPipeline(
-                skip=[
-                    caches.IJCacheDetection,
-                    caches.KCacheDetection,
-                ]
-            ),
+        # Deactivate caches. We need to extend the skip list in case users have
+        # specified skip as well
+        oir_pipeline: DefaultPipeline = self.builder.options.backend_opts.get(
+            "oir_pipeline", DefaultPipeline()
+        )
+        oir_pipeline.skip.extend(
+            [
+                caches.IJCacheDetection,
+                caches.KCacheDetection,
+                caches.PruneKCacheFills,
+                caches.PruneKCacheFlushes,
+            ]
         )
         oir = oir_pipeline.run(oir)
 
