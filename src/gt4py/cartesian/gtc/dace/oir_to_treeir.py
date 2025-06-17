@@ -256,10 +256,18 @@ class OIRToTreeIR(eve.NodeVisitor):
             axis_end=dcir.Axis.K.domain_dace_symbol(),
         )
 
+        # Current strategy is to keep vertical loop on the host as a parallel
+        # loop on CPU and a sequential on GPU
+        vertical_schedule = (
+            dtypes.ScheduleType.Default
+            if self._device_type is dtypes.DeviceType.GPU
+            else dtypes.ScheduleType.Sequential
+        )
+
         loop = tir.VerticalLoop(
             loop_order=loop_order,
             bounds_k=bounds,
-            schedule=DEFAULT_MAP_SCHEDULE[self._device_type],
+            schedule=vertical_schedule,
             children=[],
             parent=ctx.current_scope,
         )
