@@ -37,7 +37,7 @@ frameworks = [
 lint = [
   'pre-commit>=4.0.1',
   'ruff>=0.8.0',
-  'tach>=0.16.0'
+  'tach>=0.23.0'
 ]
 test = [
   'coverage[toml]>=7.5.0',
