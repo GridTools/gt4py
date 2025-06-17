@@ -52,6 +52,13 @@ class ContextPushPop:
 
 
 class TreeIRToScheduleTree(eve.NodeVisitor):
+    """Translate TreeIR temporary IR to DaCe's Schedule Tree.
+
+    TreeIR should have undone most of the DSL specificity when translating
+    from OIR. This should be a rather direct translation. No transformation
+    should happen here, they should all be done on the resulting Schedule Tree.
+    """
+
     def visit_Tasklet(self, node: tir.Tasklet, ctx: Context) -> None:
         tasklet = tn.TaskletNode(
             node=node.tasklet, in_memlets=node.inputs, out_memlets=node.outputs

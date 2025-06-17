@@ -319,6 +319,14 @@ def freeze_origin_domain_sdfg(
     """Create a new SDFG by wrapping a _copy_ of the original SDFG and freezing it's
     origin and domain
 
+    This wrapping is required because we do not expect any of the inner_sdfg bounds to
+    have been specialize, e.g. we expect "__I/J/K" symbols to still be present. We wrap
+    the call and specialize at top level, which will then be passed as a parameter to the
+    inner sdfg.
+
+    If/when we move specilization of array & maps bounds upstream, this will become moot
+    and can be remove. See https://github.com/GridTools/gt4py/issues/2082.
+
     Dev note: we need to wrap a copy to make sure we can use caching with no side effect
     in other parts of the SDFG making pipeline
 

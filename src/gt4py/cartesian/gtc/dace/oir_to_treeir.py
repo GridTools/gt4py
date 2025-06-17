@@ -33,9 +33,20 @@ DEFAULT_MAP_SCHEDULE = {
     dtypes.DeviceType.CPU: dtypes.ScheduleType.Default,
     dtypes.DeviceType.GPU: dtypes.ScheduleType.GPU_Device,
 }
+"""Default kernel target for device type"""
 
 
 class OIRToTreeIR(eve.NodeVisitor):
+    """Translate the GT4Py OIR into a Dace-centric TreeIR
+
+    TreeIR is build to be a minimum representation of DaCe's Schedule
+    Tree. No transformation is done on TreeIR, though should be done
+    once the TreeIR has been properly turned into a Schedule Tree.
+
+    This class _does not_ deal with Tasklet representation, it deffers the
+    work to the OIRToTasklet visitor.
+    """
+
     def __init__(self, device_type: str) -> None:
         device_type_translate = {
             "CPU": dtypes.DeviceType.CPU,

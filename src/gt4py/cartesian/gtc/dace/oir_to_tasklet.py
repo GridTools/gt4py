@@ -45,6 +45,11 @@ class Context:
 
 
 class OIRToTasklet(eve.NodeVisitor):
+    """Translate the numerical code with OIR to DaCe's Tasklet.
+
+    This should not attempt any transformation or do any control flow
+    work. Control flow is the responsability of OIRToTreeIR"""
+
     def _memlet_subset(self, node: oir.FieldAccess, ctx: Context) -> subsets.Subset:
         if isinstance(node.offset, common.CartesianOffset):
             offset_dict = node.offset.to_dict()
