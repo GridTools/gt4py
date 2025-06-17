@@ -61,26 +61,34 @@ if TYPE_CHECKING:
     from gt4py.cartesian.stencil_object import StencilObject
 
 
-def _specialize_transient_strides(top_sdfg: dace.SDFG, layout_map):
-    for sdfg in top_sdfg.all_sdfgs_recursive():
-        replacement_dictionary = replace_strides(
-            [
-                array
-                for array in sdfg.arrays.values()
-                if isinstance(array, dace.data.Array) and array.transient
-            ],
-            layout_map,
-        )
-        sdfg.replace_dict(replacement_dictionary)
-        for state in sdfg.nodes():
-            for node in state.nodes():
-                if isinstance(node, dace.nodes.NestedSDFG):
-                    for k, v in replacement_dictionary.items():
-                        if k in node.symbol_mapping:
-                            node.symbol_mapping[k] = v
-        for k in replacement_dictionary.keys():
-            if k in sdfg.symbols:
-                sdfg.remove_symbol(k)
+def _specialize_transient_strides(
+    sdfg: dace.SDFG, layout_map, replacement_dictionary: dict[str, str] | None = None
+):
+    # Find transients in this SDFG to specialize.
+    stride_replacements = replace_strides(
+        [
+            array
+            for array in sdfg.arrays.values()
+            if isinstance(array, dace.data.Array) and array.transient
+        ],
+        layout_map,
+    )
+
+    # In case of nested SDFGs (see below), merge with replacement dict that was passed down.
+    # Dev note: We shouldn't use mutable data structures as argument defaults.
+    replacement_dictionary = {} if replacement_dictionary is None else replacement_dictionary
+    replacement_dictionary.update(stride_replacements)
+
+    # Replace in this SDFG
+    sdfg.replace_dict(replacement_dictionary)
+    for state in sdfg.nodes():
+        for node in state.nodes():
+            if isinstance(node, dace.nodes.NestedSDFG):
+                # Recursively replace strides in nested SDFGs
+                _specialize_transient_strides(node.sdfg, layout_map, replacement_dictionary)
+    for k in replacement_dictionary.keys():
+        if k in sdfg.symbols:
+            sdfg.remove_symbol(k)
 
 
 def _get_expansion_priority_cpu(node: StencilComputation):
@@ -100,6 +108,7 @@ def _get_expansion_priority_cpu(node: StencilComputation):
 
 
 def _get_expansion_priority_gpu(node: StencilComputation):
+    raise RuntimeError("To be torched. We shouldn't end up here.")
     expansion_priority = []
     if node.has_splittable_regions():
         expansion_priority.append(["Sections", "Stages", "J", "I", "K"])
