@@ -79,6 +79,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
                         (node.bounds_j.start, f"{node.bounds_j.end} - 1", 1),
                     ]
                 ),
+                schedule=node.schedule,
             )
         )
 
@@ -113,6 +114,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
                     # -1 because range bounds are inclusive
                     [(node.bounds_k.start, f"{node.bounds_k.end} - 1", 1)]
                 ),
+                schedule=node.schedule,
             )
         )
         map_scope = tn.MapScope(node=map_entry, children=[])

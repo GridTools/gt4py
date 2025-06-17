@@ -88,10 +88,14 @@ class HorizontalLoop(TreeScope):
     bounds_i: Bounds
     bounds_j: Bounds
 
+    schedule: dtypes.ScheduleType
+
 
 class VerticalLoop(TreeScope):
     loop_order: common.LoopOrder
     bounds_k: Bounds
+
+    schedule: dtypes.ScheduleType
 
 
 class TreeRoot(TreeScope):

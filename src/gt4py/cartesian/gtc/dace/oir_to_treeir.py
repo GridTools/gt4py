@@ -29,6 +29,11 @@ DEFAULT_STORAGE_TYPE = {
 }
 """Default dace residency types for device type"""
 
+DEFAULT_MAP_SCHEDULE = {
+    dtypes.DeviceType.CPU: dtypes.ScheduleType.Default,
+    dtypes.DeviceType.GPU: dtypes.ScheduleType.GPU_Device,
+}
+
 
 class OIRToTreeIR(eve.NodeVisitor):
     def __init__(self, device_type: str) -> None:
@@ -36,10 +41,10 @@ class OIRToTreeIR(eve.NodeVisitor):
             "CPU": dtypes.DeviceType.CPU,
             "GPU": dtypes.DeviceType.GPU,
         }
-        try:
-            self._device_type = device_type_translate[device_type.upper()]
-        except KeyError as e:
-            raise ValueError(f"Device {e} is unknown") from e
+        if device_type.upper() not in device_type_translate:
+            raise ValueError(f"Unknown device type {device_type}.")
+
+        self._device_type = device_type_translate[device_type.upper()]
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         code, inputs, outputs = oir_to_tasklet.generate(node, tree=ctx.root)
@@ -126,6 +131,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                 start=f"{axis_start_j} + {extent[1][0]}",
                 end=f"{axis_end_j} + {extent[1][1]}",
             ),
+            schedule=DEFAULT_MAP_SCHEDULE[self._device_type],
             children=[],
             parent=ctx.current_scope,
         )
@@ -240,7 +246,11 @@ class OIRToTreeIR(eve.NodeVisitor):
         )
 
         loop = tir.VerticalLoop(
-            loop_order=loop_order, bounds_k=bounds, children=[], parent=ctx.current_scope
+            loop_order=loop_order,
+            bounds_k=bounds,
+            schedule=DEFAULT_MAP_SCHEDULE[self._device_type],
+            children=[],
+            parent=ctx.current_scope,
         )
 
         with loop.scope(ctx):
