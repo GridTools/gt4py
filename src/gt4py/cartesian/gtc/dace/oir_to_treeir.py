@@ -259,9 +259,9 @@ class OIRToTreeIR(eve.NodeVisitor):
         # Current strategy is to keep vertical loop on the host as a parallel
         # loop on CPU and a sequential on GPU
         vertical_schedule = (
-            dtypes.ScheduleType.Default
+            dtypes.ScheduleType.Sequential
             if self._device_type is dtypes.DeviceType.GPU
-            else dtypes.ScheduleType.Sequential
+            else dtypes.ScheduleType.Default
         )
 
         loop = tir.VerticalLoop(
