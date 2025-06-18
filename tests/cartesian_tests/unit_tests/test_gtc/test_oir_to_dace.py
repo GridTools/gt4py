@@ -33,6 +33,8 @@ pytestmark = pytest.mark.requires_dace
 
 
 def test_oir_sdfg_builder_copy_stencil() -> None:
+    pytest.skip("We are torching OirSDFGBuilder.")
+
     stencil_name = "copy"
     stencil = StencilFactory(
         name=stencil_name,
@@ -106,6 +108,8 @@ def test_oir_sdfg_builder_copy_stencil() -> None:
 
 
 def test_oir_sdfg_builder_assign_scalar_param() -> None:
+    pytest.skip("We are torching OirSDFGBuilder.")
+
     stencil_name = "scalar_assign"
     stencil = StencilFactory(
         name=stencil_name,

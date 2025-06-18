@@ -1185,6 +1185,8 @@ class DaCeIRBuilder(eve.NodeTranslator):
     def visit_VerticalLoop(
         self, node: oir.VerticalLoop, *, global_ctx: DaCeIRBuilder.GlobalContext, **kwargs: Any
     ) -> dcir.NestedSDFG:
+        raise RuntimeError("To be torched. We should not end up here anymore.")
+
         overall_extent = Extent.zeros(2)
         for he in node.walk_values().if_isinstance(oir.HorizontalExecution):
             overall_extent = overall_extent.union(global_ctx.library_node.get_extents(he))

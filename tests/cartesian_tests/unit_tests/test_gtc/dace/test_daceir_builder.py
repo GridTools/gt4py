@@ -38,6 +38,8 @@ def test_dcir_code_structure_condition() -> None:
         false_states: []
     ComputationState
     """
+    pytest.skip("We are torching the library node expansion system.")
+
     stencil = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(
@@ -78,6 +80,8 @@ def test_dcir_code_structure_while() -> None:
         body: [ComputationState]
     ComputationState
     """
+    pytest.skip("We are torching the library node expansion system.")
+
     stencil = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(

@@ -602,6 +602,8 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         symtable: ChainMap[eve.SymbolRef, Any],
         **kwargs: Any,
     ) -> dace.nodes.NestedSDFG:
+        raise RuntimeError("To be torched. We should not end up here anymore.")
+
         sdfg = dace.SDFG(node.label)
         inner_sdfg_ctx = StencilComputationSDFGBuilder.SDFGContext(
             sdfg=sdfg, state=sdfg.add_state(is_start_block=True)

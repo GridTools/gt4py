@@ -295,6 +295,8 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
 
     @classmethod
     def apply_codegen(cls, node: dcir.Tasklet, **kwargs: Any) -> str:
+        raise RuntimeError("To be torched. We should not end up here anymore.")
+
         # NOTE This is not named 'apply' b/c the base class has a method with
         # that name and a different type signature.
         if not isinstance(node, dcir.Tasklet):
