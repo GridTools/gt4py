@@ -269,6 +269,22 @@ def _sdfg_add_arrays_and_edges(
             wrapper_sdfg.add_scalar(
                 name, dtype=array.dtype, storage=array.storage, lifetime=array.lifetime
             )
+            if name in inputs:
+                state.add_edge(
+                    state.add_read(name),
+                    None,
+                    nsdfg,
+                    name,
+                    dace.Memlet(name),
+                )
+            if name in outputs:
+                state.add_edge(
+                    nsdfg,
+                    name,
+                    state.add_write(name),
+                    None,
+                    dace.Memlet(name),
+                )
 
 
 def _sdfg_specialize_symbols(wrapper_sdfg, domain: Tuple[int, ...]):
