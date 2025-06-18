@@ -572,7 +572,9 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
         >>> @register_subclasses(MyVirtualSubclassA, MyVirtualSubclassB)
         ... class MyBaseClass(abc.ABC):
         ...     pass
-        >>> issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(MyVirtualSubclassB, MyBaseClass)
+        >>> issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(
+        ...     MyVirtualSubclassB, MyBaseClass
+        ... )
         True
 
     """

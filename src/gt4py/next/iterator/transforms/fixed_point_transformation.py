@@ -61,9 +61,9 @@ class FixedPointTransformation(eve.NodeTranslator):
                 method = getattr(self, f"transform_{transformation.name.lower()}")
                 result = method(node, **kwargs)
                 if result is not None:
-                    assert (
-                        result is not node
-                    ), f"Transformation {transformation.name.lower()} should have returned None, since nothing changed."
+                    assert result is not node, (
+                        f"Transformation {transformation.name.lower()} should have returned None, since nothing changed."
+                    )
                     if self.REINFER_TYPES:
                         itir_type_inference.reinfer(result)
                     self._preserve_annex(node, result)

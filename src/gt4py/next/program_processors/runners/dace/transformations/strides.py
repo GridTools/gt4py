@@ -642,9 +642,9 @@ def _gt_find_toplevel_data_accesses(
                 # We also check if it was ever found on the top level, this should
                 #  not happen, as everything should go through Maps. But some strange
                 #  DaCe transformation might do it.
-                assert (
-                    data not in top_level_data
-                ), f"Found {data} on the top level and inside a scope."
+                assert data not in top_level_data, (
+                    f"Found {data} on the top level and inside a scope."
+                )
                 not_top_level_data.add(data)
                 continue
 
@@ -659,9 +659,9 @@ def _gt_find_toplevel_data_accesses(
                 continue
 
             # We have found a new data node that is on the top node and is unknown.
-            assert (
-                data not in not_top_level_data
-            ), f"Found {data} on the top level and inside a scope."
+            assert data not in not_top_level_data, (
+                f"Found {data} on the top level and inside a scope."
+            )
             desc: dace_data.Data = dnode.desc(sdfg)
 
             # Check if we only accept arrays

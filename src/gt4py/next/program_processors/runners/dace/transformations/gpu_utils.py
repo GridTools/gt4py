@@ -71,9 +71,9 @@ def gt_gpu_transformation(
         - Investigate if the order of iteration is not changed (it should not).
         - Investigate if the trivial GPU map remover is still needed.
     """
-    assert (
-        len(kwargs) == 0
-    ), f"gt_gpu_transformation(): found unknown arguments: {', '.join(arg for arg in kwargs.keys())}"
+    assert len(kwargs) == 0, (
+        f"gt_gpu_transformation(): found unknown arguments: {', '.join(arg for arg in kwargs.keys())}"
+    )
 
     # Turn all global arrays (which we identify as input) into GPU memory.
     #  This way the GPU transformation will not create this copying stuff.

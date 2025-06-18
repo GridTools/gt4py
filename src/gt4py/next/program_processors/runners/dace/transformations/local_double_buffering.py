@@ -356,12 +356,12 @@ def _check_if_map_must_be_handled(
         input_node, output_node = inout_datas[inout_data_name]
         input_edges = state.edges_between(input_node, map_entry)
         output_edges = state.edges_between(map_exit, output_node)
-        assert (
-            len(input_edges) == 1
-        ), f"Expected a single connection between input node and map entry, but found {len(input_edges)}."
-        assert (
-            len(output_edges) == 1
-        ), f"Expected a single connection between map exit and write back node, but found {len(output_edges)}."
+        assert len(input_edges) == 1, (
+            f"Expected a single connection between input node and map entry, but found {len(input_edges)}."
+        )
+        assert len(output_edges) == 1, (
+            f"Expected a single connection between map exit and write back node, but found {len(output_edges)}."
+        )
 
         # If there is only one edge on the inside of the map, that goes into an
         #  AccessNode, then we assume it is double buffered.

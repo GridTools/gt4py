@@ -795,9 +795,9 @@ class MapFusion(transformation.SingleStateTransformation):
                     if inner_consumer_edge.data.src_subset is None:
                         return None
                     consumer_subsets.append(inner_consumer_edge.data.src_subset)
-            assert (
-                found_second_map
-            ), f"Found '{intermediate_node}' which looked like a pure node, but is not one."
+            assert found_second_map, (
+                f"Found '{intermediate_node}' which looked like a pure node, but is not one."
+            )
             assert len(consumer_subsets) != 0
 
             # The consumer still uses the original symbols of the second map, so we must rename them.
@@ -1865,9 +1865,9 @@ class MapFusion(transformation.SingleStateTransformation):
         #  This value is set for example by the `FullMapFusion` pass.
         # TODO(phimuell): Change this once the issue is resolved.
         if self._single_use_data is not None:
-            assert (
-                sdfg in self._single_use_data
-            ), f"`_single_use_data` was set, but does not contain information about the SDFG '{sdfg.name}'."
+            assert sdfg in self._single_use_data, (
+                f"`_single_use_data` was set, but does not contain information about the SDFG '{sdfg.name}'."
+            )
             single_use_data: Set[str] = self._single_use_data[sdfg]
             return data.data not in single_use_data
 
