@@ -1132,6 +1132,7 @@ dev = [
     { name = "coverage", extra = ["toml"] },
     { name = "cython" },
     { name = "esbonio" },
+    { name = "gitpython" },
     { name = "hypothesis" },
     { name = "jupytext" },
     { name = "matplotlib" },
@@ -1149,12 +1150,14 @@ dev = [
     { name = "pytest-factoryboy" },
     { name = "pytest-instafail" },
     { name = "pytest-xdist", extra = ["psutil"] },
+    { name = "pyyaml" },
     { name = "ruff" },
     { name = "setuptools" },
     { name = "sphinx" },
     { name = "sphinx-rtd-theme" },
     { name = "sphinx-toolbox" },
     { name = "tach" },
+    { name = "typer" },
     { name = "types-decorator" },
     { name = "types-docutils" },
     { name = "types-pytz" },
@@ -1181,6 +1184,11 @@ lint = [
     { name = "ruff" },
     { name = "tach" },
     { name = "validate-pyproject-schema-store", extra = ["all"] },
+]
+scripts = [
+    { name = "gitpython" },
+    { name = "pyyaml" },
+    { name = "typer" },
 ]
 test = [
     { name = "coverage", extra = ["toml"] },
@@ -1263,6 +1271,7 @@ dev = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.5.0" },
     { name = "cython", specifier = ">=3.0.0" },
     { name = "esbonio", specifier = ">=0.16.0" },
+    { name = "gitpython", specifier = ">=3.1.0" },
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "jupytext", specifier = ">=1.14" },
     { name = "matplotlib", specifier = ">=3.8.4" },
@@ -1280,12 +1289,14 @@ dev = [
     { name = "pytest-factoryboy", specifier = ">=2.6.1" },
     { name = "pytest-instafail", specifier = ">=0.5.0" },
     { name = "pytest-xdist", extras = ["psutil"], specifier = ">=3.5.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.8.0" },
     { name = "setuptools", specifier = ">=70.0.0" },
     { name = "sphinx", specifier = ">=7.3.7" },
     { name = "sphinx-rtd-theme", specifier = ">=3.0.1" },
     { name = "sphinx-toolbox", specifier = ">=3.8.1" },
     { name = "tach", specifier = ">=0.23.0" },
+    { name = "typer", specifier = ">=0.12.3" },
     { name = "types-decorator", specifier = ">=5.1.8" },
     { name = "types-docutils", specifier = ">=0.21.0" },
     { name = "types-pytz", specifier = ">=2024.2.0" },
@@ -1310,6 +1321,11 @@ lint = [
     { name = "ruff", specifier = ">=0.8.0" },
     { name = "tach", specifier = ">=0.23.0" },
     { name = "validate-pyproject-schema-store", extras = ["all"], specifier = ">=2025.6.13" },
+]
+scripts = [
+    { name = "gitpython", specifier = ">=3.1.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "typer", specifier = ">=0.12.3" },
 ]
 test = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.5.0" },
@@ -2828,6 +2844,15 @@ wheels = [
 ]
 
 [[package]]
+name = "shellingham"
+version = "1.5.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/58/15/8b3609fd3830ef7b27b655beb4b4e9c62313a4e8da8c676e142cc210d58e/shellingham-1.5.4.tar.gz", hash = "sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de", size = 10310, upload-time = "2023-10-24T04:13:40.426Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl", hash = "sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686", size = 9755, upload-time = "2023-10-24T04:13:38.866Z" },
+]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3198,6 +3223,21 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/38/04/1cd43f72c241fedcf0d9a18d0783953ee301eac9e5d9db1df0f0f089d9af/trove_classifiers-2025.5.9.12.tar.gz", hash = "sha256:7ca7c8a7a76e2cd314468c677c69d12cc2357711fcab4a60f87994c1589e5cb5", size = 16940, upload-time = "2025-05-09T12:04:48.829Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/92/ef/c6deb083748be3bcad6f471b6ae983950c161890bf5ae1b2af80cc56c530/trove_classifiers-2025.5.9.12-py3-none-any.whl", hash = "sha256:e381c05537adac78881c8fa345fd0e9970159f4e4a04fcc42cfd3129cca640ce", size = 14119, upload-time = "2025-05-09T12:04:46.38Z" },
+]
+
+[[package]]
+name = "typer"
+version = "0.16.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "rich" },
+    { name = "shellingham" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c5/8c/7d682431efca5fd290017663ea4588bf6f2c6aad085c7f108c5dbc316e70/typer-0.16.0.tar.gz", hash = "sha256:af377ffaee1dbe37ae9440cb4e8f11686ea5ce4e9bae01b84ae7c63b87f1dd3b", size = 102625, upload-time = "2025-05-26T14:30:31.824Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/42/3efaf858001d2c2913de7f354563e3a3a2f0decae3efe98427125a8f441e/typer-0.16.0-py3-none-any.whl", hash = "sha256:1f79bed11d4d02d4310e3c1b7ba594183bcedb0ac73b27a9e5f28f6fb5b98855", size = 46317, upload-time = "2025-05-26T14:30:30.523Z" },
 ]
 
 [[package]]
