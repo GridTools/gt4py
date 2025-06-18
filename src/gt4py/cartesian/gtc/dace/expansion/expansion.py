@@ -146,6 +146,8 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         node: StencilComputation, parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> dace.nodes.NestedSDFG:
         """Expand the coarse SDFG in parent_sdfg to a NestedSDFG with all the states."""
+        raise RuntimeError("To be torched. We should not end up here anymore.")
+
         split_horizontal_executions_regions(node)
         arrays = StencilComputationExpansion._get_parent_arrays(node, parent_state, parent_sdfg)
 

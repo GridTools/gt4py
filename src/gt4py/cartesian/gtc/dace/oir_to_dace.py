@@ -141,6 +141,8 @@ class OirSDFGBuilder(eve.NodeVisitor):
             )
 
     def visit_Stencil(self, node: oir.Stencil):
+        raise RuntimeError("To be torched. We should not end up here anymore.")
+
         ctx = OirSDFGBuilder.SDFGContext(stencil=node)
         for param in node.params:
             if isinstance(param, oir.FieldDecl):
