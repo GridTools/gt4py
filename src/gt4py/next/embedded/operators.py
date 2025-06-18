@@ -93,16 +93,14 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
     if "out" in kwargs:
         # called from program or direct field_operator as program
         new_context_kwargs = {}
-        if embedded_context.within_valid_context():
-            # called from program
-            assert "offset_provider" not in kwargs
-        else:
+        if not embedded_context.within_valid_context():
             # field_operator as program
             if "offset_provider" not in kwargs:
                 raise errors.MissingArgumentError(None, "offset_provider", True)
-            offset_provider = kwargs.pop("offset_provider", None)
+            offset_provider = kwargs.pop("offset_provider")
 
             new_context_kwargs["offset_provider"] = offset_provider
+        # else called from program (we already have a context with `offset_provider`)
 
         out = kwargs.pop("out")
 

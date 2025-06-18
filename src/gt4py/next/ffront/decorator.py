@@ -733,12 +733,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        if "offset_provider" not in kwargs:
-            kwargs["offset_provider"] = {}
-        kwargs["offset_provider"] = {
-            **self._implicit_offset_provider,
-            **kwargs["offset_provider"],
-        }
+        offset_provider = {**kwargs.pop("offset_provider", {}), **self._implicit_offset_provider}
 
         if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
@@ -756,9 +751,11 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 self.definition_stage,
                 *args,
                 out=out,
+                offset_provider=offset_provider,
                 **kwargs,
             )
         else:
+            kwargs["offset_provider"] = offset_provider
             attributes = (
                 self.definition_stage.attributes
                 if self.definition_stage
