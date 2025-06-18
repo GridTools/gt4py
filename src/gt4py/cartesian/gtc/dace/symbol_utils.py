@@ -61,7 +61,7 @@ def get_axis_bound_diff_str(axis_bound1, axis_bound2, var_name: str):
         var = var_name
     else:
         var = ""
-    return f"{sign}({var}{axis_bound1.offset-axis_bound2.offset:+d})"
+    return f"{sign}({var}{axis_bound1.offset - axis_bound2.offset:+d})"
 
 
 @lru_cache(maxsize=None)

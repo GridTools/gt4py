@@ -212,7 +212,7 @@ def field_type_validator_factory(
         else:
             simple_validator = factory(type_annotation, name, required=True)
             return ValidatorAdapter(
-                simple_validator, f"{getattr(simple_validator,'__name__', 'TypeValidator')}"
+                simple_validator, f"{getattr(simple_validator, '__name__', 'TypeValidator')}"
             )
 
     return _field_type_validator_factory
@@ -915,9 +915,9 @@ def _make_post_init(has_post_init: bool) -> Callable[[DataModel], None]:
     return __attrs_post_init__
 
 
-def _make_devtools_pretty() -> (
-    Callable[[DataModel, Callable[[Any], Any]], Generator[Any, None, None]]
-):
+def _make_devtools_pretty() -> Callable[
+    [DataModel, Callable[[Any], Any]], Generator[Any, None, None]
+]:
     def __pretty__(
         self: DataModel, fmt: Callable[[Any], Any], **kwargs: Any
     ) -> Generator[Any, None, None]:
