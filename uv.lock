@@ -680,7 +680,7 @@ dependencies = [
 [[package]]
 name = "dace"
 version = "1.0.1"
-source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-to-sdfg#b9bcc3d4b24984b14eb8d25a86fee71cd11dfefb" }
+source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-to-sdfg#b29a263af5523222049e31564b58b62d39554917" }
 resolution-markers = [
     "python_full_version >= '3.11'",
     "python_full_version < '3.11'",
@@ -1083,7 +1083,7 @@ cuda12 = [
     { name = "cupy-cuda12x" },
 ]
 dace-cartesian = [
-    { name = "dace", version = "1.0.1", source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-to-sdfg#b9bcc3d4b24984b14eb8d25a86fee71cd11dfefb" } },
+    { name = "dace", version = "1.0.1", source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-to-sdfg#b29a263af5523222049e31564b58b62d39554917" } },
 ]
 dace-next = [
     { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_06_13#09dfda39e298a86251ca3f62dffda539041cfcf4" } },
