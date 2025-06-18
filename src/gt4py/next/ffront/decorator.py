@@ -755,7 +755,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 **kwargs,
             )
         else:
-            kwargs["offset_provider"] = offset_provider
+            if not next_embedded.context.within_valid_context():
+                kwargs["offset_provider"] = offset_provider
             attributes = (
                 self.definition_stage.attributes
                 if self.definition_stage
