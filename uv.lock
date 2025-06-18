@@ -1160,6 +1160,7 @@ dev = [
     { name = "types-pytz" },
     { name = "types-pyyaml" },
     { name = "types-tabulate" },
+    { name = "validate-pyproject-schema-store", extra = ["all"] },
     { name = "wheel" },
 ]
 docs = [
@@ -1179,6 +1180,7 @@ lint = [
     { name = "pre-commit" },
     { name = "ruff" },
     { name = "tach" },
+    { name = "validate-pyproject-schema-store", extra = ["all"] },
 ]
 test = [
     { name = "coverage", extra = ["toml"] },
@@ -1289,6 +1291,7 @@ dev = [
     { name = "types-pytz", specifier = ">=2024.2.0" },
     { name = "types-pyyaml", specifier = ">=6.0.10" },
     { name = "types-tabulate", specifier = ">=0.8.10" },
+    { name = "validate-pyproject-schema-store", extras = ["all"], specifier = ">=2025.6.13" },
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 docs = [
@@ -1306,6 +1309,7 @@ lint = [
     { name = "pre-commit", specifier = ">=4.0.1" },
     { name = "ruff", specifier = ">=0.8.0" },
     { name = "tach", specifier = ">=0.23.0" },
+    { name = "validate-pyproject-schema-store", extras = ["all"], specifier = ">=2025.6.13" },
 ]
 test = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.5.0" },
@@ -3188,6 +3192,15 @@ wheels = [
 ]
 
 [[package]]
+name = "trove-classifiers"
+version = "2025.5.9.12"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/38/04/1cd43f72c241fedcf0d9a18d0783953ee301eac9e5d9db1df0f0f089d9af/trove_classifiers-2025.5.9.12.tar.gz", hash = "sha256:7ca7c8a7a76e2cd314468c677c69d12cc2357711fcab4a60f87994c1589e5cb5", size = 16940, upload-time = "2025-05-09T12:04:48.829Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/92/ef/c6deb083748be3bcad6f471b6ae983950c161890bf5ae1b2af80cc56c530/trove_classifiers-2025.5.9.12-py3-none-any.whl", hash = "sha256:e381c05537adac78881c8fa345fd0e9970159f4e4a04fcc42cfd3129cca640ce", size = 14119, upload-time = "2025-05-09T12:04:46.38Z" },
+]
+
+[[package]]
 name = "types-decorator"
 version = "5.1.8.20250121"
 source = { registry = "https://pypi.org/simple" }
@@ -3248,6 +3261,39 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/aa/63/e53da845320b757bf29ef6a9062f5c669fe997973f966045cb019c3f4b66/urllib3-2.3.0.tar.gz", hash = "sha256:f8c5449b3cf0861679ce7e0503c7b44b5ec981bec0d1d3795a07f1ba96f0204d", size = 307268, upload-time = "2024-12-22T07:47:30.032Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/19/4ec628951a74043532ca2cf5d97b7b14863931476d117c471e8e2b1eb39f/urllib3-2.3.0-py3-none-any.whl", hash = "sha256:1cee9ad369867bfdbbb48b7dd50374c0967a0bb7710050facf0dd6911440e3df", size = 128369, upload-time = "2024-12-22T07:47:28.074Z" },
+]
+
+[[package]]
+name = "validate-pyproject"
+version = "0.24.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastjsonschema" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d2/e5/dd60cbfc9b0701d8621c73e56c261142c1a01d1f74d0da30133bd272ecc6/validate_pyproject-0.24.1.tar.gz", hash = "sha256:e182fc51354add988e5bee6fc06ceb327832a78d921730fc618275e5b29e6b71", size = 117054, upload-time = "2025-03-21T21:05:32.623Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a4/39/6983dd79f01aaa4c75d9ffa550fa393f0c4c28f7ccd6956e4188c62cefbc/validate_pyproject-0.24.1-py3-none-any.whl", hash = "sha256:b7b05fa9117204c9c4606ab317acd095b18d1bfc78fb7dc8cc06f77d0582ca2d", size = 53732, upload-time = "2025-03-21T21:05:31.139Z" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "packaging" },
+    { name = "tomli", marker = "python_full_version < '3.11' or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-dace-next') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-dace-next') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0')" },
+    { name = "trove-classifiers" },
+]
+
+[[package]]
+name = "validate-pyproject-schema-store"
+version = "2025.6.13"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/4f/6c5dc69c944053fdde527bae0df89d057c38c4729775dd573f6a87321573/validate_pyproject_schema_store-2025.6.13.tar.gz", hash = "sha256:013a6a1bebfb02c78176138349d58ef0e62eeb3118e220656c4dc2a793d1b82a", size = 122841, upload-time = "2025-06-13T23:28:22.993Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/97/7c/b3564e8f3bdbf11f6c14ef8b783bc07071bf661cf61c50af1358a4b7023d/validate_pyproject_schema_store-2025.6.13-py3-none-any.whl", hash = "sha256:a13ef6cbea02080f365c58deba63bcc2abcd4bfb3f0e8b43f8cab023e06b2228", size = 128266, upload-time = "2025-06-13T23:28:21.363Z" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "validate-pyproject", extra = ["all"] },
 ]
 
 [[package]]
