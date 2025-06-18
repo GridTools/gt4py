@@ -18,11 +18,24 @@ repos:
   - id: pretty-format-yaml
     args: [--autofix, --preserve-quotes, --indent, "2"]
 
-- repo: https://github.com/pre-commit/mirrors-prettier
-  rev: v4.0.0-alpha.8
+- repo: https://github.com/biomejs/pre-commit
+  rev: "v2.0.0"
   hooks:
-  - id: prettier
-    types_or: [markdown, json]
+  - id: biome-check
+    name: Check JSON files with Biome
+    types_or: [json]
+    additional_dependencies: ["@biomejs/biome@1.9.4"]
+
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v5.0.0
+  hooks:
+  - id: check-added-large-files
+  - id: check-case-conflict
+  - id: check-merge-conflict
+  - id: check-symlinks
+  - id: check-toml
+  - id: check-yaml
+  - id: destroyed-symlinks
 
 - repo: https://github.com/Lucas-C/pre-commit-hooks
   rev: v1.5.5
@@ -32,70 +45,69 @@ repos:
     types: [python]
     args: [--comment-style, "|#|", --license-filepath, ./HEADER.txt, --fuzzy-match-generates-todo]
 
-- repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v5.0.0
-  hooks:
-  - id: check-case-conflict
-  - id: check-merge-conflict
-  - id: check-toml
-  - id: check-yaml
-
+# The following hooks use development tools which are already managed by 'uv'.
+# To avoid inconsistencies between the development and the pre-commit
+# environments, we run them as local hooks so we can make sure they use
+# exactly the same versions without duplicating the version info.
 - repo: local
   hooks:
-  - id: uv-lock
+  - &uv-managed-hook
+    id: uv-managed-base-hook
+    name: uv managed hook
+    entry: uv --version
+    language: python
+    additional_dependencies: [uv>=0.6.10]
+    stages: [pre-commit]
+
+  - <<: *uv-managed-hook
+    id: uv-lock
     name: uv-lock
     description: "Automatically run 'uv lock' on your project dependencies"
     entry: uv lock
     files: ^(uv\.lock|pyproject\.toml|uv\.toml)$
     pass_filenames: false
-    language: python
-    additional_dependencies: [uv]
-    stages: [pre-commit]
-  - id: ruff-check
+
+  - <<: *uv-managed-hook
+    id: validate
+    name: validate pyproject.toml
+    entry: uv run --frozen --isolated --group dev validate-pyproject pyproject.toml
+    files: ^pyproject\.toml$
+    pass_filenames: false
+
+  - <<: *uv-managed-hook
+    id: ruff-check
     name: ruff checker
-    entry: uv run --frozen --isolated ruff check --force-exclude --fix
+    entry: uv run --frozen --isolated --group dev ruff check --force-exclude --fix
     types_or: [python, pyi, jupyter]
-    files: ^src/  # TODO(egparedes): also add the `tests` folder here
+    files: ^src/  # TODO(egparedes): add the `tests` folder here
     require_serial: true
-    language: python
-    additional_dependencies: [uv]
-    stages: [pre-commit]
 
-  - id: ruff-format
+  - <<: *uv-managed-hook
+    id: ruff-format
     name: ruff formatter
-    entry: uv run --frozen --isolated ruff format --force-exclude --fix
+    entry: uv run --frozen --isolated --group dev ruff format --force-exclude
     types_or: [python, pyi, jupyter]
     require_serial: true
-    language: python
-    additional_dependencies: [uv]
-    stages: [pre-commit]
 
-  - id: tach
+  - <<: *uv-managed-hook
+    id: tach
     name: tach module dependency checker
-    entry: uv run --frozen --isolated tach check
+    entry: uv run --frozen --isolated --group dev tach check
     pass_filenames: false
-    language: python
-    additional_dependencies: [uv]
-    stages: [pre-commit]
 
-  - id: mypy
+  - <<: *uv-managed-hook
+    id: mypy
     name: mypy static type checker
-    entry: uv run --frozen --isolated mypy --no-install-types src/
+    entry: uv run --frozen --isolated --group dev mypy --no-install-types src/
     types_or: [python, pyi]
-    require_serial: true
     pass_filenames: false
-    language: python
-    additional_dependencies: [uv]
-    stages: [pre-commit]
 
-  - id: noxfile-utils
+  - <<: *uv-managed-hook
+    id: noxfile-utils
     name: noxfile-utils checker
     entry: >
       bash -c "
-        uv run --frozen --isolated python noxfile_utils.py ;
-        uv run --frozen --isolated mypy --no-install-types noxfile_utils.py
+        uv run --frozen --isolated --group dev noxfile_utils.py ;
+        uv run --frozen --isolated --group dev mypy --no-install-types noxfile_utils.py
       "
-    language: python
     pass_filenames: false
-    additional_dependencies: [uv]
-    stages: [pre-commit]

@@ -37,7 +37,8 @@ frameworks = [
 lint = [
   'pre-commit>=4.0.1',
   'ruff>=0.8.0',
-  'tach>=0.23.0'
+  'tach>=0.23.0',
+  'validate-pyproject-schema-store[all]>=2025.06.13'
 ]
 test = [
   'coverage[toml]>=7.5.0',
@@ -177,6 +178,7 @@ source_pkgs = ['gt4py']
 # -- mypy  --
 [tool.mypy]
 disallow_incomplete_defs = true
+disallow_untyped_defs = false
 exclude = [
   '^setup\.py$',
   'build/.*$',
@@ -198,16 +200,16 @@ warn_unused_ignores = true
 
 # GT4Py configs
 [[tool.mypy.overrides]]
-allow_incomplete_defs = false
-allow_untyped_defs = false
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
 ignore_missing_imports = false
 module = 'gt4py.*'
 
 [[tool.mypy.overrides]]
 # The following ignore_errors are only temporary.
 # TODO: Fix errors and enable these settings.
-allow_incomplete_defs = true
-allow_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
 follow_imports = 'silent'
 module = 'gt4py.cartesian.*'
 
@@ -237,19 +239,19 @@ warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 # TODO: Make this false and fix errors
-allow_untyped_defs = true
+disallow_untyped_defs = false
 follow_imports = 'silent'
 module = 'gt4py.storage.*'
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-allow_incomplete_defs = true
-allow_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
 module = 'gt4py.next.iterator.*'
 
 [[tool.mypy.overrides]]
-allow_incomplete_defs = true
-allow_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
 module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 
 [[tool.mypy.overrides]]

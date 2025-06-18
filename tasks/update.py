@@ -26,21 +26,25 @@ import subprocess
 
 import typer
 
-from . import _definitions
+from . import _common
 
 
 app = typer.Typer(no_args_is_help=True)
 
+
 @app.command()
 def dependencies() -> None:
     """Update project dependencies to their latest compatible versions."""
-    subprocess.run("uv lock --upgrade", cwd=_definitions.ROOT_DIR, shell=True, check=True)
+    subprocess.run("uv lock --upgrade", cwd=_common.ROOT_DIR, shell=True, check=True)
 
 
-@app.command()
+@app.command("pre-commit")
 def precommit() -> None:
     """Update versions of pre-commit hooks."""
-    subprocess.run(f"uv run --quiet --locked --project {_definitions.ROOT_DIR} pre-commit autoupdate", shell=True)
+
+    subprocess.run(
+        f"uv run --quiet --locked --project {_common.ROOT_DIR} pre-commit autoupdate", shell=True
+    )
 
 
 @app.command()

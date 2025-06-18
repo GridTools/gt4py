@@ -29,7 +29,7 @@ import typer
 
 TASKS_PACKAGE_NAME: Final = "dev-tasks"
 
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True)
 
 
 def import_tasks_package(tasks_pkg_path: pathlib.Path) -> None:
@@ -47,6 +47,7 @@ def add_commands(app: typer.Typer) -> typer.Typer:
     for name, value in vars(sys.modules[TASKS_PACKAGE_NAME]).items():
         if (
             isinstance(value, types.ModuleType)
+            and not name.startswith("_")
             and hasattr(value, "app")
             and isinstance(value.app, typer.Typer)
         ):
