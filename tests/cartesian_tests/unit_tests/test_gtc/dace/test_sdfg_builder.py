@@ -39,6 +39,8 @@ def test_scalar_access_multiple_tasklets() -> None:
     connectors for all scalar reads unless previously written in the same Tasklet. DaCe's simplify
     pipeline will get rid of any dead dataflow introduced with this general approach.
     """
+    pytest.skip("We are torching StencilComputationSDFGBuilder.")
+
     stencil = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(
