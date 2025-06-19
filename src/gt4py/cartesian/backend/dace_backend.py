@@ -34,20 +34,12 @@ from gt4py.cartesian.backend.gtc_common import (
 )
 from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
 from gt4py.cartesian.definitions import FieldInfo
-from gt4py.cartesian.gtc import common, gtir
-from gt4py.cartesian.gtc.dace import daceir as dcir
-from gt4py.cartesian.gtc.dace.nodes import StencilComputation
-from gt4py.cartesian.gtc.dace.oir_to_dace import OirSDFGBuilder
+from gt4py.cartesian.gtc import gtir
 from gt4py.cartesian.gtc.dace.oir_to_treeir import OIRToTreeIR
-from gt4py.cartesian.gtc.dace.transformations import (
-    NoEmptyEdgeTrivialMapElimination,
-    nest_sequential_map_scopes,
-)
 from gt4py.cartesian.gtc.dace.treeir_to_stree import TreeIRToScheduleTree
 from gt4py.cartesian.gtc.dace.utils import array_dimensions, replace_strides
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
-from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_optimizations import caches
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
@@ -89,123 +81,6 @@ def _specialize_transient_strides(
     for k in replacement_dictionary.keys():
         if k in sdfg.symbols:
             sdfg.remove_symbol(k)
-
-
-def _get_expansion_priority_cpu(node: StencilComputation):
-    raise RuntimeError("To be torched. We shouldn't end up here.")
-    expansion_priority = []
-    if node.has_splittable_regions():
-        expansion_priority.append(["Sections", "Stages", "I", "J", "K"])
-    expansion_priority.extend(
-        [
-            ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
-            ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
-            ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
-            ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
-        ]
-    )
-    return expansion_priority
-
-
-def _get_expansion_priority_gpu(node: StencilComputation):
-    raise RuntimeError("To be torched. We shouldn't end up here.")
-    expansion_priority = []
-    if node.has_splittable_regions():
-        expansion_priority.append(["Sections", "Stages", "J", "I", "K"])
-    if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
-        expansion_priority.append(["Sections", "Stages", "K", "J", "I"])
-    else:
-        expansion_priority.append(["J", "I", "Sections", "Stages", "K"])
-    expansion_priority.append(["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"])
-    return expansion_priority
-
-
-def _set_expansion_orders(sdfg: dace.SDFG):
-    raise RuntimeError("To be torched. We shouldn't end up here.")
-    for node, _ in filter(
-        lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
-    ):
-        if node.device == dace.DeviceType.GPU:
-            expansion_priority = _get_expansion_priority_gpu(node)
-        else:
-            expansion_priority = _get_expansion_priority_cpu(node)
-        is_set = False
-        for exp in expansion_priority:
-            try:
-                node.expansion_specification = exp
-                is_set = True
-            except ValueError:
-                continue
-            else:
-                break
-        if not is_set:
-            raise ValueError("No expansion compatible")
-
-
-def _set_tile_sizes(sdfg: dace.SDFG):
-    raise RuntimeError("To be torched. We shouldn't end up here.")
-    for node, _ in filter(
-        lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
-    ):
-        if node.device == dace.DeviceType.GPU:
-            node.tile_sizes = {dcir.Axis.I: 64, dcir.Axis.J: 8, dcir.Axis.K: 8}
-            node.tile_sizes_interpretation = "shape"
-        else:
-            node.tile_sizes = {dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8}
-            node.tile_sizes_interpretation = "strides"
-
-
-def _to_device(sdfg: dace.SDFG, device: str) -> None:
-    """Update sdfg in place."""
-    if device == "gpu":
-        for array in sdfg.arrays.values():
-            if not isinstance(array, dace.data.Scalar):
-                array.storage = dace.StorageType.GPU_Global
-        for node, _ in sdfg.all_nodes_recursive():
-            if isinstance(node, StencilComputation):
-                node.device = dace.DeviceType.GPU
-
-
-def _pre_expand_transformations(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map):
-    raise RuntimeError("To be torched. We shouldn't end up here.")
-    args_data = make_args_data_from_gtir(gtir_pipeline)
-
-    # stencils without effect
-    if all(info is None for info in args_data.field_info.values()):
-        sdfg = dace.SDFG(gtir_pipeline.gtir.name)
-        sdfg.add_state(gtir_pipeline.gtir.name)
-        return sdfg
-
-    sdfg.simplify(validate=False)
-
-    _set_expansion_orders(sdfg)
-    _set_tile_sizes(sdfg)
-    _specialize_transient_strides(sdfg, layout_map=layout_map)
-    return sdfg
-
-
-def _post_expand_transformations(sdfg: dace.SDFG):
-    raise RuntimeError("To be torched. We shouldn't end up here.")
-    # DaCe "standard" clean-up transformations
-    sdfg.simplify(validate=False)
-
-    sdfg.apply_transformations_repeated(NoEmptyEdgeTrivialMapElimination, validate=False)
-
-    # Control the `#pragma omp parallel` statements: Fully collapse parallel loops,
-    # but set 1D maps to be sequential. (Typical domains are too small to benefit from parallelism)
-    for node, _ in filter(
-        lambda n: isinstance(n[0], dace.nodes.MapEntry), sdfg.all_nodes_recursive()
-    ):
-        node.collapse = len(node.range)
-        if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
-            node.schedule = dace.ScheduleType.Sequential
-
-    # To be re-evaluated with https://github.com/GridTools/gt4py/issues/1896
-    # sdfg.apply_transformations_repeated(InlineThreadLocalTransients, validate=False) # noqa: ERA001
-    sdfg.simplify(validate=False)
-    nest_sequential_map_scopes(sdfg)
-    for sd in sdfg.all_sdfgs_recursive():
-        sd.openmp_sections = False
 
 
 def _sdfg_add_arrays_and_edges(
@@ -340,7 +215,7 @@ def freeze_origin_domain_sdfg(
     the call and specialize at top level, which will then be passed as a parameter to the
     inner sdfg.
 
-    If/when we move specilization of array & maps bounds upstream, this will become moot
+    If/when we move specialization of array & maps bounds upstream, this will become moot
     and can be remove. See https://github.com/GridTools/gt4py/issues/2082.
 
     Dev note: we need to wrap a copy to make sure we can use caching with no side effect
@@ -500,53 +375,6 @@ class SDFGManager:
         SDFGManager._loaded_sdfgs[path] = sdfg
 
         return sdfg
-
-    # TODO: OLD CODE - TORCH WHEN STREE -> SDFG PIPELINE GETS THE OK. APPLY CARE BEFORE AND DURING TORCHING
-
-    def _unexpanded_sdfg(self):
-        raise RuntimeError("To be torched. We shouldn't end up here.")
-        filename = self.builder.module_name + ".sdfg"
-        path = (
-            pathlib.Path(os.path.relpath(self.builder.module_path.parent, pathlib.Path.cwd()))
-            / filename
-        )
-
-        if path not in SDFGManager._loaded_sdfgs:
-            try:
-                sdfg = dace.SDFG.from_file(path)
-            except FileNotFoundError:
-                base_oir = GTIRToOIR().visit(self.builder.gtir)
-                oir_pipeline = self.builder.options.backend_opts.get(
-                    "oir_pipeline", DefaultPipeline()
-                )
-                oir_node = oir_pipeline.run(base_oir)
-                sdfg = OirSDFGBuilder().visit(oir_node)
-
-                _to_device(sdfg, self.builder.backend.storage_info["device"])
-                _pre_expand_transformations(
-                    self.builder.gtir_pipeline,
-                    sdfg,
-                    self.builder.backend.storage_info["layout_map"],
-                )
-                self._save_sdfg(sdfg, path)
-            SDFGManager._loaded_sdfgs[path] = sdfg
-
-        return SDFGManager._loaded_sdfgs[path]
-
-    def unexpanded_sdfg(self):
-        raise RuntimeError("To be torched. We shouldn't end up here.")
-        return copy.deepcopy(self._unexpanded_sdfg())
-
-    def _expanded_sdfg(self):
-        raise RuntimeError("To be torched. We shouldn't end up here.")
-        sdfg = self._unexpanded_sdfg()
-        sdfg.expand_library_nodes()
-        _post_expand_transformations(sdfg)
-        return sdfg
-
-    def expanded_sdfg(self):
-        raise RuntimeError("To be torched. We shouldn't end up here.")
-        return copy.deepcopy(self._expanded_sdfg())
 
     def _frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
         frozen_hash = shash(origin, domain)
@@ -900,7 +728,9 @@ class DaCeBindingsCodegen:
             if not isinstance(array, dace.data.Array):
                 raise NotImplementedError(f"generate_sid_params(): unexpected type {type(array)}")
 
-            domain_dim_flags = array_dimensions(array)
+            domain_dim_flags = tuple(array_dimensions(array))
+            if len(domain_dim_flags) != 3:
+                raise RuntimeError("Expected 3 cartesian array dimensions. Codegen error.")
             data_ndim = len(array.shape) - sum(domain_dim_flags)
             sid_def = pybuffer_to_sid(
                 name=name,

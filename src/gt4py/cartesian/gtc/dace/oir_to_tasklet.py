@@ -9,15 +9,19 @@
 import operator
 from dataclasses import dataclass
 from functools import reduce
-from typing import Any
+from typing import Any, Final
 
 from dace import Memlet, subsets
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-from gt4py.cartesian.gtc.dace import prefix, treeir as tir
+from gt4py.cartesian.gtc.dace import treeir as tir
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 
+
+# Tasklet in/out connector prefixes
+TASKLET_IN: Final[str] = "gtIN__"
+TASKLET_OUT: Final[str] = "gtOUT__"
 
 # oir to tasklet notes
 #
@@ -353,7 +357,7 @@ def generate(
 def _tasklet_name(
     node: oir.FieldAccess | oir.ScalarAccess, is_target: bool, postfix: str = ""
 ) -> str:
-    name_prefix = prefix.TASKLET_OUT if is_target else prefix.TASKLET_IN
+    name_prefix = TASKLET_OUT if is_target else TASKLET_IN
     return "_".join(filter(None, [name_prefix, node.name, postfix]))
 
 
