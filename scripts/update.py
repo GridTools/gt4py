@@ -8,8 +8,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-
-"""Script for running recurrent development tasks."""
+"""Update project dependencies and pre-commit hooks."""
 
 from __future__ import annotations
 
@@ -20,16 +19,16 @@ from typing import Final
 import typer
 
 
-ROOT_DIR: Final = pathlib.Path(__file__).parent
+REPO_ROOT: Final = pathlib.Path(__file__).parent
 
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(no_args_is_help=True, name="update", help=__doc__)
 
 
 @app.command()
 def dependencies() -> None:
     """Update project dependencies to their latest compatible versions."""
-    subprocess.run("uv lock --upgrade", cwd=ROOT_DIR, shell=True, check=True)
+    subprocess.run("uv lock --upgrade", cwd=REPO_ROOT, shell=True, check=True)
 
 
 @app.command("pre-commit")
@@ -37,7 +36,7 @@ def precommit() -> None:
     """Update versions of pre-commit hooks."""
 
     subprocess.run(
-        f"uv run --quiet --locked --project {ROOT_DIR} pre-commit autoupdate", shell=True
+        f"uv run --quiet --locked --project {REPO_ROOT} pre-commit autoupdate", shell=True
     )
 
 

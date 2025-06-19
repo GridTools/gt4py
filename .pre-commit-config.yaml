@@ -18,13 +18,11 @@ repos:
   - id: pretty-format-yaml
     args: [--autofix, --preserve-quotes, --indent, "2"]
 
-- repo: https://github.com/biomejs/pre-commit
-  rev: "v2.0.0"
+- repo: https://github.com/JoC0de/pre-commit-prettier
+  rev: v3.5.3
   hooks:
-  - id: biome-check
-    name: Check JSON files with Biome
-    types_or: [json]
-    additional_dependencies: ["@biomejs/biome@1.9.4"]
+  - id: prettier
+    types_or: [markdown, json]
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v5.0.0
@@ -68,13 +66,6 @@ repos:
     pass_filenames: false
 
   - <<: *uv-managed-hook
-    id: validate
-    name: validate pyproject.toml
-    entry: uv run --frozen --isolated --group dev validate-pyproject pyproject.toml
-    files: ^pyproject\.toml$
-    pass_filenames: false
-
-  - <<: *uv-managed-hook
     id: ruff-check
     name: ruff checker
     entry: uv run --frozen --isolated --group dev ruff check --force-exclude --fix
@@ -103,11 +94,8 @@ repos:
     pass_filenames: false
 
   - <<: *uv-managed-hook
-    id: noxfile-utils
-    name: noxfile-utils checker
-    entry: >
-      bash -c "
-        uv run --frozen --isolated --group dev noxfile_utils.py ;
-        uv run --frozen --isolated --group dev mypy --no-install-types noxfile_utils.py
-      "
+    id: validate
+    name: validate pyproject.toml
+    entry: uv run --frozen --isolated --group dev validate-pyproject pyproject.toml
+    files: ^pyproject\.toml$
     pass_filenames: false
