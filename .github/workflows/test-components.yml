@@ -1,0 +1,76 @@
+name: "Test code components (CPU)"
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+
+jobs:
+  # First job to read Python versions from .python-versions file
+  get-python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      python-versions: ${{ steps.get-versions.outputs.python-versions }}
+    steps:
+    - uses: actions/checkout@v4
+    - id: get-versions
+      uses: ./.github/actions/get-python-versions
+
+  # Job to define test sessions based on changed files
+  define-test-sessions:
+    runs-on: ubuntu-latest
+    outputs:
+      test-sessions: ${{ steps.test-sessions.outputs.test-sessions }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Use a deep clone to get target PR branch
+
+    - name: Install uv and set the python version
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+        python-version: "3.10"  # Use a fixed Python version for defining test sessions
+
+    - name: Define test sessions base on changed files
+      id: test-sessions
+      run: |
+        ./dev-scripts.py test-sessions required \
+          --config ci/test-sessions.yml \
+          --base "${{ github.base_ref }}" \
+          --format gh-actions \
+          --output gh-test-sessions.json \
+          --verbose
+        echo 'test-sessions<<EOF' >> $GITHUB_OUTPUT
+        cat gh-test-sessions.json >> $GITHUB_OUTPUT
+        echo '' >> $GITHUB_OUTPUT
+        echo 'EOF' >> $GITHUB_OUTPUT
+
+  # Test-running job
+  test-component:
+    needs: [get-python-versions, define-test-sessions]
+    strategy:
+      matrix:
+        os: ["ubuntu-latest"]
+        python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
+        test-session: ${{ fromJson(needs.define-test-sessions.outputs.test-sessions) }}
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install uv and set the python version
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+        python-version: ${{ matrix.python-version }}
+
+    - name: Run '${{ matrix.test-session.name }}-${{ matrix.python-version }}(${{ matrix.test-session.args }})' nox session
+      shell: bash
+      run: |
+        uv run --script noxfile.py -s '${{ matrix.test-session.name }}-${{ matrix.python-version }}(${{ matrix.test-session.args }})'
