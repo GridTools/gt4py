@@ -318,7 +318,9 @@ def gt_substitute_compiletime_symbols(
             sdfg=sdfg,
             validate=validate,
             validate_all=validate_all,
-            skip=["ConstantPropagation"],  # Avoid skipping "ScalarToSymbolPromotion"
+            # avoid skipping ScalarToSymbolPromotion since some symbols are use as
+            # variables in expressions and need to be turned to symbols to be substituted
+            skip=GT_SIMPLIFY_DEFAULT_SKIP_SET.difference(["ScalarToSymbolPromotion"]),
         )
 
     # We will use the `replace` function of the top SDFG, however, lower levels
