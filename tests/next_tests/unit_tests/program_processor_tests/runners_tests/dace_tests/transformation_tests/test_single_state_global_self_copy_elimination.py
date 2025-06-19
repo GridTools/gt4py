@@ -490,25 +490,6 @@ def _make_concat_where_like_not_possible() -> (
     return sdfg, state, g1, t, g2
 
 
-def test_global_self_copy_elimination_only_pattern():
-    """Contains only the pattern -> Total elimination."""
-    sdfg, state = _make_self_copy_sdfg()
-    assert sdfg.number_of_nodes() == 1
-    assert state.number_of_nodes() == 3
-    assert util.count_nodes(state, dace_nodes.AccessNode) == 3
-    assert state.number_of_edges() == 2
-
-    count = sdfg.apply_transformations_repeated(
-        gtx_transformations.SingleStateGlobalSelfCopyElimination, validate=True, validate_all=True
-    )
-    assert count != 0
-
-    assert sdfg.number_of_nodes() == 1
-    assert (
-        state.number_of_nodes() == 0
-    ), f"Expected that 0 access nodes remained, but {state.number_of_nodes()} were there."
-
-
 def _make_multi_t_patch_sdfg() -> (
     tuple[
         dace.SDFG,
@@ -584,6 +565,123 @@ def _make_multi_t_patch_sdfg() -> (
     sdfg.validate()
 
     return sdfg, state, g1, t, g2
+
+
+def _make_not_everything_is_written_back(
+    consume_all_of_t: bool,
+    partially_writeback_second_map: bool,
+) -> dace.SDFG:
+    """
+    Generates an SDFG with the pattern but not everything that is written into `tmp`
+    is also written back into `g2`.
+
+    There is one Map, whose result is always fully written back into `g2`. However,
+    the second Map is not. If `only_write_back_one_map` set to `True` then the result
+    of the second Map is not written back, in case it is `False` it is only partially
+    written back. This is done to trigger different code paths.
+
+    If `consume_all_of_t` is `True` then everything that is written into `tmp` is also
+    consumed by another Map. If it is `False` then the data written by the second Map
+    is not read.
+
+    In case both arguments are `False` then it might be possible to handle the case,
+    in fact running `SplitAccessNode` would do the job.
+    """
+
+    sdfg = dace.SDFG(util.unique_name(f"not_everything_is_written_back"))
+    state = sdfg.add_state(is_start_block=True)
+
+    consumer_shape = (10,) if consume_all_of_t else (6,)
+    for name in "gto":
+        sdfg.add_array(
+            name=name,
+            shape=((10,) if name != "o" else consumer_shape),
+            dtype=dace.float64,
+            transient=(name == "t"),
+        )
+
+    g1, t, g2, o = (state.add_access(name) for name in "gtgo")
+
+    state.add_nedge(g1, t, dace.Memlet("g[0] -> [0]"))
+
+    # First Map
+    state.add_mapped_tasklet(
+        "written_back_computation",
+        map_ranges={"__i": "1:6"},
+        inputs={},
+        code="__out = math.sin(__i + 1.0)",
+        outputs={"__out": dace.Memlet("t[__i]")},
+        output_nodes={t},
+        external_edges=True,
+    )
+
+    # Second Map
+    state.add_mapped_tasklet(
+        "computation_that_is_not_fully_written_back",
+        map_ranges={"__i": "6:10"},
+        inputs={},
+        code="__out = math.cos(__i + 1.0)",
+        outputs={"__out": dace.Memlet("t[__i]")},
+        output_nodes={t},
+        external_edges=True,
+    )
+
+    state.add_mapped_tasklet(
+        "consumer_computation",
+        map_ranges={"__i": f"0:{consumer_shape[0]}"},
+        inputs={"__in": dace.Memlet("t[__i]")},
+        code="__out = math.exp(__in)",
+        outputs={"__out": dace.Memlet("o[__i]")},
+        input_nodes={t},
+        output_nodes={o},
+        external_edges=True,
+    )
+
+    # Writing a part of the second Maps output from `t` to `g2` will make the subset
+    #  that is written by the second Map mappable to `g`. But since not everything is
+    #  written back, it is not possible to perform the merge.
+    subset_to_write_back = "1:6" if partially_writeback_second_map else "1:7"
+    state.add_nedge(t, g2, dace.Memlet(f"t[{subset_to_write_back}] -> [{subset_to_write_back}]"))
+
+    sdfg.validate()
+
+    return sdfg
+
+
+@pytest.mark.parametrize("consume_all_of_t", [True, False])
+@pytest.mark.parametrize("partially_writeback_second_map", [True, False])
+def test_not_everything_is_written_back(
+    consume_all_of_t: bool,
+    partially_writeback_second_map: bool,
+):
+    sdfg = _make_not_everything_is_written_back(
+        consume_all_of_t=consume_all_of_t,
+        partially_writeback_second_map=partially_writeback_second_map,
+    )
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.SingleStateGlobalSelfCopyElimination, validate=True, validate_all=True
+    )
+    assert count == 0
+
+
+def test_global_self_copy_elimination_only_pattern():
+    """Contains only the pattern -> Total elimination."""
+    sdfg, state = _make_self_copy_sdfg()
+    assert sdfg.number_of_nodes() == 1
+    assert state.number_of_nodes() == 3
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 3
+    assert state.number_of_edges() == 2
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.SingleStateGlobalSelfCopyElimination, validate=True, validate_all=True
+    )
+    assert count != 0
+
+    assert sdfg.number_of_nodes() == 1
+    assert (
+        state.number_of_nodes() == 0
+    ), f"Expected that 0 access nodes remained, but {state.number_of_nodes()} were there."
 
 
 def test_global_self_copy_elimination_g_downstream():

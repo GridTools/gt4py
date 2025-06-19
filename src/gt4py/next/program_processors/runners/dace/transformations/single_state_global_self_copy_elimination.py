@@ -137,6 +137,9 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
         # To avoid race conditions we require that no other node referring to
         #  `G` is inside this state.
+        # NOTE: In case we start supporting the splitting of global AccessNodes we will
+        #   have to handle this case, to make sure that the other AccessNodes affect
+        #   other memory regions and we can safely perform the merge.
         if any(
             dnode.data == node_g1.data
             for dnode in graph.data_nodes()
@@ -236,24 +239,6 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
                 if gtx_st.are_intersecting(conflicting_read.subset, write_into_g2.subset)
             ]
             if len(write_after_read_conflicts) != 0:
-                return True
-
-        # "Pure writes", as in not coming from `g1` into `tmp`; described in
-        #  terms of `tmp`.
-        pure_tmp_writes = [
-            gtx_st.describe_edge(edge, incoming_edge=True)
-            for edge in state.in_edges(node_tmp)
-            if edge.src is not node_g1
-        ]
-
-        # Ensure that everything that is written into `tmp` is also written back.
-        # TODO(phimuell): Improve this, maybe also checking with swapped order
-        #   for `covered()`?
-        for tmp_write in pure_tmp_writes:
-            if not any(
-                tmp_to_g2_transfer.covers(tmp_write.subset)
-                for tmp_to_g2_transfer in tmp_to_g_mapping.keys()
-            ):
                 return True
 
         return False
@@ -603,7 +588,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             #  i.e. is not written back, if not known add it.
             # TODO(phimuell): We use intersection here, because cover would be too
             #   liberal. However, what we should actually do is, decompose the
-            #   subset and only add the parts that are not known.
+            #   subset and only add the parts that are not yet known.
             if not any(
                 gtx_st.are_intersecting(known_t_patch.subset, transfer_g1_desc_t.subset)
                 for known_t_patch in t_descriptions
@@ -654,14 +639,33 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             subset_map[merged_subset_at_tmp] = merged_subset_at_g2[0]
 
         if check_only:
-            # Make sure that every edge interfacing with `tmp` can be translated
-            #  into an edge that interfaces with `g`.
+            # Make sure that the `tmp` subset of any every edge that read from/write to
+            #  `tmp` (ignoring the connections to and from `G`) can be translated into
+            #  a `G` subset.
             for edge_desc in gtx_st.describe_all_edges(state, node_tmp):
-                assert edge_desc.node is node_tmp
+                if edge_desc.other_node in [node_g1, node_g2]:
+                    continue
                 if not self._compute_offset(
                     tdesc=edge_desc,
                     tmp_to_g_mapping=subset_map,
                     check_only=True,
+                ):
+                    return None
+
+            # Ensure that the writes to `tmp` are also written back to `g2`. This is
+            #  needed to ensure that `tmp` is not only used as buffer to discard some
+            #  writes.
+            # TODO(phimuell): Improve this, maybe also checking with swapped order
+            #   for `covered()`?
+            pure_tmp_writes = [
+                gtx_st.describe_edge(edge, incoming_edge=True)
+                for edge in state.in_edges(node_tmp)
+                if edge.src is not node_g1
+            ]
+            for tmp_write in pure_tmp_writes:
+                if not any(
+                    tmp_to_g2_transfer.covers(tmp_write.subset)
+                    for tmp_to_g2_transfer in subset_map.keys()
                 ):
                     return None
 
