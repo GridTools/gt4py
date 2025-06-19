@@ -9,13 +9,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import Generator, TypeAlias
 
 from dace import Memlet, data, dtypes, nodes
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, definitions
-from gt4py.cartesian.gtc.dace import daceir as dcir
+from gt4py.cartesian.gtc.dace import symbol_utils
 
 
 SymbolDict: TypeAlias = dict[str, dtypes.typeclass]
@@ -45,6 +45,41 @@ class ContextPushPop:
 
     def __exit__(self, _exc_type, _exc_value, _traceback):
         self._ctx.current_scope = self._parent_scope
+
+
+class Axis(eve.StrEnum):
+    I = "I"  # noqa: E741 [ambiguous-variable-name]
+    J = "J"
+    K = "K"
+
+    def domain_symbol(self) -> eve.SymbolRef:
+        return eve.SymbolRef("__" + self.upper())
+
+    def iteration_symbol(self) -> eve.SymbolRef:
+        return eve.SymbolRef("__" + self.lower())
+
+    def tile_symbol(self) -> eve.SymbolRef:
+        return eve.SymbolRef("__tile_" + self.lower())
+
+    @staticmethod
+    def dims_3d() -> Generator[Axis, None, None]:
+        yield from [Axis.I, Axis.J, Axis.K]
+
+    @staticmethod
+    def dims_horizontal() -> Generator[Axis, None, None]:
+        yield from [Axis.I, Axis.J]
+
+    def to_idx(self) -> int:
+        return [Axis.I, Axis.J, Axis.K].index(self)
+
+    def domain_dace_symbol(self):
+        return symbol_utils.get_dace_symbol(self.domain_symbol())
+
+    def iteration_dace_symbol(self):
+        return symbol_utils.get_dace_symbol(self.iteration_symbol())
+
+    def tile_dace_symbol(self):
+        return symbol_utils.get_dace_symbol(self.tile_symbol())
 
 
 class Bounds(eve.Node):
@@ -107,7 +142,7 @@ class TreeRoot(TreeScope):
     dimensions: dict[str, tuple[bool, bool, bool]]
     """Mapping field names to shape-axis."""
 
-    shift: dict[str, dict[dcir.Axis, int]]
+    shift: dict[str, dict[Axis, int]]
     """Mapping field names to dict[axis] -> shift."""
 
     symbols: SymbolDict

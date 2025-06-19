@@ -15,7 +15,7 @@ from dace import Memlet, subsets
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-from gt4py.cartesian.gtc.dace import daceir as dcir, prefix, treeir as tir
+from gt4py.cartesian.gtc.dace import prefix, treeir as tir
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 
 
@@ -58,7 +58,7 @@ class OIRToTasklet(eve.NodeVisitor):
 
             ranges: list[tuple[str, str, int]] = []
             # handle cartesian indices
-            for index, axis in enumerate(dcir.Axis.dims_3d()):
+            for index, axis in enumerate(tir.Axis.dims_3d()):
                 if dimensions[index]:
                     i = f"{axis.iteration_dace_symbol()} + {shift[axis]} + {offset_dict[axis.lower()]}"
                     ranges.append((i, i, 1))
@@ -77,9 +77,9 @@ class OIRToTasklet(eve.NodeVisitor):
         if isinstance(node.offset, oir.VariableKOffset):
             # handle cartesian indices
             shift = ctx.tree.shift[node.name]
-            i = f"{dcir.Axis.I.iteration_symbol()} + {shift[dcir.Axis.I]}"
-            j = f"{dcir.Axis.J.iteration_symbol()} + {shift[dcir.Axis.J]}"
-            K = f"{dcir.Axis.K.domain_symbol()} + {shift[dcir.Axis.K]} - 1"  # ranges are inclusive
+            i = f"{tir.Axis.I.iteration_symbol()} + {shift[tir.Axis.I]}"
+            j = f"{tir.Axis.J.iteration_symbol()} + {shift[tir.Axis.J]}"
+            K = f"{tir.Axis.K.domain_symbol()} + {shift[tir.Axis.K]} - 1"  # ranges are inclusive
             ranges = [(i, i, 1), (j, j, 1), ("0", K, 1)]
 
             # handle data dimensions
@@ -147,8 +147,8 @@ class OIRToTasklet(eve.NodeVisitor):
 
         # Variable K offset
         if isinstance(node.offset, oir.VariableKOffset):
-            symbol = dcir.Axis.K.iteration_dace_symbol()
-            shift = ctx.tree.shift[node.name][dcir.Axis.K]
+            symbol = tir.Axis.K.iteration_dace_symbol()
+            shift = ctx.tree.shift[node.name][tir.Axis.K]
             offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
             name_parts.append(f"[{symbol} + {shift} + {offset}]")
 

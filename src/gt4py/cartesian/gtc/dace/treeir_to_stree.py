@@ -18,7 +18,7 @@ from dace.sdfg.analysis.schedule_tree import treenodes as tn
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc.dace import daceir as dcir, treeir as tir
+from gt4py.cartesian.gtc.dace import treeir as tir
 
 
 @dataclass
@@ -68,14 +68,14 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
 
     def visit_HorizontalLoop(self, node: tir.HorizontalLoop, ctx: Context) -> None:
         # Define ij/loop
-        ctx.tree.symbols[dcir.Axis.I.iteration_symbol()] = dtypes.int32
-        ctx.tree.symbols[dcir.Axis.J.iteration_symbol()] = dtypes.int32
+        ctx.tree.symbols[tir.Axis.I.iteration_symbol()] = dtypes.int32
+        ctx.tree.symbols[tir.Axis.J.iteration_symbol()] = dtypes.int32
         map_entry = nodes.MapEntry(
             map=nodes.Map(
                 label=f"horizontal_loop_{id(node)}",
                 params=[
-                    str(dcir.Axis.I.iteration_symbol()),
-                    str(dcir.Axis.J.iteration_symbol()),
+                    str(tir.Axis.I.iteration_symbol()),
+                    str(tir.Axis.J.iteration_symbol()),
                 ],
                 # TODO (later)
                 # Ranges have support support for tiling
@@ -110,11 +110,11 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
             return
 
         # For parallel loops, create a map and add it to the tree
-        ctx.tree.symbols[dcir.Axis.K.iteration_symbol()] = dtypes.int32
+        ctx.tree.symbols[tir.Axis.K.iteration_symbol()] = dtypes.int32
         map_entry = nodes.MapEntry(
             map=nodes.Map(
                 label=f"vertical_loop_{id(node)}",
-                params=[dcir.Axis.K.iteration_symbol()],
+                params=[tir.Axis.K.iteration_symbol()],
                 # TODO (later)
                 # Ranges have support support for tiling
                 ndrange=subsets.Range(
@@ -182,7 +182,7 @@ def _for_scope_header(node: tir.VerticalLoop) -> dcf.ForScope:
 
     plus_minus = "+" if node.loop_order == common.LoopOrder.FORWARD else "-"
     comparison = "<" if node.loop_order == common.LoopOrder.FORWARD else ">="
-    iteration_var = dcir.Axis.K.iteration_symbol()
+    iteration_var = tir.Axis.K.iteration_symbol()
 
     for_scope = dcf.ForScope(
         condition=CodeBlock(

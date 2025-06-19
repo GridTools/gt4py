@@ -12,7 +12,7 @@ from dace import data, dtypes, nodes, symbolic
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, definitions, oir
-from gt4py.cartesian.gtc.dace import daceir as dcir, oir_to_tasklet, treeir as tir
+from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo
 from gt4py.cartesian.gtc.passes.oir_optimizations import utils as oir_utils
@@ -43,7 +43,7 @@ class OIRToTreeIR(eve.NodeVisitor):
     Tree. No transformation is done on TreeIR, though should be done
     once the TreeIR has been properly turned into a Schedule Tree.
 
-    This class _does not_ deal with Tasklet representation, it deffers the
+    This class _does not_ deal with Tasklet representation, it defers the
     work to the OIRToTasklet visitor.
     """
 
@@ -130,8 +130,8 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         axis_start_i = f"0 + {extent[0][0]}"
         axis_start_j = f"0 + {extent[1][0]}"
-        axis_end_i = f"{dcir.Axis.I.domain_dace_symbol()}  + {extent[0][1]}"
-        axis_end_j = f"{dcir.Axis.J.domain_dace_symbol()}  + {extent[1][1]}"
+        axis_end_i = f"{tir.Axis.I.domain_dace_symbol()}  + {extent[0][1]}"
+        axis_end_j = f"{tir.Axis.J.domain_dace_symbol()}  + {extent[1][1]}"
 
         loop = tir.HorizontalLoop(
             bounds_i=tir.Bounds(start=axis_start_i, end=axis_end_i),
@@ -179,13 +179,13 @@ class OIRToTreeIR(eve.NodeVisitor):
             self.visit(groups, ctx=ctx)
 
     def visit_HorizontalMask(self, node: common.HorizontalMask, ctx: tir.Context) -> str:
-        loop_i = dcir.Axis.I.iteration_symbol()
-        loop_j = dcir.Axis.J.iteration_symbol()
+        loop_i = tir.Axis.I.iteration_symbol()
+        loop_j = tir.Axis.J.iteration_symbol()
 
         axis_start_i = "0"
-        axis_end_i = dcir.Axis.I.domain_symbol()
+        axis_end_i = tir.Axis.I.domain_symbol()
         axis_start_j = "0"
-        axis_end_j = dcir.Axis.J.domain_symbol()
+        axis_end_j = tir.Axis.J.domain_symbol()
 
         conditions: list[str] = []
         if node.i.start is not None:
@@ -260,7 +260,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             node.interval,
             loop_order=loop_order,
             axis_start="0",
-            axis_end=dcir.Axis.K.domain_dace_symbol(),
+            axis_end=tir.Axis.K.domain_dace_symbol(),
         )
 
         loop = tir.VerticalLoop(
@@ -287,7 +287,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         containers: dict[str, data.Data] = {}
         dimensions: dict[str, tuple[bool, bool, bool]] = {}
         symbols: tir.SymbolDict = {}
-        shift: dict[str, dict[dcir.Axis, int]] = {}  # dict of field_name -> (dict of axis -> shift)
+        shift: dict[str, dict[tir.Axis, int]] = {}  # dict of field_name -> (dict of axis -> shift)
 
         # this is ij blocks = horizontal execution
         field_extents, block_extents = oir_utils.compute_extents(node, centered_extent=True)
@@ -304,9 +304,9 @@ class OIRToTreeIR(eve.NodeVisitor):
                 extent = field_extents[param.name]
                 k_bound = k_bounds[param.name]
                 shift[param.name] = {
-                    dcir.Axis.I: -extent[0][0],
-                    dcir.Axis.J: -extent[1][0],
-                    dcir.Axis.K: max(k_bound[0], 0),
+                    tir.Axis.I: -extent[0][0],
+                    tir.Axis.J: -extent[1][0],
+                    tir.Axis.K: max(k_bound[0], 0),
                 }
                 containers[param.name] = data.Array(
                     data_type_to_dace_typeclass(param.dtype),  # dtype
@@ -324,9 +324,9 @@ class OIRToTreeIR(eve.NodeVisitor):
             extent = field_extents[field.name]
             k_bound = k_bounds[field.name]
             shift[field.name] = {
-                dcir.Axis.I: -extent[0][0],
-                dcir.Axis.J: -extent[1][0],
-                dcir.Axis.K: max(k_bound[0], 0),
+                tir.Axis.I: -extent[0][0],
+                tir.Axis.J: -extent[1][0],
+                tir.Axis.K: max(k_bound[0], 0),
             }
             containers[field.name] = data.Array(
                 data_type_to_dace_typeclass(field.dtype),  # dtype
@@ -374,7 +374,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         indices: list[str] = []
 
         offset_dict = node.to_dict()
-        for index, axis in enumerate(dcir.Axis.dims_3d()):
+        for index, axis in enumerate(tir.Axis.dims_3d()):
             if ctx.root.dimensions[field.name][index]:
                 shift_str = f" + {shift[axis]}" if shift[axis] != 0 else ""
                 indices.append(
@@ -387,14 +387,14 @@ class OIRToTreeIR(eve.NodeVisitor):
         self, node: oir.VariableKOffset, field: oir.FieldAccess, ctx: tir.Context, **kwargs: Any
     ) -> str:
         shift = ctx.root.shift[field.name]
-        i_shift = f" + {shift[dcir.Axis.I]}" if shift[dcir.Axis.I] != 0 else ""
-        j_shift = f" + {shift[dcir.Axis.J]}" if shift[dcir.Axis.J] != 0 else ""
-        k_shift = f" + {shift[dcir.Axis.K]}" if shift[dcir.Axis.K] != 0 else ""
+        i_shift = f" + {shift[tir.Axis.I]}" if shift[tir.Axis.I] != 0 else ""
+        j_shift = f" + {shift[tir.Axis.J]}" if shift[tir.Axis.J] != 0 else ""
+        k_shift = f" + {shift[tir.Axis.K]}" if shift[tir.Axis.K] != 0 else ""
 
         return (
-            f"{dcir.Axis.I.iteration_symbol()}{i_shift}, "
-            f"{dcir.Axis.J.iteration_symbol()}{j_shift}, "
-            f"{dcir.Axis.K.iteration_symbol()}{k_shift} + {self.visit(node.k, ctx=ctx, **kwargs)}"
+            f"{tir.Axis.I.iteration_symbol()}{i_shift}, "
+            f"{tir.Axis.J.iteration_symbol()}{j_shift}, "
+            f"{tir.Axis.K.iteration_symbol()}{k_shift} + {self.visit(node.k, ctx=ctx, **kwargs)}"
         )
 
     def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs: Any) -> str:
@@ -467,24 +467,24 @@ def get_dace_shape(
     symbols: tir.SymbolDict,
 ) -> list[symbolic.symbol]:
     shape = []
-    for index, axis in enumerate(dcir.Axis.dims_3d()):
+    for index, axis in enumerate(tir.Axis.dims_3d()):
         if field.dimensions[index]:
             symbol = axis.domain_dace_symbol()
             symbols[axis.domain_symbol()] = dtypes.int32
 
-            if axis == dcir.Axis.I:
+            if axis == tir.Axis.I:
                 i_padding = extent[0][1] - extent[0][0]
                 if i_padding != 0:
                     shape.append(symbol + i_padding)
                     continue
 
-            if axis == dcir.Axis.J:
+            if axis == tir.Axis.J:
                 j_padding = extent[1][1] - extent[1][0]
                 if j_padding != 0:
                     shape.append(symbol + j_padding)
                     continue
 
-            if axis == dcir.Axis.K:
+            if axis == tir.Axis.K:
                 k_padding = max(k_bound[0], 0) + max(k_bound[1], 0)
                 if k_padding != 0:
                     shape.append(symbol + k_padding)
