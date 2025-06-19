@@ -7,10 +7,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Optional
+from typing import Mapping, Optional, TypeVar
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import ir_makers as im, misc as ir_misc
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
@@ -63,28 +64,23 @@ def inline_lambda(  # see todo above
     if node.fun.params and not any(eligible_params):
         return node
 
-    refs = set().union(
+    refs: set[str] = set().union(
         *(
             arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
             for arg, eligible in zip(node.args, eligible_params)
             if eligible
         )
     )
-    syms = node.fun.expr.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
+    syms: set[str] = node.fun.expr.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
     clashes = refs & syms
     expr = node.fun.expr
     if clashes:
         # TODO(tehrengruber): find a better way of generating new symbols in `name_map` that don't collide with each other. E.g. this must still work:
         # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: ERA001 [commented-out-code]
-        name_map: dict[ir.SymRef, str] = {}
-
-        def new_name(name):
-            while name in refs or name in syms or name in name_map.values():
-                name += "_"
-            return name
+        name_map: dict[str, str] = {}
 
         for sym in clashes:
-            name_map[sym] = new_name(sym)
+            name_map[sym] = ir_misc.unique_symbol(sym, refs | syms | {*name_map.values()})
 
         expr = RenameSymbols().visit(expr, name_map=name_map)
 
@@ -115,6 +111,19 @@ def inline_lambda(  # see todo above
             setattr(new_expr.annex, attr, getattr(node.annex, attr))
     itir_inference.copy_type(from_=node, to=new_expr, allow_untyped=True)
     return new_expr
+
+
+T = TypeVar("T", bound=ir.Expr)
+
+
+def rename_symbols(node: T, rename_map: Mapping[str, str | ir.SymRef]) -> T:
+    """
+    Given a node and a mapping from old symbol names to new symbol names, rename symbols.
+
+    >>> str(rename_symbols(im.plus("old_name", 1), {"old_name": "new_name"}))
+    'new_name + 1'
+    """
+    return inline_lambda(im.let(*rename_map.items())(node))
 
 
 @dataclasses.dataclass
