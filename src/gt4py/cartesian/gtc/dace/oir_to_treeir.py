@@ -126,22 +126,16 @@ class OIRToTreeIR(eve.NodeVisitor):
         return (condition_name, assignment)
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, ctx: tir.Context) -> None:
-        axis_start_i = "0"
-        axis_end_i = dcir.Axis.I.domain_dace_symbol()
-        axis_start_j = "0"
-        axis_end_j = dcir.Axis.J.domain_dace_symbol()
-
         extent = ctx.block_extents[id(node)]
 
+        axis_start_i = f"0 + {extent[0][0]}"
+        axis_start_j = f"0 + {extent[1][0]}"
+        axis_end_i = f"{dcir.Axis.I.domain_dace_symbol()}  + {extent[0][1]}"
+        axis_end_j = f"{dcir.Axis.J.domain_dace_symbol()}  + {extent[1][1]}"
+
         loop = tir.HorizontalLoop(
-            bounds_i=tir.Bounds(
-                start=f"{axis_start_i} + {extent[0][0]}",
-                end=f"{axis_end_i} + {extent[0][1]}",
-            ),
-            bounds_j=tir.Bounds(
-                start=f"{axis_start_j} + {extent[1][0]}",
-                end=f"{axis_end_j} + {extent[1][1]}",
-            ),
+            bounds_i=tir.Bounds(start=axis_start_i, end=axis_end_i),
+            bounds_j=tir.Bounds(start=axis_start_j, end=axis_end_j),
             schedule=DEFAULT_MAP_SCHEDULE[self._device_type],
             children=[],
             parent=ctx.current_scope,
@@ -186,9 +180,10 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     def visit_HorizontalMask(self, node: common.HorizontalMask, ctx: tir.Context) -> str:
         loop_i = dcir.Axis.I.iteration_symbol()
+        loop_j = dcir.Axis.J.iteration_symbol()
+
         axis_start_i = "0"
         axis_end_i = dcir.Axis.I.domain_symbol()
-        loop_j = dcir.Axis.J.iteration_symbol()
         axis_start_j = "0"
         axis_end_j = dcir.Axis.J.domain_symbol()
 
