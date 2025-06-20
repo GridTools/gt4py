@@ -17,7 +17,7 @@ from __future__ import annotations
 import types
 from typing import TYPE_CHECKING, Any, Dict, Type
 
-from gt4py.cartesian import backend as gt_backend, frontend as gt_frontend
+from gt4py.cartesian import frontend as gt_frontend
 from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.cartesian.type_hints import StencilFunc
 
@@ -37,13 +37,7 @@ def load_stencil(
 ) -> Type[StencilObject]:
     """Generate a new class object implementing the provided definition."""
     # Load components
-    backend_cls = gt_backend.from_name(backend_name)
-    if backend_cls is None:
-        raise ValueError(f"Unknown backend name ({backend_name})")
-
     frontend = gt_frontend.from_name(frontend_name)
-    if frontend is None:
-        raise ValueError(f"Invalid frontend name ({frontend_name})")
 
     builder = (
         StencilBuilder(

@@ -399,9 +399,6 @@ class StencilObject(abc.ABC):
                 arg_info = arg_infos[name]
                 assert arg_info is not None
 
-                backend_cls = gt_backend.from_name(self.backend)
-                assert backend_cls is not None
-
                 if not backend_cls.storage_info["is_optimal_layout"](
                     arg_info.array,
                     tuple(
@@ -560,7 +557,6 @@ class StencilObject(abc.ABC):
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
         backend_cls = gt_backend.from_name(self.backend)
-        assert backend_cls is not None
         device = backend_cls.storage_info["device"]
         array_infos = _extract_array_infos(field_args, device)
 
