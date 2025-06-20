@@ -38,9 +38,9 @@ def standardize_dtype_dict(dtypes):
     dtypes as 1-tuples)
     """
     assert isinstance(dtypes, collections.abc.Mapping)
-    assert all(
-        (isinstance(k, str) or gt_utils.is_iterable_of(k, str)) for k in dtypes.keys()
-    ), "Invalid key in 'dtypes'."
+    assert all((isinstance(k, str) or gt_utils.is_iterable_of(k, str)) for k in dtypes.keys()), (
+        "Invalid key in 'dtypes'."
+    )
     assert all(
         (
             isinstance(k, (type, np.dtype))
