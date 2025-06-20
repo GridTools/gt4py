@@ -19,7 +19,9 @@ from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-from gt4py.next.program_processors.runners.dace.transformations import spliting_tools as gtx_st
+from gt4py.next.program_processors.runners.dace.transformations import (
+    spliting_tools as gtx_dace_split,
+)
 
 
 @dace_properties.make_properties
@@ -187,22 +189,20 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
         merging_strategy: int,
     ) -> bool:
-        """
-        The function checks if the three matched AccessNode (which means the
-        global data and the transient data) can be considered as one single
-        data.
+        """Checks if the merging would cause a data access conflict.
 
-        It is important that these cases are very bizarre and are here mostly
+        The function returns `True` if there is a conflict and `False` if there is
+        none. It is important that these cases are very bizarre and are here mostly
         for completeness.
         """
         # What is written into `g1`; described in terms of `g`.
-        all_writes_into_g1 = gtx_st.describe_incoming_edges(state, node_g1)
+        all_writes_into_g1 = gtx_dace_split.describe_incoming_edges(state, node_g1)
 
         # What is written into `g2`, that does not come from `tmp` (checked
         #  separately) or from `g1` (according to ADR-18 can only be the same
         #  position). See it as "pure writes"; described in terms of `g`.
         pure_writes_into_g2 = [
-            gtx_st.describe_edge(edge, incoming_edge=True)
+            gtx_dace_split.describe_edge(edge, incoming_edge=True)
             for edge in state.in_edges(node_g2)
             if edge.src not in [node_tmp, node_g1]
         ]
@@ -214,7 +214,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             write_write_conflicts = [
                 write_into_g2
                 for write_into_g2 in pure_writes_into_g2
-                if gtx_st.are_intersecting(write_into_g2.subset, write_into_g1.subset)
+                if gtx_dace_split.are_intersecting(write_into_g2.subset, write_into_g1.subset)
             ]
             if len(write_write_conflicts) != 0:
                 return True
@@ -222,7 +222,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         # What is read from `g1`, ignoring the transfers to `tmp`, see them as
         #  "pure reads"; described in terms of `g`.
         pure_g1_reads = [
-            gtx_st.describe_edge(edge, incoming_edge=False)
+            gtx_dace_split.describe_edge(edge, incoming_edge=False)
             for edge in state.out_edges(node_g1)
             if edge.dst is not node_tmp
         ]
@@ -234,7 +234,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             write_after_read_conflicts = [
                 conflicting_read
                 for conflicting_read in pure_g1_reads
-                if gtx_st.are_intersecting(conflicting_read.subset, write_into_g2.subset)
+                if gtx_dace_split.are_intersecting(conflicting_read.subset, write_into_g2.subset)
             ]
             if len(write_after_read_conflicts) != 0:
                 return True
@@ -250,7 +250,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             #  something and then write to `t`. This is a simplification.
             pure_writes_into_t = [
                 self._compute_transfromed_subset(tdesc, tmp_to_g_mapping)
-                for tdesc in gtx_st.describe_incoming_edges(state, node_tmp)
+                for tdesc in gtx_dace_split.describe_incoming_edges(state, node_tmp)
                 if not gtx_transformations.utils.is_source_node_of(
                     sink=tdesc.other_node,
                     possible_sources=node_g1,
@@ -262,23 +262,21 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             # In the full merging strategy we ignore all direct transfers between `g1` and `t`.
             pure_writes_into_t = [
                 self._compute_transfromed_subset(tdesc, tmp_to_g_mapping)
-                for tdesc in gtx_st.describe_incoming_edges(state, node_tmp)
+                for tdesc in gtx_dace_split.describe_incoming_edges(state, node_tmp)
                 if tdesc.other_node is not node_g1
             ]
 
         else:
             raise NotImplementedError(f"Merging strategy {merging_strategy} is not implemented.")
 
-        # Test for write conflicts that arises because we write something into `t`
+        # Test for write conflicts that arise because we write something into `t`
         #  that conflicts with a write to either `g1` or `g2`.
         # NOTE: We only consider it a conflict if we can show that it intersects.
         for writes_into_t_wrt_g in pure_writes_into_t:
-            # If we merge `t` and `g2` together and leave `g1` be, then we do not
-            #  check for conflicts with `t`.
             write_write_conflicts_g1 = [
                 conflicting_g1_write
                 for conflicting_g1_write in all_writes_into_g1
-                if gtx_st.are_intersecting(writes_into_t_wrt_g, conflicting_g1_write.subset)
+                if gtx_dace_split.are_intersecting(writes_into_t_wrt_g, conflicting_g1_write.subset)
             ]
             if len(write_write_conflicts_g1) != 0:
                 return True
@@ -286,7 +284,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             write_write_conflicts_g2 = [
                 conflicting_g2_write
                 for conflicting_g2_write in pure_writes_into_g2
-                if gtx_st.are_intersecting(writes_into_t_wrt_g, conflicting_g2_write.subset)
+                if gtx_dace_split.are_intersecting(writes_into_t_wrt_g, conflicting_g2_write.subset)
             ]
             if len(write_write_conflicts_g2) != 0:
                 return True
@@ -363,7 +361,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         # These are all (reads and writes) that we have to relocate from `tmp` to `g2`.
         edges_to_relocate_desc = [
             desc
-            for desc in gtx_st.describe_all_edges(state, node_tmp)
+            for desc in gtx_dace_split.describe_all_edges(state, node_tmp)
             if desc.other_node is not node_g2
         ]
 
@@ -451,7 +449,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         # These are all (reads and writes) that we have to relocate from `tmp` to `g2`.
         edges_to_relocate_desc = [
             desc
-            for desc in gtx_st.describe_all_edges(state, node_tmp)
+            for desc in gtx_dace_split.describe_all_edges(state, node_tmp)
             if desc.other_node is not node_g2
         ]
 
@@ -495,7 +493,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_tmp: dace_nodes.AccessNode,
         node_g: dace_nodes.AccessNode,
         tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
-        edges_to_relocate_desc: Sequence[gtx_st.EdgeConnectionSpec],
+        edges_to_relocate_desc: Sequence[gtx_dace_split.EdgeConnectionSpec],
         already_reconfigured_dataflow: set[tuple[dace_nodes.Node, str]],
     ) -> list[dace_graph.MultiConnectorEdge]:
         """This function merges `tmp_node` with one of two global nodes.
@@ -521,7 +519,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
                 check_only=False,
             )
 
-            if gtx_st.describes_incoming_edge(edge_to_relocate_desc):
+            if gtx_dace_split.describes_incoming_edge(edge_to_relocate_desc):
                 is_producer_edge = True
                 relocate_key = (edge_to_relocate_desc.edge.src, edge_to_relocate_desc.edge.src_conn)
             else:
@@ -617,7 +615,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         # This is the set of edges that link `tmp` with `g`. We need it to understand
         #  how we have to rewrite the writes to `tmp` such that they go through `g`
         #  instead. Note that the description here is always in terms of `tmp`.
-        t_descriptions: list[gtx_st.EdgeConnectionSpec] = []
+        t_descriptions: list[gtx_dace_split.EdgeConnectionSpec] = []
 
         # The first source of `t_descriptions` are the edges that copies data from
         #  `tmp` to `g2`, i.e. write back. But they are not the only ones.
@@ -625,14 +623,14 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         #   between `tmp` and `g2`. Because it is used by `_check_read_write_conflicts()`
         #   to identify conflicts!
         t_descriptions.extend(
-            gtx_st.describe_edge(e, False) for e in state.edges_between(node_tmp, node_g2)
+            gtx_dace_split.describe_edge(e, False) for e in state.edges_between(node_tmp, node_g2)
         )
 
         # The second source of information are the initial writes from `g1` to `tmp`.
         #  However, we have to be carefully here, as it might be already included
         #  in the description trough the write back edges.
         for transfer_edge in state.edges_between(node_g1, node_tmp):
-            transfer_g1_desc_t = gtx_st.describe_edge(transfer_edge, incoming_edge=True)
+            transfer_g1_desc_t = gtx_dace_split.describe_edge(transfer_edge, incoming_edge=True)
 
             # Test if the edge writes into `tmp` at a location that is not yet known,
             #  i.e. is not written back, if not known add it.
@@ -640,7 +638,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             #   liberal. However, what we should actually do is, decompose the
             #   subset and only add the parts that are not yet known.
             if not any(
-                gtx_st.are_intersecting(known_t_patch.subset, transfer_g1_desc_t.subset)
+                gtx_dace_split.are_intersecting(known_t_patch.subset, transfer_g1_desc_t.subset)
                 for known_t_patch in t_descriptions
             ):
                 t_descriptions.append(transfer_g1_desc_t)
@@ -651,14 +649,14 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         # TODO(phimuell): Figuring out what it means if the merge does not
         #   result in a single subset. I think that the tests are strong
         #   enough to handle that case.
-        merged_subsets_at_tmp = gtx_st.subset_merger(t_descriptions)
+        merged_subsets_at_tmp = gtx_dace_split.subset_merger(t_descriptions)
 
         # Now also merges the subsets at the `g` side, but we have to do it
         #  in the same way. Thus we first find out which edges, were merged
         #  together and then we merge their `other_subset`.
         subset_map: dict[dace_sbs.Subset, dace_sbs.Subset] = {}
         for merged_subset_at_tmp in merged_subsets_at_tmp:
-            merged_subset_at_g2 = gtx_st.subset_merger(
+            merged_subset_at_g2 = gtx_dace_split.subset_merger(
                 [
                     desc.other_subset
                     for desc in t_descriptions
@@ -678,11 +676,11 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             # Ensure that there is no intersection between the subsets.
             #  Handles "unable to compare" as not an intersection.
             assert not any(
-                gtx_st.are_intersecting(merged_subset_at_tmp, known_tmp_subset) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                gtx_dace_split.are_intersecting(merged_subset_at_tmp, known_tmp_subset) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
                 for known_tmp_subset in subset_map.keys()
             )
             assert not any(
-                gtx_st.are_intersecting(merged_subset_at_g2[0], known_g_subset) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                gtx_dace_split.are_intersecting(merged_subset_at_g2[0], known_g_subset) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
                 for known_g_subset in subset_map.values()
             )
 
@@ -692,7 +690,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             # Make sure that the `tmp` subset of any every edge that read from/write to
             #  `tmp` (ignoring the connections to and from `G`) can be translated into
             #  a `G` subset.
-            for edge_desc in gtx_st.describe_all_edges(state, node_tmp):
+            for edge_desc in gtx_dace_split.describe_all_edges(state, node_tmp):
                 if edge_desc.other_node in [node_g1, node_g2]:
                     continue
                 if not self._compute_offset(
@@ -708,7 +706,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             # TODO(phimuell): Improve this, maybe also checking with swapped order
             #   for `covered()`?
             pure_tmp_writes = [
-                gtx_st.describe_edge(edge, incoming_edge=True)
+                gtx_dace_split.describe_edge(edge, incoming_edge=True)
                 for edge in state.in_edges(node_tmp)
                 if edge.src is not node_g1
             ]
@@ -788,7 +786,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
     @overload
     def _compute_offset(
         self,
-        tdesc: gtx_st.EdgeConnectionSpec,
+        tdesc: gtx_dace_split.EdgeConnectionSpec,
         tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
         check_only: Literal[True],
     ) -> bool: ...
@@ -796,14 +794,14 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
     @overload
     def _compute_offset(
         self,
-        tdesc: gtx_st.EdgeConnectionSpec,
+        tdesc: gtx_dace_split.EdgeConnectionSpec,
         tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
         check_only: Literal[False],
     ) -> list[dace_sym.SymbolicType]: ...
 
     def _compute_offset(
         self,
-        tdesc: gtx_st.EdgeConnectionSpec,
+        tdesc: gtx_dace_split.EdgeConnectionSpec,
         tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
         check_only: bool,
     ) -> Union[list[dace_sym.SymbolicType], bool]:
@@ -823,7 +821,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             (
                 merged_tmp_subset
                 for merged_tmp_subset in tmp_to_g_mapping.keys()
-                if gtx_st.are_intersecting(merged_tmp_subset, lower_bound)
+                if gtx_dace_split.are_intersecting(merged_tmp_subset, lower_bound)
             ),
             None,
         )
@@ -846,7 +844,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
     def _compute_transfromed_subset(
         self,
-        tdesc: gtx_st.EdgeConnectionSpec,
+        tdesc: gtx_dace_split.EdgeConnectionSpec,
         tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
     ) -> dace_sbs.Range:
         """Transform the subset at `t` to the corresbonding subset at at `g`."""
