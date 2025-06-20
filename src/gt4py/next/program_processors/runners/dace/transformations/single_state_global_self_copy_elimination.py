@@ -225,8 +225,8 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
             if len(write_write_conflicts) != 0:
                 return True
 
-        # What is read from `g1`, ignoring the transfers to `tmp`,
-        #  see them as "pure reads"; described in terms of `g`.
+        # What is read from `g1`, ignoring the transfers to `tmp`, see them as
+        #  "pure reads"; described in terms of `g`.
         pure_g1_reads = [
             gtx_st.describe_edge(edge, incoming_edge=False)
             for edge in state.out_edges(node_g1)
@@ -250,11 +250,30 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
 
         # What is written into `t`, that does not come from `g1`. However, the
         #  subset is expressed in g terms.
-        pure_writes_into_t = [
-            self._compute_transfromed_subset(tdesc, tmp_to_g_mapping)
-            for tdesc in gtx_st.describe_incoming_edges(state, node_tmp)
-            if tdesc.other_node is not node_g1
-        ]
+        if merging_strategy == self._MERGE_TMP_G2:
+            # In the partial merging strategy we ignore all reads from `g1`, the
+            #  direct ones and indirects, i.e. the one that read from `g1` compute
+            #  something and then write to `t`. This is a simplification.
+            pure_writes_into_t = [
+                self._compute_transfromed_subset(tdesc, tmp_to_g_mapping)
+                for tdesc in gtx_st.describe_incoming_edges(state, node_tmp)
+                if not gtx_transformations.utils.is_source_node_of(
+                    sink=tdesc.other_node,
+                    possible_sources=node_g1,
+                    state=state,
+                )
+            ]
+
+        elif merging_strategy == self._FULL_MERGE:
+            # In the full merging strategy we ignore all direct transfers between `g1` and `t`.
+            pure_writes_into_t = [
+                self._compute_transfromed_subset(tdesc, tmp_to_g_mapping)
+                for tdesc in gtx_st.describe_incoming_edges(state, node_tmp)
+                if tdesc.other_node is not node_g1
+            ]
+
+        else:
+            raise NotImplementedError(f"Merging strategy {merging_strategy} is not implemented.")
 
         # Test for write conflicts that arises because we write something into `t`
         #  that conflicts with a write to either `g1` or `g2`.
@@ -262,14 +281,13 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         for writes_into_t_wrt_g in pure_writes_into_t:
             # If we merge `t` and `g2` together and leave `g1` be, then we do not
             #  check for conflicts with `t`.
-            if merging_strategy != self._MERGE_TMP_G2:
-                write_write_conflicts_g1 = [
-                    conflicting_g1_write
-                    for conflicting_g1_write in all_writes_into_g1
-                    if gtx_st.are_intersecting(writes_into_t_wrt_g, conflicting_g1_write.subset)
-                ]
-                if len(write_write_conflicts_g1) != 0:
-                    return True
+            write_write_conflicts_g1 = [
+                conflicting_g1_write
+                for conflicting_g1_write in all_writes_into_g1
+                if gtx_st.are_intersecting(writes_into_t_wrt_g, conflicting_g1_write.subset)
+            ]
+            if len(write_write_conflicts_g1) != 0:
+                return True
 
             write_write_conflicts_g2 = [
                 conflicting_g2_write
