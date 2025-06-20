@@ -752,7 +752,8 @@ def translate_concat_where(
                 ts.FieldType(dims=[concat_dim], dtype=lower.gt_type),
                 origin=(concat_dim_bound - 1,),
             )
-            lower_domain = [(concat_dim, concat_dim_bound - 1, concat_dim_bound)]
+            lower_bound = output_domain[concat_dim_index][1]
+            lower_domain = [(concat_dim, lower_bound, concat_dim_bound)]
         elif isinstance(upper.gt_type, ts.ScalarType):
             assert len(upper_domain) == 0
             assert isinstance(lower.gt_type, ts.FieldType)
@@ -761,7 +762,8 @@ def translate_concat_where(
                 ts.FieldType(dims=[concat_dim], dtype=upper.gt_type),
                 origin=(concat_dim_bound,),
             )
-            upper_domain = [(concat_dim, concat_dim_bound, concat_dim_bound + 1)]
+            upper_bound = output_domain[concat_dim_index][2]
+            upper_domain = [(concat_dim, concat_dim_bound, upper_bound)]
 
         is_lower_slice, is_upper_slice = (False, False)
         if concat_dim not in lower.gt_type.dims:
