@@ -15,19 +15,10 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
 class FixedPointTransformation(eve.NodeTranslator):
     """
-    Transformation pass that transforms until no transformation is applicable anymore.
+    Base class for iterative transformations that converge when a fixed-point is reached.
     """
-
-    #: Enum of all transformation (names). The transformations need to be defined as methods
-    #: named `transform_<NAME>`.
-    Transformation: ClassVar[Type[enum.Flag]]
-
-    #: All transformations enabled in this instance, e.g. `Transformation.T1 & Transformation.T2`.
-    #: Usually the default value is chosen to be all transformations.
-    enabled_transformations: enum.Flag
 
     REINFER_TYPES: ClassVar[bool] = False
 
@@ -43,18 +34,44 @@ class FixedPointTransformation(eve.NodeTranslator):
             new_node = self.transform(node, **kwargs)
             if new_node is None:
                 break
+            else:
+                new_node = self.post_transform(node, new_node)
             assert new_node != node
             node = new_node
         return node
 
-    def transform(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
-        """
-        Transform node once.
+    def post_transform(self, node: ir.Node, new_node: ir.Node) -> ir.Node:
+        if self.REINFER_TYPES:
+            itir_type_inference.reinfer(new_node)
+        self._preserve_annex(node, new_node)
+        return new_node
 
-        Execute transformations until one is applicable. As soon as a transformation occured
-        the function will return the transformed node. Note that the transformation itself
-        may call other transformations on child nodes again.
-        """
+    """
+    Transform node once.
+    
+    Execute transformation if applicable. When a transformation occurred the function will return 
+    the transformed node. Note that the transformation itself may call other transformations on 
+    child nodes again.
+    """
+
+    def transform(self, node: ir.Node, **kwargs) -> Optional[ir.Node]: ...
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CombinedFixedPointTransform(FixedPointTransformation):
+    """
+    Base class for a set of iterative transformations that converge when a fixed-point is reached.
+    """
+
+    #: Enum of all transformation (names). The transformations need to be defined as methods
+    #: named `transform_<NAME>`.
+    Transformation: ClassVar[Type[enum.Flag]]
+
+    #: All transformations enabled in this instance, e.g. `Transformation.T1 & Transformation.T2`.
+    #: Usually the default value is chosen to be all transformations.
+    enabled_transformations: enum.Flag
+
+    def transform(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
         for transformation in self.Transformation:
             if self.enabled_transformations & transformation:
                 assert isinstance(transformation.name, str)
@@ -64,8 +81,5 @@ class FixedPointTransformation(eve.NodeTranslator):
                     assert (
                         result is not node
                     ), f"Transformation {transformation.name.lower()} should have returned None, since nothing changed."
-                    if self.REINFER_TYPES:
-                        itir_type_inference.reinfer(result)
-                    self._preserve_annex(node, result)
                     return result
         return None
