@@ -32,23 +32,17 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
     that the data is not copied to another location, as the NumPy instruction
     `A[2:10] = A[0:8]` would do, as this is invalid to do with a Memlet.
 
-    In the simplest case the function will eliminate the redundant copy. However,
-    the transformation is also able to handle cases where data is written
-    into `T` and both `G` nodes. In that case the function checks if the
-    three nodes act as one and will merge them together.
-
-    However, the transformation will only apply if `T` is not used anywhere else.
-
-    Depending on the situation, the function will merge all three nodes together.
-    However, this is not possible if this would create cycles, in that case the
-    transformation tries to split the cycle.
+    In the simplest case the three nodes are merged together into one.
+    However, depending on the situation, for example if this would create a cycle,
+    the function will only partially fuse them together. Currently only the case
+    where `T` and the second `G` node are merged is implemented. In this mode the
+    transformation will remove all _direct_ links between the first `G` node and
+    `T` and redirect all read writes from `T` to the second node.
 
     Todo:
-        There are two interesting and related cases that should also be handled.
-        - If `T` is accessed downstream, then one could replace `T` with `G`
-            as they are the same (in some cases).
-        - If the pattern was found in two parallel branches, it will not apply.
-            This should be fixed.
+        - Investigate if read write conflict checking is really needed.
+        - Handle the case of where cycles would be created better, especially
+            in conjunction with indirect reads.
     """
 
     # Name of all data that is used at only one place. Is computed by the
