@@ -648,6 +648,80 @@ def _make_not_everything_is_written_back(
     return sdfg
 
 
+def _make_write_write_conflict(
+    conflict_at_t: bool,
+) -> dace.SDFG:
+    sdfg = dace.SDFG(util.unique_name(f"write_write_conflict_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "gto":
+        sdfg.add_array(
+            name=name,
+            shape=(5, 2),
+            dtype=dace.float64,
+            transient=(name == "t"),
+        )
+
+    g1, t, g2, o = (state.add_access(name) for name in "gtgo")
+
+    state.add_mapped_tasklet(
+        "first_write",
+        map_ranges={"__j": "0:2"},
+        inputs={},
+        code="__out = 1.0 * (__j + 1.0)",
+        outputs={"__out": dace.Memlet("g[0, __j]")},
+        output_nodes={g1},
+        external_edges=True,
+    )
+
+    state.add_mapped_tasklet(
+        "consumer",
+        map_ranges={
+            "__i": "0:5",
+            "__j": "0:2",
+        },
+        inputs={"__in": dace.Memlet("t[__i, __j]")},
+        code="__out = math.sin(__in) + 0.5",
+        outputs={"__out": dace.Memlet("o[__i, __j]")},
+        input_nodes={t},
+        output_nodes={o},
+        external_edges=True,
+    )
+
+    if conflict_at_t:
+        # NOTE: In this case it might be possible to resolve the conflict, simply
+        #   by eliminating the first write to `g` because it does not take effect.
+
+        state.add_nedge(g1, t, dace.Memlet("g[1:5, 0:2] -> [1:5, 0:2]"))
+        state.add_mapped_tasklet(
+            "conflicting_write_into_t",
+            map_ranges={"__j": "0:2"},
+            inputs={},
+            code="__out = __j + 2.0",
+            outputs={"__out": dace.Memlet("t[0, __j]")},
+            output_nodes={t},
+            external_edges=True,
+        )
+
+    else:
+        state.add_nedge(g1, t, dace.Memlet("g[1:5, 0:2] -> [1:5, 0:2]"))
+        state.add_mapped_tasklet(
+            "conflicting_write_into_g2",
+            map_ranges={"__j": "0:2"},
+            inputs={},
+            code="__out = __j + 2.0",
+            outputs={"__out": dace.Memlet("g[0, __j]")},
+            output_nodes={g2},
+            external_edges=True,
+        )
+
+    state.add_nedge(t, g2, dace.Memlet("t[0:5, 0:2] -> [0:5, 0:2]"))
+
+    sdfg.validate()
+
+    return sdfg
+
+
 @pytest.mark.parametrize("consume_all_of_t", [True, False])
 @pytest.mark.parametrize("partially_writeback_second_map", [True, False])
 def test_not_everything_is_written_back(
@@ -1020,3 +1094,16 @@ def test_multi_t_patch():
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref, res)
+
+
+@pytest.mark.parametrize("conflict_at_t", [True, False])
+def test_write_write_conflict(conflict_at_t: bool):
+    sdfg = _make_write_write_conflict(conflict_at_t=conflict_at_t)
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.SingleStateGlobalSelfCopyElimination,
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 0
