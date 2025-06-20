@@ -722,6 +722,71 @@ def _make_write_write_conflict(
     return sdfg
 
 
+def _make_read_write_conflict() -> dace.SDFG:
+    sdfg = dace.SDFG(util.unique_name(f"write_write_conflict_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "gtom":
+        sdfg.add_array(
+            name=name,
+            shape=(10, 2),
+            dtype=dace.float64,
+            transient=(name == "t"),
+        )
+
+    g1, t, g2, o, m = (state.add_access(name) for name in "gtgom")
+
+    # This is the first read from `g1`.
+    state.add_nedge(g1, m, dace.Memlet("g[0, 0:2] -> [0, 0:2]"))
+
+    state.add_nedge(g1, t, dace.Memlet("g[1:5, 0:2] -> [1:5, 0:2]"))
+
+    state.add_mapped_tasklet(
+        "computation",
+        map_ranges={
+            "__i": "5:10",
+            "__j": "0:2",
+        },
+        inputs={},
+        code="__out = (__i + 1.0) * (__j + 2.0)",
+        outputs={"__out": dace.Memlet("t[__i, __j]")},
+        output_nodes={t},
+        external_edges=True,
+    )
+
+    state.add_mapped_tasklet(
+        "consumer",
+        map_ranges={
+            "__i": "1:10",
+            "__j": "0:2",
+        },
+        inputs={"__in": dace.Memlet("t[__i, __j]")},
+        code="__out = math.exp(__in)",
+        outputs={"__out": dace.Memlet("o[__i, __j]")},
+        input_nodes={t},
+        output_nodes={o},
+        external_edges=True,
+    )
+
+    # Write back to `g2`.
+    state.add_nedge(t, g2, dace.Memlet("t[1:10, 0:2] -> [1:10, 0:2]"))
+
+    # This is the write to the same location as we read from `g1` before.
+    state.add_mapped_tasklet(
+        "write_after_read",
+        map_ranges={"__j": "0:2"},
+        inputs={},
+        code="__out = math.sin((__j + 1.0) * 2.9)",
+        outputs={"__out": dace.Memlet("g[0, __j]")},
+        output_nodes={g2},
+        external_edges=True,
+    )
+
+    sdfg.validate()
+
+    return sdfg
+
+
 @pytest.mark.parametrize("consume_all_of_t", [True, False])
 @pytest.mark.parametrize("partially_writeback_second_map", [True, False])
 def test_not_everything_is_written_back(
@@ -1099,6 +1164,19 @@ def test_multi_t_patch():
 @pytest.mark.parametrize("conflict_at_t", [True, False])
 def test_write_write_conflict(conflict_at_t: bool):
     sdfg = _make_write_write_conflict(conflict_at_t=conflict_at_t)
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.SingleStateGlobalSelfCopyElimination,
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 0
+
+
+def test_read_write_conflict():
+    sdfg = _make_read_write_conflict()
+    sdfg.view()
 
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.SingleStateGlobalSelfCopyElimination,
