@@ -1179,7 +1179,6 @@ def test_read_write_conflict():
     #   unspecified if the read from `g1` will really happen before the write to `g2`.
     #   Nevertheless we explicitly check for it.
     sdfg = _make_read_write_conflict()
-    sdfg.view()
 
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.SingleStateGlobalSelfCopyElimination,
