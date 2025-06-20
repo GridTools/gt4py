@@ -15,19 +15,7 @@ import os
 import pathlib
 import time
 import warnings
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    ClassVar,
-    Dict,
-    List,
-    Optional,
-    Protocol,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Protocol, Type
 
 from typing_extensions import deprecated
 
@@ -45,31 +33,6 @@ if TYPE_CHECKING:
     from gt4py.cartesian.stencil_builder import StencilBuilder
     from gt4py.cartesian.stencil_object import StencilObject
 
-REGISTRY = gt_utils.Registry()
-
-
-def from_name(name: str) -> Type[Backend]:
-    backend = REGISTRY.get(name, None)
-    if backend is None:
-        raise NotImplementedError(
-            f"Backend {name} is not implemented, options are: {REGISTRY.names}"
-        )
-    return backend
-
-
-def register(backend_cls: Type[Backend]) -> Type[Backend]:
-    assert issubclass(backend_cls, Backend) and backend_cls.name is not None
-
-    if isinstance(backend_cls.name, str):
-        gt_storage.register(backend_cls.name, backend_cls.storage_info)
-        return REGISTRY.register(backend_cls.name, backend_cls)
-
-    raise ValueError(
-        "Invalid 'name' attribute ('{name}') in backend class '{cls}'".format(
-            name=backend_cls.name, cls=backend_cls
-        )
-    )
-
 
 class Backend(abc.ABC):
     #: Backend name
@@ -81,7 +44,7 @@ class Backend(abc.ABC):
     #:    - versioning: is versioning on?
     #:    - description [optional]
     #:    - type
-    options: ClassVar[Dict[str, Any]]
+    options: ClassVar[dict[str, Any]]
 
     #: Backend-specific storage parametrization:
     #:
@@ -99,7 +62,7 @@ class Backend(abc.ABC):
     #:
     #:  Languages should be spelled using the official spelling
     #:  but lower case ("python", "fortran", "rust").
-    languages: ClassVar[Optional[Dict[str, Any]]] = None
+    languages: ClassVar[dict[str, Any] | None] = None
 
     # __impl_opts:
     #   "disable-code-generation": bool
@@ -107,7 +70,7 @@ class Backend(abc.ABC):
 
     builder: StencilBuilder
 
-    def __init__(self, builder: StencilBuilder):
+    def __init__(self, builder: StencilBuilder) -> None:
         self.builder = builder
 
     @classmethod
@@ -124,7 +87,7 @@ class Backend(abc.ABC):
         return filtered_options
 
     @abc.abstractmethod
-    def load(self) -> Optional[Type[StencilObject]]:
+    def load(self) -> Type[StencilObject] | None:
         """
         Load the stencil class from the generated python module.
 
@@ -155,19 +118,45 @@ class Backend(abc.ABC):
         pass
 
     @property
-    def extra_cache_info(self) -> Dict[str, Any]:
+    def extra_cache_info(self) -> dict[str, Any]:
         """Provide additional data to be stored in cache info file (subclass hook)."""
         return {}
 
     @property
-    def extra_cache_validation_keys(self) -> List[str]:
+    def extra_cache_validation_keys(self) -> list[str]:
         """List keys from extra_cache_info to be validated during consistency check."""
         return []
 
 
+REGISTRY = gt_utils.Registry[Type[Backend]]()
+
+
+def from_name(name: str) -> Type[Backend]:
+    """Return a backend by name."""
+    backend_cls = REGISTRY.get(name, None)
+    if backend_cls is None:
+        raise NotImplementedError(
+            f"Backend '{name}' is not implemented. Options are: {REGISTRY.names}."
+        )
+    return backend_cls
+
+
+def register(backend_cls: Type[Backend]) -> Type[Backend]:
+    """Register a backend."""
+    assert issubclass(backend_cls, Backend) and backend_cls.name is not None
+
+    if isinstance(backend_cls.name, str):
+        gt_storage.register(backend_cls.name, backend_cls.storage_info)
+        return REGISTRY.register(backend_cls.name, backend_cls)
+
+    raise ValueError(
+        f"Invalid 'name' attribute ('{backend_cls.name}') in backend class '{backend_cls}'."
+    )
+
+
 class CLIBackendMixin(Backend):
     @abc.abstractmethod
-    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
+    def generate_computation(self) -> dict[str, str | dict]:
         """
         Generate the computation source code in a way agnostic of the way it is going to be used.
 
@@ -217,7 +206,7 @@ class CLIBackendMixin(Backend):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
+    def generate_bindings(self, language_name: str) -> dict[str, str | dict]:
         """
         Generate bindings source code from ``language_name`` to the target language of the backend.
 
@@ -244,7 +233,7 @@ class CLIBackendMixin(Backend):
 class BaseBackend(Backend):
     MODULE_GENERATOR_CLASS: ClassVar[Type[BaseModuleGenerator]]
 
-    def load(self) -> Optional[Type[StencilObject]]:
+    def load(self) -> Type[StencilObject] | None:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
@@ -311,7 +300,7 @@ class BaseBackend(Backend):
 
         return module
 
-    def make_module_source(self, *, args_data: Optional[ModuleData] = None, **kwargs: Any) -> str:
+    def make_module_source(self, *, args_data: ModuleData | None = None, **kwargs: Any) -> str:
         """Generate the module source code with or without stencil id."""
         args_data = args_data or make_args_data_from_gtir(self.builder.gtir_pipeline)
         source = self.MODULE_GENERATOR_CLASS()(args_data, self.builder, **kwargs)
@@ -319,7 +308,7 @@ class BaseBackend(Backend):
 
 
 class MakeModuleSourceCallable(Protocol):
-    def __call__(self, *, args_data: Optional[ModuleData] = None, **kwargs: Any) -> str: ...
+    def __call__(self, *, args_data: ModuleData | None = None, **kwargs: Any) -> str: ...
 
 
 class PurePythonBackendCLIMixin(CLIBackendMixin):
@@ -333,12 +322,12 @@ class PurePythonBackendCLIMixin(CLIBackendMixin):
     #:  :py:meth:`BaseBackend`.
     make_module_source: MakeModuleSourceCallable
 
-    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
+    def generate_computation(self) -> dict[str, str | dict]:
         file_name = self.builder.module_path.name
         source = self.make_module_source(ir=self.builder.gtir)
         return {str(file_name): source}
 
-    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
+    def generate_bindings(self, language_name: str) -> dict[str, str | dict]:
         """Pure python backends typically will not support bindings."""
         return super().generate_bindings(language_name)
 
@@ -361,7 +350,7 @@ class BasePyExtBackend(BaseBackend):
         return self.builder.pkg_path.joinpath(self.pyext_module_name + "_BUILD")
 
     @property
-    def extra_cache_info(self) -> Dict[str, Any]:
+    def extra_cache_info(self) -> dict[str, Any]:
         pyext_file_path = self.builder.backend_data.get("pyext_file_path", None)
         pyext_md5 = ""
         if pyext_file_path:
@@ -373,7 +362,7 @@ class BasePyExtBackend(BaseBackend):
         }
 
     @property
-    def extra_cache_validation_keys(self) -> List[str]:
+    def extra_cache_validation_keys(self) -> list[str]:
         keys = super().extra_cache_validation_keys
         if self.extra_cache_info["pyext_md5"]:
             keys.append("pyext_md5")
@@ -385,11 +374,11 @@ class BasePyExtBackend(BaseBackend):
 
     def build_extension_module(
         self,
-        pyext_sources: Dict[str, Any],
-        pyext_build_opts: Dict[str, str],
+        pyext_sources: dict[str, Any],
+        pyext_build_opts: dict[str, str],
         *,
         uses_cuda: bool = False,
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         # Build extension module
         pyext_build_path = pathlib.Path(
             os.path.relpath(self.pyext_build_dir_path, pathlib.Path.cwd())
@@ -408,7 +397,7 @@ class BasePyExtBackend(BaseBackend):
         pyext_target_file_path = self.builder.pkg_path
         qualified_pyext_name = self.pyext_module_path
 
-        pyext_build_args: Dict[str, Any] = dict(
+        pyext_build_args: dict[str, Any] = dict(
             name=qualified_pyext_name,
             sources=sources,
             build_path=str(pyext_build_path),
