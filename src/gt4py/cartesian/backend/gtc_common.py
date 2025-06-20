@@ -199,14 +199,14 @@ class PyExtModuleGenerator(BaseModuleGenerator):
 
 
 class BackendCodegen:
-    TEMPLATE_FILES: Dict[str, str]
+    TEMPLATE_FILES: dict[str, str]
 
     @abc.abstractmethod
-    def __init__(self, class_name: str, module_name: str, backend: Any):
+    def __init__(self, class_name: str, module_name: str, backend: Backend) -> None:
         pass
 
     @abc.abstractmethod
-    def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+    def __call__(self, ir: gtir.Stencil) -> dict[str, dict[str, str]]:
         """Return a dict with the keys 'computation' and 'bindings' to dicts of filenames to source."""
         pass
 

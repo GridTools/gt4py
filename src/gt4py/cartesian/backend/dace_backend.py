@@ -403,16 +403,15 @@ class SDFGManager:
 
 
 class DaCeExtGenerator(BackendCodegen):
-    def __init__(self, class_name, module_name, backend):
+    def __init__(self, class_name: str, module_name: str, backend: BaseDaceBackend) -> None:
         self.class_name = class_name
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+    def __call__(self, stencil_ir: gtir.Stencil) -> dict[str, dict[str, str]]:
         manager = SDFGManager(self.backend.builder)
         sdfg = manager.expanded_sdfg()
 
-        sources: Dict[str, Dict[str, str]]
         implementation = DaCeComputationCodegen.apply(stencil_ir, self.backend.builder, sdfg)
 
         bindings = DaCeBindingsCodegen.apply(
@@ -420,11 +419,10 @@ class DaCeExtGenerator(BackendCodegen):
         )
 
         bindings_ext = "cu" if self.backend.storage_info["device"] == "gpu" else "cpp"
-        sources = {
+        return {
             "computation": {"computation.hpp": implementation},
             "bindings": {f"bindings.{bindings_ext}": bindings},
         }
-        return sources
 
 
 class DaCeComputationCodegen:
