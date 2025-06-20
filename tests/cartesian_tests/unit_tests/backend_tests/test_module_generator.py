@@ -20,6 +20,9 @@ from gt4py.cartesian.stencil_builder import StencilBuilder
 
 
 class SampleModuleGenerator(BaseModuleGenerator):
+    def __init__(self, builder: StencilBuilder) -> None:
+        super().__init__(builder)
+
     def generate_implementation(self) -> str:
         return "pass"
 
@@ -49,18 +52,6 @@ def sample_args_data():
         },
         parameter_info={"param": ParameterInfo(access=AccessKind.READ, dtype=dtype)},
     )
-
-
-def test_uninitialized_builder(sample_builder, sample_args_data):
-    generator = SampleModuleGenerator()
-
-    # if builder not passed in constructor, trying to access it is guaranteed to raise
-    with pytest.raises(RuntimeError):
-        assert generator.builder
-
-    source = generator(args_data=sample_args_data, builder=sample_builder)
-    assert source
-    assert generator.builder
 
 
 def test_initialized_builder(sample_builder, sample_args_data):

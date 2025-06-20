@@ -125,24 +125,13 @@ def gtir_has_effect(pipeline: GtirPipeline) -> bool:
 class PyExtModuleGenerator(BaseModuleGenerator):
     """Module Generator for use with backends that generate c++ python extensions."""
 
-    pyext_module_name: str | None
-    pyext_file_path: str | None
+    def __init__(self, builder: StencilBuilder) -> None:
+        super().__init__(builder)
 
-    def __init__(self):
-        super().__init__()
-        self.pyext_module_name = None
-        self.pyext_file_path = None
-
-    def __call__(
-        self, args_data: ModuleData, builder: StencilBuilder | None = None, **kwargs: Any
-    ) -> str:
-        self.pyext_module_name = kwargs["pyext_module_name"]
-        self.pyext_file_path = kwargs["pyext_file_path"]
-        return super().__call__(args_data, builder, **kwargs)
+    def __call__(self, args_data: ModuleData) -> str:
+        return super().__call__(args_data)
 
     def _is_not_empty(self) -> bool:
-        if self.pyext_module_name is None:
-            return False
         return gtir_is_not_empty(self.builder.gtir_pipeline)
 
     def generate_imports(self) -> str:
@@ -151,15 +140,16 @@ class PyExtModuleGenerator(BaseModuleGenerator):
             "from gt4py.cartesian import utils as gt_utils",
         ]
         if self._is_not_empty():
-            assert self.pyext_file_path is not None
+            backend_data = self.builder.backend_data
+
             file_path = 'f"{{pathlib.Path(__file__).parent.resolve()}}/{}"'.format(
-                os.path.basename(self.pyext_file_path)
+                os.path.basename(backend_data["pyext_file_path"])
             )
             source.append(
                 textwrap.dedent(
                     f"""
                 pyext_module = gt_utils.make_module_from_file(
-                    "{self.pyext_module_name}", {file_path}, public_import=True
+                    "{backend_data["pyext_module_name"]}", {file_path}, public_import=True
                 )
                 """
                 )
