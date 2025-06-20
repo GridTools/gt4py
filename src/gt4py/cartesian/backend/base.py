@@ -48,9 +48,9 @@ if TYPE_CHECKING:
 REGISTRY = gt_utils.Registry()
 
 
-def from_name(name: str) -> Optional[Type[Backend]]:
+def from_name(name: str) -> Type[Backend]:
     backend = REGISTRY.get(name, None)
-    if not backend:
+    if backend is None:
         raise NotImplementedError(
             f"Backend {name} is not implemented, options are: {REGISTRY.names}"
         )
@@ -64,12 +64,11 @@ def register(backend_cls: Type[Backend]) -> Type[Backend]:
         gt_storage.register(backend_cls.name, backend_cls.storage_info)
         return REGISTRY.register(backend_cls.name, backend_cls)
 
-    else:
-        raise ValueError(
-            "Invalid 'name' attribute ('{name}') in backend class '{cls}'".format(
-                name=backend_cls.name, cls=backend_cls
-            )
+    raise ValueError(
+        "Invalid 'name' attribute ('{name}') in backend class '{cls}'".format(
+            name=backend_cls.name, cls=backend_cls
         )
+    )
 
 
 class Backend(abc.ABC):

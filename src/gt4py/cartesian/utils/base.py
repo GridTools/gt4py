@@ -335,12 +335,12 @@ def restore_module(patch, *, verify=True):
 
 class Registry(dict):
     @property
-    def names(self):
+    def names(self) -> list[str]:
         return list(self.keys())
 
-    def register(self, name, item=NOTHING):
+    def register(self, name: str, item=NOTHING):
         if name in self.keys():
-            raise ValueError("Name already exists in registry")
+            raise ValueError(f"Name {name} already exists in registry.")
 
         def _wrapper(obj):
             self[name] = obj
