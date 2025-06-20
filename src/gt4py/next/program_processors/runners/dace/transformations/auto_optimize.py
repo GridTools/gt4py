@@ -123,15 +123,31 @@ def gt_auto_optimize(
         dace.Config.set("store_history", value=False)
 
         # Initial Cleanup
+        #  We now perform the initial simplification of the SDFG. As a special exception
+        #  we also run `ScalarToSymbolPromotion` the reason is that during the lowering
+        #  we have to create some InterstageEdges to create symbols and running this
+        #  transformation should get rid of them.
+        # NOTE: The initial simplification stage must be synchronized with the one that
+        #   `gt_substitute_compiletime_symbols()` performs!
+        gtx_transformations.gt_simplify(
+            sdfg=sdfg,
+            validate=validate,
+            validate_all=validate_all,
+            skip=gtx_transformations.GT_SIMPLIFY_DEFAULT_SKIP_SET.difference(
+                ["ScalarToSymbolPromotion"]
+            ),
+        )
+
         if constant_symbols:
             gtx_transformations.gt_substitute_compiletime_symbols(
                 sdfg=sdfg,
                 repl=constant_symbols,
-                simplify=False,
+                simplify=True,  # Simplify again after.
+                simplify_at_entry=False,
                 validate=validate,
                 validate_all=validate_all,
             )
-        gtx_transformations.gt_simplify(sdfg)
+
         gtx_transformations.gt_reduce_distributed_buffering(sdfg)
 
         # Process top level Maps

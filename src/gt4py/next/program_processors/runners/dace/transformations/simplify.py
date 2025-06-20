@@ -303,7 +303,13 @@ def gt_substitute_compiletime_symbols(
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
 
-    Todo: This function needs improvement.
+    Note:
+        Due to [DaCe issue 1817](https://github.com/spcl/dace/issues/1817) this function
+        runs `gt_simplify()` on the SDFG. It will do so with also enable some passes
+        that are by default disabled.
+
+    Todo:
+        This function needs improvement.
     """
 
     # NOTE: If a symbol, that should be replaced with a constant, is a data, i.e. has
@@ -314,12 +320,15 @@ def gt_substitute_compiletime_symbols(
     # For testing purposes we need to be able to disable this initial simplify.
     #  This is an implementation detail that we should get rid of.
     if not kwargs.get("simplify_at_entry", False):
+        # NOTE: To ensure uniform behaviour and as a performance optimization,
+        #   `gt_auto_optimizer()` performs the initial before this function is called.
+        #   Thus if here something is changed the change might be needed to applied
+        #   there as well!
+        # TODO(phimuell, iomaganaris): Explore if `SymbolPropagation` should also be run.
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
             validate=validate,
             validate_all=validate_all,
-            # avoid skipping ScalarToSymbolPromotion since some symbols are use as
-            # variables in expressions and need to be turned to symbols to be substituted
             skip=GT_SIMPLIFY_DEFAULT_SKIP_SET.difference(["ScalarToSymbolPromotion"]),
         )
 
