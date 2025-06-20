@@ -316,10 +316,12 @@ class SDFGManager:
 
         # - oir optimizations
         # Deactivate caches. We need to extend the skip list in case users have
-        # specified skip as well
+        # specified skip as well AND we need to copy in order to not trash the
+        # cache hash!
         oir_pipeline: DefaultPipeline = self.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline()
         )
+        oir_pipeline = copy.deepcopy(oir_pipeline)
         oir_pipeline.skip.extend(
             [
                 caches.IJCacheDetection,
