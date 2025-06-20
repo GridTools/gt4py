@@ -1175,6 +1175,9 @@ def test_write_write_conflict(conflict_at_t: bool):
 
 
 def test_read_write_conflict():
+    # NOTE: This case is borderline valid. The reason is because it is in fact
+    #   unspecified if the read from `g1` will really happen before the write to `g2`.
+    #   Nevertheless we explicitly check for it.
     sdfg = _make_read_write_conflict()
     sdfg.view()
 
