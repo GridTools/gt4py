@@ -16,7 +16,9 @@ import dace
 from dace import subsets as dace_subsets
 from dace.sdfg import nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace.transformations import spliting_tools as gtx_st
+from gt4py.next.program_processors.runners.dace.transformations import (
+    splitting_tools as gtx_dace_split,
+)
 
 
 def copy_map_graph(
@@ -215,7 +217,7 @@ def split_overlapping_map_range(
         [second_map_dict[param] for param in sorted(second_map_params)]
     )
 
-    if gtx_st.never_intersecting(first_map_sorted_range, second_map_sorted_range):
+    if gtx_dace_split.never_intersecting(first_map_sorted_range, second_map_sorted_range):
         return None
     if (first_map_sorted_range == second_map_sorted_range) == True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
         return None
