@@ -12,7 +12,7 @@ import abc
 import os
 import textwrap
 import time
-from typing import TYPE_CHECKING, Any, Dict, Final, List, Optional, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Final, Type
 
 from gt4py.cartesian import backend as gt_backend, config as gt_config, utils as gt_utils
 from gt4py.cartesian.backend import Backend
@@ -41,7 +41,7 @@ def pybuffer_to_sid(
     *,
     name: str,
     ctype: str,
-    domain_dim_flags: Tuple[bool, bool, bool],
+    domain_dim_flags: tuple[bool, bool, bool],
     data_ndim: int,
     stride_kind_index: int,
     backend: Backend,
@@ -125,8 +125,8 @@ def gtir_has_effect(pipeline: GtirPipeline) -> bool:
 class PyExtModuleGenerator(BaseModuleGenerator):
     """Module Generator for use with backends that generate c++ python extensions."""
 
-    pyext_module_name: Optional[str]
-    pyext_file_path: Optional[str]
+    pyext_module_name: str | None
+    pyext_file_path: str | None
 
     def __init__(self):
         super().__init__()
@@ -134,7 +134,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         self.pyext_file_path = None
 
     def __call__(
-        self, args_data: ModuleData, builder: Optional[StencilBuilder] = None, **kwargs: Any
+        self, args_data: ModuleData, builder: StencilBuilder | None = None, **kwargs: Any
     ) -> str:
         self.pyext_module_name = kwargs["pyext_module_name"]
         self.pyext_file_path = kwargs["pyext_file_path"]
@@ -175,7 +175,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         ir = self.builder.gtir
         sources = gt_utils.text.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
 
-        args: List[str] = []
+        args: list[str] = []
         for decl in ir.params:
             args.append(decl.name)
             if isinstance(decl, gtir.FieldDecl):
@@ -211,7 +211,7 @@ class BackendCodegen:
         pass
 
 
-GTBackendOptions = Dict[str, Dict[str, Any]]
+GTBackendOptions = dict[str, dict[str, Any]]
 
 
 class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
@@ -235,12 +235,12 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     def generate(self) -> Type[StencilObject]:
         pass
 
-    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
+    def generate_computation(self) -> dict[str, str | dict]:
         dir_name = f"{self.builder.options.name}_src"
         src_files = self._make_extension_sources()
         return {dir_name: src_files["computation"]}
 
-    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
+    def generate_bindings(self, language_name: str) -> dict[str, str | dict]:
         if language_name != "python":
             return super().generate_bindings(language_name)
 
@@ -249,7 +249,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         return {dir_name: src_files["bindings"]}
 
     @abc.abstractmethod
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
         """
         Generate and build a python extension for the stencil computation.
 
@@ -257,14 +257,14 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         """
         pass
 
-    def make_extension(self, *, uses_cuda: bool = False) -> Tuple[str, str]:
+    def make_extension(self, *, uses_cuda: bool = False) -> tuple[str, str]:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
 
         # Generate source
-        gt_pyext_files: Dict[str, Any]
-        gt_pyext_sources: Dict[str, Any]
+        gt_pyext_files: dict[str, Any]
+        gt_pyext_sources: dict[str, Any]
         if self.builder.options._impl_opts.get("disable-code-generation", False):
             # Pass NOTHING to the self.builder means try to reuse the source code files
             gt_pyext_files = {}
@@ -307,7 +307,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         return result
 
-    def _make_extension_sources(self) -> Dict[str, Dict[str, str]]:
+    def _make_extension_sources(self) -> dict[str, dict[str, str]]:
         """Generate the source for the stencil independently from use case."""
         if "computation_src" in self.builder.backend_data:
             return self.builder.backend_data["computation_src"]

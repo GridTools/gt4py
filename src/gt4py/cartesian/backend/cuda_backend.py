@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, ClassVar, Type
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian.backend.base import CLIBackendMixin, disabled, register
@@ -141,14 +141,11 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
     MODULE_GENERATOR_CLASS = CUDAPyExtModuleGenerator
     GT_BACKEND_T = "gpu"
 
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
         return self.make_extension(uses_cuda=True)
 
     def generate(self) -> Type[StencilObject]:
         self.check_options(self.builder.options)
-
-        pyext_module_name: Optional[str]
-        pyext_file_path: Optional[str]
 
         # TODO(havogt) add bypass if computation has no effect
         pyext_module_name, pyext_file_path = self.generate_extension()
