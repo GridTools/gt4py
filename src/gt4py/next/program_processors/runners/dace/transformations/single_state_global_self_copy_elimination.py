@@ -191,6 +191,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
         tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
+        merging_strategy: int,
     ) -> bool:
         """
         The function checks if the three matched AccessNode (which means the
@@ -259,14 +260,16 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         #  that conflicts with a write to either `g1` or `g2`.
         # NOTE: We only consider it a conflict if we can show that it intersects.
         for writes_into_t_wrt_g in pure_writes_into_t:
-            write_write_conflicts_g1 = [
-                conflicting_g1_write
-                for conflicting_g1_write in all_writes_into_g1
-                if gtx_st.are_intersecting(writes_into_t_wrt_g, conflicting_g1_write.subset)
-            ]
-            if len(write_write_conflicts_g1) != 0:
-                breakpoint()
-                return True
+            # If we merge `t` and `g2` together and leave `g1` be, then we do not
+            #  check for conflicts with `t`.
+            if merging_strategy != self._MERGE_TMP_G2:
+                write_write_conflicts_g1 = [
+                    conflicting_g1_write
+                    for conflicting_g1_write in all_writes_into_g1
+                    if gtx_st.are_intersecting(writes_into_t_wrt_g, conflicting_g1_write.subset)
+                ]
+                if len(write_write_conflicts_g1) != 0:
+                    return True
 
             write_write_conflicts_g2 = [
                 conflicting_g2_write
