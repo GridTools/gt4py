@@ -321,9 +321,9 @@ def gt_substitute_compiletime_symbols(
     #  This is an implementation detail that we should get rid of.
     if not kwargs.get("simplify_at_entry", False):
         # NOTE: To ensure uniform behaviour and as a performance optimization,
-        #   `gt_auto_optimizer()` performs the initial before this function is called.
-        #   Thus if here something is changed the change might be needed to applied
-        #   there as well!
+        #   `gt_auto_optimizer()` performs the initial simplification before this
+        #   function is called. If something is changed here then the change might
+        #   be necessary to be applied there as well.
         # TODO(phimuell, iomaganaris): Explore if `SymbolPropagation` should also be run.
         gtx_transformations.gt_simplify(
             sdfg=sdfg,

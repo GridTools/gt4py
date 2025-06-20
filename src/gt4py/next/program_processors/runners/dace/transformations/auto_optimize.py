@@ -124,9 +124,9 @@ def gt_auto_optimize(
 
         # Initial Cleanup
         #  We now perform the initial simplification of the SDFG. As a special exception
-        #  we also run `ScalarToSymbolPromotion` the reason is that during the lowering
-        #  we have to create some InterstageEdges to create symbols and running this
-        #  transformation should get rid of them.
+        #  we also run `ScalarToSymbolPromotion`. The reason is that during the lowering
+        #  we have to create some InterstageEdges to create symbols which later might get
+        #  substituted by the `gt_substitute_compiletime_symbols` transformation.
         # NOTE: The initial simplification stage must be synchronized with the one that
         #   `gt_substitute_compiletime_symbols()` performs!
         gtx_transformations.gt_simplify(
