@@ -21,6 +21,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_misc,
 )
+from gt4py.next.iterator.ir_utils.domain_utils import SymbolicDomain
 from gt4py.next.iterator.transforms import constant_folding, trace_shifts
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -56,6 +57,7 @@ class InferenceOptions(typing.TypedDict):
     offset_provider: common.OffsetProvider | common.OffsetProviderType
     symbolic_domain_sizes: Optional[dict[str, str]]
     allow_uninferred: bool
+    keep_existing_domains: bool
 
 
 class DomainAnnexDebugger(eve.NodeVisitor):
@@ -182,11 +184,16 @@ def _infer_as_fieldop(
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]],
     allow_uninferred: bool,
+    keep_existing_domains: bool,
 ) -> tuple[itir.FunCall, AccessedDomains]:
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
     if not allow_uninferred and target_domain is DomainAccessDescriptor.NEVER:
         raise ValueError("'target_domain' cannot be 'NEVER' unless `allow_uninferred=True`.")
+
+    if len(applied_fieldop.fun.args) == 2 and keep_existing_domains:
+        target_domain = SymbolicDomain.from_expr(applied_fieldop.fun.args[1])
+
     # FIXME[#1582](tehrengruber): Temporary solution for `tuple_get` on scan result. See `test_solve_triag`.
     if isinstance(target_domain, tuple):
         target_domain = _domain_union(*flatten_nested_tuple(target_domain))  # type: ignore[arg-type]  # mypy not smart enough
@@ -226,6 +233,7 @@ def _infer_as_fieldop(
             offset_provider=offset_provider,
             symbolic_domain_sizes=symbolic_domain_sizes,
             allow_uninferred=allow_uninferred,
+            keep_existing_domains=keep_existing_domains,
         )
         transformed_inputs.append(transformed_input)
 
@@ -348,6 +356,40 @@ def _infer_if(
     return result_expr, actual_domains
 
 
+def _infer_concat_where(
+    expr: itir.Expr,
+    domain: DomainAccess,
+    **kwargs: Unpack[InferenceOptions],
+) -> tuple[itir.Expr, AccessedDomains]:
+    assert cpm.is_call_to(expr, "concat_where")
+    infered_args_expr = []
+    actual_domains: AccessedDomains = {}
+    cond, true_field, false_field = expr.args
+    symbolic_cond = domain_utils.SymbolicDomain.from_expr(cond)
+    cond_complement = domain_utils.domain_complement(symbolic_cond)
+
+    for arg in [true_field, false_field]:
+
+        @tree_map
+        def mapper(d: NonTupleDomainAccess):
+            if isinstance(d, DomainAccessDescriptor):
+                return d
+            promoted_cond = domain_utils.promote_to_same_dimensions(
+                symbolic_cond if arg == true_field else cond_complement,  # noqa: B023 # function is never used outside the loop
+                d,
+            )
+            return domain_utils.domain_intersection(d, promoted_cond)
+
+        domain_ = mapper(domain)
+
+        infered_arg_expr, actual_domains_arg = infer_expr(arg, domain_, **kwargs)
+        infered_args_expr.append(infered_arg_expr)
+        actual_domains = _merge_domains(actual_domains, actual_domains_arg)
+
+    result_expr = im.call(expr.fun)(cond, *infered_args_expr)
+    return result_expr, actual_domains
+
+
 def _infer_broadcast(
     expr: itir.Expr,
     domain: DomainAccess,
@@ -380,6 +422,8 @@ def _infer_expr(
         return _infer_tuple_get(expr, domain, **kwargs)
     elif cpm.is_call_to(expr, "if_"):
         return _infer_if(expr, domain, **kwargs)
+    elif cpm.is_call_to(expr, "concat_where"):
+        return _infer_concat_where(expr, domain, **kwargs)
     elif cpm.is_call_to(expr, "broadcast"):
         return _infer_broadcast(expr, domain, **kwargs)
     elif (
@@ -399,6 +443,7 @@ def infer_expr(
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     allow_uninferred: bool = False,
+    keep_existing_domains: bool = False,
 ) -> tuple[itir.Expr, AccessedDomains]:
     """
     Infer the domain of all field subexpressions of `expr`.
@@ -413,6 +458,10 @@ def infer_expr(
       name that evaluates to the length of that axis.
     - allow_uninferred: Allow `as_fieldop` expressions whose domain is either unknown (e.g.
       because of a dynamic shift) or never accessed.
+    # TODO: describe why this is needed with concat_where (if inside as_fieldop might shrinken the
+    actually access domain)
+    - keep_existing_domains: If `True`, keep existing domains in `as_fieldop` expressions and
+        use them to propagate the domain further.
 
     Returns:
       A tuple containing the inferred expression with all applied `as_fieldop` (that are accessed)
@@ -458,8 +507,10 @@ def infer_expr(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
         allow_uninferred=allow_uninferred,
+        keep_existing_domains=keep_existing_domains,
     )
-    expr.annex.domain = domain
+    if not keep_existing_domains or not hasattr(expr.annex, "domain"):
+        expr.annex.domain = domain
 
     return expr, accessed_domains
 
@@ -497,6 +548,8 @@ def infer_program(
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     allow_uninferred: bool = False,
+    # TODO: add test
+    keep_existing_domains: bool = False,
 ) -> itir.Program:
     """
     Infer the domain of all field subexpressions inside a program.
@@ -522,6 +575,7 @@ def infer_program(
                 offset_provider=offset_provider,
                 symbolic_domain_sizes=symbolic_domain_sizes,
                 allow_uninferred=allow_uninferred,
+                keep_existing_domains=keep_existing_domains,
             )
             for stmt in program.body
         ],
