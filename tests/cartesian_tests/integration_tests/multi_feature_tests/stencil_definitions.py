@@ -62,6 +62,7 @@ def register(func=None, *, externals=None, name=None):
 
 
 Field3D = gtscript.Field[np.float64]
+Field2D = gtscript.Field[gtscript.IJ, np.float64]
 Field3DBool = gtscript.Field[np.bool_]
 
 
@@ -72,7 +73,7 @@ def copy_stencil(field_a: Field3D, field_b: Field3D):
 
 
 @gtscript.function
-def afunc(b):
+def a_gtscript_function(b):
     return sqrt(abs(b[0, 1, 0]))
 
 
@@ -80,6 +81,27 @@ def afunc(b):
 def arithmetic_ops(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
         field_a = (((((field_b + 42.0) - 42.0) * +42.0) / -42.0) % 42.0) ** 2
+
+
+@register
+def scalar_inputs(field_a: Field3D, scalar_in: float):
+    with computation(PARALLEL), interval(...):
+        field_a = field_a * scalar_in
+
+
+@register
+def unary_operation(field_a: Field3D, scalar_in: float):
+    with computation(PARALLEL), interval(...):
+        field_a = -scalar_in
+
+
+@register
+def temporary_stencil(field_a: Field3D, field_b: Field2D, scalar_in: float):
+    with computation(PARALLEL), interval(...):
+        tmp = field_a * scalar_in
+
+    with computation(FORWARD), interval(0, 1):
+        field_b += tmp
 
 
 @register
@@ -127,8 +149,8 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         acosh_res = acosh(cosh_res)
         tanh_res = tanh(acosh_res)
         atanh_res = atanh(tanh_res)
-        sqrt_res = afunc(atanh_res)
-        pow10_res = 10 ** (sqrt_res)
+        sqrt_res = a_gtscript_function(atanh_res)
+        pow10_res = 10 ** (atanh_res)
         log10_res = log10(pow10_res)
         exp_res = exp(log10_res)
         log_res = log(exp_res)
@@ -163,6 +185,14 @@ def runtime_if(field_a: Field3D, field_b: Field3D):
         else:
             field_b = 1
             field_a = field_a
+
+
+@register
+def while_stencil(field_a: Field3D, field_b: Field3D):
+    with computation(BACKWARD), interval(...):
+        while field_a > 2.0:
+            field_b = -1
+            field_a = -field_b
 
 
 @register

@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 REGISTRY = gt_utils.Registry()
 
 
-def from_name(name: str) -> Optional[Type[Backend]]:
+def from_name(name: str) -> Type[Backend]:
     backend = REGISTRY.get(name, None)
     if not backend:
         raise NotImplementedError(

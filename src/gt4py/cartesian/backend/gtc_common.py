@@ -202,7 +202,7 @@ class BackendCodegen:
     TEMPLATE_FILES: Dict[str, str]
 
     @abc.abstractmethod
-    def __init__(self, class_name: str, module_name: str, backend: Any):
+    def __init__(self, class_name: str, module_name: str, backend: Backend):
         pass
 
     @abc.abstractmethod
