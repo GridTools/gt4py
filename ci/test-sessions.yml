@@ -1,0 +1,39 @@
+sessions:
+- name: test_cartesian
+  ignore-paths:  # Skip when only gt4py.next or doc files have been updated
+  - "src/gt4py/next/**"
+  - "tests/next_tests/**"
+  - "examples/**"
+  - "*.md"
+  - "*.rst"
+
+- name: test_eve
+  paths:  # Run when gt4py.eve files (or package settings) are changed
+  - "src/gt4py/eve/**"
+  - "tests/eve_tests/**"
+  - ".github/workflows/**"
+  - "ci/**"
+  - "*.lock"
+  - "*.toml"
+  - "*.yml"
+  - "noxfile.py"
+
+- name: test_next
+  ignore-paths:  # Skip when only gt4py.cartesian or doc files have been updated
+  - "src/gt4py/cartesian/**"
+  - "tests/cartesian_tests/**"
+  - "examples/**"
+  - "*.md"
+  - "*.rst"
+
+- name: test_storage
+  paths:  # Run when gt4py.storage files (or package settings) are changed
+  - "src/gt4py/storage/**"
+  - "src/gt4py/cartesian/backend/**"  # For DaCe storages
+  - "tests/storage_tests/**"
+  - ".github/workflows/**"
+  - "ci/**"
+  - "*.lock"
+  - "*.toml"
+  - "*.yml"
+  - "noxfile.py"
