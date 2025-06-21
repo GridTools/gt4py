@@ -214,7 +214,7 @@ class BackendCodegen:
 GTBackendOptions = dict[str, dict[str, Any]]
 
 
-class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
+class BaseGTBackend(gt_backend.BasePyExtBackend):
     GT_BACKEND_OPTS: Final[GTBackendOptions] = {
         "add_profile_info": {"versioning": True, "type": bool},
         "clean": {"versioning": False, "type": bool},
@@ -235,18 +235,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     def generate(self) -> type[StencilObject]:
         pass
 
-    def generate_computation(self) -> dict[str, str | dict]:
-        dir_name = f"{self.builder.options.name}_src"
-        src_files = self._make_extension_sources()
-        return {dir_name: src_files["computation"]}
-
-    def generate_bindings(self, language_name: str) -> dict[str, str | dict]:
-        if language_name != "python":
-            return super().generate_bindings(language_name)
-
-        dir_name = f"{self.builder.options.name}_src"
-        src_files = self._make_extension_sources()
-        return {dir_name: src_files["bindings"]}
 
     @abc.abstractmethod
     def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
