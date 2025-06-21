@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
 
 from gt4py import storage as gt_storage
-from gt4py.cartesian.backend.base import CLIBackendMixin, register
+from gt4py.cartesian.backend.base import register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
     BaseGTBackend,
@@ -125,7 +125,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return generated_code
 
 
-class GTBaseBackend(BaseGTBackend, CLIBackendMixin):
+class GTBaseBackend(BaseGTBackend):
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTExtGenerator
 

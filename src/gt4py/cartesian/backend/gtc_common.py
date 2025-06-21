@@ -12,7 +12,7 @@ import abc
 import os
 import textwrap
 import time
-from typing import TYPE_CHECKING, Any, Dict, Final, List, Optional, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, Final, List, Optional, Tuple, Type
 
 from gt4py.cartesian import backend as gt_backend, config as gt_config, utils as gt_utils
 from gt4py.cartesian.backend import Backend
@@ -214,7 +214,7 @@ class BackendCodegen:
 GTBackendOptions = Dict[str, Dict[str, Any]]
 
 
-class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
+class BaseGTBackend(gt_backend.BasePyExtBackend):
     GT_BACKEND_OPTS: Final[GTBackendOptions] = {
         "add_profile_info": {"versioning": True, "type": bool},
         "clean": {"versioning": False, "type": bool},
@@ -234,19 +234,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     @abc.abstractmethod
     def generate(self) -> Type[StencilObject]:
         pass
-
-    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
-        dir_name = f"{self.builder.options.name}_src"
-        src_files = self._make_extension_sources()
-        return {dir_name: src_files["computation"]}
-
-    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
-        if language_name != "python":
-            return super().generate_bindings(language_name)
-
-        dir_name = f"{self.builder.options.name}_src"
-        src_files = self._make_extension_sources()
-        return {dir_name: src_files["bindings"]}
 
     @abc.abstractmethod
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
