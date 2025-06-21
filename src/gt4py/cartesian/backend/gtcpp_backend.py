@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, Type
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian.backend.base import CLIBackendMixin, register
@@ -132,7 +132,7 @@ class GTBaseBackend(BaseGTBackend, CLIBackendMixin):
     def _generate_extension(self, uses_cuda: bool) -> tuple[str, str]:
         return self.make_extension(uses_cuda=uses_cuda)
 
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)
 
         # TODO(havogt) add bypass if computation has no effect

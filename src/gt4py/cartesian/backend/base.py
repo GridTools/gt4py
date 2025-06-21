@@ -15,7 +15,7 @@ import os
 import pathlib
 import time
 import warnings
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Protocol, Type
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Protocol
 
 from typing_extensions import deprecated
 
@@ -87,7 +87,7 @@ class Backend(abc.ABC):
         return filtered_options
 
     @abc.abstractmethod
-    def load(self) -> Type[StencilObject] | None:
+    def load(self) -> type[StencilObject] | None:
         """
         Load the stencil class from the generated python module.
 
@@ -102,7 +102,7 @@ class Backend(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> type[StencilObject]:
         """
         Generate the stencil class from GTScript's internal representation.
 
@@ -128,10 +128,10 @@ class Backend(abc.ABC):
         return []
 
 
-REGISTRY = gt_utils.Registry[Type[Backend]]()
+REGISTRY = gt_utils.Registry[type[Backend]]()
 
 
-def from_name(name: str) -> Type[Backend]:
+def from_name(name: str) -> type[Backend]:
     """Return a backend by name."""
     backend_cls = REGISTRY.get(name, None)
     if backend_cls is None:
@@ -141,7 +141,7 @@ def from_name(name: str) -> Type[Backend]:
     return backend_cls
 
 
-def register(backend_cls: Type[Backend]) -> Type[Backend]:
+def register(backend_cls: type[Backend]) -> type[Backend]:
     """Register a backend."""
     assert issubclass(backend_cls, Backend) and backend_cls.name is not None
 
@@ -231,9 +231,9 @@ class CLIBackendMixin(Backend):
 
 
 class BaseBackend(Backend):
-    MODULE_GENERATOR_CLASS: ClassVar[Type[BaseModuleGenerator]]
+    MODULE_GENERATOR_CLASS: ClassVar[type[BaseModuleGenerator]]
 
-    def load(self) -> Type[StencilObject] | None:
+    def load(self) -> type[StencilObject] | None:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
@@ -254,11 +254,11 @@ class BaseBackend(Backend):
 
         return stencil_class
 
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)
         return self.make_module()
 
-    def _load(self) -> Type[StencilObject]:
+    def _load(self) -> type[StencilObject]:
         stencil_class_name = self.builder.class_name
         file_name = str(self.builder.module_path)
         stencil_module = gt_utils.make_module_from_file(stencil_class_name, file_name)
@@ -280,7 +280,7 @@ class BaseBackend(Backend):
                 stacklevel=2,
             )
 
-    def make_module(self, **kwargs: Any) -> Type[StencilObject]:
+    def make_module(self, **kwargs: Any) -> type[StencilObject]:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
@@ -369,7 +369,7 @@ class BasePyExtBackend(BaseBackend):
         return keys
 
     @abc.abstractmethod
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> type[StencilObject]:
         pass
 
     def build_extension_module(
@@ -419,15 +419,15 @@ class BasePyExtBackend(BaseBackend):
         return module_name, file_path
 
 
-def disabled(message: str, *, enabled_env_var: str) -> Callable[[Type[Backend]], Type[Backend]]:
+def disabled(message: str, *, enabled_env_var: str) -> Callable[[type[Backend]], type[Backend]]:
     # We push for hard deprecation here by raising by default and warning if enabling has been forced.
     enabled = bool(int(os.environ.get(enabled_env_var, "0")))
     if enabled:
         return deprecated(message)
     else:
 
-        def _decorator(cls: Type[Backend]) -> Type[Backend]:
-            def _no_generate(obj) -> Type[StencilObject]:
+        def _decorator(cls: type[Backend]) -> type[Backend]:
+            def _no_generate(obj) -> type[StencilObject]:
                 raise NotImplementedError(
                     f"Disabled '{cls.name}' backend: 'f{message}'\n",
                     f"You can still enable the backend by hand using the environment variable '{enabled_env_var}=1'",

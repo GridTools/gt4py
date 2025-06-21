@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from numbers import Number
 from pickle import dumps
-from typing import Any, Callable, ClassVar, Dict, Literal, Optional, Tuple, Union, cast
+from typing import Any, Callable, ClassVar, Literal, Union, cast
 
 import numpy as np
 
@@ -32,14 +32,14 @@ except ImportError:
     cupy = None
 
 FieldType = Union["cp.ndarray", np.ndarray]
-OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
+OriginType = Union[tuple[int, int, int], dict[str, tuple[int, ...]]]
 
 
 def _compute_domain_origin_cache_key(
-    field_args_info: Dict[str, Optional[ArgsInfo]],
-    parameter_args: Dict[str, Optional[Number]],
-    domain: Optional[Tuple[int, ...]],
-    origin: Optional[OriginType],
+    field_args_info: dict[str, ArgsInfo | None],
+    parameter_args: dict[str, Number | None],
+    domain: tuple[int, ...] | None,
+    origin: OriginType | None,
 ) -> int:
     field_data = tuple(
         (name, arg.array.shape, arg.origin or (0, 0, 0))
@@ -53,15 +53,15 @@ def _compute_domain_origin_cache_key(
 class ArgsInfo:
     device: str
     array: FieldType
-    original_object: Optional[Any] = None
-    origin: Optional[Tuple[int, ...]] = None
-    dimensions: Optional[Tuple[str, ...]] = None
+    original_object: Any | None = None
+    origin: tuple[int, ...] | None = None
+    dimensions: tuple[str, ...] | None = None
 
 
 def _extract_array_infos(
-    field_args: Dict[str, Optional[FieldType]], device: Literal["cpu", "gpu"]
-) -> Dict[str, Optional[ArgsInfo]]:
-    array_infos: Dict[str, Optional[ArgsInfo]] = {}
+    field_args: dict[str, FieldType | None], device: Literal["cpu", "gpu"]
+) -> dict[str, ArgsInfo | None]:
+    array_infos: dict[str, ArgsInfo | None] = {}
     for name, arg in field_args.items():
         if arg is None:
             array_infos[name] = None
@@ -86,8 +86,8 @@ def _extract_array_infos(
 
 
 def _extract_stencil_arrays(
-    array_infos: Dict[str, Optional[ArgsInfo]],
-) -> Dict[str, Optional[FieldType]]:
+    array_infos: dict[str, ArgsInfo | None],
+) -> dict[str, FieldType | None]:
     return {name: info.array if info is not None else None for name, info in array_infos.items()}
 
 
@@ -96,8 +96,8 @@ class FrozenStencil:
     """Stencil with pre-computed domain and origin for each field argument."""
 
     stencil_object: StencilObject
-    origin: Dict[str, Tuple[int, ...]]
-    domain: Tuple[int, ...]
+    origin: dict[str, tuple[int, ...]]
+    domain: tuple[int, ...]
 
     def __post_init__(self):
         for name, field_info in self.stencil_object.field_info.items():
@@ -188,7 +188,7 @@ class StencilObject(abc.ABC):
     _gt_id_: str
     definition_func: Callable[..., Any]
 
-    _domain_origin_cache: ClassVar[Dict[int, Tuple[Tuple[int, ...], Dict[str, Tuple[int, ...]]]]]
+    _domain_origin_cache: ClassVar[dict[int, tuple[tuple[int, ...], dict[str, tuple[int, ...]]]]]
     """Stores domain/origin pairs that have been used by hash."""
 
     def __new__(cls, *args, **kwargs):
@@ -248,22 +248,22 @@ class StencilObject(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def field_info(self) -> Dict[str, FieldInfo]:
+    def field_info(self) -> dict[str, FieldInfo]:
         pass
 
     @property
     @abc.abstractmethod
-    def parameter_info(self) -> Dict[str, ParameterInfo]:
+    def parameter_info(self) -> dict[str, ParameterInfo]:
         pass
 
     @property
     @abc.abstractmethod
-    def constants(self) -> Dict[str, Any]:
+    def constants(self) -> dict[str, Any]:
         pass
 
     @property
     @abc.abstractmethod
-    def options(self) -> Dict[str, Any]:
+    def options(self) -> dict[str, Any]:
         pass
 
     @abc.abstractmethod
@@ -276,8 +276,8 @@ class StencilObject(abc.ABC):
 
     @staticmethod
     def _make_origin_dict(
-        origin: Union[Dict[str, Tuple[int, ...]], Tuple[int, ...], int, None],
-    ) -> Dict[str, Tuple[int, ...]]:
+        origin: dict[str, tuple[int, ...]] | tuple[int, ...] | int | None,
+    ) -> dict[str, tuple[int, ...]]:
         try:
             if isinstance(origin, dict):
                 # This is needed because the keys in origin are StringLiteral as of DaCe v0.14, and they
@@ -287,9 +287,9 @@ class StencilObject(abc.ABC):
             if origin is None:
                 return {}
             if isinstance(origin, collections.abc.Iterable):
-                return {"_all_": cast(Tuple[int, ...], Index.from_value(origin))}
+                return {"_all_": cast(tuple[int, ...], Index.from_value(origin))}
             if isinstance(origin, int):
-                return {"_all_": cast(Tuple[int, ...], Index.from_k(origin))}
+                return {"_all_": cast(tuple[int, ...], Index.from_k(origin))}
         except Exception:
             pass
 
@@ -297,10 +297,10 @@ class StencilObject(abc.ABC):
 
     @staticmethod
     def _get_max_domain(
-        array_infos: Dict[str, Optional[ArgsInfo]],
+        array_infos: dict[str, ArgsInfo | None],
         domain_infos: DomainInfo,
-        field_infos: Dict[str, FieldInfo],
-        origin: Dict[str, Tuple[int, ...]],
+        field_infos: dict[str, FieldInfo],
+        origin: dict[str, tuple[int, ...]],
         *,
         squeeze: bool = True,
     ) -> Shape:
@@ -344,10 +344,10 @@ class StencilObject(abc.ABC):
 
     def _validate_args(  # Function is too complex
         self,
-        arg_infos: Dict[str, Optional[ArgsInfo]],
-        param_args: Dict[str, Any],
-        domain: Tuple[int, ...],
-        origin: Dict[str, Tuple[int, ...]],
+        arg_infos: dict[str, ArgsInfo | None],
+        param_args: dict[str, Any],
+        domain: tuple[int, ...],
+        origin: dict[str, tuple[int, ...]],
     ) -> None:
         """
         Validate input arguments to _call_run.
@@ -482,10 +482,10 @@ class StencilObject(abc.ABC):
 
     @staticmethod
     def _normalize_origins(
-        array_infos: Dict[str, Optional[ArgsInfo]],
-        field_infos: Dict[str, FieldInfo],
-        origin: Optional[OriginType],
-    ) -> Dict[str, Tuple[int, ...]]:
+        array_infos: dict[str, ArgsInfo | None],
+        field_infos: dict[str, FieldInfo],
+        origin: OriginType | None,
+    ) -> dict[str, tuple[int, ...]]:
         origin = StencilObject._make_origin_dict(origin)
         all_origin = origin.get("_all_", None)
         # Set an appropriate origin for all fields
@@ -517,13 +517,13 @@ class StencilObject(abc.ABC):
 
     def _call_run(
         self,
-        field_args: Dict[str, FieldType],
-        parameter_args: Dict[str, Any],
-        domain: Optional[Tuple[int, ...]],
-        origin: Optional[OriginType],
+        field_args: dict[str, FieldType],
+        parameter_args: dict[str, Any],
+        domain: tuple[int, ...] | None,
+        origin: OriginType | None,
         *,
         validate_args: bool = True,
-        exec_info: Optional[Dict[str, Any]] = None,
+        exec_info: dict[str, Any] | None = None,
     ) -> None:
         """Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
 
@@ -589,7 +589,7 @@ class StencilObject(abc.ABC):
             exec_info["call_run_end_time"] = time.perf_counter()
 
     def freeze(
-        self: StencilObject, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
+        self: StencilObject, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]
     ) -> FrozenStencil:
         """Return a StencilObject wrapper with a fixed domain and origin for each argument.
 

@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, Type
+from typing import Any
 
 from gt4py.cartesian import utils as gt_utils
 from gt4py.cartesian.definitions import BuildOptions, StencilID
@@ -58,7 +58,7 @@ class Frontend(abc.ABC):
         cls,
         definition: AnyStencilFunc,
         externals: dict[str, Any],
-        dtypes: dict[Type, Type],
+        dtypes: dict[type, type],
         options: BuildOptions,
         backend_name: str,
     ) -> gtir.Stencil:
@@ -97,10 +97,10 @@ class Frontend(abc.ABC):
         pass
 
 
-REGISTRY = gt_utils.Registry[Type[Frontend]]()
+REGISTRY = gt_utils.Registry[type[Frontend]]()
 
 
-def from_name(name: str) -> Type[Frontend]:
+def from_name(name: str) -> type[Frontend]:
     """Return frontend by name."""
     frontend_cls = REGISTRY.get(name, None)
     if frontend_cls is None:
@@ -110,6 +110,6 @@ def from_name(name: str) -> Type[Frontend]:
     return frontend_cls
 
 
-def register(frontend_cls: Type[Frontend]) -> Type[Frontend]:
+def register(frontend_cls: type[Frontend]) -> type[Frontend]:
     """Register a new frontend."""
     return REGISTRY.register(frontend_cls.name, frontend_cls)

@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import typing
-from typing import Callable, List, Tuple
+from typing import Callable
 
 import pytest
 
@@ -17,7 +17,7 @@ from gt4py.cartesian.stencil_builder import StencilBuilder
 
 
 # A list of dictionaries containing a stencil definition and the expected test case outputs
-test_data: List[Tuple[Callable, bool]] = []
+test_data: list[tuple[Callable, bool]] = []
 
 
 def register_test_case(*, valid):

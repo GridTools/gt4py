@@ -12,7 +12,7 @@ import abc
 import os
 import textwrap
 import time
-from typing import TYPE_CHECKING, Any, Final, Type
+from typing import TYPE_CHECKING, Any, Final
 
 from gt4py.cartesian import backend as gt_backend, config as gt_config, utils as gt_utils
 from gt4py.cartesian.backend import Backend
@@ -229,10 +229,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     MODULE_GENERATOR_CLASS = PyExtModuleGenerator
 
-    PYEXT_GENERATOR_CLASS: Type[BackendCodegen]
+    PYEXT_GENERATOR_CLASS: type[BackendCodegen]
 
     @abc.abstractmethod
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> type[StencilObject]:
         pass
 
     def generate_computation(self) -> dict[str, str | dict]:
