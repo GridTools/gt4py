@@ -19,6 +19,7 @@ import string
 import sys
 import time
 import types
+from typing import Generic, TypeVar
 
 from gt4py.cartesian import config as gt_config
 
@@ -333,20 +334,23 @@ def restore_module(patch, *, verify=True):
             current.__dict__[name] = original_value
 
 
-class Registry(dict):
+T = TypeVar("T")
+
+
+class Registry(Generic[T], dict[str, T]):
     @property
-    def names(self):
+    def names(self) -> list[str]:
         return list(self.keys())
 
-    def register(self, name, item=NOTHING):
+    def register(self, name: str, item: T) -> T:
         if name in self.keys():
-            raise ValueError("Name already exists in registry")
+            raise ValueError(f"Name {name} already exists in registry.")
 
         def _wrapper(obj):
             self[name] = obj
             return obj
 
-        return _wrapper if item is NOTHING else _wrapper(item)
+        return _wrapper(item)
 
 
 class ClassProperty:

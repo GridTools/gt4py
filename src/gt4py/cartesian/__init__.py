@@ -11,6 +11,7 @@
 import typing
 
 from . import (
+    backend,
     caching,
     cli,
     config,
@@ -28,6 +29,7 @@ from .stencil_object import StencilObject
 
 __all__ = [
     "StencilObject",
+    "backend",
     "caching",
     "cli",
     "config",

@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian.backend.base import CLIBackendMixin, disabled, register
@@ -37,12 +37,12 @@ if TYPE_CHECKING:
 
 
 class CudaExtGenerator(BackendCodegen):
-    def __init__(self, class_name, module_name, backend):
+    def __init__(self, class_name: str, module_name: str, backend: CudaBackend) -> None:
         self.class_name = class_name
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+    def __call__(self, stencil_ir: gtir.Stencil) -> dict[str, dict[str, str]]:
         stencil_ir = GtirPipeline(stencil_ir, self.backend.builder.stencil_id).full()
         base_oir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
@@ -141,14 +141,11 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
     MODULE_GENERATOR_CLASS = CUDAPyExtModuleGenerator
     GT_BACKEND_T = "gpu"
 
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
         return self.make_extension(uses_cuda=True)
 
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)
-
-        pyext_module_name: Optional[str]
-        pyext_file_path: Optional[str]
 
         # TODO(havogt) add bypass if computation has no effect
         pyext_module_name, pyext_file_path = self.generate_extension()
