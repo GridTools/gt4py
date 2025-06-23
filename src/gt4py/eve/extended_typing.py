@@ -326,13 +326,11 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # -- Added functionality --
-_ArtefactTypes: tuple[type, ...] = tuple()
-if _sys.version_info >= (3, 9):
-    _ArtefactTypes = (_types.GenericAlias,)  # type: ignore[attr-defined]  # GenericAlias only from >= 3.8
+_ArtefactTypes: tuple[type, ...] = (_types.GenericAlias,)
 
-    # `Any` is a class since Python 3.11
-    if isinstance(_typing.Any, type):  # Python >= 3.11
-        _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
+# `Any` is a class since Python 3.11
+if isinstance(_typing.Any, type):  # Python >= 3.11
+    _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
 
 # `Any` is a class since typing_extensions >= 4.4 and Python 3.11
 if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
