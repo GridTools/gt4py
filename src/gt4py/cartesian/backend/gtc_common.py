@@ -235,7 +235,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend):
     def generate(self) -> type[StencilObject]:
         pass
 
-
     @abc.abstractmethod
     def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
         """

@@ -235,7 +235,6 @@ class MakeModuleSourceCallable(Protocol):
     def __call__(self, *, args_data: ModuleData | None = None, **kwargs: Any) -> str: ...
 
 
-
 class BasePyExtBackend(BaseBackend):
     @property
     def pyext_module_name(self) -> str:

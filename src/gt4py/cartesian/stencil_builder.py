@@ -80,7 +80,6 @@ class StencilBuilder:
             stencil_class = self.backend.generate()
         return stencil_class
 
-
     def with_caching(
         self: StencilBuilder, caching_strategy_name: str, *args: Any, **kwargs: Any
     ) -> StencilBuilder:
