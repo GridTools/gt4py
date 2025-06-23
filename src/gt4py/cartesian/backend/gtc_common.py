@@ -18,7 +18,6 @@ from gt4py.cartesian import backend as gt_backend, config as gt_config, utils as
 from gt4py.cartesian.backend import Backend
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.cartesian.gtc import gtir, utils as gtc_utils
-from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_pipeline import OirPipeline
 from gt4py.eve.codegen import MakoTemplate as as_mako
 
@@ -113,15 +112,6 @@ def bindings_main_template():
     )
 
 
-def gtir_is_not_empty(pipeline: GtirPipeline) -> bool:
-    node = pipeline.full()
-    return bool(node.walk_values().if_isinstance(gtir.ParAssignStmt).to_list())
-
-
-def gtir_has_effect(pipeline: GtirPipeline) -> bool:
-    return True
-
-
 class PyExtModuleGenerator(BaseModuleGenerator):
     """Module Generator for use with backends that generate c++ python extensions."""
 
@@ -132,7 +122,8 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         return super().__call__(args_data)
 
     def _is_not_empty(self) -> bool:
-        return gtir_is_not_empty(self.builder.gtir_pipeline)
+        node = self.builder.gtir_pipeline.full()
+        return bool(node.walk_values().if_isinstance(gtir.ParAssignStmt).to_list())
 
     def generate_imports(self) -> str:
         source = [
@@ -157,9 +148,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         return "\n".join(source)
 
     def _has_effect(self) -> bool:
-        if not self._is_not_empty():
-            return False
-        return gtir_has_effect(self.builder.gtir_pipeline)
+        return self._is_not_empty()
 
     def generate_implementation(self) -> str:
         ir = self.builder.gtir
