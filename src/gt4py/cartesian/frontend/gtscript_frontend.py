@@ -34,7 +34,7 @@ from gt4py.cartesian.frontend.exceptions import (
 from gt4py.cartesian.utils import meta as gt_meta
 
 
-PYTHON_AST_VERSION: Final = (3, 8)
+PYTHON_AST_VERSION: Final = (3, 10)
 
 
 class AssertionChecker(ast.NodeTransformer):
