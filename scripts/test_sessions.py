@@ -29,6 +29,7 @@ import yaml
 
 
 REPO_ROOT: Final = pathlib.Path(__file__).parent.parent
+DEFAULT_CONFIG = "{REPO_ROOT}/nox-sessions-config.yml"
 
 
 class ExitCode(enum.IntEnum):
@@ -48,6 +49,7 @@ class OutputFormat(str, enum.Enum):
 
     JSON = "json"
     GH_ACTIONS = "gh-actions"
+    GITLAB_CI = "gitlab-ci"
 
     def __str__(self) -> str:
         return super().__str__()
@@ -206,12 +208,32 @@ def create_github_actions_list(
     return entries
 
 
+def create_gitlab_ci_config(
+    affected: Sequence[str], *, base_commit: str = "main", verbose: bool = False
+) -> dict[str, object]:
+    """Create a GitLab CI configuration for the affected sessions."""
+    nox_sessions = get_nox_sessions("-k", "cpu", verbose=verbose)
+
+    gitlab_ci_config = {
+        "stages": ["test"],
+        "test": {
+            "stage": "test",
+            "script": [
+                f"nox -s {{session}} -- {session['args']}"
+                for session in create_github_actions_list(affected, verbose=verbose)
+            ],
+        },
+    }
+
+    return {}
+
+
 @app.command()
 def required(
     *,
     config: Annotated[
         str, typer.Option("--config", "-c", help="Sessions configuration file")
-    ] = "{REPO_ROOT}/ci/test-sessions.yml",
+    ] = DEFAULT_CONFIG,
     base_commit: Annotated[str, typer.Option("--base", help="Base commit for changes")] = "main",
     format: Annotated[
         str | None,
@@ -266,6 +288,13 @@ def required(
                     json.dump(matrix, f, indent=2)
                 rich.print(f"Saved GitHub Actions matrix to {output}")
 
+            case OutputFormat.GITLAB_CI.value:
+                gitlab_ci_config = create_gitlab_ci_config(affected, base_commit=base_commit)
+
+                with open(output, "w") as f:
+                    yaml.dump(gitlab_ci_config, f, default_flow_style=False)
+                rich.print(f"Saved GitLab CI configuration to {output}")
+
             case _:
                 assert False, f"Unexpected output format: {format!r}"
 
@@ -275,7 +304,7 @@ def required(
 
 
 @app.command()
-def all(config_file: Annotated[str, typer.Argument()] = "{REPO_ROOT}/ci/test-sessions.yml") -> None:
+def all(config_file: Annotated[str, typer.Argument()] = DEFAULT_CONFIG) -> None:
     """List all test sessions defined in the configuration file."""
     config_path = config_file.format(REPO_ROOT=REPO_ROOT)
     sessions = load_test_sessions_config(config_path)

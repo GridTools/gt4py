@@ -95,7 +95,6 @@ def install_session_venv(
         extras: Names of package's extras to install.
         groups: Names of dependency groups to install.
     """
-
     session.run_install(
         "uv",
         "sync",

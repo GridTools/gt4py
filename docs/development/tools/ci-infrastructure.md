@@ -16,7 +16,7 @@ The `Test code components (CPU)`, `Test Package Root` and `Test examples in docu
 
 #### Code component test sessions
 
-The idea is to run test sessions only when needed. This means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, `eve` tests will not be run when only GT4Py cartesian sources are changed. The criteria to trigger tests sessions is encoded in the custom [`/ci/test-sessions.yml`](../../../ci/test-sessions.yml) configuration file, which follows a similar structure of the GitHub Actions `paths` and `paths-ignore` filters. The [`/scripts/test-sessions.py`](../../../scripts/test_sessions.py) script reads this file to decide which nox sessions are required for the existing changes from a base commit.
+The idea is to run test sessions only when needed. This means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, `eve` tests will not be run when only GT4Py cartesian sources are changed. The criteria to trigger tests sessions is encoded in the custom [`nox-sessions-config`](../../../nox-sessions-config.yml) configuration file, which follows a similar structure of the GitHub Actions `paths` and `paths-ignore` filters. The [`/scripts/test-sessions.py`](../../../scripts/test_sessions.py) script reads this file to decide which nox sessions are required for the existing changes from a base commit.
 
 ### Daily CI
 
