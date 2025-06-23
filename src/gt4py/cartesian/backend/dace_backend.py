@@ -12,7 +12,7 @@ import copy
 import os
 import pathlib
 import re
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Set, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import dace
 import dace.data
@@ -84,13 +84,13 @@ def _specialize_transient_strides(
 
 
 def _sdfg_add_arrays_and_edges(
-    field_info: Dict[str, FieldInfo],
+    field_info: dict[str, FieldInfo],
     wrapper_sdfg: dace.SDFG,
     state: dace.SDFGState,
     inner_sdfg: dace.SDFG,
     nsdfg: dace.nodes.NestedSDFG,
-    inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
-    outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+    inputs: set[str] | dict[str, dace.dtypes.typeclass],
+    outputs: set[str] | dict[str, dace.dtypes.typeclass],
     origins,
 ):
     for name, array in inner_sdfg.arrays.items():
@@ -162,7 +162,7 @@ def _sdfg_add_arrays_and_edges(
                 )
 
 
-def _sdfg_specialize_symbols(wrapper_sdfg, domain: Tuple[int, ...]):
+def _sdfg_specialize_symbols(wrapper_sdfg, domain: tuple[int, ...]):
     ival, jval, kval = domain[0], domain[1], domain[2]
     for sdfg in wrapper_sdfg.all_sdfgs_recursive():
         if sdfg.parent_nsdfg_node is not None:
@@ -201,11 +201,11 @@ def _sdfg_specialize_symbols(wrapper_sdfg, domain: Tuple[int, ...]):
 def freeze_origin_domain_sdfg(
     inner_sdfg_unfrozen: dace.SDFG,
     arg_names: list[str],
-    field_info: Dict[str, FieldInfo],
+    field_info: dict[str, FieldInfo],
     *,
     layout_map,
-    origin: Dict[str, Tuple[int, ...]],
-    domain: Tuple[int, ...],
+    origin: dict[str, tuple[int, ...]],
+    domain: tuple[int, ...],
 ):
     """Create a new SDFG by wrapping a _copy_ of the original SDFG and freezing it's
     origin and domain
@@ -378,7 +378,7 @@ class SDFGManager:
 
         return sdfg
 
-    def _frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
+    def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]):
         frozen_hash = shash(origin, domain)
         # check if same sdfg already cached on disk
         basename: str = os.path.splitext(self.builder.module_path)[0]
@@ -401,12 +401,12 @@ class SDFGManager:
 
         return frozen_sdfg
 
-    def frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
+    def frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]):
         return copy.deepcopy(self._frozen_sdfg(origin=origin, domain=domain))
 
 
 class DaCeExtGenerator(BackendCodegen):
-    def __init__(self, class_name: str, module_name: str, backend: BaseDaceBackend):
+    def __init__(self, class_name: str, module_name: str, backend: BaseDaceBackend) -> None:
         self.class_name = class_name
         self.module_name = module_name
         self.backend = backend
@@ -425,7 +425,6 @@ class DaCeExtGenerator(BackendCodegen):
         # symbols. Our job creating the sdfg/stree is to make sure we use the same symbols
         # and to be sure that these symbols are added as dace symbols.
 
-        sources: Dict[str, Dict[str, str]]
         implementation = DaCeComputationCodegen.apply(stencil_ir, self.backend.builder, sdfg)
 
         bindings = DaCeBindingsCodegen.apply(
@@ -433,11 +432,10 @@ class DaCeExtGenerator(BackendCodegen):
         )
 
         bindings_ext = "cu" if self.backend.storage_info["device"] == "gpu" else "cpp"
-        sources = {
+        return {
             "computation": {"computation.hpp": implementation},
             "bindings": {f"bindings.{bindings_ext}": bindings},
         }
-        return sources
 
 
 class DaCeComputationCodegen:
@@ -586,7 +584,7 @@ namespace gt = gridtools;
 
         return generated_code
 
-    def generate_dace_args(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG) -> List[str]:
+    def generate_dace_args(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG) -> list[str]:
         oir = GTIRToOIR().visit(stencil_ir)
         field_extents = compute_fields_extents(oir, add_k=True)
 
@@ -594,7 +592,7 @@ namespace gt = gridtools;
             field_name: max(boundary[0], 0)
             for field_name, boundary in compute_k_boundary(stencil_ir).items()
         }
-        offset_dict: Dict[str, Tuple[int, int, int]] = {
+        offset_dict: dict[str, tuple[int, int, int]] = {
             k: (max(-v[0][0], 0), max(-v[1][0], 0), k_origins[k] if k in k_origins else 0)
             for k, v in field_extents.items()
         }
@@ -687,8 +685,8 @@ class DaCeBindingsCodegen:
 
     mako_template = bindings_main_template()
 
-    def generate_entry_params(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG) -> List[str]:
-        res: Dict[str, str] = {}
+    def generate_entry_params(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG) -> list[str]:
+        res: dict[str, str] = {}
 
         for name in sdfg.signature_arglist(with_types=False, for_call=True):
             if name in sdfg.arrays:
@@ -716,8 +714,8 @@ class DaCeBindingsCodegen:
                 res[name] = f"{sdfg.symbols[name].ctype} {name}"
         return list(res[node.name] for node in stencil_ir.params if node.name in res)
 
-    def generate_sid_params(self, sdfg: dace.SDFG) -> List[str]:
-        res: List[str] = []
+    def generate_sid_params(self, sdfg: dace.SDFG) -> list[str]:
+        res: list[str] = []
 
         for name, array in sdfg.arrays.items():
             if array.transient:
@@ -798,11 +796,8 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
     GT_BACKEND_T = "dace"
     PYEXT_GENERATOR_CLASS = DaCeExtGenerator
 
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)
-
-        pyext_module_name: Optional[str]
-        pyext_file_path: Optional[str]
 
         # TODO(havogt) add bypass if computation has no effect
         pyext_module_name, pyext_file_path = self.generate_extension()
@@ -829,7 +824,7 @@ class DaceCPUBackend(BaseDaceBackend):
 
     options = BaseGTBackend.GT_BACKEND_OPTS
 
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
         return self.make_extension(uses_cuda=False)
 
 
@@ -853,5 +848,5 @@ class DaceGPUBackend(BaseDaceBackend):
         "device_sync": {"versioning": True, "type": bool},
     }
 
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
         return self.make_extension(uses_cuda=True)

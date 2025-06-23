@@ -183,7 +183,6 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         **kwargs,
     ):
         backend_cls = gt_backend.from_name(backend)
-        assert backend_cls is not None
         args_iter = iter(args)
         args_as_kwargs = {
             name: (kwargs[name] if name in kwargs else next(args_iter)) for name in arg_names
