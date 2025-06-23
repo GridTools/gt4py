@@ -293,7 +293,11 @@ class Program:
             self._extended_offset_provider_cache[offset_provider] = extended_op
         return extended_op
 
-    def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
+    def __call__(
+        self, *args: Any, offset_provider: common.OffsetProvider | None = None, **kwargs: Any
+    ) -> None:
+        if offset_provider is None:
+            offset_provider = {}
         program_name = (
             f"{self.__name__}[{getattr(self.backend, 'name', '<embedded>')}]"
             if config.COLLECT_METRICS_LEVEL
@@ -453,12 +457,16 @@ class ProgramFromPast(Program):
     past_stage: ffront_stages.PastProgramDefinition
 
     @override
-    def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
+    def __call__(
+        self, *args: Any, offset_provider: Optional[common.OffsetProvider] = None, **kwargs: Any
+    ) -> None:
         if self.backend is None:
             raise NotImplementedError(
                 "Programs created from a PAST node (without a function definition) can not be executed in embedded mode"
             )
 
+        if offset_provider is None:
+            offset_provider = {}
         # TODO(ricoh): add test that does the equivalent of IDim + 1 in a ProgramFromPast
         self.backend(
             self.past_stage,
@@ -476,7 +484,11 @@ class ProgramWithBoundArgs(Program):
     bound_args: dict[str, float | int | bool] = dataclasses.field(default_factory=dict)
 
     @override
-    def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
+    def __call__(
+        self, *args: Any, offset_provider: common.OffsetProvider | None = None, **kwargs: Any
+    ) -> None:
+        if offset_provider is None:
+            offset_provider = {}
         type_ = self.past_stage.past_node.type
         assert isinstance(type_, ts_ffront.ProgramType)
         new_type = ts_ffront.ProgramType(
@@ -733,10 +745,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        offset_provider = {**kwargs.pop("offset_provider", {}), **self._implicit_offset_provider}
-
         if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
+            offset_provider = {
+                **kwargs.pop("offset_provider", {}),
+                **self._implicit_offset_provider,
+            }
             if "out" not in kwargs:
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
@@ -756,7 +770,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             )
         else:
             if not next_embedded.context.within_valid_context():
-                kwargs["offset_provider"] = offset_provider
+                kwargs["offset_provider"] = {
+                    **kwargs.pop("offset_provider", {}),
+                    **self._implicit_offset_provider,
+                }
             attributes = (
                 self.definition_stage.attributes
                 if self.definition_stage
