@@ -34,7 +34,6 @@ def dependencies() -> None:
 @app.command("pre-commit")
 def precommit() -> None:
     """Update versions of pre-commit hooks."""
-
     subprocess.run(
         f"uv run --quiet --locked --project {REPO_ROOT} pre-commit autoupdate", shell=True
     )

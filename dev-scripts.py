@@ -9,7 +9,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
-"""CLI tool to run recurrent development tasks. The subcommands are defined the `scripts` folder."""
+"""CLI tool to run recurrent development tasks. Subcommands are defined in the `scripts` folder."""
 
 from __future__ import annotations
 
