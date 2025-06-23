@@ -20,7 +20,9 @@ from dace.sdfg import nodes as dace_nodes
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
-from gt4py.next.program_processors.runners.dace.transformations import gtx_dace_split
+from gt4py.next.program_processors.runners.dace.transformations import (
+    splitting_tools as gtx_dace_split,
+)
 
 from . import util
 
