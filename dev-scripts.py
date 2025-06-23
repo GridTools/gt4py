@@ -17,7 +17,19 @@ import importlib
 import importlib.util
 import pathlib
 
-import typer
+try:
+    import typer
+except ImportError:
+    import sys
+
+    print(
+        "ERROR: Missing required package!!\n\n"
+        "Make sure 'uv' is installed in your system and run directly this script "
+        "as an executable file, to let 'uv' create a temporary venv with all the "
+        "required dependencies.",
+        file=sys.stderr,
+    )
+    sys.exit(127)
 
 
 app = typer.Typer(no_args_is_help=True, name="dev-scripts", help=__doc__)
