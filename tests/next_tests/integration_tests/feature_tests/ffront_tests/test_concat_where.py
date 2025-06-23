@@ -273,7 +273,6 @@ def test_with_tuples(cartesian_case):
     )
 
 
-@pytest.mark.uses_frontend_concat_where
 def test_nested_conditions_with_empty_branches(cartesian_case):
     @gtx.field_operator
     def testee(interior: cases.IField, boundary: cases.IField, N: gtx.int32) -> cases.IField:
