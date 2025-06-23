@@ -65,6 +65,38 @@ def test_concat_where_non_overlapping(cartesian_case):
     cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
 
 
+def test_concat_where_scalar_broadcast(cartesian_case):
+    @gtx.field_operator
+    def testee(a: np.int32, b: cases.IJKField, N: np.int32) -> cases.IJKField:
+        return concat_where(KDim < N - 1, a, b)
+
+    a = 3
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    ref = np.concatenate(
+        (
+            np.full((*out.domain.shape[0:2], out.domain.shape[2] - 1), a),
+            b.asnumpy()[:,:,-1:],
+        ),
+        axis=2,
+    )
+    cases.verify(cartesian_case, testee, a, b, cartesian_case.default_sizes[KDim], out=out, ref=ref)
+
+
+def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case):
+    @gtx.field_operator
+    def testee(a: np.int32, b: cases.IJKField) -> cases.IJKField:
+        return concat_where(KDim == 0, a, b)
+
+    a = 3
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN, domain=b.domain.slice_at[:, :, 1:])()
+
+    ref = b.asnumpy()[:,:,1:]
+    cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
+
+
 def test_concat_where_single_level_broadcast(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:
