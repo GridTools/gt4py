@@ -304,6 +304,9 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
 
 class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
+    def __init__(self, builder: StencilBuilder) -> None:
+        super().__init__(builder)
+
     def generate_implementation(self) -> str:
         source = super().generate_implementation()
         if self.builder.options.backend_opts.get("device_sync", True):

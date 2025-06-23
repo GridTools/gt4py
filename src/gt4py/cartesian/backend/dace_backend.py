@@ -724,6 +724,9 @@ class DaCeBindingsCodegen:
 
 
 class DaCePyExtModuleGenerator(PyExtModuleGenerator):
+    def __init__(self, builder: StencilBuilder) -> None:
+        super().__init__(builder)
+
     def generate_imports(self):
         return "\n".join(
             [
