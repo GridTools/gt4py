@@ -16,7 +16,19 @@ import pathlib
 import subprocess
 from typing import Final
 
-import typer
+try:
+    import typer
+except ImportError:
+    import sys
+
+    print(
+        "ERROR: Missing required package!!\n\n"
+        "Make sure 'uv' is installed in your system and run directly this script "
+        "as an executable file, to let 'uv' create a temporary venv with all the "
+        "required dependencies.",
+        file=sys.stderr,
+    )
+    sys.exit(127)
 
 
 REPO_ROOT: Final = pathlib.Path(__file__).parent

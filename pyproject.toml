@@ -184,7 +184,7 @@ source_pkgs = ['gt4py']
 # -- mypy  --
 [tool.mypy]
 disallow_incomplete_defs = true
-disallow_untyped_defs = false
+disallow_untyped_defs = true
 exclude = [
   '^setup\.py$',
   'build/.*$',
