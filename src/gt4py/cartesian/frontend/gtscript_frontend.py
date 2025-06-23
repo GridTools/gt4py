@@ -1745,7 +1745,7 @@ class GTScriptParser(ast.NodeVisitor):
             assert isinstance(ann_assign.target, ast.Name)
             name = ann_assign.target.id
 
-            source = gt_meta.ast_unparse(ann_assign.annotation)
+            source = ast.unparse(ann_assign.annotation)
             descriptor = eval(source, ann_assign_context)
             temp_annotations[name] = descriptor
             if descriptor.axes != gtscript.IJK:
