@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-import sys
 import typing
+from frozendict import frozendict
 
 import pytest
 
 from gt4py.eve import (
     extended_typing as xtyping,
-    type_definitions as type_def,
     type_validation as type_val,
 )
 from gt4py.eve.extended_typing import (
@@ -81,11 +80,11 @@ SAMPLE_TYPE_DEFINITIONS: List[
     (typing.Set[int], ({1, 2, 3}, set()), (1, [1], (1,), {1: None}), None, None),
     (typing.Dict[int, str], ({}, {3: "three"}), ([(3, "three")], 3, "three", []), None, None),
     (
-        type_def.frozendict[int, str],
+        frozendict[int, str],
         (
-            type_def.frozendict(),
-            type_def.frozendict({3: "three"}),
-            type_def.frozendict({3: "three", -1: ""}),
+            frozendict(),
+            frozendict({3: "three"}),
+            frozendict({3: "three", -1: ""}),
         ),
         ({}, {3: "three"}, [(3, "three")], 3, "three", []),
         None,
