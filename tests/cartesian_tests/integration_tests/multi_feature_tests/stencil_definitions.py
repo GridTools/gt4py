@@ -325,7 +325,7 @@ def large_k_interval(in_field: Field3D, out_field: Field3D):
     with computation(PARALLEL):
         with interval(0, 6):
             out_field = in_field
-        # this stenicl is only legal to call with fields that have more than 16 elements
+        # this stencil is only legal to call with fields that have more than 16 elements
         with interval(6, -10):
             out_field = in_field + 1
         with interval(-10, None):
