@@ -53,8 +53,6 @@ def add_optional_fields(
         if info.access == AccessKind.NONE and name in kwargs and name not in sdfg.symbols:
             if isinstance(kwargs[name], dace.data.Scalar):
                 sdfg.add_scalar(name, dtype=kwargs[name].dtype)
-            else:
-                sdfg.add_symbol(name, stype=dace.typeclass(type(kwargs[name])))
     return sdfg
 
 

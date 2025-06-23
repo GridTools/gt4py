@@ -11,7 +11,7 @@ from typing import Any, List, TypeAlias
 from dace import data, dtypes, nodes, symbolic
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common, definitions, oir
+from gt4py.cartesian.gtc import common, definitions, gtir, oir
 from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo
@@ -47,7 +47,7 @@ class OIRToTreeIR(eve.NodeVisitor):
     work to the OIRToTasklet visitor.
     """
 
-    def __init__(self, device_type: str) -> None:
+    def __init__(self, device_type: str, api_signature: list[gtir.Argument]) -> None:
         device_type_translate = {
             "CPU": dtypes.DeviceType.CPU,
             "GPU": dtypes.DeviceType.GPU,
@@ -56,6 +56,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             raise ValueError(f"Unknown device type {device_type}.")
 
         self._device_type = device_type_translate[device_type.upper()]
+        self._api_signature = api_signature
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         code, inputs, outputs = oir_to_tasklet.generate(node, tree=ctx.root)
@@ -300,7 +301,9 @@ class OIRToTreeIR(eve.NodeVisitor):
             ignore_horizontal_mask=True,
         )
 
+        missing_api_parameters: list[str] = [p.name for p in self._api_signature]
         for param in node.params:
+            missing_api_parameters.remove(param.name)
             if isinstance(param, oir.ScalarDecl):
                 containers[param.name] = data.Scalar(
                     data_type_to_dace_typeclass(param.dtype),  # dtype

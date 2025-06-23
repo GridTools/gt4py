@@ -335,7 +335,10 @@ class SDFGManager:
         # Step 2: oir to tree ir (tir)
         # - convert oir.VerticalLoops and oir.VerticalLoopSections to MapScope / ForScope
         # - split oir.HorizontalExecutions into oir.CodeBlocks
-        tir = OIRToTreeIR(self.builder.backend.storage_info["device"]).visit(oir, k_bounds=k_bounds)
+        tir = OIRToTreeIR(
+            device_type=self.builder.backend.storage_info["device"],
+            api_signature=self.builder.gtir.api_signature,
+        ).visit(oir, k_bounds=k_bounds)
 
         # Step 3: tree ir to tree
         stree = TreeIRToScheduleTree().visit(tir)
