@@ -1,4 +1,4 @@
-#! /usr/bin/env -S uv run -q --frozen --isolated --group scripts --script
+#! /usr/bin/env -S uv run -q -p 3.11 --frozen --isolated --group scripts --script
 #
 # GT4Py - GridTools Framework
 #

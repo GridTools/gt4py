@@ -19,7 +19,7 @@ repos:
     args: [--autofix, --preserve-quotes, --indent, "2"]
 
 - repo: https://github.com/JoC0de/pre-commit-prettier
-  rev: v3.5.3
+  rev: v3.6.0
   hooks:
   - id: prettier
     types_or: [markdown, json]
