@@ -9,13 +9,13 @@
 from __future__ import annotations
 
 import pathlib
-from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
+from typing import TYPE_CHECKING, Any
 
 from gt4py import cartesian as gt4pyc
 from gt4py.cartesian.definitions import BuildOptions, StencilID
 from gt4py.cartesian.gtc import gtir
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
-from gt4py.cartesian.type_hints import AnnotatedStencilFunc, StencilFunc
+from gt4py.cartesian.type_hints import AnnotatedStencilFunc, AnyStencilFunc
 
 
 if TYPE_CHECKING:
@@ -50,30 +50,25 @@ class StencilBuilder:
 
     def __init__(
         self,
-        definition_func: Union[StencilFunc, AnnotatedStencilFunc],
+        definition_func: AnyStencilFunc,
         *,
-        backend: Optional[Union[str, Type[BackendType]]] = None,
-        options: Optional[BuildOptions] = None,
-        frontend: Optional[Type[FrontendType]] = None,
+        backend: str | type[BackendType] | None = None,
+        options: BuildOptions | None = None,
+        frontend: type[FrontendType] | None = None,
     ):
         self._definition = definition_func
         self.options = options or BuildOptions(**self.default_options_dict(definition_func))
         backend = backend or "numpy"
         backend = gt4pyc.backend.from_name(backend) if isinstance(backend, str) else backend
-        if backend is None:
-            raise RuntimeError(f"Unknown backend: {backend}")
-
         frontend = frontend or gt4pyc.frontend.from_name("gtscript")
-        if frontend is None:
-            raise RuntimeError(f"Unknown frontend: {frontend}")
 
         self.backend: BackendType = backend(self)
-        self.frontend: Type[FrontendType] = frontend
+        self.frontend: type[FrontendType] = frontend
         self.with_caching("jit")
-        self._externals: Dict[str, Any] = {}
-        self._dtypes: Dict[Type, Type] = {}
+        self._externals: dict[str, Any] = {}
+        self._dtypes: dict[type, type] = {}
 
-    def build(self) -> Type[StencilObject]:
+    def build(self) -> type[StencilObject]:
         """Generate, compile and/or load everything necessary to provide a usable stencil class."""
         # load or generate
         stencil_class = None if self.options.rebuild else self.backend.load()
@@ -85,11 +80,11 @@ class StencilBuilder:
             stencil_class = self.backend.generate()
         return stencil_class
 
-    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
+    def generate_computation(self) -> dict[str, str | dict]:
         """Generate the stencil source code, fail if backend does not support CLI."""
         return self.cli_backend.generate_computation()
 
-    def generate_bindings(self, targe_language: str) -> Dict[str, Union[str, Dict]]:
+    def generate_bindings(self, targe_language: str) -> dict[str, str | dict]:
         """Generate ``target_language`` bindings source, fail if backend does not support CLI."""
         return self.cli_backend.generate_bindings(targe_language)
 
@@ -114,7 +109,7 @@ class StencilBuilder:
         -----
         Resets all cached build data.
         """
-        self._build_data: Dict[str, Any] = {}
+        self._build_data: dict[str, Any] = {}
         kwargs = {**self.options.cache_settings, **kwargs}
         self.caching = gt4pyc.caching.strategy_factory(caching_strategy_name, self, *args, **kwargs)
         return self
@@ -141,7 +136,7 @@ class StencilBuilder:
         self.options = BuildOptions(name=name, module=module, **kwargs)  # type: ignore
         return self
 
-    def with_changed_options(self: StencilBuilder, **kwargs: Dict[str, Any]) -> StencilBuilder:
+    def with_changed_options(self: StencilBuilder, **kwargs: dict[str, Any]) -> StencilBuilder:
         old_options = self.options.as_dict()
         # BuildOptions constructor expects ``impl_opts`` keyword
         # but BuildOptions.as_dict outputs ``_impl_opts`` key
@@ -163,18 +158,15 @@ class StencilBuilder:
         """
         self._build_data = {}
         backend = gt4pyc.backend.from_name(backend_name)
-        assert backend is not None
         self.backend = backend(self)
         return self
 
     @classmethod
-    def default_options_dict(
-        cls, definition_func: Union[StencilFunc, AnnotatedStencilFunc]
-    ) -> Dict[str, Any]:
+    def default_options_dict(cls, definition_func: AnyStencilFunc) -> dict[str, Any]:
         return {"name": definition_func.__name__, "module": definition_func.__module__}
 
     @classmethod
-    def name_to_options_args(cls, name: Optional[str]) -> Dict[str, str]:
+    def name_to_options_args(cls, name: str | None) -> dict[str, str]:
         """Check for qualified name, extract also module option in that case."""
         if not name:
             return {}
@@ -185,7 +177,7 @@ class StencilBuilder:
         return data
 
     @classmethod
-    def nest_impl_options(cls, options_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def nest_impl_options(cls, options_dict: dict[str, Any]) -> dict[str, Any]:
         impl_opts = options_dict.setdefault("impl_opts", {})
         # The following is not a dict comprehension because:
         # The backend-specific options (starting with ``_``) are nested under
@@ -203,18 +195,18 @@ class StencilBuilder:
         )
 
     @property
-    def externals(self) -> Dict[str, Any]:
+    def externals(self) -> dict[str, Any]:
         return self._build_data.get("externals") or self._build_data.setdefault(
             "externals", self._externals.copy()
         )
 
     @property
-    def dtypes(self) -> Dict[Type, Type]:
+    def dtypes(self) -> dict[type, type]:
         return self._build_data.get("dtypes") or self._build_data.setdefault(
             "dtypes", self._dtypes.copy()
         )
 
-    def with_externals(self: StencilBuilder, externals: Dict[str, Any]) -> StencilBuilder:
+    def with_externals(self: StencilBuilder, externals: dict[str, Any]) -> StencilBuilder:
         """
         Fluidly set externals for this build.
 
@@ -225,17 +217,17 @@ class StencilBuilder:
         self.with_caching(self.caching.name)
         return self
 
-    def with_dtypes(self: StencilBuilder, dtypes: Dict[Type, Type]) -> StencilBuilder:
+    def with_dtypes(self: StencilBuilder, dtypes: dict[type, type]) -> StencilBuilder:
         self._build_data = {}
         self._dtypes = dtypes
         self.with_caching(self.caching.name)
         return self
 
     @property
-    def backend_data(self) -> Dict[str, Any]:
+    def backend_data(self) -> dict[str, Any]:
         return self._build_data.get("backend_data", {}).copy()
 
-    def with_backend_data(self: StencilBuilder, data: Dict[str, Any]) -> StencilBuilder:
+    def with_backend_data(self: StencilBuilder, data: dict[str, Any]) -> StencilBuilder:
         self._build_data["backend_data"] = {**self.backend_data, **data}
         return self
 
