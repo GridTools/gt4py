@@ -9,16 +9,10 @@
 from __future__ import annotations
 
 import abc
+import importlib.resources as importlib_resources
 import numbers
-import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Set, cast
-
-
-if sys.version_info >= (3, 9):
-    import importlib.resources as importlib_resources
-else:
-    import importlib_resources  # type: ignore[no-redef]
 
 import jinja2
 import numpy
