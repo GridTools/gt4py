@@ -126,12 +126,12 @@ class OIRToTreeIR(eve.NodeVisitor):
         return (condition_name, assignment)
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, ctx: tir.Context) -> None:
-        extent = ctx.block_extents[id(node)]
+        block_extent = ctx.block_extents[id(node)]
 
-        axis_start_i = f"0 + {extent[0][0]}"
-        axis_start_j = f"0 + {extent[1][0]}"
-        axis_end_i = f"{tir.Axis.I.domain_dace_symbol()}  + {extent[0][1]}"
-        axis_end_j = f"{tir.Axis.J.domain_dace_symbol()}  + {extent[1][1]}"
+        axis_start_i = f"0 + {block_extent[0][0]}"
+        axis_start_j = f"0 + {block_extent[1][0]}"
+        axis_end_i = f"{tir.Axis.I.domain_dace_symbol()}  + {block_extent[0][1]}"
+        axis_end_j = f"{tir.Axis.J.domain_dace_symbol()}  + {block_extent[1][1]}"
 
         loop = tir.HorizontalLoop(
             bounds_i=tir.Bounds(start=axis_start_i, end=axis_end_i),
@@ -290,7 +290,15 @@ class OIRToTreeIR(eve.NodeVisitor):
         shift: dict[str, dict[tir.Axis, int]] = {}  # dict of field_name -> (dict of axis -> shift)
 
         # this is ij blocks = horizontal execution
-        field_extents, block_extents = oir_utils.compute_extents(node, centered_extent=True)
+        field_extents, block_extents = oir_utils.compute_extents(
+            node,
+            centered_extent=True,
+        )
+        field_without_mask_extents = oir_utils.compute_fields_extents(
+            node,
+            centered_extent=True,
+            ignore_horizontal_mask=True,
+        )
 
         for param in node.params:
             if isinstance(param, oir.ScalarDecl):
@@ -301,16 +309,25 @@ class OIRToTreeIR(eve.NodeVisitor):
                 continue
 
             if isinstance(param, oir.FieldDecl):
-                extent = field_extents[param.name]
+                field_extent = field_extents[param.name]
                 k_bound = k_bounds[param.name]
                 shift[param.name] = {
-                    tir.Axis.I: -extent[0][0],
-                    tir.Axis.J: -extent[1][0],
+                    tir.Axis.I: -field_extent[0][0],
+                    tir.Axis.J: -field_extent[1][0],
                     tir.Axis.K: max(k_bound[0], 0),
                 }
+                # When determining the shape of the array, we have to look at the field extents at large
+                # GT4Py tries to give a precise measure by looking at the horizontal restriction and reduce
+                # the extent to the only grid points inside the mask. DaCe requires the real size of the
+                # data, hence the call with ignore_horizontal_mask=True
                 containers[param.name] = data.Array(
                     data_type_to_dace_typeclass(param.dtype),  # dtype
-                    get_dace_shape(param, extent, k_bound, symbols),  # shape
+                    get_dace_shape(
+                        param,
+                        field_without_mask_extents[param.name],
+                        k_bound,
+                        symbols,
+                    ),  # shape
                     strides=get_dace_strides(param, symbols),
                     storage=DEFAULT_STORAGE_TYPE[self._device_type],
                     debuginfo=get_dace_debuginfo(param),
@@ -321,16 +338,16 @@ class OIRToTreeIR(eve.NodeVisitor):
             raise ValueError(f"Unexpected parameter type {type(param)}.")
 
         for field in node.declarations:
-            extent = field_extents[field.name]
+            field_extent = field_extents[field.name]
             k_bound = k_bounds[field.name]
             shift[field.name] = {
-                tir.Axis.I: -extent[0][0],
-                tir.Axis.J: -extent[1][0],
+                tir.Axis.I: -field_extent[0][0],
+                tir.Axis.J: -field_extent[1][0],
                 tir.Axis.K: max(k_bound[0], 0),
             }
             containers[field.name] = data.Array(
                 data_type_to_dace_typeclass(field.dtype),  # dtype
-                get_dace_shape(field, extent, k_bound, symbols),  # shape
+                get_dace_shape(field, field_extent, k_bound, symbols),  # shape
                 strides=get_dace_strides(field, symbols),
                 transient=True,
                 lifetime=dtypes.AllocationLifetime.Persistent,

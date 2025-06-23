@@ -39,11 +39,17 @@ class GenericAccess(Generic[OffsetT]):
     def is_read(self) -> bool:
         return not self.is_write
 
-    def to_extent(self, horizontal_extent: Extent, centered: bool = False) -> Optional[Extent]:
+    def to_extent(
+        self,
+        horizontal_extent: Extent,
+        centered: bool = False,
+        ignore_horizontal_mask: bool = False,
+    ) -> Optional[Extent]:
         """
         Convert the access to an extent provided a horizontal extent for the access.
 
-        This returns None if no overlap exists between the horizontal mask and interval.
+        This returns None if no overlap exists between the horizontal mask and interval if
+        `ignore_horizontal_mask` is not set.
         """
         if centered:
             offset_as_extent = CenteredExtent.from_offset(
@@ -52,7 +58,7 @@ class GenericAccess(Generic[OffsetT]):
         else:
             offset_as_extent = Extent.from_offset(cast(Tuple[int, int, int], self.offset)[:2])
         zeros = Extent.zeros(ndims=2)
-        if self.horizontal_mask:
+        if self.horizontal_mask and not ignore_horizontal_mask:
             if dist_from_edge := mask_overlap_with_extent(self.horizontal_mask, horizontal_extent):
                 return ((horizontal_extent - dist_from_edge) + offset_as_extent) | zeros
             return None
@@ -224,14 +230,29 @@ def collect_symbol_names(node: eve.RootNode) -> Set[str]:
 
 
 class StencilExtentComputer(eve.NodeVisitor):
+    """Compute extend per fields and horizontal blocks.
+
+    Args:
+        add_k: add an extent for the K axis. Default to False.
+        centered_extent: center the extent on 0 (negative left, positive right). Default to False.
+        ignore_horizontal_mask: when computing extent, do not restrict it by reading the
+            horizontal regions masks. Default to False.
+    """
+
     @dataclass
     class Context:
         fields: Dict[str, Extent] = dataclasses.field(default_factory=dict)
         blocks: Dict[int, Extent] = dataclasses.field(default_factory=dict)
 
-    def __init__(self, add_k: bool = False, centered_extent: bool = False):
+    def __init__(
+        self,
+        add_k: bool = False,
+        centered_extent: bool = False,
+        ignore_horizontal_mask: bool = False,
+    ):
         self.add_k = add_k
         self.centered_extent = centered_extent
+        self.ignore_horizontal_mask = ignore_horizontal_mask
         self.zero_extent = Extent.zeros(ndims=2)
 
     def visit_Stencil(self, node: oir.Stencil) -> Context:
@@ -260,7 +281,11 @@ class StencilExtentComputer(eve.NodeVisitor):
         ctx.blocks[id(node)] = horizontal_extent
 
         for access in results.ordered_accesses():
-            extent = access.to_extent(horizontal_extent, centered=self.centered_extent)
+            extent = access.to_extent(
+                horizontal_extent,
+                centered=self.centered_extent,
+                ignore_horizontal_mask=self.ignore_horizontal_mask,
+            )
             if extent is None:
                 continue
 
