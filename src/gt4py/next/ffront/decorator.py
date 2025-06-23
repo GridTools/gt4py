@@ -770,6 +770,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             )
         else:
             if not next_embedded.context.within_valid_context():
+                # field_operator as program
                 kwargs["offset_provider"] = {
                     **kwargs.pop("offset_provider", {}),
                     **self._implicit_offset_provider,
