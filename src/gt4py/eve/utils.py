@@ -22,7 +22,6 @@ import operator
 import pickle
 import pprint
 import re
-import sys
 import types
 import typing
 import uuid
@@ -858,21 +857,9 @@ class FrozenNamespace(Namespace[T]):
 class UIDGenerator:
     """Simple unique id generator using different methods."""
 
-    prefix: Optional[str] = (
-        dataclasses.field(default=None, kw_only=True)
-        if sys.version_info >= (3, 10)
-        else dataclasses.field(default=None)
-    )
-    width: Optional[int] = (
-        dataclasses.field(default=None, kw_only=True)
-        if sys.version_info >= (3, 10)
-        else dataclasses.field(default=None)
-    )
-    warn_unsafe: Optional[bool] = (
-        dataclasses.field(default=None, kw_only=True)
-        if sys.version_info >= (3, 10)
-        else dataclasses.field(default=None)
-    )
+    prefix: Optional[str] = dataclasses.field(default=None, kw_only=True)
+    width: Optional[int] = dataclasses.field(default=None, kw_only=True)
+    warn_unsafe: Optional[bool] = dataclasses.field(default=None, kw_only=True)
 
     _counter: Iterator[int] = dataclasses.field(
         default_factory=functools.partial(itertools.count, 1), init=False
