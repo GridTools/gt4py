@@ -141,21 +141,21 @@ SAMPLE_TYPE_DEFINITIONS: List[
     ),
 ]
 
-if sys.version_info >= (3, 10):
 
-    @dataclasses.dataclass(slots=True)
-    class SampleSlottedDataClass:
-        b: float
+@dataclasses.dataclass(slots=True)
+class SampleSlottedDataClass:
+    b: float
 
-    SAMPLE_TYPE_DEFINITIONS.append(
-        (
-            SampleSlottedDataClass,
-            [SampleSlottedDataClass(1.0), SampleSlottedDataClass(1)],
-            [object(), float(1.2), int(1), "1.2", SampleSlottedDataClass],
-            None,
-            None,
-        )
+
+SAMPLE_TYPE_DEFINITIONS.append(
+    (
+        SampleSlottedDataClass,
+        [SampleSlottedDataClass(1.0), SampleSlottedDataClass(1)],
+        [object(), float(1.2), int(1), "1.2", SampleSlottedDataClass],
+        None,
+        None,
     )
+)
 
 
 @pytest.mark.parametrize("validator", VALIDATORS)
