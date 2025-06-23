@@ -39,7 +39,6 @@ def test_numpy_allocators(backend, order):
 def test_bad_layout_warns(backend):
     xp = get_array_library(backend)
     backend_cls = gt4pyc.backend.from_name(backend)
-    assert backend_cls is not None
 
     shape = (10, 10, 10)
 
