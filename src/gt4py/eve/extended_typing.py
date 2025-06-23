@@ -139,31 +139,23 @@ MaybeNestedInList = Union[_T_co, NestedList[_T_co]]
 MaybeNestedInTuple = Union[_T_co, NestedTuple[_T_co]]
 
 # -- Typing annotations --
-if _sys.version_info >= (3, 9):
-    SolvedTypeAnnotation = Union[
-        Type,
-        _typing._SpecialForm,
-        _types.GenericAlias,  # type: ignore[name-defined]  # Python 3.8 does not include `_types.GenericAlias`
-        _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
-    ]
-else:
-    SolvedTypeAnnotation = Union[  # type: ignore[misc]  # mypy consider this assignment a redefinition
-        Type, _typing._SpecialForm, _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
-    ]
+SolvedTypeAnnotation = Union[
+    Type,
+    _typing._SpecialForm,
+    _types.GenericAlias,
+    _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
+]
 
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
 
 StdGenericAliasType: Final[Type] = type(List[int])
 
-if _sys.version_info >= (3, 9):
-    if TYPE_CHECKING:
-        StdGenericAlias: TypeAlias = _types.GenericAlias  # type: ignore[name-defined,attr-defined]  # Python 3.8 does not include `_types.GenericAlias`
+if TYPE_CHECKING:
+    StdGenericAlias: TypeAlias = _types.GenericAlias
 
 _TypingSpecialFormType: Final[Type] = _typing._SpecialForm
-_TypingGenericAliasType: Final[Type] = (
-    _typing._BaseGenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
-)
+_TypingGenericAliasType: Final[Type] = _typing._BaseGenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
 
 
 # -- Standard Python protocols --
