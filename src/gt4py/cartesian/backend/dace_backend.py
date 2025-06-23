@@ -12,7 +12,7 @@ import copy
 import os
 import pathlib
 import re
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import dace
 import dace.data
@@ -780,7 +780,7 @@ class DaceCPUBackend(BaseDaceBackend):
 
     options = BaseGTBackend.GT_BACKEND_OPTS
 
-    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
+    def generate_extension(self) -> None:
         return self.make_extension(uses_cuda=False)
 
 
@@ -804,5 +804,5 @@ class DaceGPUBackend(BaseDaceBackend):
         "device_sync": {"versioning": True, "type": bool},
     }
 
-    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
+    def generate_extension(self) -> None:
         return self.make_extension(uses_cuda=True)

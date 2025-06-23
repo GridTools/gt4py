@@ -115,10 +115,6 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
 class BaseModuleGenerator(abc.ABC):
     SOURCE_LINE_LENGTH = 120
     TEMPLATE_INDENT_SIZE = 4
-    DOMAIN_ARG_NAME = "_domain_"
-    ORIGIN_ARG_NAME = "_origin_"
-    SPLITTERS_NAME = "_splitters_"
-
     TEMPLATE_RESOURCE = "stencil_module.py.in"
 
     builder: StencilBuilder
@@ -135,12 +131,7 @@ class BaseModuleGenerator(abc.ABC):
         )
 
     def __call__(self, args_data: ModuleData) -> str:
-        """
-        Generate source code for a Python module containing a StencilObject.
-
-        A possible reason for extending is processing additional kwargs,
-        using a different template might require completely overriding.
-        """
+        """Generate source code for a Python module containing a StencilObject."""
         self.args_data = args_data
 
         module_source = self.template.render(

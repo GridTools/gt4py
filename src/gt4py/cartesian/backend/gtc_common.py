@@ -239,15 +239,13 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         return {dir_name: src_files["bindings"]}
 
     @abc.abstractmethod
-    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
+    def generate_extension(self) -> None:
         """
         Generate and build a python extension for the stencil computation.
-
-        Returns the name and file path (as string) of the compiled extension ".so" module.
         """
         pass
 
-    def make_extension(self, *, uses_cuda: bool = False) -> tuple[str, str]:
+    def make_extension(self, *, uses_cuda: bool = False) -> None:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
@@ -290,12 +288,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             ),
         )
 
-        result = self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
+        self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
 
         if build_info is not None:
             build_info["build_time"] = time.perf_counter() - start_time
-
-        return result
 
     def _make_extension_sources(self) -> dict[str, dict[str, str]]:
         """Generate the source for the stencil independently from use case."""

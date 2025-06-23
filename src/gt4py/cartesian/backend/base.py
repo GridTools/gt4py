@@ -376,7 +376,7 @@ class BasePyExtBackend(BaseBackend):
         pyext_build_opts: dict[str, str],
         *,
         uses_cuda: bool = False,
-    ) -> tuple[str, str]:
+    ) -> None:
         # Build extension module
         pyext_build_path = pathlib.Path(
             os.path.relpath(self.pyext_build_dir_path, pathlib.Path.cwd())
@@ -413,8 +413,6 @@ class BasePyExtBackend(BaseBackend):
         self.builder.with_backend_data(
             {"pyext_module_name": module_name, "pyext_file_path": file_path}
         )
-
-        return module_name, file_path
 
 
 def disabled(message: str, *, enabled_env_var: str) -> Callable[[type[Backend]], type[Backend]]:
