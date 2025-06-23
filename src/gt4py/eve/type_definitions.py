@@ -12,27 +12,14 @@ from __future__ import annotations
 
 import abc
 import re
-import sys
 from enum import Enum as Enum, IntEnum as IntEnum
 
 from boltons.typeutils import classproperty as classproperty
-from frozendict import frozendict as _frozendict
 
-from .extended_typing import (
-    Any,
-    ClassVar,
-    Generic,
-    NoReturn,
-    Optional,
-    Tuple,
-    TypeAlias,
-    TypeVar,
-    final,
-)
+from .extended_typing import Any, ClassVar, NoReturn, Optional, Tuple, TypeVar, final
 
 
 # -- Frozen collections --
-_T = TypeVar("_T")
 _Tc = TypeVar("_Tc", covariant=True)
 
 
@@ -44,16 +31,6 @@ class FrozenList(Tuple[_Tc, ...], metaclass=abc.ABCMeta):
     @classmethod
     def __subclasshook__(cls, C: type) -> bool:
         return tuple in C.__mro__
-
-
-if sys.version_info >= (3, 9):
-    frozendict: TypeAlias = _frozendict
-else:
-    _KeyT = TypeVar("_KeyT")
-
-    @final
-    class frozendict(_frozendict, Generic[_KeyT, _T]):
-        __slots__ = ()
 
 
 # -- Sentinels --
