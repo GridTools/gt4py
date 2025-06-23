@@ -231,24 +231,23 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_TemporaryAllocation(self, node: gtfn_ir.TemporaryAllocation, **kwargs: Any) -> str:
-        # TODO(tehrengruber): Revisit. We are currently converting an itir.NamedRange with
-        #  start and stop values into an gtfn_ir.(Cartesian|Unstructured)Domain with
-        #  size and offset values, just to here convert back in order to obtain stop values again.
-        # TODO(tehrengruber): Fix memory alignment.
         assert isinstance(node.domain, (gtfn_ir.CartesianDomain, gtfn_ir.UnstructuredDomain))
         assert node.domain.tagged_offsets.tags == node.domain.tagged_sizes.tags
         tags = node.domain.tagged_offsets.tags
-        new_sizes = []
-        for size, offset in zip(node.domain.tagged_offsets.values, node.domain.tagged_sizes.values):
-            new_sizes.append(gtfn_ir.BinaryExpr(op="+", lhs=size, rhs=offset))
+
+        new_offsets = [
+            gtfn_ir.UnaryExpr(op="-", expr=offset) for offset in node.domain.tagged_offsets.values
+        ]
+
         return self.generic_visit(
             node,
-            tmp_sizes=self.visit(gtfn_ir.TaggedValues(tags=tags, values=new_sizes), **kwargs),
+            tmp_sizes=self.visit(node.domain.tagged_sizes, **kwargs),
+            shifts=self.visit(gtfn_ir.TaggedValues(tags=tags, values=new_offsets), **kwargs),
             **kwargs,
         )
 
     TemporaryAllocation = as_fmt(
-        "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {tmp_sizes});"
+        "auto {id} = gridtools::sid::shift_sid_origin(gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {tmp_sizes}), {shifts});"
     )
 
     def visit_Program(self, node: gtfn_ir.Program, **kwargs: Any) -> Union[str, Collection[str]]:

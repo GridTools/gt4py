@@ -198,7 +198,10 @@ def _arg_inline_predicate(node: itir.Expr, shifts: set[tuple[itir.OffsetLiteral,
     ) or cpm.is_call_to(node, "if_"):
         # always inline arg if it is an applied fieldop with only a single arg
         if is_applied_fieldop and len(node.args) == 1:
-            return True
+            # ... and not too much overcompute
+            # TODO(havogt): tune this value or improve heuristic
+            if len(shifts) < 6:
+                return True
         # argument is never used, will be removed when inlined
         if len(shifts) == 0:
             return True
