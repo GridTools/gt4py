@@ -98,7 +98,7 @@ UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
     "GT4PY_UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", default=False
 )
 
-#: Number of threads to use to use for compilation.
+#: Number of threads to use to use for compilation (0 = synchronous compilation).
 #: Default:
 #: - use os.cpu_count(), TODO(havogt): in Python >= 3.13 use `process_cpu_count()`
 #: - if os.cpu_count() is None we are conservative and use 1 job,

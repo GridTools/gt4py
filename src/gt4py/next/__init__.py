@@ -44,6 +44,7 @@ from .iterator.embedded import (
     index_field,
     np_as_located_field,
 )
+from .otf.compiled_program import wait_for_compilation
 from .program_processors.runners.gtfn import (
     run_gtfn_cached as gtfn_cpu,
     run_gtfn_gpu_cached as gtfn_gpu,
@@ -83,6 +84,8 @@ __all__ = [
     "field_operator",
     "program",
     "scan_operator",
+    # from otf
+    "wait_for_compilation",
     # from program_processor
     "gtfn_cpu",
     "gtfn_gpu",
