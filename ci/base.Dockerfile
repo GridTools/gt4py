@@ -1,10 +1,11 @@
-ARG BASE_IMAGE=ubuntu:24.04
+ARG BASE_IMAGE=docker.io/ubuntu:24.04
 FROM $BASE_IMAGE
 
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
 ARG DEBIAN_FRONTEND=noninteractive
+ARG EXTRA_APTGET=""
 RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     strace \
     build-essential \
@@ -26,7 +27,8 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     libreadline-dev \
     git \
     rustc \
-    htop && \
+    htop \
+    ${EXTRA_APTGET} && \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv
@@ -48,5 +50,11 @@ ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
 
 # Install core dependencies to fill the uv cache
 RUN uv pip install setuptools wheel pip
-ARG EXTRA_VENV_PACKAGES="clang-format jaxlib numpy pytest scipy"
-RUN uv pip install ${EXTRA_VENV_PACKAGES} 
+ARG EXTRA_UV_SYNC=""
+RUN UV_PROJECT_ENVIRONMENT=${VIRTUAL_ENV} uv sync install \
+    --group dev \
+    --extra formatting \
+    --extra jax \
+    --extra performance \
+    --extra testing \
+     ${EXTRA_UV_SYNC}

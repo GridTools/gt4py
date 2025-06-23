@@ -1,0 +1,46 @@
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
+include:
+  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+
+# TDS needs different credentials
+.tds-container-runner-beverin:
+  variables:
+    F7T_CLIENT_ID: $F7T_TDS_CLIENT_ID
+    F7T_CLIENT_SECRET: $F7T_TDS_CLIENT_SECRET
+
+.tds-container-runner-beverin-mi200:
+  extends:
+    - .container-runner-beverin-mi200
+    - .tds-container-runner-beverin
+
+.tds-container-runner-beverin-mi300:
+  extends:
+    - .container-runner-beverin-mi300
+    - .tds-container-runner-beverin
+
+.tds-container-builder-beverin-mi200:
+  extends:
+    - .container-builder-cscs-zen2
+    #- .tds-container-runner-beverin-mi200
+  variables:
+    RUNNER: ".tds-container-runner-beverin-mi200"
+    THREADS_MAX_PER_TASK: 16
+    THREADS_PER_NODE: 256
+
+# .tds-container-builder-beverin-mi300:
+#   extends:
+#     - .container-builder-cscs-zen2
+#     #- .tds-container-runner-beverin-mi300
+#   variables:
+#     RUNNER: ".tds-container-runner-beverin-mi300"
+#     THREADS_MAX_PER_TASK: 16
+#     THREADS_PER_NODE: 256

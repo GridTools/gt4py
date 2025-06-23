@@ -1,4 +1,4 @@
-#! /usr/bin/env -S uv run -q --frozen --isolated --group scripts --script
+#! /usr/bin/env -S uv run -q -p 3.11 --frozen --isolated --group scripts --script
 #
 # GT4Py - GridTools Framework
 #
@@ -19,9 +19,7 @@ import json
 import pathlib
 import subprocess
 from collections.abc import Callable, Iterable, Sequence
-from typing import Annotated, Final, TypedDict
-
-from typing_extensions import NotRequired
+from typing import Annotated, Final, NotRequired, TypedDict
 
 import rich
 import typer
@@ -35,13 +33,13 @@ DEFAULT_CONFIG = "{REPO_ROOT}/nox-sessions-config.yml"
 class ExitCode(enum.IntEnum):
     """Exit codes for the script."""
 
-    INVALID_COMMAND_OPTIONS = -1
-    CONFIG_FILE_NOT_FOUND = -10
-    YAML_PARSE_ERROR = -11
-    INVALID_SESSION_DEFINITION = -12
-    GIT_DIFF_ERROR = -20
-    GH_MATRIX_CREATION_ERROR = -30
-    NOX_JSON_PARSE_ERROR = -31
+    INVALID_COMMAND_OPTIONS = 1
+    CONFIG_FILE_NOT_FOUND = 10
+    YAML_PARSE_ERROR = 11
+    INVALID_SESSION_DEFINITION = 12
+    GIT_DIFF_ERROR = 20
+    GH_MATRIX_CREATION_ERROR = 30
+    NOX_JSON_PARSE_ERROR = 31
 
 
 class OutputFormat(str, enum.Enum):

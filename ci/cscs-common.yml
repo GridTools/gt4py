@@ -1,0 +1,98 @@
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+include:
+  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+  - local: 'ci/tds-ci-config.yml'
+
+variables:  # Default variables for all jobs
+  CUDA_VERSION: '12.6.2'
+  ROCM_VERSION: '6.2.4'
+  UBUNTU_VERSION: '24.04'
+
+stages:
+  - build_base
+  - build
+  - test
+
+.build_base_common:
+  stage: build_base
+  # Default variables for base image builds
+  variables:  
+    BASE_IMAGE: docker.io/ubuntu:${UBUNTU_VERSION}
+    # CSCS_REBUILD_POLICY: 'always' => rebuild even if target tag exists already
+    # (if-not-exists is the default, i.e. we could also skip the variable)
+    CSCS_REBUILD_POLICY: if-not-exists
+    DOCKERFILE: ci/base.Dockerfile
+    DOCKER_BUILD_ARGS: '[
+        "BASE_IMAGE",
+        "EXTRA_APTGET",
+        "EXTRA_UV_SYNC",
+        "PY_VERSION"
+        "UV_VERSION",
+      ]'
+    EXTRA_APTGET: ""
+    EXTRA_UV_SYNC: ""
+    UV_VERSION: '0.6.12'
+  before_script:
+    # We create a tag that depends on the SHA value of ci/base.Dockerfile,
+    # the docker build arguments (since we use a parameterized Docker file),
+    # and the contents of the `uv.lock` file (which contains the version of
+    # python packages used in the base image).
+    # This way a new base image is only built if the contents of these files
+    # and build arguments changes.
+    - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
+    - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/public/$ARCH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
+    - echo "BASE_IMAGE_${PYVERSION_PREFIX}=$PERSIST_IMAGE_NAME" >> build.env
+  artifacts:
+    # Since the base image name becomes runtime dependent, we need to carry the
+    # value of it to the following jobs via the 'build.env' dotenv file.
+    reports:
+      dotenv: build.env
+
+.build_base_with_cuda:
+  extends:
+    - .build_base_common
+  variables:
+    BASE_IMAGE: docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
+    EXTRA_UV_SYNC:
+      - "--extra cuda12"
+
+.build_base_with_rocm:
+  extends:
+    - .build_base_common
+  variables:
+    BASE_IMAGE: docker.io/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
+    EXTRA_UV_SYNC:
+      - "--extra rocm6"
+    #ENV CUPY_INSTALL_USE_HIP=1
+
+.build_base_x86_64:
+  extends:
+    - .container-builder-cscs-zen2
+    - .build_base_common
+
+.build_base_x86_64_with_cuda:
+  extends:
+    - .container-builder-cscs-zen2
+    - .build_base_common
+    - .build_base_with_cuda
+
+.build_base_cscs_gh200:
+  extends:
+    - .container-builder-cscs-gh200
+    - .build_base_common
+    - .build_base_with_cuda
+
+.build_base_cscs_mi200:
+  extends:
+    - .tds-container-runner-beverin-mi200
+    - .build_base_x86_64
+    - .build_base_with_rocm
+
