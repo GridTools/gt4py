@@ -382,7 +382,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     ) -> SDFGBuilder:
         nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, scope_symbols)
         params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in scope_symbols.items()]
-        symbolic_arguments = _collect_symbols_in_domain_expressions(node, node.params) | {
+        symbolic_arguments = _collect_symbols_in_domain_expressions(node, params) | {
             # scalar values represented as dace symbols in parent SDFG are mapped
             # to dace symbols in the nested SDFG
             pname
