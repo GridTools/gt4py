@@ -465,7 +465,7 @@ def get_partial_type_hints(
     if getattr(obj, "__no_type_check__", None):
         return {}
     if not hasattr(obj, "__annotations__"):
-        return get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+        return get_type_hints(
             obj, globalns=globalns, localns=localns, include_extras=include_extras
         )
 
@@ -474,7 +474,7 @@ def get_partial_type_hints(
     for name, hint in annotations.items():
         obj.__annotations__ = {name: hint}
         try:
-            resolved_hints = get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+            resolved_hints = get_type_hints(
                 obj, globalns=globalns, localns=localns, include_extras=include_extras
             )
             hints[name] = resolved_hints[name]
@@ -530,7 +530,7 @@ def eval_forward_ref(
     else:
         safe_localns = {"typing": _sys.modules[__name__], "NoneType": type(None)}
 
-    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]
     assert not isinstance(actual_type, ForwardRef)
 
     return actual_type
