@@ -687,7 +687,11 @@ class DaCeBindingsCodegen:
         for name, array in sdfg.arrays.items():
             if array.transient:
                 continue
-            domain_dim_flags = array_dimensions(array)
+
+            domain_dim_flags = tuple(array_dimensions(array))
+            if len(domain_dim_flags) != 3:
+                raise RuntimeError("Expected 3 cartesian array dimensions. Codegen error.")
+
             data_ndim = len(array.shape) - sum(domain_dim_flags)
             sid_def = pybuffer_to_sid(
                 name=name,
