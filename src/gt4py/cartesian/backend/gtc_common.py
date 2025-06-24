@@ -12,13 +12,12 @@ import abc
 import os
 import textwrap
 import time
-from typing import TYPE_CHECKING, Any, Dict, Final, List, Optional, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Final
 
 from gt4py.cartesian import backend as gt_backend, config as gt_config, utils as gt_utils
 from gt4py.cartesian.backend import Backend
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.cartesian.gtc import gtir, utils as gtc_utils
-from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_pipeline import OirPipeline
 from gt4py.eve.codegen import MakoTemplate as as_mako
 
@@ -41,7 +40,7 @@ def pybuffer_to_sid(
     *,
     name: str,
     ctype: str,
-    domain_dim_flags: Tuple[bool, bool, bool],
+    domain_dim_flags: tuple[bool, bool, bool],
     data_ndim: int,
     stride_kind_index: int,
     backend: Backend,
@@ -113,37 +112,18 @@ def bindings_main_template():
     )
 
 
-def gtir_is_not_empty(pipeline: GtirPipeline) -> bool:
-    node = pipeline.full()
-    return bool(node.walk_values().if_isinstance(gtir.ParAssignStmt).to_list())
-
-
-def gtir_has_effect(pipeline: GtirPipeline) -> bool:
-    return True
-
-
 class PyExtModuleGenerator(BaseModuleGenerator):
     """Module Generator for use with backends that generate c++ python extensions."""
 
-    pyext_module_name: Optional[str]
-    pyext_file_path: Optional[str]
+    def __init__(self, builder: StencilBuilder) -> None:
+        super().__init__(builder)
 
-    def __init__(self):
-        super().__init__()
-        self.pyext_module_name = None
-        self.pyext_file_path = None
-
-    def __call__(
-        self, args_data: ModuleData, builder: Optional[StencilBuilder] = None, **kwargs: Any
-    ) -> str:
-        self.pyext_module_name = kwargs["pyext_module_name"]
-        self.pyext_file_path = kwargs["pyext_file_path"]
-        return super().__call__(args_data, builder, **kwargs)
+    def __call__(self, args_data: ModuleData) -> str:
+        return super().__call__(args_data)
 
     def _is_not_empty(self) -> bool:
-        if self.pyext_module_name is None:
-            return False
-        return gtir_is_not_empty(self.builder.gtir_pipeline)
+        node = self.builder.gtir_pipeline.full()
+        return bool(node.walk_values().if_isinstance(gtir.ParAssignStmt).to_list())
 
     def generate_imports(self) -> str:
         source = [
@@ -151,15 +131,16 @@ class PyExtModuleGenerator(BaseModuleGenerator):
             "from gt4py.cartesian import utils as gt_utils",
         ]
         if self._is_not_empty():
-            assert self.pyext_file_path is not None
+            backend_data = self.builder.backend_data
+
             file_path = 'f"{{pathlib.Path(__file__).parent.resolve()}}/{}"'.format(
-                os.path.basename(self.pyext_file_path)
+                os.path.basename(backend_data["pyext_file_path"])
             )
             source.append(
                 textwrap.dedent(
                     f"""
                 pyext_module = gt_utils.make_module_from_file(
-                    "{self.pyext_module_name}", {file_path}, public_import=True
+                    "{backend_data["pyext_module_name"]}", {file_path}, public_import=True
                 )
                 """
                 )
@@ -167,15 +148,13 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         return "\n".join(source)
 
     def _has_effect(self) -> bool:
-        if not self._is_not_empty():
-            return False
-        return gtir_has_effect(self.builder.gtir_pipeline)
+        return self._is_not_empty()
 
     def generate_implementation(self) -> str:
         ir = self.builder.gtir
         sources = gt_utils.text.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
 
-        args: List[str] = []
+        args: list[str] = []
         for decl in ir.params:
             args.append(decl.name)
             if isinstance(decl, gtir.FieldDecl):
@@ -199,19 +178,19 @@ class PyExtModuleGenerator(BaseModuleGenerator):
 
 
 class BackendCodegen:
-    TEMPLATE_FILES: Dict[str, str]
+    TEMPLATE_FILES: dict[str, str]
 
     @abc.abstractmethod
-    def __init__(self, class_name: str, module_name: str, backend: Any):
+    def __init__(self, class_name: str, module_name: str, backend: Backend) -> None:
         pass
 
     @abc.abstractmethod
-    def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+    def __call__(self, ir: gtir.Stencil) -> dict[str, dict[str, str]]:
         """Return a dict with the keys 'computation' and 'bindings' to dicts of filenames to source."""
         pass
 
 
-GTBackendOptions = Dict[str, Dict[str, Any]]
+GTBackendOptions = dict[str, dict[str, Any]]
 
 
 class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
@@ -229,18 +208,18 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     MODULE_GENERATOR_CLASS = PyExtModuleGenerator
 
-    PYEXT_GENERATOR_CLASS: Type[BackendCodegen]
+    PYEXT_GENERATOR_CLASS: type[BackendCodegen]
 
     @abc.abstractmethod
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> type[StencilObject]:
         pass
 
-    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
+    def generate_computation(self) -> dict[str, str | dict]:
         dir_name = f"{self.builder.options.name}_src"
         src_files = self._make_extension_sources()
         return {dir_name: src_files["computation"]}
 
-    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
+    def generate_bindings(self, language_name: str) -> dict[str, str | dict]:
         if language_name != "python":
             return super().generate_bindings(language_name)
 
@@ -249,22 +228,20 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         return {dir_name: src_files["bindings"]}
 
     @abc.abstractmethod
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+    def generate_extension(self) -> None:
         """
         Generate and build a python extension for the stencil computation.
-
-        Returns the name and file path (as string) of the compiled extension ".so" module.
         """
         pass
 
-    def make_extension(self, *, uses_cuda: bool = False) -> Tuple[str, str]:
+    def make_extension(self, *, uses_cuda: bool = False) -> None:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
 
         # Generate source
-        gt_pyext_files: Dict[str, Any]
-        gt_pyext_sources: Dict[str, Any]
+        gt_pyext_files: dict[str, Any]
+        gt_pyext_sources: dict[str, Any]
         if self.builder.options._impl_opts.get("disable-code-generation", False):
             # Pass NOTHING to the self.builder means try to reuse the source code files
             gt_pyext_files = {}
@@ -300,14 +277,12 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             ),
         )
 
-        result = self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
+        self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
 
         if build_info is not None:
             build_info["build_time"] = time.perf_counter() - start_time
 
-        return result
-
-    def _make_extension_sources(self) -> Dict[str, Dict[str, str]]:
+    def _make_extension_sources(self) -> dict[str, dict[str, str]]:
         """Generate the source for the stencil independently from use case."""
         if "computation_src" in self.builder.backend_data:
             return self.builder.backend_data["computation_src"]
@@ -329,6 +304,9 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
 
 class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
+    def __init__(self, builder: StencilBuilder) -> None:
+        super().__init__(builder)
+
     def generate_implementation(self) -> str:
         source = super().generate_implementation()
         if self.builder.options.backend_opts.get("device_sync", True):
