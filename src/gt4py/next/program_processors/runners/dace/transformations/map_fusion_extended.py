@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import dace
 from dace import (
@@ -21,7 +21,10 @@ from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import map_fusion_utils
-
+from gt4py.next.program_processors.runners.dace.transformations.map_fusion_utils import (
+    relocate_nodes,
+    rename_map_parameters,
+)
 
 def gt_horizontal_map_fusion(
     sdfg: dace.SDFG,
@@ -44,8 +47,9 @@ def gt_horizontal_map_fusion(
     transformations = [
         HorizontalSplitMapRange(
             only_toplevel_maps=True,
+            consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
         ),
-        gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
+        # gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
         gtx_transformations.MapFusionParallel(
             only_if_common_ancestor=True,
             only_inner_maps=False,
@@ -165,7 +169,7 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
         first_map_exit: dace_nodes.MapExit,
         second_map_entry: dace_nodes.MapEntry,
         second_map_exit: dace_nodes.MapExit,
-    ) -> None:
+    ) -> tuple[list[tuple[dace_nodes.MapEntry, dace_nodes.MapExit]], list[tuple[dace_nodes.MapEntry, dace_nodes.MapExit]]]:
         """Split the map range in order to obtain an overlapping range between the first and second map."""
         splitted_range = map_fusion_utils.split_overlapping_map_range(
             first_map_entry.map, second_map_entry.map
@@ -178,24 +182,29 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
             map_entry: dace_nodes.MapEntry,
             map_exit: dace_nodes.MapExit,
             new_ranges: list[dace_subsets.Range],
-        ) -> None:
+        ) -> list[tuple[dace_nodes.MapEntry, dace_nodes.MapExit]]:
             """Replace a map with multiple maps based on new_ranges."""
-
+            new_maps = []
             # make copies of the map with splitted ranges
             for i, r in enumerate(new_ranges):
-                map_fusion_utils.copy_map_graph_with_new_range(
-                    sdfg, graph, map_entry, map_exit, r, str(i)
+                new_maps.append(
+                    map_fusion_utils.copy_map_graph_with_new_range(
+                        sdfg, graph, map_entry, map_exit, r, str(i)
+                    )
                 )
 
             # remove the original first map
             map_fusion_utils.delete_map(graph, map_entry, map_exit)
 
-        _replace_ranged_map(
+            return new_maps
+
+
+        new_maps_from_first = _replace_ranged_map(
             first_map_entry,
             first_map_exit,
             first_map_splitted_range,
         )
-        _replace_ranged_map(
+        new_maps_from_second = _replace_ranged_map(
             second_map_entry,
             second_map_exit,
             second_map_splitted_range,
@@ -205,6 +214,8 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
 
         # workaround to refresh `cfg_list` on the SDFG
         sdfg.hash_sdfg()
+
+        return new_maps_from_first, new_maps_from_second
 
 
 @dace_properties.make_properties
@@ -217,8 +228,21 @@ class HorizontalSplitMapRange(SplitMapRange):
     first_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
     second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
+    never_consolidate_edges = dace_properties.Property(
+        dtype=bool,
+        default=False,
+        desc="If `True`, always create a new connector, instead of reusing one that referring to the same data.",
+    )
+    consolidate_edges_only_if_not_extending = dace_properties.Property(
+        dtype=bool,
+        default=False,
+        desc="Only consolidate if this does not lead to an extension of the subset.",
+    )
+
     def __init__(
         self,
+        consolidate_edges_only_if_not_extending: Optional[bool] = None,
+        never_consolidate_edges: Optional[bool] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -283,9 +307,48 @@ class HorizontalSplitMapRange(SplitMapRange):
         second_map_entry: dace_nodes.MapEntry = self.second_map_entry
         second_map_exit: dace_nodes.MapExit = graph.exit_node(second_map_entry)
 
-        self.split_maps(
+        new_maps_from_first, new_maps_from_second = self.split_maps(
             graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit
         )
+
+        matching_maps = []
+        for first_map_entry, first_map_exit in new_maps_from_first:
+            for second_map_entry, second_map_exit in new_maps_from_second:
+                if first_map_entry.map.range == second_map_entry.map.range and first_map_exit.map.range == second_map_exit.map.range:
+                    matching_maps.append(
+                        (first_map_entry, first_map_exit, second_map_entry, second_map_exit)
+                    )
+        
+        # We have to get the scope_dict before we start mutating the graph.
+        scope_dict: Dict = graph.scope_dict().copy()
+
+        for first_map_entry, first_map_exit, second_map_entry, second_map_exit in matching_maps:
+            # Before we do anything we perform the renaming, i.e. we will rename the
+            #  parameters of the second map such that they match the one of the first map.
+            rename_map_parameters(
+                first_map=first_map_entry.map,
+                second_map=second_map_entry.map,
+                second_map_entry=second_map_entry,
+                state=graph,
+            )
+
+            # Now we relocate all connectors from the second to the first map and remove
+            #  the respective node of the second map.
+            for to_node, from_node in [
+                (first_map_entry, second_map_entry),
+                (first_map_exit, second_map_exit),
+            ]:
+                relocate_nodes(
+                    from_node=from_node,
+                    to_node=to_node,
+                    state=graph,
+                    sdfg=sdfg,
+                    scope_dict=scope_dict,
+                    never_consolidate_edges=self.never_consolidate_edges,
+                    consolidate_edges_only_if_not_extending=self.consolidate_edges_only_if_not_extending,
+                )
+                # The relocate function does not remove the node, so we must do it.
+                graph.remove_node(from_node)
 
 
 @dace_properties.make_properties
