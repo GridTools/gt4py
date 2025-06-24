@@ -22,7 +22,7 @@ import sys
 import time
 import types
 import warnings
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from gt4py.cartesian import config as gt_config
 
@@ -42,14 +42,14 @@ def jsonify(value, indent=2):
     return json.dumps(value, indent=indent, default=lambda obj: str(obj))
 
 
-def is_identifier_name(value, namespaced=True):
+def is_identifier_name(value: Any, namespaced: bool = True) -> bool:
     if isinstance(value, str):
         if namespaced:
             return all(name.isidentifier() for name in value.split("."))
-        else:
-            return value.isidentifier()
-    else:
-        return False
+
+        return value.isidentifier()
+
+    return False
 
 
 def listify(value):
@@ -75,8 +75,8 @@ def get_member(instance, item_name):
             isinstance(instance, collections.abc.Sequence) and isinstance(item_name, int)
         ):
             return instance[item_name]
-        else:
-            return getattr(instance, item_name)
+
+        return getattr(instance, item_name)
     except Exception:
         return NOTHING
 
@@ -209,12 +209,10 @@ def shashed_id(*args, length: int = 10) -> str:
 def classmethod_to_function(class_method, instance=None, owner=None, remove_cls_arg=False):
     if remove_cls_arg:
         return functools.partial(class_method.__get__(instance, owner), None)
-    else:
-        return class_method.__get__(instance, owner)
+    return class_method.__get__(instance, owner)
 
 
-def namespace_from_nested_dict(nested_dict):
-    assert isinstance(nested_dict, dict)
+def namespace_from_nested_dict(nested_dict: dict) -> types.SimpleNamespace:
     return types.SimpleNamespace(
         **{
             key: namespace_from_nested_dict(value) if isinstance(value, dict) else value
@@ -318,15 +316,13 @@ def patch_module(module, member, new_value, *, recursive=True):
         if patched:
             originals[current] = patched
 
-    patch = dict(
+    return dict(
         module=module,
         original_value=member,
         patched_value=new_value,
         recursive=recursive,
         originals=originals,
     )
-
-    return patch
 
 
 def restore_module(patch, *, verify=True):
