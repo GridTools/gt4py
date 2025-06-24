@@ -383,9 +383,10 @@ class SDFGManager:
 
     def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]):
         frozen_hash = shash(origin, domain)
+        basename = self.builder.module_path.stem
+        path = f"{basename}_{frozen_hash}.sdfg"
+
         # check if same sdfg already cached on disk
-        basename: str = os.path.splitext(self.builder.module_path)[0]
-        path = f"{basename}_{frozen_hash!s}.sdfg"
         if path in SDFGManager._loaded_sdfgs:
             return SDFGManager._loaded_sdfgs[path]
 
@@ -399,8 +400,8 @@ class SDFGManager:
             origin=origin,
             domain=domain,
         )
-        self._save_sdfg(frozen_sdfg, path)
         SDFGManager._loaded_sdfgs[path] = frozen_sdfg
+        self._save_sdfg(frozen_sdfg, path)
 
         return frozen_sdfg
 
