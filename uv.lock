@@ -1296,7 +1296,7 @@ dev = [
     { name = "sphinx-rtd-theme", specifier = ">=3.0.1" },
     { name = "sphinx-toolbox", specifier = ">=3.8.1" },
     { name = "tach", specifier = ">=0.23.0" },
-    { name = "typer", extras = ["standard"], specifier = ">=0.12.3" },
+    { name = "typer", specifier = ">=0.12.3" },
     { name = "types-decorator", specifier = ">=5.1.8" },
     { name = "types-docutils", specifier = ">=0.21.0" },
     { name = "types-pytz", specifier = ">=2024.2.0" },
@@ -1325,7 +1325,7 @@ lint = [
 scripts = [
     { name = "gitpython", specifier = ">=3.1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "typer", extras = ["standard"], specifier = ">=0.12.3" },
+    { name = "typer", specifier = ">=0.12.3" },
 ]
 test = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.5.0" },

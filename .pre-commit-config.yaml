@@ -18,11 +18,17 @@ repos:
   - id: pretty-format-yaml
     args: [--autofix, --preserve-quotes, --indent, "2"]
 
-- repo: https://github.com/JoC0de/pre-commit-prettier
-  rev: v3.6.0
-  hooks:
-  - id: prettier
-    types_or: [markdown, json]
+repos:
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v2.0.2
+    hooks:
+      - id: biome-check
+
+# - repo: https://github.com/JoC0de/pre-commit-prettier
+#   rev: v3.6.0
+#   hooks:
+#   - id: prettier
+#     types_or: [markdown, json]
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v5.0.0
