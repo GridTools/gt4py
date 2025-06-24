@@ -350,12 +350,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             }
             containers[field.name] = data.Array(
                 data_type_to_dace_typeclass(field.dtype),  # dtype
-                get_dace_shape(
-                    field,
-                    field_without_mask_extents[param.name],  # See above for comments
-                    k_bound,
-                    symbols,
-                ),  # shape
+                get_dace_shape(field, field_extent, k_bound, symbols),  # shape
                 strides=get_dace_strides(field, symbols),
                 transient=True,
                 lifetime=dtypes.AllocationLifetime.Persistent,
