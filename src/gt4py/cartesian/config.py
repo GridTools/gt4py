@@ -49,6 +49,7 @@ build_settings: Dict[str, Any] = {
     "extra_link_args": extra_link_args,
     "parallel_jobs": multiprocessing.cpu_count(),
     "cpp_template_depth": os.environ.get("GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH),
+    "literal_floating_point_precision": os.environ.get("GT4PY_LITERAL_PRECISION", None),
 }
 if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
     build_settings["cuda_library_path"] = os.path.join(CUDA_ROOT, "lib")

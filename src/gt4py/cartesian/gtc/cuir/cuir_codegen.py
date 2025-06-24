@@ -70,7 +70,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         decl = symtable[node.name]
         if isinstance(decl, cuir.Temporary) and decl.data_dims:
             data_index_str = "+".join(
-                f"{index}*{int(np.prod(decl.data_dims[i + 1:], initial=1))}"
+                f"{index}*{int(np.prod(decl.data_dims[i + 1 :], initial=1))}"
                 for i, index in enumerate(data_index)
             )
             return f"{name}({offset})[{data_index_str}]"
@@ -172,6 +172,10 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         NativeFunction.FLOOR: "std::floor",
         NativeFunction.CEIL: "std::ceil",
         NativeFunction.TRUNC: "std::trunc",
+        NativeFunction.I32: "std::int32_t",
+        NativeFunction.I64: "std::int64_t",
+        NativeFunction.F32: "float",
+        NativeFunction.F64: "double",
     }
 
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:

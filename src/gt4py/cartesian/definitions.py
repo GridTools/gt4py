@@ -102,6 +102,8 @@ class BuildOptions(AttributeClassLike):
     raise_if_not_cached = attribute(of=bool, default=False)
     cache_settings = attribute(of=DictOf[str, Any], factory=dict)
     _impl_opts = attribute(of=DictOf[str, Any], factory=dict)
+    literal_precision = attribute(of=int, default=64)
+    "Specify the literal precision for automatic casts. Defaults to 64-bit"
 
     @property
     def qualified_name(self):

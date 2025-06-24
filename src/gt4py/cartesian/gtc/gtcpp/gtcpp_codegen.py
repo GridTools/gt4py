@@ -100,7 +100,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             temp = temp_decls[accessor_ref.name]
             data_index = "+".join(
                 [
-                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i+1:], initial=1))}"
+                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i + 1 :], initial=1))}"
                     for i, index in enumerate(accessor_ref.data_index)
                 ]
             )
@@ -176,6 +176,10 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 NativeFunction.FLOOR: "std::floor",
                 NativeFunction.CEIL: "std::ceil",
                 NativeFunction.TRUNC: "std::trunc",
+                NativeFunction.I32: "std::int32_t",
+                NativeFunction.I64: "std::int64_t",
+                NativeFunction.F32: "float",
+                NativeFunction.F64: "double",
             }[func]
         except KeyError as error:
             raise NotImplementedError(
