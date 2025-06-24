@@ -363,6 +363,14 @@ class AssignTargetsCollector(ASTPass):
         self.visit(ast_root)
         return self.assign_targets
 
+    def visit_AnnAssign(self, node: ast.AnnAssign):
+        if isinstance(node.target, ast.Tuple):
+            for t in node.target.elts:
+                assert isinstance(t, ast.Name)
+                self.assign_targets.append(t)
+        else:
+            self.assign_targets.append(node.target)
+
     def visit_Assign(self, node: ast.Assign):
         if len(node.targets) > 1 and not self.allow_multiple_targets:
             raise RuntimeError(f"Multiple targets found in assignment ({node})")

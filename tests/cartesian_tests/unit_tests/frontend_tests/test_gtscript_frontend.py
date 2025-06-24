@@ -60,6 +60,7 @@ def parse_definition(
         module=module,
         rebuild=rebuild,
         backend_opts=kwargs,
+        literal_precision=literal_precision,
         build_info=None,
     )
 

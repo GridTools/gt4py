@@ -413,10 +413,9 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        if (
-            isinstance(node.value, ast.Call)
-            and gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
-        ):
+        if isinstance(node.value, ast.Call) and gt_meta.get_qualified_name_from_node(
+            node.value.func
+        ) not in gtscript.MATH_BUILTINS.union(gtscript.TYPE_HINT_AND_CAST_BUILTINS):
             assert len(node.targets) == 1
             self.visit(node.value, target_node=node.targets[0])
             # This node can be now removed since the trivial assignment has been already done
@@ -745,7 +744,7 @@ class IRMaker(ast.NodeVisitor):
         self.parsing_horizontal_region = False
         self.written_vars: Set[str] = set()
         self.dtypes = dtypes
-        nodes.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
+        self.python_symbol_to_ir_op = {
             "abs": nodes.NativeFunction.ABS,
             "min": nodes.NativeFunction.MIN,
             "max": nodes.NativeFunction.MAX,
@@ -788,7 +787,7 @@ class IRMaker(ast.NodeVisitor):
                 if options.literal_precision == 32
                 else nodes.NativeFunction.F64
             ),
-        }  # CConversion table for functions to NativeFunctions
+        }  # Conversion table for functions to NativeFunctions
 
         self.temporary_type_to_native_type = {
             "i32": nodes.DataType.INT32,
@@ -1429,7 +1428,7 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_Call(self, node: ast.Call):
-        native_fcn = nodes.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
+        native_fcn = self.python_symbol_to_ir_op[node.func.id]
 
         args = [self.visit(arg) for arg in node.args]
         if len(args) != native_fcn.arity:
@@ -1475,23 +1474,39 @@ class IRMaker(ast.NodeVisitor):
 
         return name, spatial_offset, data_index
 
-    def visit_Assign(self, node: ast.Assign) -> list:
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> list:
+        return self._resolve_assign(node, [node.target], target_annotation=node.annotation)
+
+    def visit_Assign(self, node: ast.Assign, **kwargs) -> list:
+        return self._resolve_assign(node, node.targets)
+
+    def _resolve_assign(
+        self,
+        node: Union[ast.AnnAssign, ast.Assign],
+        targets: List[Any],
+        target_annotation: Optional[Any] = None,
+    ) -> list:
         result = []
 
         # Create decls for temporary fields
         target = []
-        if len(node.targets) > 1:
+        if len(targets) > 1:
             raise GTScriptSyntaxError(
                 message="Assignment to multiple variables (e.g. var1 = var2 = value) not supported.",
                 loc=nodes.Location.from_ast_node(node),
             )
 
-        for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
+        for t in targets[0].elts if isinstance(targets[0], ast.Tuple) else targets:
             name, spatial_offset, data_index = self._parse_assign_target(t)
             if spatial_offset:
                 if spatial_offset[0] != 0 or spatial_offset[1] != 0:
                     raise GTScriptSyntaxError(
                         message="Assignment to non-zero offsets is not supported in IJ.",
+                        loc=nodes.Location.from_ast_node(t),
+                    )
+                if target_annotation is not None:
+                    raise GTScriptSyntaxError(
+                        message="Cannot annotate a temporary Field with offset write. Define first.",
                         loc=nodes.Location.from_ast_node(t),
                     )
                 # Case of K-offset
@@ -1511,9 +1526,20 @@ class IRMaker(ast.NodeVisitor):
                             message="Temporaries with data dimensions need to be declared explicitly.",
                             loc=nodes.Location.from_ast_node(t),
                         )
+                    dtype = nodes.DataType.AUTO
+                    if target_annotation is not None:
+                        source = gt_meta.ast_unparse(target_annotation)
+                        try:
+                            dtype = eval(source, self.temporary_type_to_native_type)
+                        except NameError:
+                            raise GTScriptSyntaxError(
+                                message=f"Failed to recognize type {source} for local symbol {name}."
+                                f"Available types are {self.temporary_type_to_native_type.keys()}",
+                                loc=nodes.Location.from_ast_node(t),
+                            ) from None
                     field_decl = nodes.FieldDecl(
                         name=name,
-                        data_type=nodes.DataType.AUTO,
+                        data_type=dtype,
                         axes=nodes.Domain.LatLonGrid().axes_names,
                         is_api=False,
                         loc=nodes.Location.from_ast_node(t),
