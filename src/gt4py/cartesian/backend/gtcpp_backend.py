@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian.backend.base import CLIBackendMixin, register
@@ -129,19 +129,17 @@ class GTBaseBackend(BaseGTBackend, CLIBackendMixin):
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTExtGenerator
 
-    def _generate_extension(self, uses_cuda: bool) -> tuple[str, str]:
+    def _generate_extension(self, uses_cuda: bool) -> None:
         return self.make_extension(uses_cuda=uses_cuda)
 
     def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)
 
         # TODO(havogt) add bypass if computation has no effect
-        pyext_module_name, pyext_file_path = self.generate_extension()
+        self.generate_extension()
 
         # Generate and return the Python wrapper class
-        return self.make_module(
-            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
-        )
+        return self.make_module()
 
 
 @register
@@ -153,7 +151,7 @@ class GTCpuIfirstBackend(GTBaseBackend):
     languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
     storage_info = gt_storage.layout.CPUIFirstLayout
 
-    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
+    def generate_extension(self) -> None:
         return super()._generate_extension(uses_cuda=False)
 
 
@@ -166,7 +164,7 @@ class GTCpuKfirstBackend(GTBaseBackend):
     languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
     storage_info = gt_storage.layout.CPUKFirstLayout
 
-    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
+    def generate_extension(self) -> None:
         return super()._generate_extension(uses_cuda=False)
 
 
@@ -184,5 +182,5 @@ class GTGpuBackend(GTBaseBackend):
     }
     storage_info = gt_storage.layout.CUDALayout
 
-    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
+    def generate_extension(self) -> None:
         return super()._generate_extension(uses_cuda=True)

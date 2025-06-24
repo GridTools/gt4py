@@ -12,7 +12,7 @@ import copy
 import os
 import pathlib
 import re
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import dace
 import dace.data
@@ -769,6 +769,9 @@ class DaCeBindingsCodegen:
 
 
 class DaCePyExtModuleGenerator(PyExtModuleGenerator):
+    def __init__(self, builder: StencilBuilder) -> None:
+        super().__init__(builder)
+
     def generate_imports(self):
         return "\n".join(
             [
@@ -803,12 +806,10 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
         self.check_options(self.builder.options)
 
         # TODO(havogt) add bypass if computation has no effect
-        pyext_module_name, pyext_file_path = self.generate_extension()
+        self.generate_extension()
 
         # Generate and return the Python wrapper class
-        return self.make_module(
-            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
-        )
+        return self.make_module()
 
 
 @register
@@ -827,7 +828,7 @@ class DaceCPUBackend(BaseDaceBackend):
 
     options = BaseGTBackend.GT_BACKEND_OPTS
 
-    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
+    def generate_extension(self) -> None:
         return self.make_extension(uses_cuda=False)
 
 
@@ -851,5 +852,5 @@ class DaceGPUBackend(BaseDaceBackend):
         "device_sync": {"versioning": True, "type": bool},
     }
 
-    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
+    def generate_extension(self) -> None:
         return self.make_extension(uses_cuda=True)
