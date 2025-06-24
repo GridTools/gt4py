@@ -8,6 +8,8 @@
 
 """Basic utilities for Python programming."""
 
+from __future__ import annotations
+
 import collections.abc
 import functools
 import hashlib
@@ -19,6 +21,7 @@ import string
 import sys
 import time
 import types
+import warnings
 from typing import Generic, TypeVar
 
 from gt4py.cartesian import config as gt_config
@@ -169,7 +172,13 @@ def normalize_mapping(mapping, key_types=(object,), *, filter_none=False):
     return result
 
 
-def shash(*args, hash_algorithm=None):
+def shash(*args, hash_algorithm: hashlib._Hash | None = None, length: int | None = None) -> str:
+    """Hash the given arguments.
+
+    Args:
+        hash_algorithm: Specify the hashlib algorithm used. Defaults to sha 256.
+        length: Trim to the first `length` digits of the hash. Returns the full hash by default.
+    """
     if hash_algorithm is None:
         hash_algorithm = hashlib.sha256()
 
@@ -182,11 +191,19 @@ def shash(*args, hash_algorithm=None):
             item = str.encode(repr(item))
         hash_algorithm.update(item)
 
-    return hash_algorithm.hexdigest()
+    digest = hash_algorithm.hexdigest()
+    if length is not None and length > len(digest):
+        warnings.warn(
+            f"Requested hash of length {length}, but the full hash's length is {len(digest)}. Returning the full hash.",
+            stacklevel=2,
+        )
+        length = None
+    return digest[:length] if length is not None else digest
 
 
-def shashed_id(*args, length=10, hash_algorithm=None):
-    return shash(*args, hash_algorithm=hash_algorithm)[:length]
+def shashed_id(*args, length: int = 10) -> str:
+    """Hash the given arguments and trim to length."""
+    return shash(*args, length=length)
 
 
 def classmethod_to_function(class_method, instance=None, owner=None, remove_cls_arg=False):
