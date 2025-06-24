@@ -316,20 +316,20 @@ def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, doma
 
 class SDFGManager:
     # Cache loaded SDFGs across all instances
-    _loaded_sdfgs: ClassVar[dict[str, dace.SDFG]] = dict()
+    _loaded_sdfgs: ClassVar[dict[str | pathlib.Path, dace.SDFG]] = dict()
 
-    def __init__(self, builder):
+    def __init__(self, builder: StencilBuilder) -> None:
         self.builder = builder
 
     @staticmethod
-    def _strip_history(sdfg):
+    def _strip_history(sdfg: dace.SDFG) -> None:
         # strip history from SDFG for faster save/load
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
             tmp_sdfg.transformation_hist = []
             tmp_sdfg.orig_sdfg = None
 
     @staticmethod
-    def _save_sdfg(sdfg, path):
+    def _save_sdfg(sdfg: dace.SDFG, path: str) -> None:
         SDFGManager._strip_history(sdfg)
         sdfg.save(path)
 
@@ -375,27 +375,26 @@ class SDFGManager:
         return copy.deepcopy(self._expanded_sdfg())
 
     def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]):
-        frozen_hash = shash(origin, domain)
-        # check if same sdfg already cached on disk
-        path = self.builder.module_path
-        basename = os.path.splitext(path)[0]
-        path = basename + "_" + str(frozen_hash) + ".sdfg"
-        if path not in SDFGManager._loaded_sdfgs:
-            try:
-                sdfg = dace.SDFG.from_file(path)
-            except FileNotFoundError:
-                # otherwise, wrap and save sdfg from scratch
-                inner_sdfg = self.unexpanded_sdfg()
+        basename = self.builder.module_path.stem
+        path = f"{basename}_{shash(origin, domain)}.sdfg"
 
-                sdfg = freeze_origin_domain_sdfg(
-                    inner_sdfg,
-                    arg_names=[arg.name for arg in self.builder.gtir.api_signature],
-                    field_info=make_args_data_from_gtir(self.builder.gtir_pipeline).field_info,
-                    origin=origin,
-                    domain=domain,
-                )
-                self._save_sdfg(sdfg, path)
-            SDFGManager._loaded_sdfgs[path] = sdfg
+        # check if same sdfg already cached on disk
+        if path in SDFGManager._loaded_sdfgs:
+            return SDFGManager._loaded_sdfgs[path]
+
+        # otherwise, wrap and save sdfg from scratch
+        inner_sdfg = self.unexpanded_sdfg()
+
+        sdfg = freeze_origin_domain_sdfg(
+            inner_sdfg,
+            arg_names=[arg.name for arg in self.builder.gtir.api_signature],
+            field_info=make_args_data_from_gtir(self.builder.gtir_pipeline).field_info,
+            origin=origin,
+            domain=domain,
+        )
+        SDFGManager._loaded_sdfgs[path] = sdfg
+        self._save_sdfg(sdfg, path)
+
         return SDFGManager._loaded_sdfgs[path]
 
     def frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]):
@@ -631,6 +630,7 @@ namespace gt = gridtools;
             symbols[name] = fmt.format(
                 name=name, ndim=len(array.shape), origin=",".join(str(o) for o in origin)
             )
+
         # the remaining arguments are variables and can be passed by name
         for sym in sdfg.signature_arglist(with_types=False, for_call=True):
             if sym not in symbols:
@@ -678,8 +678,7 @@ class DaCeBindingsCodegen:
                     )
                 )
             elif name in sdfg.symbols and not name.startswith("__"):
-                assert name in sdfg.symbols
-                res[name] = "{dtype} {name}".format(dtype=sdfg.symbols[name].ctype, name=name)
+                res[name] = f"{sdfg.symbols[name].ctype} {name}"
         return list(res[node.name] for node in stencil_ir.params if node.name in res)
 
     def generate_sid_params(self, sdfg: dace.SDFG) -> list[str]:
