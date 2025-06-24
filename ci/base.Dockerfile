@@ -1,13 +1,15 @@
 ARG BASE_IMAGE=docker.io/ubuntu:24.04
-FROM $BASE_IMAGE
+FROM ${BASE_IMAGE}
 
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
+WORKDIR /workspace
+
 ARG DEBIAN_FRONTEND=noninteractive
 ARG EXTRA_APTGET=""
 RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
-    strace \
+    # strace \
     build-essential \
     tar \
     wget \
@@ -17,44 +19,54 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     libssl-dev \
     libbz2-dev \
     libsqlite3-dev \
-    llvm \
+    # llvm \
     libncurses5-dev \
     libncursesw5-dev \
     xz-utils \
-    tk-dev \
+    # tk-dev \
     libffi-dev \
     liblzma-dev \
     libreadline-dev \
     git \
-    rustc \
-    htop \
+    # rustc \
+    # htop \
     ${EXTRA_APTGET} && \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv
 ARG UV_VERSION=0.6.12
 ADD https://astral.sh/uv/${UV_VERSION}/install.sh /uv-installer.sh
-RUN sh /uv-installer.sh && rm /uv-installer.sh
-ENV PATH="/root/.local/bin/:$PATH"
+RUN UV_UNMANAGED_INSTALL="/opt/uv" sh /uv-installer.sh && rm /uv-installer.sh
+ENV PATH="/opt/uv:$PATH"
 
-# Create main python venv for development only,
-# since nox creates a different venv per session
-ARG PY_VERSION=3.10
-ARG COMPILE_BYTECODE=1
-ENV UV_COMPILE_BYTECODE=${COMPILE_BYTECODE}
-ENV UV_LINK_MODE=copy
+# Set up the environment vars with paths for uv
+ARG CACHE_DIR=/workspace/cache/
+ENV UV_CACHE_DIR="${CACHE_DIR}/uv"
+ENV UV_PROJECT_ENVIRONMENT=/workspace/venv
+ENV UV_PYTHON_INSTALL_DIR="/opt/uv-python"
 
-ENV VIRTUAL_ENV=/gt4py.venv
-RUN uv venv -p ${PY_VERSION} ${VIRTUAL_ENV}
+# Create and activate the python venv
+ARG PY_VERSION=3.10.16
+RUN uv venv -p ${PY_VERSION} --link-mode copy ${VIRTUAL_ENV}
+ENV VIRTUAL_ENV=${UV_PROJECT_ENVIRONMENT}
 ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
 
-# Install core dependencies to fill the uv cache
-RUN uv pip install setuptools wheel pip
+# Install python packages using uv just to fill the uv cache,
+# since nox will creates its own test session venv anyway
+ARG EXTRA_BUILD_ENV_VARS="" 
 ARG EXTRA_UV_SYNC=""
-RUN UV_PROJECT_ENVIRONMENT=${VIRTUAL_ENV} uv sync install \
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    <<EOF
+if [[ ! -z "${EXTRA_BUILD_ENV_VARS}" ]]; then
+    eval "export $EXTRA_BUILD_ENV_VARS"
+fi
+uv pip install --compile-bytecode setuptools wheel pip
+uv sync --compile-bytecode --frozen --no-install-project \
     --group dev \
     --extra formatting \
     --extra jax \
     --extra performance \
     --extra testing \
      ${EXTRA_UV_SYNC}
+EOF
