@@ -1,5 +1,5 @@
 include:
-- remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
 
 .py311: &py311
   PYVERSION_PREFIX: py311
@@ -10,9 +10,9 @@ include:
 
 
 stages:
-- baseimage
-- image
-- test
+  - baseimage
+  - image
+  - test
 
 .build_baseimage:
   stage: baseimage
@@ -24,9 +24,9 @@ stages:
   # the following jobs via a dotenv file.
   before_script:
   # include build arguments in hash since we use a parameterized Docker file
-  - DOCKER_TAG=`echo "$(cat $DOCKERFILE) $DOCKER_BUILD_ARGS" | sha256sum | head -c 16`
-  - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/public/$ARCH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
-  - echo "BASE_IMAGE_${PYVERSION_PREFIX}=$PERSIST_IMAGE_NAME" >> build.env
+    - DOCKER_TAG=`echo "$(cat $DOCKERFILE) $DOCKER_BUILD_ARGS" | sha256sum | head -c 16`
+    - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/public/$ARCH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
+    - echo "BASE_IMAGE_${PYVERSION_PREFIX}=$PERSIST_IMAGE_NAME" >> build.env
   artifacts:
     reports:
       dotenv: build.env
@@ -109,14 +109,14 @@ build_py310_image_aarch64:
   stage: test
   image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
-  - cd /gt4py.src
-  - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
-  - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
-  - echo "GITHUB_PR=${GITHUB_PR}"
-  - export CI_NOX_RUN_ONLY_IF_CHANGED_FROM="gh/$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.base.ref')"
-  - echo "CI_NOX_RUN_ONLY_IF_CHANGED_FROM=${CI_NOX_RUN_ONLY_IF_CHANGED_FROM}"
-  - NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
-  - nox -s "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS"
+    - cd /gt4py.src
+    - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
+    - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
+    - echo "GITHUB_PR=${GITHUB_PR}"
+    - export CI_NOX_RUN_ONLY_IF_CHANGED_FROM="gh/$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.base.ref')"
+    - echo "CI_NOX_RUN_ONLY_IF_CHANGED_FROM=${CI_NOX_RUN_ONLY_IF_CHANGED_FROM}"
+    - NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
+    - nox -s "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS"
   variables:
     CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
@@ -139,16 +139,16 @@ build_py310_image_aarch64:
   extends: [.container-runner-santis-gh200, .test_helper]
   parallel:
     matrix:
-    - SUBPACKAGE: [cartesian]
-      VARIANT: ['internal', 'dace']
-      SUBVARIANT: ['cuda12', 'cpu']
-    - SUBPACKAGE: eve
-    - SUBPACKAGE: next
-      VARIANT: ['internal', 'dace']
-      SUBVARIANT: ['cuda12', 'cpu']
-      DETAIL: ['nomesh', 'atlas']
-    - SUBPACKAGE: [storage]
-      VARIANT: ['cuda12', 'cpu']
+      - SUBPACKAGE: [cartesian]
+        VARIANT: ['internal', 'dace']
+        SUBVARIANT: ['cuda12', 'cpu']
+      - SUBPACKAGE: eve
+      - SUBPACKAGE: next
+        VARIANT: ['internal', 'dace']
+        SUBVARIANT: ['cuda12', 'cpu']
+        DETAIL: ['nomesh', 'atlas']
+      - SUBPACKAGE: [storage]
+        VARIANT: ['cuda12', 'cpu']
   variables:
     # TODO: Fix issue with compile parallelism that causes tests to hang
     GT4PY_BUILD_JOBS: 2
