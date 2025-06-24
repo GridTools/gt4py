@@ -11,7 +11,6 @@ on:
 jobs:
   # First job to read Python versions from .python-versions file
   get-python-versions:
-    skip-if: false
     runs-on: ubuntu-latest
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
@@ -22,7 +21,6 @@ jobs:
 
   # Test-running job
   test-next:
-    skip-if: false
     needs: get-python-versions
     strategy:
       matrix:

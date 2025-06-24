@@ -13,24 +13,6 @@
 [![uv](https://img.shields.io/badge/-uv-261230.svg?logo=uv)](https://github.com/astral-sh/uv)
 [![Nox](https://img.shields.io/badge/%F0%9F%A6%8A-Nox-D85E00.svg)](https://github.com/wntrblm/nox)
 
-**NOTE:** This is the testing branch for schedule tree (stree). The basic pipeline is gtir -> schedule tree -> sdfg -> codgen.
-
-Getting started: Run
-
-```bash
-uv sync --group dev --extra dace-cartesian
-```
-
-to get the stree branch of dace into gt4py. With that, we are able to run gt4py tests against that dace branch (which we need for the stree -> sdfg back transformation).
-
-Note to myself: to update the DaCe branch in the `uv.lock` file
-
-```bash
-uv sync -P dace --group dev --extra dace-cartesian --extra cuda12
-```
-
-_Your standard README continues now._
-
 # GT4Py: GridTools for Python
 
 GT4Py is a Python library for generating high performance implementations of stencil kernels from a high-level definition using regular Python functions. GT4Py is part of the GridTools framework, a set of libraries and utilities to develop performance portable applications in the area of weather and climate modeling.

@@ -12,7 +12,7 @@ import copy
 import os
 import pathlib
 import re
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import dace
 import dace.data
@@ -383,9 +383,10 @@ class SDFGManager:
 
     def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]):
         frozen_hash = shash(origin, domain)
+        basename = self.builder.module_path.stem
+        path = f"{basename}_{frozen_hash}.sdfg"
+
         # check if same sdfg already cached on disk
-        basename: str = os.path.splitext(self.builder.module_path)[0]
-        path = f"{basename}_{frozen_hash!s}.sdfg"
         if path in SDFGManager._loaded_sdfgs:
             return SDFGManager._loaded_sdfgs[path]
 
@@ -399,8 +400,8 @@ class SDFGManager:
             origin=origin,
             domain=domain,
         )
-        self._save_sdfg(frozen_sdfg, path)
         SDFGManager._loaded_sdfgs[path] = frozen_sdfg
+        self._save_sdfg(frozen_sdfg, path)
 
         return frozen_sdfg
 
@@ -769,6 +770,9 @@ class DaCeBindingsCodegen:
 
 
 class DaCePyExtModuleGenerator(PyExtModuleGenerator):
+    def __init__(self, builder: StencilBuilder) -> None:
+        super().__init__(builder)
+
     def generate_imports(self):
         return "\n".join(
             [
@@ -803,12 +807,10 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
         self.check_options(self.builder.options)
 
         # TODO(havogt) add bypass if computation has no effect
-        pyext_module_name, pyext_file_path = self.generate_extension()
+        self.generate_extension()
 
         # Generate and return the Python wrapper class
-        return self.make_module(
-            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
-        )
+        return self.make_module()
 
 
 @register
@@ -827,7 +829,7 @@ class DaceCPUBackend(BaseDaceBackend):
 
     options = BaseGTBackend.GT_BACKEND_OPTS
 
-    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
+    def generate_extension(self) -> None:
         return self.make_extension(uses_cuda=False)
 
 
@@ -851,5 +853,5 @@ class DaceGPUBackend(BaseDaceBackend):
         "device_sync": {"versioning": True, "type": bool},
     }
 
-    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
+    def generate_extension(self) -> None:
         return self.make_extension(uses_cuda=True)

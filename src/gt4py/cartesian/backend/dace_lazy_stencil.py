@@ -60,13 +60,12 @@ class DaCeLazyStencil(LazyStencil, SDFGConvertible):
             **kwargs,
         )
         sdfg = sdfg_manager.frozen_sdfg(origin=norm_kwargs["origin"], domain=norm_kwargs["domain"])
-        sdfg = add_optional_fields(
+        return add_optional_fields(
             sdfg,
             field_info=args_data.field_info,
             parameter_info=args_data.parameter_info,
             **norm_kwargs,
         )
-        return sdfg
 
     def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         return {}

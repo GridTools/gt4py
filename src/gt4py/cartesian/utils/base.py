@@ -8,6 +8,8 @@
 
 """Basic utilities for Python programming."""
 
+from __future__ import annotations
+
 import collections.abc
 import functools
 import hashlib
@@ -169,7 +171,7 @@ def normalize_mapping(mapping, key_types=(object,), *, filter_none=False):
     return result
 
 
-def shash(*args, hash_algorithm=None):
+def shash(*args, hash_algorithm: hashlib._Hash | None = None):
     if hash_algorithm is None:
         hash_algorithm = hashlib.sha256()
 
@@ -185,15 +187,14 @@ def shash(*args, hash_algorithm=None):
     return hash_algorithm.hexdigest()
 
 
-def shashed_id(*args, length=10, hash_algorithm=None):
+def shashed_id(*args, length=10, hash_algorithm: hashlib._Hash | None = None):
     return shash(*args, hash_algorithm=hash_algorithm)[:length]
 
 
 def classmethod_to_function(class_method, instance=None, owner=None, remove_cls_arg=False):
     if remove_cls_arg:
         return functools.partial(class_method.__get__(instance, owner), None)
-    else:
-        return class_method.__get__(instance, owner)
+    return class_method.__get__(instance, owner)
 
 
 def namespace_from_nested_dict(nested_dict):
