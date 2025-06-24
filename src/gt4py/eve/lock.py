@@ -15,7 +15,9 @@ from flufl import lock as flufl_lock
 
 
 @contextlib.contextmanager
-def refreshing_lock(path: pathlib.Path, lifetime: int = 10, refresh: int = 5) -> Generator[None]:
+def refreshing_lock(
+    path: pathlib.Path, lifetime: int = 10, refresh: int = 5
+) -> Generator[None, None, None]:
     lock = flufl_lock.Lock(str(path), lifetime=lifetime)  # type: ignore[attr-defined] # mypy doesn't understand flufl.lock's custom export mechanism
     lock.lock()
     stop_event = threading.Event()
