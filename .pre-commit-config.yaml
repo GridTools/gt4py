@@ -1,15 +1,13 @@
 minimum_pre_commit_version: 3.8.0
 repos:
-  # - repo: meta
-  #   hooks:
-  #   - id: check-hooks-apply
-  #   - id: check-useless-excludes
+  - repo: meta
+    hooks:
+      - id: check-hooks-apply
+      - id: check-useless-excludes
 
   - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
     rev: v2.14.0
     hooks:
-      - id: pretty-format-ini
-        args: [--autofix]
       - id: pretty-format-toml
         args: [--autofix]
         exclude: tach.toml
@@ -28,7 +26,6 @@ repos:
       - id: check-added-large-files
       - id: check-case-conflict
       - id: check-merge-conflict
-      - id: check-symlinks
       - id: check-toml
       - id: check-yaml
       - id: destroyed-symlinks
@@ -37,7 +34,6 @@ repos:
     rev: v1.5.5
     hooks:
       - id: insert-license
-        exclude: ^\..*$
         types: [python]
         args: [--comment-style, "|#|", --license-filepath, ./HEADER.txt, --fuzzy-match-generates-todo]
 
