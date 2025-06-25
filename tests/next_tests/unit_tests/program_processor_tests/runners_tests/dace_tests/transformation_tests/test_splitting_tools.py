@@ -20,10 +20,11 @@ from dace.sdfg import nodes as dace_nodes
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
+from gt4py.next.program_processors.runners.dace.transformations import (
+    splitting_tools as gtx_dace_split,
+)
 
 from . import util
-
-import dace
 
 
 def _make_distributed_split_sdfg() -> tuple[
@@ -83,7 +84,7 @@ def test_distributed_split():
         dace_sbs.Range.from_string("5:10"),
     ]
 
-    new_access_nodes = gtx_transformations.spliting_tools.split_node(
+    new_access_nodes = gtx_dace_split.split_node(
         state=state,
         sdfg=sdfg,
         node_to_split=t,
@@ -177,7 +178,7 @@ def test_simple_node_split():
         dace_sbs.Range.from_string("5:10"),
     ]
 
-    new_access_nodes = gtx_transformations.spliting_tools.split_node(
+    new_access_nodes = gtx_dace_split.split_node(
         state=state,
         sdfg=sdfg,
         node_to_split=t,
@@ -251,7 +252,7 @@ def test_split_edge():
     #  be maintained.
     split = dace_sbs.Range.from_string("0:5")
 
-    new_edges_by_split = gtx_transformations.spliting_tools.split_edge(
+    new_edges_by_split = gtx_dace_split.split_edge(
         state=state,
         sdfg=sdfg,
         edge_to_split=edge_to_split,
@@ -304,7 +305,7 @@ def test_split_edge_2d():
 
     # There will be one edge that copies the split, and two edges for the rest.
     #  However, there are two different possibilities how they are split.
-    new_edges_by_split = gtx_transformations.spliting_tools.split_edge(
+    new_edges_by_split = gtx_dace_split.split_edge(
         state=state,
         sdfg=sdfg,
         edge_to_split=edge_to_split,
@@ -348,7 +349,7 @@ def test_subset_merging_1():
         dace_sbs.Range.from_string("5:10, 5:10"),
     ]
 
-    merged_subset = gtx_transformations.spliting_tools.subset_merger(subsets)
+    merged_subset = gtx_dace_split.subset_merger(subsets)
 
     assert len(merged_subset) == 1
     assert merged_subset[0] == dace_sbs.Range.from_string("0:10, 0:10")
@@ -360,7 +361,7 @@ def test_subset_merging_2():
         dace_sbs.Range.from_string("10:12"),
     ]
 
-    merged_subset = gtx_transformations.spliting_tools.subset_merger(subsets)
+    merged_subset = gtx_dace_split.subset_merger(subsets)
 
     assert len(merged_subset) == 1
     assert merged_subset[0] == dace_sbs.Range.from_string("0:12")
@@ -373,7 +374,7 @@ def test_subset_merging_3():
         dace_sbs.Range.from_string("11:20"),
     ]
 
-    merged_subset = gtx_transformations.spliting_tools.subset_merger(subsets)
+    merged_subset = gtx_dace_split.subset_merger(subsets)
 
     assert len(merged_subset) == 2
     assert set(subsets) == set(merged_subset)
@@ -386,7 +387,7 @@ def test_subset_merging_4():
         dace_sbs.Range.from_string("11:20"),
     ]
 
-    merged_subset = gtx_transformations.spliting_tools.subset_merger(subsets)
+    merged_subset = gtx_dace_split.subset_merger(subsets)
 
     assert len(merged_subset) == 2
     assert set(subsets) == set(merged_subset)
@@ -407,7 +408,7 @@ def test_subset_merging_stability():
 
     stable_result: Optional[set[dace_sbs.Subset]] = None
     for permut in itertools.permutations(subsets):
-        merged_subset = gtx_transformations.spliting_tools.subset_merger(list(permut))
+        merged_subset = gtx_dace_split.subset_merger(list(permut))
         print(merged_subset)
 
         assert merged_subset is not None
