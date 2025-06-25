@@ -24,6 +24,8 @@ from gt4py.next.program_processors.runners.dace.transformations import map_fusio
 from gt4py.next.program_processors.runners.dace.transformations.map_fusion_utils import (
     relocate_nodes,
     rename_map_parameters,
+    can_topologically_be_fused,
+    is_parallel,
 )
 
 def gt_horizontal_map_fusion(
@@ -335,6 +337,21 @@ class HorizontalSplitMapRange(SplitMapRange):
                 second_map_entry=second_map_entry,
                 state=graph,
             )
+            if scope_dict[first_map_entry] != scope_dict[second_map_entry]:
+                return
+            if not is_parallel(graph=graph, node1=first_map_entry, node2=second_map_entry):
+                return
+
+            param_repl = can_topologically_be_fused(
+                first_map_entry=first_map_entry,
+                second_map_entry=second_map_entry,
+                graph=graph,
+                sdfg=sdfg,
+                only_inner_maps=False,
+                only_toplevel_maps=self.only_toplevel_maps,
+            )
+            if param_repl is None:
+                return False
 
             # Now we relocate all connectors from the second to the first map and remove
             #  the respective node of the second map.

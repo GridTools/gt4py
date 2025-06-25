@@ -20,9 +20,11 @@ import dace
 from dace import data, properties, subsets, symbolic, transformation
 from dace.sdfg import SDFG, SDFGState, graph, nodes, propagation
 from .map_fusion_utils import (
-    find_parameter_remapping,
     rename_map_parameters,
     relocate_nodes,
+    can_topologically_be_fused,
+    is_parallel,
+    is_node_reachable_from,
 )
 
 @properties.make_properties
@@ -345,17 +347,19 @@ class MapFusion(transformation.SingleStateTransformation):
             return False
 
         # We will now check if the two maps are parallel.
-        if not self.is_parallel(graph=graph, node1=first_map_entry, node2=second_map_entry):
+        if not is_parallel(graph=graph, node1=first_map_entry, node2=second_map_entry):
             return False
 
         # Check the structural properties of the Maps. The function will return
         #  the `dict` that describes how the parameters must be renamed (for caching)
         #  or `None` if the maps can not be structurally fused.
-        param_repl = self.can_topologically_be_fused(
+        param_repl = can_topologically_be_fused(
             first_map_entry=first_map_entry,
             second_map_entry=second_map_entry,
             graph=graph,
             sdfg=sdfg,
+            only_inner_maps=self.only_inner_maps,
+            only_toplevel_maps=self.only_toplevel_maps,
         )
         if param_repl is None:
             return False
@@ -394,7 +398,7 @@ class MapFusion(transformation.SingleStateTransformation):
         # Check the structural properties of the Maps. The function will return
         #  the `dict` that describes how the parameters must be renamed (for caching)
         #  or `None` if the maps can not be structurally fused.
-        param_repl = self.can_topologically_be_fused(
+        param_repl = can_topologically_be_fused(
             first_map_entry=first_map_entry,
             second_map_entry=second_map_entry,
             graph=graph,
@@ -665,7 +669,7 @@ class MapFusion(transformation.SingleStateTransformation):
 
             # If the second map is not reachable from the intermediate node, then
             #  the output is pure and we can end here.
-            if not self.is_node_reachable_from(
+            if not is_node_reachable_from(
                 graph=state,
                 begin=intermediate_node,
                 end=second_map_entry,
@@ -681,7 +685,7 @@ class MapFusion(transformation.SingleStateTransformation):
                     continue
                 if intermediate_node_iedge.src is first_map_exit:
                     return None
-                if self.is_node_reachable_from(
+                if is_node_reachable_from(
                     graph=state,
                     begin=first_map_exit,
                     end=intermediate_node_iedge.src,
@@ -769,7 +773,7 @@ class MapFusion(transformation.SingleStateTransformation):
                 # If the second map entry is not immediately reachable from the intermediate
                 #  node, then ensure that there is not path that goes to it.
                 if intermediate_node_out_edge.dst is not second_map_entry:
-                    if self.is_node_reachable_from(
+                    if is_node_reachable_from(
                         graph=state, begin=intermediate_node_out_edge.dst, end=second_map_entry
                     ):
                         return None
@@ -1254,86 +1258,6 @@ class MapFusion(transformation.SingleStateTransformation):
             )
         return final_offset
 
-    def can_topologically_be_fused(
-        self,
-        first_map_entry: nodes.MapEntry,
-        second_map_entry: nodes.MapEntry,
-        graph: Union[dace.SDFGState, dace.SDFG],
-        sdfg: dace.SDFG,
-        permissive: bool = False,
-    ) -> Optional[Dict[str, str]]:
-        """Performs basic checks if the maps can be fused.
-
-        This function only checks constrains that are common between serial and
-        parallel map fusion process, which includes:
-        * The scope of the maps.
-        * The scheduling of the maps.
-        * The map parameters.
-
-        :return: If the maps can not be topologically fused the function returns `None`.
-            If they can be fused the function returns `dict` that describes parameter
-            replacement, see `find_parameter_remapping()` for more.
-
-        :param first_map_entry: The entry of the first (in serial case the top) map.
-        :param second_map_exit: The entry of the second (in serial case the bottom) map.
-        :param graph: The SDFGState in which the maps are located.
-        :param sdfg: The SDFG itself.
-        :param permissive: Currently unused.
-
-        :note: It is invalid to call this function after nodes have been removed from the SDFG.
-        """
-        if self.only_inner_maps and self.only_toplevel_maps:
-            raise ValueError(
-                "Only one of `only_inner_maps` and `only_toplevel_maps` is allowed per MapFusion instance."
-            )
-
-        # Ensure that both have the same schedule
-        if first_map_entry.map.schedule != second_map_entry.map.schedule:
-            return None
-
-        # Fusing is only possible if the two entries are in the same scope.
-        scope = graph.scope_dict()
-        if scope[first_map_entry] != scope[second_map_entry]:
-            return None
-        elif self.only_inner_maps:
-            if scope[first_map_entry] is None:
-                return None
-        elif self.only_toplevel_maps:
-            if scope[first_map_entry] is not None:
-                return None
-
-        # We will now check if we can rename the Map parameter of the second Map such that they
-        #  match the one of the first Map.
-        param_repl = find_parameter_remapping(
-            first_map=first_map_entry.map, second_map=second_map_entry.map
-        )
-        return param_repl
-
-    def is_parallel(
-        self,
-        graph: dace.SDFGState,
-        node1: nodes.Node,
-        node2: nodes.Node,
-    ) -> bool:
-        """Tests if `node1` and `node2` are parallel in the data flow graph.
-
-        The function considers two nodes parallel in the data flow graph, if `node2`
-        can not be reached from `node1` and vice versa. The function does not check
-        the scope of the nodes.
-
-        :param graph: The state on which we operate.
-        :param node1: The first node to check.
-        :param node2: The second node to check.
-        """
-        # The `all_nodes_between()` function traverse the graph and returns `None` if
-        #  `end` was not found. We have to call it twice, because we do not know
-        #  which node is upstream if they are not parallel.
-        if self.is_node_reachable_from(graph=graph, begin=node1, end=node2):
-            return False
-        elif self.is_node_reachable_from(graph=graph, begin=node2, end=node1):
-            return False
-        return True
-
     def has_inner_read_write_dependency(
         self,
         first_map_entry: nodes.MapEntry,
@@ -1745,40 +1669,6 @@ class MapFusion(transformation.SingleStateTransformation):
                 return True
 
         # The `data` is not used anywhere else, thus `data` is not shared.
-        return False
-
-    def is_node_reachable_from(
-        self,
-        graph: dace.SDFGState,
-        begin: nodes.Node,
-        end: nodes.Node,
-    ) -> bool:
-        """Test if the node `end` can be reached from `begin`.
-
-        Essentially the function starts a DFS at `begin`. If an edge is found that lead
-        to `end` the function returns `True`. If the node is never found `False` is
-        returned.
-
-        :param graph: The graph to operate on.
-        :param begin: The start of the DFS.
-        :param end: The node that should be located.
-        """
-
-        def next_nodes(node: nodes.Node) -> Iterable[nodes.Node]:
-            return (edge.dst for edge in graph.out_edges(node))
-
-        to_visit: List[nodes.Node] = [begin]
-        seen: Set[nodes.Node] = set()
-
-        while len(to_visit) > 0:
-            node: nodes.Node = to_visit.pop()
-            if node == end:
-                return True
-            elif node not in seen:
-                to_visit.extend(next_nodes(node))
-            seen.add(node)
-
-        # We never found `end`
         return False
 
     def _is_data_accessed_downstream(
