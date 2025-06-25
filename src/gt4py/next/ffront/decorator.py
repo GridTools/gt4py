@@ -54,6 +54,30 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
+def _implicit_offset_providers_from_types(types: list[ts.TypeSpec]) -> common.OffsetProvider:
+    """
+    Add all implicit offset providers.
+    Each dimension implicitly defines an offset provider such that we can allow syntax like::
+        field(TDim + 1)
+    This function adds these implicit offset providers.
+    """
+    # TODO(tehrengruber): We add all dimensions here regardless of whether they are cartesian
+    #  or unstructured. While it is conceptually fine, but somewhat meaningless,
+    #  to do something `Cell+1` the GTFN backend for example doesn't support these. We should
+    #  find a way to avoid adding these dimensions, but since we don't have the grid type here
+    #  and since the dimensions don't this information either, we just add all dimensions here
+    #  and filter them out in the backends that don't support this.
+    implicit_offset_provider = {}
+    for type_ in types:
+        if isinstance(type_, ts.FieldType):
+            for dim in type_.dims:
+                if dim.kind in (common.DimensionKind.HORIZONTAL, common.DimensionKind.VERTICAL):
+                    implicit_offset_provider.update(
+                        {common.dimension_to_implicit_offset(dim.value): dim}
+                    )
+    return implicit_offset_provider
+
+
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
@@ -236,32 +260,10 @@ class Program:
         return self._frontend_transforms.past_to_itir(no_args_past).data
 
     @functools.cached_property
-    def _implicit_offset_provider(self) -> dict[str, common.Dimension]:
-        """
-        Add all implicit offset providers.
-
-        Each dimension implicitly defines an offset provider such that we can allow syntax like::
-
-            field(TDim + 1)
-
-        This function adds these implicit offset providers.
-        """
-        # TODO(tehrengruber): We add all dimensions here regardless of whether they are cartesian
-        #  or unstructured. While it is conceptually fine, but somewhat meaningless,
-        #  to do something `Cell+1` the GTFN backend for example doesn't support these. We should
-        #  find a way to avoid adding these dimensions, but since we don't have the grid type here
-        #  and since the dimensions don't this information either, we just add all dimensions here
-        #  and filter them out in the backends that don't support this.
-        implicit_offset_provider = {}
-        params = self.past_stage.past_node.params
-        for param in params:
-            if isinstance(param.type, ts.FieldType):
-                for dim in param.type.dims:
-                    if dim.kind in (common.DimensionKind.HORIZONTAL, common.DimensionKind.VERTICAL):
-                        implicit_offset_provider.update(
-                            {common.dimension_to_implicit_offset(dim.value): dim}
-                        )
-        return implicit_offset_provider
+    def _implicit_offset_provider(self) -> common.OffsetProvider:
+        return _implicit_offset_providers_from_types(
+            [param.type for param in self.past_stage.past_node.params]
+        )
 
     @functools.cached_property
     def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
@@ -291,7 +293,11 @@ class Program:
             self._extended_offset_provider_cache[offset_provider] = extended_op
         return extended_op
 
-    def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
+    def __call__(
+        self, *args: Any, offset_provider: common.OffsetProvider | None = None, **kwargs: Any
+    ) -> None:
+        if offset_provider is None:
+            offset_provider = {}
         program_name = (
             f"{self.__name__}[{getattr(self.backend, 'name', '<embedded>')}]"
             if config.COLLECT_METRICS_LEVEL
@@ -451,12 +457,16 @@ class ProgramFromPast(Program):
     past_stage: ffront_stages.PastProgramDefinition
 
     @override
-    def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
+    def __call__(
+        self, *args: Any, offset_provider: Optional[common.OffsetProvider] = None, **kwargs: Any
+    ) -> None:
         if self.backend is None:
             raise NotImplementedError(
                 "Programs created from a PAST node (without a function definition) can not be executed in embedded mode"
             )
 
+        if offset_provider is None:
+            offset_provider = {}
         # TODO(ricoh): add test that does the equivalent of IDim + 1 in a ProgramFromPast
         self.backend(
             self.past_stage,
@@ -474,7 +484,11 @@ class ProgramWithBoundArgs(Program):
     bound_args: dict[str, float | int | bool] = dataclasses.field(default_factory=dict)
 
     @override
-    def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
+    def __call__(
+        self, *args: Any, offset_provider: common.OffsetProvider | None = None, **kwargs: Any
+    ) -> None:
+        if offset_provider is None:
+            offset_provider = {}
         type_ = self.past_stage.past_node.type
         assert isinstance(type_, ts_ffront.ProgramType)
         new_type = ts_ffront.ProgramType(
@@ -704,6 +718,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __gt_closure_vars__(self) -> dict[str, Any]:
         return self.foast_stage.closure_vars
 
+    @functools.cached_property
+    def _implicit_offset_provider(self) -> common.OffsetProvider:
+        return _implicit_offset_providers_from_types(
+            [param.type for param in self.foast_stage.foast_node.definition.params]
+        )
+
     def as_program(self, compiletime_args: arguments.CompileTimeArgs) -> Program:
         foast_with_types = (
             toolchain.CompilableProgram(
@@ -727,10 +747,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
-            if "offset_provider" not in kwargs:
-                raise errors.MissingArgumentError(None, "offset_provider", True)
-            offset_provider = kwargs.pop("offset_provider")
-
+            offset_provider = {
+                **kwargs.pop("offset_provider", {}),
+                **self._implicit_offset_provider,
+            }
             if "out" not in kwargs:
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
@@ -749,6 +769,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 **kwargs,
             )
         else:
+            if not next_embedded.context.within_valid_context():
+                # field_operator as program
+                kwargs["offset_provider"] = {
+                    **kwargs.pop("offset_provider", {}),
+                    **self._implicit_offset_provider,
+                }
             attributes = (
                 self.definition_stage.attributes
                 if self.definition_stage
