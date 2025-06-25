@@ -77,7 +77,7 @@ def test_concat_where_scalar_broadcast(cartesian_case):
     ref = np.concatenate(
         (
             np.full((*out.domain.shape[0:2], out.domain.shape[2] - 1), a),
-            b.asnumpy()[:,:,-1:],
+            b.asnumpy()[:, :, -1:],
         ),
         axis=2,
     )
@@ -93,7 +93,7 @@ def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case):
     b = cases.allocate(cartesian_case, testee, "b")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN, domain=b.domain.slice_at[:, :, 1:])()
 
-    ref = b.asnumpy()[:,:,1:]
+    ref = b.asnumpy()[:, :, 1:]
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
