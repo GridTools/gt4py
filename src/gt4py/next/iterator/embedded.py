@@ -1698,6 +1698,14 @@ def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[
         false_branch()
 
 
+@runtime.temporary.register(EMBEDDED)
+def temporary(domain: runtime.CartesianDomain | runtime.UnstructuredDomain, dtype):
+    type_ = runtime._dtypebuiltin_to_ts(dtype)
+    new_domain = common.domain(domain)
+    tmp = field_utils.field_from_typespec(type_, new_domain, np)
+    return tmp
+
+
 def _compute_at_position(
     sten: Callable,
     ins: Sequence[common.Field],
