@@ -275,14 +275,16 @@ class TestHashableTypings:
 
         assert isinstance(A(), xtyping.HasCustomHash)
 
+        # PEP-683 Immortal objects have custom hash
+        assert isinstance(None, xtyping.HasCustomHash) == (sys.version_info >= (3, 12))
+        assert isinstance(True, xtyping.HasCustomHash) == (sys.version_info >= (3, 12))
+
         class B:
             __hash__ = None
 
         assert not isinstance(B(), xtyping.HasCustomHash)
 
-        assert not isinstance(None, xtyping.HasCustomHash)
         assert not isinstance(object(), xtyping.HasCustomHash)
-        assert not isinstance(tuple, xtyping.HasCustomHash)
         assert not isinstance(type, xtyping.HasCustomHash)
 
 

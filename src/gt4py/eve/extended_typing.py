@@ -384,7 +384,7 @@ _NoneType = _types.NoneType  # type: ignore[valid-type] # NoneType should not be
 
 
 def is_type_with_custom_hash(type_: Type) -> bool:
-    return type_.__hash__ not in (None, object.__hash__, _NoneType.__hash__)
+    return type_.__hash__ not in (object.__hash__, None)
 
 
 class HasCustomHash(Hashable):
