@@ -65,6 +65,38 @@ def test_concat_where_non_overlapping(cartesian_case):
     cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
 
 
+def test_concat_where_scalar_broadcast(cartesian_case):
+    @gtx.field_operator
+    def testee(a: np.int32, b: cases.IJKField, N: np.int32) -> cases.IJKField:
+        return concat_where(KDim < N - 1, a, b)
+
+    a = 3
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    ref = np.concatenate(
+        (
+            np.full((*out.domain.shape[0:2], out.domain.shape[2] - 1), a),
+            b.asnumpy()[:, :, -1:],
+        ),
+        axis=2,
+    )
+    cases.verify(cartesian_case, testee, a, b, cartesian_case.default_sizes[KDim], out=out, ref=ref)
+
+
+def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case):
+    @gtx.field_operator
+    def testee(a: np.int32, b: cases.IJKField) -> cases.IJKField:
+        return concat_where(KDim == 0, a, b)
+
+    a = 3
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN, domain=b.domain.slice_at[:, :, 1:])()
+
+    ref = b.asnumpy()[:, :, 1:]
+    cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
+
+
 def test_concat_where_single_level_broadcast(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:
@@ -141,6 +173,21 @@ def test_boundary_single_layer_2d_bc(cartesian_case):
         interior.asnumpy(),
     )
 
+    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
+
+
+def test_boundary_single_layer_2d_bc_on_empty_branch(cartesian_case):
+    @gtx.field_operator
+    def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
+        return concat_where(KDim == 0, boundary, interior)
+
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(
+        cartesian_case, testee, cases.RETURN, domain=interior.domain.slice_at[:, :, 1:]
+    )()
+
+    ref = interior.asnumpy()[:, :, 1:]
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
@@ -271,6 +318,28 @@ def test_with_tuples(cartesian_case):
         out=out,
         ref=(ref0, ref1),
     )
+
+
+def test_nested_conditions_with_empty_branches(cartesian_case):
+    @gtx.field_operator
+    def testee(interior: cases.IField, boundary: cases.IField, N: gtx.int32) -> cases.IField:
+        interior = concat_where(IDim == 0, boundary, interior)
+        interior = concat_where((1 <= IDim) & (IDim < N - 1), interior * 2, interior)
+        interior = concat_where(IDim == N - 1, boundary, interior)
+        return interior
+
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    N = cartesian_case.default_sizes[IDim]
+
+    i = np.arange(0, cartesian_case.default_sizes[IDim])
+    ref = np.where(
+        (i[:] == 0) | (i[:] == N - 1),
+        boundary.asnumpy(),
+        interior.asnumpy() * 2,
+    )
+    cases.verify(cartesian_case, testee, interior, boundary, N, out=out, ref=ref)
 
 
 @pytest.mark.uses_tuple_returns
