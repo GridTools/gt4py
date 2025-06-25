@@ -383,7 +383,7 @@ class SDFGManager:
 
     def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]):
         frozen_hash = shash(origin, domain)
-        basename = self.builder.module_path.stem
+        basename = self.builder.module_path.with_suffix("")
         path = f"{basename}_{frozen_hash}.sdfg"
 
         # check if same sdfg already cached on disk
