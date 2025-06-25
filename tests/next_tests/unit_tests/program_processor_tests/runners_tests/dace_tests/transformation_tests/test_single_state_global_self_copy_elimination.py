@@ -433,15 +433,13 @@ def _make_concat_where_like_41_to_60(
     return sdfg, state, g1, t, g2, c1, c2
 
 
-def _make_concat_where_like_not_possible() -> (
-    tuple[
-        dace.SDFG,
-        dace.SDFGState,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-    ]
-):
+def _make_concat_where_like_not_possible() -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+]:
     """Because the "Bulk Map" writes more into `tmp` than is written back
     the transformation is not applicable.
     """
@@ -488,15 +486,13 @@ def _make_concat_where_like_not_possible() -> (
     return sdfg, state, g1, t, g2
 
 
-def _make_multi_t_patch_sdfg() -> (
-    tuple[
-        dace.SDFG,
-        dace.SDFGState,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-    ]
-):
+def _make_multi_t_patch_sdfg() -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+]:
     """An SDFG where the initialization of `tmp` is not a single transaction.
 
     Note that the content of the temporary in the patch `[2:10, 9]` is
