@@ -375,7 +375,7 @@ class SDFGManager:
         return copy.deepcopy(self._expanded_sdfg())
 
     def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]):
-        basename = self.builder.module_path.stem
+        basename = self.builder.module_path.with_suffix("")
         path = f"{basename}_{shash(origin, domain)}.sdfg"
 
         # check if same sdfg already cached on disk
