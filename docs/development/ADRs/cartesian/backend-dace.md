@@ -1,6 +1,6 @@
 # DaCe backend
 
-In the context of performance optimization, facing the [fragmentedness] of NWP code, we decided to implemented a backend based on DaCe to unlock full-program optimization. We accept the need to downside of having to maintain that (additional) performance backend.
+In the context of performance optimization, facing the fragmentedness of NWP code, we decided to implemented a backend based on DaCe to unlock full-program optimization. We accept the need to downside of having to maintain that (additional) performance backend.
 
 ## Context
 
@@ -12,7 +12,7 @@ We chose to add DaCe backends,`dace:cpu` and `dace:gpu`, for CPU and GPU targets
 
 ## Consequences
 
-We will need to maintain the `dace:*` backends. If we keep adding more and more backend, maintainability will be a question down the road.
+We will need to maintain the `dace:*` backends. If we keep adding more and more backend, maintainability will be a question down the road. We thus decided to put a [feature freeze](./backend-cuda-feature-freeze.md) on the `cuda` backend, focussing on `dace:*` backends instead.
 
 ## Alternatives considered
 

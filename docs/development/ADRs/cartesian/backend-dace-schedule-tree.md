@@ -51,9 +51,9 @@ The subsequent conversion from Tree IR to schedule tree is a straight forward vi
 
 ## Consequences
 
-What it now easier to do? What becomes more difficult with this change?
+The schedule tree introduces a transpilation layer ideally suited for macro-level optimizations, which are targeting the program's execution schedule. This is particularly interesting for the DaCe backends because we use the same backend pipeline to generate code for CPU and GPU targets.
 
-Describe the positive (e.g., improvement of quality attribute satisfaction, follow-up decisions required, ...) as well as the negative (e.g., compromising quality attribute, follow-up decisions required, ...) outcomes of this decision.
+In particular, the schedule tree allows to easily re-order/modify/change the loop structure. This not only allows us to generate hardware-specific loop order and tile-sizes, but also gives us fine grained control of loop merges and which which loops to generate in the first place. For example, going directly from OIR to Tree IR allows us to translate horizontal regions to either `if` statements inside a bigger horizontal loop (for small regions) or break them out into separate loops (for bigger regions) if that makes sense for the target architecture.
 
 ## Alternatives considered
 
@@ -71,7 +71,3 @@ GT4Py next has gone this route and an improved version is merged in the mainline
 ### Write custom map fusion based on SDFG syntax
 
 Possible, but a lot more cumbersome than writing the same transformation based on the schedule tree syntax.
-
-## References
-
-If it helps, add references e.g. to issues and/or other planning documents.
