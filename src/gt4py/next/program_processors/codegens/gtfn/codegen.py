@@ -235,14 +235,14 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         assert node.domain.tagged_offsets.tags == node.domain.tagged_sizes.tags
         tags = node.domain.tagged_offsets.tags
 
-        new_offsets = [
+        origins = [
             gtfn_ir.UnaryExpr(op="-", expr=offset) for offset in node.domain.tagged_offsets.values
         ]
 
         return self.generic_visit(
             node,
             tmp_sizes=self.visit(node.domain.tagged_sizes, **kwargs),
-            shifts=self.visit(gtfn_ir.TaggedValues(tags=tags, values=new_offsets), **kwargs),
+            shifts=self.visit(gtfn_ir.TaggedValues(tags=tags, values=origins), **kwargs),
             **kwargs,
         )
 
