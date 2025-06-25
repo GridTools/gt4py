@@ -247,6 +247,10 @@ class HorizontalSplitMapRange(SplitMapRange):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
+        if consolidate_edges_only_if_not_extending is not None:
+            self.consolidate_edges_only_if_not_extending = consolidate_edges_only_if_not_extending
+        if never_consolidate_edges is not None:
+            self.never_consolidate_edges = never_consolidate_edges
 
     @classmethod
     def expressions(cls) -> Any:
@@ -318,7 +322,7 @@ class HorizontalSplitMapRange(SplitMapRange):
                     matching_maps.append(
                         (first_map_entry, first_map_exit, second_map_entry, second_map_exit)
                     )
-        
+
         # We have to get the scope_dict before we start mutating the graph.
         scope_dict: Dict = graph.scope_dict().copy()
 
