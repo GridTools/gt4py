@@ -380,8 +380,10 @@ def get_actual_type(obj: _T) -> Type[_T]:
     return StdGenericAliasType if isinstance(obj, StdGenericAliasType) else type(obj)
 
 
+_NoneType = _types.NoneType
+
 def is_type_with_custom_hash(type_: Type) -> bool:
-    return type_.__hash__ not in (None, object.__hash__)
+    return type_.__hash__ not in (None, object.__hash__, _NoneType.__hash__)
 
 
 class HasCustomHash(Hashable):
