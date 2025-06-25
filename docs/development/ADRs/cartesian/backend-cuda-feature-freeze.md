@@ -1,4 +1,4 @@
-# Cuda backend: feature freeze
+# Cuda backend: Feature freeze
 
 In the context of (backend) feature development, facing maintainability/duplication concerns, we decided to put a feature freeze on the `cuda` backend and focus on the `dace:gpu` backends instead to keep the number of backends manageable.
 
@@ -6,7 +6,7 @@ In the context of (backend) feature development, facing maintainability/duplicat
 
 The introduction of the [`dace:*`](./backend-dace.md) backends brought up the question of backend redundancy. In particular, it seems that `cuda` and `dace:gpu` backends serve similar purposes.
 
-`dace:gpu` backends not only generate code for different graphics cards, they also share big substantial code paths with the `dace:cpu` backend. This simplifies (backend) feature development.
+`dace:gpu` backends not only generate code for different graphics cards, they also share substantial code paths with the `dace:cpu` backend. This simplifies (backend) feature development.
 
 ## Decision
 
