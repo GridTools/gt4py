@@ -32,12 +32,7 @@ from .multi_state_global_self_copy_elimination import (
     MultiStateGlobalSelfCopyElimination2,
     gt_multi_state_global_self_copy_elimination,
 )
-from .redundant_array_removers import (
-    CopyChainRemover,
-    SingleStateGlobalDirectSelfCopyElimination,
-    SingleStateGlobalSelfCopyElimination,
-    gt_remove_copy_chain,
-)
+from .redundant_array_removers import CopyChainRemover, gt_remove_copy_chain
 from .serial_map_promoter import SerialMapPromoter
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
@@ -47,6 +42,10 @@ from .simplify import (
     gt_reduce_distributed_buffering,
     gt_simplify,
     gt_substitute_compiletime_symbols,
+)
+from .single_state_global_self_copy_elimination import (
+    SingleStateGlobalDirectSelfCopyElimination,
+    SingleStateGlobalSelfCopyElimination,
 )
 from .split_access_nodes import SplitAccessNode, gt_split_access_nodes
 from .split_memlet import SplitConsumerMemlet
