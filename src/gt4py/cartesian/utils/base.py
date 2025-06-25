@@ -22,7 +22,7 @@ import sys
 import time
 import types
 import warnings
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeGuard, TypeVar
 
 from gt4py.cartesian import config as gt_config
 
@@ -42,7 +42,7 @@ def jsonify(value, indent=2):
     return json.dumps(value, indent=indent, default=lambda obj: str(obj))
 
 
-def is_identifier_name(value: Any, namespaced: bool = True) -> bool:
+def is_identifier_name(value: object, namespaced: bool = True) -> TypeGuard[str]:
     if isinstance(value, str):
         if namespaced:
             return all(name.isidentifier() for name in value.split("."))
