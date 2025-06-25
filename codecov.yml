@@ -5,30 +5,30 @@ flag_management:
   default_rules:
     carryforward: true
     statuses:
-    - type: project
-      target: auto
-      threshold: 0%
-    - type: patch
-      target: 0%
+      - type: project
+        target: auto
+        threshold: 0%
+      - type: patch
+        target: 0%
   individual_flags:
-  - name: gt4py-all
-    paths:
-    - src/functional
-    carryforward: true
-    statuses:
-    - type: project
-      target: 85%
-    - type: patch
-      target: 0%
-  - name: eve-all
-    paths:
-    - src/eve
-    carryforward: true
-    statuses:
-    - type: project
-      target: 85%
-    - type: patch
-      target: 0%
+    - name: gt4py-all
+      paths:
+        - src/functional
+      carryforward: true
+      statuses:
+        - type: project
+          target: 85%
+        - type: patch
+          target: 0%
+    - name: eve-all
+      paths:
+        - src/eve
+      carryforward: true
+      statuses:
+        - type: project
+          target: 85%
+        - type: patch
+          target: 0%
 
 comment:
   layout: "reach,diff,flags,files,footer"

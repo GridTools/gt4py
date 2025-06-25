@@ -215,9 +215,9 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                     if first_scope_dict[dnode] is None and first_subgraph.out_degree(dnode) != 0
                 }
             )
-            assert all_data_producers.isdisjoint(
-                data_producers[-1]
-            ), "Found multiple AccessNodes that writes to data in one state."
+            assert all_data_producers.isdisjoint(data_producers[-1]), (
+                "Found multiple AccessNodes that writes to data in one state."
+            )
             all_data_producers.update(data_producers[-1])
 
         # Now determine the concurrent subgraphs of the second state, i.e. the parts

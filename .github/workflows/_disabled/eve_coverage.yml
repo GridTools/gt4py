@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: ["Eve / Test"]
     types:
-    - completed
+      - completed
 
 jobs:
   upload:
