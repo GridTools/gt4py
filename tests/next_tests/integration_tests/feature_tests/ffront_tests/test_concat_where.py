@@ -176,6 +176,21 @@ def test_boundary_single_layer_2d_bc(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
+def test_boundary_single_layer_2d_bc_on_empty_branch(cartesian_case):
+    @gtx.field_operator
+    def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
+        return concat_where(KDim == 0, boundary, interior)
+
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(
+        cartesian_case, testee, cases.RETURN, domain=interior.domain.slice_at[:, :, 1:]
+    )()
+
+    ref = interior.asnumpy()[:, :, 1:]
+    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
+
+
 def test_dimension_two_nested_conditions(cartesian_case):
     @gtx.field_operator
     def testee(interior: cases.IJKField, boundary: cases.IJKField) -> cases.IJKField:

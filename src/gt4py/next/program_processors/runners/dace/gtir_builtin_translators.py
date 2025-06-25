@@ -625,10 +625,7 @@ def _make_concat_field_slice(
     dims = [*f.gt_type.dims[:concat_dim_index], concat_dim, *f.gt_type.dims[concat_dim_index:]]
     origin = tuple([*f.origin[:concat_dim_index], concat_dim_origin, *f.origin[concat_dim_index:]])
     shape = tuple([*f_desc.shape[:concat_dim_index], 1, *f_desc.shape[concat_dim_index:]])
-    strides = tuple([*f_desc.strides[:concat_dim_index], 1, *f_desc.strides[concat_dim_index:]])
-    slice_data, slice_data_desc = sdfg.add_view(
-        f"view_{f.dc_node.data}", shape, f_desc.dtype, strides=strides, find_new_name=True
-    )
+    slice_data, slice_data_desc = sdfg.add_temp_transient(shape, f_desc.dtype)
     slice_node = state.add_access(slice_data)
     state.add_nedge(
         f.dc_node,
@@ -765,7 +762,6 @@ def translate_concat_where(
             upper_bound = output_domain[concat_dim_index][2]
             upper_domain = [(concat_dim, concat_dim_bound, upper_bound)]
 
-        is_lower_slice, is_upper_slice = (False, False)
         if concat_dim not in lower.gt_type.dims:
             assert lower.gt_type.dims == [
                 *upper.gt_type.dims[0:concat_dim_index],
@@ -774,7 +770,10 @@ def translate_concat_where(
             lower, lower_desc = _make_concat_field_slice(
                 sdfg, state, lower, lower_desc, concat_dim, concat_dim_index, concat_dim_bound - 1
             )
-            is_lower_slice = True
+            lower_bound = dace.symbolic.pystr_to_symbolic(
+                f"max({concat_dim_bound - 1}, {output_domain[concat_dim_index][1]})"
+            )
+            lower_domain.insert(concat_dim_index, (concat_dim, lower_bound, concat_dim_bound))
         elif concat_dim not in upper.gt_type.dims:
             assert upper.gt_type.dims == [
                 *lower.gt_type.dims[0:concat_dim_index],
@@ -783,7 +782,10 @@ def translate_concat_where(
             upper, upper_desc = _make_concat_field_slice(
                 sdfg, state, upper, upper_desc, concat_dim, concat_dim_index, concat_dim_bound
             )
-            is_upper_slice = True
+            upper_bound = dace.symbolic.pystr_to_symbolic(
+                f"min({concat_dim_bound + 1}, {output_domain[concat_dim_index][2]})"
+            )
+            upper_domain.insert(concat_dim_index, (concat_dim, concat_dim_bound, upper_bound))
         elif len(lower.gt_type.dims) == 1:
             assert len(lower_domain) == 1 and lower_domain[0][0] == concat_dim
             lower_domain = [
@@ -812,25 +814,16 @@ def translate_concat_where(
         # ensure that the arguments have the same domain as the concat result
         assert all(ftype.dims == output_dims for ftype in (lower.gt_type, upper.gt_type))
 
-        # the lower/upper range to be copied is defined by the start ('range_0') and stop ('range_1') indices
-        if is_lower_slice:
-            lower_range_0 = lower.origin[concat_dim_index]
-            lower_range_1 = lower_range_0 + 1
-        else:
-            lower_range_0 = lower_domain[concat_dim_index][1]
-            lower_range_1 = dace.symbolic.pystr_to_symbolic(
-                f"max({lower_range_0}, {lower_domain[concat_dim_index][2]})"
-            )
+        lower_range_0 = lower_domain[concat_dim_index][1]
+        lower_range_1 = dace.symbolic.pystr_to_symbolic(
+            f"max({lower_range_0}, {lower_domain[concat_dim_index][2]})"
+        )
         lower_range_size = lower_range_1 - lower_range_0
 
-        if is_upper_slice:
-            upper_range_0 = upper.origin[concat_dim_index]
-            upper_range_1 = upper_range_0 + 1
-        else:
-            upper_range_0 = upper_domain[concat_dim_index][1]
-            upper_range_1 = dace.symbolic.pystr_to_symbolic(
-                f"max({upper_range_0}, {upper_domain[concat_dim_index][2]})"
-            )
+        upper_range_0 = upper_domain[concat_dim_index][1]
+        upper_range_1 = dace.symbolic.pystr_to_symbolic(
+            f"max({upper_range_0}, {upper_domain[concat_dim_index][2]})"
+        )
         upper_range_size = upper_range_1 - upper_range_0
 
         output, output_desc = sdfg_builder.add_temp_array(sdfg, output_shape, lower_desc.dtype)
