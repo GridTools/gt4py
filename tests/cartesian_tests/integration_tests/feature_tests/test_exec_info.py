@@ -277,7 +277,3 @@ class TestExecInfo:
         self.subtest_stencil_info(
             exec_info, exec_info[type(self.diffusion).__name__], last_called_stencil=True
         )
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])

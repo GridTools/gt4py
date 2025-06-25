@@ -13,7 +13,7 @@ import typing
 import numpy as np
 import pytest
 
-from gt4py.next import errors, common, constructors
+from gt4py.next import errors
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import broadcast, int32
 
@@ -53,9 +53,7 @@ def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[s
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    testee.with_backend(cartesian_case.backend)(
-        *pos_args, **kw_args, out=out, offset_provider=cartesian_case.offset_provider
-    )
+    testee.with_backend(cartesian_case.backend)(*pos_args, **kw_args, out=out)
 
     expected = args["a"] * 2 * args["b"] - args["c"]
 
@@ -79,9 +77,7 @@ def test_call_program_from_python(cartesian_case, arg_spec):
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    testee.with_backend(cartesian_case.backend)(
-        *pos_args, **kw_args, offset_provider=cartesian_case.offset_provider
-    )
+    testee.with_backend(cartesian_case.backend)(*pos_args, **kw_args)
 
     expected = args["a"] + 2 * args["b"]
 
