@@ -82,7 +82,7 @@ def from_type_hint(
 
     canonical_type = (
         typing.get_origin(type_hint)
-        if isinstance(type_hint, types.GenericAlias) or type(type_hint).__module__ == "typing"
+        if isinstance(type_hint, (types.GenericAlias, typing._GenericAlias))  # type: ignore[attr-defined] # looks like `_GenericAlias`` exists...
         else type_hint
     )
     args = typing.get_args(type_hint)
