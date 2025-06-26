@@ -56,10 +56,9 @@ ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
 ARG EXTRA_BUILD_ENV_VARS="" 
 ARG EXTRA_UV_SYNC=""
 RUN --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    <<EOF
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml <<EOF
 if [[ ! -z "${EXTRA_BUILD_ENV_VARS}" ]]; then
-    eval "export $EXTRA_BUILD_ENV_VARS"
+    eval "export ${EXTRA_BUILD_ENV_VARS}"
 fi
 uv pip install --compile-bytecode setuptools wheel pip
 uv sync --compile-bytecode --frozen --no-install-project \
@@ -70,3 +69,7 @@ uv sync --compile-bytecode --frozen --no-install-project \
     --extra testing \
      ${EXTRA_UV_SYNC}
 EOF
+
+# Add the repository to the workspace
+ARG GT4PY_REPO="https://github.com/gridtools/gt4py"
+ADD --keep-git-dir=true ${GT4PY_REPO} /workspace/gt4py

@@ -7,9 +7,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 #
+
 include:
   - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
-  - local: 'ci/tds-ci-config.yml'
+  - local: 'ci/cscs-ci-ext-config.yml'
 
 variables:  # Default variables for all jobs
   CUDA_VERSION: '12.6.2'
@@ -17,21 +18,22 @@ variables:  # Default variables for all jobs
   UBUNTU_VERSION: '24.04'
 
 stages:
-  - build_base
+  - build
   - test
 
 .build_base_common:
-  stage: build_base
+  stage: build
   # Default variables for base image builds
   variables:
     BASE_IMAGE: docker.io/ubuntu:${UBUNTU_VERSION}
     # CSCS_REBUILD_POLICY: 'always' => rebuild even if target tag exists already
     # (if-not-exists is the default, i.e. we could also skip the variable)
     CSCS_REBUILD_POLICY: if-not-exists
-    DOCKERFILE: ci/base.Dockerfile
+    DOCKERFILE: ci/Dockerfile
     DOCKER_BUILD_ARGS: '[ "BASE_IMAGE", "EXTRA_APTGET", "EXTRA_UV_SYNC", "PY_VERSION" "UV_VERSION" ]'
     EXTRA_APTGET: ""
     EXTRA_UV_SYNC: ""
+    PY_VERSION: '3.10'
     UV_VERSION: '0.6.12'
   before_script:
     # We create a tag that depends on the SHA value of ci/base.Dockerfile,
@@ -42,19 +44,17 @@ stages:
     # and build arguments changes.
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
     - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/public/$ARCH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
-    - echo "BASE_IMAGE_${PYVERSION_PREFIX}=$PERSIST_IMAGE_NAME" >> build.env
-    - my_script > dynamic_pipeline.yml
-  # after_script:
-  #   - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
-  #   - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/public/$ARCH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
-  #   - echo "BASE_IMAGE_${PYVERSION_PREFIX}=$PERSIST_IMAGE_NAME" >> build.env
-  #   - my_script > dynamic_pipeline.yml
+    - echo "BASE_IMAGE_${PY_VERSION}=$PERSIST_IMAGE_NAME" >> build.env
+  after_script:
+    # Just for testing for now 
+    - cp ci/cscs-test-template > generated_cscs_test_pipeline.yml
   artifacts:
     # Since the base image name becomes runtime dependent, we need to carry the
     # value of it to the following jobs via the 'build.env' dotenv file.
     reports:
-      dotenv: build.env
-      #  dynamic_pipeline.yml
+      dotenv: build_base.env
+    paths:
+      - generated_cscs_test_pipeline
 
 .build_with_cuda_extra:
   variables:
@@ -68,25 +68,6 @@ stages:
     EXTRA_UV_SYNC:
       - "--extra rocm6"
     #ENV CUPY_INSTALL_USE_HIP=1
-
-build_base_cscs_gh200:
-  extends:
-    - .container-builder-cscs-gh200
-    - .build_base_common
-    - .build_with_cuda_extra
-
-.build_base_cscs_amd_cuda:
-  extends:
-    - .container-builder-cscs-zen2
-    - .build_base_common
-    - .build_with_cuda_extra
-
-.build_base_cscs_amd_rocm:
-  extends:
-    - .container-builder-cscs-zen2
-    - .build_base_common
-    - .build_with_rocm_extra
-
 
 .test_base:
   stage: test
@@ -104,39 +85,10 @@ build_base_cscs_gh200:
     CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 20
-    PYENV_VERSION: $PYVERSION
-    VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
-    CI_NOX_VERBOSE: 1
 
-.test_helper_aarch64:
-  extends: [.container-runner-santis-gh200, .test_helper]
-  parallel:
-    matrix:
-      - SUBPACKAGE: [cartesian]
-        VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'cpu']
-      - SUBPACKAGE: eve
-      - SUBPACKAGE: next
-        VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'cpu']
-        DETAIL: ['nomesh', 'atlas']
-      - SUBPACKAGE: [storage]
-        VARIANT: ['cuda12', 'cpu']
-  variables:
-    # TODO: Fix issue with compile parallelism that causes tests to hang
-    GT4PY_BUILD_JOBS: 2
-    # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
-    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
-
-test_py311_aarch64:
-  extends: [.test_helper_aarch64]
-  needs: [build_py311_image_aarch64]
-  variables:
-    <<: *py311
-
-
-test_py310_aarch64:
-  extends: [.test_helper_aarch64]
-  needs: [build_py310_image_aarch64]
-  variables:
-    <<: *py310
+.test_trigger_base:
+  stage: test
+  trigger:
+    strategy: depend
+    forward:
+      pipeline_variables: true

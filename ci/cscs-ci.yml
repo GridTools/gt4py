@@ -1,0 +1,71 @@
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+include:
+  - local: 'ci/cscs-common.yml'
+
+# build_base_cscs_gh200:
+#   extends:
+#     - .container-builder-cscs-gh200
+#     - .build_base_common
+#     - .build_with_cuda_extra
+#   variables:
+#     RUNNER_BASE: .container-runner-santis-gh200
+
+# build_base_cscs_amd_cuda:
+#   extends:
+#     - .container-builder-cscs-zen2
+#     - .build_base_common
+#     - .build_with_cuda_extra
+#   variables:
+#     RUNNER_BASE: .container-runner-santis-zen2
+
+build_base_cscs_amd_rocm:
+  extends:
+    - .container-builder-cscs-zen2
+    - .build_base_common
+    - .build_with_rocm_extra
+  variables:
+    RUNNER_KEY: .tds-container-runner-beverin-mi200
+
+# test_cscs_gh200:
+#   stage: test
+#   extends:
+#     - .container-runner-santis-gh200
+#     - .test_trigger_base
+#   needs:
+#     - build_base_cscs_gh200
+#   trigger:
+#     include:
+#       - artifact: generated_test_pipeline.yml
+#         job: build_base_cscs_gh200
+
+# test_cscs_amd_cuda:
+#   stage: test
+#   extends:
+#     - .container-runner-santis-zen2
+#     - .test_trigger_base
+#   needs:
+#     - build_base_cscs_amd_cuda
+#   trigger:
+#     include:
+#       - artifact: generated_test_pipeline.yml
+#         job: build_base_cscs_amd_cuda
+
+test_cscs_amd_rocm:
+  stage: test
+  extends:
+    - .tds-container-runner-beverin-mi200
+    - .test_trigger_base
+  needs:
+    - build_base_cscs_amd_rocm
+  trigger:
+    include:
+      - artifact: generated_test_pipeline.yml
+        job: build_base_cscs_amd_rocm
