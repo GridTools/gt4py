@@ -329,14 +329,6 @@ class HorizontalSplitMapRange(SplitMapRange):
         scope_dict: Dict = graph.scope_dict().copy()
 
         for first_map_entry, first_map_exit, second_map_entry, second_map_exit in matching_maps:
-            # Before we do anything we perform the renaming, i.e. we will rename the
-            #  parameters of the second map such that they match the one of the first map.
-            rename_map_parameters(
-                first_map=first_map_entry.map,
-                second_map=second_map_entry.map,
-                second_map_entry=second_map_entry,
-                state=graph,
-            )
             if scope_dict[first_map_entry] != scope_dict[second_map_entry]:
                 return
             if not is_parallel(graph=graph, node1=first_map_entry, node2=second_map_entry):
@@ -352,6 +344,15 @@ class HorizontalSplitMapRange(SplitMapRange):
             )
             if param_repl is None:
                 return False
+
+            # Before we do anything we perform the renaming, i.e. we will rename the
+            #  parameters of the second map such that they match the one of the first map.
+            rename_map_parameters(
+                first_map=first_map_entry.map,
+                second_map=second_map_entry.map,
+                second_map_entry=second_map_entry,
+                state=graph,
+            )
 
             # Now we relocate all connectors from the second to the first map and remove
             #  the respective node of the second map.
