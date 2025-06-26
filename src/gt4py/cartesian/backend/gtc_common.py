@@ -185,7 +185,7 @@ class BackendCodegen:
         pass
 
     @abc.abstractmethod
-    def __call__(self, ir: gtir.Stencil) -> dict[str, dict[str, str]]:
+    def __call__(self) -> dict[str, dict[str, str]]:
         """Return a dict with the keys 'computation' and 'bindings' to dicts of filenames to source."""
         pass
 
@@ -294,7 +294,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             else f"{self.builder.options.name}_pyext"
         )
         gt_pyext_generator = self.PYEXT_GENERATOR_CLASS(class_name, module_name, self)
-        gt_pyext_sources = gt_pyext_generator(self.builder.gtir)
+        gt_pyext_sources = gt_pyext_generator()
         final_ext = ".cu" if self.languages and self.languages["computation"] == "cuda" else ".cpp"
         comp_src = gt_pyext_sources["computation"]
         for key in [k for k in comp_src.keys() if k.endswith(".src")]:

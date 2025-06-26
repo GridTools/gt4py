@@ -407,14 +407,14 @@ class DaCeExtGenerator(BackendCodegen):
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, stencil_ir: gtir.Stencil) -> dict[str, dict[str, str]]:
+    def __call__(self) -> dict[str, dict[str, str]]:
         manager = SDFGManager(self.backend.builder)
         sdfg = manager.expanded_sdfg()
 
-        implementation = DaCeComputationCodegen.apply(stencil_ir, self.backend.builder, sdfg)
+        implementation = DaCeComputationCodegen.apply(self.backend.builder, sdfg)
 
         bindings = DaCeBindingsCodegen.apply(
-            stencil_ir, sdfg, module_name=self.module_name, backend=self.backend
+            sdfg, module_name=self.module_name, backend=self.backend
         )
 
         bindings_ext = "cu" if self.backend.storage_info["device"] == "gpu" else "cpp"
@@ -518,7 +518,7 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
         return "\n".join(filter(keep_line, lines))
 
     @classmethod
-    def apply(cls, stencil_ir: gtir.Stencil, builder: StencilBuilder, sdfg: dace.SDFG):
+    def apply(cls, builder: StencilBuilder, sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
             # To prevent conflict with 3rd party usage of DaCe config always make sure that any
@@ -547,7 +547,7 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
         interface = cls.template.definition.render(
             name=sdfg.name,
             backend_specifics=omp_threads,
-            dace_args=self.generate_dace_args(stencil_ir, sdfg),
+            dace_args=self.generate_dace_args(builder.gtir, sdfg),
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
@@ -651,7 +651,7 @@ namespace gt = gridtools;
 
 
 class DaCeBindingsCodegen:
-    def __init__(self, backend):
+    def __init__(self, backend: BaseDaceBackend):
         self.backend = backend
         self._unique_index: int = 0
 
@@ -661,7 +661,7 @@ class DaCeBindingsCodegen:
 
     mako_template = bindings_main_template()
 
-    def generate_entry_params(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG) -> list[str]:
+    def generate_entry_params(self, sdfg: dace.SDFG) -> list[str]:
         res: dict[str, str] = {}
 
         for name in sdfg.signature_arglist(with_types=False, for_call=True):
@@ -679,7 +679,7 @@ class DaCeBindingsCodegen:
                 )
             elif name in sdfg.symbols and not name.startswith("__"):
                 res[name] = f"{sdfg.symbols[name].ctype} {name}"
-        return list(res[node.name] for node in stencil_ir.params if node.name in res)
+        return list(res[node.name] for node in self.backend.builder.gtir.params if node.name in res)
 
     def generate_sid_params(self, sdfg: dace.SDFG) -> list[str]:
         res: list[str] = []
@@ -708,19 +708,17 @@ class DaCeBindingsCodegen:
             res.append(name)
         return res
 
-    def generate_sdfg_bindings(self, stencil_ir: gtir.Stencil, sdfg, module_name) -> str:
+    def generate_sdfg_bindings(self, sdfg, module_name) -> str:
         return self.mako_template.render_values(
             name=sdfg.name,
             module_name=module_name,
-            entry_params=self.generate_entry_params(stencil_ir, sdfg),
+            entry_params=self.generate_entry_params(sdfg),
             sid_params=self.generate_sid_params(sdfg),
         )
 
     @classmethod
-    def apply(cls, stencil_ir: gtir.Stencil, sdfg: dace.SDFG, module_name: str, *, backend) -> str:
-        generated_code = cls(backend).generate_sdfg_bindings(
-            stencil_ir, sdfg, module_name=module_name
-        )
+    def apply(cls, sdfg: dace.SDFG, module_name: str, *, backend: BaseDaceBackend) -> str:
+        generated_code = cls(backend).generate_sdfg_bindings(sdfg, module_name=module_name)
         if backend.builder.options.format_source:
             generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return generated_code
