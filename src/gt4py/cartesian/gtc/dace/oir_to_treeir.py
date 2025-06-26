@@ -12,9 +12,7 @@ from dace import data, dtypes, nodes, symbolic
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, definitions, gtir, oir
-from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir
-from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
-from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo
+from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir, utils
 from gt4py.cartesian.gtc.passes.oir_optimizations import utils as oir_utils
 
 
@@ -110,10 +108,10 @@ class OIRToTreeIR(eve.NodeVisitor):
         condition_name = f"{prefix}_condition_{id(node)}"
 
         ctx.root.containers[condition_name] = data.Scalar(
-            data_type_to_dace_typeclass(common.DataType.BOOL),
+            utils.data_type_to_dace_typeclass(common.DataType.BOOL),
             transient=True,
             storage=dtypes.StorageType.Register,
-            debuginfo=get_dace_debuginfo(node),
+            debuginfo=utils.get_dace_debuginfo(node),
         )
 
         assignment = oir.AssignStmt(
@@ -146,10 +144,10 @@ class OIRToTreeIR(eve.NodeVisitor):
             # Push local scalars to the tree repository
             for local_scalar in node.declarations:
                 ctx.root.containers[local_scalar.name] = data.Scalar(
-                    data_type_to_dace_typeclass(local_scalar.dtype),  # dtype
+                    utils.data_type_to_dace_typeclass(local_scalar.dtype),  # dtype
                     transient=True,
                     storage=dtypes.StorageType.Register,
-                    debuginfo=get_dace_debuginfo(local_scalar),
+                    debuginfo=utils.get_dace_debuginfo(local_scalar),
                 )
 
             groups = self._group_statements(node)
@@ -306,8 +304,8 @@ class OIRToTreeIR(eve.NodeVisitor):
             missing_api_parameters.remove(param.name)
             if isinstance(param, oir.ScalarDecl):
                 containers[param.name] = data.Scalar(
-                    data_type_to_dace_typeclass(param.dtype),  # dtype
-                    debuginfo=get_dace_debuginfo(param),
+                    utils.data_type_to_dace_typeclass(param.dtype),  # dtype
+                    debuginfo=utils.get_dace_debuginfo(param),
                 )
                 continue
 
@@ -324,7 +322,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                 # the extent to the only grid points inside the mask. DaCe requires the real size of the
                 # data, hence the call with ignore_horizontal_mask=True
                 containers[param.name] = data.Array(
-                    data_type_to_dace_typeclass(param.dtype),  # dtype
+                    utils.data_type_to_dace_typeclass(param.dtype),  # dtype
                     get_dace_shape(
                         param,
                         field_without_mask_extents[param.name],
@@ -333,7 +331,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                     ),  # shape
                     strides=get_dace_strides(param, symbols),
                     storage=DEFAULT_STORAGE_TYPE[self._device_type],
-                    debuginfo=get_dace_debuginfo(param),
+                    debuginfo=utils.get_dace_debuginfo(param),
                 )
                 dimensions[param.name] = param.dimensions
                 continue
@@ -349,13 +347,13 @@ class OIRToTreeIR(eve.NodeVisitor):
                 tir.Axis.K: max(k_bound[0], 0),
             }
             containers[field.name] = data.Array(
-                data_type_to_dace_typeclass(field.dtype),  # dtype
+                utils.data_type_to_dace_typeclass(field.dtype),  # dtype
                 get_dace_shape(field, field_extent, k_bound, symbols),  # shape
                 strides=get_dace_strides(field, symbols),
                 transient=True,
                 lifetime=dtypes.AllocationLifetime.Persistent,
                 storage=DEFAULT_STORAGE_TYPE[self._device_type],
-                debuginfo=get_dace_debuginfo(field),
+                debuginfo=utils.get_dace_debuginfo(field),
             )
             dimensions[field.name] = field.dimensions
 
@@ -382,7 +380,7 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     # Visit expressions for condition code in ControlFlow
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> str:
-        dtype = data_type_to_dace_typeclass(node.dtype)
+        dtype = utils.data_type_to_dace_typeclass(node.dtype)
         expression = self.visit(node.expr, **kwargs)
 
         return f"{dtype}({expression})"

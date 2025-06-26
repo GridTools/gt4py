@@ -15,8 +15,7 @@ from dace import Memlet, subsets
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-from gt4py.cartesian.gtc.dace import treeir as tir
-from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
+from gt4py.cartesian.gtc.dace import treeir as tir, utils
 
 
 # Tasklet in/out connector prefixes
@@ -215,7 +214,7 @@ class OIRToTasklet(eve.NodeVisitor):
         return f"{node.op.value}({expr})"
 
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> str:
-        dtype = data_type_to_dace_typeclass(node.dtype)
+        dtype = utils.data_type_to_dace_typeclass(node.dtype)
         expression = self.visit(node.expr, **kwargs)
 
         return f"{dtype}({expression})"
