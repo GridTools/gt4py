@@ -105,16 +105,13 @@ class BuildOptions(AttributeClassLike):
 
     @property
     def qualified_name(self):
-        name = ".".join([self.module, self.name])
-        return name
+        return ".".join([self.module, self.name])
 
     @property
     def shashed_id(self):
-        result = gt_utils.shashed_id(
+        return gt_utils.shashed_id(
             self.name, self.module, self.format_source, *tuple(sorted(self.backend_opts.items()))
         )
-
-        return result
 
 
 @attribclass(frozen=True)

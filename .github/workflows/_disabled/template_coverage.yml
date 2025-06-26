@@ -1,0 +1,80 @@
+name: Template / Coverage
+
+on:
+  workflow_call:
+    inputs:
+      workflow_run_id: # github.event.workflow_run.id
+        required: true
+        type: string
+      coverage_flag:
+        required: true
+        type: string
+    secrets:
+      CODECOV_TOKEN:
+        required: true
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version-file: ".default-python-version"
+
+      - name: Install python dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip coverage
+
+      - name: Download coverage artifacts
+        uses: actions/github-script@v6
+        with:
+          script: |
+            var artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               run_id: ${{ inputs.workflow_run_id }},
+            });
+            var coverageArtifacts = artifacts.data.artifacts.filter((artifact) => {
+              return artifact.name.startsWith("coverage")
+            });
+            var fs = require('fs');
+            for (const artifact of coverageArtifacts) {
+              var download = await github.rest.actions.downloadArtifact({
+                 owner: context.repo.owner,
+                 repo: context.repo.repo,
+                 artifact_id: artifact.id,
+                 archive_format: 'zip',
+              });
+              fs.writeFileSync('${{github.workspace}}/' + artifact.name + '.zip', Buffer.from(download.data));
+            }
+
+            var infoArtifact = artifacts.data.artifacts.filter((artifact) => {
+              return artifact.name.startsWith("info")
+            })[0];          
+            var download = await github.rest.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: infoArtifact.id,
+               archive_format: 'zip',
+            });
+            fs.writeFileSync('${{github.workspace}}/info.zip', Buffer.from(download.data));
+      - run: unzip 'coverage*.zip'
+      - run: |
+          unzip info.zip
+          python ci/coverage_info_to_env.py
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v3
+        with:
+          files: coverage*.json
+          fail_ci_if_error: true
+          flags: ${{ inputs.coverage_flag }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          override_build: ${{ env.CODECOV_OVERRIDE_BUILD }}
+          override_branch: ${{ env.CODECOV_OVERRIDE_BRANCH }}
+          override_commit: ${{ env.CODECOV_OVERRIDE_COMMIT }}
+          override_pr: ${{ env.CODECOV_OVERRIDE_PR }}
+          override_tag: ${{ env.CODECOV_OVERRIDE_TAG }}
