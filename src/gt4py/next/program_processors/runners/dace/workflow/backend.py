@@ -76,6 +76,7 @@ def make_dace_backend(
     make_persistent: bool,
     blocking_dim: common.Dimension | None,
     blocking_size: int = 10,
+    disable_field_origin: bool = False,
 ) -> backend.Backend:
     """Helper function to create a dace cached backend with custom config for SDFG
     lowering and auto-optimize.
@@ -91,6 +92,8 @@ def make_dace_backend(
             on this dimension.
         blocking_size: Block size to use in 'LoopBlocking' SDFG transformation,
             when enabled.
+        disable_field_origin: Can be set to `True` when all fields passed as program
+            arguments have zero-based origin.
 
     Returns:
         A custom dace backend object.
@@ -104,6 +107,7 @@ def make_dace_backend(
         otf_workflow__bare_translation__make_persistent=make_persistent,
         otf_workflow__bare_translation__blocking_dim=blocking_dim,
         otf_workflow__bare_translation__blocking_size=blocking_size,
+        otf_workflow__bare_translation__disable_field_origin_on_program_arguments=disable_field_origin,
         otf_workflow__bindings__make_persistent=make_persistent,
     )
 
