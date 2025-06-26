@@ -19,13 +19,15 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 import dace
 from dace import data, properties, subsets, symbolic, transformation
 from dace.sdfg import SDFG, SDFGState, graph, nodes, propagation
+
 from .map_fusion_utils import (
-    rename_map_parameters,
-    relocate_nodes,
     can_topologically_be_fused,
-    is_parallel,
     is_node_reachable_from,
+    is_parallel,
+    relocate_nodes,
+    rename_map_parameters,
 )
+
 
 @properties.make_properties
 class MapFusion(transformation.SingleStateTransformation):

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import copy
 import itertools
-from typing import Any, Dict, List, Iterable, Optional, Set, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import dace
 from dace import subsets as dace_subsets, symbolic
@@ -18,6 +18,7 @@ from dace.sdfg import graph, nodes as dace_nodes, validation
 from dace.transformation import helpers
 
 from gt4py.next.program_processors.runners.dace.transformations import spliting_tools as gtx_st
+
 
 def find_parameter_remapping(
     first_map: dace_nodes.Map, second_map: dace_nodes.Map
@@ -64,8 +65,7 @@ def find_parameter_remapping(
         param: tuple(simp(r) for r in rng) for param, rng in zip(first_params, first_map.range)
     }
     second_rngs: Dict[str, Tuple[Any, Any, Any]] = {
-        param: tuple(simp(r) for r in rng)
-        for param, rng in zip(second_params, second_map.range)
+        param: tuple(simp(r) for r in rng) for param, rng in zip(second_params, second_map.range)
     }
 
     # Parameters of the second map that have not yet been matched to a parameter
@@ -124,7 +124,7 @@ def rename_map_parameters(
     second_map: dace_nodes.Map,
     second_map_entry: dace_nodes.MapEntry,
     state: dace.SDFGState,
-    ) -> None:
+) -> None:
     """Replaces the map parameters of the second map with names from the first.
 
     The replacement is done in a safe way, thus `{'i': 'j', 'j': 'i'}` is
@@ -157,6 +157,7 @@ def rename_map_parameters(
     #  parameter of the map, so we will do it the hard way.
     second_map.params = copy.deepcopy(first_map.params)
     second_map.range = copy.deepcopy(first_map.range)
+
 
 def get_new_conn_name(
     edge_to_move: graph.MultiConnectorEdge[dace.Memlet],
@@ -232,6 +233,7 @@ def get_new_conn_name(
         or edge_to_move_subset.covers(edge_that_is_already_present_subset)
         else (to_node.next_connector(old_conn), False)
     )
+
 
 def relocate_nodes(
     from_node: Union[dace_nodes.MapExit, dace_nodes.MapEntry],
@@ -351,6 +353,7 @@ def relocate_nodes(
     assert len(from_node.in_connectors) == 0
     assert len(from_node.out_connectors) == 0
 
+
 def is_node_reachable_from(
     graph: dace.SDFGState,
     begin: dace_nodes.Node,
@@ -384,6 +387,7 @@ def is_node_reachable_from(
     # We never found `end`
     return False
 
+
 def is_parallel(
     graph: dace.SDFGState,
     node1: dace_nodes.Node,
@@ -407,6 +411,7 @@ def is_parallel(
     elif is_node_reachable_from(graph=graph, begin=node2, end=node1):
         return False
     return True
+
 
 def can_topologically_be_fused(
     first_map_entry: dace_nodes.MapEntry,
@@ -463,6 +468,7 @@ def can_topologically_be_fused(
         first_map=first_map_entry.map, second_map=second_map_entry.map
     )
     return param_repl
+
 
 def copy_map_graph(
     sdfg: dace.SDFG,

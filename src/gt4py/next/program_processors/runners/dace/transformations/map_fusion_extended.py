@@ -22,10 +22,11 @@ from dace.transformation.passes import analysis as dace_analysis
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import map_fusion_utils
 from gt4py.next.program_processors.runners.dace.transformations.map_fusion_utils import (
+    is_parallel,
     relocate_nodes,
     rename_map_parameters,
-    is_parallel,
 )
+
 
 def gt_horizontal_map_fusion(
     sdfg: dace.SDFG,
@@ -172,7 +173,10 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
         first_map_exit: dace_nodes.MapExit,
         second_map_entry: dace_nodes.MapEntry,
         second_map_exit: dace_nodes.MapExit,
-    ) -> tuple[list[tuple[dace_nodes.MapEntry, dace_nodes.MapExit]], list[tuple[dace_nodes.MapEntry, dace_nodes.MapExit]]]:
+    ) -> tuple[
+        list[tuple[dace_nodes.MapEntry, dace_nodes.MapExit]],
+        list[tuple[dace_nodes.MapEntry, dace_nodes.MapExit]],
+    ]:
         """Split the map range in order to obtain an overlapping range between the first and second map."""
         splitted_range = map_fusion_utils.split_overlapping_map_range(
             first_map_entry.map, second_map_entry.map
@@ -200,7 +204,6 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
             map_fusion_utils.delete_map(graph, map_entry, map_exit)
 
             return new_maps
-
 
         new_maps_from_first = _replace_ranged_map(
             first_map_entry,
@@ -308,7 +311,9 @@ class HorizontalSplitMapRange(SplitMapRange):
         if splitted_range is None:
             return False
 
-        if self.fuse_possible_maps and not is_parallel(graph=graph, node1=self.first_map_entry, node2=self.second_map_entry):
+        if self.fuse_possible_maps and not is_parallel(
+            graph=graph, node1=self.first_map_entry, node2=self.second_map_entry
+        ):
             return False
 
         return True
@@ -337,7 +342,10 @@ class HorizontalSplitMapRange(SplitMapRange):
         matching_maps = []
         for first_map_entry, first_map_exit in new_maps_from_first:
             for second_map_entry, second_map_exit in new_maps_from_second:
-                if first_map_entry.map.range == second_map_entry.map.range and first_map_exit.map.range == second_map_exit.map.range:
+                if (
+                    first_map_entry.map.range == second_map_entry.map.range
+                    and first_map_exit.map.range == second_map_exit.map.range
+                ):
                     matching_maps.append(
                         (first_map_entry, first_map_exit, second_map_entry, second_map_exit)
                     )
