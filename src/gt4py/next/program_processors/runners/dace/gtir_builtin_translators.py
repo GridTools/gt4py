@@ -814,15 +814,15 @@ def translate_concat_where(
         # ensure that the arguments have the same domain as the concat result
         assert all(ftype.dims == output_dims for ftype in (lower.gt_type, upper.gt_type))
 
-        lower_range_0 = lower_domain[concat_dim_index][1]
+        lower_range_0 = output_domain[concat_dim_index][1]
         lower_range_1 = dace.symbolic.pystr_to_symbolic(
             f"max({lower_range_0}, {lower_domain[concat_dim_index][2]})"
         )
         lower_range_size = lower_range_1 - lower_range_0
 
-        upper_range_0 = upper_domain[concat_dim_index][1]
-        upper_range_1 = dace.symbolic.pystr_to_symbolic(
-            f"max({upper_range_0}, {upper_domain[concat_dim_index][2]})"
+        upper_range_1 = output_domain[concat_dim_index][2]
+        upper_range_0 = dace.symbolic.pystr_to_symbolic(
+            f"min({upper_range_1}, {upper_domain[concat_dim_index][1]})"
         )
         upper_range_size = upper_range_1 - upper_range_0
 
@@ -838,8 +838,8 @@ def translate_concat_where(
                 )
                 if dim_index == concat_dim_index
                 else (
-                    lower_domain[dim_index][1] - lower.origin[dim_index],
-                    lower_domain[dim_index][1] - lower.origin[dim_index] + size - 1,
+                    output_domain[dim_index][1] - lower.origin[dim_index],
+                    output_domain[dim_index][1] - lower.origin[dim_index] + size - 1,
                     1,
                 )
                 for dim_index, size in enumerate(output_desc.shape)
@@ -872,8 +872,8 @@ def translate_concat_where(
                 )
                 if dim_index == concat_dim_index
                 else (
-                    upper_domain[dim_index][1] - upper.origin[dim_index],
-                    upper_domain[dim_index][1] - upper.origin[dim_index] + size - 1,
+                    output_domain[dim_index][1] - upper.origin[dim_index],
+                    output_domain[dim_index][1] - upper.origin[dim_index] + size - 1,
                     1,
                 )
                 for dim_index, size in enumerate(output_desc.shape)
