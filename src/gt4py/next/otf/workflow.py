@@ -155,6 +155,15 @@ class NamedStepSequence(
                 step_names.append(field.name)
         return step_names
 
+    @functools.cached_property
+    def workflow_state_hash(self) -> Hashable:
+        return hash(
+            tuple(
+                getattr(getattr(self, step_name), "workflow_state_hash", None)
+                for step_name in self.step_order
+            )
+        )
+
 
 @dataclasses.dataclass(frozen=True)
 class MultiWorkflow(
@@ -221,6 +230,10 @@ class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
     def start(cls, first_step: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:
         return cls(cls.__Steps((first_step,)))
 
+    @functools.cached_property
+    def workflow_state_hash(self) -> Hashable:
+        return hash(tuple(getattr(step, "workflow_state_hash", None) for step in self.steps.inner))
+
 
 @dataclasses.dataclass(frozen=True)
 class CachedStep(
@@ -264,6 +277,10 @@ class CachedStep(
             result = self.cache[hash_] = self.step(inp)
         return result
 
+    @functools.cached_property
+    def workflow_state_hash(self) -> Hashable:
+        return getattr(self.step, "workflow_state_hash", None)
+
 
 @dataclasses.dataclass(frozen=True)
 class SkippableStep(
@@ -278,3 +295,7 @@ class SkippableStep(
 
     def skip_condition(self, inp: StartT) -> bool:
         raise NotImplementedError()
+
+    @functools.cached_property
+    def workflow_state_hash(self) -> Hashable:
+        return getattr(self.step, "workflow_state_hash", None)
