@@ -4,9 +4,6 @@ include:
 .py312: &py312
   PYVERSION_PREFIX: py312
   PYVERSION: 3.12.7
-.py311: &py311
-  PYVERSION_PREFIX: py311
-  PYVERSION: 3.11.9
 .py310: &py310
   PYVERSION_PREFIX: py310
   PYVERSION: 3.10.9
@@ -62,15 +59,6 @@ build_py312_baseimage_aarch64:
   variables:
     <<: *py312
 
-# build_py311_baseimage_x86_64:
-#   extends: .build_baseimage_x86_64
-#   variables:
-#     <<: *py311
-build_py311_baseimage_aarch64:
-  extends: .build_baseimage_aarch64
-  variables:
-    <<: *py311
-
 # build_py310_baseimage_x86_64:
 #   extends: .build_baseimage_x86_64
 #   variables:
@@ -105,17 +93,6 @@ build_py312_image_aarch64:
   needs: [build_py312_baseimage_aarch64]
   variables:
     <<: *py312
-
-# build_py311_image_x86_64:
-#   extends: .build_image_x86_64
-#   needs: [build_py311_baseimage_x86_64]
-#   variables:
-#     <<: *py311
-build_py311_image_aarch64:
-  extends: .build_image_aarch64
-  needs: [build_py311_baseimage_aarch64]
-  variables:
-    <<: *py311
 
 # build_py310_image_x86_64:
 #   extends: .build_image_x86_64
@@ -189,17 +166,6 @@ test_py312_aarch64:
   needs: [build_py312_image_aarch64]
   variables:
     <<: *py312
-
-# test_py311_x86_64:
-#   extends: [.test_helper_x86_64]
-#   needs: [build_py311_image_x86_64]
-#   variables:
-#     <<: *py311
-test_py311_aarch64:
-  extends: [.test_helper_aarch64]
-  needs: [build_py311_image_aarch64]
-  variables:
-    <<: *py311
 
 # test_py310_x86_64:
 #   extends: [.test_helper_x86_64]

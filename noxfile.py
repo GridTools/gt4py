@@ -153,7 +153,6 @@ def test_cartesian(
         "*.toml",
         "*.yml",
         "noxfile*.py",
-        ".python-versions",
     ],
 )
 def test_eve(session: nox.Session) -> None:
