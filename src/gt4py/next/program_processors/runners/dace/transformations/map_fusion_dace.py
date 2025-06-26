@@ -403,6 +403,8 @@ class MapFusion(transformation.SingleStateTransformation):
             second_map_entry=second_map_entry,
             graph=graph,
             sdfg=sdfg,
+            only_inner_maps=self.only_inner_maps,
+            only_toplevel_maps=self.only_toplevel_maps,
         )
         if param_repl is None:
             return False
@@ -579,6 +581,8 @@ class MapFusion(transformation.SingleStateTransformation):
                 state=graph,
                 sdfg=sdfg,
                 scope_dict=scope_dict,
+                never_consolidate_edges=self.never_consolidate_edges,
+                consolidate_edges_only_if_not_extending=self.consolidate_edges_only_if_not_extending,
             )
 
         # Now move the input of the second map, that has no connection to the first
@@ -592,6 +596,8 @@ class MapFusion(transformation.SingleStateTransformation):
             state=graph,
             sdfg=sdfg,
             scope_dict=scope_dict,
+            never_consolidate_edges=self.never_consolidate_edges,
+            consolidate_edges_only_if_not_extending=self.consolidate_edges_only_if_not_extending,
         )
 
         for node_to_remove in [first_map_exit, second_map_entry]:
