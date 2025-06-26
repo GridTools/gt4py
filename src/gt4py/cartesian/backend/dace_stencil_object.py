@@ -104,22 +104,19 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
             return self._frozen_cache[key]
 
         # otherwise, wrap and save sdfg from scratch
-        inner_sdfg = self.sdfg()
-
         backend_class = gt_backend.from_name(self.backend)
         frozen_sdfg = freeze_origin_domain_sdfg(
-            inner_sdfg,
+            self.sdfg(),
             arg_names=list(self.__sdfg_signature__()[0]),
             field_info=self.field_info,
-            layout_map=backend_class.storage_info["layout_map"],
+            layout_info=backend_class.storage_info,
             origin=origin,
             domain=domain,
         )
         self._frozen_cache[key] = DaCeFrozenStencil(self, origin, domain, frozen_sdfg)
 
-        frozen_hash = shash(origin, domain)
         basename = os.path.splitext(self.SDFG_PATH)[0]
-        filename = f"{basename}_{frozen_hash}.sdfg"
+        filename = f"{basename}_{shash(origin, domain)}.sdfg"
         frozen_sdfg.save(filename)
 
         return self._frozen_cache[key]

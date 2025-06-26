@@ -11,11 +11,11 @@ from typing import Any, List, TypeAlias
 from dace import data, dtypes, nodes, symbolic
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common, definitions, gtir, oir
-from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir
-from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
-from gt4py.cartesian.gtc.dace.utils import get_dace_debuginfo
+from gt4py.cartesian.gtc import common, definitions, oir
+from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir, utils
+from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
 from gt4py.cartesian.gtc.passes.oir_optimizations import utils as oir_utils
+from gt4py.cartesian.stencil_builder import StencilBuilder
 
 
 ControlFlow: TypeAlias = (
@@ -39,24 +39,27 @@ DEFAULT_MAP_SCHEDULE = {
 class OIRToTreeIR(eve.NodeVisitor):
     """Translate the GT4Py OIR into a Dace-centric TreeIR
 
-    TreeIR is build to be a minimum representation of DaCe's Schedule
+    TreeIR is built to be a minimum representation of DaCe's Schedule
     Tree. No transformation is done on TreeIR, though should be done
     once the TreeIR has been properly turned into a Schedule Tree.
 
-    This class _does not_ deal with Tasklet representation, it defers the
+    This class _does not_ deal with Tasklet representation, it defers that
     work to the OIRToTasklet visitor.
     """
 
-    def __init__(self, device_type: str, api_signature: list[gtir.Argument]) -> None:
+    def __init__(self, builder: StencilBuilder) -> None:
         device_type_translate = {
             "CPU": dtypes.DeviceType.CPU,
             "GPU": dtypes.DeviceType.GPU,
         }
+
+        device_type = builder.backend.storage_info["device"]
         if device_type.upper() not in device_type_translate:
             raise ValueError(f"Unknown device type {device_type}.")
 
         self._device_type = device_type_translate[device_type.upper()]
-        self._api_signature = api_signature
+        self._api_signature = builder.gtir.api_signature
+        self._k_bounds = compute_k_boundary(builder.gtir)
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         code, inputs, outputs = oir_to_tasklet.generate(node, tree=ctx.root)
@@ -110,10 +113,10 @@ class OIRToTreeIR(eve.NodeVisitor):
         condition_name = f"{prefix}_condition_{id(node)}"
 
         ctx.root.containers[condition_name] = data.Scalar(
-            data_type_to_dace_typeclass(common.DataType.BOOL),
+            utils.data_type_to_dace_typeclass(common.DataType.BOOL),
             transient=True,
             storage=dtypes.StorageType.Register,
-            debuginfo=get_dace_debuginfo(node),
+            debuginfo=utils.get_dace_debuginfo(node),
         )
 
         assignment = oir.AssignStmt(
@@ -146,10 +149,10 @@ class OIRToTreeIR(eve.NodeVisitor):
             # Push local scalars to the tree repository
             for local_scalar in node.declarations:
                 ctx.root.containers[local_scalar.name] = data.Scalar(
-                    data_type_to_dace_typeclass(local_scalar.dtype),  # dtype
+                    utils.data_type_to_dace_typeclass(local_scalar.dtype),  # dtype
                     transient=True,
                     storage=dtypes.StorageType.Register,
-                    debuginfo=get_dace_debuginfo(local_scalar),
+                    debuginfo=utils.get_dace_debuginfo(local_scalar),
                 )
 
             groups = self._group_statements(node)
@@ -281,9 +284,7 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         self.visit(node.sections, ctx=ctx, loop_order=node.loop_order)
 
-    def visit_Stencil(
-        self, node: oir.Stencil, k_bounds: dict[str, tuple[int, int]]
-    ) -> tir.TreeRoot:
+    def visit_Stencil(self, node: oir.Stencil) -> tir.TreeRoot:
         # setup the descriptor repository
         containers: dict[str, data.Data] = {}
         dimensions: dict[str, tuple[bool, bool, bool]] = {}
@@ -306,14 +307,14 @@ class OIRToTreeIR(eve.NodeVisitor):
             missing_api_parameters.remove(param.name)
             if isinstance(param, oir.ScalarDecl):
                 containers[param.name] = data.Scalar(
-                    data_type_to_dace_typeclass(param.dtype),  # dtype
-                    debuginfo=get_dace_debuginfo(param),
+                    utils.data_type_to_dace_typeclass(param.dtype),  # dtype
+                    debuginfo=utils.get_dace_debuginfo(param),
                 )
                 continue
 
             if isinstance(param, oir.FieldDecl):
                 field_extent = field_extents[param.name]
-                k_bound = k_bounds[param.name]
+                k_bound = self._k_bounds[param.name]
                 shift[param.name] = {
                     tir.Axis.I: -field_extent[0][0],
                     tir.Axis.J: -field_extent[1][0],
@@ -324,7 +325,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                 # the extent to the only grid points inside the mask. DaCe requires the real size of the
                 # data, hence the call with ignore_horizontal_mask=True
                 containers[param.name] = data.Array(
-                    data_type_to_dace_typeclass(param.dtype),  # dtype
+                    utils.data_type_to_dace_typeclass(param.dtype),  # dtype
                     get_dace_shape(
                         param,
                         field_without_mask_extents[param.name],
@@ -333,7 +334,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                     ),  # shape
                     strides=get_dace_strides(param, symbols),
                     storage=DEFAULT_STORAGE_TYPE[self._device_type],
-                    debuginfo=get_dace_debuginfo(param),
+                    debuginfo=utils.get_dace_debuginfo(param),
                 )
                 dimensions[param.name] = param.dimensions
                 continue
@@ -342,20 +343,20 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         for field in node.declarations:
             field_extent = field_extents[field.name]
-            k_bound = k_bounds[field.name]
+            k_bound = self._k_bounds[field.name]
             shift[field.name] = {
                 tir.Axis.I: -field_extent[0][0],
                 tir.Axis.J: -field_extent[1][0],
                 tir.Axis.K: max(k_bound[0], 0),
             }
             containers[field.name] = data.Array(
-                data_type_to_dace_typeclass(field.dtype),  # dtype
+                utils.data_type_to_dace_typeclass(field.dtype),  # dtype
                 get_dace_shape(field, field_extent, k_bound, symbols),  # shape
                 strides=get_dace_strides(field, symbols),
                 transient=True,
                 lifetime=dtypes.AllocationLifetime.Persistent,
                 storage=DEFAULT_STORAGE_TYPE[self._device_type],
-                debuginfo=get_dace_debuginfo(field),
+                debuginfo=utils.get_dace_debuginfo(field),
             )
             dimensions[field.name] = field.dimensions
 
@@ -382,7 +383,7 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     # Visit expressions for condition code in ControlFlow
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> str:
-        dtype = data_type_to_dace_typeclass(node.dtype)
+        dtype = utils.data_type_to_dace_typeclass(node.dtype)
         expression = self.visit(node.expr, **kwargs)
 
         return f"{dtype}({expression})"

@@ -15,7 +15,7 @@ from dace import Memlet, data, dtypes, nodes
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, definitions
-from gt4py.cartesian.gtc.dace import symbol_utils
+from gt4py.cartesian.gtc.dace import utils
 
 
 SymbolDict: TypeAlias = dict[str, dtypes.typeclass]
@@ -73,13 +73,13 @@ class Axis(eve.StrEnum):
         return [Axis.I, Axis.J, Axis.K].index(self)
 
     def domain_dace_symbol(self):
-        return symbol_utils.get_dace_symbol(self.domain_symbol())
+        return utils.get_dace_symbol(self.domain_symbol())
 
     def iteration_dace_symbol(self):
-        return symbol_utils.get_dace_symbol(self.iteration_symbol())
+        return utils.get_dace_symbol(self.iteration_symbol())
 
     def tile_dace_symbol(self):
-        return symbol_utils.get_dace_symbol(self.tile_symbol())
+        return utils.get_dace_symbol(self.tile_symbol())
 
 
 class Bounds(eve.Node):

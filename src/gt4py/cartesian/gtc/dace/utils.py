@@ -7,10 +7,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import re
+from functools import lru_cache
 
 import numpy as np
 from dace import data, dtypes, symbolic
 
+from gt4py import eve
 from gt4py.cartesian.gtc import common
 
 
@@ -24,7 +26,7 @@ def get_dace_debuginfo(node: common.LocNode) -> dtypes.DebugInfo:
 
 
 def array_dimensions(array: data.Array) -> list[bool]:
-    dims = [
+    return [
         any(
             re.match(f"__.*_{k}_stride", str(sym))
             for st in array.strides
@@ -37,7 +39,6 @@ def array_dimensions(array: data.Array) -> list[bool]:
         )
         for k in "IJK"
     ]
-    return dims
 
 
 def replace_strides(arrays: list[data.Array], get_layout_map) -> dict[str, str]:
@@ -55,3 +56,15 @@ def replace_strides(arrays: list[data.Array], get_layout_map) -> dict[str, str]:
                     symbol_mapping[str(symbol)] = symbolic.pystr_to_symbolic(stride)
                 stride *= array.shape[idx]
     return symbol_mapping
+
+
+def data_type_to_dace_typeclass(data_type: common.DataType) -> dtypes.typeclass:
+    dtype = np.dtype(common.data_type_to_typestr(data_type))
+    return dtypes.typeclass(dtype.type)
+
+
+@lru_cache(maxsize=None)
+def get_dace_symbol(
+    name: eve.SymbolRef, dtype: common.DataType = common.DataType.INT32
+) -> symbolic.symbol:
+    return symbolic.symbol(name, dtype=data_type_to_dace_typeclass(dtype))
