@@ -24,13 +24,13 @@ from gt4py.next.program_processors.runners.dace.transformations import map_fusio
 from gt4py.next.program_processors.runners.dace.transformations.map_fusion_utils import (
     relocate_nodes,
     rename_map_parameters,
-    can_topologically_be_fused,
     is_parallel,
 )
 
 def gt_horizontal_map_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
+    fuse_possible_maps: bool,
     consolidate_edges_only_if_not_extending: bool,
     single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
     validate: bool = True,
@@ -44,14 +44,15 @@ def gt_horizontal_map_fusion(
     #  kernels (OpenMP loops or GPU kernels). Thus we have to restrict them
     #  such that these Maps are processed. Thus we set `only_toplevel_maps` to
     #  `True`.
-    # TODO: Restrict MapFusion such that it only applies to the Maps that have
-    #   been split and not some other random Maps.
+    # Fuse maps with the same range together, if possible in the HorizontalSplitMapRange
+    # transformation so that MapFusionParallel has less maps to check, improving performance
+    # of this pass.
     transformations = [
         HorizontalSplitMapRange(
+            fuse_possible_maps=fuse_possible_maps,
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
         ),
-        # gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
         gtx_transformations.MapFusionParallel(
             only_if_common_ancestor=True,
             only_inner_maps=False,
@@ -230,6 +231,11 @@ class HorizontalSplitMapRange(SplitMapRange):
     first_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
     second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
+    fuse_possible_maps = dace_properties.Property(
+        dtype=bool,
+        default=True,
+        desc="If `True`, the transformation will try to fuse maps that have the same range together.",
+    )
     never_consolidate_edges = dace_properties.Property(
         dtype=bool,
         default=False,
@@ -243,12 +249,15 @@ class HorizontalSplitMapRange(SplitMapRange):
 
     def __init__(
         self,
+        fuse_possible_maps: Optional[bool] = None,
         consolidate_edges_only_if_not_extending: Optional[bool] = None,
         never_consolidate_edges: Optional[bool] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
+        if fuse_possible_maps is not None:
+            self.fuse_possible_maps = fuse_possible_maps
         if consolidate_edges_only_if_not_extending is not None:
             self.consolidate_edges_only_if_not_extending = consolidate_edges_only_if_not_extending
         if never_consolidate_edges is not None:
@@ -299,7 +308,8 @@ class HorizontalSplitMapRange(SplitMapRange):
         if splitted_range is None:
             return False
 
-        # TODO: Ensure that the fusion can be performed.
+        if self.fuse_possible_maps and not is_parallel(graph=graph, node1=self.first_map_entry, node2=self.second_map_entry):
+            return False
 
         return True
 
@@ -317,6 +327,13 @@ class HorizontalSplitMapRange(SplitMapRange):
             graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit
         )
 
+        if not self.fuse_possible_maps:
+            # If we do not want to fuse the maps, we can stop here.
+            return
+
+        # Since we know that the two maps are in the same scope and are parallel from the `can_be_applied` function,
+        # we can now fuse them together.
+
         matching_maps = []
         for first_map_entry, first_map_exit in new_maps_from_first:
             for second_map_entry, second_map_exit in new_maps_from_second:
@@ -329,22 +346,6 @@ class HorizontalSplitMapRange(SplitMapRange):
         scope_dict: Dict = graph.scope_dict().copy()
 
         for first_map_entry, first_map_exit, second_map_entry, second_map_exit in matching_maps:
-            if scope_dict[first_map_entry] != scope_dict[second_map_entry]:
-                return
-            if not is_parallel(graph=graph, node1=first_map_entry, node2=second_map_entry):
-                return
-
-            param_repl = can_topologically_be_fused(
-                first_map_entry=first_map_entry,
-                second_map_entry=second_map_entry,
-                graph=graph,
-                sdfg=sdfg,
-                only_inner_maps=False,
-                only_toplevel_maps=self.only_toplevel_maps,
-            )
-            if param_repl is None:
-                return False
-
             # Before we do anything we perform the renaming, i.e. we will rename the
             #  parameters of the second map such that they match the one of the first map.
             rename_map_parameters(

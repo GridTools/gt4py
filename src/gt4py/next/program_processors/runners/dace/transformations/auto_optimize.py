@@ -339,6 +339,7 @@ def _gt_auto_process_top_level_maps(
         gtx_transformations.gt_horizontal_map_fusion(
             sdfg=sdfg,
             run_simplify=False,
+            fuse_possible_maps=True,
             consolidate_edges_only_if_not_extending=True,
             single_use_data=single_use_data,
             validate=validate,
