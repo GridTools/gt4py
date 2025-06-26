@@ -12,11 +12,8 @@ import ast
 import copy
 import inspect
 import operator
-import platform
 import textwrap
 from typing import Callable, Dict, Final, List, Tuple, Type
-
-from packaging import version
 
 from gt4py.cartesian.utils.base import shashed_id
 
@@ -115,16 +112,6 @@ def ast_dump(
     dumped_ast = _dump(get_ast(definition, feature_version=feature_version), skip_node_names)
 
     return dumped_ast
-
-
-def ast_unparse(ast_node):
-    """Call ast.unparse, but use astunparse for Python prior to 3.9."""
-    if version.parse(platform.python_version()) < version.parse("3.9"):
-        import astunparse
-
-        return astunparse.unparse(ast_node)
-    else:
-        return ast.unparse(ast_node)
 
 
 def ast_shash(ast_node, *, skip_decorators=True):

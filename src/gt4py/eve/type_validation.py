@@ -14,7 +14,6 @@ import abc
 import collections.abc
 import dataclasses
 import functools
-import sys
 import types
 import typing
 
@@ -195,11 +194,10 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             if type_annotation is None:
                 type_annotation = type(None)
 
-            if sys.version_info >= (3, 10):
-                if isinstance(
-                    type_annotation, types.UnionType
-                ):  # see https://github.com/python/cpython/issues/105499
-                    type_annotation = typing.Union[type_annotation.__args__]
+            if isinstance(
+                type_annotation, types.UnionType
+            ):  # see https://github.com/python/cpython/issues/105499
+                type_annotation = typing.Union[type_annotation.__args__]
 
             # Non-generic types
             if xtyping.is_actual_type(type_annotation):
