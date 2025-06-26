@@ -12,7 +12,7 @@ import abc
 import dataclasses
 import functools
 import typing
-from collections.abc import MutableMapping
+from collections.abc import Hashable, MutableMapping
 from typing import Any, Callable, Generic, Protocol, TypeVar
 
 from typing_extensions import Self
@@ -226,7 +226,6 @@ class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
 class CachedStep(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    Generic[StartT, EndT, HashT],
 ):
     """
     Cached workflow of single input callables.
@@ -253,12 +252,12 @@ class CachedStep(
     """
 
     step: Workflow[StartT, EndT]
-    hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
-    cache: MutableMapping[HashT, EndT] = dataclasses.field(repr=False, default_factory=dict)
+    hash_function: Callable[[StartT], Hashable] = dataclasses.field(default=hash)  # type: ignore[assignment]
+    cache: MutableMapping[int, EndT] = dataclasses.field(repr=False, default_factory=dict)
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
-        hash_ = self.hash_function(inp)
+        hash_ = hash((self.hash_function(inp), getattr(self.step, "workflow_state_hash", None)))
         try:
             result = self.cache[hash_]
         except KeyError:

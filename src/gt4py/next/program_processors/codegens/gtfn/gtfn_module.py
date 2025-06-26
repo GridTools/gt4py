@@ -16,7 +16,7 @@ import factory
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import codegen
+from gt4py.eve import codegen, utils
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
@@ -53,6 +53,18 @@ class GTFNTranslationStep(
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: Optional[dict[str, str]] = None
+
+    @functools.cached_property
+    def workflow_state_hash(self) -> str:
+        return utils.content_hash(
+            (
+                self.language_settings,
+                self.enable_itir_transforms,
+                self.use_imperative_backend,
+                self.device_type,
+                tuple(self.symbolic_domain_sizes.items()) if self.symbolic_domain_sizes else None,
+            )
+        )
 
     def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
         match self.device_type:
