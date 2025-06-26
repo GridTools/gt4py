@@ -102,11 +102,7 @@ def _sdfg_add_arrays_and_edges(
             ]
 
             wrapper_sdfg.add_array(
-                name,
-                dtype=array.dtype,
-                strides=array.strides,
-                shape=shape,
-                storage=array.storage,
+                name, dtype=array.dtype, strides=array.strides, shape=shape, storage=array.storage
             )
             if isinstance(origins, tuple):
                 origin = [o for a, o in zip("IJK", origins) if a in axes]
@@ -208,25 +204,25 @@ def freeze_origin_domain_sdfg(
     domain: tuple[int, ...],
 ) -> SDFG:
     """Create a new SDFG by wrapping a _copy_ of the original SDFG and freezing it's
-    origin and domain
+    origin and domain.
 
     This wrapping is required because we do not expect any of the inner_sdfg bounds to
-    have been specialize, e.g. we expect "__I/J/K" symbols to still be present. We wrap
+    have been specialized, e.g. we expect "__I/J/K" symbols to still be present. We wrap
     the call and specialize at top level, which will then be passed as a parameter to the
     inner sdfg.
 
-    If/when we move specialization of array & maps bounds upstream, this will become moot
-    and can be remove. See https://github.com/GridTools/gt4py/issues/2082.
+    Once we move specialization of array & maps bounds upstream, this will become moot
+    and can be removed, see https://github.com/GridTools/gt4py/issues/2082.
 
-    Dev note: we need to wrap a copy to make sure we can use caching with no side effect
-    in other parts of the SDFG making pipeline
+    Dev note: we need to wrap a copy to make sure we can use caching with no side effects
+    in other parts of the SDFG making pipeline.
 
     Args:
         inner_sdfg_unfrozen: SDFG with cartesian bounds as symbols
         arg_names: names of arguments to freeze
         field_info: full info stack on arguments
         origin: tuple of offset into the memory
-        domain: tuple of size for the memory wrote by the stencil
+        domain: tuple of size for the memory written by the stencil
     """
     inner_sdfg = copy.deepcopy(inner_sdfg_unfrozen)
 
@@ -247,14 +243,7 @@ def freeze_origin_domain_sdfg(
     nsdfg = state.add_nested_sdfg(inner_sdfg, None, inputs, outputs)
 
     _sdfg_add_arrays_and_edges(
-        field_info,
-        wrapper_sdfg,
-        state,
-        inner_sdfg,
-        nsdfg,
-        inputs,
-        outputs,
-        origins=origin,
+        field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin
     )
 
     # in special case of empty domain, remove entire SDFG.
@@ -298,17 +287,12 @@ class SDFGManager:
         This function is a three-step process:
 
         oir = gtir_to_oir(self.builder.gtir)
-        tir = oir_to_tir(oir)
-        schedule_tree = oir_to_stree(tir)
+        tree_ir = oir_to_tree_ir(oir)
+        schedule_tree = tree_ir_to_schedule_tree(tree_ir)
         """
 
-        # Step 1: gtir to oir
-        k_bounds = compute_k_boundary(self.builder.gtir)
-
-        # - gtir to oir lowering
         oir = GTIRToOIR().visit(self.builder.gtir)
 
-        # - oir optimizations
         # Deactivate caches. We need to extend the skip list in case users have
         # specified skip as well AND we need to copy in order to not trash the
         # cache hash!
@@ -326,18 +310,9 @@ class SDFGManager:
         )
         oir = oir_pipeline.run(oir)
 
-        # Step 2: oir to tree ir (tir)
-        # - convert oir.VerticalLoops and oir.VerticalLoopSections to MapScope / ForScope
-        # - split oir.HorizontalExecutions into oir.CodeBlocks
-        tir = OIRToTreeIR(
-            device_type=self.builder.backend.storage_info["device"],
-            api_signature=self.builder.gtir.api_signature,
-        ).visit(oir, k_bounds=k_bounds)
+        tir = OIRToTreeIR(self.builder).visit(oir)
 
-        # Step 3: tree ir to tree
-        stree = TreeIRToScheduleTree().visit(tir)
-
-        return stree
+        return TreeIRToScheduleTree().visit(tir)
 
     @staticmethod
     def _strip_history(sdfg: SDFG) -> None:
@@ -379,7 +354,7 @@ class SDFGManager:
         basename = self.builder.module_path.with_suffix("")
         path = f"{basename}_{shash(origin, domain)}.sdfg"
 
-        # check if same sdfg already cached on disk
+        # check if the same sdfg is already cached on disk
         if path in SDFGManager._loaded_sdfgs:
             return SDFGManager._loaded_sdfgs[path]
 
