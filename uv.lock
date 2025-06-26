@@ -519,6 +519,17 @@ wheels = [
 ]
 
 [[package]]
+name = "cupy"
+version = "13.4.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastrlock" },
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-5-gt4py-all' or extra == 'extra-5-gt4py-dace' or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0')" },
+    { name = "numpy", version = "2.2.2", source = { registry = "https://pypi.org/simple" }, marker = "(extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-dace-next') or (extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-dace-next') or (extra != 'extra-5-gt4py-all' and extra != 'extra-5-gt4py-dace') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/20/ca/951248eb2554b075b251349968fbb4977c9986088ea17ffc3bfb449046ca/cupy-13.4.1.tar.gz", hash = "sha256:9654730da3f7122ba3fe99ce951247e299f3f9c23449a884ba9914444845f0cd", size = 3498639, upload-time = "2025-03-21T07:26:13.127Z" }
+
+[[package]]
 name = "cupy-cuda11x"
 version = "13.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1115,6 +1126,9 @@ rocm4-3 = [
 rocm5-0 = [
     { name = "cupy-rocm-5-0" },
 ]
+rocm6-0 = [
+    { name = "cupy" },
+]
 testing = [
     { name = "hypothesis" },
     { name = "pytest" },
@@ -1221,6 +1235,7 @@ requires-dist = [
     { name = "clang-format", marker = "extra == 'formatting'", specifier = ">=9.0" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "cmake", specifier = ">=3.22" },
+    { name = "cupy", marker = "extra == 'rocm6-0'", specifier = "==13.4.1" },
     { name = "cupy-cuda11x", marker = "extra == 'cuda11'", specifier = ">=12.0" },
     { name = "cupy-cuda12x", marker = "extra == 'cuda12'", specifier = ">=12.0" },
     { name = "cupy-rocm-4-3", marker = "extra == 'rocm4-3'", specifier = ">=13.3.0" },
@@ -1257,7 +1272,7 @@ requires-dist = [
     { name = "versioningit", specifier = ">=3.1.1" },
     { name = "xxhash", specifier = ">=1.4.4,<3.1.0" },
 ]
-provides-extras = ["all", "cuda11", "cuda12", "dace", "dace-next", "formatting", "jax", "jax-cuda12", "performance", "rocm4-3", "rocm5-0", "testing"]
+provides-extras = ["all", "cuda11", "cuda12", "dace", "dace-next", "formatting", "jax", "jax-cuda12", "performance", "rocm4-3", "rocm5-0", "rocm6-0", "testing"]
 
 [package.metadata.requires-dev]
 build = [

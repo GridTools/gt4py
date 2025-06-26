@@ -1,0 +1,46 @@
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+include:
+  - local: 'ci/cscs-common.yml'
+
+
+test_matrix_job:
+  extends: [.container-runner-santis-gh200, .test_helper]
+  parallel:
+    matrix:
+      - SUBPACKAGE: [cartesian]
+        VARIANT: ['internal', 'dace']
+        SUBVARIANT: ['cuda12', 'cpu']
+      - SUBPACKAGE: eve
+      - SUBPACKAGE: next
+        VARIANT: ['internal', 'dace']
+        SUBVARIANT: ['cuda12', 'cpu']
+        DETAIL: ['nomesh', 'atlas']
+      - SUBPACKAGE: [storage]
+        VARIANT: ['cuda12', 'cpu']
+  variables:
+    # TODO: Fix issue with compile parallelism that causes tests to hang
+    GT4PY_BUILD_JOBS: 2
+    # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
+    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+
+test_cscs_gh200:
+  extends: [.test_helper_aarch64]
+  needs: [build_py311_image_aarch64]
+  variables:
+    <<: *py311
+
+
+
+test_py311_aarch64:
+  extends: [.test_helper_aarch64]
+  needs: [build_py311_image_aarch64]
+  variables:
+    <<: *py311
