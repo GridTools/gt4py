@@ -63,7 +63,6 @@ def register(func=None, *, externals=None, name=None):
 
 Field2D = gtscript.Field[gtscript.IJ, np.float64]
 Field3D = gtscript.Field[np.float64]
-Field2D = gtscript.Field[gtscript.IJ, np.float64]
 Field3DBool = gtscript.Field[np.bool_]
 
 
@@ -194,14 +193,6 @@ def runtime_if(field_a: Field3D, field_b: Field3D):
         else:
             field_b = 1
             field_a = field_a
-
-
-@register
-def while_stencil(field_a: Field3D, field_b: Field3D):
-    with computation(BACKWARD), interval(...):
-        while field_a > 2.0:
-            field_b = -1
-            field_a = -field_b
 
 
 @register
