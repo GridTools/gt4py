@@ -61,6 +61,7 @@ def register(func=None, *, externals=None, name=None):
     return _register_decorator(func) if func else _register_decorator
 
 
+Field2D = gtscript.Field[gtscript.IJ, np.float64]
 Field3D = gtscript.Field[np.float64]
 Field2D = gtscript.Field[gtscript.IJ, np.float64]
 Field3DBool = gtscript.Field[np.bool_]
@@ -168,6 +169,14 @@ def native_functions(field_a: Field3D, field_b: Field3D):
             if isnan(trunc_res)
             else 0.0
         )
+
+
+@register
+def while_stencil(field_a: Field3D, field_b: Field3D):
+    with computation(BACKWARD), interval(...):
+        while field_a > 2.0:
+            field_b = -1
+            field_a = -field_b
 
 
 @register

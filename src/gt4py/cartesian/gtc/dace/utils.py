@@ -24,7 +24,7 @@ def get_dace_debuginfo(node: common.LocNode) -> dtypes.DebugInfo:
 
 
 def array_dimensions(array: data.Array) -> list[bool]:
-    dims = [
+    return [
         any(
             re.match(f"__.*_{k}_stride", str(sym))
             for st in array.strides
@@ -37,7 +37,6 @@ def array_dimensions(array: data.Array) -> list[bool]:
         )
         for k in "IJK"
     ]
-    return dims
 
 
 def replace_strides(arrays: list[data.Array], get_layout_map) -> dict[str, str]:

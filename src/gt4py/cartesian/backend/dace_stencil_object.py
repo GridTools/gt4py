@@ -117,9 +117,8 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         )
         self._frozen_cache[key] = DaCeFrozenStencil(self, origin, domain, frozen_sdfg)
 
-        frozen_hash = shash(origin, domain)
         basename = os.path.splitext(self.SDFG_PATH)[0]
-        filename = f"{basename}_{frozen_hash}.sdfg"
+        filename = f"{basename}_{shash(origin, domain)}.sdfg"
         frozen_sdfg.save(filename)
 
         return self._frozen_cache[key]

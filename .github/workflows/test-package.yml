@@ -3,10 +3,10 @@ name: "Test Package Root"
 on:
   push:
     branches:
-    - main
+      - main
   pull_request:
     branches:
-    - main
+      - main
 
 jobs:
   # First job to read Python versions from .python-versions file
@@ -15,9 +15,9 @@ jobs:
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
-    - uses: actions/checkout@v4
-    - id: get-versions
-      uses: ./.github/actions/get-python-versions
+      - uses: actions/checkout@v4
+      - id: get-versions
+        uses: ./.github/actions/get-python-versions
 
   # Test-running job
   test-package:
@@ -30,15 +30,15 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Install uv and set the python version
-      uses: astral-sh/setup-uv@v6
-      with:
-        enable-cache: true
-        cache-dependency-glob: "uv.lock"
-        python-version: ${{ matrix.python-version }}
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: ${{ matrix.python-version }}
 
-    - name: Run 'package' tests with nox
-      shell: bash
-      run: uv run --script noxfile.py -s test_package-${{ matrix.python-version }}
+      - name: Run 'package' tests with nox
+        shell: bash
+        run: uv run --script noxfile.py -s test_package-${{ matrix.python-version }}

@@ -294,7 +294,7 @@ class SDFGManager:
     # Cache loaded SDFGs across all instances
     _loaded_sdfgs: ClassVar[dict[str | pathlib.Path, dace.SDFG]] = dict()
 
-    def __init__(self, builder: StencilBuilder):
+    def __init__(self, builder: StencilBuilder) -> None:
         self.builder = builder
 
     def schedule_tree(self) -> tn.ScheduleTreeRoot:
@@ -381,10 +381,11 @@ class SDFGManager:
 
         return sdfg
 
-    def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]):
-        frozen_hash = shash(origin, domain)
+    def _frozen_sdfg(
+        self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]
+    ) -> dace.SDFG:
         basename = self.builder.module_path.with_suffix("")
-        path = f"{basename}_{frozen_hash}.sdfg"
+        path = f"{basename}_{shash(origin, domain)}.sdfg"
 
         # check if same sdfg already cached on disk
         if path in SDFGManager._loaded_sdfgs:
@@ -405,7 +406,9 @@ class SDFGManager:
 
         return frozen_sdfg
 
-    def frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]):
+    def frozen_sdfg(
+        self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]
+    ) -> dace.SDFG:
         return copy.deepcopy(self._frozen_sdfg(origin=origin, domain=domain))
 
 
@@ -714,7 +717,6 @@ class DaCeBindingsCodegen:
                         f"generate_entry_params(): unexpected type {type(data)}"
                     )
             elif name in sdfg.symbols and not name.startswith("__"):
-                assert name in sdfg.symbols
                 res[name] = f"{sdfg.symbols[name].ctype} {name}"
         return list(res[node.name] for node in stencil_ir.params if node.name in res)
 

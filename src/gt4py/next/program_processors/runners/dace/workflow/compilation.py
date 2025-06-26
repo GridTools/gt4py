@@ -11,10 +11,12 @@ from __future__ import annotations
 import dataclasses
 import importlib
 import os
+import pathlib
 from typing import Any, Callable, Sequence
 
 import dace
 import factory
+from flufl import lock
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
@@ -123,7 +125,10 @@ class DaCeCompiler(
                 cmake_build_type=self.cmake_build_type,
             )
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-            sdfg_program = sdfg.compile(validate=False)
+            sdfg_build_folder = pathlib.Path(sdfg.build_folder)
+            sdfg_build_folder.mkdir(parents=True, exist_ok=True)
+            with lock.Lock(str(sdfg_build_folder / "compilation.lock"), lifetime=600):  # type: ignore[attr-defined]
+                sdfg_program = sdfg.compile(validate=False)
 
         assert inp.binding_source is not None
         return CompiledDaceProgram(

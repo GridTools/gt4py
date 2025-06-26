@@ -2,7 +2,7 @@ name: Daily CI
 
 on:
   schedule:
-  - cron: '0 4 * * *'
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
   ## COMMENTED OUT: only for testing CI action changes.
@@ -19,10 +19,10 @@ jobs:
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - id: get-versions
-      uses: ./.github/actions/get-python-versions
+      - id: get-versions
+        uses: ./.github/actions/get-python-versions
 
   daily-ci:
     needs: get-python-versions
@@ -39,69 +39,69 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Install uv and set the python version
-      uses: astral-sh/setup-uv@v6
-      with:
-        enable-cache: true
-        cache-dependency-glob: "uv.lock"
-        python-version: ${{ matrix.python-version }}
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: ${{ matrix.python-version }}
 
-    - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
-      env:
-        UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
+      - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
+        env:
+          UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
         # Force a specific compiler for setuptools/distutils (used in gt4py.cartesian)
-        CXX: g++
-        CC: gcc
-      run: uv run --script noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
+          CXX: g++
+          CC: gcc
+        run: uv run --script noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
-    - name: Notify slack
-      if: ${{ failure() }}
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      uses: slackapi/slack-github-action@v1.23.0
-      with:
-        channel-id: ${{ vars.SLACK_BOT_CHANNEL }}  # Use SLACK_BOT_CHANNEL_TEST for testing
-        payload: |
-          {
-            "text": "Failed tests for ${{ github.workflow }} (dependencies-strategy=${{ matrix.dependencies-strategy }}, python=${{ matrix.python-version }}, component=${{ matrix.gt4py-module }}) [https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}].",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "Failed tests: <https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: ${{ matrix.gt4py-module }} (CPU) for Python-${{ matrix.python-version }} with '${{ matrix.dependencies-strategy }}' uv resolution strategy.>"
+      - name: Notify slack
+        if: ${{ failure() }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: ${{ vars.SLACK_BOT_CHANNEL }} # Use SLACK_BOT_CHANNEL_TEST for testing
+          payload: |
+            {
+              "text": "Failed tests for ${{ github.workflow }} (dependencies-strategy=${{ matrix.dependencies-strategy }}, python=${{ matrix.python-version }}, component=${{ matrix.gt4py-module }}) [https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}].",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Failed tests: <https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: ${{ matrix.gt4py-module }} (CPU) for Python-${{ matrix.python-version }} with '${{ matrix.dependencies-strategy }}' uv resolution strategy.>"
+                  }
                 }
-              }
-            ]
-          }
+              ]
+            }
 
   weekly-reminder:
     runs-on: ubuntu-latest
     steps:
-    - id: get_day_of_the_week
-      name: Get day of the week
-      run: echo "day_of_week=$(date +'%u')" >> $GITHUB_OUTPUT
+      - id: get_day_of_the_week
+        name: Get day of the week
+        run: echo "day_of_week=$(date +'%u')" >> $GITHUB_OUTPUT
 
-    - name: Weekly notification
-      if: ${{ env.DAY_OF_WEEK == 1 }}
-      env:
-        DAY_OF_WEEK: ${{ steps.get_day_of_the_week.outputs.day_of_week }}
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      uses: slackapi/slack-github-action@v1.23.0
-      with:
-        channel-id: ${{ vars.SLACK_BOT_CHANNEL }}  # Use SLACK_BOT_CHANNEL_TEST for testing
-        payload: |
-          {
-            "text": "Weekly reminder to check the latest runs of the GT4Py Daily CI workflow at the GitHub Actions dashboard [https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml].",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "Weekly reminder to check the latest runs of the <https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml|GT4Py Daily CI> workflow at the GitHub Actions dashboard."
+      - name: Weekly notification
+        if: ${{ env.DAY_OF_WEEK == 1 }}
+        env:
+          DAY_OF_WEEK: ${{ steps.get_day_of_the_week.outputs.day_of_week }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: ${{ vars.SLACK_BOT_CHANNEL }} # Use SLACK_BOT_CHANNEL_TEST for testing
+          payload: |
+            {
+              "text": "Weekly reminder to check the latest runs of the GT4Py Daily CI workflow at the GitHub Actions dashboard [https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml].",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Weekly reminder to check the latest runs of the <https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml|GT4Py Daily CI> workflow at the GitHub Actions dashboard."
+                  }
                 }
-              }
-            ]
-          }
+              ]
+            }
