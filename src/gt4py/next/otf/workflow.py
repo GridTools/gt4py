@@ -13,7 +13,7 @@ import dataclasses
 import functools
 import typing
 from collections.abc import Hashable, MutableMapping
-from typing import Any, Callable, Generic, Protocol, TypeVar
+from typing import Any, Callable, Protocol, TypeVar
 
 from typing_extensions import Self
 
@@ -252,7 +252,7 @@ class CachedStep(
     """
 
     step: Workflow[StartT, EndT]
-    hash_function: Callable[[StartT], Hashable] = dataclasses.field(default=hash)  # type: ignore[assignment]
+    hash_function: Callable[[StartT], Hashable] = dataclasses.field(default=hash)
     cache: MutableMapping[int, EndT] = dataclasses.field(repr=False, default_factory=dict)
 
     def __call__(self, inp: StartT) -> EndT:
