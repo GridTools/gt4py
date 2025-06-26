@@ -147,7 +147,7 @@ def test_gtfn_file_cache(program_example):
         gpu=False, cached=True, otf_workflow__cached_translation=False
     ).executor.step.translation
 
-    cache_key = stages.fingerprint_compilable_program(compilable_program)
+    cache_key = cached_gtfn_translation_step.cache_key(compilable_program)
 
     # ensure the actual cached step in the backend generates the cache item for the test
     if cache_key in (translation_cache := cached_gtfn_translation_step.cache):

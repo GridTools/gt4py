@@ -55,15 +55,13 @@ class GTFNTranslationStep(
     symbolic_domain_sizes: Optional[dict[str, str]] = None
 
     @functools.cached_property
-    def workflow_state_hash(self) -> str:
+    def workflow_state_id(self) -> str:
         return utils.content_hash(
-            (
-                self.language_settings,
-                self.enable_itir_transforms,
-                self.use_imperative_backend,
-                self.device_type,
-                tuple(self.symbolic_domain_sizes.items()) if self.symbolic_domain_sizes else None,
-            )
+            self.language_settings,
+            self.enable_itir_transforms,
+            self.use_imperative_backend,
+            self.device_type,
+            tuple(self.symbolic_domain_sizes.items()) if self.symbolic_domain_sizes else None,
         )
 
     def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
