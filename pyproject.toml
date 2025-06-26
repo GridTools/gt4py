@@ -81,6 +81,7 @@ classifiers = [
   'Programming Language :: Python',
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
   'Programming Language :: Python :: Implementation :: CPython',
   'Topic :: Scientific/Engineering :: Atmospheric Science',
   'Topic :: Scientific/Engineering :: Mathematics',
@@ -130,7 +131,7 @@ keywords = [
 license = {text = 'BSD-3 License'}  # TODO: waiting for PEP 639 being implemented by setuptools (https://github.com/codecov/codecov-cli/issues/605)
 name = 'gt4py'
 readme = 'README.md'
-requires-python = '>=3.10, <3.12'
+requires-python = '>=3.10, <3.13'
 
 [project.optional-dependencies]
 # bundles
