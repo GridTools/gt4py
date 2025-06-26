@@ -267,6 +267,7 @@ class TestHashableTypings:
 
     def test_has_custom_hash_abc(self):
         assert isinstance(4, xtyping.HasCustomHash)
+        assert isinstance(True, xtyping.HasCustomHash)
         assert isinstance((), xtyping.HasCustomHash)
 
         class A:
@@ -277,7 +278,6 @@ class TestHashableTypings:
 
         # PEP-683 Immortal objects have custom hash
         assert isinstance(None, xtyping.HasCustomHash) == (sys.version_info >= (3, 12))
-        assert isinstance(True, xtyping.HasCustomHash) == (sys.version_info >= (3, 12))
 
         class B:
             __hash__ = None
