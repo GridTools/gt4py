@@ -36,14 +36,14 @@ def test__field_offset_postfix(node: oir.FieldAccess, expected: str) -> None:
 @pytest.mark.parametrize(
     "node,is_target,postfix,expected",
     [
-        (oir.ScalarAccess(name="A"), False, "", "gtIN___A"),
-        (oir.ScalarAccess(name="A"), True, "", "gtOUT___A"),
-        (oir.ScalarAccess(name="A"), False, "im1", "gtIN___A_im1"),
+        (oir.ScalarAccess(name="A"), False, "", "gtIN__A"),
+        (oir.ScalarAccess(name="A"), True, "", "gtOUT__A"),
+        (oir.ScalarAccess(name="A"), False, "im1", "gtIN__A_im1"),
         (
             oir.FieldAccess(name="A", offset=common.CartesianOffset(i=1, j=-1, k=0)),
             True,
             "",
-            "gtOUT___A",
+            "gtOUT__A",
         ),
     ],
 )
