@@ -311,11 +311,6 @@ class HorizontalSplitMapRange(SplitMapRange):
         if splitted_range is None:
             return False
 
-        if self.fuse_possible_maps and not is_parallel(
-            graph=graph, node1=self.first_map_entry, node2=self.second_map_entry
-        ):
-            return False
-
         return True
 
     def apply(
@@ -349,6 +344,10 @@ class HorizontalSplitMapRange(SplitMapRange):
                     matching_maps.append(
                         (first_map_entry, first_map_exit, second_map_entry, second_map_exit)
                     )
+
+        # Check if only one pair of maps is parallel. The rest should be parallel to each other.
+        if not is_parallel(graph=graph, node1=matching_maps[0][0], node2=matching_maps[0][2]):
+            return
 
         # We have to get the scope_dict before we start mutating the graph.
         scope_dict: Dict = graph.scope_dict().copy()
