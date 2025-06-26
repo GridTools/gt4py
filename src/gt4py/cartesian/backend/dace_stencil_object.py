@@ -111,7 +111,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
             inner_sdfg,
             arg_names=list(self.__sdfg_signature__()[0]),
             field_info=self.field_info,
-            layout_map=backend_class.storage_info["layout_map"],
+            layout_info=backend_class.storage_info,
             origin=origin,
             domain=domain,
         )
