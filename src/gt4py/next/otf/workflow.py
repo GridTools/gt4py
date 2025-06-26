@@ -17,6 +17,8 @@ from typing import Any, Callable, Protocol, TypeVar
 
 from typing_extensions import Self
 
+from gt4py.eve import utils
+
 
 StartT = TypeVar("StartT")
 StartT_contra = TypeVar("StartT_contra", contravariant=True)
@@ -157,8 +159,8 @@ class NamedStepSequence(
 
     @functools.cached_property
     def workflow_state_hash(self) -> Hashable:
-        return hash(
-            tuple(
+        return utils.content_hash(
+            *(
                 getattr(getattr(self, step_name), "workflow_state_hash", None)
                 for step_name in self.step_order
             )
@@ -232,7 +234,9 @@ class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
 
     @functools.cached_property
     def workflow_state_hash(self) -> Hashable:
-        return hash(tuple(getattr(step, "workflow_state_hash", None) for step in self.steps.inner))
+        return utils.content_hash(
+            *(getattr(step, "workflow_state_hash", None) for step in self.steps.inner)
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -266,11 +270,13 @@ class CachedStep(
 
     step: Workflow[StartT, EndT]
     hash_function: Callable[[StartT], Hashable] = dataclasses.field(default=hash)
-    cache: MutableMapping[int, EndT] = dataclasses.field(repr=False, default_factory=dict)
+    cache: MutableMapping[Hashable, EndT] = dataclasses.field(repr=False, default_factory=dict)
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
-        hash_ = hash((self.hash_function(inp), getattr(self.step, "workflow_state_hash", None)))
+        hash_ = utils.content_hash(
+            self.hash_function(inp), getattr(self.step, "workflow_state_hash", None)
+        )
         try:
             result = self.cache[hash_]
         except KeyError:
