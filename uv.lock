@@ -1339,7 +1339,7 @@ requires-dist = [
     { name = "clang-format", marker = "extra == 'formatting'", specifier = ">=9.0" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "cmake", specifier = ">=3.22" },
-    { name = "cupy", marker = "extra == 'rocm6-0'", specifier = "==13.4.1" },
+    { name = "cupy", marker = "extra == 'rocm6-0'", specifier = ">=13.4.1" },
     { name = "cupy-cuda11x", marker = "extra == 'cuda11'", specifier = ">=12.0" },
     { name = "cupy-cuda12x", marker = "extra == 'cuda12'", specifier = ">=12.0" },
     { name = "cupy-rocm-4-3", marker = "extra == 'rocm4-3'", specifier = ">=13.3.0" },
