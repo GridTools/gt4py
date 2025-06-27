@@ -778,7 +778,6 @@ resolution-markers = [
 dependencies = [
     { name = "aenum" },
     { name = "astunparse" },
-    { name = "cmake" },
     { name = "dill" },
     { name = "fparser" },
     { name = "networkx" },
@@ -787,7 +786,6 @@ dependencies = [
     { name = "ply" },
     { name = "pyreadline", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0')" },
     { name = "pyyaml" },
-    { name = "scikit-build" },
     { name = "sympy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/53/02/1a2ece00b229710a4db8f301bba6097eacfbc2a9af84d8746089242d1cf5/dace-1.0.2.tar.gz", hash = "sha256:6728f4bcf584b9f5bbb9c9a393fbdd87364af0c6ad9120da0302b8b470f4f71c", size = 5801789, upload-time = "2025-03-20T15:17:14.034Z" }
