@@ -108,7 +108,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         # otherwise, wrap and save sdfg from scratch
         frozen_sdfg = freeze_origin_domain_sdfg(
             self.sdfg(),
-            arg_names=self.__sdfg_signature__()[0],
+            arg_names=list(self.__sdfg_signature__()[0]),
             field_info=self.field_info,
             origin=origin,
             domain=domain,

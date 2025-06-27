@@ -11,7 +11,6 @@ include:
   - local: 'ci/cscs-base.yml'
 
 .test_matrix_job:
-  extends: [.container-runner-santis-gh200, .test_helper]
   parallel:
     matrix:
       # In the generated test pipeline this matrix will be redefined 
@@ -47,6 +46,7 @@ include:
 
 test_cscs_amd_rocm:
   extends:
+    - .tds-container-runner-beverin-mi200
     - .test_base
     - .test_matrix_job
   needs:
