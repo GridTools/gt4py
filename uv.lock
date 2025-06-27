@@ -746,7 +746,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.0"
-source = { git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_06_24#87c77efcb702411cc127a6780f3a8e01b33c0e21" }
+source = { git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_06_27#c2a4e4268b7aa9fac8ed4325355c842172fc53bf" }
 resolution-markers = [
     "python_full_version >= '3.12'",
     "python_full_version == '3.11.*'",
@@ -1198,7 +1198,7 @@ dace = [
     { name = "dace", version = "1.0.2", source = { registry = "https://pypi.org/simple" } },
 ]
 dace-next = [
-    { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_06_24#87c77efcb702411cc127a6780f3a8e01b33c0e21" } },
+    { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_06_27#c2a4e4268b7aa9fac8ed4325355c842172fc53bf" } },
 ]
 formatting = [
     { name = "clang-format" },
@@ -1331,7 +1331,7 @@ requires-dist = [
     { name = "cupy-rocm-5-0", marker = "extra == 'rocm5-0'", specifier = ">=13.3.0" },
     { name = "cytoolz", specifier = ">=0.12.1" },
     { name = "dace", marker = "extra == 'dace'", specifier = ">=1.0.2,<1.1.0" },
-    { name = "dace", marker = "extra == 'dace-next'", git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_06_24" },
+    { name = "dace", marker = "extra == 'dace-next'", git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_06_27" },
     { name = "deepdiff", specifier = ">=5.6.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "diskcache", specifier = ">=5.6.3" },
