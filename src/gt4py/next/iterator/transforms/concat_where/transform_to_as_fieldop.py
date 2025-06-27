@@ -69,9 +69,9 @@ class _TransformToAsFieldop(PreserveLocationVisitor, NodeTranslator):
             domains: tuple[domain_utils.SymbolicDomain, ...] = utils.flatten_nested_tuple(
                 node.annex.domain
             )
-            assert all(
-                domain == domains[0] for domain in domains
-            ), "At this point all `concat_where` arguments should be posed on the same domain."
+            assert all(domain == domains[0] for domain in domains), (
+                "At this point all `concat_where` arguments should be posed on the same domain."
+            )
             assert isinstance(domains[0], domain_utils.SymbolicDomain)
             domain_expr = domains[0].as_expr()
 

@@ -263,8 +263,9 @@ def attribclass(cls_or_none=None, **kwargs):
         for name, member in extra_members.items():
             if name in cls.__dict__.keys():
                 raise ValueError(
-                    "Name clashing with a existing '{name}' member"
-                    " of the decorated class ".format(name=name)
+                    "Name clashing with a existing '{name}' member of the decorated class ".format(
+                        name=name
+                    )
                 )
             setattr(cls, name, member)
 

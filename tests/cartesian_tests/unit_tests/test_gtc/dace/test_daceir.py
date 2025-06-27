@@ -67,25 +67,25 @@ def test_DomainInterval_intersection() -> None:
         end=dcir.AxisBound(axis=dcir.Axis.I, level=common.LevelMarker.START, offset=10),
     )
 
-    assert (
-        dcir.DomainInterval.intersection(dcir.Axis.I, I_0_4, I_2_10) == I_2_4
-    ), "intersection left"
-    assert (
-        dcir.DomainInterval.intersection(dcir.Axis.I, I_2_10, I_8_15) == I_8_10
-    ), "intersection right"
+    assert dcir.DomainInterval.intersection(dcir.Axis.I, I_0_4, I_2_10) == I_2_4, (
+        "intersection left"
+    )
+    assert dcir.DomainInterval.intersection(dcir.Axis.I, I_2_10, I_8_15) == I_8_10, (
+        "intersection right"
+    )
 
-    assert (
-        dcir.DomainInterval.intersection(dcir.Axis.I, I_2_5, I_2_10) == I_2_5
-    ), "first contained in second"
-    assert (
-        dcir.DomainInterval.intersection(dcir.Axis.I, I_2_10, I_2_5) == I_2_5
-    ), "second contained in first"
-    assert (
-        dcir.DomainInterval.intersection(dcir.Axis.I, I_8_15, I_full) == I_8_15
-    ), "full interval overlaps with start level"
-    assert (
-        dcir.DomainInterval.intersection(dcir.Axis.I, I_end_m3, I_full) == I_end_m3
-    ), "full interval overlaps with end level"
+    assert dcir.DomainInterval.intersection(dcir.Axis.I, I_2_5, I_2_10) == I_2_5, (
+        "first contained in second"
+    )
+    assert dcir.DomainInterval.intersection(dcir.Axis.I, I_2_10, I_2_5) == I_2_5, (
+        "second contained in first"
+    )
+    assert dcir.DomainInterval.intersection(dcir.Axis.I, I_8_15, I_full) == I_8_15, (
+        "full interval overlaps with start level"
+    )
+    assert dcir.DomainInterval.intersection(dcir.Axis.I, I_end_m3, I_full) == I_end_m3, (
+        "full interval overlaps with end level"
+    )
 
     with pytest.raises(ValueError, match=r"^No intersection found for intervals *"):
         dcir.DomainInterval.intersection(dcir.Axis.I, I_0_4, I_8_15)

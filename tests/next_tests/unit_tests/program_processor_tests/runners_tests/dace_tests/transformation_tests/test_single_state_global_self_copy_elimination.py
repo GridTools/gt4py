@@ -72,15 +72,13 @@ def _make_direct_self_copy_elimination_used_sdfg() -> dace.SDFG:
     return sdfg
 
 
-def _make_self_copy_sdfg_with_multiple_paths() -> (
-    tuple[
-        dace.SDFG,
-        dace.SDFGState,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-    ]
-):
+def _make_self_copy_sdfg_with_multiple_paths() -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+]:
     """There are multiple paths between the two global nodes.
 
     There are to global nodes and two paths between them. The first one is direct,
@@ -435,15 +433,13 @@ def _make_concat_where_like_41_to_60(
     return sdfg, state, g1, t, g2, c1, c2
 
 
-def _make_concat_where_like_not_possible() -> (
-    tuple[
-        dace.SDFG,
-        dace.SDFGState,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-    ]
-):
+def _make_concat_where_like_not_possible() -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+]:
     """Because the "Bulk Map" writes more into `tmp` than is written back
     the transformation is not applicable.
     """
@@ -490,15 +486,13 @@ def _make_concat_where_like_not_possible() -> (
     return sdfg, state, g1, t, g2
 
 
-def _make_multi_t_patch_sdfg() -> (
-    tuple[
-        dace.SDFG,
-        dace.SDFGState,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-    ]
-):
+def _make_multi_t_patch_sdfg() -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+]:
     """An SDFG where the initialization of `tmp` is not a single transaction.
 
     Note that the content of the temporary in the patch `[2:10, 9]` is
@@ -818,9 +812,9 @@ def test_global_self_copy_elimination_only_pattern():
     assert count != 0
 
     assert sdfg.number_of_nodes() == 1
-    assert (
-        state.number_of_nodes() == 0
-    ), f"Expected that 0 access nodes remained, but {state.number_of_nodes()} were there."
+    assert state.number_of_nodes() == 0, (
+        f"Expected that 0 access nodes remained, but {state.number_of_nodes()} were there."
+    )
 
 
 def test_global_self_copy_elimination_g_downstream():
@@ -857,9 +851,9 @@ def test_global_self_copy_elimination_g_downstream():
     assert count != 0
 
     assert sdfg.number_of_nodes() == 2
-    assert (
-        state1.number_of_nodes() == 0
-    ), f"Expected that 0 access nodes remained, but {state.number_of_nodes()} were there."
+    assert state1.number_of_nodes() == 0, (
+        f"Expected that 0 access nodes remained, but {state.number_of_nodes()} were there."
+    )
     assert state2.number_of_nodes() == 5
     assert util.count_nodes(state2, dace_nodes.AccessNode) == 2
     assert util.count_nodes(state2, dace_nodes.MapEntry) == 1
