@@ -19,14 +19,6 @@ build_base_cscs_gh200:
   variables:
     RUNNER_KEY: test_cscs_gh200
 
-# .build_base_cscs_amd_cuda:
-#   extends:
-#     - .container-builder-cscs-zen2
-#     - .build_base_common
-#     - .build_with_cuda_extra
-#   variables:
-#     RUNNER_KEY: test_cscs_amd_cuda
-
 .build_base_cscs_amd_rocm:
   extends:
     - .container-builder-cscs-zen2
@@ -47,18 +39,6 @@ test_cscs_gh200:
     include:
       - artifact: generated_test_pipeline.yml
         job: build_base_cscs_gh200
-
-# .test_cscs_amd_cuda:
-#   stage: test
-#   extends:
-#     - .container-runner-zen2
-#     - .test_trigger_base
-#   needs:
-#     - build_base_cscs_amd_cuda
-#   trigger:
-#     include:
-#       - artifact: generated_cscs_test_pipeline.yml
-#         job: build_base_cscs_amd_cuda
 
 .test_cscs_amd_rocm:
   stage: test

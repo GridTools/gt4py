@@ -34,14 +34,6 @@ include:
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
 
-# .test_cscs_amd_cuda-template:
-#   extends:
-#     - .container-runner-santis-zen2
-#     - .test_base
-#     - .test_matrix_job
-#   needs:
-#     - build_base_cscs_amd_rocm
-
 .test_cscs_amd_rocm-template:
   extends:
     - .tds-container-runner-beverin-mi200
