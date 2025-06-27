@@ -786,7 +786,7 @@ def translate_concat_where(
                 f"min({concat_dim_bound + 1}, {output_domain[concat_dim_index][2]})"
             )
             upper_domain.insert(concat_dim_index, (concat_dim, concat_dim_bound, upper_bound))
-        elif len(lower.gt_type.dims) == 1:
+        elif len(lower.gt_type.dims) == 1 and len(output_domain) > 1:
             assert len(lower_domain) == 1 and lower_domain[0][0] == concat_dim
             lower_domain = [
                 *output_domain[:concat_dim_index],
@@ -796,7 +796,7 @@ def translate_concat_where(
             lower, lower_desc = _make_concat_scalar_broadcast(
                 sdfg, state, lower, lower_desc, lower_domain, concat_dim_index
             )
-        elif len(upper.gt_type.dims) == 1:
+        elif len(upper.gt_type.dims) == 1 and len(output_domain) > 1:
             assert len(upper_domain) == 1 and upper_domain[0][0] == concat_dim
             upper_domain = [
                 *output_domain[:concat_dim_index],
