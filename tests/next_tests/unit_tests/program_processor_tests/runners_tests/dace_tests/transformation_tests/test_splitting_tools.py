@@ -27,18 +27,16 @@ from gt4py.next.program_processors.runners.dace.transformations import (
 from . import util
 
 
-def _make_distributed_split_sdfg() -> (
-    tuple[
-        dace.SDFG,
-        dace.SDFGState,
-        dace_nodes.Tasklet,
-        dace_nodes.MapExit,
-        dace_nodes.AccessNode,
-        dace_nodes.AccessNode,
-        dace.SDFGState,
-        dace_nodes.AccessNode,
-    ]
-):
+def _make_distributed_split_sdfg() -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.Tasklet,
+    dace_nodes.MapExit,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+]:
     sdfg = dace.SDFG(util.unique_name("distributed_split_sdfg"))
     state = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state)
@@ -114,9 +112,9 @@ def test_distributed_split():
     assert False
 
 
-def _make_split_node_simple_sdfg() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapExit, dace_nodes.MapExit]
-):
+def _make_split_node_simple_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapExit, dace_nodes.MapExit
+]:
     sdfg = dace.SDFG(util.unique_name("single_state_split"))
     state = sdfg.add_state(is_start_block=True)
 
@@ -200,9 +198,9 @@ def test_simple_node_split():
     assert all(np.allclose(ref[n], res[n]) for n in ref)
 
 
-def _make_split_edge_sdfg() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode]
-):
+def _make_split_edge_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode
+]:
     sdfg = dace.SDFG(util.unique_name("split_edge"))
     state = sdfg.add_state(is_start_block=True)
 

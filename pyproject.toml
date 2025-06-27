@@ -17,6 +17,7 @@ dev = [
   {include-group = 'docs'},
   {include-group = 'frameworks'},
   {include-group = 'lint'},
+  {include-group = 'scripts'},
   {include-group = 'test'},
   {include-group = 'typing'}
 ]
@@ -37,7 +38,13 @@ frameworks = [
 lint = [
   'pre-commit>=4.0.1',
   'ruff>=0.8.0',
-  'tach>=0.16.0'
+  'tach>=0.23.0',
+  'validate-pyproject-schema-store[all]>=2025.06.13'
+]
+scripts = [
+  'gitpython>=3.1.0',
+  'pyyaml>=6.0',
+  'typer>=0.12.3'
 ]
 test = [
   'coverage[toml]>=7.5.0',
@@ -74,6 +81,7 @@ classifiers = [
   'Programming Language :: Python',
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
   'Programming Language :: Python :: Implementation :: CPython',
   'Topic :: Scientific/Engineering :: Atmospheric Science',
   'Topic :: Scientific/Engineering :: Mathematics',
@@ -123,7 +131,7 @@ keywords = [
 license = {text = 'BSD-3 License'}  # TODO: waiting for PEP 639 being implemented by setuptools (https://github.com/codecov/codecov-cli/issues/605)
 name = 'gt4py'
 readme = 'README.md'
-requires-python = '>=3.10, <3.12'
+requires-python = '>=3.10, <3.13'
 
 [project.optional-dependencies]
 # bundles
@@ -177,6 +185,7 @@ source_pkgs = ['gt4py']
 # -- mypy  --
 [tool.mypy]
 disallow_incomplete_defs = true
+disallow_untyped_defs = true
 exclude = [
   '^setup\.py$',
   'build/.*$',
@@ -198,16 +207,16 @@ warn_unused_ignores = true
 
 # GT4Py configs
 [[tool.mypy.overrides]]
-allow_incomplete_defs = false
-allow_untyped_defs = false
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
 ignore_missing_imports = false
 module = 'gt4py.*'
 
 [[tool.mypy.overrides]]
 # The following ignore_errors are only temporary.
 # TODO: Fix errors and enable these settings.
-allow_incomplete_defs = true
-allow_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
 follow_imports = 'silent'
 module = 'gt4py.cartesian.*'
 
@@ -237,19 +246,19 @@ warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 # TODO: Make this false and fix errors
-allow_untyped_defs = true
+disallow_untyped_defs = false
 follow_imports = 'silent'
 module = 'gt4py.storage.*'
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-allow_incomplete_defs = true
-allow_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
 module = 'gt4py.next.iterator.*'
 
 [[tool.mypy.overrides]]
-allow_incomplete_defs = true
-allow_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
 module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 
 [[tool.mypy.overrides]]
@@ -433,7 +442,7 @@ url = 'https://test.pypi.org/simple/'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_06_13", extra = "dace-next"}
+dace = {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_06_27", extra = "dace-next"}
 
 # -- versioningit --
 [tool.versioningit]

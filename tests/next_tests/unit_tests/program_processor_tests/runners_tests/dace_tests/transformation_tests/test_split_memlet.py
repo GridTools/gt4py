@@ -74,9 +74,9 @@ def test_split_edge_two_ac_producer_one_ac_consumer_1d():
     assert util.compare_sdfg_res(ref, res)
 
 
-def _make_split_edge_mock_apply_diffusion_to_w_sdfg() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode]
-):
+def _make_split_edge_mock_apply_diffusion_to_w_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode
+]:
     # Test is roughly equivalent to what we see in `apply_diffusion_to_w`
     #  Although instead of Maps we sometimes use direct edges.
     sdfg = dace.SDFG(util.unique_name("split_edge_mock_apply_diffusion_to_w"))

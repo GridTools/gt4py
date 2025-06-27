@@ -66,9 +66,9 @@ def test_oir_sdfg_builder_copy_stencil() -> None:
     # expect StencilComputation, AccessNode(A), and AccessNode(B) in the last block
     last_block = states[len(states) - 1]
     nodes = last_block.nodes()
-    assert (
-        len(list(filter(lambda node: isinstance(node, StencilComputation), nodes))) == 1
-    ), "one StencilComputation library node"
+    assert len(list(filter(lambda node: isinstance(node, StencilComputation), nodes))) == 1, (
+        "one StencilComputation library node"
+    )
     assert (
         len(
             list(
@@ -136,9 +136,9 @@ def test_oir_sdfg_builder_assign_scalar_param() -> None:
 
     last_block = states[len(states) - 1]
     nodes = last_block.nodes()
-    assert (
-        len(list(filter(lambda node: isinstance(node, StencilComputation), nodes))) == 1
-    ), "one StencilComputation library node"
+    assert len(list(filter(lambda node: isinstance(node, StencilComputation), nodes))) == 1, (
+        "one StencilComputation library node"
+    )
     assert (
         len(
             list(

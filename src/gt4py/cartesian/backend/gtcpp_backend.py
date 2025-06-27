@@ -20,12 +20,10 @@ from gt4py.cartesian.backend.gtc_common import (
     bindings_main_template,
     pybuffer_to_sid,
 )
-from gt4py.cartesian.gtc import gtir
 from gt4py.cartesian.gtc.common import DataType
 from gt4py.cartesian.gtc.gtcpp import gtcpp, gtcpp_codegen
 from gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
-from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.eve import codegen
 
@@ -40,9 +38,8 @@ class GTExtGenerator(BackendCodegen):
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, stencil_ir: gtir.Stencil) -> dict[str, dict[str, str]]:
-        stencil_ir = GtirPipeline(stencil_ir, self.backend.builder.stencil_id).full()
-        base_oir = GTIRToOIR().visit(stencil_ir)
+    def __call__(self) -> dict[str, dict[str, str]]:
+        base_oir = GTIRToOIR().visit(self.backend.builder.gtir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline()
         )
