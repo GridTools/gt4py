@@ -32,7 +32,7 @@ build_base_cscs_amd_rocm:
     - .build_base_common
     - .build_with_rocm_extra
   variables:
-    RUNNER_KEY: .tds-container-runner-beverin-mi200
+    RUNNER_KEY: '.tds-container-runner-beverin-mi200'
 
 # test_cscs_gh200:
 #   stage: test

@@ -18,17 +18,17 @@ include:
       - SUBPACKAGE: [cartesian]
         VARIANT: ['internal', 'dace']
         SUBVARIANT: ['cuda12', 'cpu']
-        PYTHON: [3.10, 3.11]
+        PYTHON: ['3.10', '3.11']
       - SUBPACKAGE: eve
-        PYTHON: [3.10, 3.11]
+        PYTHON: ['3.10', '3.11']
       - SUBPACKAGE: next
         VARIANT: ['internal', 'dace']
         SUBVARIANT: ['cuda12', 'cpu']
         DETAIL: ['nomesh', 'atlas']
-        PYTHON: [3.10, 3.11]
+        PYTHON: ['3.10', '3.11']
       - SUBPACKAGE: [storage]
         VARIANT: ['cuda12', 'cpu']
-        PYTHON: [3.10, 3.11]
+        PYTHON: ['3.10', '3.11']
 
 # In the generated test pipeline one of these jobs will be renamed
 # as a public job and then executed in the public runner
