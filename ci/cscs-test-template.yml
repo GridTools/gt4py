@@ -13,25 +13,16 @@ include:
 .test_matrix_job:
   parallel:
     matrix:
-      # In the generated test pipeline this matrix will be redefined 
-      - SUBPACKAGE: [cartesian]
-        VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'cpu']
-        PYTHON: ['3.10', '3.11']
-      - SUBPACKAGE: eve
-        PYTHON: ['3.10', '3.11']
-      - SUBPACKAGE: next
-        VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'cpu']
-        DETAIL: ['nomesh', 'atlas']
-        PYTHON: ['3.10', '3.11']
-      - SUBPACKAGE: [storage]
-        VARIANT: ['cuda12', 'cpu']
-        PYTHON: ['3.10', '3.11']
+      # In the generated test pipeline, all matrix entries will be
+      # fully replaced with new entries, this is just to show how
+      # they will look like:  
+      - SESSION_NAME: test_next
+        SESSION_ARGS: "internal, cpu, nomesh"
+        SESSION_PYTHON: ['3.10', '3.11']
 
 # In the generated test pipeline one of these jobs will be renamed
-# as a public job and then executed in the public runner
-.test_cscs_gh200:
+# as a public job and then executed in the triggered runner
+.test_cscs_gh200-template:
   extends:
     - .test_base
     - .test_matrix_job
@@ -43,8 +34,15 @@ include:
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
 
+.test_cscs_amd_cuda-template:
+  extends:
+    - .container-runner-santis-zen2
+    - .test_base
+    - .test_matrix_job
+  needs:
+    - build_base_cscs_amd_rocm
 
-test_cscs_amd_rocm:
+.test_cscs_amd_rocm-template:
   extends:
     - .tds-container-runner-beverin-mi200
     - .test_base

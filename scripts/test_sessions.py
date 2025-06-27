@@ -27,7 +27,8 @@ import yaml
 
 
 REPO_ROOT: Final = pathlib.Path(__file__).parent.parent
-DEFAULT_CONFIG = "{REPO_ROOT}/nox-sessions-config.yml"
+DEFAULT_CONFIG: Final = "{REPO_ROOT}/nox-sessions-config.yml"
+PYTHON_VERSIONS: Final[list[str]] = pathlib.Path(".python-versions").read_text().splitlines()
 
 
 class ExitCode(enum.IntEnum):
@@ -206,24 +207,30 @@ def create_github_actions_list(
     return entries
 
 
-def create_gitlab_ci_config(
-    affected: Sequence[str], *, base_commit: str = "main", verbose: bool = False
-) -> dict[str, object]:
+def create_gitlab_ci_matrix(
+    affected_sessions: Sequence[str], *, verbose: bool = False
+) -> list[dict[str, str | list[str]]]:
     """Create a GitLab CI configuration for the affected sessions."""
-    nox_sessions = get_nox_sessions("-k", "cpu", verbose=verbose)
 
-    gitlab_ci_config = {
-        "stages": ["test"],
-        "test": {
-            "stage": "test",
-            "script": [
-                f"nox -s {{session}} -- {session['args']}"
-                for session in create_github_actions_list(affected, verbose=verbose)
-            ],
-        },
-    }
+    nox_sessions = get_nox_sessions(verbose=verbose)
+    entries: list[dict[str, str | list[str]]] = []
 
-    return {}
+    processed_sessions = set()
+    for session in nox_sessions:
+        if session["name"] in affected_sessions:
+            call_spec = tuple(session["call_spec"].items())
+            session_id = (session["name"], *call_spec)
+            if session_id not in processed_sessions:
+                processed_sessions.add(session_id)
+                entries.append(
+                    dict(
+                        SESSION_NAME=session["name"],
+                        SESSION_ARGS=", ".join(session["call_spec"].values()),
+                        SESSION_PYTHON=[*PYTHON_VERSIONS],
+                    )
+                )
+
+    return entries
 
 
 @app.command()
@@ -283,15 +290,15 @@ def required(
             case OutputFormat.GH_ACTIONS.value:
                 matrix = create_github_actions_list(affected, verbose=verbose)
                 with open(output, "w") as f:
-                    json.dump(matrix, f, indent=2)
-                rich.print(f"Saved GitHub Actions matrix to {output}")
+                    yaml.dump(matrix, f, indent=2)
+                rich.print(f"Saved GitHub Actions matrix to '{output}'")
 
             case OutputFormat.GITLAB_CI.value:
-                gitlab_ci_config = create_gitlab_ci_config(affected, base_commit=base_commit)
+                matrix = create_gitlab_ci_matrix(affected, verbose=verbose)
 
                 with open(output, "w") as f:
-                    yaml.dump(gitlab_ci_config, f, default_flow_style=False)
-                rich.print(f"Saved GitLab CI configuration to {output}")
+                    yaml.dump(matrix, f, default_flow_style=False)
+                rich.print(f"Saved GitLab CI matrix to '{output}'")
 
             case _:
                 assert False, f"Unexpected output format: {format!r}"

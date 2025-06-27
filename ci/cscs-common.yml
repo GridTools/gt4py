@@ -12,10 +12,11 @@ include:
   - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
   - local: 'ci/cscs-ci-ext-config.yml'
 
-variables:  # Default variables for all jobs
+variables:  # Default values for base variables (can be overriden in jobs definitions)
   CUDA_VERSION: '12.6.2'
   ROCM_VERSION: '6.2.4'
   UBUNTU_VERSION: '24.04'
+  UV_VERSION: '0.6.12'
 
 stages:
   - build
@@ -30,11 +31,9 @@ stages:
     # (if-not-exists is the default, i.e. we could also skip the variable)
     CSCS_REBUILD_POLICY: if-not-exists
     DOCKERFILE: ci/Dockerfile
-    DOCKER_BUILD_ARGS: '[ "BASE_IMAGE", "EXTRA_APTGET", "EXTRA_UV_SYNC", "PY_VERSION" "UV_VERSION" ]'
-    EXTRA_APTGET: ""
-    EXTRA_UV_SYNC: ""
-    PY_VERSION: '3.10'
-    UV_VERSION: '0.6.12'
+    DOCKER_BUILD_ARGS: >
+      '[ "BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS",
+         "EXTRA_UV_SYNC_ARGS", "GT4PY_REPO", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
   before_script:
     # We create a tag that depends on the SHA value of ci/base.Dockerfile,
     # the docker build arguments (since we use a parameterized Docker file),
@@ -43,46 +42,37 @@ stages:
     # This way a new base image is only built if the contents  of these files
     # and build arguments changes.
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
-    - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/public/$ARCH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
-    - echo "BASE_IMAGE_${PY_VERSION}=$PERSIST_IMAGE_NAME" >> build.env
+    - export BASE_GT4PY_IMAGE=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
+    - echo "BASE_GT4PY_IMAGE=${BASE_GT4PY_IMAGE}" >> build.env
   after_script:
-    # Just for testing for now 
-    - cp ci/cscs-test-template > generated_cscs_test_pipeline.yml
+    - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
+    - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
+    - echo "GITHUB_PR=${GITHUB_PR}"
+    - export GIT_TARGET_BRANCH="gh/$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.base.ref')"
+    - export OLD_RUNNER_KEY=".${RUNNER_KEY}-template"
+    - ./dev-scripts.py test-sessions required ${GIT_TARGET_BRANCH} --base --format gitlab-ci --output gitlab-test-matrix.yml
+    - yq eval '.".test_matrix_job".parallel.matrix  = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yaml > generated_cscs_test_pipeline.yml
+    - yq eval -i '(.[strenv(OLD_RUNNER_KEY)] | key) = strenv(RUNNER_KEY)' generated_cscs_test_pipeline.yml
   artifacts:
     # Since the base image name becomes runtime dependent, we need to carry the
     # value of it to the following jobs via the 'build.env' dotenv file.
     reports:
       dotenv: build_base.env
     paths:
-      - generated_cscs_test_pipeline
+      - generated_cscs_test_pipeline.yml
 
 .build_with_cuda_extra:
   variables:
     BASE_IMAGE: docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
-    EXTRA_UV_SYNC: "--extra cuda12"
+    EXTRA_UV_SYNC_ARGS: "--extra cuda12"
 
 .build_with_rocm_extra:
   variables:
     BASE_IMAGE: docker.io/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
-    EXTRA_UV_SYNC: "--extra rocm6"
-    EXTRA_BUILD_ENV_VARS: "CUPY_INSTALL_USE_HIP=1"
+    #EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
+    EXTRA_UV_PIP_ARGS: ""
+    EXTRA_BUILD_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
 
-.test_base:
-  stage: test
-  image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
-  script:
-    - cd /gt4py.src
-    - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
-    - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
-    - echo "GITHUB_PR=${GITHUB_PR}"
-    - export CI_NOX_RUN_ONLY_IF_CHANGED_FROM="gh/$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.base.ref')"
-    - echo "CI_NOX_RUN_ONLY_IF_CHANGED_FROM=${CI_NOX_RUN_ONLY_IF_CHANGED_FROM}"
-    - NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
-    - nox -s "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS"
-  variables:
-    CSCS_CUDA_MPS: 1
-    SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 20
 
 .test_trigger_base:
   stage: test
@@ -90,3 +80,17 @@ stages:
     strategy: depend
     forward:
       pipeline_variables: true
+
+
+.test_base:
+  stage: test
+  #image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PY_VERSION
+  image: ${BASE_GT4PY_IMAGE}
+  script:
+    - cd /workspace/gt4py
+    # SESSION_NAME, SESSION_ARGS and SESSION_PYTHON are set in the actual job
+    - nox -s "${SESSION_NAME}-${SESSION_PYTHON}(${SESSION_ARGS})"
+  variables:
+    CSCS_CUDA_MPS: 1
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_TIMELIMIT: 20

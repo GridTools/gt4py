@@ -4,7 +4,8 @@ FROM ${BASE_IMAGE}
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
-WORKDIR /workspace
+ARG WORKDIR_PATH=/workspace
+ENV WORKDIR=${WORKDIR_PATH}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG EXTRA_APTGET=""
@@ -40,25 +41,26 @@ RUN UV_UNMANAGED_INSTALL="/opt/uv" sh /uv-installer.sh && rm /uv-installer.sh
 ENV PATH="/opt/uv:$PATH"
 
 # Set up the environment vars with paths for uv
-ARG CACHE_DIR=/workspace/cache/
+ARG CACHE_DIR=${WORKDIR_PATH}/cache/
 ENV UV_CACHE_DIR="${CACHE_DIR}/uv"
-ENV UV_PROJECT_ENVIRONMENT=/workspace/venv
+ENV UV_PROJECT_ENVIRONMENT=${WORKDIR_PATH}/venv
 ENV UV_PYTHON_INSTALL_DIR="/opt/uv-python"
 
 # Create and activate the python venv
-ARG PY_VERSION=3.10.16
+ARG PY_VERSION=3.10
 RUN uv venv -p ${PY_VERSION} --link-mode copy ${VIRTUAL_ENV}
 ENV VIRTUAL_ENV=${UV_PROJECT_ENVIRONMENT}
 ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
 
 # Install python packages using uv just to fill the uv cache,
 # since nox will creates its own test session venv anyway
-ARG EXTRA_BUILD_ENV_VARS="" 
-ARG EXTRA_UV_SYNC=""
+ARG EXTRA_UV_ENV_VARS="" 
+ARG EXTRA_UV_PIP_ARGS=""
+ARG EXTRA_UV_SYNC_ARGS=""
 RUN --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml <<EOF
-if [[ ! -z "${EXTRA_BUILD_ENV_VARS}" ]]; then
-    eval "export ${EXTRA_BUILD_ENV_VARS}"
+if [[ ! -z "${EXTRA_UV_ENV_VARS}" ]]; then
+    eval "export ${EXTRA_UV_ENV_VARS}"
 fi
 uv pip install --compile-bytecode setuptools wheel pip
 uv sync --compile-bytecode --frozen --no-install-project \
@@ -67,9 +69,13 @@ uv sync --compile-bytecode --frozen --no-install-project \
     --extra jax \
     --extra performance \
     --extra testing \
-     ${EXTRA_UV_SYNC}
+     ${EXTRA_UV_SYNC_ARGS}
+if [[ ! -z "${EXTRA_UV_PIP_ARGS}" ]]; then
+    uv pip install --compile-bytecode ${EXTRA_UV_PIP_ARGS}
+fi
 EOF
+
 
 # Add the repository to the workspace
 ARG GT4PY_REPO="https://github.com/gridtools/gt4py"
-ADD --keep-git-dir=true ${GT4PY_REPO} /workspace/gt4py
+ADD --keep-git-dir=true ${GT4PY_REPO} ${WORKDIR_PATH}/gt4py
