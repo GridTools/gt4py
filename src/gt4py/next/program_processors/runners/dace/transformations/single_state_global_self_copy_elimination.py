@@ -20,7 +20,7 @@ from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
-    spliting_tools as gtx_dace_split,
+    splitting_tools as gtx_dace_split,
 )
 
 

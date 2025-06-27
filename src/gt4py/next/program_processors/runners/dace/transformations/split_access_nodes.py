@@ -15,6 +15,9 @@ from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace.transformations import (
+    splitting_tools as gtx_dace_split,
+)
 
 
 def gt_split_access_nodes(
@@ -165,7 +168,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         #   of the splitter functionality.
         split_description = [e.data.dst_subset for e in edge_reassignments.keys()]
 
-        fragment_access_nodes = gtx_transformations.spliting_tools.split_node(
+        fragment_access_nodes = gtx_dace_split.split_node(
             state=graph,
             sdfg=sdfg,
             node_to_split=access_node,

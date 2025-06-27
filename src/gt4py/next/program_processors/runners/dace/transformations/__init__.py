@@ -12,7 +12,7 @@ Please also see [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/deve
 that explains the general structure and requirements on the SDFGs.
 """
 
-from . import spliting_tools
+from . import splitting_tools
 from .auto_optimize import gt_auto_optimize
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow
 from .gpu_utils import (
@@ -104,5 +104,5 @@ __all__ = [
     "gt_split_access_nodes",
     "gt_substitute_compiletime_symbols",
     "gt_vertical_map_fusion",
-    "spliting_tools",
+    "splitting_tools",
 ]

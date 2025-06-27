@@ -3,10 +3,10 @@ name: "Test Cartesian (CPU)"
 on:
   push:
     branches:
-    - main
+      - main
   pull_request:
     branches:
-    - main
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,9 +19,9 @@ jobs:
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
-    - uses: actions/checkout@v4
-    - id: get-versions
-      uses: ./.github/actions/get-python-versions
+      - uses: actions/checkout@v4
+      - id: get-versions
+        uses: ./.github/actions/get-python-versions
 
   # Test-running job
   test-cartesian:
@@ -35,23 +35,23 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Use a deep clone to get target PR branch
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Use a deep clone to get target PR branch
 
-    - name: Install uv and set the python version
-      uses: astral-sh/setup-uv@v6
-      with:
-        enable-cache: true
-        cache-dependency-glob: "uv.lock"
-        python-version: ${{ matrix.python-version }}
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: ${{ matrix.python-version }}
 
-    - name: Run CPU 'cartesian' tests with nox
-      env:
-        CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "origin/${{ github.base_ref }}"
-        CI_NOX_VERBOSE: 1
+      - name: Run CPU 'cartesian' tests with nox
+        env:
+          CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "origin/${{ github.base_ref }}"
+          CI_NOX_VERBOSE: 1
         # Force a specific compiler for setuptools/distutils
-        CXX: g++
-        CC: gcc
-      shell: bash
-      run: uv run --script noxfile.py -s 'test_cartesian-${{ matrix.python-version }}(${{ matrix.codegen-factor }}, cpu)'
+          CXX: g++
+          CC: gcc
+        shell: bash
+        run: uv run --script noxfile.py -s 'test_cartesian-${{ matrix.python-version }}(${{ matrix.codegen-factor }}, cpu)'

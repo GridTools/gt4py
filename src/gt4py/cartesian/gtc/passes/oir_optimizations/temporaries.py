@@ -24,9 +24,9 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
         offsets = node.offset.to_dict()
         if node.name in tmps_name_map:
-            assert (
-                offsets["i"] == offsets["j"] == offsets["k"] == 0
-            ), "Non-zero offset in temporary that is replaced?!"
+            assert offsets["i"] == offsets["j"] == offsets["k"] == 0, (
+                "Non-zero offset in temporary that is replaced?!"
+            )
             return oir.ScalarAccess(name=tmps_name_map[node.name], dtype=node.dtype)
         return self.generic_visit(node, tmps_name_map=tmps_name_map, **kwargs)
 

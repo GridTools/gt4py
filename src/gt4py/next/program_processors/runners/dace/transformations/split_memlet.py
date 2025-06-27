@@ -20,7 +20,9 @@ from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-from gt4py.next.program_processors.runners.dace.transformations import spliting_tools as gtx_st
+from gt4py.next.program_processors.runners.dace.transformations import (
+    splitting_tools as gtx_dace_split,
+)
 
 
 @dace_properties.make_properties
@@ -111,7 +113,7 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
             if current_read_subset is None:
                 return False
             for known_read_subset in known_read_subsets:
-                if gtx_st.maybe_intersecting(known_read_subset, current_read_subset):
+                if gtx_dace_split.maybe_intersecting(known_read_subset, current_read_subset):
                     return False
             known_read_subsets.append(current_read_subset)
         assert len(known_read_subsets) > 0
@@ -120,7 +122,7 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
         found_edge_to_split = False
         for edge_to_split in edges_to_split:
             for split in split_description:
-                if gtx_transformations.spliting_tools.decompose_subset(
+                if gtx_dace_split.decompose_subset(
                     producer=split, consumer=edge_to_split.data.src_subset
                 ):
                     found_edge_to_split = True
@@ -151,7 +153,7 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
             self.source_node, graph, sdfg
         )
         for edge_to_split in edges_to_split:
-            gtx_transformations.spliting_tools.split_edge(
+            gtx_dace_split.split_edge(
                 state=graph,
                 sdfg=sdfg,
                 edge_to_split=edge_to_split,
@@ -165,8 +167,7 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
     ) -> tuple[list[dace_sbs.Subset], list[dace_graph.MultiConnectorEdge]]:
         split_description = [
-            desc.subset
-            for desc in gtx_transformations.spliting_tools.describe_incoming_edges(state, node)
+            desc.subset for desc in gtx_dace_split.describe_incoming_edges(state, node)
         ]
         edges_to_split = [
             oedge
