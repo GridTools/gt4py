@@ -59,15 +59,13 @@ stages:
 .build_with_cuda_extra:
   variables:
     BASE_IMAGE: docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
-    EXTRA_UV_SYNC:
-      - "--extra cuda12"
+    EXTRA_UV_SYNC: "--extra cuda12"
 
 .build_with_rocm_extra:
   variables:
     BASE_IMAGE: docker.io/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
-    EXTRA_UV_SYNC:
-      - "--extra rocm6"
-    #ENV CUPY_INSTALL_USE_HIP=1
+    EXTRA_UV_SYNC: "--extra rocm6"
+    EXTRA_BUILD_ENV_VARS: "CUPY_INSTALL_USE_HIP=1"
 
 .test_base:
   stage: test
