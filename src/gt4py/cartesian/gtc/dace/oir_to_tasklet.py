@@ -69,7 +69,7 @@ class OIRToTasklet(eve.NodeVisitor):
 
         memlet = Memlet(data=node.name, subset=subsets.Range([(0, 0, 1)]))
         if is_target:
-            # note: it doesn't matter if we use is_target or target here because if they
+            # Nnote: it doesn't matter if we use is_target or target here because if they
             # were different, we had a read-after-write situation, which was already
             # handled above.
             ctx.targets.add(node.name)
@@ -86,7 +86,7 @@ class OIRToTasklet(eve.NodeVisitor):
         target = is_target or key in ctx.targets
         tasklet_name = _tasklet_name(node, target, postfix)
 
-        # gather all parts of the variable name in this list
+        # Gather all parts of the variable name in this list
         name_parts = [tasklet_name]
 
         # Variable K offset subscript
@@ -122,7 +122,7 @@ class OIRToTasklet(eve.NodeVisitor):
             volume=reduce(operator.mul, data_domains, 1),
         )
         if is_target:
-            # note: it doesn't matter if we use is_target or target here because if they
+            # Note: it doesn't matter if we use is_target or target here because if they
             # were different, we had a read-after-write situation, which was already
             # handled above.
             ctx.targets.add(key)
@@ -133,7 +133,7 @@ class OIRToTasklet(eve.NodeVisitor):
         return "".join(filter(None, name_parts))
 
     def visit_AssignStmt(self, node: oir.AssignStmt, ctx: Context) -> None:
-        # order matters: always evaluate the right side of an assignment first
+        # Order matters: always evaluate the right side of an assignment first
         right = self.visit(node.right, ctx=ctx, is_target=False)
         left = self.visit(node.left, ctx=ctx, is_target=True)
 
@@ -329,13 +329,13 @@ def _memlet_subset_cartesian(
     shift = ctx.tree.shift[node.name]
 
     ranges: list[tuple[str, str, int]] = []
-    # handle cartesian indices
+    # Handle cartesian indices
     for index, axis in enumerate(tir.Axis.dims_3d()):
         if dimensions[index]:
             i = f"{axis.iteration_dace_symbol()} + {shift[axis]} + {offset_dict[axis.lower()]}"
             ranges.append((i, i, 1))
 
-    # append data dimensions
+    # Append data dimensions
     for domain_size in data_domains:
         ranges.append(("0", f"{domain_size}-1", 1))  # ranges are inclusive
 
@@ -345,14 +345,14 @@ def _memlet_subset_cartesian(
 def _memlet_subset_variable_offset(
     node: oir.FieldAccess, data_domains: list[int], ctx: Context
 ) -> subsets.Subset:
-    # handle cartesian indices
+    # Handle cartesian indices
     shift = ctx.tree.shift[node.name]
     i = f"{tir.Axis.I.iteration_symbol()} + {shift[tir.Axis.I]}"
     j = f"{tir.Axis.J.iteration_symbol()} + {shift[tir.Axis.J]}"
     K = f"{tir.Axis.K.domain_symbol()} + {shift[tir.Axis.K]} - 1"  # ranges are inclusive
     ranges = [(i, i, 1), (j, j, 1), ("0", K, 1)]
 
-    # append data dimensions
+    # Append data dimensions
     for domain_size in data_domains:
         ranges.append(("0", f"{domain_size}-1", 1))  # ranges are inclusive
 

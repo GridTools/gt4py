@@ -78,26 +78,24 @@ class OIRToTreeIR(eve.NodeVisitor):
         )
         ctx.current_scope.children.append(tasklet)
 
-    def _group_statements(
-        self, node: ControlFlow
-    ) -> list[oir.CodeBlock | ControlFlow | common.Stmt]:
+    def _group_statements(self, node: ControlFlow) -> list[oir.CodeBlock | ControlFlow]:
         """Group the body of a control flow node into CodeBlocks and other ControlFlow
 
         Visitor on statements is left to the caller.
         """
         statements: List[ControlFlow | oir.CodeBlock | common.Stmt] = []
-        groups: List[ControlFlow | oir.CodeBlock | common.Stmt] = []
+        groups: List[ControlFlow | oir.CodeBlock] = []
 
-        for stmt in node.body:
-            if isinstance(stmt, (oir.MaskStmt, oir.While, oir.HorizontalRestriction)):
+        for statement in node.body:
+            if isinstance(statement, ControlFlow):
                 if statements != []:
                     groups.append(
                         oir.CodeBlock(label=f"he_{id(node)}_{len(groups)}", body=statements)
                     )
-                groups.append(stmt)
+                groups.append(statement)
                 statements = []
             else:
-                statements.append(stmt)
+                statements.append(statement)
 
         if statements != []:
             groups.append(oir.CodeBlock(label=f"he_{id(node)}_{len(groups)}", body=statements))
@@ -296,6 +294,10 @@ class OIRToTreeIR(eve.NodeVisitor):
             node,
             centered_extent=True,
         )
+        # When determining the shape of the array, we have to look at the field extents at large.
+        # GT4Py tries to give a precise measure by looking at the horizontal restriction and reduce
+        # the extent to the only grid points inside the mask. DaCe requires the real size of the
+        # data, hence the call with ignore_horizontal_mask=True.
         field_without_mask_extents = oir_utils.compute_fields_extents(
             node,
             centered_extent=True,
@@ -320,10 +322,6 @@ class OIRToTreeIR(eve.NodeVisitor):
                     tir.Axis.J: -field_extent[1][0],
                     tir.Axis.K: max(k_bound[0], 0),
                 }
-                # When determining the shape of the array, we have to look at the field extents at large
-                # GT4Py tries to give a precise measure by looking at the horizontal restriction and reduce
-                # the extent to the only grid points inside the mask. DaCe requires the real size of the
-                # data, hence the call with ignore_horizontal_mask=True
                 containers[param.name] = data.Array(
                     utils.data_type_to_dace_typeclass(param.dtype),  # dtype
                     get_dace_shape(
