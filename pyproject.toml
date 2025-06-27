@@ -443,7 +443,7 @@ url = 'https://test.pypi.org/simple/'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_06_13", extra = "dace-next"}
+dace = {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_06_27", extra = "dace-next"}
 
 # -- versioningit --
 [tool.versioningit]
