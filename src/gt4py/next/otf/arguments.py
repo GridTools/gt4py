@@ -91,12 +91,10 @@ def jit_to_aot_args(
     return CompileTimeArgs.from_concrete_no_size(*inp.args, **inp.kwargs)
 
 
-def adapted_jit_to_aot_args_factory() -> (
-    workflow.Workflow[
-        toolchain.CompilableProgram[DATA_T, JITArgs],
-        toolchain.CompilableProgram[DATA_T, CompileTimeArgs],
-    ]
-):
+def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
+    toolchain.CompilableProgram[DATA_T, JITArgs],
+    toolchain.CompilableProgram[DATA_T, CompileTimeArgs],
+]:
     """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
     return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
 

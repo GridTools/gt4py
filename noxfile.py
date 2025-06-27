@@ -131,7 +131,12 @@ def test_cartesian(
 
     nox_utils.install_session_venv(
         session,
-        extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
+        extras=[
+            "performance",
+            "testing",
+            *codegen_settings["extras"],
+            *device_settings["extras"],
+        ],
         groups=["test"],
     )
 
@@ -243,7 +248,12 @@ def test_next(
 
     nox_utils.install_session_venv(
         session,
-        extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
+        extras=[
+            "performance",
+            "testing",
+            *codegen_settings["extras"],
+            *device_settings["extras"],
+        ],
         groups=groups,
     )
 
@@ -307,7 +317,9 @@ def test_storage(
     device_settings = DeviceTestSettings[device]
 
     nox_utils.install_session_venv(
-        session, extras=["performance", "testing", *device_settings["extras"]], groups=["test"]
+        session,
+        extras=["performance", "testing", *device_settings["extras"]],
+        groups=["test"],
     )
 
     markers = " and ".join(device_settings["markers"])

@@ -12,9 +12,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-import dace
-import dace.data
 import numpy as np
+from dace import data, dtypes, properties, subsets, symbolic
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
@@ -23,33 +22,32 @@ from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
-def get_dace_debuginfo(node: common.LocNode) -> dace.dtypes.DebugInfo:
+def get_dace_debuginfo(node: common.LocNode) -> dtypes.DebugInfo:
     if node.loc is None:
-        return dace.dtypes.DebugInfo(0)
+        return dtypes.DebugInfo(0)
 
-    return dace.dtypes.DebugInfo(
+    return dtypes.DebugInfo(
         node.loc.line, node.loc.column, node.loc.line, node.loc.column, node.loc.filename
     )
 
 
-def array_dimensions(array: dace.data.Array):
-    dims = [
+def array_dimensions(array: data.Array) -> list[bool]:
+    return [
         any(
             re.match(f"__.*_{k}_stride", str(sym))
             for st in array.strides
-            for sym in dace.symbolic.pystr_to_symbolic(st).free_symbols
+            for sym in symbolic.pystr_to_symbolic(st).free_symbols
         )
         or any(
             re.match(f"__{k}", str(sym))
             for sh in array.shape
-            for sym in dace.symbolic.pystr_to_symbolic(sh).free_symbols
+            for sym in symbolic.pystr_to_symbolic(sh).free_symbols
         )
         for k in "IJK"
     ]
-    return dims
 
 
-def replace_strides(arrays: List[dace.data.Array], get_layout_map) -> Dict[str, str]:
+def replace_strides(arrays: list[data.Array], get_layout_map) -> dict[str, str]:
     symbol_mapping = {}
     for array in arrays:
         dims = array_dimensions(array)
@@ -61,7 +59,7 @@ def replace_strides(arrays: List[dace.data.Array], get_layout_map) -> Dict[str, 
             for idx in reversed(np.argsort(layout)):
                 symbol = array.strides[idx]
                 if symbol.is_symbol:
-                    symbol_mapping[str(symbol)] = dace.symbolic.pystr_to_symbolic(stride)
+                    symbol_mapping[str(symbol)] = symbolic.pystr_to_symbolic(stride)
                 stride *= array.shape[idx]
     return symbol_mapping
 
@@ -318,7 +316,7 @@ def compute_dcir_access_infos(
     collect_write=True,
     include_full_domain=False,
     **kwargs,
-) -> dace.properties.DictProperty:
+) -> properties.DictProperty:
     if block_extents is None:
         assert isinstance(oir_node, oir.Stencil)
         block_extents = compute_horizontal_block_extents(oir_node)
@@ -514,7 +512,7 @@ def make_dace_subset(
     context_info: dcir.FieldAccessInfo,
     access_info: dcir.FieldAccessInfo,
     data_dims: Tuple[int, ...],
-) -> dace.subsets.Range:
+) -> subsets.Range:
     clamped_access_info = access_info
     clamped_context_info = context_info
     for axis in access_info.axes():
@@ -531,7 +529,7 @@ def make_dace_subset(
         ].to_dace_symbolic()
         res_ranges.append((subset_start - context_start, subset_end - context_start - 1, 1))
     res_ranges.extend((0, dim - 1, 1) for dim in data_dims)
-    return dace.subsets.Range(res_ranges)
+    return subsets.Range(res_ranges)
 
 
 def untile_memlets(memlets: Sequence[dcir.Memlet], axes: Sequence[dcir.Axis]) -> List[dcir.Memlet]:
