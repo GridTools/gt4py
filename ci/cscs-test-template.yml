@@ -1,0 +1,48 @@
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+include:
+  - local: 'ci/cscs-base.yml'
+
+.test_matrix_job:
+  parallel:
+    matrix:
+      # In the generated test pipeline, all matrix entries will be
+      # fully replaced with new entries, this is just to show how
+      # they will look like:  
+      - SESSION_NAME: test_next
+        SESSION_ARGS: "internal, cpu, nomesh"
+        SESSION_PYTHON: ['3.10', '3.11']
+
+# In the generated test pipeline one of these jobs will be renamed
+# as a public job and then executed in the triggered runner
+.test_cscs_gh200-template:
+  extends:
+    - .test_base
+    - .test_matrix_job
+  needs:
+    - build_base_cscs_gh200
+  variables:
+    # TODO: Fix issue with compile parallelism that causes tests to hang
+    GT4PY_BUILD_JOBS: 2
+    # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
+    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+
+.test_cscs_amd_rocm-template:
+  extends:
+    - .tds-container-runner-beverin-mi200
+    - .test_base
+    - .test_matrix_job
+  needs:
+    - build_base_cscs_amd_rocm
+  variables:
+    # TODO: Fix issue with compile parallelism that causes tests to hang
+    GT4PY_BUILD_JOBS: 2
+    # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
+    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
