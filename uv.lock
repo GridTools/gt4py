@@ -1319,7 +1319,7 @@ typing = [
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=21.3" },
-    { name = "black", specifier = ">=22.6" },
+    { name = "black", specifier = ">=23.12" },
     { name = "boltons", specifier = ">=20.1" },
     { name = "cached-property", specifier = ">=1.5.1" },
     { name = "clang-format", marker = "extra == 'formatting'", specifier = ">=9.0" },
@@ -1341,7 +1341,7 @@ requires-dist = [
     { name = "gridtools-cpp", specifier = "==2.*,>=2.3.9" },
     { name = "gt4py", extras = ["cuda12"], marker = "extra == 'jax-cuda12'" },
     { name = "gt4py", extras = ["dace", "formatting", "jax", "performance", "testing"], marker = "extra == 'all'" },
-    { name = "hypothesis", marker = "extra == 'testing'", specifier = ">=6.134" },
+    { name = "hypothesis", marker = "extra == 'testing'", specifier = ">=6.93" },
     { name = "jax", marker = "extra == 'jax'", specifier = ">=0.4.26" },
     { name = "jax", extras = ["cuda12-local"], marker = "extra == 'jax-cuda12'", specifier = ">=0.4.26" },
     { name = "jinja2", specifier = ">=3.0.0" },
