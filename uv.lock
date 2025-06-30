@@ -1319,7 +1319,7 @@ typing = [
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=21.3" },
-    { name = "black", specifier = ">=22.6" },
+    { name = "black", specifier = ">=23.12" },
     { name = "boltons", specifier = ">=20.1" },
     { name = "cached-property", specifier = ">=1.5.1" },
     { name = "clang-format", marker = "extra == 'formatting'", specifier = ">=9.0" },
@@ -1329,7 +1329,7 @@ requires-dist = [
     { name = "cupy-cuda12x", marker = "extra == 'cuda12'", specifier = ">=12.0" },
     { name = "cupy-rocm-4-3", marker = "extra == 'rocm4-3'", specifier = ">=13.3.0" },
     { name = "cupy-rocm-5-0", marker = "extra == 'rocm5-0'", specifier = ">=13.3.0" },
-    { name = "cytoolz", specifier = ">=0.12.1" },
+    { name = "cytoolz", specifier = ">=1.0.0" },
     { name = "dace", marker = "extra == 'dace'", specifier = ">=1.0.2,<1.1.0" },
     { name = "dace", marker = "extra == 'dace-next'", git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_06_27" },
     { name = "deepdiff", specifier = ">=5.6.0" },
@@ -1341,7 +1341,7 @@ requires-dist = [
     { name = "gridtools-cpp", specifier = "==2.*,>=2.3.9" },
     { name = "gt4py", extras = ["cuda12"], marker = "extra == 'jax-cuda12'" },
     { name = "gt4py", extras = ["dace", "formatting", "jax", "performance", "testing"], marker = "extra == 'all'" },
-    { name = "hypothesis", marker = "extra == 'testing'", specifier = ">=6.0.0" },
+    { name = "hypothesis", marker = "extra == 'testing'", specifier = ">=6.93" },
     { name = "jax", marker = "extra == 'jax'", specifier = ">=0.4.26" },
     { name = "jax", extras = ["cuda12-local"], marker = "extra == 'jax-cuda12'", specifier = ">=0.4.26" },
     { name = "jinja2", specifier = ">=3.0.0" },
@@ -1353,7 +1353,7 @@ requires-dist = [
     { name = "packaging", specifier = ">=20.0" },
     { name = "pybind11", specifier = ">=2.10.1" },
     { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.0" },
-    { name = "scipy", marker = "extra == 'performance'", specifier = ">=1.9.2" },
+    { name = "scipy", marker = "extra == 'performance'", specifier = ">=1.12.0" },
     { name = "setuptools", specifier = ">=70.0.0" },
     { name = "tabulate", specifier = ">=0.8.10" },
     { name = "toolz", specifier = ">=0.12.1" },
@@ -1393,7 +1393,7 @@ dev = [
     { name = "pytest-factoryboy", specifier = ">=2.6.1" },
     { name = "pytest-instafail", specifier = ">=0.5.0" },
     { name = "pytest-xdist", extras = ["psutil"], specifier = ">=3.5.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "pyyaml", specifier = ">=6.0.1" },
     { name = "ruff", specifier = ">=0.8.0" },
     { name = "setuptools", specifier = ">=70.0.0" },
     { name = "sphinx", specifier = ">=7.3.7" },
@@ -1428,7 +1428,7 @@ lint = [
 ]
 scripts = [
     { name = "gitpython", specifier = ">=3.1.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "pyyaml", specifier = ">=6.0.1" },
     { name = "typer", specifier = ">=0.12.3" },
 ]
 test = [
@@ -1468,16 +1468,16 @@ wheels = [
 
 [[package]]
 name = "hypothesis"
-version = "6.125.2"
+version = "6.135.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "exceptiongroup", marker = "python_full_version < '3.11' or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0')" },
     { name = "sortedcontainers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f9/69/3273c85add01293b0ed8fc71554cecb256c9e7826fa102c72cc847bb8bac/hypothesis-6.125.2.tar.gz", hash = "sha256:c70f0a12deb688ce90f2765a507070c4bff57e48ac86849f4350bbddc1df41a3", size = 417961, upload-time = "2025-02-06T00:36:59.581Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/14/69/b5f457b0cc6f9cffcc91ad655d440d30803b3d3f11dcb0e24e53e67861a0/hypothesis-6.135.17.tar.gz", hash = "sha256:9dc0f2d8c9488cebca0ba7d02714c33a687c173782e97f9f5325ee2bf99e3b95", size = 452316, upload-time = "2025-06-30T02:43:08.02Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/1b/e78605ce304554451a36c6e24e603cfcee808c9ed09be5112bf00a10eb5e/hypothesis-6.125.2-py3-none-any.whl", hash = "sha256:55d4966d521b85d2f77e916dabb00d66d5530ea9fbb89c7489ee810625fac802", size = 480692, upload-time = "2025-02-06T00:36:55.685Z" },
+    { url = "https://files.pythonhosted.org/packages/37/3b/db293cb518104366d54613ca4113950124806d5a9a9cc5b18eb3072f14af/hypothesis-6.135.17-py3-none-any.whl", hash = "sha256:f906fe466ff571d7dd565e8af892004ee6d0fb3a9ef2b9a7ce52c11295ef6648", size = 518461, upload-time = "2025-06-30T02:43:04.201Z" },
 ]
 
 [[package]]

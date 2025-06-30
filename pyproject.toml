@@ -43,7 +43,7 @@ lint = [
 ]
 scripts = [
   'gitpython>=3.1.0',
-  'pyyaml>=6.0',
+  'pyyaml>=6.0.1',
   'typer>=0.12.3'
 ]
 test = [
@@ -89,12 +89,12 @@ classifiers = [
 ]
 dependencies = [
   'attrs>=21.3',
-  'black>=22.6',
+  'black>=23.12',
   'boltons>=20.1',
   'cached-property>=1.5.1',
   'click>=8.0.0',
   'cmake>=3.22',
-  'cytoolz>=0.12.1',
+  'cytoolz>=1.0.0',
   'deepdiff>=5.6.0',
   'devtools>=0.6',
   'diskcache>=5.6.3',
@@ -145,10 +145,10 @@ dace-next = ['dace']  # pull dace latest version from the git repository
 formatting = ['clang-format>=9.0']
 jax = ['jax>=0.4.26']
 jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
-performance = ['scipy>=1.9.2']
+performance = ['scipy>=1.12.0']
 rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
 rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
-testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
+testing = ['hypothesis>=6.93', 'pytest>=7.0']
 
 [project.scripts]
 gtpyc = 'gt4py.cartesian.cli:gtpyc'
