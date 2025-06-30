@@ -154,7 +154,6 @@ build_py310_image_aarch64:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
         SLURM_TIMELIMIT: '00:25:00'
-        GT4PY_BUILD_JOBS: 2
     - when: on_success
   variables:
     # TODO: Fix issue with compile parallelism that causes tests to hang
