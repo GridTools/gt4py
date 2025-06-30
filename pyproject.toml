@@ -148,7 +148,7 @@ jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
 performance = ['scipy>=1.12.0']
 rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
 rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
-testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
+testing = ['hypothesis>=6.134', 'pytest>=7.0']
 
 [project.scripts]
 gtpyc = 'gt4py.cartesian.cli:gtpyc'

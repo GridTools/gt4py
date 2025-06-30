@@ -1341,7 +1341,7 @@ requires-dist = [
     { name = "gridtools-cpp", specifier = "==2.*,>=2.3.9" },
     { name = "gt4py", extras = ["cuda12"], marker = "extra == 'jax-cuda12'" },
     { name = "gt4py", extras = ["dace", "formatting", "jax", "performance", "testing"], marker = "extra == 'all'" },
-    { name = "hypothesis", marker = "extra == 'testing'", specifier = ">=6.0.0" },
+    { name = "hypothesis", marker = "extra == 'testing'", specifier = ">=6.134" },
     { name = "jax", marker = "extra == 'jax'", specifier = ">=0.4.26" },
     { name = "jax", extras = ["cuda12-local"], marker = "extra == 'jax-cuda12'", specifier = ">=0.4.26" },
     { name = "jinja2", specifier = ">=3.0.0" },
@@ -1468,16 +1468,16 @@ wheels = [
 
 [[package]]
 name = "hypothesis"
-version = "6.125.2"
+version = "6.135.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "exceptiongroup", marker = "python_full_version < '3.11' or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0')" },
     { name = "sortedcontainers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f9/69/3273c85add01293b0ed8fc71554cecb256c9e7826fa102c72cc847bb8bac/hypothesis-6.125.2.tar.gz", hash = "sha256:c70f0a12deb688ce90f2765a507070c4bff57e48ac86849f4350bbddc1df41a3", size = 417961, upload-time = "2025-02-06T00:36:59.581Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/14/69/b5f457b0cc6f9cffcc91ad655d440d30803b3d3f11dcb0e24e53e67861a0/hypothesis-6.135.17.tar.gz", hash = "sha256:9dc0f2d8c9488cebca0ba7d02714c33a687c173782e97f9f5325ee2bf99e3b95", size = 452316, upload-time = "2025-06-30T02:43:08.02Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/1b/e78605ce304554451a36c6e24e603cfcee808c9ed09be5112bf00a10eb5e/hypothesis-6.125.2-py3-none-any.whl", hash = "sha256:55d4966d521b85d2f77e916dabb00d66d5530ea9fbb89c7489ee810625fac802", size = 480692, upload-time = "2025-02-06T00:36:55.685Z" },
+    { url = "https://files.pythonhosted.org/packages/37/3b/db293cb518104366d54613ca4113950124806d5a9a9cc5b18eb3072f14af/hypothesis-6.135.17-py3-none-any.whl", hash = "sha256:f906fe466ff571d7dd565e8af892004ee6d0fb3a9ef2b9a7ce52c11295ef6648", size = 518461, upload-time = "2025-06-30T02:43:04.201Z" },
 ]
 
 [[package]]
