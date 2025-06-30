@@ -44,23 +44,24 @@ stages:
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
     - export BASE_GT4PY_IMAGE=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
     - echo "BASE_GT4PY_IMAGE=${BASE_GT4PY_IMAGE}" >> build.env
-  after_script:
-    # Get the name of the git target branch
-    - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
-    - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
-    - echo "GITHUB_PR=${GITHUB_PR}"
-    - export GIT_TARGET_BRANCH="gh/$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.base.ref')"
-    - export OLD_RUNNER_KEY=".${RUNNER_KEY}-template"
-    # TODO: check if there is a FULL repository clone available here,
-    #   otherwise clone the repository
-    # Install uv
-    - curl -LsSf https://astral.sh/uv/install.sh | sh
-    # Run script to generate the test matrix
-    - ./scripts-cli.py cscs-ci matrix --verbose --base ${GIT_TARGET_BRANCH} --config nox-sessions-config.yml --base main --output gitlab-test-matrix.yml
-    # Insert the test matrix into the template
-    - uvx yq eval '.".test_matrix_job".parallel.matrix  = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yaml > generated_cscs_test_pipeline.yml
-    # Rename the template job to the actual job name
-    - uvx yq eval -i '(.[strenv(OLD_RUNNER_KEY)] | key) = strenv(RUNNER_KEY)' generated_cscs_test_pipeline.yml
+    - cp ci/cscs-test-template.yaml generated_cscs_test_pipeline.yml
+  # after_script:
+  #   # Get the name of the git target branch
+  #   - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
+  #   - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
+  #   - echo "GITHUB_PR=${GITHUB_PR}"
+  #   - export GIT_TARGET_BRANCH="gh/$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.base.ref')"
+  #   - export OLD_RUNNER_KEY=".${RUNNER_KEY}-template"
+  #   # TODO: check if there is a FULL repository clone available here,
+  #   #   otherwise clone the repository
+  #   # Install uv
+  #   - curl -LsSf https://astral.sh/uv/install.sh | sh
+  #   # Run script to generate the test matrix
+  #   - ./scripts-cli.py cscs-ci matrix --verbose --base ${GIT_TARGET_BRANCH} --config nox-sessions-config.yml --base main --output gitlab-test-matrix.yml
+  #   # Insert the test matrix into the template
+  #   - uvx yq eval '.".test_matrix_job".parallel.matrix  = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yaml > generated_cscs_test_pipeline.yml
+  #   # Rename the template job to the actual job name
+  #   - uvx yq eval -i '(.[strenv(OLD_RUNNER_KEY)] | key) = strenv(RUNNER_KEY)' generated_cscs_test_pipeline.yml
   artifacts:
     # Since the base image name becomes runtime dependent, we need to carry the
     # value of it to the following jobs via the 'build.env' dotenv file.
@@ -82,23 +83,23 @@ stages:
     EXTRA_BUILD_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
 
 
-.test_trigger_base:
-  stage: test
-  trigger:
-    strategy: depend
-    forward:
-      pipeline_variables: true
+# .test_trigger_base:
+#   stage: test
+#   trigger:
+#     strategy: depend
+#     forward:
+#       pipeline_variables: true
 
 
-.test_base:
-  stage: test
-  #image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PY_VERSION
-  image: ${BASE_GT4PY_IMAGE}
-  script:
-    - cd /workspace/gt4py
-    # SESSION_NAME, SESSION_ARGS and SESSION_PYTHON are set in the actual job
-    - nox -s "${SESSION_NAME}-${SESSION_PYTHON}(${SESSION_ARGS})"
-  variables:
-    CSCS_CUDA_MPS: 1
-    SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 20
+# .test_base:
+#   stage: test
+#   #image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PY_VERSION
+#   image: ${BASE_GT4PY_IMAGE}
+#   script:
+#     - cd /workspace/gt4py
+#     # SESSION_NAME, SESSION_ARGS and SESSION_PYTHON are set in the actual job
+#     - nox -s "${SESSION_NAME}-${SESSION_PYTHON}(${SESSION_ARGS})"
+#   variables:
+#     CSCS_CUDA_MPS: 1
+#     SLURM_JOB_NUM_NODES: 1
+#     SLURM_TIMELIMIT: 20
