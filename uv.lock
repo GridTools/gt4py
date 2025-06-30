@@ -1393,7 +1393,7 @@ dev = [
     { name = "pytest-factoryboy", specifier = ">=2.6.1" },
     { name = "pytest-instafail", specifier = ">=0.5.0" },
     { name = "pytest-xdist", extras = ["psutil"], specifier = ">=3.5.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "pyyaml", specifier = ">=6.0.1" },
     { name = "ruff", specifier = ">=0.8.0" },
     { name = "setuptools", specifier = ">=70.0.0" },
     { name = "sphinx", specifier = ">=7.3.7" },
@@ -1428,7 +1428,7 @@ lint = [
 ]
 scripts = [
     { name = "gitpython", specifier = ">=3.1.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "pyyaml", specifier = ">=6.0.1" },
     { name = "typer", specifier = ">=0.12.3" },
 ]
 test = [
