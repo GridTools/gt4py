@@ -42,8 +42,8 @@ stages:
     # This way a new base image is only built if the contents  of these files
     # and build arguments changes.
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
-    - export BASE_GT4PY_IMAGE=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
-    - echo "BASE_GT4PY_IMAGE=${BASE_GT4PY_IMAGE}" >> build.env
+    - export PERSIST_IMAGE_NAME=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
+    - echo "BASE_GT4PY_IMAGE=${PERSIST_IMAGE_NAME}" >> build.env
   after_script:
     - cp ci/cscs-test-template.yml generated_cscs_test_pipeline.yml
   #   # Get the name of the git target branch
