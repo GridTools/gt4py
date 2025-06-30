@@ -16,8 +16,7 @@ import shutil
 import subprocess
 from typing import Optional, TypeVar
 
-from flufl import lock
-
+from gt4py._core import locking
 from gt4py.next import config, errors
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import interface
@@ -258,7 +257,7 @@ def _cc_get_compiledb(
 
     # In a multi-threaded environment, multiple threads may try to create the compiledb at the same time
     # leading to compilation errors.
-    with lock.Lock(str(cache_path / "compiledb.lock"), lifetime=120):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
+    with locking.lock(cache_path / "compiledb.lock"):
         if renew_compiledb or not (compiled_db := _cc_find_compiledb(path=cache_path)):
             compiled_db = _cc_create_compiledb(
                 prototype_program_source=prototype_program_source,
