@@ -39,10 +39,9 @@ jobs:
       - name: Define test sessions base on changed files
         id: test-sessions
         run: |
-          ./dev-scripts.py test-sessions required \
+          ./scripts-cli.py github-ci matrix \
             --config ci/test-sessions.yml \
             --base "${{ github.base_ref }}" \
-            --format gh-actions \
             --output gh-test-sessions.json \
             --verbose
           echo 'test-sessions<<EOF' >> $GITHUB_OUTPUT

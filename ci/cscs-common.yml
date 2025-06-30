@@ -56,7 +56,7 @@ stages:
     # Install uv
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     # Run script to generate the test matrix
-    - ./dev-scripts.py test-sessions required ${GIT_TARGET_BRANCH} --base --format gitlab-ci --output gitlab-test-matrix.yml
+    - ./scripts-cli.py cscs-ci matrix --verbose --base ${GIT_TARGET_BRANCH} --config nox-sessions-config.yml --base main --output gitlab-test-matrix.yml
     # Insert the test matrix into the template
     - uvx yq eval '.".test_matrix_job".parallel.matrix  = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yaml > generated_cscs_test_pipeline.yml
     # Rename the template job to the actual job name

@@ -1,3 +1,12 @@
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 #! /usr/bin/env -S uv run -q -p 3.11 --frozen --isolated --group scripts --script
 #
 # GT4Py - GridTools Framework
@@ -8,7 +17,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Manage test sessions in GT4Py CI."""
+"""Manage conditional execution of nox sessions."""
 
 from __future__ import annotations
 
@@ -18,17 +27,17 @@ import itertools
 import json
 import pathlib
 import subprocess
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Iterable, Sequence
 from typing import Annotated, Final, NotRequired, TypedDict
 
 import rich
 import typer
 import yaml
 
+from . import _common as common
 
-REPO_ROOT: Final = pathlib.Path(__file__).parent.parent
+
 DEFAULT_CONFIG: Final = "{REPO_ROOT}/nox-sessions-config.yml"
-PYTHON_VERSIONS: Final[list[str]] = pathlib.Path(".python-versions").read_text().splitlines()
 
 
 class ExitCode(enum.IntEnum):
@@ -41,17 +50,6 @@ class ExitCode(enum.IntEnum):
     GIT_DIFF_ERROR = 20
     GH_MATRIX_CREATION_ERROR = 30
     NOX_JSON_PARSE_ERROR = 31
-
-
-class OutputFormat(str, enum.Enum):
-    """Output formats for the affected sessions."""
-
-    JSON = "json"
-    GH_ACTIONS = "gh-actions"
-    GITLAB_CI = "gitlab-ci"
-
-    def __str__(self) -> str:
-        return super().__str__()
 
 
 SessionDefinition = TypedDict(
@@ -72,7 +70,7 @@ NoxSessionDefinition = TypedDict(
 )
 
 
-app = typer.Typer(no_args_is_help=True, name="test-sessions", help=__doc__)
+cli = typer.Typer(no_args_is_help=True, name="nox-sessions", help=__doc__)
 
 
 def load_test_sessions_config(config_path: str | pathlib.Path) -> list[SessionDefinition]:
@@ -103,7 +101,7 @@ def get_changed_files(base_commit: str) -> list[str]:
     """Get list of changed files from base_commit."""
     cmd_args = ["git", "diff", "--name-only", base_commit]
     try:
-        out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=REPO_ROOT).stdout
+        out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=common.REPO_ROOT).stdout
     except subprocess.CalledProcessError as e:
         rich.print(f"[red]Error:[/red] Failed to get changed files: {e}")
         raise typer.Exit(ExitCode.GIT_DIFF_ERROR) from e
@@ -166,11 +164,11 @@ def should_run_session(
     return should_run
 
 
-def get_nox_sessions(*args: str, verbose: bool = False) -> list[NoxSessionDefinition]:
+def get_sessions(*args: str, verbose: bool = False) -> list[NoxSessionDefinition]:
     """Get the names of nox sessions that should run based on the test sessions configuration."""
     cmd_args = ["./noxfile.py", "--list", "--json", *args]
     try:
-        out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=REPO_ROOT).stdout
+        out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=common.REPO_ROOT).stdout
         if verbose:
             rich.print(f"nox output: {out}")
         nox_sessions = json.loads(out)
@@ -185,88 +183,21 @@ def get_nox_sessions(*args: str, verbose: bool = False) -> list[NoxSessionDefini
     return nox_sessions
 
 
-def create_github_actions_list(
-    affected_sessions: Sequence[str], *, verbose: bool = False
-) -> list[dict[str, str]]:
-    """Create a GitHub Actions matrix from the affected CPU-only sessions."""
-
-    nox_sessions = get_nox_sessions("-k", "cpu", verbose=verbose)
-    entries: list[dict[str, str]] = []
-
-    processed_sessions = set()
-    for session in nox_sessions:
-        if session["name"] in affected_sessions:
-            call_spec = tuple(session["call_spec"].items())
-            session_id = (session["name"], *call_spec)
-            if session_id not in processed_sessions:
-                processed_sessions.add(session_id)
-                entries.append(
-                    dict(name=session["name"], args=", ".join(session["call_spec"].values()))
-                )
-
-    return entries
-
-
-def create_gitlab_ci_matrix(
-    affected_sessions: Sequence[str], *, verbose: bool = False
-) -> list[dict[str, str | list[str]]]:
-    """Create a GitLab CI configuration for the affected sessions."""
-
-    nox_sessions = get_nox_sessions(verbose=verbose)
-    entries: list[dict[str, str | list[str]]] = []
-
-    processed_sessions = set()
-    for session in nox_sessions:
-        if session["name"] in affected_sessions:
-            call_spec = tuple(session["call_spec"].items())
-            session_id = (session["name"], *call_spec)
-            if session_id not in processed_sessions:
-                processed_sessions.add(session_id)
-                entries.append(
-                    dict(
-                        SESSION_NAME=session["name"],
-                        SESSION_ARGS=", ".join(session["call_spec"].values()),
-                        SESSION_PYTHON=[*PYTHON_VERSIONS],
-                    )
-                )
-
-    return entries
-
-
-@app.command()
+@cli.command()
 def required(
     *,
     config: Annotated[
         str, typer.Option("--config", "-c", help="Sessions configuration file")
     ] = DEFAULT_CONFIG,
     base_commit: Annotated[str, typer.Option("--base", help="Base commit for changes")] = "main",
-    format: Annotated[
-        str | None,
-        typer.Option("--format", help=f"Output format: {list(f'{f.value}' for f in OutputFormat)}"),
-    ] = None,
-    output: Annotated[
-        str | None,
-        typer.Option("--output", help=f"Output file name."),
+    json_output: Annotated[
+        str | None, typer.Option("--json-output", help="Output file name.")
     ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose output")] = False,
 ) -> None:
     """List all test sessions affected by changes from a base commit."""
 
-    if format:
-        if format not in OutputFormat.__members__.values():
-            rich.print(
-                f"[red]Error:[/red] Invalid output format: {format!r}. "
-                f"Choose from: {list(f'{f.value}' for f in OutputFormat)}"
-            )
-            raise typer.Exit(ExitCode.INVALID_COMMAND_OPTIONS)
-
-        if not output:
-            rich.print(
-                "[red]Error:[/red] Output file name must be provided when using --format option."
-            )
-            raise typer.Exit(ExitCode.INVALID_COMMAND_OPTIONS)
-
-    config_path = config.format(REPO_ROOT=REPO_ROOT)
+    config_path = config.format(REPO_ROOT=common.REPO_ROOT)
     sessions = load_test_sessions_config(config_path)
     rich.print(
         f"Found {len(sessions)} test sessions in {config_path}: {[session['name'] for session in sessions]}"
@@ -278,40 +209,20 @@ def required(
         if should_run_session(session, base_commit=base_commit, verbose=verbose)
     ]
 
-    if format:
-        match format:
-            case OutputFormat.JSON.value:
-                with open(output, "w") as f:
-                    json.dump(
-                        {"base_commit": base_commit, "affected_sessions": affected}, f, indent=2
-                    )
-                rich.print(f"Saved affected sessions to {output}")
-
-            case OutputFormat.GH_ACTIONS.value:
-                matrix = create_github_actions_list(affected, verbose=verbose)
-                with open(output, "w") as f:
-                    yaml.dump(matrix, f, indent=2)
-                rich.print(f"Saved GitHub Actions matrix to '{output}'")
-
-            case OutputFormat.GITLAB_CI.value:
-                matrix = create_gitlab_ci_matrix(affected, verbose=verbose)
-
-                with open(output, "w") as f:
-                    yaml.dump(matrix, f, default_flow_style=False)
-                rich.print(f"Saved GitLab CI matrix to '{output}'")
-
-            case _:
-                assert False, f"Unexpected output format: {format!r}"
+    if json_output:
+        with open(json_output, "w") as f:
+            json.dump({"base_commit": base_commit, "affected_sessions": affected}, f, indent=2)
+        rich.print(f"Saved affected sessions to {json_output}")
 
     rich.print(
         f"Found {len(affected)} affected test sessions in changes from {base_commit!r}: {affected}"
     )
 
 
-@app.command()
-def all(config_file: Annotated[str, typer.Argument()] = DEFAULT_CONFIG) -> None:
+@cli.command()
+def list(config_file: Annotated[str, typer.Argument()] = DEFAULT_CONFIG) -> None:  # noqa: A001 [builtin-variable-shadowing]
     """List all test sessions defined in the configuration file."""
-    config_path = config_file.format(REPO_ROOT=REPO_ROOT)
+    config_path = config_file.format(REPO_ROOT=common.REPO_ROOT)
     sessions = load_test_sessions_config(config_path)
 
     rich.print(f"Found {len(sessions)} test sessions in {config_path}:")
@@ -323,4 +234,4 @@ def all(config_file: Annotated[str, typer.Argument()] = DEFAULT_CONFIG) -> None:
 
 
 if __name__ == "__main__":
-    app()
+    cli()

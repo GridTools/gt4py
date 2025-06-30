@@ -64,7 +64,7 @@ repos:
         name: ruff checker
         entry: uv run --frozen --isolated --group dev ruff check --force-exclude --fix
         types_or: [python, pyi, jupyter]
-        files: ^src/ # TODO(egparedes): add the `tests` folder here
+        exclude: '^(tests/|docs/|examples/)'  # TODO(egparedes): remove the exclusions
         require_serial: true
 
       - <<: *uv-managed-hook
