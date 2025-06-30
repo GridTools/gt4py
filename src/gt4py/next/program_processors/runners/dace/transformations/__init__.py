@@ -58,7 +58,7 @@ from .strides import (
     gt_propagate_strides_of,
 )
 from .utils import gt_find_constant_arguments, gt_make_transients_persistent
-
+from .remove_views import RemovePointwiseViews
 
 __all__ = [
     "GT_SIMPLIFY_DEFAULT_SKIP_SET",
@@ -75,6 +75,7 @@ __all__ = [
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
     "MultiStateGlobalSelfCopyElimination2",
+    "RemovePointwiseViews",
     "SerialMapPromoter",
     "SerialMapPromoterGPU",
     "SingleStateGlobalDirectSelfCopyElimination",
