@@ -377,6 +377,12 @@ def _gt_auto_process_top_level_maps(
             ),
         )
 
+    sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.RemovePointwiseViews,
+        validate=validate,
+        validate_all=validate_all,
+    )
+
     return sdfg
 
 
