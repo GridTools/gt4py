@@ -100,12 +100,11 @@ def test_horizontal_map_fusion():
     assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 4
 
 
-    sdfg.apply_transformations_repeated(
+    sdfg.apply_transformations_once_everywhere(
         gtx_transformations.RemovePointwiseViews,
         validate=True,
         validate_all=True,
     )
-    sdfg.view()
 
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
     assert util.count_nodes(sdfg, dace_nodes.MapExit) == 1
