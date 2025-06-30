@@ -23,6 +23,8 @@ jobs:
 
       - id: get-versions
         uses: ./.github/actions/get-python-versions
+        with:
+          all: true
 
   daily-ci:
     needs: get-python-versions
