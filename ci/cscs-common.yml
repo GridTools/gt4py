@@ -44,8 +44,8 @@ stages:
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
     - export BASE_GT4PY_IMAGE=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
     - echo "BASE_GT4PY_IMAGE=${BASE_GT4PY_IMAGE}" >> build.env
-    - cp ci/cscs-test-template.yaml generated_cscs_test_pipeline.yml
-  # after_script:
+  after_script:
+    - cp ci/cscs-test-template.yml generated_cscs_test_pipeline.yml
   #   # Get the name of the git target branch
   #   - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
   #   - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
@@ -59,7 +59,7 @@ stages:
   #   # Run script to generate the test matrix
   #   - ./scripts-cli.py cscs-ci matrix --verbose --base ${GIT_TARGET_BRANCH} --config nox-sessions-config.yml --base main --output gitlab-test-matrix.yml
   #   # Insert the test matrix into the template
-  #   - uvx yq eval '.".test_matrix_job".parallel.matrix  = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yaml > generated_cscs_test_pipeline.yml
+  #   - uvx yq eval '.".test_matrix_job".parallel.matrix  = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yml > generated_cscs_test_pipeline.yml
   #   # Rename the template job to the actual job name
   #   - uvx yq eval -i '(.[strenv(OLD_RUNNER_KEY)] | key) = strenv(RUNNER_KEY)' generated_cscs_test_pipeline.yml
   artifacts:
