@@ -80,11 +80,7 @@ def from_type_hint(
         ):
             type_hint = xtyping.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
 
-    canonical_type = (
-        typing.get_origin(type_hint)
-        if isinstance(type_hint, (types.GenericAlias, typing._GenericAlias))  # type: ignore[attr-defined] # looks like `_GenericAlias`` exists...
-        else type_hint
-    )
+    canonical_type = typing.get_origin(type_hint) or type_hint
     args = typing.get_args(type_hint)
 
     match canonical_type:
