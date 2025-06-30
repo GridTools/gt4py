@@ -18,7 +18,7 @@ import pytest
 
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import ir_makers as im, common_pattern_matcher as cpm
 from gt4py.next.iterator.type_system import (
     inference as itir_type_inference,
     type_specifications as it_ts,
@@ -31,6 +31,7 @@ from next_tests.integration_tests.cases import (
     V2E,
     E2VDim,
     Edge,
+    Cell,
     IDim,
     Ioff,
     JDim,
@@ -48,15 +49,18 @@ from next_tests.integration_tests.cases import IField, JField
 bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-float64_list_type = ts.ListType(element_type=float64_type)
+float64_list_type = ts.ListType(element_type=float64_type, offset_type=V2EDim)
 int_list_type = ts.ListType(element_type=int_type)
 
 float_i_field = ts.FieldType(dims=[IDim], dtype=float64_type)
 float_j_field = ts.FieldType(dims=[JDim], dtype=float64_type)
+float_k_field = ts.FieldType(dims=[KDim], dtype=float64_type)
 float_ij_field = ts.FieldType(dims=[IDim, JDim], dtype=float64_type)
 float_vertex_k_field = ts.FieldType(dims=[Vertex, KDim], dtype=float64_type)
 float_edge_k_field = ts.FieldType(dims=[Edge, KDim], dtype=float64_type)
 float_edge_field = ts.FieldType(dims=[Edge], dtype=float64_type)
+float_vertex_field = ts.FieldType(dims=[Vertex], dtype=float64_type)
+float_cell_k_field = ts.FieldType(dims=[Cell, KDim], dtype=float64_type)
 float_vertex_v2e_field = ts.FieldType(dims=[Vertex, V2EDim], dtype=float64_type)
 
 it_on_v_of_e_type = it_ts.IteratorType(
@@ -73,6 +77,12 @@ it_ijk_type = it_ts.IteratorType(
 
 
 def expression_test_cases():
+    i_domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 1)})
+    ij_domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 1), JDim: (0, 1)})
+    k_domain = im.domain(common.GridType.CARTESIAN, {KDim: (0, 1)})
+    cell_k_domain = im.domain(common.GridType.UNSTRUCTURED, {Cell: (0, 1), KDim: (0, 1)})
+    vertex_k_domain = im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 1), KDim: (0, 1)})
+
     return (
         # itir expr, type
         (im.call("abs")(1), int_type),
@@ -94,7 +104,7 @@ def expression_test_cases():
             im.call("cartesian_domain")(
                 im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
             ),
-            it_ts.DomainType(dims=[IDim]),
+            ts.DomainType(dims=[IDim]),
         ),
         (
             im.call("unstructured_domain")(
@@ -102,7 +112,7 @@ def expression_test_cases():
                     itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
                 )
             ),
-            it_ts.DomainType(dims=[Vertex]),
+            ts.DomainType(dims=[Vertex]),
         ),
         # make_tuple
         (
@@ -119,7 +129,7 @@ def expression_test_cases():
         # neighbors
         (
             im.neighbors("E2V", im.ref("a", it_on_e_of_e_type)),
-            ts.ListType(element_type=it_on_e_of_e_type.element_type),
+            ts.ListType(element_type=it_on_e_of_e_type.element_type, offset_type=E2VDim),
         ),
         # cast
         (im.cast_(1, int_type), int_type),
@@ -129,6 +139,13 @@ def expression_test_cases():
         (
             im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.ref("b", int_list_type)),
             int_list_type,
+        ),
+        (
+            im.map_(im.ref("plus"))(
+                im.ref("a", int_list_type),
+                im.ref("b", ts.ListType(element_type=int_type, offset_type=V2EDim)),
+            ),
+            ts.ListType(element_type=int_type, offset_type=V2EDim),
         ),
         # reduce
         (im.reduce("plus", 0)(im.ref("l", int_list_type)), int_type),
@@ -149,38 +166,65 @@ def expression_test_cases():
         (im.shift("Ioff", 1)(im.ref("it", it_ijk_type)), it_ijk_type),
         # as_fieldop
         (
+            im.as_fieldop("deref", i_domain)(im.ref("inp", float_i_field)),
+            float_i_field,
+        ),
+        (
             im.as_fieldop(
-                "deref",
-                im.call("cartesian_domain")(
-                    im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
-                ),
+                im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))),
+                i_domain,
             )(im.ref("inp", float_i_field)),
             float_i_field,
         ),
         (
             im.as_fieldop(
-                im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))),
-                im.call("unstructured_domain")(
-                    im.call("named_range")(
-                        itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL),
-                        0,
-                        1,
-                    ),
-                    im.call("named_range")(
-                        itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
+                im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))),
+                ij_domain,
+            )(im.ref("inp", float_ij_field)),
+            float_ij_field,
+        ),
+        (
+            im.as_fieldop(
+                im.lambda_("it")(im.deref(im.shift("Koff", 1)(im.shift("V2E", 0)("it")))),
+                vertex_k_domain,
+            )(im.ref("inp", float_edge_k_field)),
+            float_vertex_k_field,
+        ),
+        (
+            im.as_fieldop(
+                im.lambda_("it1", "it2")(
+                    im.plus(
+                        im.deref(im.shift("E2V", 1)(im.shift("C2E", 1)("it1"))),
+                        im.deref(im.shift("Koff", 1)("it2")),
                     ),
                 ),
+                cell_k_domain,
+            )(
+                im.ref("inp1", float_vertex_field),
+                im.ref("inp2", float_k_field),
+            ),
+            float_cell_k_field,
+        ),
+        (
+            im.as_fieldop(
+                im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))),
+                vertex_k_domain,
             )(im.ref("inp", float_edge_k_field)),
             float_vertex_k_field,
         ),
         (
             im.as_fieldop(
                 im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
-                im.call("cartesian_domain")(
-                    im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
-                ),
-            )(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field)),
-            ts.TupleType(types=[float_i_field, float_i_field]),
+                ij_domain,
+            )(im.ref("inp1", float_i_field), im.ref("inp2", float_j_field)),
+            ts.TupleType(types=[float_ij_field, float_ij_field]),
+        ),
+        (
+            im.as_fieldop(
+                im.scan(im.lambda_("state", "inp")(im.plus("state", im.deref("inp"))), True, 0.0),
+                k_domain,
+            )(im.ref("inp", float_k_field)),
+            float_k_field,
         ),
         (
             im.as_fieldop(im.lambda_("x")(im.deref("x")))(
@@ -228,6 +272,28 @@ def test_expression_type(test_case):
         testee, offset_provider_type=offset_provider_type, allow_undeclared_symbols=True
     )
     assert result.type == expected_type
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [(expr, type_) for expr, type_ in expression_test_cases() if cpm.is_applied_as_fieldop(expr)],
+)
+def test_expression_type_as_fieldop_no_domain(test_case):
+    mesh = simple_mesh(None)
+    offset_provider_type = {**mesh.offset_provider_type, "Ioff": IDim, "Joff": JDim, "Koff": KDim}
+
+    testee_with_domain, expected_type = test_case
+    result_with_domain = itir_type_inference.infer(
+        testee_with_domain, offset_provider_type=offset_provider_type, allow_undeclared_symbols=True
+    )
+    # testee stays as is, but we remove the domain
+    testee_without_domain = im.as_fieldop(testee_with_domain.fun.args[0])(*testee_with_domain.args)
+    result_without_domain = itir_type_inference.infer(
+        testee_without_domain,
+        offset_provider_type=offset_provider_type,
+        allow_undeclared_symbols=True,
+    )
+    assert result_with_domain.type == result_without_domain.type == expected_type
 
 
 def test_adhoc_polymorphism():
@@ -320,7 +386,7 @@ def test_cartesian_fencil_definition():
 
     program_type = it_ts.ProgramType(params={"inp": float_i_field, "out": float_i_field})
     assert result.type == program_type
-    domain_type = it_ts.DomainType(dims=[IDim])
+    domain_type = ts.DomainType(dims=[IDim])
     assert result.body[0].domain.type == domain_type
     assert result.body[0].expr.type == float_i_field
     assert result.body[0].target.type == float_i_field
@@ -359,7 +425,7 @@ def test_unstructured_fencil_definition():
         params={"inp": float_edge_k_field, "out": float_vertex_k_field}
     )
     assert result.type == program_type
-    domain_type = it_ts.DomainType(dims=[Vertex, KDim])
+    domain_type = ts.DomainType(dims=[Vertex, KDim])
     assert result.body[0].domain.type == domain_type
     assert result.body[0].expr.type == float_vertex_k_field
     assert result.body[0].target.type == float_vertex_k_field
@@ -424,7 +490,6 @@ def test_fencil_with_nb_field_input():
     )
 
     result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
-
     stencil = result.body[0].expr.fun.args[0]
     assert stencil.expr.args[0].type == float64_list_type
     assert stencil.type.returns == float64_type
@@ -482,10 +547,7 @@ def test_program_setat_without_domain():
 
     result = itir_type_inference.infer(testee, offset_provider_type={"Ioff": IDim})
 
-    assert (
-        isinstance(result.body[0].expr.type, ts.DeferredType)
-        and result.body[0].expr.type.constraint == ts.FieldType
-    )
+    assert result.body[0].expr.type, ts.FieldType(dims=[IDim], dtype=float64_type)
 
 
 def test_if_stmt():
@@ -512,16 +574,18 @@ def test_if_stmt():
     assert result.true_branch[0].expr.type == float_i_field
 
 
-def test_as_fieldop_without_domain():
-    testee = im.as_fieldop(im.lambda_("it")(im.deref(im.shift("IOff", 1)("it"))))(
-        im.ref("inp", float_i_field)
-    )
+def test_as_fieldop_without_domain_nb_field_input():
+    stencil = im.lambda_("it1")(im.deref("it1"))
+
+    testee = im.as_fieldop(stencil)(im.ref("inp1", float_vertex_v2e_field))
     result = itir_type_inference.infer(
-        testee, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True
+        testee, offset_provider_type={"V2E": V2E}, allow_undeclared_symbols=True
     )
-    assert result.type == ts.DeferredType(constraint=ts.FieldType)
+    assert result.type == ts.FieldType(dims=[Vertex], dtype=float64_list_type)
     assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
-        position_dims="unknown", defined_dims=float_i_field.dims, element_type=float_i_field.dtype
+        position_dims=[Vertex],
+        defined_dims=float_vertex_field.dims,
+        element_type=float64_list_type,
     )
 
 

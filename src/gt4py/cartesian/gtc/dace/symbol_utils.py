@@ -11,20 +11,20 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
-import dace
 import numpy as np
+from dace import dtypes, symbolic
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
 
 
 if TYPE_CHECKING:
-    import gt4py.cartesian.gtc.dace.daceir as dcir
+    from gt4py.cartesian.gtc.dace import daceir as dcir
 
 
-def data_type_to_dace_typeclass(data_type):
+def data_type_to_dace_typeclass(data_type: common.DataType) -> dtypes.typeclass:
     dtype = np.dtype(common.data_type_to_typestr(data_type))
-    return dace.dtypes.typeclass(dtype.type)
+    return dtypes.typeclass(dtype.type)
 
 
 def get_axis_bound_str(axis_bound, var_name):
@@ -61,9 +61,11 @@ def get_axis_bound_diff_str(axis_bound1, axis_bound2, var_name: str):
         var = var_name
     else:
         var = ""
-    return f"{sign}({var}{axis_bound1.offset-axis_bound2.offset:+d})"
+    return f"{sign}({var}{axis_bound1.offset - axis_bound2.offset:+d})"
 
 
 @lru_cache(maxsize=None)
-def get_dace_symbol(name: eve.SymbolRef, dtype: common.DataType = common.DataType.INT32):
-    return dace.symbol(name, dtype=data_type_to_dace_typeclass(dtype))
+def get_dace_symbol(
+    name: eve.SymbolRef, dtype: common.DataType = common.DataType.INT32
+) -> symbolic.symbol:
+    return symbolic.symbol(name, dtype=data_type_to_dace_typeclass(dtype))

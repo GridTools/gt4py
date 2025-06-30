@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import abc
+import collections
 import collections.abc
 import dataclasses
 import enum
@@ -256,53 +258,146 @@ class IndexerCallable(Generic[_S, _T]):
         return self.func(*key) if isinstance(key, tuple) else self.func(key)
 
 
-class fluid_partial(functools.partial):
-    """Create a `functools.partial` with support for multiple applications calling `.partial()`."""
-
-    def partial(self, *args: Any, **kwargs: Any) -> fluid_partial:
-        return fluid_partial(self, *args, **kwargs)
+_K = TypeVar("_K")
+_V = TypeVar("_V")
 
 
-@overload
-def with_fluid_partial(
-    func: Literal[None] = None, *args: Any, **kwargs: Any
-) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
+class CustomDefaultDictBase(collections.UserDict[_K, _V]):
+    """
+    Base dict-like class using a value factory to compute default values per key.
 
+    This class is not intended to be used directly, but as a base for other classes.
 
-@overload
-def with_fluid_partial(  # redefinition of unused function
-    func: Callable[_P, _T], *args: Any, **kwargs: Any
-) -> Callable[_P, _T]: ...
+    Examples:
+        >>> class MyDefaultDict(CustomDefaultDictBase):
+        ...     def value_factory(self, key):
+        ...         return key * 2
+        >>> d = MyDefaultDict()
+        >>> d[1]
+        2
+        >>> d[2]
+        4
+        >>> d[1] = 10
+        >>> d[1]
+        10
 
-
-def with_fluid_partial(  # redefinition of unused function
-    func: Optional[Callable[..., Any]] = None, *args: Any, **kwargs: Any
-) -> Union[Callable[..., Any], Callable[[Callable[..., Any]], Callable[..., Any]]]:
-    """Add a `partial` attribute to the decorated function.
-
-    The `partial` attribute is a function that behaves like `functools.partial`,
-    but also supports partial application of the decorated function. It can be
-    used both as a bare or a parameterized decorator.
-
-    Arguments:
-        func: The function to decorate.
-
-    Returns:
-        Returns the decorated function with an extra `.partial()` attribute.
-
-    Example:
-        >>> @with_fluid_partial
-        ... def add(a, b):
-        ...     return a + b
-        >>> add.partial(1)(2)
-        3
     """
 
-    def _decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        func.partial = fluid_partial(functools.partial, func, *args, **kwargs)  # type: ignore[attr-defined]  # add attribute
-        return func
+    @abc.abstractmethod
+    def value_factory(self, key: _K) -> _V:
+        raise NotImplementedError
 
-    return _decorator(func) if func is not None else _decorator
+    def __getitem__(self, key: _K) -> _V:
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            self.data[key] = (value := self.value_factory(key))
+            return value
+
+
+class CustomMapping(collections.abc.MutableMapping[_K, _V]):
+    """
+    A custom mapping class that uses a key function to map keys to values.
+
+    This class allows for custom key functions to be used for indexing and
+    retrieving values, while maintaining a mapping-like interface.
+
+    Examples:
+        >>> mapping = CustomMapping(lambda x: hash(repr(x)))
+        >>> mapping[[1, 2]] = "first"
+        >>> mapping[[1, 2]]
+        'first'
+        >>> mapping[{1, 2}] = "second"
+        >>> mapping[{1, 2}]
+        'second'
+        >>> len(mapping)
+        2
+    """
+
+    __slots__ = ("key_func", "key_map", "value_map")
+
+    key_func: Callable[[_K], int]
+    key_map: dict[int, _K]
+    value_map: dict[int, _V]
+
+    def __init__(self, key: Callable[[_K], int]) -> None:
+        self.key_func = key
+        self.key_map = {}
+        self.value_map = {}
+
+    def __getitem__(self, key: _K) -> _V:
+        return self.value_map[self.key_func(key)]
+
+    def __setitem__(self, key: _K, value: _V) -> None:
+        data_key = self.key_func(key)
+        self.key_map[data_key] = key
+        self.value_map[data_key] = value
+
+    def __delitem__(self, key: _K) -> None:
+        custom_key = self.key_func(key)
+        del self.key_map[custom_key]
+        del self.value_map[custom_key]
+
+    def __len__(self) -> int:
+        return len(self.key_map)
+
+    def __iter__(self) -> Iterator[_K]:
+        for custom_key in self.key_map:
+            yield self.key_map[custom_key]
+
+    def __repr__(self) -> str:
+        return (
+            "{"
+            + ", ".join(f"{self.key_map[k]!r}: {self.value_map[k]!r}" for k in self.key_map)
+            + "}"
+        )
+
+
+class HashableBy(Generic[_T]):
+    __slots__ = ("hashed_value", "value")
+
+    def __init__(self, hash_func: Callable[[_T], int], value: _T) -> None:
+        self.value = value
+        self.hashed_value = hash_func(value)
+
+    def __hash__(self) -> int:
+        return self.hashed_value
+
+    def __eq__(self, other: Any) -> bool:
+        assert isinstance(other, HashableBy)
+        return self.value is other.value or self.value == other.value
+
+    def __str__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(value={self.value!r}, hashed_value={self.hashed_value!r})"
+        )
+
+
+@overload
+def hashable_by(func: Callable[[_T], int], value: _T) -> HashableBy[_T]: ...
+
+
+@overload
+def hashable_by(
+    func: Callable[[_T], int], value: NothingType = NOTHING
+) -> functools.partial[HashableBy[_T]]: ...
+
+
+def hashable_by(
+    func: Callable[[_T], int], value: _T | NothingType = NOTHING
+) -> HashableBy[_T] | functools.partial[HashableBy[_T]]:
+    """
+    Creates a wrapper that uses `func` to hash the value passed to it.
+    """
+    return (
+        HashableBy(func, value)  # type: ignore[arg-type] # checked in condition
+        if value is not NOTHING
+        else functools.partial(hashable_by, func)
+    )
+
+
+hashable_by_id = hashable_by(id)
+cached_hash = hashable_by(hash)
 
 
 @overload
@@ -312,12 +407,12 @@ def optional_lru_cache(
 
 
 @overload
-def optional_lru_cache(  # redefinition of unused function
+def optional_lru_cache(
     func: Callable[_P, _T], *, maxsize: Optional[int] = 128, typed: bool = False
 ) -> Callable[_P, _T]: ...
 
 
-def optional_lru_cache(  # redefinition of unused function
+def optional_lru_cache(
     func: Optional[Callable[_P, _T]] = None, *, maxsize: Optional[int] = 128, typed: bool = False
 ) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
     """Wrap :func:`functools.lru_cache` to fall back to the original function if arguments are not hashable.
@@ -362,6 +457,109 @@ def optional_lru_cache(  # redefinition of unused function
     return _decorator(func) if func is not None else _decorator
 
 
+# TODO(egparedes): it would be more efficient to implement the caching logic
+# here instead of relying on `functools.lru_cache` and wrapping/unwrapping the
+# arguments.
+def lru_cache(
+    func: Optional[Callable[_P, _T]] = None,
+    *,
+    key: Optional[Callable[_P, int]] = None,
+    maxsize: Optional[int] = 128,
+    typed: bool = False,
+) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
+    """
+    Wrap :func:`functools.lru_cache` but allow customizing the cache key.
+
+    Be careful: `key(obj1) == key(obj2)` must imply `obj1 == obj2`.
+
+    >>> @lru_cache(key=id)
+    ... def func(x):
+    ...     print("called")
+    ...     return x
+
+    >>> obj = object()
+    >>> func(obj) is obj
+    called
+    True
+    >>> func(obj) is obj
+    True
+    """
+
+    def _decorator(func: Callable[_P, _T]) -> Callable[_P, _T]:
+        if key:
+            if typed:
+                raise ValueError("Cannot use both 'key' and 'typed'")
+
+            @functools.lru_cache(maxsize=maxsize, typed=False)
+            def cached_func(*args: HashableBy, **kwargs: HashableBy) -> _T:
+                return func(*(arg.value for arg in args), **{k: v.value for k, v in kwargs.items()})
+
+            @functools.wraps(func)
+            def inner(*args, **kwargs):  # type: ignore[no-untyped-def]  # cast below restores type info
+                return cached_func(
+                    *(hashable_by(key, arg) for arg in args),
+                    **{k: hashable_by(key, arg) for k, arg in kwargs.items()},
+                )
+
+            inner.cache_parameters = cached_func.cache_parameters  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
+            inner.cache_info = cached_func.cache_info  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
+
+            return typing.cast(Callable[_P, _T], inner)
+
+        return typing.cast(
+            Callable[_P, _T], functools.lru_cache(maxsize=maxsize, typed=typed)(func)
+        )
+
+    return _decorator(func) if func is not None else _decorator
+
+
+class fluid_partial(functools.partial):
+    """Create a `functools.partial` with support for multiple applications calling `.partial()`."""
+
+    def partial(self, *args: Any, **kwargs: Any) -> fluid_partial:
+        return fluid_partial(self, *args, **kwargs)
+
+
+@overload
+def with_fluid_partial(
+    func: Literal[None] = None, *args: Any, **kwargs: Any
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
+
+
+@overload
+def with_fluid_partial(func: Callable[_P, _T], *args: Any, **kwargs: Any) -> Callable[_P, _T]: ...
+
+
+def with_fluid_partial(
+    func: Optional[Callable[..., Any]] = None, *args: Any, **kwargs: Any
+) -> Union[Callable[..., Any], Callable[[Callable[..., Any]], Callable[..., Any]]]:
+    """Add a `partial` attribute to the decorated function.
+
+    The `partial` attribute is a function that behaves like `functools.partial`,
+    but also supports partial application of the decorated function. It can be
+    used both as a bare or a parameterized decorator.
+
+    Arguments:
+        func: The function to decorate.
+
+    Returns:
+        Returns the decorated function with an extra `.partial()` attribute.
+
+    Example:
+        >>> @with_fluid_partial
+        ... def add(a, b):
+        ...     return a + b
+        >>> add.partial(1)(2)
+        3
+    """
+
+    def _decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        func.partial = fluid_partial(functools.partial, func, *args, **kwargs)  # type: ignore[attr-defined]  # add attribute
+        return func
+
+    return _decorator(func) if func is not None else _decorator
+
+
 def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     """Class decorator to automatically register virtual subclasses.
 
@@ -374,7 +572,9 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
         >>> @register_subclasses(MyVirtualSubclassA, MyVirtualSubclassB)
         ... class MyBaseClass(abc.ABC):
         ...     pass
-        >>> issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(MyVirtualSubclassB, MyBaseClass)
+        >>> issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(
+        ...     MyVirtualSubclassB, MyBaseClass
+        ... )
         True
 
     """

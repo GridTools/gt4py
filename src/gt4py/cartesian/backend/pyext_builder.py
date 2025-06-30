@@ -11,7 +11,7 @@ import copy
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union, overload
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, TypedDict, Union
 
 import pybind11
 import setuptools
@@ -20,6 +20,12 @@ from setuptools.command.build_ext import build_ext
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
+
+
+class SetuptoolsArgs(TypedDict):
+    name: str
+    ext_modules: list[setuptools.Extension]
+    script_args: list[str]
 
 
 def get_dace_module_path() -> Optional[str]:
@@ -49,7 +55,7 @@ def get_gt_pyext_build_opts(
     uses_openmp: bool = True,
     uses_cuda: bool = False,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
-    include_dirs = [gt_config.build_settings["boost_include_path"]]
+    include_dirs: list[str] = []
     extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
     is_rocm_gpu = core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
 
@@ -79,30 +85,23 @@ def get_gt_pyext_build_opts(
             # because `char` is used to represent the `int8` type in GT4Py programs.
             "-fsigned-char",
             "-isystem{}".format(gt_include_path),
-            "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
-            "-DBOOST_PP_VARIADICS",
             *extra_compile_args_from_config["cxx"],
         ]
     )
     extra_compile_args["cuda"] = [
         "-std=c++17",
         "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
-        "-DBOOST_PP_VARIADICS",
-        "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
-        "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
         *extra_compile_args_from_config["cuda"],
     ]
     if is_rocm_gpu:
         extra_compile_args["cuda"] += [
             "-isystem{}".format(gt_include_path),
-            "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
             "-fvisibility=hidden",
             "-fPIC",
         ]
     else:
         extra_compile_args["cuda"] += [
             "-isystem={}".format(gt_include_path),
-            "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
             "-arch=sm_{}".format(cuda_arch),
             "--expt-relaxed-constexpr",
             "--compiler-options",
@@ -191,31 +190,6 @@ def setuptools_setup(*, build_ext_class: type[build_ext] | None, **kwargs) -> No
     setuptools.distutils.core.run_commands(dist)
 
 
-# The following tells mypy to accept unpacking kwargs
-@overload
-def build_pybind_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str
-) -> Tuple[str, str]: ...
-
-
-@overload
-def build_pybind_ext(
-    name: str,
-    sources: list,
-    build_path: str,
-    target_path: str,
-    *,
-    include_dirs: Optional[List[str]] = None,
-    library_dirs: Optional[List[str]] = None,
-    libraries: Optional[List[str]] = None,
-    extra_compile_args: Optional[Union[List[str], Dict[str, List[str]]]] = None,
-    extra_link_args: Optional[List[str]] = None,
-    build_ext_class: Optional[Type] = None,
-    verbose: bool = False,
-    clean: bool = False,
-) -> Tuple[str, str]: ...
-
-
 def build_pybind_ext(
     name: str,
     sources: list,
@@ -257,7 +231,7 @@ def build_pybind_ext(
         extra_link_args=extra_link_args,
     )
 
-    setuptools_args = dict(
+    setuptools_args = SetuptoolsArgs(
         name=name,
         ext_modules=[py_extension],
         script_args=[
@@ -295,14 +269,6 @@ def build_pybind_ext(
         distutils.sysconfig._config_vars[key] = value
 
     return module_name, dest_path
-
-
-# The following tells mypy to accept unpacking kwargs
-@overload
-def build_pybind_cuda_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str
-) -> Tuple[str, str]:
-    pass
 
 
 def build_pybind_cuda_ext(

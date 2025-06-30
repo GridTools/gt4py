@@ -1,71 +1,95 @@
-default_language_version:
-  python: python3.10
 minimum_pre_commit_version: 3.8.0
 repos:
-# - repo: meta
-#   hooks:
-#   - id: check-hooks-apply
-#   - id: check-useless-excludes
+  - repo: meta
+    hooks:
+      - id: check-hooks-apply
+      - id: check-useless-excludes
 
-- repo: https://github.com/astral-sh/uv-pre-commit
-  # uv version.
-  rev: 0.5.25
-  hooks:
-  - id: uv-lock
+  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+    rev: v2.14.0
+    hooks:
+      - id: pretty-format-toml
+        args: [--autofix]
+        exclude: tach.toml
+      - id: pretty-format-yaml
+        args: [--autofix, --preserve-quotes, --indent, "2", --offset, "2"]
 
-- repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  rev: v2.6.0
-  hooks:
-  - id: pretty-format-ini
-    args: [--autofix]
-  - id: pretty-format-toml
-    args: [--autofix]
-    exclude: tach.toml
-  - id: pretty-format-yaml
-    args: [--autofix, --preserve-quotes, --indent, "2"]
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        types_or: [markdown, json]
 
-- repo: https://github.com/pre-commit/mirrors-prettier
-  rev: v3.0.0-alpha.4
-  hooks:
-  - id: prettier
-    types_or: [markdown, json]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: destroyed-symlinks
 
-- repo: https://github.com/Lucas-C/pre-commit-hooks
-  rev: v1.5.5
-  hooks:
-  - id: insert-license
-    exclude: ^\..*$
-    types: [python]
-    args: [--comment-style, "|#|", --license-filepath, ./HEADER.txt, --fuzzy-match-generates-todo]
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.5
+    hooks:
+      - id: insert-license
+        types: [python]
+        args: [--comment-style, "|#|", --license-filepath, ./HEADER.txt, --fuzzy-match-generates-todo]
 
-- repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.4.0
-  hooks:
-  - id: check-case-conflict
-  - id: check-merge-conflict
-  - id: check-toml
-  - id: check-yaml
+  # The following hooks use development tools which are already managed by 'uv'.
+  # To avoid inconsistencies between the development and the pre-commit
+  # environments, we run them as local hooks so we can make sure they use
+  # exactly the same versions without duplicating the version info.
+  - repo: local
+    hooks:
+      - &uv-managed-hook
+        id: uv-managed-base-hook
+        name: uv managed hook
+        entry: uv --version
+        language: python
+        additional_dependencies: [uv>=0.6.10]
+        stages: [pre-commit]
 
-- repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.8.6
-  hooks:
-  - id: ruff
-    files: ^src/  # TODO(egparedes): also add the `tests` folder here
-    args: [--fix]
-  - id: ruff-format
+      - <<: *uv-managed-hook
+        id: uv-lock
+        name: uv-lock
+        description: "Automatically run 'uv lock' on your project dependencies"
+        entry: uv lock
+        files: ^(uv\.lock|pyproject\.toml|uv\.toml)$
+        pass_filenames: false
 
-- repo: https://github.com/gauge-sh/tach-pre-commit
-  rev: v0.23.0
-  hooks:
-  - id: tach
+      - <<: *uv-managed-hook
+        id: ruff-check
+        name: ruff checker
+        entry: uv run --frozen --isolated --group dev ruff check --force-exclude --fix
+        types_or: [python, pyi, jupyter]
+        files: ^src/ # TODO(egparedes): add the `tests` folder here
+        require_serial: true
 
-- repo: local
-  hooks:
-  - id: mypy
-    name: mypy static type checker
-    entry: uv run --frozen mypy --no-install-types src/
-    language: system
-    types_or: [python, pyi]
-    pass_filenames: false
-    require_serial: true
-    stages: [pre-commit]
+      - <<: *uv-managed-hook
+        id: ruff-format
+        name: ruff formatter
+        entry: uv run --frozen --isolated --group dev ruff format --force-exclude
+        types_or: [python, pyi, jupyter]
+        require_serial: true
+
+      - <<: *uv-managed-hook
+        id: tach
+        name: tach module dependency checker
+        entry: uv run --frozen --isolated --group dev tach check
+        pass_filenames: false
+
+      - <<: *uv-managed-hook
+        id: mypy
+        name: mypy static type checker
+        entry: uv run --frozen --isolated --group dev mypy --no-install-types src/
+        types_or: [python, pyi]
+        pass_filenames: false
+
+      - <<: *uv-managed-hook
+        id: validate
+        name: validate pyproject.toml
+        entry: uv run --frozen --isolated --group dev validate-pyproject pyproject.toml
+        files: ^pyproject\.toml$
+        pass_filenames: false

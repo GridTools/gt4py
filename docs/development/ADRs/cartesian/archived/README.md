@@ -31,3 +31,7 @@ Process:
 Rationale:
 
 All ADRs under `ADRs/cartesian/` are always valid. Revisiting e.g. the decision to deprecate a feature should be easily accessible. Restoring an ADR from the git history is way more complicated than looking in the `archived/` folder.
+
+## GDPs
+
+GDP is short for _GT4Py Development Proposal_ and was the predecessor of ADRs. We keep [these documents](./GDPs/) for reference only.

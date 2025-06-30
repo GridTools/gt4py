@@ -66,6 +66,8 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.OffsetType
     elif t is core_defs.ScalarT:
         return ts.ScalarType
+    elif t is common.Domain:
+        return ts.DomainType
     elif t is type:
         return (
             ts.FunctionType
@@ -135,14 +137,14 @@ class BuiltInFunction(Generic[_R, _P]):
         )
 
 
-MaskT = TypeVar("MaskT", bound=common.Field)
+CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
 FieldT = TypeVar("FieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
 
 
 class WhereBuiltinFunction(
-    BuiltInFunction[_R, [MaskT, FieldT, FieldT]], Generic[_R, MaskT, FieldT]
+    BuiltInFunction[_R, [CondT, FieldT, FieldT]], Generic[_R, CondT, FieldT]
 ):
-    def __call__(self, mask: MaskT, true_field: FieldT, false_field: FieldT) -> _R:
+    def __call__(self, cond: CondT, true_field: FieldT, false_field: FieldT) -> _R:
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
@@ -153,8 +155,8 @@ class WhereBuiltinFunction(
                 raise ValueError(
                     "Tuple of different size not allowed."
                 )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
-            return tuple(self(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
-        return super().__call__(mask, true_field, false_field)
+            return tuple(self(cond, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
+        return super().__call__(cond, true_field, false_field)
 
 
 @BuiltInFunction
@@ -333,7 +335,7 @@ class FieldOffset(runtime.Offset):
         from gt4py.next import embedded  # avoid circular import
 
         assert isinstance(self.value, str)
-        current_offset_provider = embedded.context.offset_provider.get(None)
+        current_offset_provider = embedded.context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[self.value]
 
@@ -354,7 +356,7 @@ class FieldOffset(runtime.Offset):
         from gt4py.next import embedded  # avoid circular import
 
         assert isinstance(self.value, str)
-        current_offset_provider = embedded.context.offset_provider.get(None)
+        current_offset_provider = embedded.context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[self.value]
 

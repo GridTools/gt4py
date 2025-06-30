@@ -129,7 +129,7 @@ def gt_find_constant_arguments(
     ret_value: dict[str, Any] = {}
 
     for name, value in call_args.items():
-        if name in include or (gtx_dace_utils.is_field_symbol(name) and value == 1):
+        if name in include or (gtx_dace_utils.is_stride_symbol(name) and value == 1):
             ret_value[name] = value
 
     return ret_value
@@ -244,7 +244,8 @@ def is_reachable(
     """Explores the graph from `start` and checks if `target` is reachable.
 
     The exploration of the graph is done in a way that ignores the connector names.
-    It is possible to pass multiple start nodes and targets. In case of multiple target nodes, the function returns True if any of them is reachable.
+    It is possible to pass multiple start nodes and targets. In case of multiple target
+    nodes, the function returns True if any of them is reachable.
 
     Args:
         start: The node from where to start.
@@ -261,6 +262,42 @@ def is_reachable(
             return True
         seen.add(node)
         to_visit.extend(oedge.dst for oedge in state.out_edges(node) if oedge.dst not in seen)
+
+    return False
+
+
+def is_source_node_of(
+    sink: dace_nodes.Node,
+    possible_sources: Union[dace_nodes.Node, Sequence[dace_nodes.Node]],
+    state: dace.SDFGState,
+) -> bool:
+    """Explores the graph and checks if `possible_sources` produce data for `sink`.
+
+    The function is similar to `is_reachable()` except that it explores the
+    graph in the reverse direction of the data flow. The function starts a
+    revers depth first search at `sink` and checks if it is possible to reach
+    any nodes listed in `possible_sources`.
+
+    Args:
+        sink: Start of the reverse DFS.
+        possible_sources: Look for these nodes.
+        state: The SDFG state on which we operate.
+    """
+    # TODO(phimuell): Think if this function could be implemented in terms of `is_reachable()`.
+    to_visit: list[dace_nodes.Node] = [sink] if isinstance(sink, dace_nodes.Node) else list(sink)
+    possible_sources = (
+        {possible_sources}
+        if isinstance(possible_sources, dace_nodes.Node)
+        else set(possible_sources)
+    )
+    seen: set[dace_nodes.Node] = set()
+
+    while to_visit:
+        node = to_visit.pop()
+        if node in possible_sources:
+            return True
+        seen.add(node)
+        to_visit.extend(iedge.src for iedge in state.in_edges(node) if iedge.src not in seen)
 
     return False
 
@@ -306,10 +343,10 @@ def track_view(
         raise RuntimeError(f"Failed to determine the direction of the view '{view}'.")
     if curr_edge.dst_conn == "views":
         # The view is used for reading.
-        next_node = lambda curr_edge: curr_edge.src  # noqa: E731
+        next_node = lambda curr_edge: curr_edge.src  # noqa: E731 [lambda-assignment]
     elif curr_edge.src_conn == "views":
         # The view is used for writing.
-        next_node = lambda curr_edge: curr_edge.dst  # noqa: E731
+        next_node = lambda curr_edge: curr_edge.dst  # noqa: E731 [lambda-assignment]
     else:
         raise RuntimeError(f"Failed to determine the direction of the view '{view}' | {curr_edge}.")
 
@@ -533,3 +570,90 @@ def reconfigure_dataflow_after_rerouting(
         raise NotImplementedError(
             f"The case for '{type(other_node).__name__}' has not been implemented."
         )
+
+
+def find_upstream_nodes(
+    start: dace_nodes.Node,
+    state: dace.SDFGState,
+    start_connector: Optional[str] = None,
+    limit_node: Optional[dace_nodes.Node] = None,
+) -> set[dace_nodes.Node]:
+    """Finds all upstream nodes, i.e. all producers, of `start`.
+
+    Args:
+        start: Start the exploring from this node.
+        state: The state in which it should be explored.
+        start_connector: If given then only consider edges that terminate
+            in this connector, otherwise consider all incoming edges.
+        limit_node: Consider this node as "limiting wall", i.e. do not explore
+            beyond it.
+    """
+    seen: set[dace_nodes.Node] = set()
+
+    to_visit = [
+        iedge.src
+        for iedge in (
+            state.in_edges(start)
+            if start_connector is None
+            else state.in_edges_by_connector(start, start_connector)
+        )
+        if iedge.src is not limit_node
+    ]
+
+    while len(to_visit) != 0:
+        node = to_visit.pop()
+        if node in seen:
+            continue
+        seen.add(node)
+        to_visit.extend(iedge.src for iedge in state.in_edges(node) if iedge.src is not limit_node)
+
+    return seen
+
+
+def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
+    """Finds the set of next states after `state`.
+
+    In the simplest case the function will return something like this.
+    `[e.dst for e in state.sdfg.out_edges(state)`].
+    If this set is empty, the function will go up the hierarchy of the control flow
+    regions and inspect the outputs. This means if `state` is a terminal node of
+    a control flow region the function will find the successor states of the
+    region.
+    If the set of successors contains an control flow region, the region will be
+    expanded, such that the result set only consists of `SDFGState`s.
+    """
+
+    def _impl(
+        state: Union[dace.SDFGState, dace.sdfg.state.AbstractControlFlowRegion],
+        graph: dace.sdfg.state.AbstractControlFlowRegion,
+    ) -> list[dace.sdfg.state.AbstractControlFlowRegion]:
+        assert state is not graph
+        assert state in graph.nodes()
+
+        curr_out_edges = [oedge.dst for oedge in graph.out_edges(state)]
+
+        # End recursion if we found some successor edges or we have reached the top.
+        if len(curr_out_edges) > 0 or graph.parent_graph is state.sdfg:
+            return curr_out_edges
+        elif isinstance(graph.parent_graph, dace.sdfg.state.ConditionalBlock):
+            # For conditional we go two levels up, because there is nothing
+            #  interesting inside it.
+            return _impl(graph.parent_graph, graph.parent_graph.parent_graph)
+        else:
+            # We have not found any successor edges, so we go one level up.
+            #  This time we look for the enclosing graph.
+            # NOTE: We do not handle the `LoopRegion` specially, as the successor
+            #   state could either be the one following the region or the first
+            #   state of the loop body.
+            return _impl(graph, graph.parent_graph)
+
+    # Expand the successors such that it contains only `SDFGState`s.
+    # TODO(phimuell): Only use the starting block instead of all.
+    all_successors: list[dace.SDFGState] = []
+    for successor in _impl(state, state.parent_graph):
+        if isinstance(successor, dace.SDFGState):
+            all_successors.append(successor)
+        else:
+            all_successors.extend(successor.all_states())
+
+    return all_successors

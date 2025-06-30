@@ -20,7 +20,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
 from gt4py.next.ffront.stages import AOT_FOP, AOT_PRG
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import toolchain, workflow
+from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -77,7 +77,9 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         ...     column_axis=None,
         ... )
 
-        >>> copy_program = op_to_prog(toolchain.CompilableProgram(copy.foast_stage, compile_time_args))
+        >>> copy_program = op_to_prog(
+        ...     toolchain.CompilableProgram(copy.foast_stage, compile_time_args)
+        ... )
 
         >>> print(copy_program.data.past_node.id)
         __field_operator_copy
@@ -93,8 +95,13 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
 
-        arg_types = inp.args.args
-        kwarg_types = inp.args.kwargs
+        arg_types = tuple(
+            arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
+        )
+        kwarg_types = {
+            k: v.type_ if isinstance(v, arguments.StaticArg) else v
+            for k, v in inp.args.kwargs.items()
+        }
 
         loc = inp.data.foast_node.location
         # use a new UID generator to allow caching

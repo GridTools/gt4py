@@ -7,17 +7,18 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 # TODO(dropd): Remove as soon as `gt4py.next.ffront.decorator` is type checked.
-import numpy as np
+import unittest.mock as mock
+
 import pytest
 
 from gt4py import next as gtx
 from gt4py.next.iterator import ir as itir
-
-from next_tests import definitions as test_definitions
+from gt4py.next import common as gtx_common, metrics
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
+    simple_cartesian_grid,
 )
 
 
@@ -57,7 +58,8 @@ def test_frozen(cartesian_case):
     testee._compiled_program(*args_2, offset_provider=cartesian_case.offset_provider, **kwargs_2)
 
     # and give expected results
-    assert np.allclose(kwargs_2["out"].ndarray, args_2[0].ndarray)
+    xp = args_1[0].array_ns
+    assert xp.allclose(kwargs_2["out"].ndarray, args_2[0].ndarray)
 
     # with_backend returns a new instance, which is frozen but not compiled yet
     assert testee.with_backend(cartesian_case.backend)._compiled_program is None
@@ -66,95 +68,81 @@ def test_frozen(cartesian_case):
     assert testee.with_grid_type(cartesian_case.grid_type)._compiled_program is None
 
 
-def _always_raise_callable(*args, **kwargs) -> None:
-    raise AssertionError("This function should never be called.")
+@pytest.mark.parametrize(
+    "metrics_level,expected_names",
+    [
+        (metrics.DISABLED, ()),
+        (metrics.PERFORMANCE, ("compute",)),
+        (metrics.ALL, ("compute", "total")),
+    ],
+)
+@pytest.mark.uses_program_metrics
+def test_collect_metrics(cartesian_case, metrics_level, expected_names):
+    if cartesian_case.backend is None:
+        pytest.skip("Precompiled program with embedded execution is not possible.")
 
-
-@pytest.fixture
-def compile_testee(cartesian_case):
     @gtx.field_operator
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
         return a + b
 
+    @gtx.program(backend=None)
+    def testee(a: cases.IField, out: cases.IField):
+        testee_op(a, a, out=out)
+
+    try:
+        with mock.patch("gt4py.next.config.COLLECT_METRICS_LEVEL", metrics_level):
+            testee = testee.with_backend(cartesian_case.backend).with_grid_type(
+                cartesian_case.grid_type
+            )
+            args, kwargs = cases.get_default_data(cartesian_case, testee)
+            testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+
+        assert set(metrics.program_metrics.metric_names) == set(expected_names)
+
+    finally:
+        metrics.program_metrics.clear()
+
+
+def test_offset_provider_cache(cartesian_case):
+    if cartesian_case.backend is None:
+        pytest.skip("Precompiled program with embedded execution is not possible.")
+
+    @gtx.field_operator
+    def testee_op(a: cases.IField) -> cases.IField:
+        return a
+
     @gtx.program(backend=cartesian_case.backend)
-    def testee(a: cases.IField, b: cases.IField, out: cases.IField):
-        testee_op(a, b, out=out)
-
-    return testee
-
-
-@pytest.fixture
-def compile_testee_scan(cartesian_case):
-    @gtx.scan_operator(axis=cases.KDim, forward=True, init=0)
-    def testee_op(carry: gtx.int32, inp: gtx.int32) -> gtx.int32:
-        return carry + inp
-
-    @gtx.program(backend=cartesian_case.backend)
-    def testee(a: cases.KField, out: cases.KField):
+    def testee(a: cases.IField, out: cases.IField):
         testee_op(a, out=out)
 
-    return testee
+    testee.compile(
+        offset_provider=cartesian_case.offset_provider,
+    )
 
+    grid = simple_cartesian_grid()
+    grid_offset_provider = {"Ioff": grid.offset_provider["Ioff"]}
 
-def test_compile(cartesian_case, compile_testee):
-    if cartesian_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
+    mock_offset_provider_to_type = mock.MagicMock()
+    impl_offset_provider_to_type = gtx_common.offset_provider_to_type
 
-    assert compile_testee._compiled_program is None
-    compile_testee.compile(offset_provider_type=cartesian_case.offset_provider)
-    assert compile_testee._compiled_program is not None
+    def mocked_offset_provider_to_type(
+        offset_provider: gtx_common.OffsetProvider | gtx_common.OffsetProviderType,
+    ) -> gtx_common.OffsetProviderType:
+        mock_offset_provider_to_type.__call__(offset_provider)
+        return impl_offset_provider_to_type(offset_provider)
 
-    args, kwargs = cases.get_default_data(cartesian_case, compile_testee)
+    with mock.patch("gt4py.next.common.offset_provider_to_type", mocked_offset_provider_to_type):
+        args_1, kwargs_1 = cases.get_default_data(cartesian_case, testee)
+        testee(*args_1, offset_provider=cartesian_case.offset_provider, **kwargs_1)
+        mock_offset_provider_to_type.assert_called()
+        mock_offset_provider_to_type.reset_mock()
 
-    # make sure the backend is never called
-    object.__setattr__(compile_testee, "backend", _always_raise_callable)
+        args_2, kwargs_2 = cases.get_default_data(cartesian_case, testee)
+        testee(*args_2, offset_provider=grid_offset_provider, **kwargs_2)
+        mock_offset_provider_to_type.assert_called()
+        mock_offset_provider_to_type.reset_mock()
 
-    compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
-    assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
-
-    # run a second time to check if it still works after the future is resolved
-    compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
-    assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
-
-
-def test_compile_twice_errors(cartesian_case, compile_testee):
-    if cartesian_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-    with pytest.raises(RuntimeError):
-        compile_testee.compile(offset_provider_type=cartesian_case.offset_provider).compile(
-            offset_provider_type=cartesian_case.offset_provider
-        )
-
-
-def test_compile_kwargs(cartesian_case, compile_testee):
-    if cartesian_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    assert compile_testee._compiled_program is None
-    compile_testee.compile(offset_provider_type=cartesian_case.offset_provider)
-    assert compile_testee._compiled_program is not None
-
-    (a, b), kwargs = cases.get_default_data(cartesian_case, compile_testee)
-
-    # make sure the backend is never called
-    object.__setattr__(compile_testee, "backend", _always_raise_callable)
-
-    compile_testee(offset_provider=cartesian_case.offset_provider, b=b, a=a, **kwargs)
-    assert np.allclose(kwargs["out"].ndarray, a.ndarray + b.ndarray)
-
-
-def test_compile_scan(cartesian_case, compile_testee_scan):
-    if cartesian_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    assert compile_testee_scan._compiled_program is None
-    compile_testee_scan.compile(offset_provider_type=cartesian_case.offset_provider)
-    assert compile_testee_scan._compiled_program is not None
-
-    args, kwargs = cases.get_default_data(cartesian_case, compile_testee_scan)
-
-    # make sure the backend is never called
-    object.__setattr__(compile_testee_scan, "backend", _always_raise_callable)
-
-    compile_testee_scan(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
-    assert np.allclose(kwargs["out"].ndarray, np.cumsum(args[0].ndarray))
+        args_3, kwargs_3 = cases.get_default_data(cartesian_case, testee)
+        testee(*args_3, offset_provider=cartesian_case.offset_provider, **kwargs_3)
+        mock_offset_provider_to_type.assert_not_called()
+        mock_offset_provider_to_type.reset_mock()

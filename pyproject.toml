@@ -17,6 +17,7 @@ dev = [
   {include-group = 'docs'},
   {include-group = 'frameworks'},
   {include-group = 'lint'},
+  {include-group = 'scripts'},
   {include-group = 'test'},
   {include-group = 'typing'}
 ]
@@ -37,13 +38,19 @@ frameworks = [
 lint = [
   'pre-commit>=4.0.1',
   'ruff>=0.8.0',
-  'tach>=0.16.0'
+  'tach>=0.23.0',
+  'validate-pyproject-schema-store[all]>=2025.06.13'
+]
+scripts = [
+  'gitpython>=3.1.0',
+  'pyyaml>=6.0.1',
+  'typer>=0.12.3'
 ]
 test = [
   'coverage[toml]>=7.5.0',
   'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
-  'nox>=2024.10.9',
+  'nox>=2025.02.09',
   'pytest>=8.0.1',
   'pytest-benchmark>=5.0.0',
   'pytest-cache>=1.0',
@@ -74,6 +81,7 @@ classifiers = [
   'Programming Language :: Python',
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
   'Programming Language :: Python :: Implementation :: CPython',
   'Topic :: Scientific/Engineering :: Atmospheric Science',
   'Topic :: Scientific/Engineering :: Mathematics',
@@ -81,19 +89,19 @@ classifiers = [
 ]
 dependencies = [
   'attrs>=21.3',
-  'black>=22.3',
+  'black>=23.12',
   'boltons>=20.1',
   'cached-property>=1.5.1',
   'click>=8.0.0',
   'cmake>=3.22',
-  'cytoolz>=0.12.1',
+  'cytoolz>=1.0.0',
   'deepdiff>=5.6.0',
   'devtools>=0.6',
   'diskcache>=5.6.3',
   'factory-boy>=3.3.0',
   "flufl-lock>=8.1.0",
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.8,==2.*',
+  'gridtools-cpp>=2.3.9,==2.*',
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.1',
@@ -123,7 +131,7 @@ keywords = [
 license = {text = 'BSD-3 License'}  # TODO: waiting for PEP 639 being implemented by setuptools (https://github.com/codecov/codecov-cli/issues/605)
 name = 'gt4py'
 readme = 'README.md'
-requires-python = '>=3.10, <3.12'
+requires-python = '>=3.10, <3.13'
 
 [project.optional-dependencies]
 # bundles
@@ -137,10 +145,10 @@ dace-next = ['dace']  # pull dace latest version from the git repository
 formatting = ['clang-format>=9.0']
 jax = ['jax>=0.4.26']
 jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
-performance = ['scipy>=1.9.2']
+performance = ['scipy>=1.12.0']
 rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
 rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
-testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
+testing = ['hypothesis>=6.93', 'pytest>=7.0']
 
 [project.scripts]
 gtpyc = 'gt4py.cartesian.cli:gtpyc'
@@ -177,6 +185,7 @@ source_pkgs = ['gt4py']
 # -- mypy  --
 [tool.mypy]
 disallow_incomplete_defs = true
+disallow_untyped_defs = true
 exclude = [
   '^setup\.py$',
   'build/.*$',
@@ -198,22 +207,18 @@ warn_unused_ignores = true
 
 # GT4Py configs
 [[tool.mypy.overrides]]
-allow_incomplete_defs = false
-allow_untyped_defs = false
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
 ignore_missing_imports = false
 module = 'gt4py.*'
 
 [[tool.mypy.overrides]]
 # The following ignore_errors are only temporary.
 # TODO: Fix errors and enable these settings.
-allow_incomplete_defs = true
-allow_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
 follow_imports = 'silent'
 module = 'gt4py.cartesian.*'
-
-[[tool.mypy.overrides]]
-ignore_errors = true
-module = 'gt4py.cartesian.backend.pyext_builder'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
@@ -241,19 +246,19 @@ warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 # TODO: Make this false and fix errors
-allow_untyped_defs = true
+disallow_untyped_defs = false
 follow_imports = 'silent'
 module = 'gt4py.storage.*'
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-allow_incomplete_defs = true
-allow_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
 module = 'gt4py.next.iterator.*'
 
 [[tool.mypy.overrides]]
-allow_incomplete_defs = true
-allow_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
 module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 
 [[tool.mypy.overrides]]
@@ -302,6 +307,8 @@ markers = [
   'uses_unstructured_shift: tests that use a unstructured connectivity',
   'uses_max_over: tests that use the max_over builtin',
   'uses_mesh_with_skip_values: tests that use a mesh with skip values',
+  'uses_concat_where: tests that use the concat_where builtin',
+  'uses_program_metrics: tests that require backend support for program metrics',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
@@ -426,6 +433,7 @@ conflicts = [
     {extra = 'dace-next'}
   ]
 ]
+required-version = ">=0.6.10"
 
 [[tool.uv.index]]
 explicit = true
@@ -434,7 +442,7 @@ url = 'https://test.pypi.org/simple/'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/spcl/dace", branch = "main", extra = "dace-next"}
+dace = {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_06_27", extra = "dace-next"}
 
 # -- versioningit --
 [tool.versioningit]

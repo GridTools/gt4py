@@ -49,6 +49,9 @@ class VoidType(TypeSpec):
 class DimensionType(TypeSpec):
     dim: common.Dimension
 
+    def __str__(self) -> str:
+        return str(self.dim)
+
 
 class OffsetType(TypeSpec):
     # TODO(havogt): replace by ConnectivityType
@@ -92,8 +95,7 @@ class ListType(DataType):
     """
 
     element_type: DataType
-    # TODO(havogt): the `offset_type` is not yet used in type_inference,
-    # it is meant to describe the neighborhood (via the local dimension)
+    # TODO(tehrengruber): make `offset_type` mandatory
     offset_type: Optional[common.Dimension] = None
 
 
@@ -139,3 +141,7 @@ class FunctionType(TypeSpec, CallableType):
         kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
+
+
+class DomainType(DataType):
+    dims: list[common.Dimension]

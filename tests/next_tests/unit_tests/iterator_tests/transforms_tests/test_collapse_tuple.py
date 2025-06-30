@@ -213,9 +213,26 @@ def test_propagate_to_if_on_tuples_with_let():
     assert actual == expected
 
 
-def test_propagate_nested_lift():
+def test_propagate_nested_let():
     testee = im.let("a", im.let("b", 1)("a_val"))("a")
     expected = im.let("b", 1)(im.let("a", "a_val")("a"))
+    actual = CollapseTuple.apply(
+        testee,
+        remove_letified_make_tuple_elements=False,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert actual == expected
+
+
+def test_propagate_nested_let_with_collision():
+    testee = im.let(("a", im.let("c", 1)("c")), ("b", im.let("c", 2)("c")))(
+        im.call("plus")("a", "b")
+    )
+    expected = im.let(("c", 1), ("c_", 2))(
+        im.let(("a", "c"), ("b", "c_"))(im.call("plus")("a", "b"))
+    )
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
@@ -321,8 +338,8 @@ def test_if_make_tuple_reorder_cps_external():
 
 def test_flatten_as_fieldop_args():
     it_type = it_ts.IteratorType(
-        position_dims=[Vertex],
-        defined_dims=[Vertex],
+        position_dims=[],
+        defined_dims=[],
         element_type=ts.TupleType(types=[int_type, int_type]),
     )
     testee = im.as_fieldop(im.lambda_(im.sym("it", it_type))(im.tuple_get(1, im.deref("it"))))(
@@ -342,8 +359,8 @@ def test_flatten_as_fieldop_args():
 
 def test_flatten_as_fieldop_args_nested():
     it_type = it_ts.IteratorType(
-        position_dims=[Vertex],
-        defined_dims=[Vertex],
+        position_dims=[],
+        defined_dims=[],
         element_type=ts.TupleType(
             types=[
                 int_type,
@@ -370,8 +387,8 @@ def test_flatten_as_fieldop_args_nested():
 
 def test_flatten_as_fieldop_args_scan():
     it_type = it_ts.IteratorType(
-        position_dims=[Vertex],
-        defined_dims=[Vertex],
+        position_dims=[],
+        defined_dims=[],
         element_type=ts.TupleType(types=[int_type, int_type]),
     )
     testee = im.as_fieldop(

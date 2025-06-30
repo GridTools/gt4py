@@ -65,7 +65,7 @@ def _make_strides_propagation_level2_sdfg() -> tuple[dace.SDFG, dace_nodes.Neste
     for name in names:
         stride_name = name + "_stride"
         stride_sym = dace_symbolic.pystr_to_symbolic(stride_name)
-        sdfg.add_symbol(stride_name, dace.int64)
+        sdfg.add_symbol(stride_name, dace.int32)
         sdfg.add_array(
             name,
             shape=(10,),
@@ -110,9 +110,9 @@ def _make_strides_propagation_level2_sdfg() -> tuple[dace.SDFG, dace_nodes.Neste
     return sdfg, nsdfg
 
 
-def _make_strides_propagation_level1_sdfg() -> (
-    tuple[dace.SDFG, dace_nodes.NestedSDFG, dace_nodes.NestedSDFG]
-):
+def _make_strides_propagation_level1_sdfg() -> tuple[
+    dace.SDFG, dace_nodes.NestedSDFG, dace_nodes.NestedSDFG
+]:
     """Generates the level 1 SDFG (top) SDFG for `test_strides_propagation()`.
 
     Note that the SDFG is valid, but will be indeterminate. The only point of
@@ -133,7 +133,7 @@ def _make_strides_propagation_level1_sdfg() -> (
     for name in names:
         stride_name = name + "_stride"
         stride_sym = dace_symbolic.pystr_to_symbolic(stride_name)
-        sdfg.add_symbol(stride_name, dace.int64)
+        sdfg.add_symbol(stride_name, dace.int32)
         sdfg.add_array(
             name,
             shape=(10,),
@@ -186,9 +186,9 @@ def test_strides_propagation_use_symbol_mapping():
             exp_stride = f"{aname}_stride"
             actual_stride = adesc.strides[0]
             assert len(adesc.strides) == 1
-            assert (
-                str(actual_stride) == exp_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(actual_stride) == exp_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
             nsdfg = sdfg.parent_nsdfg_node
             if nsdfg is not None:
@@ -218,9 +218,9 @@ def test_strides_propagation_use_symbol_mapping():
                 assert original_stride in nsdfg.symbol_mapping
                 assert str(nsdfg.symbol_mapping[original_stride]) == target_symbol
             assert len(adesc.strides) == 1
-            assert (
-                str(adesc.strides[0]) == original_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(adesc.strides[0]) == original_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
     # Now we also propagate `c` thus now all data descriptors have the same stride
     gtx_transformations.gt_propagate_strides_of(sdfg_level1, "c1", ignore_symbol_mapping=False)
@@ -229,14 +229,14 @@ def test_strides_propagation_use_symbol_mapping():
         for aname, adesc in sdfg.arrays.items():
             nsdfg = sdfg.parent_nsdfg_node
             original_stride = f"{aname}_stride"
-            target_symbol = f"{aname[0]}{level-1}_stride"
+            target_symbol = f"{aname[0]}{level - 1}_stride"
             if nsdfg is not None:
                 assert original_stride in nsdfg.symbol_mapping
                 assert str(nsdfg.symbol_mapping[original_stride]) == target_symbol
             assert len(adesc.strides) == 1
-            assert (
-                str(adesc.strides[0]) == original_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(adesc.strides[0]) == original_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
 
 def test_strides_propagation_ignore_symbol_mapping():
@@ -249,9 +249,9 @@ def test_strides_propagation_ignore_symbol_mapping():
             exp_stride = f"{aname}_stride"
             actual_stride = adesc.strides[0]
             assert len(adesc.strides) == 1
-            assert (
-                str(actual_stride) == exp_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(actual_stride) == exp_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
             nsdfg = sdfg.parent_nsdfg_node
             if nsdfg is not None:
@@ -275,9 +275,9 @@ def test_strides_propagation_ignore_symbol_mapping():
             else:
                 exp_stride = f"{aname[0]}1_stride"
             assert len(adesc.strides) == 1
-            assert (
-                str(adesc.strides[0]) == exp_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(adesc.strides[0]) == exp_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
             nsdfg = sdfg.parent_nsdfg_node
             if nsdfg is not None:
@@ -292,9 +292,9 @@ def test_strides_propagation_ignore_symbol_mapping():
             exp_stride = f"{aname[0]}1_stride"
             original_stride = f"{aname}_stride"
             assert len(adesc.strides) == 1
-            assert (
-                str(adesc.strides[0]) == exp_stride
-            ), f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            assert str(adesc.strides[0]) == exp_stride, (
+                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
+            )
 
             nsdfg = sdfg.parent_nsdfg_node
             if nsdfg is not None:
@@ -309,7 +309,7 @@ def _make_strides_propagation_dependent_symbol_nsdfg() -> dace.SDFG:
 
     array_names = ["a2", "b2"]
     for name in array_names:
-        stride_sym = dace.symbol(f"{name}_stride", dtype=dace.uint64)
+        stride_sym = dace.symbol(f"{name}_stride", dtype=dace.uint32)
         sdfg.add_symbol(stride_sym.name, stride_sym.dtype)
         sdfg.add_array(
             name,
@@ -337,8 +337,8 @@ def _make_strides_propagation_dependent_symbol_sdfg() -> tuple[dace.SDFG, dace_n
 
     array_names = ["a1", "b1"]
     for name in array_names:
-        stride_sym1 = dace.symbol(f"{name}_1stride", dtype=dace.uint64)
-        stride_sym2 = dace.symbol(f"{name}_2stride", dtype=dace.int64)
+        stride_sym1 = dace.symbol(f"{name}_1stride", dtype=dace.uint32)
+        stride_sym2 = dace.symbol(f"{name}_2stride", dtype=dace.int32)
         sdfg_level1.add_symbol(stride_sym1.name, stride_sym1.dtype)
         sdfg_level1.add_symbol(stride_sym2.name, stride_sym2.dtype)
         stride_sym = stride_sym1 * stride_sym2
@@ -372,8 +372,8 @@ def _make_strides_propagation_dependent_symbol_sdfg() -> tuple[dace.SDFG, dace_n
 
 def test_strides_propagation_dependent_symbol():
     sdfg_level1, nsdfg_level2 = _make_strides_propagation_dependent_symbol_sdfg()
-    sym1_dtype = dace.uint64
-    sym2_dtype = dace.int64
+    sym1_dtype = dace.uint32
+    sym2_dtype = dace.int32
 
     # Ensure that the special symbols are not already present inside the nested SDFG.
     for aname, adesc in sdfg_level1.arrays.items():
@@ -414,8 +414,8 @@ def _make_strides_propagation_shared_symbols_nsdfg() -> dace.SDFG:
 
     # NOTE: Both arrays have the same symbols used for strides.
     array_names = ["a2", "b2"]
-    stride_sym0 = dace.symbol(f"__stride_0", dtype=dace.uint64)
-    stride_sym1 = dace.symbol(f"__stride_1", dtype=dace.uint64)
+    stride_sym0 = dace.symbol(f"__stride_0", dtype=dace.uint32)
+    stride_sym1 = dace.symbol(f"__stride_1", dtype=dace.uint32)
     sdfg.add_symbol(stride_sym0.name, stride_sym0.dtype)
     sdfg.add_symbol(stride_sym1.name, stride_sym1.dtype)
     for name in array_names:
@@ -449,8 +449,8 @@ def _make_strides_propagation_shared_symbols_sdfg() -> tuple[dace.SDFG, dace_nod
     # NOTE: Both arrays use the same symbols as strides.
     #   Furthermore, they are the same as in the nested SDFG, i.e. they are shared.
     array_names = ["a1", "b1"]
-    stride_sym0 = dace.symbol(f"__stride_0", dtype=dace.uint64)
-    stride_sym1 = dace.symbol(f"__stride_1", dtype=dace.uint64)
+    stride_sym0 = dace.symbol(f"__stride_0", dtype=dace.uint32)
+    stride_sym1 = dace.symbol(f"__stride_1", dtype=dace.uint32)
     sdfg_level1.add_symbol(stride_sym0.name, stride_sym0.dtype)
     sdfg_level1.add_symbol(stride_sym1.name, stride_sym1.dtype)
     for name in array_names:
@@ -512,8 +512,8 @@ def test_strides_propagation_shared_symbols_sdfg():
 
     # Now we change the strides of `b1`, and then we propagate the new strides
     #  into the nested SDFG. We want to keep (for whatever reasons) strides of `a1`.
-    stride_b1_sym0 = dace.symbol(f"__b1_stride_0", dtype=dace.uint64)
-    stride_b1_sym1 = dace.symbol(f"__b1_stride_1", dtype=dace.uint64)
+    stride_b1_sym0 = dace.symbol(f"__b1_stride_0", dtype=dace.uint32)
+    stride_b1_sym1 = dace.symbol(f"__b1_stride_1", dtype=dace.uint32)
     sdfg_level1.add_symbol(stride_b1_sym0.name, stride_b1_sym0.dtype)
     sdfg_level1.add_symbol(stride_b1_sym1.name, stride_b1_sym1.dtype)
 
@@ -545,8 +545,8 @@ def _make_strides_propagation_stride_1_nsdfg() -> dace.SDFG:
     sdfg_level1 = dace.SDFG(util.unique_name("strides_propagation_stride_1_nsdfg"))
     state = sdfg_level1.add_state(is_start_block=True)
 
-    a_stride_sym = dace.symbol("a_stride", dtype=dace.uint64)
-    b_stride_sym = dace.symbol("b_stride", dtype=dace.uint64)
+    a_stride_sym = dace.symbol("a_stride", dtype=dace.uint32)
+    b_stride_sym = dace.symbol("b_stride", dtype=dace.uint32)
     stride_syms = {"a": a_stride_sym, "b": b_stride_sym}
 
     for name in ["a", "b"]:
@@ -574,8 +574,8 @@ def _make_strides_propagation_stride_1_sdfg() -> tuple[dace.SDFG, dace_nodes.Nes
     sdfg = dace.SDFG(util.unique_name("strides_propagation_stride_1_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
-    a_stride_sym = dace.symbol("a_stride", dtype=dace.uint64)
-    b_stride_sym = dace.symbol("b_stride", dtype=dace.uint64)
+    a_stride_sym = dace.symbol("a_stride", dtype=dace.uint32)
+    b_stride_sym = dace.symbol("b_stride", dtype=dace.uint32)
     stride_syms = {"a": a_stride_sym, "b": b_stride_sym}
 
     for name in ["a", "b"]:

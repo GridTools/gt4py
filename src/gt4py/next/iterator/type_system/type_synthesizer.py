@@ -11,13 +11,23 @@ from __future__ import annotations
 import dataclasses
 import functools
 import inspect
+from typing import TypeVar, cast, overload
 
+from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
-from gt4py.next.iterator import builtins
+from gt4py.next.ffront import fbuiltins
+from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
+
+
+def _type_synth_arg_cache_key(type_or_synth: TypeOrTypeSynthesizer) -> int:
+    if isinstance(type_or_synth, TypeSynthesizer):
+        return id(type_or_synth)
+    # TODO(tehrengruber): use regular __hash__ again when ts.TypeSpec supports it.
+    return hash(eve_utils.content_hash(type_or_synth))
 
 
 @dataclasses.dataclass
@@ -39,19 +49,49 @@ class TypeSynthesizer:
     """
 
     type_synthesizer: Callable[..., TypeOrTypeSynthesizer]
+    cache: bool = False
 
     def __post_init__(self):
         if "offset_provider_type" not in inspect.signature(self.type_synthesizer).parameters:
             synthesizer = self.type_synthesizer
-            self.type_synthesizer = lambda *args, offset_provider_type: synthesizer(*args)
+            self.type_synthesizer = lambda *args, offset_provider_type, **kwargs: synthesizer(
+                *args, **kwargs
+            )
+        if self.cache:
+            self.type_synthesizer = eve_utils.lru_cache(
+                self.type_synthesizer,
+                # we only cache `itir.Lambda` right now which is only ever evaluated with
+                # the same arguments. Hence, the cache only needs a size of one.
+                maxsize=1,
+                key=_type_synth_arg_cache_key,
+            )
 
     def __call__(
-        self, *args: TypeOrTypeSynthesizer, offset_provider_type: common.OffsetProviderType
+        self,
+        *args: TypeOrTypeSynthesizer,
+        offset_provider_type: common.OffsetProviderType,
+        **kwargs,
     ) -> TypeOrTypeSynthesizer:
-        return self.type_synthesizer(*args, offset_provider_type=offset_provider_type)
+        return self.type_synthesizer(*args, offset_provider_type=offset_provider_type, **kwargs)
 
 
 TypeOrTypeSynthesizer = Union[ts.TypeSpec, TypeSynthesizer]
+F = TypeVar("F", bound=Callable[..., TypeOrTypeSynthesizer])
+
+
+@overload
+def type_synthesizer(fun: F) -> TypeSynthesizer: ...
+@overload
+def type_synthesizer(*, cache: bool = False) -> Callable[[F], TypeSynthesizer]: ...
+
+
+def type_synthesizer(
+    fun: Optional[F] = None, cache: bool = False
+) -> Union[TypeSynthesizer, Callable[[F], TypeSynthesizer]]:
+    if fun is None:
+        return functools.partial(TypeSynthesizer, cache=cache)
+    return TypeSynthesizer(fun, cache=cache)
+
 
 #: dictionary from name of a builtin to its type synthesizer
 builtin_type_synthesizers: dict[str, TypeSynthesizer] = {}
@@ -76,7 +116,7 @@ def _register_builtin_type_synthesizer(
     # store names in function object for better debuggability
     synthesizer.fun_names = fun_names or [synthesizer.__name__]  # type: ignore[attr-defined]
     for f in synthesizer.fun_names:  # type: ignore[attr-defined]
-        builtin_type_synthesizers[f] = TypeSynthesizer(type_synthesizer=synthesizer)
+        builtin_type_synthesizers[f] = type_synthesizer(synthesizer)
     return synthesizer
 
 
@@ -187,9 +227,9 @@ def named_range(
 
 
 @_register_builtin_type_synthesizer(fun_names=["cartesian_domain", "unstructured_domain"])
-def _(*args: it_ts.NamedRangeType) -> it_ts.DomainType:
+def _(*args: it_ts.NamedRangeType) -> ts.DomainType:
     assert all(isinstance(arg, it_ts.NamedRangeType) for arg in args)
-    return it_ts.DomainType(dims=[arg.dim for arg in args])
+    return ts.DomainType(dims=[arg.dim for arg in args])
 
 
 @_register_builtin_type_synthesizer
@@ -225,19 +265,23 @@ def broadcast(
 
 
 @_register_builtin_type_synthesizer
-def neighbors(offset_literal: it_ts.OffsetLiteralType, it: it_ts.IteratorType) -> ts.ListType:
-    assert (
-        isinstance(offset_literal, it_ts.OffsetLiteralType)
-        and isinstance(offset_literal.value, common.Dimension)
-        and offset_literal.value.kind == common.DimensionKind.LOCAL
+def neighbors(
+    offset_literal: it_ts.OffsetLiteralType,
+    it: it_ts.IteratorType,
+    offset_provider_type: common.OffsetProviderType,
+) -> ts.ListType:
+    assert isinstance(offset_literal, it_ts.OffsetLiteralType) and isinstance(
+        offset_literal.value, str
     )
     assert isinstance(it, it_ts.IteratorType)
-    return ts.ListType(element_type=it.element_type)
+    conn_type = offset_provider_type[offset_literal.value]
+    assert isinstance(conn_type, common.NeighborConnectivityType)
+    return ts.ListType(element_type=it.element_type, offset_type=conn_type.neighbor_dim)
 
 
 @_register_builtin_type_synthesizer
 def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
-    @TypeSynthesizer
+    @type_synthesizer
     def apply_lift(
         *its: it_ts.IteratorType, offset_provider_type: common.OffsetProviderType
     ) -> it_ts.IteratorType:
@@ -266,10 +310,10 @@ def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
     return apply_lift
 
 
-def _convert_as_fieldop_input_to_iterator(
-    domain: it_ts.DomainType, input_: ts.TypeSpec
-) -> it_ts.IteratorType:
-    # get the dimensions of all non-zero-dimensional field inputs and check they agree
+def _collect_and_check_dimensions(input_: ts.TypeSpec) -> list[common.Dimension]:
+    """
+    Extracts dimensions from non-zero-dimensional field inputs and ensures they match.
+    """
     all_input_dims = (
         type_info.primitive_constituents(input_)
         .if_isinstance(ts.FieldType)
@@ -277,71 +321,220 @@ def _convert_as_fieldop_input_to_iterator(
         .filter(lambda dims: len(dims) > 0)
         .to_list()
     )
-    input_dims: list[common.Dimension]
     if all_input_dims:
         assert all(cur_input_dims == all_input_dims[0] for cur_input_dims in all_input_dims)
-        input_dims = all_input_dims[0]
-    else:
-        input_dims = []
+        return all_input_dims[0]
 
-    element_type: ts.DataType
-    element_type = type_info.apply_to_primitive_constituents(type_info.extract_dtype, input_)
+    return []
 
-    # handle neighbor / sparse input fields
-    defined_dims = []
-    is_nb_field = False
-    for dim in input_dims:
-        if dim.kind == common.DimensionKind.LOCAL:
-            assert not is_nb_field
-            is_nb_field = True
-        else:
-            defined_dims.append(dim)
-    if is_nb_field:
-        element_type = ts.ListType(element_type=element_type)
+
+def _convert_as_fieldop_input_to_iterator(
+    domain: ts.DomainType, input_: ts.TypeSpec
+) -> it_ts.IteratorType:
+    """
+    Convert a field operation input into an iterator type, preserving its dimensions and data type.
+    """
+    input_dims = _collect_and_check_dimensions(input_)
+    element_type: ts.DataType = type_info.apply_to_primitive_constituents(
+        type_info.extract_dtype, input_
+    )
 
     return it_ts.IteratorType(
-        position_dims=domain.dims, defined_dims=defined_dims, element_type=element_type
+        position_dims=domain.dims, defined_dims=input_dims, element_type=element_type
     )
+
+
+@overload
+def _canonicalize_nb_fields(
+    input_: ts.ScalarType | ts.FieldType,
+) -> ts.ScalarType | ts.FieldType: ...
+
+
+@overload
+def _canonicalize_nb_fields(
+    input_: ts.TupleType | tuple[ts.ScalarType | ts.FieldType | ts.TupleType, ...],
+) -> ts.TupleType: ...
+
+
+def _canonicalize_nb_fields(
+    input_: ts.ScalarType
+    | ts.FieldType
+    | ts.TupleType
+    | tuple[ts.ScalarType | ts.FieldType | ts.TupleType, ...],
+) -> ts.ScalarType | ts.FieldType | ts.TupleType:
+    """
+    Transform neighbor / sparse field type by removal of local dimension and addition of corresponding `ListType` dtype.
+
+    Examples:
+    >>> input_field = ts.FieldType(
+    ...     dims=[
+    ...         common.Dimension(value="Vertex"),
+    ...         common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL),
+    ...     ],
+    ...     dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+    ... )
+    >>> _canonicalize_nb_fields(input_field)
+    FieldType(dims=[Dimension(value='Vertex', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ListType(element_type=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None), offset_type=Dimension(value='V2E', kind=<DimensionKind.LOCAL: 'local'>)))
+    """
+    match input_:
+        case tuple() | ts.TupleType():
+            assert all(
+                isinstance(field, (ts.ScalarType, ts.FieldType, ts.TupleType)) for field in input_
+            )
+            return ts.TupleType(
+                types=[
+                    _canonicalize_nb_fields(cast(ts.FieldType | ts.TupleType, field))
+                    for field in input_
+                ]
+            )
+        case ts.FieldType():
+            input_dims = _collect_and_check_dimensions(input_)
+            element_type: ts.DataType = type_info.apply_to_primitive_constituents(
+                type_info.extract_dtype, input_
+            )
+            defined_dims = []
+            neighbor_dim = None
+            for dim in input_dims:
+                if dim.kind == common.DimensionKind.LOCAL:
+                    assert neighbor_dim is None
+                    neighbor_dim = dim
+                else:
+                    defined_dims.append(dim)
+            if neighbor_dim:
+                element_type = ts.ListType(element_type=element_type, offset_type=neighbor_dim)
+            return ts.FieldType(dims=defined_dims, dtype=element_type)
+        case ts.ScalarType():
+            return input_
+        case _:
+            raise TypeError(f"Unexpected type: {type(input_)}")
+
+
+def _resolve_dimensions(
+    input_dims: list[common.Dimension],
+    shift_tuple: tuple[itir.OffsetLiteral, ...],
+    offset_provider_type: common.OffsetProviderType,
+) -> list[common.Dimension]:
+    """
+    Resolves the final dimensions by applying shifts from the given shift tuple.
+
+    Args:
+        - input_dims: A list of initial dimensions to resolve.
+        - shift_tuple: A tuple of offset literals defining the shift.
+        - offset_provider_type: Offset provider dictionary.
+
+    Returns:
+        A list of resolved dimensions after applying the shifts.
+
+    Examples:
+        Consider the following expression
+        ```
+        (⇑(λ(it) → ·⟪V2Eₒ, 0ₒ⟫(it)))(inp)
+        ```
+        where `inp` is a field defined on [Edge, K] that is given to an `as_fieldop` then
+        ```
+        _resolve_dimensions([Edge, K], (V2Eₒ, 0ₒ), ...)
+        ```
+        tells you the dimensions of the field returned by the `as_fieldop`, in this case
+        `[Vertex, K]`.
+
+        >>> Edge = common.Dimension(value="Edge")
+        >>> Vertex = common.Dimension(value="Vertex")
+        >>> K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
+        >>> V2E = common.Dimension(value="V2E")
+        >>> input_dims = [Edge, K]
+        >>> shift_tuple = (
+        ...     itir.OffsetLiteral(value="V2E"),
+        ...     itir.OffsetLiteral(value=0),
+        ... )
+        >>> offset_provider_type = {
+        ...     "V2E": common.NeighborConnectivityType(
+        ...         domain=(Vertex, V2E),
+        ...         codomain=Edge,
+        ...         skip_value=None,
+        ...         dtype=None,
+        ...         max_neighbors=4,
+        ...     ),
+        ...     "KOff": K,
+        ... }
+        >>> _resolve_dimensions(input_dims, shift_tuple, offset_provider_type)
+        [Dimension(value='Vertex', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>)]
+    """
+    resolved_dims = []
+    for input_dim in input_dims:
+        for off_literal in reversed(
+            shift_tuple[::2]
+        ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
+            offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
+            if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
+                continue  # No shift applied
+            if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
+                if input_dim == offset_type.codomain:  # Check if input fits to offset
+                    input_dim = offset_type.domain[0]  # Update input_dim for next iteration
+        resolved_dims.append(input_dim)
+    return resolved_dims
 
 
 @_register_builtin_type_synthesizer
 def as_fieldop(
     stencil: TypeSynthesizer,
-    domain: Optional[it_ts.DomainType] = None,
+    domain: Optional[ts.DomainType] = None,
     *,
     offset_provider_type: common.OffsetProviderType,
 ) -> TypeSynthesizer:
-    # In case we don't have a domain argument to `as_fieldop` we can not infer the exact result
-    # type. In order to still allow some passes which don't need this information to run before the
-    # domain inference, we continue with a dummy domain. One example is the CollapseTuple pass
-    # which only needs information about the structure, e.g. how many tuple elements does this node
-    # have, but not the dimensions of a field.
-    # Note that it might appear as if using the TraceShift pass would allow us to deduce the return
-    # type of `as_fieldop` without a domain, but this is not the case, since we don't have
-    # information on the ordering of dimensions. In this example
-    #   `as_fieldop(it1, it2 -> deref(it1) + deref(it2))(i_field, j_field)`
-    # it is unclear if the result has dimension I, J or J, I.
-    if domain is None:
-        domain = it_ts.DomainType(dims="unknown")
-
-    @TypeSynthesizer
-    def applied_as_fieldop(*fields) -> ts.FieldType | ts.DeferredType:
+    @type_synthesizer
+    def applied_as_fieldop(
+        *fields: ts.TupleType,
+        # For each stencil parameter all locations it is `deref`ed on
+        #  see :func:`gt4py.next.iterator.transforms.trace_stencil`.
+        shift_sequences_per_param: list[set[tuple[itir.OffsetLiteral, ...]]] | None,
+    ) -> ts.FieldType | ts.DeferredType:
         if any(
             isinstance(el, ts.DeferredType)
             for f in fields
             for el in type_info.primitive_constituents(f)
         ):
             return ts.DeferredType(constraint=None)
+        nonlocal domain
+
+        new_fields = _canonicalize_nb_fields(fields)
+
+        if not domain:
+            deduced_domain = None
+            output_dims: list[common.Dimension] = []
+            if offset_provider_type is not None and shift_sequences_per_param is not None:
+                for field, shift_sequences in zip(
+                    new_fields, shift_sequences_per_param, strict=True
+                ):
+                    for el in type_info.primitive_constituents(field):
+                        input_dims = type_info.extract_dims(el)
+                        for shift_sequence in shift_sequences:
+                            output_dims = common.promote_dims(
+                                output_dims,
+                                _resolve_dimensions(
+                                    input_dims, shift_sequence, offset_provider_type
+                                ),
+                            )
+
+                        assert all(isinstance(dim, common.Dimension) for dim in output_dims)
+                        deduced_domain = ts.DomainType(dims=output_dims)
+
+            if deduced_domain:
+                domain = deduced_domain
+            else:
+                return ts.DeferredType(constraint=None)
 
         stencil_return = stencil(
-            *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields),
+            *(_convert_as_fieldop_input_to_iterator(domain, field) for field in new_fields),
             offset_provider_type=offset_provider_type,
         )
+
         assert isinstance(stencil_return, ts.DataType)
+
         return type_info.apply_to_primitive_constituents(
-            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
-            if domain.dims != "unknown"
-            else ts.DeferredType(constraint=ts.FieldType),
+            lambda el_type: ts.FieldType(
+                dims=domain.dims,
+                dtype=el_type,
+            ),
             stencil_return,
         )
 
@@ -354,7 +547,7 @@ def scan(
 ) -> TypeSynthesizer:
     assert isinstance(direction, ts.ScalarType) and direction.kind == ts.ScalarKind.BOOL
 
-    @TypeSynthesizer
+    @type_synthesizer
     def apply_scan(
         *its: it_ts.IteratorType, offset_provider_type: common.OffsetProviderType
     ) -> ts.DataType:
@@ -367,7 +560,7 @@ def scan(
 
 @_register_builtin_type_synthesizer
 def map_(op: TypeSynthesizer) -> TypeSynthesizer:
-    @TypeSynthesizer
+    @type_synthesizer
     def applied_map(
         *args: ts.ListType, offset_provider_type: common.OffsetProviderType
     ) -> ts.ListType:
@@ -376,14 +569,17 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
         arg_el_types = [arg.element_type for arg in args]
         el_type = op(*arg_el_types, offset_provider_type=offset_provider_type)
         assert isinstance(el_type, ts.DataType)
-        return ts.ListType(element_type=el_type)
+        offset_types = [arg.offset_type for arg in args if arg.offset_type]
+        offset_type = offset_types[0] if offset_types else None
+        assert all(offset_type == arg for arg in offset_types)
+        return ts.ListType(element_type=el_type, offset_type=offset_type)
 
     return applied_map
 
 
 @_register_builtin_type_synthesizer
 def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
-    @TypeSynthesizer
+    @type_synthesizer
     def applied_reduce(*args: ts.ListType, offset_provider_type: common.OffsetProviderType):
         assert all(isinstance(arg, ts.ListType) for arg in args)
         return op(
@@ -395,7 +591,7 @@ def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
 
 @_register_builtin_type_synthesizer
 def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> TypeSynthesizer:
-    @TypeSynthesizer
+    @type_synthesizer
     def apply_shift(
         it: it_ts.IteratorType | ts.DeferredType,
     ) -> it_ts.IteratorType | ts.DeferredType:
@@ -410,9 +606,9 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
             assert len(offset_literals) % 2 == 0
             for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
                 assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
-                    offset_axis.value, common.Dimension
+                    offset_axis.value, str
                 )
-                type_ = offset_provider_type[offset_axis.value.value]
+                type_ = offset_provider_type[offset_axis.value]
                 if isinstance(type_, common.Dimension):
                     pass
                 elif isinstance(type_, common.NeighborConnectivityType):

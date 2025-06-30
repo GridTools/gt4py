@@ -175,10 +175,10 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
         verify_testee()
         mock_construct_args.assert_not_called()
 
-    # Pass a new buffer, which should trigger reconstruct of SDFG arguments: fastcall API will not be used
+    # Pass a new buffer, fastcall API should still be used
     a = cases.allocate(cartesian_case, testee, "a")()
     verify_testee()
-    mock_construct_args.assert_called_once()
+    mock_construct_args.assert_not_called()
 
 
 def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):

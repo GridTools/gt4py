@@ -11,8 +11,11 @@ from typing import Any, Callable, Dict, Set, Union
 
 from gt4py import eve
 from gt4py.cartesian.gtc import oir
-
-from .utils import AccessCollector, collect_symbol_names, symbol_name_creator
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
+    AccessCollector,
+    collect_symbol_names,
+    symbol_name_creator,
+)
 
 
 class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
@@ -21,9 +24,9 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
         offsets = node.offset.to_dict()
         if node.name in tmps_name_map:
-            assert (
-                offsets["i"] == offsets["j"] == offsets["k"] == 0
-            ), "Non-zero offset in temporary that is replaced?!"
+            assert offsets["i"] == offsets["j"] == offsets["k"] == 0, (
+                "Non-zero offset in temporary that is replaced?!"
+            )
             return oir.ScalarAccess(name=tmps_name_map[node.name], dtype=node.dtype)
         return self.generic_visit(node, tmps_name_map=tmps_name_map, **kwargs)
 
@@ -90,7 +93,6 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
 
     Note that temporaries used in horizontal regions in a single horizontal execution
     may not be scalarized.
-
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -121,7 +123,6 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
 
     Note that temporaries used in horizontal regions in a single horizontal execution
     may not be scalarized.
-
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:

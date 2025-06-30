@@ -76,7 +76,6 @@ class CachingStrategy(abc.ABC):
         ----------
         extra_cache_info:
             Additional info to be written
-
         """
         raise NotImplementedError
 
@@ -326,7 +325,7 @@ class JITCachingStrategy(CachingStrategy):
         # typeignore because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore
             self.builder.options.qualified_name,
-            gt_utils.shashed_id(gt_utils.shashed_id(fingerprint), self.options_id),
+            gt_utils.shashed_id(fingerprint, self.options_id),
         )
 
     @property

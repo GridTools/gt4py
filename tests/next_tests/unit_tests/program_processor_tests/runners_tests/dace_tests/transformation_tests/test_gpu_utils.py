@@ -98,26 +98,28 @@ def test_trivial_gpu_map_promoter_1():
         validate=True,
         validate_all=True,
     )
-    assert (
-        nb_runs == 1
-    ), f"Expected that 'TrivialGPUMapElimination' applies once but it applied {nb_runs}."
+    assert nb_runs == 1, (
+        f"Expected that 'TrivialGPUMapElimination' applies once but it applied {nb_runs}."
+    )
     trivial_map_params = trivial_map_entry.map.params
     trivial_map_ranges = trivial_map_entry.map.range
     second_map_params = second_map_entry.map.params
     second_map_ranges = second_map_entry.map.range
 
-    assert (
-        second_map_params == org_second_map_params
-    ), "The transformation modified the parameter of the second map."
-    assert all(
-        org_rng == rng for org_rng, rng in zip(org_second_map_ranges, second_map_ranges)
-    ), "The transformation modified the range of the second map."
+    assert second_map_params == org_second_map_params, (
+        "The transformation modified the parameter of the second map."
+    )
+    assert all(org_rng == rng for org_rng, rng in zip(org_second_map_ranges, second_map_ranges)), (
+        "The transformation modified the range of the second map."
+    )
     assert all(
         t_rng == s_rng for t_rng, s_rng in zip(trivial_map_ranges, second_map_ranges, strict=True)
-    ), "Expected that the ranges are the same; trivial '{trivial_map_ranges}'; second '{second_map_ranges}'."
-    assert (
-        trivial_map_params == second_map_params
-    ), f"Expected the trivial map to have parameters '{second_map_params}', but it had '{trivial_map_params}'."
+    ), (
+        "Expected that the ranges are the same; trivial '{trivial_map_ranges}'; second '{second_map_ranges}'."
+    )
+    assert trivial_map_params == second_map_params, (
+        f"Expected the trivial map to have parameters '{second_map_params}', but it had '{trivial_map_params}'."
+    )
     assert sdfg.is_valid()
 
 
@@ -158,7 +160,7 @@ def test_set_gpu_properties():
     state = sdfg.add_state(is_start_block=True)
 
     map_entries: dict[int, dace_nodes.MapEntry] = {}
-    for dim in [1, 2, 3]:
+    for dim in [1, 2, 3, 4]:
         shape = (10,) * dim
         sdfg.add_array(
             f"A_{dim}", shape=shape, dtype=dace.float64, storage=dace.StorageType.GPU_Global
@@ -181,22 +183,34 @@ def test_set_gpu_properties():
 
     gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
         sdfg=sdfg,
-        block_size=(10, "11", 12),
+        block_size=(9, "11", 12),
         launch_factor_2d=2,
-        block_size_2d=(2, 2, 2),
+        block_size_2d=(2, "12", 2),
         launch_bounds_3d=200,
     )
 
-    map1, map2, map3 = (map_entries[d].map for d in [1, 2, 3])
+    map1, map2, map3, map4 = (map_entries[d].map for d in [1, 2, 3, 4])
 
+    # It takes the normal block size and does not regulate anything.
     assert len(map1.params) == 1
-    assert map1.gpu_block_size == [10, 1, 1]
+    assert map1.gpu_block_size == [9, 1, 1]
     assert map1.gpu_launch_bounds == "0"
 
+    # It takes the specialization for the 2d version, but it modifies the y dimension.
+    #  The value of the launch bounds are not affected from this modification, so they
+    #  are still based in `(2, 12, 1)` and then multiplied with 2.
     assert len(map2.params) == 2
-    assert map2.gpu_block_size == [2, 2, 1]
-    assert map2.gpu_launch_bounds == "8"
+    assert map2.gpu_block_size == [2, 10, 1]
+    assert map2.gpu_launch_bounds == "48"
 
+    # It takes normal block size but regulates the y and z dimension.
     assert len(map3.params) == 3
-    assert map3.gpu_block_size == [10, 11, 12]
+    assert map3.gpu_block_size == [9, 10, 10]
     assert map3.gpu_launch_bounds == "200"
+
+    # It takes the normal block size and regulates the y dimension, but because
+    #  there are more than three dim, it will not regulate the z block.
+    #  Even though `map4` is a 4D Map, the launch bound value for 3D map is used.
+    assert len(map4.params) == 4
+    assert map4.gpu_block_size == [9, 10, 12]
+    assert map4.gpu_launch_bounds == "200"

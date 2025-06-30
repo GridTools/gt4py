@@ -19,11 +19,36 @@ from gt4py.next.ffront import decorator
 
 import next_tests
 
+__all__ = [
+    "exec_alloc_descriptor",
+    "mesh_descriptor",
+    "simple_cartesian_grid",
+    "debug_itir",
+    "size",
+    "DimsType",
+    "DType",
+    "IDim",
+    "JDim",
+    "KDim",
+    "Ioff",
+    "Joff",
+    "Koff",
+    "Vertex",
+    "Edge",
+    "Cell",
+    "EdgeOffset",
+    "MeshDescriptor",
+    "CartesianGridDescriptor",
+]
+
 
 class NoBackend(next_backend.Backend):
     """Temporary default backend to not accidentally test the wrong backend."""
 
     def __call__(self, program, *args, **kwargs) -> None:
+        raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+
+    def compile(self, program, compile_time_args):
         raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
     def __gt_allocator__(
@@ -68,10 +93,6 @@ no_backend = NoBackend(
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU_NO_OPT,
             marks=pytest.mark.requires_dace,
-        ),
-        pytest.param(
-            next_tests.definitions.OptionalProgramBackendId.DACE_GPU_NO_OPT,
-            marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
         ),
     ],
     ids=lambda p: p.short_id(),
@@ -133,6 +154,44 @@ C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
 C2V = gtx.FieldOffset("C2V", source=Vertex, target=(Cell, C2VDim))
 
 size = 10
+
+
+class CartesianGridDescriptor(Protocol):
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def sizes(self) -> tuple[int, int, int]: ...
+
+    @property
+    def offset_provider(self) -> common.OffsetProvider: ...
+
+    @property
+    def offset_provider_type(self) -> common.OffsetProviderType: ...
+
+
+def simple_cartesian_grid(sizes: int | tuple[int, int, int] = 10) -> CartesianGridDescriptor:
+    if isinstance(sizes, int):
+        sizes = (sizes,) * 3
+    assert len(sizes) == 3, "sizes must be a tuple of three integers"
+
+    offset_provider = {
+        "Ioff": IDim,
+        "Joff": JDim,
+        "Koff": KDim,
+    }
+
+    return types.SimpleNamespace(
+        name="simple_cartesian_grid",
+        sizes=sizes,
+        offset_provider=offset_provider,
+        offset_provider_type=common.offset_provider_to_type(offset_provider),
+    )
+
+
+@pytest.fixture
+def cartesian_grid_descriptor() -> CartesianGridDescriptor:
+    return simple_cartesian_grid()
 
 
 class MeshDescriptor(Protocol):
@@ -348,26 +407,6 @@ def skip_value_mesh(allocator) -> MeshDescriptor:
         offset_provider=offset_provider,
         offset_provider_type=common.offset_provider_to_type(offset_provider),
     )
-
-
-__all__ = [
-    "exec_alloc_descriptor",
-    "mesh_descriptor",
-    "debug_itir",
-    "DimsType",
-    "DType",
-    "IDim",
-    "JDim",
-    "KDim",
-    "Ioff",
-    "Joff",
-    "Koff",
-    "Vertex",
-    "Edge",
-    "Cell",
-    "EdgeOffset",
-    "size",
-]
 
 
 @pytest.fixture(
