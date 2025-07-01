@@ -154,10 +154,10 @@ build_py310_image_aarch64:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
         SLURM_TIMELIMIT: '00:25:00'
+        # TODO: Fix issue with compile parallelism that causes tests to hang
         GT4PY_BUILD_JOBS: 2
     - when: on_success
   variables:
-    # TODO: Fix issue with compile parallelism that causes tests to hang
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
