@@ -90,7 +90,7 @@ classifiers = [
 ]
 dependencies = [
   'attrs>=21.3',
-  'black>=23.12',
+  'black>=24.10',
   'boltons>=20.1',
   'cached-property>=1.5.1',
   'click>=8.0.0',
