@@ -61,13 +61,18 @@ stages:
     - export OLD_RUNNER_KEY=".${RUNNER_KEY}-template"
     # TODO: check if there is a FULL repository clone available here,
     #   otherwise clone the repository
-    # Install uv
+    # Install script helpers: uv, yq
     - curl -LsSf https://astral.sh/uv/install.sh | sh
+    # - export YQ_BINARY_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    # - export YQ_BINARY_ARCH=$(uname -p | sed -e 's/x86_64/amd64/' | sed -e 's/aarch64/arm64/')
+    - export YQ_BINARY="yq_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -p | sed -e 's/x86_64/amd64/' | sed -e 's/aarch64/arm64/')"
+    - export YQ_VERSION="v4.45.4"
+    - wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY} -O ${HOME}/local/bin/yq && chmod +x ${HOME}/.local/bin/yq
     - export PATH="$HOME/.local/bin:${PATH}"
     # Run script to generate the test matrix
-    - ./scripts-cli.py cscs-ci matrix --verbose --base ${GIT_TARGET_BRANCH} --config nox-sessions-config.yml --base main --output gitlab-test-matrix.yml
+    - ./scripts-cli.py cscs-ci matrix --verbose --base ${GIT_TARGET_BRANCH} --config nox-sessions-config.yml --output gitlab-test-matrix.yml
     # Insert the test matrix into the template
-    - uvx yq eval '.".test_matrix_job".parallel.matrix  = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yml > generated_cscs_test_pipeline.yml
+    - yq eval '.".test_matrix_job".parallel.matrix  = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yml > generated_cscs_test_pipeline.yml
     # Rename the template job to the actual job name
     - uvx yq eval -i '(.[strenv(OLD_RUNNER_KEY)] | key) = strenv(RUNNER_KEY)' generated_cscs_test_pipeline.yml
   artifacts:

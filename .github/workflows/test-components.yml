@@ -34,7 +34,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
-          python-version: "3.10" # Use a fixed Python version for defining test sessions
+          # python-version: "3.12" # Use a fixed Python version for defining test sessions
 
       - name: Define test sessions base on changed files
         id: test-sessions
