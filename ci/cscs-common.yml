@@ -77,7 +77,7 @@ stages:
     # Insert the test matrix into the template
     - yq eval '.".test_matrix_job".parallel.matrix  = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yml > generated_cscs_test_pipeline.yml
     # Rename the template job to the actual job name
-    - uvx yq eval -i '(.[strenv(OLD_RUNNER_KEY)] | key) = strenv(RUNNER_KEY)' generated_cscs_test_pipeline.yml
+    - yq eval -i '(.[strenv(OLD_RUNNER_KEY)] | key) = strenv(RUNNER_KEY)' generated_cscs_test_pipeline.yml
   artifacts:
     # Since the base image name becomes runtime dependent, we need to carry the
     # value of it to the following jobs via the 'build.env' dotenv file.
