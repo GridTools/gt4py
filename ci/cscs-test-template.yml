@@ -24,6 +24,7 @@ include:
 # as a public job and then executed in the triggered runner
 .test_cscs_gh200-template:
   extends:
+    - .container-runner-santis-gh200
     - .test_base
     - .test_matrix_job
   needs:

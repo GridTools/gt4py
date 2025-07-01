@@ -31,7 +31,6 @@ build_base_cscs_gh200:
 test_cscs_gh200:
   stage: test
   extends:
-    - .container-runner-santis-gh200
     - .test_trigger_base
   needs:
     - build_base_cscs_gh200
