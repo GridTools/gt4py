@@ -1472,7 +1472,7 @@ requires-dist = [
     { name = "setuptools", specifier = ">=70.0.0" },
     { name = "tabulate", specifier = ">=0.8.10" },
     { name = "toolz", specifier = ">=0.12.1" },
-    { name = "typing-extensions", specifier = ">=4.11.0" },
+    { name = "typing-extensions", specifier = ">=4.12.0" },
     { name = "versioningit", specifier = ">=3.1.1" },
     { name = "xxhash", specifier = ">=3.5.0" },
 ]
@@ -1486,7 +1486,7 @@ build = [
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dev = [
-    { name = "atlas4py", specifier = ">=0.35", index = "https://test.pypi.org/simple/" },
+    { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple/" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
     { name = "cython", specifier = ">=3.0.0" },
     { name = "esbonio", specifier = ">=0.16.0" },
@@ -1534,7 +1534,7 @@ docs = [
     { name = "sphinx-rtd-theme", specifier = ">=3.0.1" },
     { name = "sphinx-toolbox", specifier = ">=3.8.1" },
 ]
-frameworks = [{ name = "atlas4py", specifier = ">=0.35", index = "https://test.pypi.org/simple/" }]
+frameworks = [{ name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple/" }]
 lint = [
     { name = "pre-commit", specifier = ">=4.0.1" },
     { name = "ruff", specifier = ">=0.8.0" },

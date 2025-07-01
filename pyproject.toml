@@ -33,7 +33,7 @@ docs = [
 ]
 frameworks = [
   # 3rd party frameworks with some interoperability with gt4py
-  'atlas4py>=0.35'
+  'atlas4py>=0.41'
 ]
 lint = [
   'pre-commit>=4.0.1',
@@ -114,7 +114,7 @@ dependencies = [
   'setuptools>=70.0.0',
   'tabulate>=0.8.10',
   'toolz>=0.12.1',
-  'typing-extensions>=4.11.0',
+  'typing-extensions>=4.12.0',
   'versioningit>=3.1.1',
   'xxhash>=3.5.0'
 ]
