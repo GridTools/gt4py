@@ -8,6 +8,7 @@
 
 """Unit tests for the command line interface (CLI)."""
 
+import importlib
 import re
 import sys
 
@@ -75,12 +76,14 @@ class NonCliBackend(backend.Backend):
         pass
 
 
-@pytest.fixture
-def nocli_backend(scope="module"):
+@pytest.fixture(scope="module")
+def nocli_backend():
     """Temporarily register the nocli backend."""
     backend.register(NonCliBackend)
+    importlib.reload(cli)  # Reload to ensure the backend is registered in the CLI
     yield
     backend.REGISTRY.pop("nocli")
+    importlib.reload(cli)  # Reload to ensure the backend is unregistered in the CLI
 
 
 BACKEND_ROW_PATTERN_BY_NAME = {
@@ -110,7 +113,7 @@ def test_list_backends(clirunner, list_backends_line_pattern):
     result = clirunner.invoke(cli.gtpyc, ["list-backends"], catch_exceptions=False)
 
     assert result.exit_code == 0
-    assert re.findall(list_backends_line_pattern, result.output, re.MULTILINE), print(result.output)
+    assert re.findall(list_backends_line_pattern, result.output, re.MULTILINE), result.output
 
 
 def test_gen_silent(clirunner, simple_stencil, tmp_path):
