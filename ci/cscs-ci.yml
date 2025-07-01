@@ -47,7 +47,7 @@ stages:
   variables:
     CUDA_VERSION: 12.6.2
     CUPY_PACKAGE: cupy-cuda12x
-    CUPY_VERSION: 13.3.0
+    CUPY_VERSION: 13.4.1
     UBUNTU_VERSION: 22.04
 
 # build_py313_baseimage_x86_64:
