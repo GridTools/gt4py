@@ -67,7 +67,7 @@ stages:
     # - export YQ_BINARY_ARCH=$(uname -p | sed -e 's/x86_64/amd64/' | sed -e 's/aarch64/arm64/')
     - export YQ_BINARY="yq_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -p | sed -e 's/x86_64/amd64/' | sed -e 's/aarch64/arm64/')"
     - export YQ_VERSION="v4.45.4"
-    - wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY} -O ${HOME}/local/bin/yq && chmod +x ${HOME}/.local/bin/yq
+    - curl https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY} -o ${HOME}/.local/bin/yq && chmod +x ${HOME}/.local/bin/yq
     - export PATH="$HOME/.local/bin:${PATH}"
     # Run script to generate the test matrix
     - ./scripts-cli.py cscs-ci matrix --verbose --base ${GIT_TARGET_BRANCH} --config nox-sessions-config.yml --output gitlab-test-matrix.yml
