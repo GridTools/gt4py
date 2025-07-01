@@ -543,7 +543,12 @@ def _gt_auto_post_processing(
                 assert isinstance(state, dace.SDFGState)
                 for edge in state.edges():
                     edge.data.wcr_nonatomic = False
-
+    else:
+        # Use memory pool for allocation of transient arrays
+        for _, _, desc in sdfg.arrays_recursive():
+            if isinstance(desc, dace_data.Array) and desc.transient:
+                desc.lifetime = dace.AllocationLifetime.Scope
+                desc.pool = True
     return sdfg
 
 
