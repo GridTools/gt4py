@@ -1464,7 +1464,7 @@ requires-dist = [
     { name = "mako", specifier = ">=1.3" },
     { name = "nanobind", specifier = ">=1.4.0" },
     { name = "ninja", specifier = ">=1.10" },
-    { name = "numpy", specifier = ">=1.23.3" },
+    { name = "numpy", specifier = ">=1.26.4" },
     { name = "packaging", specifier = ">=20.0" },
     { name = "pybind11", specifier = ">=2.10.1" },
     { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.0" },
