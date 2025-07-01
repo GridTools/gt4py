@@ -32,8 +32,16 @@ stages:
     CSCS_REBUILD_POLICY: if-not-exists
     DOCKERFILE: ci/Dockerfile
     DOCKER_BUILD_ARGS: >
-      '[ "BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS",
-         "EXTRA_UV_SYNC_ARGS", "GT4PY_REPO", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
+      '[ "BASE_IMAGE=$BASE_IMAGE",
+         "CACHE_DIR=$CACHE_DIR",
+         "EXTRA_APTGET=$EXTRA_APTGET",
+         "EXTRA_UV_ENV_VARS=$EXTRA_UV_ENV_VARS",
+         "EXTRA_UV_PIP_ARGS=$EXTRA_UV_PIP_ARGS",
+         "EXTRA_UV_SYNC_ARGS=$EXTRA_UV_SYNC_ARGS",
+         "GT4PY_REPO=$GT4PY_REPO",
+         "PY_VERSION=$PY_VERSION",
+         "UV_VERSION=$UV_VERSION",
+         "WORKDIR_PATH=$WORKDIR_PATH" ]'
   before_script:
     # We create a tag that depends on the SHA value of ci/base.Dockerfile,
     # the docker build arguments (since we use a parameterized Docker file),
@@ -43,7 +51,7 @@ stages:
     # and build arguments changes.
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
     - export PERSIST_IMAGE_NAME=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
-    - echo "BASE_GT4PY_IMAGE=${PERSIST_IMAGE_NAME}" >> build.env
+    - echo "BASE_IMAGE=${PERSIST_IMAGE_NAME}" >> build.env
   after_script:
     - cp ci/cscs-test-template.yml generated_cscs_test_pipeline.yml
   #   # Get the name of the git target branch
@@ -66,7 +74,7 @@ stages:
     # Since the base image name becomes runtime dependent, we need to carry the
     # value of it to the following jobs via the 'build.env' dotenv file.
     reports:
-      dotenv: build_base.env
+      dotenv: build.env
     paths:
       - generated_cscs_test_pipeline.yml
 
@@ -80,7 +88,7 @@ stages:
     BASE_IMAGE: docker.io/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
     #EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
     EXTRA_UV_PIP_ARGS: ""
-    EXTRA_BUILD_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
+    EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
 
 
 # .test_trigger_base:
