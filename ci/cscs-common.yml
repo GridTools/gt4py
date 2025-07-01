@@ -63,6 +63,7 @@ stages:
     #   otherwise clone the repository
     # Install uv
     - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - export PATH="$HOME/.local/bin:${PATH}""
     # Run script to generate the test matrix
     - ./scripts-cli.py cscs-ci matrix --verbose --base ${GIT_TARGET_BRANCH} --config nox-sessions-config.yml --base main --output gitlab-test-matrix.yml
     # Insert the test matrix into the template
