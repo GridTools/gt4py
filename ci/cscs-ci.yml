@@ -27,18 +27,18 @@ build_base_cscs_gh200:
 #   variables:
 #     RUNNER_KEY: test_cscs_amd_rocm
 
-# # Trigger jobs for the generated test pipeline
-# test_cscs_gh200:
-#   stage: test
-#   extends:
-#     - .container-runner-santis-gh200
-#     - .test_trigger_base
-#   needs:
-#     - build_base_cscs_gh200
-#   trigger:
-#     include:
-#       - artifact: generated_test_pipeline.yml
-#         job: build_base_cscs_gh200
+# Trigger jobs for the generated test pipeline
+test_cscs_gh200:
+  stage: test
+  extends:
+    - .container-runner-santis-gh200
+    - .test_trigger_base
+  needs:
+    - build_base_cscs_gh200
+  trigger:
+    include:
+      - artifact: generated_test_pipeline.yml
+        job: build_base_cscs_gh200
 
 # .test_cscs_amd_rocm:
 #   stage: test
