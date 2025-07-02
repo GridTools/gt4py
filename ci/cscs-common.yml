@@ -45,6 +45,7 @@ stages:
     # and build arguments changes.
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
     - export PERSIST_IMAGE_NAME=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
+    - echo "TEST_IMAGE=${PERSIST_IMAGE_NAME}" >> base.env
   after_script:
     # We create here the child pipeline ('generated_cscs_test_pipeline.yml') with
     # the actual tests that should be run. The pipeline is then triggered in the
@@ -54,8 +55,11 @@ stages:
     - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
     - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
     - echo "GITHUB_PR=${GITHUB_PR}"
-    - export GIT_TARGET_BRANCH="$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.base.ref')"
-    - echo GIT_TARGET_BRANCH=${GIT_TARGET_BRANCH}
+    - curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null > gh_pull.json
+    - export GIT_TARGET_BRANCH="$(jq -r '.base.ref' gh_pull.json)"
+    - echo GIT_TARGET_BRANCH=${GIT_TARGET_BRANCH} >> base.env
+    - export GIT_COMMIT_SHA="$(jq -r '.head.sha' gh_pull.json)"
+    - echo GIT_COMMIT_SHA=${GIT_COMMIT_SHA} >> base.env
     # Fetch the target branch from github
     - git remote add gh https://github.com/gridtools/gt4py
     - git fetch gh "${GIT_TARGET_BRANCH}"
@@ -75,6 +79,8 @@ stages:
     - yq eval -i '(.[strenv(OLD_RUNNER_KEY)] | key) = strenv(RUNNER_KEY)' generated_cscs_test_pipeline.yml
     - cat generated_cscs_test_pipeline.yml
   artifacts:
+    reports:
+      dotenv: base.env
     paths:
       - generated_cscs_test_pipeline.yml
 
@@ -98,10 +104,11 @@ stages:
 
 .test_base:
   stage: test
-  #image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PY_VERSION
-  #image: ${BASE_GT4PY_IMAGE}
+  image: ${TEST_IMAGE}
   script:
     - cd /workspace/gt4py
+    - git fetch
+    - git checkout "${GIT_COMMIT_SHA}"
     # SESSION_NAME, SESSION_ARGS and SESSION_PYTHON are set in the actual job
     - nox -s "${SESSION_NAME}-${SESSION_PYTHON}(${SESSION_ARGS})"
   variables:
