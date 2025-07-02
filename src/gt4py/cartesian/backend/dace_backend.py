@@ -20,7 +20,7 @@ from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
 
 from gt4py._core import definitions as core_defs
-from gt4py.cartesian import config as gt_config
+from gt4py.cartesian import config as gt_config, definitions
 from gt4py.cartesian.backend.base import CLIBackendMixin, register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
@@ -32,7 +32,6 @@ from gt4py.cartesian.backend.gtc_common import (
     pybuffer_to_sid,
 )
 from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
-from gt4py.cartesian.definitions import FieldInfo
 from gt4py.cartesian.gtc import gtir
 from gt4py.cartesian.gtc.dace.oir_to_treeir import OIRToTreeIR
 from gt4py.cartesian.gtc.dace.treeir_to_stree import TreeIRToScheduleTree
@@ -84,7 +83,7 @@ def _specialize_transient_strides(
 
 
 def _sdfg_add_arrays_and_edges(
-    field_info: dict[str, FieldInfo],
+    field_info: dict[str, definitions.FieldInfo],
     wrapper_sdfg: SDFG,
     state: SDFGState,
     inner_sdfg: SDFG,
@@ -205,7 +204,7 @@ def _sdfg_specialize_symbols(wrapper_sdfg: SDFG, domain: tuple[int, ...]) -> Non
 def freeze_origin_domain_sdfg(
     inner_sdfg_unfrozen: SDFG,
     arg_names: list[str],
-    field_info: dict[str, FieldInfo],
+    field_info: dict[str, definitions.FieldInfo],
     *,
     layout_info: layout.LayoutInfo,
     origin: dict[str, tuple[int, ...]],
@@ -393,7 +392,7 @@ class DaCeExtGenerator(BackendCodegen):
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, stencil_ir: gtir.Stencil) -> dict[str, dict[str, str]]:
+    def __call__(self) -> dict[str, dict[str, str]]:
         manager = SDFGManager(self.backend.builder)
 
         sdfg = manager.sdfg_via_schedule_tree()
@@ -407,11 +406,9 @@ class DaCeExtGenerator(BackendCodegen):
         # symbols. Our job creating the sdfg/stree is to make sure we use the same symbols
         # and to be sure that these symbols are added as dace symbols.
 
-        implementation = DaCeComputationCodegen.apply(stencil_ir, self.backend.builder, sdfg)
+        implementation = DaCeComputationCodegen.apply(self.backend.builder, sdfg)
 
-        bindings = DaCeBindingsCodegen.apply(
-            stencil_ir, sdfg, module_name=self.module_name, backend=self.backend
-        )
+        bindings = DaCeBindingsCodegen.apply(sdfg, self.module_name, backend=self.backend)
 
         bindings_ext = "cu" if self.backend.storage_info["device"] == "gpu" else "cpp"
         return {
@@ -514,7 +511,7 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
         return "\n".join(filter(keep_line, lines))
 
     @classmethod
-    def apply(cls, stencil_ir: gtir.Stencil, builder: StencilBuilder, sdfg: SDFG) -> str:
+    def apply(cls, builder: StencilBuilder, sdfg: SDFG) -> str:
         self = cls()
         with config.temporary_config():
             # To prevent conflict with 3rd party usage of DaCe config always make sure that any
@@ -543,7 +540,7 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
         interface = cls.template.definition.render(
             name=sdfg.name,
             backend_specifics=omp_threads,
-            dace_args=self.generate_dace_args(stencil_ir, sdfg),
+            dace_args=self.generate_dace_args(builder.gtir, sdfg),
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
@@ -667,7 +664,7 @@ class DaCeBindingsCodegen:
 
     mako_template = bindings_main_template()
 
-    def generate_entry_params(self, stencil_ir: gtir.Stencil, sdfg: SDFG) -> list[str]:
+    def generate_entry_params(self, sdfg: SDFG) -> list[str]:
         res: dict[str, str] = {}
 
         for name in sdfg.signature_arglist(with_types=False, for_call=True):
@@ -693,7 +690,7 @@ class DaCeBindingsCodegen:
                     )
             elif name in sdfg.symbols and not name.startswith("__"):
                 res[name] = f"{sdfg.symbols[name].ctype} {name}"
-        return list(res[node.name] for node in stencil_ir.params if node.name in res)
+        return list(res[node.name] for node in self.backend.builder.gtir.params if node.name in res)
 
     def generate_sid_params(self, sdfg: SDFG) -> list[str]:
         res: list[str] = []
@@ -728,21 +725,17 @@ class DaCeBindingsCodegen:
             res.append(name)
         return res
 
-    def generate_sdfg_bindings(self, stencil_ir: gtir.Stencil, sdfg: SDFG, module_name: str) -> str:
+    def generate_sdfg_bindings(self, sdfg: SDFG, module_name: str) -> str:
         return self.mako_template.render_values(
             name=sdfg.name,
             module_name=module_name,
-            entry_params=self.generate_entry_params(stencil_ir, sdfg),
+            entry_params=self.generate_entry_params(sdfg),
             sid_params=self.generate_sid_params(sdfg),
         )
 
     @classmethod
-    def apply(
-        cls, stencil_ir: gtir.Stencil, sdfg: SDFG, module_name: str, *, backend: BaseDaceBackend
-    ) -> str:
-        generated_code = cls(backend).generate_sdfg_bindings(
-            stencil_ir, sdfg, module_name=module_name
-        )
+    def apply(cls, sdfg: SDFG, module_name: str, *, backend: BaseDaceBackend) -> str:
+        generated_code = cls(backend).generate_sdfg_bindings(sdfg, module_name)
         if backend.builder.options.format_source:
             generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return generated_code
