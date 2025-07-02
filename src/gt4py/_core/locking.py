@@ -18,9 +18,10 @@ class _LockConstructor(Protocol):
     def __call__(self, path: str, /) -> ContextManager: ...
 
 
-_default_lock: _LockConstructor = filelock.FileLock
+# Changing the default is private API, but could be made public in the future
+_lock_constructor: _LockConstructor = filelock.FileLock
 
 
 def lock(path: pathlib.Path | str) -> ContextManager:
     """Create a lock for the given path."""
-    return _default_lock(str(path))
+    return _lock_constructor(str(path))
