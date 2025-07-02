@@ -41,7 +41,8 @@ stages:
     # and build arguments changes.
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
     - export PERSIST_IMAGE_NAME=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
-    - echo "BASE_IMAGE=${PERSIST_IMAGE_NAME}" >> build.env
+    #- echo "BASE_IMAGE=${PERSIST_IMAGE_NAME}" >> build.env
+    - env
   after_script:
     # Get the name of the git target branch
     - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
@@ -75,8 +76,8 @@ stages:
   artifacts:
     # Since the base image name becomes runtime dependent, we need to carry the
     # value of it to the following jobs via the 'build.env' dotenv file.
-    reports:
-      dotenv: build.env
+    # reports:
+    #   dotenv: build.env
     paths:
       - generated_cscs_test_pipeline.yml
 
