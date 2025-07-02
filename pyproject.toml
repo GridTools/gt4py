@@ -23,7 +23,7 @@ dev = [
 docs = [
   'esbonio>=0.16.0',
   'jupytext>=1.14',
-  'matplotlib>=3.8.4',
+  'matplotlib>=3.9.0',
   'myst-parser>=4.0.0',
   'pygments>=2.7.3',
   'sphinx>=7.3.7',
@@ -32,7 +32,7 @@ docs = [
 ]
 frameworks = [
   # 3rd party frameworks with some interoperability with gt4py
-  'atlas4py>=0.35'
+  'atlas4py>=0.41'
 ]
 lint = [
   'pre-commit>=4.0.1',
@@ -41,7 +41,7 @@ lint = [
   'validate-pyproject-schema-store[all]>=2025.06.13'
 ]
 test = [
-  'coverage[toml]>=7.5.0',
+  'coverage[toml]>=7.6.1',
   'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
   'nox>=2025.02.09',
@@ -76,6 +76,7 @@ classifiers = [
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
   'Programming Language :: Python :: 3.12',
+  'Programming Language :: Python :: 3.13',
   'Programming Language :: Python :: Implementation :: CPython',
   'Topic :: Scientific/Engineering :: Atmospheric Science',
   'Topic :: Scientific/Engineering :: Mathematics',
@@ -83,13 +84,13 @@ classifiers = [
 ]
 dependencies = [
   'attrs>=21.3',
-  'black>=23.12',
+  'black>=24.10',
   'boltons>=20.1',
   'cached-property>=1.5.1',
   'click>=8.0.0',
   'cmake>=3.22',
-  'cytoolz>=1.0.0',
-  'deepdiff>=5.6.0',
+  'cytoolz>=1.0.1',
+  'deepdiff>=8.1.0',
   'devtools>=0.6',
   'diskcache>=5.6.3',
   'factory-boy>=3.3.0',
@@ -98,18 +99,18 @@ dependencies = [
   'gridtools-cpp>=2.3.9,==2.*',
   'jinja2>=3.0.0',
   'lark>=1.1.2',
-  'mako>=1.1',
+  'mako>=1.3',
   'nanobind>=1.4.0 ',
   'ninja>=1.10',
-  'numpy>=1.23.3',
+  'numpy>=1.26.4',
   'packaging>=20.0',
   'pybind11>=2.10.1',
   'setuptools>=70.0.0',
   'tabulate>=0.8.10',
   'toolz>=0.12.1',
-  'typing-extensions>=4.11.0',
+  'typing-extensions>=4.12.0',
   'versioningit>=3.1.1',
-  'xxhash>=1.4.4,<3.1.0'
+  'xxhash>=3.5.0'
 ]
 description = 'Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL)'
 dynamic = ['version']
@@ -125,7 +126,7 @@ keywords = [
 license = {text = 'BSD-3 License'}  # TODO: waiting for PEP 639 being implemented by setuptools (https://github.com/codecov/codecov-cli/issues/605)
 name = 'gt4py'
 readme = 'README.md'
-requires-python = '>=3.10, <3.13'
+requires-python = '>=3.10, <3.14'
 
 [project.optional-dependencies]
 # bundles
@@ -139,7 +140,7 @@ dace-next = ['dace']  # pull dace latest version from the git repository
 formatting = ['clang-format>=9.0']
 jax = ['jax>=0.4.26']
 jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
-performance = ['scipy>=1.12.0']
+performance = ['scipy>=1.14.1']
 rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
 rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
 rocm6_0 = ['cupy>=13.4.1']
@@ -437,7 +438,7 @@ url = 'https://test.pypi.org/simple/'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_06_27", extra = "dace-next"}
+dace = {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_02", extra = "dace-next"}
 
 # -- versioningit --
 [tool.versioningit]
