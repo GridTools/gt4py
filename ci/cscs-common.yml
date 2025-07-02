@@ -58,8 +58,8 @@ stages:
     - curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null > gh_pull.json
     - export GIT_TARGET_BRANCH="$(jq -r '.base.ref' gh_pull.json)"
     - echo GIT_TARGET_BRANCH=${GIT_TARGET_BRANCH} >> base.env
-    - export GIT_COMMIT_SHA="$(jq -r '.head.sha' gh_pull.json)"
-    - echo GIT_COMMIT_SHA=${GIT_COMMIT_SHA} >> base.env
+    - export GIT_CURRENT_BRANCH="$(jq -r '.head.ref' gh_pull.json)"
+    - echo GIT_CURRENT_BRANCH=${GIT_CURRENT_BRANCH} >> base.env
     # Fetch the target branch from github
     - git remote add gh https://github.com/gridtools/gt4py
     - git fetch gh "${GIT_TARGET_BRANCH}"
@@ -108,7 +108,7 @@ stages:
   script:
     - cd /workspace/gt4py
     - git fetch
-    - git checkout "${GIT_COMMIT_SHA}"
+    - git switch "${GIT_CURRENT_BRANCH}"
     # SESSION_NAME, SESSION_ARGS and SESSION_PYTHON are set in the actual job
     - nox -s "${SESSION_NAME}-${SESSION_PYTHON}(${SESSION_ARGS})"
   variables:
