@@ -102,7 +102,11 @@ def _sdfg_add_arrays_and_edges(
             ]
 
             wrapper_sdfg.add_array(
-                name, dtype=array.dtype, strides=array.strides, shape=shape, storage=array.storage
+                name,
+                dtype=array.dtype,
+                strides=array.strides,
+                shape=shape,
+                storage=array.storage,
             )
             if isinstance(origins, tuple):
                 origin = [o for a, o in zip("IJK", origins) if a in axes]
@@ -138,7 +142,11 @@ def _sdfg_add_arrays_and_edges(
                 )
         elif isinstance(array, data.Scalar):
             wrapper_sdfg.add_scalar(
-                name, dtype=array.dtype, storage=array.storage, lifetime=array.lifetime
+                name,
+                dtype=array.dtype,
+                storage=array.storage,
+                lifetime=array.lifetime,
+                transient=array.transient,
             )
             if name in inputs:
                 state.add_edge(
@@ -322,7 +330,9 @@ class SDFGManager:
             tmp_sdfg.orig_sdfg = None
 
     @staticmethod
-    def _save_sdfg(sdfg: SDFG, path: str) -> None:
+    def _save_sdfg(sdfg: SDFG, path: str, validate: bool = False) -> None:
+        if validate:
+            sdfg.validate()
         SDFGManager._strip_history(sdfg)
         sdfg.save(path)
 
