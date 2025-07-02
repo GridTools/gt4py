@@ -27,6 +27,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.stages import AOT_FOP, FOP
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms import inline_lambdas
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -134,11 +135,15 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
         new_body = func_definition.expr
 
-        stencil_args: list[itir.Expr] = []
         assert not node.type.definition.pos_only_args and not node.type.definition.kw_only_args
-        for param in func_definition.params[1:]:
-            new_body = im.let(param.id, im.deref(param.id))(new_body)
-            stencil_args.append(im.ref(param.id))
+        stencil_args: list[itir.Expr] = [im.ref(param.id) for param in func_definition.params[1:]]
+        new_body = im.let(
+            *((param.id, im.deref(param.id)) for param in func_definition.params[1:])
+        )(new_body)
+        # Derefing the iterators directly in the let may lead to out-of-bounds access. Force inline
+        # them here such that they can be guarded by an if.
+        # TODO(tehrengruber): This should be fixed on the conceptual level when reworking the scan.
+        new_body = inline_lambdas.inline_lambda(new_body)
 
         definition = itir.Lambda(params=func_definition.params, expr=new_body)
 
