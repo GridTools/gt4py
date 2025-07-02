@@ -72,8 +72,12 @@ stages:
     - export PATH="$HOME/.local/bin:${PATH}"
     # Run script to generate the test matrix
     - ./scripts-cli.py cscs-ci matrix --verbose --base "gh/${GIT_TARGET_BRANCH}" --config nox-sessions-config.yml --output gitlab-test-matrix.yml
+    - cat gitlab-test-matrix.yml
     # Insert the test matrix into the template
+    - cat ci/cscs-test-template.yml
     - yq eval '.".test_matrix_job".parallel.matrix  = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yml > generated_cscs_test_pipeline.yml
+    - ls -las generated_cscs_test_pipeline.yml
+    - cat generated_cscs_test_pipeline.yml
     # Rename the template job to the actual job name
     - export OLD_RUNNER_KEY=".${RUNNER_KEY}-template"
     - yq eval -i '(.[strenv(OLD_RUNNER_KEY)] | key) = strenv(RUNNER_KEY)' generated_cscs_test_pipeline.yml
