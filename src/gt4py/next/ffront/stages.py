@@ -79,7 +79,7 @@ AOT_PRG: typing.TypeAlias = toolchain.CompilableProgram[PRG, arguments.CompileTi
 def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:
     hasher: xtyping.HashlibAlgorithm
     if not algorithm:
-        hasher = xxhash.xxh64()
+        hasher = xxhash.xxh64()  # type: ignore[assignment]  # fixing this requires https://github.com/ifduyue/python-xxhash/issues/104
     elif isinstance(algorithm, str):
         hasher = hashlib.new(algorithm)
     else:
