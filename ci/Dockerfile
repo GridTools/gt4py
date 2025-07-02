@@ -59,7 +59,7 @@ ARG EXTRA_UV_PIP_ARGS=""
 ARG EXTRA_UV_SYNC_ARGS=""
 RUN --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml <<EOF
-if [[ ! -z "${EXTRA_UV_ENV_VARS}" ]]; then
+if [ ! -z "${EXTRA_UV_ENV_VARS}" ]; then
     eval "export ${EXTRA_UV_ENV_VARS}"
 fi
 uv pip install --compile-bytecode setuptools wheel pip
@@ -70,12 +70,12 @@ uv sync --compile-bytecode --frozen --no-install-project \
     --extra performance \
     --extra testing \
      ${EXTRA_UV_SYNC_ARGS}
-if [[ ! -z "${EXTRA_UV_PIP_ARGS}" ]]; then
+if [ ! -z "${EXTRA_UV_PIP_ARGS}" ]; then
     uv pip install --compile-bytecode ${EXTRA_UV_PIP_ARGS}
 fi
 EOF
 
-
 # Add the repository to the workspace
 ARG GT4PY_REPO="https://github.com/gridtools/gt4py"
-ADD --keep-git-dir=true ${GT4PY_REPO} ${WORKDIR_PATH}/gt4py
+#ADD --keep-git-dir=true ${GT4PY_REPO} ${WORKDIR_PATH}/gt4py
+RUN git clone ${GT4PY_REPO} ${WORKDIR_PATH}/gt4py
