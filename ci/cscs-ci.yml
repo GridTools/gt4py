@@ -36,7 +36,7 @@ test_cscs_gh200:
     - build_base_cscs_gh200
   trigger:
     include:
-      - artifact: generated_test_pipeline.yml
+      - artifact: generated_cscs_test_pipeline.yml
         job: build_base_cscs_gh200
 
 # .test_cscs_amd_rocm:
