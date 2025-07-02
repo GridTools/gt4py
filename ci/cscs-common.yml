@@ -106,10 +106,15 @@ stages:
   stage: test
   image: ${TEST_IMAGE}
   script:
+    # Since the repo in the container does not contain the latest changes,
+    # we need to fetch the current branch (set in the base.env file by the build
+    # the job) from the remote repository. Otherwise, the tests will run
+    # against the branch that was used to build the base image.
     - cd /workspace/gt4py
     - git fetch origin "${GIT_CURRENT_BRANCH}"
     - git switch "${GIT_CURRENT_BRANCH}"
-    # SESSION_NAME, SESSION_ARGS and SESSION_PYTHON are set in the actual job
+    # Run the tests using nox, with the session name and python version
+    # set in the actual job. The session arguments are optional and can be empty.
     - nox -s "${SESSION_NAME}-${SESSION_PYTHON}${SESSION_ARGS}"
   variables:
     CSCS_CUDA_MPS: 1
