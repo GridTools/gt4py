@@ -153,9 +153,9 @@ build_py310_image_aarch64:
   rules:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
-        # TODO(edopao): understand why the dace tests take so long
-        SLURM_TIMELIMIT: '00:30:00'
+        # TODO: investigate why the dace tests seem to hang with multiple jobs
         GT4PY_BUILD_JOBS: 1
+        SLURM_TIMELIMIT: '00:15:00'
     - when: on_success
   variables:
     GT4PY_BUILD_JOBS: 8
