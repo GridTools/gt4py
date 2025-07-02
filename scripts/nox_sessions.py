@@ -7,16 +7,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-#! /usr/bin/env -S uv run -q -p 3.11 --frozen --isolated --group scripts --script
-#
-# GT4Py - GridTools Framework
-#
-# Copyright (c) 2014-2024, ETH Zurich
-# All rights reserved.
-#
-# Please, refer to the LICENSE file in the root directory.
-# SPDX-License-Identifier: BSD-3-Clause
-
 """Manage conditional execution of nox sessions."""
 
 from __future__ import annotations
@@ -101,7 +91,9 @@ def get_changed_files(base_commit: str) -> list[str]:
     """Get list of changed files from base_commit."""
     cmd_args = ["git", "diff", "--name-only", base_commit]
     try:
-        out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=common.REPO_ROOT).stdout
+        out = subprocess.run(
+            cmd_args, capture_output=True, text=True, cwd=common.REPO_ROOT, check=True
+        ).stdout
     except subprocess.CalledProcessError as e:
         rich.print(f"[red]Error:[/red] Failed to get changed files: {e}")
         raise typer.Exit(ExitCode.GIT_DIFF_ERROR) from e
@@ -168,7 +160,9 @@ def get_sessions(*args: str, verbose: bool = False) -> list[NoxSessionDefinition
     """Get the names of nox sessions that should run based on the test sessions configuration."""
     cmd_args = ["./noxfile.py", "--list", "--json", *args]
     try:
-        out = subprocess.run(cmd_args, capture_output=True, text=True, cwd=common.REPO_ROOT).stdout
+        out = subprocess.run(
+            cmd_args, capture_output=True, text=True, cwd=common.REPO_ROOT, check=True
+        ).stdout
         if verbose:
             rich.print(f"nox output: {out}")
         nox_sessions = json.loads(out)
