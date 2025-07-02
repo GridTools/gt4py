@@ -79,5 +79,4 @@ EOF
 
 # Add the repository to the workspace
 ARG GT4PY_REPO="https://github.com/gridtools/gt4py"
-#ADD --keep-git-dir=true ${GT4PY_REPO} ${WORKDIR_PATH}/gt4py
 RUN git clone ${GT4PY_REPO} ${WORKDIR_PATH}/gt4py
