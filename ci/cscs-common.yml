@@ -77,6 +77,8 @@ stages:
     # Rename the template job to the actual job name
     - export OLD_RUNNER_KEY=".${RUNNER_KEY}-template"
     - yq eval -i '(.[strenv(OLD_RUNNER_KEY)] | key) = strenv(RUNNER_KEY)' generated_cscs_test_pipeline.yml
+    - ls -las generated_cscs_test_pipeline.yml
+    - cat generated_cscs_test_pipeline.yml
     - echo "generated_cscs_test_pipeline=$(cat generated_cscs_test_pipeline.yml)"
   artifacts:
     # Since the base image name becomes runtime dependent, we need to carry the
