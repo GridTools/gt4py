@@ -31,17 +31,7 @@ stages:
     # (if-not-exists is the default, i.e. we could also skip the variable)
     CSCS_REBUILD_POLICY: if-not-exists
     DOCKERFILE: ci/Dockerfile
-    DOCKER_BUILD_ARGS: >
-      '[ "BASE_IMAGE",
-         "CACHE_DIR",
-         "EXTRA_APTGET",
-         "EXTRA_UV_ENV_VARS",
-         "EXTRA_UV_PIP_ARGS",
-         "EXTRA_UV_SYNC_ARGS",
-         "GT4PY_REPO",
-         "PY_VERSION",
-         "UV_VERSION",
-         "WORKDIR_PATH" ]'
+    DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "GT4PY_REPO", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
   before_script:
     # We create a tag that depends on the SHA value of ci/base.Dockerfile,
     # the docker build arguments (since we use a parameterized Docker file),
