@@ -11,7 +11,7 @@ include:
   - local: 'ci/cscs-common.yml'
 
 # Base image build jobs
-build_base_cscs_gh200:
+build_cscs_gh200:
   extends:
     - .container-builder-cscs-gh200
     - .build_base_common
@@ -32,12 +32,10 @@ test_cscs_gh200:
   stage: test
   extends:
     - .test_trigger_base
-  needs:
-    - build_base_cscs_gh200
   trigger:
     include:
       - artifact: generated_cscs_test_pipeline.yml
-        job: build_base_cscs_gh200
+        job: build_cscs_gh200
 
 # .test_cscs_amd_rocm:
 #   stage: test

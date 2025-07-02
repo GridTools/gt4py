@@ -27,8 +27,6 @@ include:
     - .container-runner-santis-gh200
     - .test_base
     - .test_matrix_job
-  needs:
-    - build_base_cscs_gh200
   variables:
     # TODO: Fix issue with compile parallelism that causes tests to hang
     GT4PY_BUILD_JOBS: 2
@@ -40,8 +38,6 @@ include:
     - .tds-container-runner-beverin-mi200
     - .test_base
     - .test_matrix_job
-  needs:
-    - build_base_cscs_amd_rocm
   variables:
     # TODO: Fix issue with compile parallelism that causes tests to hang
     GT4PY_BUILD_JOBS: 2
