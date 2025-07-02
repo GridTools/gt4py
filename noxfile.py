@@ -165,7 +165,6 @@ def test_cartesian(
         "*.toml",
         "*.yml",
         "noxfile*.py",
-        ".python-versions",
     ],
 )
 def test_eve(session: nox.Session) -> None:
@@ -248,12 +247,7 @@ def test_next(
 
     nox_utils.install_session_venv(
         session,
-        extras=[
-            "performance",
-            "testing",
-            *codegen_settings["extras"],
-            *device_settings["extras"],
-        ],
+        extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
         groups=groups,
     )
 
@@ -317,9 +311,7 @@ def test_storage(
     device_settings = DeviceTestSettings[device]
 
     nox_utils.install_session_venv(
-        session,
-        extras=["performance", "testing", *device_settings["extras"]],
-        groups=["test"],
+        session, extras=["performance", "testing", *device_settings["extras"]], groups=["test"]
     )
 
     markers = " and ".join(device_settings["markers"])
