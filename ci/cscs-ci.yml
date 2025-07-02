@@ -1,9 +1,9 @@
 include:
   - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
 
-.py312: &py312
-  PYVERSION_PREFIX: py312
-  PYVERSION: 3.12.7
+.py313: &py313
+  PYVERSION_PREFIX: py313
+  PYVERSION: 3.13.3
 .py310: &py310
   PYVERSION_PREFIX: py310
   PYVERSION: 3.10.9
@@ -47,17 +47,17 @@ stages:
   variables:
     CUDA_VERSION: 12.6.2
     CUPY_PACKAGE: cupy-cuda12x
-    CUPY_VERSION: 13.3.0
+    CUPY_VERSION: 13.4.1
     UBUNTU_VERSION: 22.04
 
-# build_py312_baseimage_x86_64:
+# build_py313_baseimage_x86_64:
 #   extends: .build_baseimage_x86_64
 #   variables:
-#     <<: *py312
-build_py312_baseimage_aarch64:
+#     <<: *py313
+build_py313_baseimage_aarch64:
   extends: .build_baseimage_aarch64
   variables:
-    <<: *py312
+    <<: *py313
 
 # build_py310_baseimage_x86_64:
 #   extends: .build_baseimage_x86_64
@@ -83,16 +83,16 @@ build_py310_baseimage_aarch64:
   extends: [.container-builder-cscs-gh200, .build_image]
 
 
-# build_py312_image_x86_64:
+# build_py313_image_x86_64:
 #   extends: .build_image_x86_64
-#   needs: [build_py312_baseimage_x86_64]
+#   needs: [build_py313_baseimage_x86_64]
 #   variables:
-#     <<: *py312
-build_py312_image_aarch64:
+#     <<: *py313
+build_py313_image_aarch64:
   extends: .build_image_aarch64
-  needs: [build_py312_baseimage_aarch64]
+  needs: [build_py313_baseimage_aarch64]
   variables:
-    <<: *py312
+    <<: *py313
 
 # build_py310_image_x86_64:
 #   extends: .build_image_x86_64
@@ -162,16 +162,16 @@ build_py310_image_aarch64:
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
 
-# test_py312_x86_64:
+# test_py313_x86_64:
 #   extends: [.test_helper_x86_64]
-#   needs: [build_py312_image_x86_64]
+#   needs: [build_py313_image_x86_64]
 #   variables:
-#     <<: *py312
-test_py312_aarch64:
+#     <<: *py313
+test_py313_aarch64:
   extends: [.test_helper_aarch64]
-  needs: [build_py312_image_aarch64]
+  needs: [build_py313_image_aarch64]
   variables:
-    <<: *py312
+    <<: *py313
 
 # test_py310_x86_64:
 #   extends: [.test_helper_x86_64]
