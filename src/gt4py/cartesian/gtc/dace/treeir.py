@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import TracebackType
 from typing import Generator, TypeAlias
 
 from dace import Memlet, data, dtypes, nodes
@@ -38,12 +39,17 @@ class ContextPushPop:
         self._parent_scope = ctx.current_scope
         self._node = node
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         self._node.parent = self._parent_scope
         self._parent_scope.children.append(self._node)
         self._ctx.current_scope = self._node
 
-    def __exit__(self, _exc_type, _exc_value, _traceback):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self._ctx.current_scope = self._parent_scope
 
 
@@ -53,13 +59,10 @@ class Axis(eve.StrEnum):
     K = "K"
 
     def domain_symbol(self) -> eve.SymbolRef:
-        return eve.SymbolRef("__" + self.upper())
+        return eve.SymbolRef(f"__{self.upper()}")
 
     def iteration_symbol(self) -> eve.SymbolRef:
-        return eve.SymbolRef("__" + self.lower())
-
-    def tile_symbol(self) -> eve.SymbolRef:
-        return eve.SymbolRef("__tile_" + self.lower())
+        return eve.SymbolRef(f"__{self.lower()}")
 
     @staticmethod
     def dims_3d() -> Generator[Axis, None, None]:
