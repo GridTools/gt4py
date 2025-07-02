@@ -121,7 +121,7 @@ build_py310_image_aarch64:
   variables:
     CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 20
+    SLURM_TIMELIMIT: 5
     PYENV_VERSION: $PYVERSION
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
     CI_NOX_VERBOSE: 1
@@ -150,9 +150,15 @@ build_py310_image_aarch64:
         DETAIL: ['nomesh', 'atlas']
       - SUBPACKAGE: [storage]
         VARIANT: ['cuda12', 'cpu']
+  rules:
+    - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
+      variables:
+        SLURM_TIMELIMIT: '00:25:00'
+        # TODO: Fix issue with compile parallelism that causes tests to hang
+        GT4PY_BUILD_JOBS: 2
+    - when: on_success
   variables:
-    # TODO: Fix issue with compile parallelism that causes tests to hang
-    GT4PY_BUILD_JOBS: 2
+    GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
 
