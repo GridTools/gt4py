@@ -32,16 +32,16 @@ stages:
     CSCS_REBUILD_POLICY: if-not-exists
     DOCKERFILE: ci/Dockerfile
     DOCKER_BUILD_ARGS: >
-      '[ "BASE_IMAGE=${BASE_IMAGE}",
-         "CACHE_DIR=${CACHE_DIR}",
-         "EXTRA_APTGET=${EXTRA_APTGET}",
-         "EXTRA_UV_ENV_VARS=${EXTRA_UV_ENV_VARS}",
-         "EXTRA_UV_PIP_ARGS=${EXTRA_UV_PIP_ARGS}",
-         "EXTRA_UV_SYNC_ARGS=${EXTRA_UV_SYNC_ARGS}",
-         "GT4PY_REPO=${GT4PY_REPO}",
-         "PY_VERSION=${PY_VERSION}",
-         "UV_VERSION=${UV_VERSION}",
-         "WORKDIR_PATH=${WORKDIR_PATH}" ]'
+      '[ "BASE_IMAGE",
+         "CACHE_DIR",
+         "EXTRA_APTGET",
+         "EXTRA_UV_ENV_VARS",
+         "EXTRA_UV_PIP_ARGS",
+         "EXTRA_UV_SYNC_ARGS",
+         "GT4PY_REPO",
+         "PY_VERSION",
+         "UV_VERSION",
+         "WORKDIR_PATH" ]'
   before_script:
     # We create a tag that depends on the SHA value of ci/base.Dockerfile,
     # the docker build arguments (since we use a parameterized Docker file),
@@ -73,8 +73,7 @@ stages:
     # Run script to generate the test matrix
     - ./scripts-cli.py cscs-ci matrix --verbose --base "gh/${GIT_TARGET_BRANCH}" --config nox-sessions-config.yml --output gitlab-test-matrix.yml
     # Insert the test matrix into the template
-    - | 
-      yq eval '.".test_matrix_job".parallel.matrix = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yml > generated_cscs_test_pipeline.yml
+    - yq eval '.".test_matrix_job".parallel.matrix = load("gitlab-test-matrix.yml")' ci/cscs-test-template.yml > generated_cscs_test_pipeline.yml
     - ls -las generated_cscs_test_pipeline.yml
     - cat generated_cscs_test_pipeline.yml
     # Rename the template job to the actual job name
