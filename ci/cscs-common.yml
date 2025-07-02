@@ -31,6 +31,10 @@ stages:
     # (if-not-exists is the default, i.e. we could also skip the variable)
     CSCS_REBUILD_POLICY: if-not-exists
     DOCKERFILE: ci/Dockerfile
+    # We pass the build arguments to the Dockerfile as a JSON array of names.
+    # The actual values will be taken from environment variables with the same
+    # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
+    # To override the defaults, just define these variables in the actual job.
     DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "GT4PY_REPO", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
   before_script:
     # We create a tag that depends on the SHA value of ci/base.Dockerfile,
@@ -41,7 +45,6 @@ stages:
     # and build arguments changes.
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
     - export PERSIST_IMAGE_NAME=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
-    #- echo "BASE_IMAGE=${PERSIST_IMAGE_NAME}" >> build.env
   after_script:
     # Get the name of the git target branch
     - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
@@ -56,7 +59,7 @@ stages:
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     - export YQ_BINARY="yq_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed -e 's/x86_64/amd64/' | sed -e 's/aarch64/arm64/')"
     - export YQ_VERSION="v4.45.4"
-    - wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY} -O ${HOME}/.local/bin/yq
+    - curl -L -o ${HOME}/.local/bin/yq https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}
     - chmod +x ${HOME}/.local/bin/yq
     - export PATH="$HOME/.local/bin:${PATH}"
     # Run script to generate the test matrix
@@ -68,10 +71,6 @@ stages:
     - yq eval -i '(.[strenv(OLD_RUNNER_KEY)] | key) = strenv(RUNNER_KEY)' generated_cscs_test_pipeline.yml
     - cat generated_cscs_test_pipeline.yml
   artifacts:
-    # Since the base image name becomes runtime dependent, we need to carry the
-    # value of it to the following jobs via the 'build.env' dotenv file.
-    # reports:
-    #   dotenv: build.env
     paths:
       - generated_cscs_test_pipeline.yml
 
