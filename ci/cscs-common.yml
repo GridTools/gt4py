@@ -107,10 +107,10 @@ stages:
   image: ${TEST_IMAGE}
   script:
     - cd /workspace/gt4py
-    - git fetch
+    - git fetch origin "${GIT_CURRENT_BRANCH}"
     - git switch "${GIT_CURRENT_BRANCH}"
     # SESSION_NAME, SESSION_ARGS and SESSION_PYTHON are set in the actual job
-    - nox -s "${SESSION_NAME}-${SESSION_PYTHON}(${SESSION_ARGS})"
+    - nox -s "${SESSION_NAME}-${SESSION_PYTHON}${SESSION_ARGS}"
   variables:
     CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1

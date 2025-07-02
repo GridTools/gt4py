@@ -40,10 +40,13 @@ def create_gitlab_ci_matrix(
             session_id = (session["name"], *call_spec)
             if session_id not in processed_sessions:
                 processed_sessions.add(session_id)
+                session_args = ", ".join(session["call_spec"].values())
+                if session_args:
+                    session_args = f"({session_args})"
                 entries.append(
                     dict(
                         SESSION_NAME=session["name"],
-                        SESSION_ARGS=", ".join(session["call_spec"].values()),
+                        SESSION_ARGS=session_args,
                         SESSION_PYTHON=[*common.PYTHON_VERSIONS],
                     )
                 )
