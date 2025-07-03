@@ -296,8 +296,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         for node in new_nodes.values():
             if isinstance(node, dace_nodes.NestedSDFG):
                 # ensure the correct reference to parent
-                node.sdfg.parent_nsdfg_node = node
                 node.sdfg.parent = branch_state
+                node.sdfg.parent_sdfg = if_block.sdfg
+                node.sdfg.parent_nsdfg_node = node
         branch_state.add_nodes_from(new_nodes.values())
 
         # Now add the edges between the edges that have been replicated inside the
