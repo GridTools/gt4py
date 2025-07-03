@@ -40,6 +40,7 @@ from gt4py.cartesian.frontend.nodes import (
     HorizontalIf,
     If,
     IterationOrder,
+    IteratorAccess,
     LevelMarker,
     NativeFuncCall,
     NativeFunction,
@@ -410,6 +411,9 @@ class DefIRToGTIR(IRNodeVisitor):
             temporaries=temporaries,
             loc=location_to_source_location(node.loc),
         )
+
+    def visit_IteratorAccess(self, iterator_access: IteratorAccess) -> gtir.IteratorAccess:
+        return gtir.IteratorAccess(name=gtir.IteratorAccess.AxisName(iterator_access.name))
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
         return [self.visit(s) for s in node.stmts]

@@ -359,6 +359,13 @@ class AbsoluteKIndex(Expr):
 
 
 @attribclass
+class IteratorAccess(Ref):
+    """Iterator query"""
+
+    name = attribute(of=str)
+
+
+@attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
     offset = attribute(of=DictOf[str, UnionOf[int, Expr, AbsoluteKIndex]])

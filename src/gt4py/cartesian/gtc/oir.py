@@ -32,6 +32,12 @@ class Expr(common.Expr):
 class Stmt(common.Stmt):
     pass
 
+class IteratorAccess(Expr):
+    class AxisName(eve.StrEnum):
+        I = "I"  # noqa: E741 [ambiguous-variable-name]
+        J = "J"
+        K = "K"
+    name: AxisName
 
 class CodeBlock(common.BlockStmt[Stmt], Stmt):
     label: str
