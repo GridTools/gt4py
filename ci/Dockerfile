@@ -11,7 +11,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG EXTRA_APTGET=""
 RUN <<EOF
 apt-get install -qq -y --no-install-recommends \
-    # strace \
     build-essential \
     tar \
     wget \
@@ -21,17 +20,13 @@ apt-get install -qq -y --no-install-recommends \
     libssl-dev \
     libbz2-dev \
     libsqlite3-dev \
-    # llvm \
     libncurses5-dev \
     libncursesw5-dev \
     xz-utils \
-    # tk-dev \
     libffi-dev \
     liblzma-dev \
     libreadline-dev \
     git \
-    # rustc \
-    # htop \
     ${EXTRA_APTGET}
 apt-get clean && rm -rf /var/lib/apt/lists/*
 EOF
