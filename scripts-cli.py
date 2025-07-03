@@ -8,6 +8,12 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 #
+# NOTE: the '-p' option in the shebang is only needed because
+# there is a .python-versions file in the root directory.
+# 'uv' apparently always uses the first version in that file,
+# even if it not satisfies the 'requires-python' constraint from
+# the inlined medatada section below.
+#
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [

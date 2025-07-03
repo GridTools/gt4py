@@ -19,7 +19,7 @@ runs:
     - id: set-versions
       shell: bash
       run: |
-        ALL_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
+        ALL_VERSIONS=$(cat .python-versions | grep -v '^#' | jq -R -s -c 'split("\n") | map(select(length > 0))')
 
         case "${{ inputs.which }}" in
           "all")

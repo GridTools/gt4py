@@ -641,6 +641,17 @@ wheels = [
 ]
 
 [[package]]
+name = "cupy"
+version = "13.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastrlock" },
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-5-gt4py-all' or extra == 'extra-5-gt4py-dace' or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0')" },
+    { name = "numpy", version = "2.2.2", source = { registry = "https://pypi.org/simple" }, marker = "(extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-dace-next') or (extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-dace-next') or (extra != 'extra-5-gt4py-all' and extra != 'extra-5-gt4py-dace') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-all' and extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-dace' and extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d8/57/c7183d27b5dd4be32f53f35b3a7b3b650878a1db4c37654abb649f410d5d/cupy-13.5.0.tar.gz", hash = "sha256:e24be7837c857f95cf484b4eff91a627a5e622aaece559060b138d9d64e6161d", size = 3508204, upload-time = "2025-07-03T05:46:30.074Z" }
+
+[[package]]
 name = "cupy-cuda11x"
 version = "13.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -850,7 +861,6 @@ resolution-markers = [
 dependencies = [
     { name = "aenum" },
     { name = "astunparse" },
-    { name = "cmake" },
     { name = "dill" },
     { name = "fparser" },
     { name = "networkx" },
@@ -859,7 +869,6 @@ dependencies = [
     { name = "ply" },
     { name = "pyreadline", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0')" },
     { name = "pyyaml" },
-    { name = "scikit-build" },
     { name = "sympy" },
 ]
 
@@ -876,7 +885,6 @@ resolution-markers = [
 dependencies = [
     { name = "aenum" },
     { name = "astunparse" },
-    { name = "cmake" },
     { name = "dill" },
     { name = "fparser" },
     { name = "networkx" },
@@ -885,7 +893,6 @@ dependencies = [
     { name = "ply" },
     { name = "pyreadline", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0')" },
     { name = "pyyaml" },
-    { name = "scikit-build" },
     { name = "sympy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/53/02/1a2ece00b229710a4db8f301bba6097eacfbc2a9af84d8746089242d1cf5/dace-1.0.2.tar.gz", hash = "sha256:6728f4bcf584b9f5bbb9c9a393fbdd87364af0c6ad9120da0302b8b470f4f71c", size = 5801789, upload-time = "2025-03-20T15:17:14.034Z" }
@@ -1001,15 +1008,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0d/dd/1bec4c5ddb504ca60fc29472f3d27e8d4da1257a854e1d96742f15c1d02d/distlib-0.3.9.tar.gz", hash = "sha256:a60f20dea646b8a33f3e7772f74dc0b2d0772d2837ee1342a00645c81edf9403", size = 613923, upload-time = "2024-10-09T18:35:47.551Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/91/a1/cf2472db20f7ce4a6be1253a81cfdf85ad9c7885ffbed7047fb72c24cf87/distlib-0.3.9-py2.py3-none-any.whl", hash = "sha256:47f8c22fd27c27e25a65601af709b38e4f0a45ea4fc2e710f65755fa8caaaf87", size = 468973, upload-time = "2024-10-09T18:35:44.272Z" },
-]
-
-[[package]]
-name = "distro"
-version = "1.9.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/98eea607f65de6527f8a2e8885fc8015d3e6f5775df186e443e0964a11c3/distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed", size = 60722, upload-time = "2023-12-24T09:54:32.31Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2", size = 20277, upload-time = "2023-12-24T09:54:30.421Z" },
 ]
 
 [[package]]
@@ -1347,6 +1345,9 @@ rocm4-3 = [
 rocm5-0 = [
     { name = "cupy-rocm-5-0" },
 ]
+rocm6-0 = [
+    { name = "cupy" },
+]
 testing = [
     { name = "hypothesis" },
     { name = "pytest" },
@@ -1364,7 +1365,6 @@ dev = [
     { name = "coverage", extra = ["toml"] },
     { name = "cython" },
     { name = "esbonio" },
-    { name = "gitpython" },
     { name = "hypothesis" },
     { name = "jupytext" },
     { name = "matplotlib" },
@@ -1382,14 +1382,12 @@ dev = [
     { name = "pytest-factoryboy" },
     { name = "pytest-instafail" },
     { name = "pytest-xdist", extra = ["psutil"] },
-    { name = "pyyaml" },
     { name = "ruff" },
     { name = "setuptools" },
     { name = "sphinx" },
     { name = "sphinx-rtd-theme" },
     { name = "sphinx-toolbox" },
     { name = "tach" },
-    { name = "typer" },
     { name = "types-decorator" },
     { name = "types-docutils" },
     { name = "types-pytz" },
@@ -1416,11 +1414,6 @@ lint = [
     { name = "ruff" },
     { name = "tach" },
     { name = "validate-pyproject-schema-store", extra = ["all"] },
-]
-scripts = [
-    { name = "gitpython" },
-    { name = "pyyaml" },
-    { name = "typer" },
 ]
 test = [
     { name = "coverage", extra = ["toml"] },
@@ -1453,6 +1446,7 @@ requires-dist = [
     { name = "clang-format", marker = "extra == 'formatting'", specifier = ">=9.0" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "cmake", specifier = ">=3.22" },
+    { name = "cupy", marker = "extra == 'rocm6-0'", specifier = ">=13.4.1" },
     { name = "cupy-cuda11x", marker = "extra == 'cuda11'", specifier = ">=12.0" },
     { name = "cupy-cuda12x", marker = "extra == 'cuda12'", specifier = ">=12.0" },
     { name = "cupy-rocm-4-3", marker = "extra == 'rocm4-3'", specifier = ">=13.3.0" },
@@ -1489,7 +1483,7 @@ requires-dist = [
     { name = "versioningit", specifier = ">=3.1.1" },
     { name = "xxhash", specifier = ">=3.5.0" },
 ]
-provides-extras = ["all", "cuda11", "cuda12", "dace", "dace-next", "formatting", "jax", "jax-cuda12", "performance", "rocm4-3", "rocm5-0", "testing"]
+provides-extras = ["all", "cuda11", "cuda12", "dace", "dace-next", "formatting", "jax", "jax-cuda12", "performance", "rocm4-3", "rocm5-0", "rocm6-0", "testing"]
 
 [package.metadata.requires-dev]
 build = [
@@ -1503,7 +1497,6 @@ dev = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
     { name = "cython", specifier = ">=3.0.0" },
     { name = "esbonio", specifier = ">=0.16.0" },
-    { name = "gitpython", specifier = ">=3.1.0" },
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "jupytext", specifier = ">=1.14" },
     { name = "matplotlib", specifier = ">=3.9.0" },
@@ -1521,14 +1514,12 @@ dev = [
     { name = "pytest-factoryboy", specifier = ">=2.6.1" },
     { name = "pytest-instafail", specifier = ">=0.5.0" },
     { name = "pytest-xdist", extras = ["psutil"], specifier = ">=3.5.0" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "ruff", specifier = ">=0.8.0" },
     { name = "setuptools", specifier = ">=70.0.0" },
     { name = "sphinx", specifier = ">=7.3.7" },
     { name = "sphinx-rtd-theme", specifier = ">=3.0.1" },
     { name = "sphinx-toolbox", specifier = ">=3.8.1" },
     { name = "tach", specifier = ">=0.23.0" },
-    { name = "typer", specifier = ">=0.12.3" },
     { name = "types-decorator", specifier = ">=5.1.8" },
     { name = "types-docutils", specifier = ">=0.21.0" },
     { name = "types-pytz", specifier = ">=2024.2.0" },
@@ -1553,11 +1544,6 @@ lint = [
     { name = "ruff", specifier = ">=0.8.0" },
     { name = "tach", specifier = ">=0.23.0" },
     { name = "validate-pyproject-schema-store", extras = ["all"], specifier = ">=2025.6.13" },
-]
-scripts = [
-    { name = "gitpython", specifier = ">=3.1.0" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "typer", specifier = ">=0.12.3" },
 ]
 test = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
@@ -3419,22 +3405,6 @@ wheels = [
 ]
 
 [[package]]
-name = "scikit-build"
-version = "0.18.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "distro" },
-    { name = "packaging" },
-    { name = "setuptools" },
-    { name = "tomli", marker = "python_full_version < '3.11' or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0')" },
-    { name = "wheel" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/56/54/2beb41f3fcddb4ea238634c6c23fe93115090d8799a45f626a83e6934c16/scikit_build-0.18.1.tar.gz", hash = "sha256:a4152ac5a084d499c28a7797be0628d8366c336e2fb0e1a063eb32e55efcb8e7", size = 274171, upload-time = "2024-08-28T18:18:13.457Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c3/a3/21b519f58de90d684056c52ec4e45f744cfda7483f082dcc4dd18cc74a93/scikit_build-0.18.1-py3-none-any.whl", hash = "sha256:a6860e300f6807e76f21854163bdb9db16afc74eadf34bd6a9947d3fdfcd725a", size = 85568, upload-time = "2024-08-28T18:18:12.247Z" },
-]
-
-[[package]]
 name = "scipy"
 version = "1.15.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3506,15 +3476,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/4f/a4/00a9ac1b555294710d4a68d2ce8dfdf39d72aa4d769a7395d05218d88a42/setuptools_scm-8.1.0.tar.gz", hash = "sha256:42dea1b65771cba93b7a515d65a65d8246e560768a66b9106a592c8e7f26c8a7", size = 76465, upload-time = "2024-05-06T15:07:56.934Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a0/b9/1906bfeb30f2fc13bb39bf7ddb8749784c05faadbd18a21cf141ba37bff2/setuptools_scm-8.1.0-py3-none-any.whl", hash = "sha256:897a3226a6fd4a6eb2f068745e49733261a21f70b1bb28fce0339feb978d9af3", size = 43666, upload-time = "2024-05-06T15:07:55.071Z" },
-]
-
-[[package]]
-name = "shellingham"
-version = "1.5.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/58/15/8b3609fd3830ef7b27b655beb4b4e9c62313a4e8da8c676e142cc210d58e/shellingham-1.5.4.tar.gz", hash = "sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de", size = 10310, upload-time = "2023-10-24T04:13:40.426Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl", hash = "sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686", size = 9755, upload-time = "2023-10-24T04:13:38.866Z" },
 ]
 
 [[package]]
@@ -3918,21 +3879,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/38/04/1cd43f72c241fedcf0d9a18d0783953ee301eac9e5d9db1df0f0f089d9af/trove_classifiers-2025.5.9.12.tar.gz", hash = "sha256:7ca7c8a7a76e2cd314468c677c69d12cc2357711fcab4a60f87994c1589e5cb5", size = 16940, upload-time = "2025-05-09T12:04:48.829Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/92/ef/c6deb083748be3bcad6f471b6ae983950c161890bf5ae1b2af80cc56c530/trove_classifiers-2025.5.9.12-py3-none-any.whl", hash = "sha256:e381c05537adac78881c8fa345fd0e9970159f4e4a04fcc42cfd3129cca640ce", size = 14119, upload-time = "2025-05-09T12:04:46.38Z" },
-]
-
-[[package]]
-name = "typer"
-version = "0.16.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "click" },
-    { name = "rich" },
-    { name = "shellingham" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/c5/8c/7d682431efca5fd290017663ea4588bf6f2c6aad085c7f108c5dbc316e70/typer-0.16.0.tar.gz", hash = "sha256:af377ffaee1dbe37ae9440cb4e8f11686ea5ce4e9bae01b84ae7c63b87f1dd3b", size = 102625, upload-time = "2025-05-26T14:30:31.824Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/42/3efaf858001d2c2913de7f354563e3a3a2f0decae3efe98427125a8f441e/typer-0.16.0-py3-none-any.whl", hash = "sha256:1f79bed11d4d02d4310e3c1b7ba594183bcedb0ac73b27a9e5f28f6fb5b98855", size = 46317, upload-time = "2025-05-26T14:30:30.523Z" },
 ]
 
 [[package]]
