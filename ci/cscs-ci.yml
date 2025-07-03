@@ -41,7 +41,9 @@ stages:
     # The actual values will be taken from environment variables with the same
     # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
     # To override the defaults, just define these variables in the actual job.
-    DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", \ "EXTRA_UV_SYNC_ARGS", "GT4PY_REPO", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
+    DOCKER_BUILD_ARGS: >-
+      '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS",
+        "EXTRA_UV_SYNC_ARGS", "GT4PY_REPO", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
   before_script:
     # We create a tag that depends on the SHA value of ci/base.Dockerfile,
     # the docker build arguments (since we use a parameterized Docker file),
@@ -58,8 +60,7 @@ stages:
     # - echo "GITHUB_PR=${GITHUB_PR}" >> base.env
     # - echo "GIT_TARGET_BRANCH=$(jq -r '.base.ref' gh_pull.json)" >> base.env
     # - echo "GIT_CURRENT_BRANCH=$(jq -r '.head.ref' gh_pull.json)" >> base.env
-    - env | sort
-    - git --version
+    #- env | sort
 
   artifacts:
     reports:
