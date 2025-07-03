@@ -41,9 +41,7 @@ stages:
     # The actual values will be taken from environment variables with the same
     # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
     # To override the defaults, just define these variables in the actual job.
-    DOCKER_BUILD_ARGS: >
-      '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS",
-        "EXTRA_UV_SYNC_ARGS", "GT4PY_REPO", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
+    DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", \ "EXTRA_UV_SYNC_ARGS", "GT4PY_REPO", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
   before_script:
     # We create a tag that depends on the SHA value of ci/base.Dockerfile,
     # the docker build arguments (since we use a parameterized Docker file),
@@ -54,12 +52,12 @@ stages:
     - echo "GT4PY_IMAGE_PREFIX=${GT4PY_IMAGE_PREFIX}" >> base.env
     - export PERSIST_IMAGE_NAME=${GT4PY_IMAGE_PREFIX}-${PY_VERSION}
     # Get the information of the current branch and PR from GitHub
-    - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
-    - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
-    - curl https://api.github.com/repos/${GT4PY_GITHUB_PATH}/pulls/${GITHUB_PR} 2>/dev/null > gh_pull.json
-    - echo "GITHUB_PR=${GITHUB_PR}" >> base.env
-    - echo "GIT_TARGET_BRANCH=$(jq -r '.base.ref' gh_pull.json)" >> base.env
-    - echo "GIT_CURRENT_BRANCH=$(jq -r '.head.ref' gh_pull.json)" >> base.env
+    # - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
+    # - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
+    # - curl https://api.github.com/repos/${GT4PY_GITHUB_PATH}/pulls/${GITHUB_PR} 2>/dev/null > gh_pull.json
+    # - echo "GITHUB_PR=${GITHUB_PR}" >> base.env
+    # - echo "GIT_TARGET_BRANCH=$(jq -r '.base.ref' gh_pull.json)" >> base.env
+    # - echo "GIT_CURRENT_BRANCH=$(jq -r '.head.ref' gh_pull.json)" >> base.env
     - env | sort
     - git --version
 
@@ -126,8 +124,8 @@ build_cscs_gh200:
         SLURM_TIMELIMIT: "00:15:00"
     - when: on_success
   script:
-    # Since the image does not contain the repo, we need to clone before running the tests
-    - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --branch "${GIT_CURRENT_BRANCH}" "${GT4PY_REPO}" "${WORKDIR}/gt4py"
+    # Since the image does not contain the repo, we need to clone it before running the tests
+    - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --revision "${CI_COMMIT_SHA}" "${GT4PY_REPO}" "${WORKDIR}/gt4py"
     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
     - cd "${WORKDIR}/gt4py" && nox -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
 
