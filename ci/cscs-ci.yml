@@ -20,6 +20,7 @@ variables:  # Default values for base variables (can be overriden in jobs defini
   ROCM_VERSION: '6.2.4'
   UBUNTU_VERSION: '24.04'
   UV_VERSION: '0.6.12'
+  GT4PY_GITHUB_PATH: 'gridtools/gt4py'
 
 stages:
   - build
@@ -47,11 +48,14 @@ stages:
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
     - export PERSIST_IMAGE_NAME=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
     - echo "BASE_IMAGE=${PERSIST_IMAGE_NAME}" >> base.env
-    # Get the name of the git target branch
+    # Get the information of the current branch and PR from GitHub
     - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
     - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
-    - curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null > gh_pull.json
+    - curl https://api.github.com/repos/${GT4PY_GITHUB_PATH}/pulls/${GITHUB_PR} 2>/dev/null > gh_pull.json
+    - echo "GITHUB_PR=${GITHUB_PR}" >> base.env
     - echo "GIT_TARGET_BRANCH=$(jq -r '.base.ref' gh_pull.json)" >> base.env
+    - echo "GIT_CURRENT_BRANCH=$(jq -r '.head.ref' gh_pull.json)" >> base.env
+
   artifacts:
     reports:
       dotenv: base.env
@@ -84,6 +88,7 @@ build_cscs_gh200:
   stage: test
   image: ${BASE_IMAGE}
   variables:
+    GT4PY_REPO: https://github.com/${GT4PY_GITHUB_PATH}
     CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5

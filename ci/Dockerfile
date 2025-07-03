@@ -76,6 +76,3 @@ if [ ! -z "${EXTRA_UV_PIP_ARGS}" ]; then
     uv pip install --compile-bytecode ${EXTRA_UV_PIP_ARGS}
 fi
 EOF
-
-ARG GT4PY_REPO="https://github.com/gridtools/gt4py"
-ENV GT4PY_REPO=${GT4PY_REPO}
