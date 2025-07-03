@@ -480,6 +480,9 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return f"({if_code} if {condition} else {else_code})"
 
+    def visit_IteratorAccess(self, node: oir.IteratorAccess, **kwargs: Any) -> str:
+        return tir.Axis(node.name).iteration_symbol()
+
     # visitors that should _not_ be called
 
     def visit_Decl(self, node: oir.Decl, **kwargs: Any) -> None:

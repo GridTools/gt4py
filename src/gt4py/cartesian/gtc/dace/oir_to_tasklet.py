@@ -231,6 +231,9 @@ class OIRToTasklet(eve.NodeVisitor):
 
         return f"{function_name}({arguments})"
 
+    def visit_IteratorAccess(self, node: oir.IteratorAccess, **kwargs: Any) -> str:
+        return tir.Axis(node.name).iteration_symbol()
+
     # Not (yet) supported section
     def visit_CacheDesc(self, node: oir.CacheDesc, **kwargs: Any) -> None:
         raise NotImplementedError("To be implemented: Caches")

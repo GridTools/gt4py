@@ -20,6 +20,7 @@ from gt4py.cartesian.gtscript import (
     GlobalTable,
     I,
     J,
+    K,
     IJ,
     computation,
     horizontal,
@@ -918,3 +919,24 @@ def test_absolute_K_index(backend):
     out_arr[:, :, :] = 0
     test_field_access(in_arr, k_arr, out_arr)
     assert (out_arr[:, :, :] == 42.42).all()
+
+
+@pytest.mark.parametrize("backend", ["dace:cpu"])
+def test_iterator_access(backend):
+    domain = (5, 5, 5)
+
+    field_A = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+    field_B = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+
+    @gtscript.stencil(backend=backend)
+    def test_all_valid_usage(field_A: Field[np.float64], field_B: Field[np.float64]) -> None:
+        with computation(PARALLEL), interval(...):
+            if K == 2:
+                field_A = 20.20
+            field_B = K
+
+    test_all_valid_usage(field_A, field_B)
+    assert field_A[0, 0, 1] == 0
+    assert field_A[0, 0, 2] == 20.20
+    for _k in range(domain[2]):
+        assert field_B[0, 0, _k] == _k

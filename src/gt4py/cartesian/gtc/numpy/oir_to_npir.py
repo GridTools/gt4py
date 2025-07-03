@@ -86,6 +86,9 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
         return 0, 0, npir.AbsoluteKIndex(k=self.visit(node.k, **kwargs))
 
+    def visit_IteratorAccess(self, node: oir.IteratorAccess, **kwargs: Any) -> None:
+        raise NotImplementedError(f"Iterator access ({node.name}) is not implemented for numpy")
+
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> npir.FieldSlice:
         i_offset, j_offset, k_offset = self.visit(node.offset, **kwargs)
         data_index = [self.visit(index, **kwargs) for index in node.data_index]

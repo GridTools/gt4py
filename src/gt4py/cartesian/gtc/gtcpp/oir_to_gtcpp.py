@@ -190,6 +190,11 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
         return 0, 0, gtcpp.AbsoluteKIndex(k=self.visit(node.k, **kwargs))
 
+    def visit_IteratorAccess(self, node: oir.IteratorAccess, **kwargs: Any) -> None:
+        raise NotImplementedError(
+            f"Iterator access ({node.name}) is not implemented for gt:X backends"
+        )
+
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> gtcpp.AccessorRef:
         return gtcpp.AccessorRef(
             name=node.name,
