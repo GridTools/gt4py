@@ -60,7 +60,7 @@ stages:
     - echo "GITHUB_PR=${GITHUB_PR}" >> base.env
     - echo "GIT_TARGET_BRANCH=$(jq -r '.base.ref' gh_pull.json)" >> base.env
     - echo "GIT_CURRENT_BRANCH=$(jq -r '.head.ref' gh_pull.json)" >> base.env
-    - env
+    - env | sort
 
   artifacts:
     reports:
@@ -92,62 +92,62 @@ build_cscs_gh200:
 #     - .build_common
 #     - .build_extra_rocm
 
-# # -- Test stage --
-# .test_common:
-#   stage: test
-#   image: ${GT4PY_IMAGE_PREFIX}-${PY_VERSION}
-#   variables:
-#     GT4PY_REPO: https://github.com/${GT4PY_GITHUB_PATH}
-#     CSCS_CUDA_MPS: 1
-#     SLURM_JOB_NUM_NODES: 1
-#     SLURM_TIMELIMIT: 5
-#   parallel:
-#     matrix:
-#       - SUBPACKAGE: [cartesian]
-#         VARIANT: ["internal", "dace"]
-#         SUBVARIANT: ["cuda12", "cpu"]
-#         PY_VERSION: ${PYTHON_VERSIONS}
-#       - SUBPACKAGE: eve
-#         PY_VERSION: ${PYTHON_VERSIONS}
-#       - SUBPACKAGE: next
-#         VARIANT: ["internal", "dace"]
-#         SUBVARIANT: ["cuda12", "cpu"]
-#         DETAIL: ["nomesh", "atlas"]
-#         PY_VERSION: ${PYTHON_VERSIONS}
-#       - SUBPACKAGE: [storage]
-#         VARIANT: ["cuda12", "cpu"]
-#         PY_VERSION: ${PYTHON_VERSIONS}
-#   rules:
-#     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
-#       variables:
-#         # TODO: investigate why the dace tests seem to hang with multiple jobs
-#         GT4PY_BUILD_JOBS: 1
-#         SLURM_TIMELIMIT: "00:15:00"
-#     - when: on_success
-#   script:
-#     # Since the image does not contain the repo, we need to clone before running the tests
-#     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --branch "${GIT_CURRENT_BRANCH}" "${GT4PY_REPO}" "${WORKDIR}/gt4py"
-#     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
-#     - cd "${WORKDIR}/gt4py" && nox -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
+# -- Test stage --
+.test_common:
+  stage: test
+  image: ${GT4PY_IMAGE_PREFIX}-${PY_VERSION}
+  variables:
+    GT4PY_REPO: https://github.com/${GT4PY_GITHUB_PATH}
+    CSCS_CUDA_MPS: 1
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_TIMELIMIT: 5
+  parallel:
+    matrix:
+      - SUBPACKAGE: [cartesian]
+        VARIANT: ["internal", "dace"]
+        SUBVARIANT: ["cuda12", "cpu"]
+        PY_VERSION: ${PYTHON_VERSIONS}
+      - SUBPACKAGE: eve
+        PY_VERSION: ${PYTHON_VERSIONS}
+      - SUBPACKAGE: next
+        VARIANT: ["internal", "dace"]
+        SUBVARIANT: ["cuda12", "cpu"]
+        DETAIL: ["nomesh", "atlas"]
+        PY_VERSION: ${PYTHON_VERSIONS}
+      - SUBPACKAGE: [storage]
+        VARIANT: ["cuda12", "cpu"]
+        PY_VERSION: ${PYTHON_VERSIONS}
+  rules:
+    - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
+      variables:
+        # TODO: investigate why the dace tests seem to hang with multiple jobs
+        GT4PY_BUILD_JOBS: 1
+        SLURM_TIMELIMIT: "00:15:00"
+    - when: on_success
+  script:
+    # Since the image does not contain the repo, we need to clone before running the tests
+    - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --branch "${GIT_CURRENT_BRANCH}" "${GT4PY_REPO}" "${WORKDIR}/gt4py"
+    - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
+    - cd "${WORKDIR}/gt4py" && nox -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
 
-# test_cscs_gh200:
+test_cscs_gh200:
+  extends:
+    - .container-runner-santis-gh200
+    - .test_common
+  # needs:
+  #   - 'build_cscs_gh200: [${PY_VERSION}]'
+  # - job: build_cscs_gh200
+  #     parallel:
+  #       matrix:
+  #         - PY_VERSION: ${PY_VERSION}
+  variables:
+    GT4PY_BUILD_JOBS: 8
+    # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
+    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+
+# .test_cscs_amd_rocm:
 #   extends:
-#     - .container-runner-santis-gh200
+#     - .tds-container-runner-beverin-mi200
 #     - .test_common
-#   # needs:
-#   #   - 'build_cscs_gh200: [${PY_VERSION}]'
-#   # - job: build_cscs_gh200
-#   #     parallel:
-#   #       matrix:
-#   #         - PY_VERSION: ${PY_VERSION}
 #   variables:
-#     GT4PY_BUILD_JOBS: 8
-#     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
-#     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
-
-# # .test_cscs_amd_rocm:
-# #   extends:
-# #     - .tds-container-runner-beverin-mi200
-# #     - .test_common
-# #   variables:
-# #
+#
