@@ -13,6 +13,5 @@ import pathlib
 from typing import Final
 
 
-PYTHON_VERSIONS: Final[list[str]] = pathlib.Path(".python-versions").read_text().splitlines()
-
 REPO_ROOT: Final = pathlib.Path(__file__).parent.parent.resolve().absolute()
+PYTHON_VERSIONS: Final[list[str]] = (REPO_ROOT / ".python-versions").read_text().splitlines()

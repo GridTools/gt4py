@@ -89,7 +89,7 @@ def load_test_sessions_config(config_path: str | pathlib.Path) -> list[SessionDe
 
 def get_changed_files(base_commit: str) -> list[str]:
     """Get list of changed files from base_commit."""
-    cmd_args = ["git", "diff", "--name-only", base_commit]
+    cmd_args = ["git", "--no-pager", "diff", "--name-only", base_commit]
     try:
         out = subprocess.run(
             cmd_args, capture_output=True, text=True, cwd=common.REPO_ROOT, check=True
