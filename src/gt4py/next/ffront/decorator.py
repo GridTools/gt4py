@@ -106,7 +106,6 @@ class Program:
     connectivities: Optional[
         common.OffsetProvider
     ]  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
-    enable_jit: bool
     static_params: (
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
@@ -123,7 +122,6 @@ class Program:
         definition: types.FunctionType,
         backend: next_backend.Backend | None,
         grid_type: common.GridType | None = None,
-        enable_jit: bool = config.DEFAULT_ENABLE_JIT,
         static_params: Sequence[str] | None = None,
         connectivities: Optional[
             common.OffsetProvider
@@ -134,7 +132,6 @@ class Program:
             definition_stage=program_def,
             backend=backend,
             connectivities=connectivities,
-            enable_jit=enable_jit,
             static_params=static_params,
         )
 
@@ -294,7 +291,11 @@ class Program:
         return extended_op
 
     def __call__(
-        self, *args: Any, offset_provider: common.OffsetProvider | None = None, **kwargs: Any
+        self,
+        *args: Any,
+        offset_provider: common.OffsetProvider | None = None,
+        enable_jit: bool = config.ENABLE_JIT_DEFAULT,
+        **kwargs: Any,
     ) -> None:
         if offset_provider is None:
             offset_provider = {}
@@ -321,7 +322,7 @@ class Program:
             offset_provider = self._extend_offset_provider(offset_provider)
             if self.backend is not None:
                 self._compiled_programs(
-                    *args, **kwargs, offset_provider=offset_provider, enable_jit=self.enable_jit
+                    *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
             else:
                 # embedded
@@ -560,7 +561,6 @@ def program(
     *,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
-    enable_jit: bool,
     static_params: Sequence[str] | None,
     frozen: bool,
 ) -> Callable[[types.FunctionType], Program]: ...
@@ -572,7 +572,6 @@ def program(
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
-    enable_jit: bool = config.DEFAULT_ENABLE_JIT,  # only relevant if static_params are set
     static_params: Sequence[str] | None = None,
     frozen: bool = False,
 ) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:
@@ -601,7 +600,6 @@ def program(
                 next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
             ),
             grid_type=grid_type,
-            enable_jit=enable_jit,
             static_params=static_params,
         )
         if frozen:
@@ -740,7 +738,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             past_stage=past_stage,
             backend=self.backend,
             connectivities=None,
-            enable_jit=False,  # TODO(havogt): revisit ProgramFromPast
             static_params=None,  # TODO(havogt): revisit ProgramFromPast
         )
 
