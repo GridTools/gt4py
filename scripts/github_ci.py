@@ -82,10 +82,7 @@ def matrix(
     else:
         rich.print(
             "GitHub Actions matrix: (use '--output <filename>' to save it)\n---------------------"
-        )
-        json.dumps(
-            matrix,
-            indent=2,
+            f"{json.dumps(matrix, indent=2)}"
         )
 
     rich.print(

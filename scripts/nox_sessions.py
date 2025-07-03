@@ -98,7 +98,7 @@ def get_changed_files(base_commit: str) -> list[str]:
         rich.print(f"[red]Error:[/red] Failed to get changed files: {e}")
         raise typer.Exit(ExitCode.GIT_DIFF_ERROR) from e
 
-    changed_files = out.strip().split("\n")
+    changed_files = [f for f in out.strip().split("\n") if f]
 
     return changed_files
 

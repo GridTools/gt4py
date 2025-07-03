@@ -41,7 +41,7 @@ jobs:
         run: |
           ./scripts-cli.py github-ci matrix \
             --config nox-sessions-config.yml \
-            --base "${{ github.base_ref }}" \
+            --base "origin/${{ github.base_ref }}" \
             --output gh-test-sessions.json \
             --verbose
           echo 'test-sessions<<EOF' >> $GITHUB_OUTPUT

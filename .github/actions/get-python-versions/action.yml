@@ -36,5 +36,4 @@ runs:
             exit 1
             ;;
         esac
-
         echo "python-versions=${PYTHON_VERSIONS}" >> $GITHUB_OUTPUT

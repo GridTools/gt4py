@@ -61,7 +61,7 @@ def precommit() -> None:
             content = f.read()
 
         new_content = re.sub(
-            r"additional_dependencies:\s* \[uv>=([\d\.]+)\]",
+            r"additional_dependencies:\s*\[uv>=([\d\.]+)\]",
             f"additional_dependencies: [uv{uv_spec}]",
             content,
             count=1,
