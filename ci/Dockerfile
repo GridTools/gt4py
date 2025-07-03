@@ -9,8 +9,8 @@ ENV WORKDIR=${WORKDIR_PATH}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG EXTRA_APTGET=""
-RUN <<EOF
-apt-get install -qq -y --no-install-recommends \
+RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
+    # strace \
     build-essential \
     tar \
     wget \
@@ -20,16 +20,19 @@ apt-get install -qq -y --no-install-recommends \
     libssl-dev \
     libbz2-dev \
     libsqlite3-dev \
+    # llvm \
     libncurses5-dev \
     libncursesw5-dev \
     xz-utils \
+    # tk-dev \
     libffi-dev \
     liblzma-dev \
     libreadline-dev \
     git \
-    ${EXTRA_APTGET}
-apt-get clean && rm -rf /var/lib/apt/lists/*
-EOF
+    # rustc \
+    # htop \
+    ${EXTRA_APTGET} && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install uv
 ARG UV_VERSION=0.6.12
