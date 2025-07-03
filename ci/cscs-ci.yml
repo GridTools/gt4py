@@ -21,7 +21,8 @@ variables:  # Default values for base variables (can be overriden in jobs defini
   UBUNTU_VERSION: '24.04'
   UV_VERSION: '0.6.12'
   GT4PY_GITHUB_PATH: 'gridtools/gt4py'
-  #PYTHON_VERSIONS: ['3.10', '3.13']
+
+.python_versions: &python_versions ['3.10', '3.13']
 
 stages:
   - build
@@ -83,7 +84,7 @@ build_cscs_gh200:
     - .build_extra_cuda
   parallel:
     matrix:
-      - PY_VERSION: ${PYTHON_VERSIONS}
+      - PY_VERSION: *python_versions
 
 # .build_cscs_amd_rocm:
 #   extends:
