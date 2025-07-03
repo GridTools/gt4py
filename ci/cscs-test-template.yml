@@ -17,7 +17,7 @@ include:
       # fully replaced with new entries, this is just to show how
       # they will look like:  
       - SESSION_NAME: test_next
-        SESSION_ARGS: "internal, cpu, nomesh"
+        SESSION_ARGS: "(internal, cpu, nomesh)"
         SESSION_PYTHON: ['3.10', '3.11']
 
 # In the generated test pipeline one of these jobs will be renamed

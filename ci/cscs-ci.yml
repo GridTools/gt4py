@@ -9,7 +9,8 @@
 #
 
 # This is the main entry point for the CSCS CI pipeline and assembles
-# the build and the test trigger jobs with pieces from the included files. 
+# the build and the test trigger jobs with pieces from the included files.
+# Note: 'definition-from-cscs-ci-ext', 'definition_from_yaml_file_in_this_repo'
 #
 # The build job creates two things:
 # - the base image for the CSCS CI (only if the external dependencies change)

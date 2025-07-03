@@ -60,7 +60,7 @@ stages:
     - echo GIT_TARGET_BRANCH=${GIT_TARGET_BRANCH} >> base.env
     - export GIT_CURRENT_BRANCH="$(jq -r '.head.ref' gh_pull.json)"
     - echo GIT_CURRENT_BRANCH=${GIT_CURRENT_BRANCH} >> base.env
-    # Fetch the target branch from github
+    # Fetch the target and current branches from github
     - git remote add gh https://github.com/gridtools/gt4py
     - git fetch gh "${GIT_TARGET_BRANCH}"
     # Install script helpers: uv, yq
