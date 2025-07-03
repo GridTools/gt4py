@@ -21,6 +21,7 @@ variables:  # Default values for base variables (can be overriden in jobs defini
   UBUNTU_VERSION: '24.04'
   UV_VERSION: '0.6.12'
   GT4PY_GITHUB_PATH: 'gridtools/gt4py'
+  PYTHON_VERSIONS: ['3.10', '3.13']
 
 stages:
   - build
@@ -39,15 +40,18 @@ stages:
     # The actual values will be taken from environment variables with the same
     # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
     # To override the defaults, just define these variables in the actual job.
-    DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "GT4PY_REPO", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
+    DOCKER_BUILD_ARGS: >
+      '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS",
+        "EXTRA_UV_SYNC_ARGS", "GT4PY_REPO", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
   before_script:
     # We create a tag that depends on the SHA value of ci/base.Dockerfile,
     # the docker build arguments (since we use a parameterized Docker file),
     # and the contents of the `uv.lock` file (which contains the version of
     # python packages used in the base image).
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS} $(cat uv.lock)" | sha256sum | head -c 16`
-    - export PERSIST_IMAGE_NAME=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
-    - echo "BASE_IMAGE=${PERSIST_IMAGE_NAME}" >> base.env
+    - export GT4PY_IMAGE_PREFIX=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
+    - echo "GT4PY_IMAGE_PREFIX=${GT4PY_IMAGE_PREFIX}" >> base.env
+    - export PERSIST_IMAGE_NAME=${GT4PY_IMAGE_PREFIX}-${PY_VERSION}
     # Get the information of the current branch and PR from GitHub
     - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
     - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
@@ -76,6 +80,9 @@ build_cscs_gh200:
     - .container-builder-cscs-gh200
     - .build_base_common
     - .build_with_cuda_extra
+  parallel:
+    matrix:
+      - PY_VERSION: ${PYTHON_VERSIONS}
 
 # .build_base_cscs_amd_rocm:
 #   extends:
@@ -86,7 +93,7 @@ build_cscs_gh200:
 # -- Test stage --
 .test_base:
   stage: test
-  image: ${BASE_IMAGE}
+  image: ${GT4PY_IMAGE_PREFIX}-${PY_VERSION}
   variables:
     GT4PY_REPO: https://github.com/${GT4PY_GITHUB_PATH}
     CSCS_CUDA_MPS: 1
@@ -97,17 +104,17 @@ build_cscs_gh200:
       - SUBPACKAGE: [cartesian]
         VARIANT: ["internal", "dace"]
         SUBVARIANT: ["cuda12", "cpu"]
-        PYTHON: ['3.10', '3.13']
+        PY_VERSION: ${PYTHON_VERSIONS}
       - SUBPACKAGE: eve
-        PYTHON: ['3.10', '3.13']
+        PY_VERSION: ${PYTHON_VERSIONS}
       - SUBPACKAGE: next
         VARIANT: ["internal", "dace"]
         SUBVARIANT: ["cuda12", "cpu"]
         DETAIL: ["nomesh", "atlas"]
-        PYTHON: ['3.10', '3.13']
+        PY_VERSION: ${PYTHON_VERSIONS}
       - SUBPACKAGE: [storage]
         VARIANT: ["cuda12", "cpu"]
-        PYTHON: ['3.10', '3.13']
+        PY_VERSION: ${PYTHON_VERSIONS}
   rules:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
@@ -119,7 +126,7 @@ build_cscs_gh200:
     # Since the image does not contain the repo, we need to clone before running the tests
     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --branch "${GIT_CURRENT_BRANCH}" "${GT4PY_REPO}" "${WORKDIR}/gt4py"
     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
-    - cd "${WORKDIR}/gt4py" && nox -s "test_${SUBPACKAGE}-${PYTHON}${NOX_SESSION_ARGS}"
+    - cd "${WORKDIR}/gt4py" && nox -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
 
 test_cscs_gh200:
   extends:

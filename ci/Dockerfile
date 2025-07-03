@@ -48,8 +48,8 @@ ENV UV_PYTHON_INSTALL_DIR="/opt/uv-python"
 
 # Create and activate the python venv
 ARG PY_VERSION=3.10
-RUN uv venv -p ${PY_VERSION} --link-mode copy ${VIRTUAL_ENV}
 ENV VIRTUAL_ENV=${UV_PROJECT_ENVIRONMENT}
+RUN uv venv -p ${PY_VERSION} --link-mode copy ${VIRTUAL_ENV}
 ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
 
 # Install python packages using uv just to fill the uv cache,
