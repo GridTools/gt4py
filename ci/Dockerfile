@@ -9,7 +9,9 @@ ENV WORKDIR=${WORKDIR_PATH}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG EXTRA_APTGET=""
-RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
+RUN <<EOF
+add-apt-repository ppa:git-core/ppa && apt-get update -qq 
+apt-get install -qq -y --no-install-recommends \
     # strace \
     build-essential \
     tar \
@@ -31,8 +33,9 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     git \
     # rustc \
     # htop \
-    ${EXTRA_APTGET} && \
-    rm -rf /var/lib/apt/lists/*
+    ${EXTRA_APTGET}
+rm -rf /var/lib/apt/lists/*
+EOF
 
 # Install uv
 ARG UV_VERSION=0.6.12
