@@ -24,7 +24,7 @@ We chose option X because [justification. e.g., only option, which meets k.o. cr
 
 ## Consequences
 
-What it now easier to do? What becomes more difficult with this change?
+What is now easier to do? What becomes more difficult with this change?
 
 Describe the positive (e.g., improvement of quality attribute satisfaction, follow-up decisions required, ...) as well as the negative (e.g., compromising quality attribute, follow-up decisions required, ...) outcomes of this decision.
 

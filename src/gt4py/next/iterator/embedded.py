@@ -644,9 +644,9 @@ def _is_list_of_complete_offsets(
 def group_offsets(*offsets: OffsetPart) -> list[CompleteOffset]:
     assert len(offsets) % 2 == 0
     complete_offsets = [*zip(offsets[::2], offsets[1::2])]
-    assert _is_list_of_complete_offsets(
-        complete_offsets
-    ), f"Invalid sequence of offset parts: {offsets}"
+    assert _is_list_of_complete_offsets(complete_offsets), (
+        f"Invalid sequence of offset parts: {offsets}"
+    )
     return complete_offsets
 
 
@@ -1696,6 +1696,14 @@ def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[
         true_branch()
     else:
         false_branch()
+
+
+@runtime.temporary.register(EMBEDDED)
+def temporary(domain: runtime.CartesianDomain | runtime.UnstructuredDomain, dtype):
+    type_ = runtime._dtypebuiltin_to_ts(dtype)
+    new_domain = common.domain(domain)
+    tmp = field_utils.field_from_typespec(type_, new_domain, np)
+    return tmp
 
 
 def _compute_at_position(

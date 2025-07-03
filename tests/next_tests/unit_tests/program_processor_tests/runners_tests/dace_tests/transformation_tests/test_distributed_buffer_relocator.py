@@ -133,9 +133,9 @@ def test_distributed_buffer_global_memory_data_race():
     assert state2.number_of_nodes() == 2
 
 
-def _make_distributed_buffer_global_memory_data_race_sdfg2() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]
-):
+def _make_distributed_buffer_global_memory_data_race_sdfg2() -> tuple[
+    dace.SDFG, dace.SDFGState, dace.SDFGState
+]:
     sdfg = dace.SDFG(util.unique_name("distributed_buffer_global_memory_data_race2_sdfg"))
     arr_names = ["a", "b", "t"]
     for name in arr_names:
@@ -288,9 +288,9 @@ def test_distributed_buffer_global_memory_data_no_rance2():
     assert state2.number_of_nodes() == 0
 
 
-def _make_distributed_buffer_non_sink_temporary_sdfg() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]
-):
+def _make_distributed_buffer_non_sink_temporary_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace.SDFGState
+]:
     sdfg = dace.SDFG(util.unique_name("distributed_buffer_non_sink_temporary_sdfg"))
     state = sdfg.add_state(is_start_block=True)
     wb_state = sdfg.add_state_after(state)

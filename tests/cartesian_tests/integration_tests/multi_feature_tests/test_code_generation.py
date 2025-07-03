@@ -50,8 +50,8 @@ def test_generation(name, backend):
                 dtype=(v.dtype, v.data_dims) if v.data_dims else v.dtype,
                 dimensions=v.axes,
                 backend=backend,
-                shape=(23, 23, 23),
-                aligned_index=(10, 10, 10),
+                shape=(23,) * len(v.axes),
+                aligned_index=(10,) * len(v.axes),
             )
         else:
             args[k] = v(1.5)
@@ -367,6 +367,17 @@ def test_input_order(backend):
     ):
         with computation(PARALLEL), interval(...):
             out_field[0, 0, 0] = in_field * parameter
+
+    field_in = gt_storage.ones(
+        dtype=np.float64, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
+    )
+    field_out = gt_storage.zeros(
+        dtype=np.float64, backend=backend, shape=(23, 23, 23), aligned_index=(0, 0, 0)
+    )
+
+    stencil(field_in, 3.1415, field_out)
+
+    np.testing.assert_allclose(field_out[:, :, :], 3.1415)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -706,8 +717,8 @@ def test_K_offset_write_conditional(backend):
     # - lev = 2
     # - A[2] == 42 && B[2] == -1 => False
     # End of iteration state
-    # - A[...] = A[40, 2.0, 2.0, -1]
-    # - B[...] = A[1, 1, -1, 42]
+    # - A[...] = A[40, 2.0, 42, -1]
+    # - B[...] = B[1, 1, -1, 42]
     # ITERATION k = 1 of [2:1]
     # if condition
     # - A[1] == 2.0 && B[1] == 1 => True
@@ -719,10 +730,10 @@ def test_K_offset_write_conditional(backend):
     # - A[2] = -1
     # - B[1] = -1
     # - lev = 2
-    # - A[1] == 2.0 && B[2] == -1 => False
+    # - A[1] == 2.0 && B[1] == -1 => False
     # End of stencil state
     # - A[...] = A[2.0, 2.0, -1, -1]
-    # - B[...] = A[1, -1, 2.0, 42]
+    # - B[...] = B[1, -1, 2.0, 42]
 
     assert (A[0, 0, :] == arraylib.array([2, 2, -1, -1])).all()
     assert (B[0, 0, :] == arraylib.array([1, -1, 2, 42])).all()
@@ -769,21 +780,7 @@ def test_function_inline_in_while(backend):
     assert (out_arr[:, :, :] == 388.0).all()
 
 
-def _xfail_dace_backends(param):
-    if param.values[0].startswith("dace:"):
-        marks = [
-            *param.marks,
-            pytest.mark.xfail(
-                raises=ValueError,
-                reason="Missing support in DaCe backends, see https://github.com/GridTools/gt4py/issues/1881.",
-            ),
-        ]
-        # make a copy because otherwise we are operating in-place
-        return pytest.param(*param.values, marks=marks)
-    return param
-
-
-@pytest.mark.parametrize("backend", map(_xfail_dace_backends, ALL_BACKENDS))
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_cast_in_index(backend):
     @gtscript.stencil(backend)
     def cast_in_index(

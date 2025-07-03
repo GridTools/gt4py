@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import os
 from typing import Any, Dict, cast
 
 import numpy as np
@@ -115,14 +114,10 @@ def test_device_sync_option(backend_name, mode, device_sync):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
     builder.options.backend_opts["device_sync"] = device_sync
+    builder.build()
     args_data = make_args_data_from_gtir(builder.gtir_pipeline)
-    module_generator = backend_cls.MODULE_GENERATOR_CLASS()
-    source = module_generator(
-        args_data,
-        builder,
-        pyext_module_name=builder.module_name,
-        pyext_file_path=str(builder.module_path),
-    )
+    module_generator = backend_cls.MODULE_GENERATOR_CLASS(builder)
+    source = module_generator(args_data)
 
     if device_sync:
         assert "cupy.cuda.Device(0).synchronize()" in source
@@ -194,7 +189,3 @@ def test_bad_backend_feedback():
 
     with pytest.raises(NotImplementedError):
         backend_from_name("xxxxx")
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])
