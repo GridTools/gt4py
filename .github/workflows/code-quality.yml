@@ -9,7 +9,20 @@ on:
       - main
 
 jobs:
+  # First job to read Python versions from .python-versions file
+  get-python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      python-versions: ${{ steps.get-versions.outputs.python-versions }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: get-versions
+        uses: ./.github/actions/get-python-versions
+        with:
+          which: 'default'
+
   code-quality:
+    needs: [get-python-versions]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +30,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: ".python-versions"
+          python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6

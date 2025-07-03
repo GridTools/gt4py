@@ -7,6 +7,17 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 #
+
+# This is the main entry point for the CSCS CI pipeline and assembles
+# the build and the test trigger jobs with pieces from the included files. 
+#
+# The build job creates two things:
+# - the base image for the CSCS CI (only if the external dependencies change)
+# - the actual CI pipeline for this commit (in the 'after_script' section).
+#
+# The generated pipeline is stored in the `generated_cscs_test_pipeline.yml` file,
+# which is then used by the test trigger jobs to run the tests.
+
 include:
   - local: 'ci/cscs-common.yml'
 
