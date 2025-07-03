@@ -51,6 +51,12 @@ class VariableKOffset(common.VariableKOffset[Expr]):
     pass
 
 
+class AbsoluteKIndex(common.AbsoluteKIndex[Expr]):
+    """See gtc.common.AbsoluteKIndex"""
+
+    pass
+
+
 class ScalarAccess(common.ScalarAccess, Expr):
     pass
 
@@ -83,14 +89,26 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
     ) -> None:
         if isinstance(instance.left, FieldAccess):
             offset_reads = (
-                eve.walk_values(instance.right)
-                .filter(_cartesian_fieldaccess)
-                .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
-                .getattr("name")
-                .to_set()
-            ) | eve.walk_values(instance.right).filter(_variablek_fieldaccess).getattr(
-                "name"
-            ).to_set()
+                (
+                    eve.walk_values(instance.right)
+                    .filter(_cartesian_fieldaccess)
+                    .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
+                    .getattr("name")
+                    .to_set()
+                )
+                | (
+                    eve.walk_values(instance.right)
+                    .filter(_absolutekindex_fieldaccess)
+                    .getattr("name")
+                    .to_set()
+                )
+                | (
+                    eve.walk_values(instance.right)
+                    .filter(_variablek_fieldaccess)
+                    .getattr("name")
+                    .to_set()
+                )
+            )
             if instance.left.name in offset_reads:
                 raise ValueError("Self-assignment with offset is illegal.")
 
@@ -246,11 +264,27 @@ class Stencil(LocNode, eve.ValidatedSymbolTableTrait):
 
 
 def _cartesian_fieldaccess(node) -> bool:
-    return isinstance(node, FieldAccess) and not isinstance(node.offset, VariableKOffset)
+    return (
+        isinstance(node, FieldAccess)
+        and not isinstance(node.offset, VariableKOffset)
+        and not isinstance(node.offset, AbsoluteKIndex)
+    )
 
 
 def _variablek_fieldaccess(node) -> bool:
-    return isinstance(node, FieldAccess) and isinstance(node.offset, VariableKOffset)
+    return (
+        isinstance(node, FieldAccess)
+        and isinstance(node.offset, VariableKOffset)
+        and not isinstance(node.offset, AbsoluteKIndex)
+    )
+
+
+def _absolutekindex_fieldaccess(node) -> bool:
+    return (
+        isinstance(node, FieldAccess)
+        and isinstance(node.offset, AbsoluteKIndex)
+        and not isinstance(node.offset, VariableKOffset)
+    )
 
 
 # TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode
