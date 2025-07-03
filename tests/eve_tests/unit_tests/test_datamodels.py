@@ -560,13 +560,11 @@ SAMPLE_TYPE_DATA: Final = [
         "int | float | str",
         [1, 3.0, "one"],
         [[1], [], 1j],
-        marks=pytest.mark.skipif(sys.version_info < (3, 10), reason="| union syntax not supported"),
     ),
     pytest.param(
         "typing.List[int|float]",
         [[1, 2.0], []],
         [1, 2.0, [1, "2.0"]],
-        marks=pytest.mark.skipif(sys.version_info < (3, 10), reason="| union syntax not supported"),
     ),
     ("typing.Optional[int]", [1, None], [[1], [], 1j]),
     (

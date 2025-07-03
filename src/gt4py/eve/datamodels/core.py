@@ -151,10 +151,7 @@ Unchecked = xtyping.Annotated[_T, _UNCHECKED_TYPE_TAG]
 """Type hint marker to define fields that should NOT be type-checked at initialization."""
 
 
-if sys.version_info >= (3, 10):
-    _dataclass_opts: Final[dict[str, Any]] = {"slots": True}
-else:
-    _dataclass_opts: Final[Dict[str, Any]] = {}
+_dataclass_opts: Final[dict[str, Any]] = {"slots": True}
 
 
 @dataclasses.dataclass(**_dataclass_opts)
@@ -348,7 +345,7 @@ def datamodel(  # redefinition of unused symbol
             for all fields.
         generic: If ``True`` (default is ``False``) the class should be a ``Generic[]`` class,
             and the generated Data Model will support creation of new Data Model subclasses
-            when using concrete types as arguments of ``DataModelClass[some_concret_type]``.
+            when using concrete types as arguments of ``DataModelClass[some_concrete_type]``.
         type_validation_factory: Type validation factory used to build the field type validators.
             If ``None``, type validators will not be generators.
 
@@ -1255,9 +1252,12 @@ def _make_concrete_with_cache(
     if not is_generic_datamodel_class(datamodel_cls):
         raise TypeError(f"'{datamodel_cls.__name__}' is not a generic model class.")
     for t in type_args:
-        _accepted_types: tuple[type, ...] = (type, type(None), xtyping.StdGenericAliasType)
-        if sys.version_info >= (3, 10):
-            _accepted_types = (*_accepted_types, types.UnionType)
+        _accepted_types: tuple[type, ...] = (
+            type,
+            type(None),
+            xtyping.StdGenericAliasType,
+            types.UnionType,
+        )
         if not (
             isinstance(t, _accepted_types)
             or (getattr(type(t), "__module__", None) in ("typing", "typing_extensions"))
