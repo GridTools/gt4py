@@ -40,7 +40,7 @@ jobs:
         id: test-sessions
         run: |
           ./scripts-cli.py github-ci matrix \
-            --config ci/test-sessions.yml \
+            --config nox-sessions-config.yml \
             --base "${{ github.base_ref }}" \
             --output gh-test-sessions.json \
             --verbose
