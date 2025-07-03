@@ -1485,9 +1485,22 @@ class IRMaker(ast.NodeVisitor):
                 "a list of values. Must be of the form`.at(K=..., ddim=[...])`",
                 loc=nodes.Location.from_ast_node(node),
             )
+        k_offset_value = self.visit(node.keywords[0].value)
+        if isinstance(k_offset_value, nodes.IteratorAccess) and k_offset_value.name == "K":
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, you cannot write `.at(K=K)` since `.at` denotes "
+                "an absolute index, this is equivalent to `field[0, 0, 0]` or simply `field`.",
+                loc=nodes.Location.from_ast_node(node),
+            )
+        if isinstance(k_offset_value, nodes.IteratorAccess):
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, you cannot use parallel axis in absolute, "
+                f"e.g. no `.at(K={k_offset_value.name})`",
+                loc=nodes.Location.from_ast_node(node),
+            )
         field: nodes.FieldRef = self.visit(node.func.value)
         assert isinstance(field, nodes.FieldRef)
-        field.offset = nodes.AbsoluteKIndex(k=self.visit(node.keywords[0].value))
+        field.offset = nodes.AbsoluteKIndex(k=k_offset_value)
         if len(node.keywords) == 2:
             field.data_index = [self.visit(value) for value in node.keywords[1].value.elts]
         return field

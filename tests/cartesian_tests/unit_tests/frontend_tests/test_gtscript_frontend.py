@@ -2037,7 +2037,7 @@ class TestIteratorAccess:
         assert isinstance(def_ir.computations[0].body.stmts[0].value.offset, dict)
         assert def_ir.computations[0].body.stmts[0].value.offset["K"] == -1
 
-    def test_failure_with_I(self):
+    def test_bad_syntax_with_I(self):
         def stencil(field: gtscript.Field[float]):  # type: ignore
             with computation(PARALLEL), interval(...):
                 if I == 2:
@@ -2046,6 +2046,21 @@ class TestIteratorAccess:
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
             match=r".*Parallel axis I can't be queried - only K - at.*",
+        ):
+            parse_definition(
+                stencil,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
+
+    def test_bad_syntax_with_absolute_indexing(self):
+        def stencil(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field.at(K=K)
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match=r".*Absolute K index: bad syntax, you cannot write.*",
         ):
             parse_definition(
                 stencil,
