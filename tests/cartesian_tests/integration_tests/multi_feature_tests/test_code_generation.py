@@ -20,6 +20,7 @@ from gt4py.cartesian.gtscript import (
     GlobalTable,
     I,
     J,
+    IJ,
     computation,
     horizontal,
     interval,
