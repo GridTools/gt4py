@@ -32,6 +32,8 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     # rustc \
     # htop \
     ${EXTRA_APTGET} && \
+    apt-get clean && \
+    apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv

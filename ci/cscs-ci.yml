@@ -48,15 +48,8 @@ stages:
     - export GT4PY_IMAGE_PREFIX=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci:${DOCKER_TAG}
     - echo "GT4PY_IMAGE_PREFIX=${GT4PY_IMAGE_PREFIX}" >> base.env
     - export PERSIST_IMAGE_NAME=${GT4PY_IMAGE_PREFIX}-${PY_VERSION}
-    # Get the information of the current branch and PR from GitHub
-    # - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
-    # - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
-    # - curl https://api.github.com/repos/${GT4PY_GITHUB_PATH}/pulls/${GITHUB_PR} 2>/dev/null > gh_pull.json
-    # - echo "GITHUB_PR=${GITHUB_PR}" >> base.env
-    # - echo "GIT_TARGET_BRANCH=$(jq -r '.base.ref' gh_pull.json)" >> base.env
-    # - echo "GIT_CURRENT_BRANCH=$(jq -r '.head.ref' gh_pull.json)" >> base.env
-    - env | sort
-
+    # Uncomment the following line to see the environment variables for debugging 
+    # - env | sort 
   artifacts:
     reports:
       dotenv: base.env
@@ -95,7 +88,7 @@ build_cscs_gh200:
     GT4PY_REPO: https://github.com/${GT4PY_GITHUB_PATH}
     CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 5
+    SLURM_TIMELIMIT: 4
   parallel:
     matrix:
       - SUBPACKAGE: [cartesian]
@@ -131,12 +124,6 @@ test_cscs_gh200:
   extends:
     - .container-runner-santis-gh200
     - .test_common
-  # needs:
-  #   - 'build_cscs_gh200: [${PY_VERSION}]'
-  # - job: build_cscs_gh200
-  #     parallel:
-  #       matrix:
-  #         - PY_VERSION: ${PY_VERSION}
   variables:
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
