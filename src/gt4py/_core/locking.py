@@ -28,5 +28,9 @@ def lock(directory: pathlib.Path | str, suffix: str = ".lock") -> ContextManager
     """Create a lock for the given path."""
     constructor, identifier = _lock
 
-    path = pathlib.Path(directory) / f"{identifier}{suffix}"
+    directory = pathlib.Path(directory)
+    if not directory.is_dir():
+        raise ValueError(f"Expected a directory, got: {directory}")
+
+    path = directory / f"{identifier}{suffix}"
     return constructor(str(path))
