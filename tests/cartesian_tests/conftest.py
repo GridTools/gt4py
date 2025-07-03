@@ -40,12 +40,12 @@ def pytest_addoption(parser):
     parser.addoption("--keep-gtcache", action="store_true", default=False, dest="keep_gtcache")
 
 
-def pytest_sessionstart():
+def pytest_sessionstart(session):
     gt_config.cache_settings["dir_name"] = pytest_gt_cache_dir
+    if session.config.option.keep_gtcache:
+        print(f"\nNOTE: gt4py caches will be retained at {pytest_gt_cache_dir}")
 
 
 def pytest_sessionfinish(session):
     if not session.config.option.keep_gtcache:
         shutil.rmtree(pytest_gt_cache_dir, ignore_errors=True)
-    else:
-        print(f"\nNOTE: gt4py caches were retained at {pytest_gt_cache_dir}")

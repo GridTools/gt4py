@@ -95,6 +95,9 @@ class OIRToTasklet(eve.NodeVisitor):
             shift = ctx.tree.shift[node.name][tir.Axis.K]
             offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
             name_parts.append(f"[{symbol} + {shift} + {offset}]")
+        elif isinstance(node.offset, oir.AbsoluteKIndex):
+            index = self.visit(node.offset.k, ctx=ctx, is_target=False)
+            name_parts.append(f"[{index}]")
 
         # Data dimension subscript
         data_indices: list[str] = []
@@ -245,6 +248,9 @@ class OIRToTasklet(eve.NodeVisitor):
     def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs: Any) -> None:
         raise RuntimeError("Variable K Offset should be dealt in Access IRs.")
 
+    def visit_AbsoluteKIndex(self, node: oir.AbsoluteKIndex, **kwargs: Any) -> None:
+        raise RuntimeError("Absolute K Offset should be dealt in Access IRs.")
+
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
         raise RuntimeError("visit_MaskStmt should not be called")
 
@@ -309,6 +315,9 @@ def _field_offset_postfix(node: oir.FieldAccess) -> str:
     if isinstance(node.offset, oir.VariableKOffset):
         return "var_k"
 
+    if isinstance(node.offset, oir.AbsoluteKIndex):
+        return "abs_k"
+
     offset_indicators = [
         f"{k}{'p' if v > 0 else 'm'}{abs(v)}" for k, v in node.offset.to_dict().items() if v != 0
     ]
@@ -316,10 +325,14 @@ def _field_offset_postfix(node: oir.FieldAccess) -> str:
 
 
 def _memlet_subset(node: oir.FieldAccess, data_domains: list[int], ctx: Context) -> subsets.Subset:
+    # TODO: break down the memlet_subset in more atomic operations and recombine them here
     if isinstance(node.offset, common.CartesianOffset):
         return _memlet_subset_cartesian(node, data_domains, ctx)
 
     if isinstance(node.offset, oir.VariableKOffset):
+        return _memlet_subset_variable_offset(node, data_domains, ctx)
+
+    if isinstance(node.offset, oir.AbsoluteKIndex):
         return _memlet_subset_variable_offset(node, data_domains, ctx)
 
     raise NotImplementedError(f"_memlet_subset(): unknown offset type {type(node.offset)}")

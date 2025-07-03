@@ -352,9 +352,16 @@ class VarRef(Ref):
 
 
 @attribclass
+class AbsoluteKIndex(Expr):
+    """See gtc.common.AbsoluteKIndex"""
+
+    k = attribute(of=Any)
+
+
+@attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr, AbsoluteKIndex]])
     data_index = attribute(of=ListOf[Expr], factory=list)
     loc = attribute(of=Location, optional=True)
 
@@ -682,9 +689,9 @@ class IterationOrder(enum.Enum):
     def symbol(self):
         if self == self.BACKWARD:
             return "<-"
-        if self == self.PARALLEL:
+        elif self == self.PARALLEL:
             return "||"
-        if self == self.FORWARD:
+        elif self == self.FORWARD:
             return "->"
 
     def __str__(self) -> str:
