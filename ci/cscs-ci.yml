@@ -17,7 +17,6 @@ variables:  # Default values for base variables (can be overriden in jobs defini
   ROCM_VERSION: '6.2.4'
   UBUNTU_VERSION: '24.04'
   UV_VERSION: '0.6.12'
-  GT4PY_GITHUB_PATH: 'gridtools/gt4py'
 
 .python_versions: &python_versions ['3.10', '3.13']
 
@@ -39,7 +38,7 @@ stages:
     # The actual values will be taken from environment variables with the same
     # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
     # To override the defaults, just define these variables in the actual job.
-    DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "GT4PY_REPO", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
+    DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
   before_script:
     # We create a tag that depends on the SHA value of ci/Dockerfile,
     # the docker build arguments since the Docker file is heavily parameterized,
@@ -85,7 +84,6 @@ build_cscs_gh200:
   stage: test
   image: ${GT4PY_IMAGE_PREFIX}-${PY_VERSION}
   variables:
-    GT4PY_REPO: https://github.com/${GT4PY_GITHUB_PATH}
     CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 4
@@ -114,7 +112,7 @@ build_cscs_gh200:
     - when: on_success
   script:
     # Since the image does not contain the repo, we need to clone it before running the tests
-    #- mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --revision "${CI_COMMIT_SHA}" "${GT4PY_REPO}" "${WORKDIR}/gt4py"
+    #- mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --revision "${CI_COMMIT_SHA}" "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
