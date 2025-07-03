@@ -70,7 +70,7 @@ class Compiler(
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.
-        with locking.lock(src_dir / "compilation.lock"):
+        with locking.lock(src_dir):
             data = build_data.read_data(src_dir)
 
             if not data or not is_compiled(data) or self.force_recompile:

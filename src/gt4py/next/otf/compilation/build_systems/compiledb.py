@@ -282,7 +282,7 @@ def _cc_get_compiledb(
 
     # In a multi-threaded environment, multiple threads may try to create the compiledb at the same time
     # leading to compilation errors.
-    with locking.lock(cache_path / "compiledb.lock"):
+    with locking.lock(cache_path):
         if renew_compiledb or not (compiled_db := _cc_find_compiledb(path=cache_path)):
             compiled_db = _cc_create_compiledb(
                 prototype_program_source=prototype_program_source,

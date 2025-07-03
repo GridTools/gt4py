@@ -125,7 +125,7 @@ class FileCache(diskcache.Cache):
             lock_dir = pathlib.Path(tempfile.gettempdir())
 
         lock_dir.mkdir(parents=True, exist_ok=True)
-        with locking.lock(lock_dir / "file_cache.lock"):
+        with locking.lock(lock_dir):
             super().__init__(directory=directory, **settings)
 
         self._init_complete = True
