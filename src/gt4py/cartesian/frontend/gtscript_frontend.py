@@ -1445,7 +1445,7 @@ class IRMaker(ast.NodeVisitor):
         # Dev note: we enforce .at(K=..., ddim=[...])
         #           A better version of this code would look through the keywords
         #           in any order. `ddim` shall remain optional, K mandatory.
-        assert _filter_absolute_K_index_method(node, self.backend_name)
+        assert _filter_absolute_K_index_method(node)
         if len(node.keywords) not in [1, 2]:
             raise GTScriptSyntaxError(
                 message="Absolute K index bad syntax. Must be of the form`.at(K=..., ddim=[...])` "
@@ -1483,7 +1483,7 @@ class IRMaker(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call):
         # We check for am absolute Field index in K
-        if _filter_absolute_K_index_method(node, self.backend_name):
+        if _filter_absolute_K_index_method(node):
             return self._absolute_K_index_method(node)
 
         # We expect the Call is a native function to carry forward
