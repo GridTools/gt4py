@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from typing import Type
+
 import numpy as np
 
 
@@ -63,3 +65,7 @@ isnan: np.ufunc = np.isnan
 floor: np.ufunc = np.floor
 ceil: np.ufunc = np.ceil
 trunc: np.ufunc = np.trunc
+i32: Type[np.signedinteger] = np.int32
+i64: Type[np.signedinteger] = np.int64
+f32: Type[np.floating] = np.float32
+f64: Type[np.floating] = np.float64

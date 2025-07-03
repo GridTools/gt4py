@@ -15,11 +15,25 @@ import numbers
 import textwrap
 import time
 import types
-from typing import Any, Dict, Final, List, Literal, Optional, Sequence, Set, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Final,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 import numpy as np
 
 from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
+from gt4py.cartesian.config import build_settings
 from gt4py.cartesian.frontend import node_util, nodes
 from gt4py.cartesian.frontend.base import Frontend, register
 from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
@@ -399,10 +413,9 @@ class CallInliner(ast.NodeTransformer):
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        if (
-            isinstance(node.value, ast.Call)
-            and gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
-        ):
+        if isinstance(node.value, ast.Call) and gt_meta.get_qualified_name_from_node(
+            node.value.func
+        ) not in gtscript.MATH_BUILTINS.union(gtscript.TYPE_HINT_AND_CAST_BUILTINS):
             assert len(node.targets) == 1
             self.visit(node.value, target_node=node.targets[0])
             # This node can be now removed since the trivial assignment has been already done
@@ -707,6 +720,7 @@ class IRMaker(ast.NodeVisitor):
         backend_name: str,
         *,
         domain: nodes.Domain,
+        options: gt_definitions.BuildOptions,
         temp_decls: Optional[Dict[str, nodes.FieldDecl]] = None,
         dtypes: Optional[Dict[Type, Type]] = None,
     ):
@@ -730,7 +744,7 @@ class IRMaker(ast.NodeVisitor):
         self.parsing_horizontal_region = False
         self.written_vars: Set[str] = set()
         self.dtypes = dtypes
-        nodes.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
+        self.python_symbol_to_ir_op = {
             "abs": nodes.NativeFunction.ABS,
             "min": nodes.NativeFunction.MIN,
             "max": nodes.NativeFunction.MAX,
@@ -759,7 +773,34 @@ class IRMaker(ast.NodeVisitor):
             "floor": nodes.NativeFunction.FLOOR,
             "ceil": nodes.NativeFunction.CEIL,
             "trunc": nodes.NativeFunction.TRUNC,
-        }
+            "i32": nodes.NativeFunction.I32,
+            "i64": nodes.NativeFunction.I64,
+            "f32": nodes.NativeFunction.F32,
+            "f64": nodes.NativeFunction.F64,
+            "int": (
+                nodes.NativeFunction.I32
+                if options.literal_precision == 32
+                else nodes.NativeFunction.I64
+            ),
+            "float": (
+                nodes.NativeFunction.F32
+                if options.literal_precision == 32
+                else nodes.NativeFunction.F64
+            ),
+        }  # Conversion table for functions to NativeFunctions
+
+        self.temporary_type_to_native_type = {
+            "i32": nodes.DataType.INT32,
+            "i64": nodes.DataType.INT64,
+            "f32": nodes.DataType.FLOAT32,
+            "f64": nodes.DataType.FLOAT64,
+            "int": nodes.DataType.INT32
+            if options.literal_precision == 32
+            else nodes.DataType.INT64,
+            "float": nodes.DataType.FLOAT32
+            if options.literal_precision == 32
+            else nodes.DataType.FLOAT64,
+        }  # Conversion table for types to DataTypes
 
     def __call__(self, ast_root: ast.AST):
         assert (
@@ -1004,11 +1045,20 @@ class IRMaker(ast.NodeVisitor):
                 loc=nodes.Location.from_ast_node(node),
             )
         elif isinstance(value, numbers.Number):
-            value_type = (
-                self.dtypes[type(value)]
-                if self.dtypes and type(value) in self.dtypes.keys()
-                else np.dtype(type(value))
-            )
+            if self.dtypes and type(value) in self.dtypes.keys():
+                value_type = self.dtypes[type(value)]
+            else:
+                if build_settings["literal_floating_point_precision"] is not None:
+                    if isinstance(value, int):
+                        value_type = np.dtype(
+                            f"i{int(int(build_settings['literal_floating_point_precision']) / 8)}"
+                        )
+                    else:
+                        value_type = np.dtype(
+                            f"f{int(int(build_settings['literal_floating_point_precision']) / 8)}"
+                        )
+                else:
+                    value_type = np.dtype(type(value))
             data_type = nodes.DataType.from_dtype(value_type)
             return nodes.ScalarLiteral(value=value, data_type=data_type)
         else:
@@ -1378,7 +1428,7 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_Call(self, node: ast.Call):
-        native_fcn = nodes.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
+        native_fcn = self.python_symbol_to_ir_op[node.func.id]
 
         args = [self.visit(arg) for arg in node.args]
         if len(args) != native_fcn.arity:
@@ -1424,23 +1474,39 @@ class IRMaker(ast.NodeVisitor):
 
         return name, spatial_offset, data_index
 
-    def visit_Assign(self, node: ast.Assign) -> list:
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> list:
+        return self._resolve_assign(node, [node.target], target_annotation=node.annotation)
+
+    def visit_Assign(self, node: ast.Assign, **kwargs) -> list:
+        return self._resolve_assign(node, node.targets)
+
+    def _resolve_assign(
+        self,
+        node: Union[ast.AnnAssign, ast.Assign],
+        targets: List[Any],
+        target_annotation: Optional[Any] = None,
+    ) -> list:
         result = []
 
         # Create decls for temporary fields
         target = []
-        if len(node.targets) > 1:
+        if len(targets) > 1:
             raise GTScriptSyntaxError(
                 message="Assignment to multiple variables (e.g. var1 = var2 = value) not supported.",
                 loc=nodes.Location.from_ast_node(node),
             )
 
-        for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
+        for t in targets[0].elts if isinstance(targets[0], ast.Tuple) else targets:
             name, spatial_offset, data_index = self._parse_assign_target(t)
             if spatial_offset:
                 if spatial_offset[0] != 0 or spatial_offset[1] != 0:
                     raise GTScriptSyntaxError(
                         message="Assignment to non-zero offsets is not supported in IJ.",
+                        loc=nodes.Location.from_ast_node(t),
+                    )
+                if target_annotation is not None:
+                    raise GTScriptSyntaxError(
+                        message="Cannot annotate a temporary Field with offset write. Define first.",
                         loc=nodes.Location.from_ast_node(t),
                     )
                 # Case of K-offset
@@ -1460,9 +1526,20 @@ class IRMaker(ast.NodeVisitor):
                             message="Temporaries with data dimensions need to be declared explicitly.",
                             loc=nodes.Location.from_ast_node(t),
                         )
+                    dtype = nodes.DataType.AUTO
+                    if target_annotation is not None:
+                        source = gt_meta.ast_unparse(target_annotation)
+                        try:
+                            dtype = eval(source, self.temporary_type_to_native_type)
+                        except NameError:
+                            raise GTScriptSyntaxError(
+                                message=f"Failed to recognize type {source} for local symbol {name}."
+                                f"Available types are {self.temporary_type_to_native_type.keys()}",
+                                loc=nodes.Location.from_ast_node(t),
+                            ) from None
                     field_decl = nodes.FieldDecl(
                         name=name,
-                        data_type=nodes.DataType.AUTO,
+                        data_type=dtype,
                         axes=nodes.Domain.LatLonGrid().axes_names,
                         is_api=False,
                         loc=nodes.Location.from_ast_node(t),
@@ -1676,7 +1753,28 @@ class GTScriptParser(ast.NodeVisitor):
         return result
 
     @staticmethod
-    def annotate_definition(definition, externals=None):
+    def annotate_definition(
+        definition: Callable,
+        options: gt_definitions.BuildOptions | None = None,
+        externals=None,
+    ) -> Callable:
+        """Annotate the function definition with dtypes, resolve externals and add default values.
+
+        Args:
+            definition (Callable): function to annotate
+            options (gt_definitions.BuildOptions, optional): Options for building the stencil.
+                Defaults to None.
+            externals (_type_, optional): Externals used.
+                Defaults to None.
+
+        Raises:
+            GTScriptDefinitionError
+            GTScriptValueError
+            GTScriptSyntaxError
+
+        Returns:
+            definition (Callable): function to annotate
+        """
         api_signature = []
         api_annotations = []
 
@@ -1744,6 +1842,13 @@ class GTScriptParser(ast.NodeVisitor):
         temp_annotations: Dict[str, gtscript._FieldDescriptor] = {}
         temp_init_values: Dict[str, numbers.Number] = {}
 
+        if options is not None:
+            frontend_types_to_native_types = nodes.frontend_type_to_native_type(
+                options.literal_precision
+            )
+        else:
+            frontend_types_to_native_types = nodes.frontend_type_to_native_type()
+
         ann_assign_context = {
             "Field": gtscript.Field,
             "IJK": gtscript.IJK,
@@ -1755,6 +1860,7 @@ class GTScriptParser(ast.NodeVisitor):
             "JK": gtscript.JK,
             "np": np,
             **(resolved_externals if externals is not None else nonlocal_symbols),
+            **frontend_types_to_native_types,
         }
         ann_assigns = tuple(filter(lambda stmt: isinstance(stmt, ast.AnnAssign), ast_func_def.body))
         for ann_assign in ann_assigns:
@@ -1763,6 +1869,9 @@ class GTScriptParser(ast.NodeVisitor):
 
             source = gt_meta.ast_unparse(ann_assign.annotation)
             descriptor = eval(source, ann_assign_context)
+            # Scalar annotated are dealt with after inlining
+            if descriptor in frontend_types_to_native_types.values():
+                continue
             temp_annotations[name] = descriptor
             if descriptor.axes != gtscript.IJK:
                 axes = "".join(str(ax) for ax in descriptor.axes)
@@ -2070,6 +2179,7 @@ class GTScriptParser(ast.NodeVisitor):
             domain=domain,
             temp_decls=temp_decls,
             dtypes=self.dtypes,
+            options=self.options,
         )(self.ast_root)
 
         self.definition_ir = nodes.StencilDefinition(
@@ -2118,8 +2228,24 @@ class GTScriptFrontend(Frontend):
         return stencil_id
 
     @classmethod
-    def prepare_stencil_definition(cls, definition, externals):
-        return GTScriptParser.annotate_definition(definition, externals)
+    def prepare_stencil_definition(
+        cls,
+        definition: Callable,
+        externals,
+        options: gt_definitions.BuildOptions | None = None,
+    ) -> Callable:
+        """Return an annotated version of the stencil definition.
+
+        Args:
+            definition (Callable): Stencil to annotate.
+            externals: externals to use
+            options (gt_definitions.BuildOptions, optional): Options for buidling the stencil.
+                Defaults to None.
+
+        Returns:
+            Callable: Annotated stencil
+        """
+        return GTScriptParser.annotate_definition(definition, options, externals)
 
     @classmethod
     def generate(cls, definition, externals, dtypes, options, backend_name):
@@ -2127,7 +2253,7 @@ class GTScriptFrontend(Frontend):
             start_time = time.perf_counter()
 
         if not hasattr(definition, "_gtscript_"):
-            cls.prepare_stencil_definition(definition, externals)
+            cls.prepare_stencil_definition(definition, externals, options)
         translator = GTScriptParser(definition, externals=externals, dtypes=dtypes, options=options)
         definition_ir = translator.run(backend_name)
 
