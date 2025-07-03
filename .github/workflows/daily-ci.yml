@@ -20,11 +20,10 @@ jobs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
       - uses: actions/checkout@v4
-
       - id: get-versions
         uses: ./.github/actions/get-python-versions
         with:
-          all: true
+          which: 'all'
 
   daily-ci:
     needs: get-python-versions

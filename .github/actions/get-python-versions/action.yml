@@ -2,10 +2,10 @@ name: "Get Python Versions"
 description: "Reads Python versions from .python-versions file and outputs them as a JSON array"
 
 inputs:
-  all:
-    description: "Whether to return all Python versions (true) or just lowest and highest (false)"
+  which:
+    description: "Which Python versions to return: 'all', 'default' (first line), 'bounds': lowest and highest"
     required: false
-    default: "false"
+    default: "bounds"
 
 outputs:
   python-versions:
@@ -21,11 +21,20 @@ runs:
       run: |
         ALL_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
 
-        if [[ "${{ inputs.all }}" == "true" ]]; then
-          PYTHON_VERSIONS="${ALL_VERSIONS}"
-        else
-          # Get lowest and highest versions only
-          PYTHON_VERSIONS=$(echo "${ALL_VERSIONS}" | jq -c '[.[0], .[-1]] | unique')
-        fi
+        case "${{ inputs.which }}" in
+          "all")
+            PYTHON_VERSIONS="${ALL_VERSIONS}"
+            ;;
+          "default")
+            PYTHON_VERSIONS=$(echo "${ALL_VERSIONS}" | jq -c '[.[0]]')
+            ;;
+          "bounds")
+            PYTHON_VERSIONS=$(echo "${ALL_VERSIONS}" | jq -c 'sort | [.[0], .[-1]] | unique')
+            ;;
+          *)
+            echo "Error: Invalid value for 'which' input. Must be 'all', 'default', or 'bounds'."
+            exit 1
+            ;;
+        esac
 
         echo "python-versions=${PYTHON_VERSIONS}" >> $GITHUB_OUTPUT
