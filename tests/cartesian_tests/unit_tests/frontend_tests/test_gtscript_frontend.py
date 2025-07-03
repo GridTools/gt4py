@@ -1986,3 +1986,69 @@ class TestTemporaryTypes:
         print(def_ir)
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.FLOAT32
+
+
+class TestIteratorAccess:
+    def test_read_in_K_iterator(self):
+        def stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(...):
+                field[0, 0, 0] = K
+
+        def_ir = parse_definition(
+            stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_precision=64,
+        )
+
+        assert isinstance(def_ir.computations[0].body.stmts[0].value, nodes.IteratorAccess)
+        iterator_access = def_ir.computations[0].body.stmts[0].value
+        assert iterator_access.name == "K"
+
+    def test_K_as_cond_iterator(self):
+        def stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(...):
+                if K == 2:
+                    field[0, 0, 0] = 42
+
+        def_ir = parse_definition(
+            stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_precision=64,
+        )
+
+        assert isinstance(def_ir.computations[0].body.stmts[0].condition.lhs, nodes.IteratorAccess)
+        iterator_access = def_ir.computations[0].body.stmts[0].condition.lhs
+        assert iterator_access.name == "K"
+
+    def test_iterator_in_offsets_is_left_alone(self):
+        def stencil(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(1, None):
+                out_field[0, 0, 0] = in_field[K - 1]
+
+        def_ir = parse_definition(
+            stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_precision=64,
+        )
+
+        assert isinstance(def_ir.computations[0].body.stmts[0].value.offset, dict)
+        assert def_ir.computations[0].body.stmts[0].value.offset["K"] == -1
+
+    def test_failure_with_I(self):
+        def stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(...):
+                if I == 2:
+                    field[0, 0, 0] = 42
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match=r".*Parallel axis I can't be queried - only K - at.*",
+        ):
+            parse_definition(
+                stencil,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
