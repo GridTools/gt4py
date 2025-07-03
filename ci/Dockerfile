@@ -10,7 +10,8 @@ ENV WORKDIR=${WORKDIR_PATH}
 ARG DEBIAN_FRONTEND=noninteractive
 ARG EXTRA_APTGET=""
 RUN <<EOF
-add-apt-repository ppa:git-core/ppa && apt-get update -qq 
+apt-get install software-properties-common
+apt-add-repository ppa:git-core/ppa && apt-get update -qq
 apt-get install -qq -y --no-install-recommends \
     # strace \
     build-essential \
