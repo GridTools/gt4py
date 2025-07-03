@@ -72,4 +72,4 @@ jobs:
       - name: Run '${{ matrix.test-session.name }}-${{ matrix.python-version }}(${{ matrix.test-session.args }})' nox session
         shell: bash
         run: |
-          uv run --script noxfile.py -s '${{ matrix.test-session.name }}-${{ matrix.python-version }}(${{ matrix.test-session.args }})'
+          uv run --script noxfile.py -s '${{ matrix.test-session.name }}-${{ matrix.python-version }}${{ matrix.test-session.args }}'

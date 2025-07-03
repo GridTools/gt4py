@@ -37,11 +37,13 @@ def create_github_actions_list(
         if session["name"] in affected_sessions:
             call_spec = tuple(session["call_spec"].items())
             session_id = (session["name"], *call_spec)
+
             if session_id not in processed_sessions:
                 processed_sessions.add(session_id)
-                entries.append(
-                    dict(name=session["name"], args=", ".join(session["call_spec"].values()))
-                )
+                session_args = ", ".join(session["call_spec"].values())
+                if session_args:
+                    session_args = f"({session_args})"
+                entries.append(dict(name=session["name"], args=session_args))
 
     return entries
 
@@ -81,7 +83,7 @@ def matrix(
         rich.print(f"Saved GitHub Actions matrix to '{output}'")
     else:
         rich.print(
-            "GitHub Actions matrix: (use '--output <filename>' to save it)\n---------------------"
+            "GitHub Actions matrix: (use '--output <filename>' to save it)\n---------------------\n "
             f"{json.dumps(matrix, indent=2)}"
         )
 
