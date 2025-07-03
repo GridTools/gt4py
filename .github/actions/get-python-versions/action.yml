@@ -26,7 +26,7 @@ runs:
             PYTHON_VERSIONS="${ALL_VERSIONS}"
             ;;
           "default")
-            PYTHON_VERSIONS=$(echo "${ALL_VERSIONS}" | jq -r '.[0]')
+            PYTHON_VERSIONS=$(echo "${ALL_VERSIONS}" | jq -r '.[0]' | jq -R .)
             ;;
           "bounds")
             PYTHON_VERSIONS=$(echo "${ALL_VERSIONS}" | jq -c 'sort | [.[0], .[-1]] | unique')
