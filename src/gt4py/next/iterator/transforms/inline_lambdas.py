@@ -23,9 +23,10 @@ from gt4py.next.iterator.type_system import inference as itir_inference
 
 def _is_trivial_as_fieldop(node: ir.FunCall) -> bool:
     if cpm.is_applied_as_fieldop(node):
-        as_fieldopped_expr = node.fun.args[0].expr
-        if cpm.is_call_to(as_fieldopped_expr, "cast_"):
-            return True
+        if isinstance(node.fun.args[0], ir.Lambda):
+            as_fieldopped_expr = node.fun.args[0].expr
+            if cpm.is_call_to(as_fieldopped_expr, "cast_"):
+                return True
     return False
 
 
