@@ -9,14 +9,10 @@
 #
 
 """
-
 Package for development scripts.
 
-Notes:
-    Modules containing the actual Typer scripts should be written in a way
-    that they could executed independently from ther repository root by using:
-
-        $ uv run -p 3.12 --frozen --isolated --group scripts scripts.<module_name>
+Dependencies for all the modules in this package should be declared
+in the inlined metadata section of the `/scripts-cli.py` script.
 """
 
 from __future__ import annotations
