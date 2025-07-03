@@ -61,6 +61,7 @@ stages:
     - echo "GIT_TARGET_BRANCH=$(jq -r '.base.ref' gh_pull.json)" >> base.env
     - echo "GIT_CURRENT_BRANCH=$(jq -r '.head.ref' gh_pull.json)" >> base.env
     - env | sort
+    - git --version
 
   artifacts:
     reports:
