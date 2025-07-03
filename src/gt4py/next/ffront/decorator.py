@@ -106,6 +106,7 @@ class Program:
     connectivities: Optional[
         common.OffsetProvider
     ]  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
+    enable_jit: bool | None
     static_params: (
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
@@ -122,6 +123,7 @@ class Program:
         definition: types.FunctionType,
         backend: next_backend.Backend | None,
         grid_type: common.GridType | None = None,
+        enable_jit: bool | None = None,
         static_params: Sequence[str] | None = None,
         connectivities: Optional[
             common.OffsetProvider
@@ -132,6 +134,7 @@ class Program:
             definition_stage=program_def,
             backend=backend,
             connectivities=connectivities,
+            enable_jit=enable_jit,
             static_params=static_params,
         )
 
@@ -294,11 +297,15 @@ class Program:
         self,
         *args: Any,
         offset_provider: common.OffsetProvider | None = None,
-        enable_jit: bool = config.ENABLE_JIT_DEFAULT,
+        enable_jit: bool | None = None,
         **kwargs: Any,
     ) -> None:
         if offset_provider is None:
             offset_provider = {}
+        if enable_jit is None:
+            enable_jit = (
+                self.enable_jit if self.enable_jit is not None else config.ENABLE_JIT_DEFAULT
+            )
         program_name = (
             f"{self.__name__}[{getattr(self.backend, 'name', '<embedded>')}]"
             if config.COLLECT_METRICS_LEVEL
@@ -344,6 +351,7 @@ class Program:
         | common.OffsetProvider
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
+        enable_jit: bool | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         """
@@ -356,6 +364,8 @@ class Program:
         # rename to `with_static_args` or similar) once we have a better understanding of the
         # use-cases.
 
+        if enable_jit is not None:
+            object.__setattr__(self, "enable_jit", enable_jit)
         if self.static_params is None:
             object.__setattr__(self, "static_params", tuple(static_args.keys()))
         if self.connectivities is None and offset_provider is None:
@@ -547,6 +557,7 @@ class ProgramWithBoundArgs(Program):
         | common.OffsetProvider
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
+        enable_jit: bool | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
@@ -561,6 +572,7 @@ def program(
     *,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
+    enable_jit: bool | None,
     static_params: Sequence[str] | None,
     frozen: bool,
 ) -> Callable[[types.FunctionType], Program]: ...
@@ -572,6 +584,7 @@ def program(
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
+    enable_jit: bool | None = None,  # only relevant if static_params are set
     static_params: Sequence[str] | None = None,
     frozen: bool = False,
 ) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:
@@ -600,6 +613,7 @@ def program(
                 next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
             ),
             grid_type=grid_type,
+            enable_jit=enable_jit,
             static_params=static_params,
         )
         if frozen:
@@ -738,6 +752,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             past_stage=past_stage,
             backend=self.backend,
             connectivities=None,
+            enable_jit=False,  # TODO(havogt): revisit ProgramFromPast
             static_params=None,  # TODO(havogt): revisit ProgramFromPast
         )
 
