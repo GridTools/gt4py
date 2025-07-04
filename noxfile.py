@@ -48,21 +48,28 @@ nox.options.sessions = [
     "test_cartesian-3.11(dace, cpu)",
     "test_cartesian-3.12(internal, cpu)",
     "test_cartesian-3.12(dace, cpu)",
+    "test_cartesian-3.13(internal, cpu)",
+    "test_cartesian-3.13(dace, cpu)",
     "test_eve-3.10",
     "test_eve-3.11",
     "test_eve-3.12",
+    "test_eve-3.13",
     "test_next-3.10(internal, cpu, nomesh)",
     "test_next-3.10(dace, cpu, nomesh)",
     "test_next-3.11(internal, cpu, nomesh)",
     "test_next-3.11(dace, cpu, nomesh)",
     "test_next-3.12(internal, cpu, nomesh)",
     "test_next-3.12(dace, cpu, nomesh)",
+    "test_next-3.13(internal, cpu, nomesh)",
+    "test_next-3.13(dace, cpu, nomesh)",
     "test_package-3.10",
     "test_package-3.11",
     "test_package-3.12",
+    "test_package-3.13",
     "test_storage-3.10(cpu)",
     "test_storage-3.11(cpu)",
     "test_storage-3.12(cpu)",
+    "test_storage-3.13(cpu)",
 ]
 
 
@@ -124,7 +131,12 @@ def test_cartesian(
 
     nox_utils.install_session_venv(
         session,
-        extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
+        extras=[
+            "performance",
+            "testing",
+            *codegen_settings["extras"],
+            *device_settings["extras"],
+        ],
         groups=["test"],
     )
 
