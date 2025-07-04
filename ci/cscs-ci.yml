@@ -49,6 +49,9 @@ stages:
     - export PERSIST_IMAGE_NAME=${GT4PY_IMAGE_PREFIX}-${PY_VERSION}
     # Uncomment the following line to see the environment variables for debugging 
     # - env | sort 
+  parallel:
+    matrix:
+      - PY_VERSION: *test_python_versions
   artifacts:
     reports:
       dotenv: base.env
@@ -58,26 +61,24 @@ stages:
     BASE_IMAGE: docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
     EXTRA_UV_SYNC_ARGS: "--extra cuda12"
 
-.build_extra_rocm:
-  variables:
-    BASE_IMAGE: docker.io/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
-    EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
-    EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
+# TODO: rocm steps are in draft state for now to show how to add support in the future
+# .build_extra_rocm:
+#   variables:
+#     BASE_IMAGE: docker.io/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
+#     EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
+#     EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
 
 build_cscs_gh200:
   extends:
     - .container-builder-cscs-gh200
     - .build_common
     - .build_extra_cuda
-  parallel:
-    matrix:
-      - PY_VERSION: *test_python_versions
 
-build_cscs_amd_rocm:
-  extends:
-    - .container-builder-cscs-zen2
-    - .build_common
-    - .build_extra_rocm
+# .build_cscs_amd_rocm:
+#   extends:
+#     - .container-builder-cscs-zen2
+#     - .build_common
+#     - .build_extra_rocm
 
 # -- Test stage --
 .test_common:
@@ -112,7 +113,7 @@ build_cscs_amd_rocm:
     - when: on_success
   script:
     # Since the image does not contain the repo, we need to clone it before running the tests
-    #- mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --revision "${CI_COMMIT_SHA}" "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
+    # for git>=2.49: mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --revision "${CI_COMMIT_SHA}" "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
