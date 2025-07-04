@@ -127,7 +127,7 @@ test_cscs_gh200:
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
 
-.test_cscs_amd_rocm:
+test_cscs_amd_rocm:
   extends:
     - .tds-container-runner-beverin-mi200
     - .test_common
