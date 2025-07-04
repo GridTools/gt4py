@@ -18,7 +18,7 @@ variables:  # Default values for base variables (can be overriden in jobs defini
   UBUNTU_VERSION: '24.04'
   UV_VERSION: '0.6.12'
 
-.python_versions: &python_versions ['3.10', '3.13']
+.test_python_versions: &test_python_versions ['3.10', '3.13']
 
 stages:
   - build
@@ -58,11 +58,11 @@ stages:
     BASE_IMAGE: docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
     EXTRA_UV_SYNC_ARGS: "--extra cuda12"
 
-# .build_extra_rocm:
-#   variables:
-#     BASE_IMAGE: docker.io/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
-#     EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
-#     EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
+.build_extra_rocm:
+  variables:
+    BASE_IMAGE: docker.io/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
+    EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
+    EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
 
 build_cscs_gh200:
   extends:
@@ -71,13 +71,13 @@ build_cscs_gh200:
     - .build_extra_cuda
   parallel:
     matrix:
-      - PY_VERSION: *python_versions
+      - PY_VERSION: *test_python_versions
 
-# .build_cscs_amd_rocm:
-#   extends:
-#     - .container-builder-cscs-zen2
-#     - .build_common
-#     - .build_extra_rocm
+.build_cscs_amd_rocm:
+  extends:
+    - .container-builder-cscs-zen2
+    - .build_common
+    - .build_extra_rocm
 
 # -- Test stage --
 .test_common:
@@ -92,17 +92,17 @@ build_cscs_gh200:
       - SUBPACKAGE: [cartesian]
         VARIANT: ["internal", "dace"]
         SUBVARIANT: ["cuda12", "cpu"]
-        PY_VERSION: *python_versions
+        PY_VERSION: *test_python_versions
       - SUBPACKAGE: eve
-        PY_VERSION: *python_versions
+        PY_VERSION: *test_python_versions
       - SUBPACKAGE: next
         VARIANT: ["internal", "dace"]
         SUBVARIANT: ["cuda12", "cpu"]
         DETAIL: ["nomesh", "atlas"]
-        PY_VERSION: *python_versions
+        PY_VERSION: *test_python_versions
       - SUBPACKAGE: [storage]
         VARIANT: ["cuda12", "cpu"]
-        PY_VERSION: *python_versions
+        PY_VERSION: *test_python_versions
   rules:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
