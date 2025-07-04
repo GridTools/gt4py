@@ -626,8 +626,9 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
             Defaults to :class:`xxhash.xxh64`.
 
     """
+    hasher: xtyping.HashlibAlgorithm
     if hash_algorithm is None:
-        hasher = xxhash.xxh64()
+        hasher = xxhash.xxh64()  # type: ignore[assignment]  # fixing this requires https://github.com/ifduyue/python-xxhash/issues/104
     elif isinstance(hash_algorithm, str):
         hasher = hashlib.new(hash_algorithm)
     else:
