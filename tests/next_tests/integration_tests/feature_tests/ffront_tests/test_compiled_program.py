@@ -446,6 +446,18 @@ def test_compile_variants_not_compiled_but_jit_enabled_on_call(
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
     out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
 
+    with pytest.raises(RuntimeError):
+        # fails because jit is disabled on the program and not explicitly enabled on the call
+        compile_variants_testee(
+            field_a,
+            int32(3),  # variant does not exist
+            4.0,
+            False,
+            field_b,
+            out=out,
+            offset_provider=cartesian_case.offset_provider,
+        )
+
     compile_variants_testee(
         field_a,
         int32(3),  # variant does not exist
@@ -454,31 +466,34 @@ def test_compile_variants_not_compiled_but_jit_enabled_on_call(
         field_b,
         out=out,
         offset_provider=cartesian_case.offset_provider,
-        enable_jit=True,  # but enable jit on the call
+        enable_jit=True,  # explicitly enable jit on the call
     )
     assert np.allclose(out[0].ndarray, field_a.ndarray - 3)
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
 
 def test_compile_variants_config_default_disable_jit(cartesian_case, compile_variants_testee):
+    """
+    Checks that changing the config default will be picked up at call time.
+    """
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
     out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
 
-    # the default in config is to allow jit (if that changes, this test has to change)
-    compile_variants_testee(
-        field_a,
-        int32(3),  # variant does not exist
-        4.0,
-        False,
-        field_b,
-        out=out,
-        offset_provider=cartesian_case.offset_provider,
-    )
-    assert np.allclose(out[0].ndarray, field_a.ndarray - 3)
-    assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
+    # One of the 2 cases will be the non-default.
+    with mock.patch.object(config, "ENABLE_JIT_DEFAULT", True):
+        compile_variants_testee(
+            field_a,
+            int32(3),  # variant does not exist
+            4.0,
+            False,
+            field_b,
+            out=out,
+            offset_provider=cartesian_case.offset_provider,
+        )
+        assert np.allclose(out[0].ndarray, field_a.ndarray - 3)
+        assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
-    # now we make sure that changing config.ENABLE_JIT_DEFAULT to False is picked up on call
     with mock.patch.object(config, "ENABLE_JIT_DEFAULT", False):
         with pytest.raises(RuntimeError):
             compile_variants_testee(
