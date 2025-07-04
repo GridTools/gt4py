@@ -1,0 +1,28 @@
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
+include:
+  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+
+# TDS needs different credentials
+.tds-container-runner-beverin:
+  variables:
+    F7T_CLIENT_ID: $F7T_TDS_CLIENT_ID
+    F7T_CLIENT_SECRET: $F7T_TDS_CLIENT_SECRET
+
+.tds-container-runner-beverin-mi200:
+  extends:
+    - .container-runner-beverin-mi200
+    - .tds-container-runner-beverin
+
+.tds-container-runner-beverin-mi300:
+  extends:
+    - .container-runner-beverin-mi300
+    - .tds-container-runner-beverin
