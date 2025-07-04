@@ -274,6 +274,9 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     def visit_Literal(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
         return Sentinel.VALUE
 
+    def visit_InfinityLiteral(self, node: ir.InfinityLiteral, *, ctx: dict[str, Any]):
+        return Sentinel.VALUE
+
     def visit_SymRef(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
         if node.id in ctx:
             return ctx[node.id]
