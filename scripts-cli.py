@@ -33,7 +33,7 @@ import sys
 try:
     import typer
 
-    import scripts
+    import scripts  # Import from the ./scripts folder when running as a script
 
     assert len(scripts.__path__) == 1 and scripts.__path__[0] == str(
         pathlib.Path(__file__).parent.resolve().absolute() / "scripts"
@@ -41,24 +41,7 @@ try:
         "The 'scripts' package path does not match the expected path. "
         "Please check the structure of the repository."
     )
-
-    cli = typer.Typer(no_args_is_help=True, name="dev-scripts", help=__doc__)
-
-    def main() -> None:
-        """Main entry point for the dev-scripts CLI."""
-
-        for name, sub_cli in scripts.typer_clis.items():
-            cli.add_typer(sub_cli, name=sub_cli.info.name or name)
-
-        cli()
-
-    if __name__ == "__main__":
-        main()
-
-
 except ImportError as e:
-    import sys
-
     print(
         f"ERROR: '{e.name}' package cannot be imported!!\n"
         "Make sure 'uv' is installed in your system and run directly this script "
@@ -67,3 +50,18 @@ except ImportError as e:
         file=sys.stderr,
     )
     sys.exit(127)
+
+
+def main() -> None:
+    """Main entry point for the dev-scripts CLI."""
+
+    cli = typer.Typer(no_args_is_help=True, name="dev-scripts", help=__doc__)
+
+    for name, sub_cli in scripts.typer_clis.items():
+        cli.add_typer(sub_cli, name=sub_cli.info.name or name)
+
+    cli()
+
+
+if __name__ == "__main__":
+    main()
