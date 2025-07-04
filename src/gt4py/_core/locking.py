@@ -24,7 +24,7 @@ class _LockConstructor(Protocol):
 
 
 # Changing the lock is private API, but could be made public in the future
-_lock: _LockConstructor = filelock.FileLock
+_lock_constructor: _LockConstructor = filelock.FileLock
 
 
 def lock(directory: pathlib.Path | str, suffix: str = ".lock") -> ContextManager:
@@ -35,6 +35,6 @@ def lock(directory: pathlib.Path | str, suffix: str = ".lock") -> ContextManager
 
     # Identifier of the lock implementation to avoid conflicts
     # when switching between different implementations.
-    identifier = f"{eve_utils.a10n(_lock.__module__)}_{eve_utils.a10n(_lock.__name__)}"
+    identifier = f"{eve_utils.a10n(_lock_constructor.__module__)}_{eve_utils.a10n(_lock_constructor.__name__)}"
     path = directory / f"{identifier}{suffix}"
-    return _lock(str(path))
+    return _lock_constructor(str(path))
