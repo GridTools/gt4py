@@ -14,4 +14,8 @@ from typing import Final
 
 
 REPO_ROOT: Final = pathlib.Path(__file__).parent.parent.resolve().absolute()
-PYTHON_VERSIONS: Final[list[str]] = (REPO_ROOT / ".python-versions").read_text().splitlines()
+PYTHON_VERSIONS: Final[list[str]] = [
+    v
+    for line in (REPO_ROOT / ".python-versions").read_text().splitlines()
+    if (v := line.strip()) and not v.startswith("#")
+]
