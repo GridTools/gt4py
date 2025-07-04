@@ -30,7 +30,8 @@ stages:
 .build_common:
   stage: build
   variables:
-    BASE_IMAGE: docker.io/ubuntu:${UBUNTU_VERSION}
+    # jfrog.svc.cscs.ch/dockerhub/ubuntu is the cached version of docker.io/ubuntu
+    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/ubuntu:${UBUNTU_VERSION
     # CSCS_REBUILD_POLICY: 'always' => rebuild even if target tag exists already
     CSCS_REBUILD_POLICY: if-not-exists  # default, i.e. we could also skip the variable
     DOCKERFILE: ci/Dockerfile
@@ -58,13 +59,15 @@ stages:
 
 .build_extra_cuda:
   variables:
-    BASE_IMAGE: docker.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
+    # jfrog.svc.cscs.ch/dockerhub/nvidia is the cached version of docker.io/nvidia
+    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
     EXTRA_UV_SYNC_ARGS: "--extra cuda12"
 
 # TODO: rocm steps are in draft state for now to show how to add support in the future
 # .build_extra_rocm:
 #   variables:
-#     BASE_IMAGE: docker.io/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
+#     # jfrog.svc.cscs.ch/dockerhub/rocm is the cached version of docker.io/rocm
+#     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
 #     EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
 #     EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
 
@@ -87,7 +90,7 @@ build_cscs_gh200:
   variables:
     CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 4
+    SLURM_TIMELIMIT: 5
   parallel:
     matrix:
       - SUBPACKAGE: [cartesian]
