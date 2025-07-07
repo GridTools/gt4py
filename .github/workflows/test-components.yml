@@ -37,10 +37,10 @@ jobs:
           cache-dependency-glob: "uv.lock"
           # python-version: "3.12" # Use a fixed Python version for defining test sessions
 
-      - name: Define test sessions base on changed files
+      - name: Define test sessions based on changed files
         id: test-sessions
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
             # Run only sessions related to the changes
             ./scripts-cli.py github-ci matrix \
               --config nox-sessions-config.yml \
@@ -48,7 +48,7 @@ jobs:
               --output gh-test-sessions.json \
               --verbose
           else
-            # Run all sessions on push to main
+            # Run all sessions
             ./scripts-cli.py github-ci matrix \
               --config nox-sessions-config.yml \
               --output gh-test-sessions.json \
