@@ -21,7 +21,7 @@ from dace.sdfg.utils import inline_sdfgs
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config, definitions
-from gt4py.cartesian.backend.base import CLIBackendMixin, register
+from gt4py.cartesian.backend.base import register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
     BaseGTBackend,
@@ -771,7 +771,7 @@ class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, CUDAPyExtModuleGene
     pass
 
 
-class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
+class BaseDaceBackend(BaseGTBackend):
     GT_BACKEND_T = "dace"
     PYEXT_GENERATOR_CLASS = DaCeExtGenerator
 

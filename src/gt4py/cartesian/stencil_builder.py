@@ -19,7 +19,7 @@ from gt4py.cartesian.type_hints import AnnotatedStencilFunc, AnyStencilFunc
 
 
 if TYPE_CHECKING:
-    from gt4py.cartesian.backend.base import Backend as BackendType, CLIBackendMixin
+    from gt4py.cartesian.backend.base import Backend as BackendType
     from gt4py.cartesian.frontend.base import Frontend as FrontendType
     from gt4py.cartesian.stencil_object import StencilObject
 
@@ -79,14 +79,6 @@ class StencilBuilder:
                 )
             stencil_class = self.backend.generate()
         return stencil_class
-
-    def generate_computation(self) -> dict[str, str | dict]:
-        """Generate the stencil source code, fail if backend does not support CLI."""
-        return self.cli_backend.generate_computation()
-
-    def generate_bindings(self, targe_language: str) -> dict[str, str | dict]:
-        """Generate ``target_language`` bindings source, fail if backend does not support CLI."""
-        return self.cli_backend.generate_bindings(targe_language)
 
     def with_caching(
         self: StencilBuilder, caching_strategy_name: str, *args: Any, **kwargs: Any
@@ -307,11 +299,3 @@ class StencilBuilder:
     @property
     def is_build_data_empty(self) -> bool:
         return not bool(self._build_data)
-
-    @property
-    def cli_backend(self) -> CLIBackendMixin:
-        from gt4py.cartesian.backend.base import CLIBackendMixin
-
-        if not isinstance(self.backend, CLIBackendMixin):
-            raise RuntimeError("backend of StencilBuilder instance is not CLI enabled.")
-        return self.backend
