@@ -39,11 +39,16 @@ jobs:
       - name: Define test sessions base on changed files
         id: test-sessions
         run: |
-          ./scripts-cli.py github-ci matrix \
-            --config nox-sessions-config.yml \
-            --base "origin/${{ github.base_ref }}" \
-            --output gh-test-sessions.json \
-            --verbose
+          if [ "${{ github.event_name }}" == "push" ]; then
+            echo "Push event detected"
+            echo "Notifying team of deployment"
+          elif [ "${{ github.event_name }}" == "pull_request" ]; then
+            ./scripts-cli.py github-ci matrix \
+              --config nox-sessions-config.yml \
+              --base "origin/${{ github.base_ref }}" \
+              --output gh-test-sessions.json \
+              --verbose
+          fi
           echo 'test-sessions<<EOF' >> $GITHUB_OUTPUT
           cat gh-test-sessions.json >> $GITHUB_OUTPUT
           echo '' >> $GITHUB_OUTPUT

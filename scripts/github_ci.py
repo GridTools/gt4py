@@ -54,7 +54,7 @@ def matrix(
     config: Annotated[
         str, typer.Option("--config", "-c", help="Sessions configuration file")
     ] = nox_sessions.DEFAULT_CONFIG,
-    base_commit: Annotated[str, typer.Option("--base", help="Base commit for changes")] = "main",
+    base_commit: Annotated[str | None, typer.Option("--base", help="Base commit for changes")] = None,
     output: Annotated[str | None, typer.Option("--output", help="Output (JSON) file name.")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose output")] = False,
 ) -> None:
