@@ -1,10 +1,10 @@
 name: "Test code components (CPU)"
 
 on:
-  # push:
+  push:
   #   branches:
   #     - main
-  # pull_request:
+  pull_request:
   #   branches:
   #     - main
   workflow_dispatch: # Add this for manual triggering
@@ -40,18 +40,17 @@ jobs:
       - name: Define test sessions base on changed files
         id: test-sessions
         run: |
-          #if [ "${{ github.event_name }}" == "push" ]; then
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            # Run all sessions on push to main
-            ./scripts-cli.py github-ci matrix \
-              --config nox-sessions-config.yml \
-              --output gh-test-sessions.json \
-              --verbose
-          elif [ "${{ github.event_name }}" == "pull_request" ]; then
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
             # Run only sessions related to the changes
             ./scripts-cli.py github-ci matrix \
               --config nox-sessions-config.yml \
               --base "origin/${{ github.base_ref }}" \
+              --output gh-test-sessions.json \
+              --verbose
+          else
+            # Run all sessions on push to main
+            ./scripts-cli.py github-ci matrix \
+              --config nox-sessions-config.yml \
               --output gh-test-sessions.json \
               --verbose
           fi
