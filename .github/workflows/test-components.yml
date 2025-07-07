@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch: # Add this for manual triggering
 
 jobs:
   # First job to read Python versions from .python-versions file
