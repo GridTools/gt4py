@@ -12,7 +12,7 @@ import pathlib
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from gt4py import storage as gt_storage
-from gt4py.cartesian.backend.base import BaseBackend, CLIBackendMixin, register
+from gt4py.cartesian.backend.base import BaseBackend, register
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.numpy import npir
@@ -72,7 +72,7 @@ def recursive_write(root_path: pathlib.Path, tree: dict[str, str | dict]):
 
 
 @register
-class NumpyBackend(BaseBackend, CLIBackendMixin):
+class NumpyBackend(BaseBackend):
     """NumPy backend using gtc."""
 
     name = "numpy"
@@ -99,10 +99,6 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
             source = format_source("python", source)
 
         return {computation_name: source}
-
-    def generate_bindings(self, language_name: str) -> dict[str, str | dict]:
-        super().generate_bindings(language_name)
-        return {self.builder.module_path.name: self.make_module_source()}
 
     def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)

@@ -71,7 +71,6 @@ GT4Py Features:
    gtscript
    arrays
    lang_design
-   commandline
    apiref
    indices
    license
