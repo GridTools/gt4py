@@ -277,14 +277,13 @@ def test_computation() -> None:
             )
         )
     )
-    print(result)
     match = re.match(
         (
             r"import numbers\n"
             r"from typing import Tuple\n+"
             r"import numpy as np\n"
             r"from gt4py.cartesian.gtc import ufuncs\n+"
-            r"class Field:\n"
+            r"from gt4py.cartesian.utils import Field\n"
             r"(.*\n)+"
             r"def run\(\*, a, b, _domain_, _origin_\):\n"
             r"\n?"
