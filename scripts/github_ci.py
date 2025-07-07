@@ -68,7 +68,7 @@ def matrix(
         f"Found {len(sessions)} test sessions in {config_path}: {[session['name'] for session in sessions]}"
     )
 
-    collect_all = base_commit is not None
+    collect_all = base_commit is None
     affected = [
         session["name"]
         for session in sessions
