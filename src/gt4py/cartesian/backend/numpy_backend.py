@@ -8,11 +8,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import Any, ClassVar
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian.backend.base import BaseBackend, register
-from gt4py.cartesian.backend.module_generator import BaseModuleGenerator
+from gt4py.cartesian.backend.module_generator_python import PythonModuleGenerator
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.numpy import npir
 from gt4py.cartesian.gtc.numpy.npir_codegen import NpirCodegen
@@ -25,39 +25,8 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.caches import (
     PruneKCacheFlushes,
 )
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline, OirPipeline
-from gt4py.cartesian.stencil_builder import StencilBuilder
+from gt4py.cartesian.stencil_object import StencilObject
 from gt4py.eve.codegen import format_source
-
-
-if TYPE_CHECKING:
-    from gt4py.cartesian.stencil_object import StencilObject
-
-
-class ModuleGenerator(BaseModuleGenerator):
-    def __init__(self, builder: StencilBuilder) -> None:
-        super().__init__(builder)
-
-    def generate_imports(self) -> str:
-        comp_pkg = (
-            self.builder.caching.module_prefix + "computation" + self.builder.caching.module_postfix
-        )
-        return "\n".join(
-            [
-                *super().generate_imports().splitlines(),
-                "import pathlib",
-                "from gt4py.cartesian.utils import make_module_from_file",
-                f'computation = make_module_from_file("{comp_pkg}", pathlib.Path(__file__).parent / "{comp_pkg}.py")',
-            ]
-        )
-
-    def generate_implementation(self) -> str:
-        params = [f"{p.name}={p.name}" for p in self.builder.gtir.params]
-        params.extend(["_domain_=_domain_", "_origin_=_origin_"])
-        return f"computation.run({', '.join(params)})"
-
-    @property
-    def backend(self) -> NumpyBackend:
-        return cast(NumpyBackend, self.builder.backend)
 
 
 @register
@@ -72,7 +41,7 @@ class NumpyBackend(BaseBackend):
     }
     storage_info = gt_storage.layout.NaiveCPULayout
     languages: ClassVar[dict] = {"computation": "python", "bindings": ["python"]}
-    MODULE_GENERATOR_CLASS = ModuleGenerator
+    MODULE_GENERATOR_CLASS = PythonModuleGenerator
 
     def generate_computation(self) -> dict[str, str | dict]:
         computation_name = (

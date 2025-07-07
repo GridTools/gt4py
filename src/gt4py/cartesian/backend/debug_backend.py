@@ -8,7 +8,8 @@
 
 from typing import Any, ClassVar
 
-from gt4py.cartesian.backend import base as backend_base, numpy_backend
+from gt4py.cartesian.backend import base as backend_base
+from gt4py.cartesian.backend.module_generator_python import PythonModuleGenerator
 from gt4py.cartesian.gtc import gtir_to_oir
 from gt4py.cartesian.gtc.debug import debug_codegen
 from gt4py.cartesian.gtc.passes import oir_pipeline
@@ -29,7 +30,7 @@ class DebugBackend(backend_base.BaseBackend):
     }
     storage_info = layout.NaiveCPULayout
     languages: ClassVar[dict[str, Any]] = {"computation": "python", "bindings": ["python"]}
-    MODULE_GENERATOR_CLASS = numpy_backend.ModuleGenerator
+    MODULE_GENERATOR_CLASS = PythonModuleGenerator
 
     def _generate_computation(self) -> dict[str, str | dict]:
         computation_name = (
