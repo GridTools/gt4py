@@ -98,9 +98,9 @@ def test_scalar_access_multiple_tasklets() -> None:
                     )
                 )[0]
                 assert len(edges) == 1, "one edge expected"
-                assert (
-                    edges[0].src == tasklet and edges[0].dst == write_access
-                ), "write access of 'tmp'"
+                assert edges[0].src == tasklet and edges[0].dst == write_access, (
+                    "write access of 'tmp'"
+                )
 
             if state.name == "block_1":
                 nodes = state.nodes()
@@ -136,9 +136,9 @@ def test_scalar_access_multiple_tasklets() -> None:
                     )
                 )[0]
                 assert len(edges) == 2, "two edges expected"
-                assert (
-                    edges[0].src == tasklet and edges[0].dst == write_access
-                ), "write access of 'other'"
-                assert (
-                    edges[1].src == read_access and edges[1].dst == tasklet
-                ), "read access of 'tmp'"
+                assert edges[0].src == tasklet and edges[0].dst == write_access, (
+                    "write access of 'other'"
+                )
+                assert edges[1].src == read_access and edges[1].dst == tasklet, (
+                    "read access of 'tmp'"
+                )

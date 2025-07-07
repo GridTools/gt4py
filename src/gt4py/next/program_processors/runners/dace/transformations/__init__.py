@@ -12,7 +12,7 @@ Please also see [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/deve
 that explains the general structure and requirements on the SDFGs.
 """
 
-from . import spliting_tools
+from . import splitting_tools
 from .auto_optimize import gt_auto_optimize
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow
 from .gpu_utils import (
@@ -32,12 +32,7 @@ from .multi_state_global_self_copy_elimination import (
     MultiStateGlobalSelfCopyElimination2,
     gt_multi_state_global_self_copy_elimination,
 )
-from .redundant_array_removers import (
-    CopyChainRemover,
-    SingleStateGlobalDirectSelfCopyElimination,
-    SingleStateGlobalSelfCopyElimination,
-    gt_remove_copy_chain,
-)
+from .redundant_array_removers import CopyChainRemover, gt_remove_copy_chain
 from .serial_map_promoter import SerialMapPromoter
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
@@ -47,6 +42,10 @@ from .simplify import (
     gt_reduce_distributed_buffering,
     gt_simplify,
     gt_substitute_compiletime_symbols,
+)
+from .single_state_global_self_copy_elimination import (
+    SingleStateGlobalDirectSelfCopyElimination,
+    SingleStateGlobalSelfCopyElimination,
 )
 from .split_access_nodes import SplitAccessNode, gt_split_access_nodes
 from .split_memlet import SplitConsumerMemlet
@@ -105,5 +104,5 @@ __all__ = [
     "gt_split_access_nodes",
     "gt_substitute_compiletime_symbols",
     "gt_vertical_map_fusion",
-    "spliting_tools",
+    "splitting_tools",
 ]

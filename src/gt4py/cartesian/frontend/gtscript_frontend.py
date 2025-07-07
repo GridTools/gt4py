@@ -480,7 +480,7 @@ class CallInliner(ast.NodeTransformer):
             if isinstance(value, ast.Name) and name not in assigned_symbols
         }
 
-        call_id = gt_utils.shashed_id(call_name)[:3]
+        call_id = gt_utils.shashed_id(call_name, length=3)
         call_id_suffix = f"{call_id}_{node.lineno}_{node.col_offset}"
         template_fmt = "{name}__" + call_id_suffix
 

@@ -262,10 +262,9 @@ class BaseBackend(Backend):
         stencil_class_name = self.builder.class_name
         file_name = str(self.builder.module_path)
         stencil_module = gt_utils.make_module_from_file(stencil_class_name, file_name)
-        stencil_class = getattr(stencil_module, stencil_class_name)
+        stencil_class: type[StencilObject] = getattr(stencil_module, stencil_class_name)
         stencil_class.__module__ = self.builder.module_qualname
         stencil_class._gt_id_ = self.builder.stencil_id.version
-        stencil_class._file_name = file_name
         stencil_class.definition_func = staticmethod(self.builder.definition)
 
         return stencil_class
@@ -280,13 +279,13 @@ class BaseBackend(Backend):
                 stacklevel=2,
             )
 
-    def make_module(self, **kwargs: Any) -> type[StencilObject]:
+    def make_module(self) -> type[StencilObject]:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
 
         file_path = self.builder.module_path
-        module_source = self.make_module_source(**kwargs)
+        module_source = self.make_module_source()
 
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -300,15 +299,14 @@ class BaseBackend(Backend):
 
         return module
 
-    def make_module_source(self, *, args_data: ModuleData | None = None, **kwargs: Any) -> str:
+    def make_module_source(self, *, args_data: ModuleData | None = None) -> str:
         """Generate the module source code with or without stencil id."""
         args_data = args_data or make_args_data_from_gtir(self.builder.gtir_pipeline)
-        source = self.MODULE_GENERATOR_CLASS()(args_data, self.builder, **kwargs)
-        return source
+        return self.MODULE_GENERATOR_CLASS(self.builder)(args_data)
 
 
 class MakeModuleSourceCallable(Protocol):
-    def __call__(self, *, args_data: ModuleData | None = None, **kwargs: Any) -> str: ...
+    def __call__(self, *, args_data: ModuleData | None = None) -> str: ...
 
 
 class PurePythonBackendCLIMixin(CLIBackendMixin):
@@ -324,7 +322,7 @@ class PurePythonBackendCLIMixin(CLIBackendMixin):
 
     def generate_computation(self) -> dict[str, str | dict]:
         file_name = self.builder.module_path.name
-        source = self.make_module_source(ir=self.builder.gtir)
+        source = self.make_module_source()
         return {str(file_name): source}
 
     def generate_bindings(self, language_name: str) -> dict[str, str | dict]:
@@ -378,7 +376,7 @@ class BasePyExtBackend(BaseBackend):
         pyext_build_opts: dict[str, str],
         *,
         uses_cuda: bool = False,
-    ) -> tuple[str, str]:
+    ) -> None:
         # Build extension module
         pyext_build_path = pathlib.Path(
             os.path.relpath(self.pyext_build_dir_path, pathlib.Path.cwd())
@@ -416,29 +414,26 @@ class BasePyExtBackend(BaseBackend):
             {"pyext_module_name": module_name, "pyext_file_path": file_path}
         )
 
-        return module_name, file_path
-
 
 def disabled(message: str, *, enabled_env_var: str) -> Callable[[type[Backend]], type[Backend]]:
     # We push for hard deprecation here by raising by default and warning if enabling has been forced.
     enabled = bool(int(os.environ.get(enabled_env_var, "0")))
     if enabled:
         return deprecated(message)
-    else:
 
-        def _decorator(cls: type[Backend]) -> type[Backend]:
-            def _no_generate(obj) -> type[StencilObject]:
-                raise NotImplementedError(
-                    f"Disabled '{cls.name}' backend: 'f{message}'\n",
-                    f"You can still enable the backend by hand using the environment variable '{enabled_env_var}=1'",
-                )
+    def _decorator(cls: type[Backend]) -> type[Backend]:
+        def _no_generate(obj) -> type[StencilObject]:
+            raise NotImplementedError(
+                f"Disabled '{cls.name}' backend: 'f{message}'\n",
+                f"You can still enable the backend by hand using the environment variable '{enabled_env_var}=1'",
+            )
 
-            # Replace generate method with raise
-            if not hasattr(cls, "generate"):
-                raise ValueError(f"Coding error. Expected a generate method on {cls}")
-            # Flag that it got disabled for register lookup
-            cls.disabled = True  # type: ignore
-            cls.generate = _no_generate  # type: ignore
-            return cls
+        # Replace generate method with raise
+        if not hasattr(cls, "generate"):
+            raise ValueError(f"Coding error. Expected a generate method on {cls}")
+        # Flag that it got disabled for register lookup
+        cls.disabled = True  # type: ignore
+        cls.generate = _no_generate  # type: ignore
+        return cls
 
-        return _decorator
+    return _decorator

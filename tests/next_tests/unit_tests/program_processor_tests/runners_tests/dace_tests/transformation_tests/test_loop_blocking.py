@@ -363,9 +363,9 @@ def test_chained_access() -> None:
         if not isinstance(node, dace_nodes.MapEntry):
             continue
         if state.scope_dict()[node] is None:
-            assert (
-                outer_map is None
-            ), f"Found multiple outer maps, first '{outer_map}', second '{node}'."
+            assert outer_map is None, (
+                f"Found multiple outer maps, first '{outer_map}', second '{node}'."
+            )
             outer_map = node
     assert outer_map is not None, "Could not found the outer map."
     assert len(outer_map.map.params) == 2
@@ -751,9 +751,9 @@ def test_loop_blocking_inner_map_with_independent_part(independent_part):
     assert all(oedge.dst is inner_blocking_map for oedge in state.out_edges(i_access_node))
 
 
-def _make_loop_blocking_sdfg_with_independent_inner_map() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]
-):
+def _make_loop_blocking_sdfg_with_independent_inner_map() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry
+]:
     """
     Creates a nested Map that is independent from the blocking parameter.
     """
@@ -1323,9 +1323,9 @@ def test_blocking_size_too_big():
     assert count == 1
 
 
-def _make_loop_blocking_sdfg_with_semi_independent_map() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]
-):
+def _make_loop_blocking_sdfg_with_semi_independent_map() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry
+]:
     sdfg = dace.SDFG(util.unique_name("sdfg_with_inner_semi_independent_map"))
     state = sdfg.add_state(is_start_block=True)
 
@@ -1413,9 +1413,9 @@ def test_loop_blocking_sdfg_with_semi_independent_map():
     assert new_scope_of_inner_map is not me
 
 
-def _make_loop_blocking_only_independent_inner_map() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]
-):
+def _make_loop_blocking_only_independent_inner_map() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry
+]:
     sdfg = dace.SDFG(util.unique_name("sdfg_with_only_independent_inner_map"))
     state = sdfg.add_state(is_start_block=True)
 

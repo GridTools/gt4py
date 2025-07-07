@@ -393,9 +393,9 @@ def _make_non_eligible_sdfg_with_branches():
     return sdfg
 
 
-def _make_write_into_global_at_t_definition() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode]
-):
+def _make_write_into_global_at_t_definition() -> tuple[
+    dace.SDFG, dace.SDFGState, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode
+]:
     """
     This SDFG is different from `_make_not_apply_because_of_write_to_g_sdfg` as the
     write happens before we define `t`.

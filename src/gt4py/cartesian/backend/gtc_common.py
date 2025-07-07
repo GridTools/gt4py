@@ -18,7 +18,6 @@ from gt4py.cartesian import backend as gt_backend, config as gt_config, utils as
 from gt4py.cartesian.backend import Backend
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.cartesian.gtc import gtir, utils as gtc_utils
-from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_pipeline import OirPipeline
 from gt4py.eve.codegen import MakoTemplate as as_mako
 
@@ -113,37 +112,18 @@ def bindings_main_template():
     )
 
 
-def gtir_is_not_empty(pipeline: GtirPipeline) -> bool:
-    node = pipeline.full()
-    return bool(node.walk_values().if_isinstance(gtir.ParAssignStmt).to_list())
-
-
-def gtir_has_effect(pipeline: GtirPipeline) -> bool:
-    return True
-
-
 class PyExtModuleGenerator(BaseModuleGenerator):
     """Module Generator for use with backends that generate c++ python extensions."""
 
-    pyext_module_name: str | None
-    pyext_file_path: str | None
+    def __init__(self, builder: StencilBuilder) -> None:
+        super().__init__(builder)
 
-    def __init__(self):
-        super().__init__()
-        self.pyext_module_name = None
-        self.pyext_file_path = None
-
-    def __call__(
-        self, args_data: ModuleData, builder: StencilBuilder | None = None, **kwargs: Any
-    ) -> str:
-        self.pyext_module_name = kwargs["pyext_module_name"]
-        self.pyext_file_path = kwargs["pyext_file_path"]
-        return super().__call__(args_data, builder, **kwargs)
+    def __call__(self, args_data: ModuleData) -> str:
+        return super().__call__(args_data)
 
     def _is_not_empty(self) -> bool:
-        if self.pyext_module_name is None:
-            return False
-        return gtir_is_not_empty(self.builder.gtir_pipeline)
+        node = self.builder.gtir_pipeline.full()
+        return bool(node.walk_values().if_isinstance(gtir.ParAssignStmt).to_list())
 
     def generate_imports(self) -> str:
         source = [
@@ -151,15 +131,16 @@ class PyExtModuleGenerator(BaseModuleGenerator):
             "from gt4py.cartesian import utils as gt_utils",
         ]
         if self._is_not_empty():
-            assert self.pyext_file_path is not None
+            backend_data = self.builder.backend_data
+
             file_path = 'f"{{pathlib.Path(__file__).parent.resolve()}}/{}"'.format(
-                os.path.basename(self.pyext_file_path)
+                os.path.basename(backend_data["pyext_file_path"])
             )
             source.append(
                 textwrap.dedent(
                     f"""
                 pyext_module = gt_utils.make_module_from_file(
-                    "{self.pyext_module_name}", {file_path}, public_import=True
+                    "{backend_data["pyext_module_name"]}", {file_path}, public_import=True
                 )
                 """
                 )
@@ -167,9 +148,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         return "\n".join(source)
 
     def _has_effect(self) -> bool:
-        if not self._is_not_empty():
-            return False
-        return gtir_has_effect(self.builder.gtir_pipeline)
+        return self._is_not_empty()
 
     def generate_implementation(self) -> str:
         ir = self.builder.gtir
@@ -206,7 +185,7 @@ class BackendCodegen:
         pass
 
     @abc.abstractmethod
-    def __call__(self, ir: gtir.Stencil) -> dict[str, dict[str, str]]:
+    def __call__(self) -> dict[str, dict[str, str]]:
         """Return a dict with the keys 'computation' and 'bindings' to dicts of filenames to source."""
         pass
 
@@ -249,15 +228,13 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         return {dir_name: src_files["bindings"]}
 
     @abc.abstractmethod
-    def generate_extension(self, **kwargs: Any) -> tuple[str, str]:
+    def generate_extension(self) -> None:
         """
         Generate and build a python extension for the stencil computation.
-
-        Returns the name and file path (as string) of the compiled extension ".so" module.
         """
         pass
 
-    def make_extension(self, *, uses_cuda: bool = False) -> tuple[str, str]:
+    def make_extension(self, *, uses_cuda: bool = False) -> None:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
@@ -300,12 +277,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             ),
         )
 
-        result = self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
+        self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
 
         if build_info is not None:
             build_info["build_time"] = time.perf_counter() - start_time
-
-        return result
 
     def _make_extension_sources(self) -> dict[str, dict[str, str]]:
         """Generate the source for the stencil independently from use case."""
@@ -319,7 +294,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             else f"{self.builder.options.name}_pyext"
         )
         gt_pyext_generator = self.PYEXT_GENERATOR_CLASS(class_name, module_name, self)
-        gt_pyext_sources = gt_pyext_generator(self.builder.gtir)
+        gt_pyext_sources = gt_pyext_generator()
         final_ext = ".cu" if self.languages and self.languages["computation"] == "cuda" else ".cpp"
         comp_src = gt_pyext_sources["computation"]
         for key in [k for k in comp_src.keys() if k.endswith(".src")]:
@@ -329,6 +304,9 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
 
 class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
+    def __init__(self, builder: StencilBuilder) -> None:
+        super().__init__(builder)
+
     def generate_implementation(self) -> str:
         source = super().generate_implementation()
         if self.builder.options.backend_opts.get("device_sync", True):

@@ -46,8 +46,7 @@ def from_name(name: str) -> Optional[LayoutInfo]:
 
 def register(name: str, info: Optional[LayoutInfo]) -> None:
     if info is None:
-        if name in REGISTRY:
-            del REGISTRY[name]
+        REGISTRY.pop(name, None)
     else:
         assert isinstance(name, str)
         assert isinstance(info, dict)
