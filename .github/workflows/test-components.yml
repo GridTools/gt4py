@@ -1,13 +1,13 @@
-name: "Test manual code components (CPU)"
+name: "Test code components (CPU)"
 
 on:
   push:
-  #   branches:
-  #     - main
+    branches:
+      - main
   pull_request:
-  #   branches:
-  #     - main
-  workflow_dispatch: # Add this for manual triggering
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   # First job to read Python versions from .python-versions file
@@ -40,7 +40,7 @@ jobs:
       - name: Define test sessions base on changed files
         id: test-sessions
         run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
             # Run only sessions related to the changes
             ./scripts-cli.py github-ci matrix \
               --config nox-sessions-config.yml \
