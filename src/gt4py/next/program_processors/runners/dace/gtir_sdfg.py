@@ -19,7 +19,19 @@ import dataclasses
 import itertools
 import operator
 import warnings
-from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Set, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import dace
 
@@ -785,20 +797,38 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         elif cpm.is_applied_as_fieldop(node):
             return gtir_builtin_translators.translate_as_fieldop(node, sdfg, head_state, self)
         elif isinstance(node.fun, gtir.Lambda):
-            lambda_args = [
-                self.visit(
+            # Special handling of lambda arguments that can be lowered as symbolic expressions:
+            # when all the symrefs the lambda argument depends on are SDFG symbols, the argument
+            # can be passed to the nested SDFG by means of symbol mapping.
+            symbolic_args = {
+                str(p.id): gtir_sdfg_utils.get_symbolic(lambda_arg)
+                for p, lambda_arg in zip(node.fun.params, node.args, strict=True)
+                if (
+                    isinstance(lambda_arg.type, ts.ScalarType)
+                    and all(
+                        symref in sdfg.symbols
+                        for symref in symbol_ref_utils.collect_symbol_refs(
+                            lambda_arg, self.global_symbols.keys()
+                        )
+                    )
+                )
+            }
+            # All other lambda arguments are lowered to taskgraphs that produce a data node.
+            param_args = {
+                param: self.visit(
                     arg,
                     sdfg=sdfg,
                     head_state=head_state,
                 )
-                for arg in node.args
-            ]
-
+                for p, arg in zip(node.fun.params, node.args, strict=True)
+                if (param := str(p.id)) not in symbolic_args
+            }
             return self.visit(
                 node.fun,
                 sdfg=sdfg,
                 head_state=head_state,
-                args=lambda_args,
+                param_args=param_args,
+                symbolic_args=symbolic_args,
             )
         elif isinstance(node.type, ts.ScalarType):
             return gtir_builtin_translators.translate_scalar_expr(node, sdfg, head_state, self)
@@ -810,14 +840,18 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Lambda,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        args: Sequence[gtir_builtin_translators.FieldopResult],
+        param_args: Mapping[str, gtir_builtin_translators.FieldopResult],
+        symbolic_args: Mapping[str, dace.symbolic.SymbolicType],
     ) -> gtir_builtin_translators.FieldopResult:
         """
         Translates a `Lambda` node to a nested SDFG in the current state.
 
-        All arguments to lambda functions are fields (i.e. `as_fieldop`, field or scalar `gtir.SymRef`,
-        nested let-lambdas thereof). The reason for creating a nested SDFG is to define local symbols
-        (the lambda paremeters) that map to parent fields, either program arguments or temporary fields.
+        The `param_args` are passed to a lambda function as data access nodes (i.e.
+        `as_fieldop`, field or scalar `gtir.SymRef`, nested let-lambdas thereof).
+        The reason for creating a nested SDFG is to define local symbols (the lambda
+        paremeters) that map to parent fields, either program arguments or temporaries.
+        Arguments that can be evaluated as symbolic expressions (`symbolic_args`)
+        are instead mapped to symbols on the nested SDFG.
 
         If the lambda has a parameter whose name is already present in `GTIRToSDFG.global_symbols`,
         i.e. a lambda parameter with the same name as a symbol in scope, the parameter will shadow
@@ -826,8 +860,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         lambda_arg_nodes = dict(
             itertools.chain(
                 *[
-                    gtir_builtin_translators.flatten_tuples(psym.id, arg)
-                    for psym, arg in zip(node.params, args, strict=True)
+                    gtir_builtin_translators.flatten_tuples(param, arg)
+                    for param, arg in param_args.items()
                 ]
             )
         )
@@ -837,10 +871,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sym: self.global_symbols[sym]
             for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
         } | {
-            psym.id: gtir_builtin_translators.get_tuple_type(arg)
+            param: gtir_builtin_translators.get_tuple_type(arg)
             if isinstance(arg, tuple)
             else arg.gt_type
-            for psym, arg in zip(node.params, args, strict=True)
+            for param, arg in param_args.items()
         }
 
         # lower let-statement lambda node as a nested SDFG
@@ -917,15 +951,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for sym in nsdfg.free_symbols:
             if (sym_id := str(sym)) in lambda_arg_nodes:
                 # Map a scalar data descriptor to a symbol on the nested SDFG.
+                assert isinstance(lambda_arg_nodes[sym_id].gt_type, ts.ScalarType)
                 nsdfg_symbols_to_args.add(sym_id)
             else:
-                nsdfg_symbols_mapping[sym_id] = sym
+                nsdfg_symbols_mapping[sym_id] = symbolic_args.get(sym_id, sym)
         input_memlets |= _map_args_to_symbols_on_nested_sdfg(
             sdfg, nsdfg, nsdfg_symbols_to_args, lambda_arg_nodes
         )
-        for sym, arg in zip(node.params, args, strict=True):
+        for param, arg in param_args.items():
             nsdfg_symbols_mapping |= gtir_builtin_translators.get_arg_symbol_mapping(
-                sym.id, arg, sdfg
+                param, arg, sdfg
             )
 
         nsdfg_node = head_state.add_nested_sdfg(
