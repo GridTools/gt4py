@@ -8,12 +8,10 @@
 
 from typing import Any, ClassVar
 
-from gt4py.cartesian.backend import base as backend_base
-from gt4py.cartesian.backend.module_generator_python import PythonModuleGenerator
-from gt4py.cartesian.gtc import gtir_to_oir
-from gt4py.cartesian.gtc.debug import debug_codegen
-from gt4py.cartesian.gtc.passes import oir_pipeline
-from gt4py.cartesian.gtc.passes.oir_optimizations import horizontal_execution_merging, temporaries
+from gt4py.cartesian.backend import base as backend_base, python_common as py_common
+from gt4py.cartesian.gtc.debug.debug_codegen import DebugCodeGen
+from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
+from gt4py.cartesian.gtc.passes import oir_optimizations, oir_pipeline
 from gt4py.cartesian.stencil_object import StencilObject
 from gt4py.eve import codegen
 from gt4py.storage import layout
@@ -30,7 +28,7 @@ class DebugBackend(backend_base.BaseBackend):
     }
     storage_info = layout.NaiveCPULayout
     languages: ClassVar[dict[str, Any]] = {"computation": "python", "bindings": ["python"]}
-    MODULE_GENERATOR_CLASS = PythonModuleGenerator
+    MODULE_GENERATOR_CLASS = py_common.PythonModuleGenerator
 
     def _generate_computation(self) -> dict[str, str | dict]:
         computation_name = (
@@ -38,10 +36,10 @@ class DebugBackend(backend_base.BaseBackend):
             + f"computation{self.builder.caching.module_postfix}.py"
         )
 
-        oir = gtir_to_oir.GTIRToOIR().visit(self.builder.gtir)
-        oir = horizontal_execution_merging.HorizontalExecutionMerging().visit(oir)
-        oir = temporaries.LocalTemporariesToScalars().visit(oir)
-        source_code = debug_codegen.DebugCodeGen().visit(oir)
+        oir = GTIRToOIR().visit(self.builder.gtir)
+        oir = oir_optimizations.HorizontalExecutionMerging().visit(oir)
+        oir = oir_optimizations.LocalTemporariesToScalars().visit(oir)
+        source_code = DebugCodeGen().visit(oir)
 
         if self.builder.options.format_source:
             source_code = codegen.format_source("python", source_code)
@@ -51,7 +49,8 @@ class DebugBackend(backend_base.BaseBackend):
     def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)
         src_dir = self.builder.module_path.parent
+
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
-            src_dir.mkdir(parents=True, exist_ok=True)
-            self.recursive_write(src_dir, self._generate_computation())
+            py_common.recursive_write(src_dir, self._generate_computation())
+
         return self.make_module()

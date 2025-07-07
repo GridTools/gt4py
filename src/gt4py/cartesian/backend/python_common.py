@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import pathlib
+
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator
 from gt4py.cartesian.stencil_builder import StencilBuilder
 
@@ -33,3 +35,14 @@ class PythonModuleGenerator(BaseModuleGenerator):
         params = [f"{p.name}={p.name}" for p in self.builder.gtir.params]
         params.extend(["_domain_=_domain_", "_origin_=_origin_"])
         return f"computation.run({', '.join(params)})"
+
+
+def recursive_write(root_path: pathlib.Path, tree: dict[str, str | dict]):
+    root_path.mkdir(parents=True, exist_ok=True)
+
+    for key, value in tree.items():
+        if isinstance(value, dict):
+            return recursive_write(root_path / key, value)
+
+        src_path = root_path / key
+        src_path.write_text(value)

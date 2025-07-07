@@ -228,15 +228,6 @@ class BaseBackend(Backend):
         args_data = args_data or make_args_data_from_gtir(self.builder.gtir_pipeline)
         return self.MODULE_GENERATOR_CLASS(self.builder)(args_data)
 
-    def recursive_write(self, root_path: pathlib.Path, tree: dict[str, str | dict]):
-        root_path.mkdir(parents=True, exist_ok=True)
-        for key, value in tree.items():
-            if isinstance(value, dict):
-                self.recursive_write(root_path / key, value)
-            else:
-                src_path = root_path / key
-                src_path.write_text(value)
-
 
 class MakeModuleSourceCallable(Protocol):
     def __call__(self, *, args_data: ModuleData | None = None) -> str: ...

@@ -11,19 +11,14 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from gt4py import storage as gt_storage
+from gt4py.cartesian.backend import python_common as py_common
 from gt4py.cartesian.backend.base import BaseBackend, register
-from gt4py.cartesian.backend.module_generator_python import PythonModuleGenerator
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.numpy import npir
 from gt4py.cartesian.gtc.numpy.npir_codegen import NpirCodegen
 from gt4py.cartesian.gtc.numpy.oir_to_npir import OirToNpir
 from gt4py.cartesian.gtc.numpy.scalars_to_temps import ScalarsToTemporaries
-from gt4py.cartesian.gtc.passes.oir_optimizations.caches import (
-    IJCacheDetection,
-    KCacheDetection,
-    PruneKCacheFills,
-    PruneKCacheFlushes,
-)
+from gt4py.cartesian.gtc.passes import oir_optimizations as oir_opt
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline, OirPipeline
 from gt4py.cartesian.stencil_object import StencilObject
 from gt4py.eve.codegen import format_source
@@ -41,7 +36,7 @@ class NumpyBackend(BaseBackend):
     }
     storage_info = gt_storage.layout.NaiveCPULayout
     languages: ClassVar[dict] = {"computation": "python", "bindings": ["python"]}
-    MODULE_GENERATOR_CLASS = PythonModuleGenerator
+    MODULE_GENERATOR_CLASS = py_common.PythonModuleGenerator
 
     def generate_computation(self) -> dict[str, str | dict]:
         computation_name = (
@@ -61,9 +56,10 @@ class NumpyBackend(BaseBackend):
     def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)
         src_dir = self.builder.module_path.parent
+
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
-            src_dir.mkdir(parents=True, exist_ok=True)
-            self.recursive_write(src_dir, self.generate_computation())
+            py_common.recursive_write(src_dir, self.generate_computation())
+
         return self.make_module()
 
     def _make_npir(self) -> npir.Computation:
@@ -71,7 +67,12 @@ class NumpyBackend(BaseBackend):
         oir_pipeline = self.builder.options.backend_opts.get(
             "oir_pipeline",
             DefaultPipeline(
-                skip=[IJCacheDetection, KCacheDetection, PruneKCacheFills, PruneKCacheFlushes]
+                skip=[
+                    oir_opt.IJCacheDetection,
+                    oir_opt.KCacheDetection,
+                    oir_opt.PruneKCacheFills,
+                    oir_opt.PruneKCacheFlushes,
+                ]
             ),
         )
         oir_node = oir_pipeline.run(base_oir)
