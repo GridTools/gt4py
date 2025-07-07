@@ -814,7 +814,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 )
             }
             # All other lambda arguments are lowered to taskgraphs that produce a data node.
-            param_args = {
+            data_args = {
                 param: self.visit(
                     arg,
                     sdfg=sdfg,
@@ -827,7 +827,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 node.fun,
                 sdfg=sdfg,
                 head_state=head_state,
-                param_args=param_args,
+                data_args=data_args,
                 symbolic_args=symbolic_args,
             )
         elif isinstance(node.type, ts.ScalarType):
@@ -840,13 +840,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Lambda,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        param_args: Mapping[str, gtir_builtin_translators.FieldopResult],
+        data_args: Mapping[str, gtir_builtin_translators.FieldopResult],
         symbolic_args: Mapping[str, dace.symbolic.SymbolicType],
     ) -> gtir_builtin_translators.FieldopResult:
         """
         Translates a `Lambda` node to a nested SDFG in the current state.
 
-        The `param_args` are passed to a lambda function as data access nodes (i.e.
+        The `data_args` are passed to a lambda function as data access nodes (i.e.
         `as_fieldop`, field or scalar `gtir.SymRef`, nested let-lambdas thereof).
         The reason for creating a nested SDFG is to define local symbols (the lambda
         paremeters) that map to parent fields, either program arguments or temporaries.
@@ -861,7 +861,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             itertools.chain(
                 *[
                     gtir_builtin_translators.flatten_tuples(param, arg)
-                    for param, arg in param_args.items()
+                    for param, arg in data_args.items()
                 ]
             )
         )
@@ -874,7 +874,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             param: gtir_builtin_translators.get_tuple_type(arg)
             if isinstance(arg, tuple)
             else arg.gt_type
-            for param, arg in param_args.items()
+            for param, arg in data_args.items()
         }
 
         # lower let-statement lambda node as a nested SDFG
@@ -958,7 +958,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         input_memlets |= _map_args_to_symbols_on_nested_sdfg(
             sdfg, nsdfg, nsdfg_symbols_to_args, lambda_arg_nodes
         )
-        for param, arg in param_args.items():
+        for param, arg in data_args.items():
             nsdfg_symbols_mapping |= gtir_builtin_translators.get_arg_symbol_mapping(
                 param, arg, sdfg
             )
