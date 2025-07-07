@@ -101,7 +101,7 @@ def make_sdfg_async(sdfg: dace.SDFG) -> None:
             symbolic_rhs_values = (
                 sym
                 for v in oedge.data.assignments.values()
-                if isinstance(sym := dace.symbolic.pystr_to_symbolic(v), dace.symbolic.SymExpr)
+                if hasattr(sym := dace.symbolic.pystr_to_symbolic(v), "free_symbols")
             )
             if any(
                 sym_id in sdfg.arrays for sym_id in oedge.data.condition.get_free_symbols()
