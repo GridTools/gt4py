@@ -58,11 +58,15 @@ def connectivity_identifier(name: str) -> str:
 
 
 def is_connectivity_identifier(
-    name: str, offset_provider_type: gtx_common.OffsetProviderType
+    name: str, offset_provider_type: gtx_common.OffsetProviderType = None
 ) -> bool:
     m = CONNECTIVITY_INDENTIFIER_RE.match(name)
     if m is None:
         return False
+    if offset_provider_type is None:
+        # If no offset provider type is provided, we assume there is a connectivity identifier
+        # that matches the CONNECTIVITY_INDENTIFIER_RE.
+        return True
     return m[1] in offset_provider_type
 
 
