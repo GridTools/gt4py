@@ -1,4 +1,4 @@
-name: "Test code components (CPU)"
+name: "Test manual code components (CPU)"
 
 on:
   push:
