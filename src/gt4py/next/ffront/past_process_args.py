@@ -62,14 +62,19 @@ def _validate_args(
 
 
 def _process_args(
-    past_node: past.Program, args: Sequence[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+    past_node: past.Program,
+    args: Sequence[ts.TypeSpec | arguments.StaticArg],
+    kwargs: dict[str, ts.TypeSpec | arguments.StaticArg],
 ) -> tuple[tuple, tuple, dict[str, Any]]:
     if not isinstance(past_node.type, ts_ffront.ProgramType):
         raise TypeError("Can not process arguments for PAST programs prior to type inference.")
 
-    _validate_args(past_node=past_node, arg_types=args, kwarg_types=kwargs)
-
     args, kwargs = type_info.canonicalize_arguments(past_node.type, args, kwargs)
+    arg_types = tuple(arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in args)
+    kwarg_types = {
+        k: (v.type_ if isinstance(v, arguments.StaticArg) else v) for k, v in kwargs.items()
+    }
+    _validate_args(past_node=past_node, arg_types=arg_types, kwarg_types=kwarg_types)
 
     implicit_domain = any(
         isinstance(stmt, past.Call) and "domain" not in stmt.kwargs for stmt in past_node.body
@@ -83,7 +88,9 @@ def _process_args(
             # TODO(tehrengruber): Previously this function was called with the actual arguments
             #  not their type. The check using the shape here is not functional anymore and
             #  should instead be placed in a proper location.
-            ranges_and_dims = [*_field_constituents_range_and_dims(args[param_idx], param.type)]
+            ranges_and_dims = [
+                *_field_constituents_range_and_dims(arg_types[param_idx], param.type)
+            ]
             # check that all non-scalar like constituents have the same shape and dimension, e.g.
             # for `(scalar, (field1, field2))` the two fields need to have the same shape and
             # dimension

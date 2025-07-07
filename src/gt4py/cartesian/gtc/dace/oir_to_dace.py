@@ -12,13 +12,10 @@ from dataclasses import dataclass
 from typing import Dict
 
 import dace
-import dace.properties
-import dace.subsets
 
-import gt4py.cartesian.gtc.oir as oir
 from gt4py import eve
-from gt4py.cartesian.gtc.dace import daceir as dcir
-from gt4py.cartesian.gtc.dace.constants import CONNECTOR_PREFIX_IN, CONNECTOR_PREFIX_OUT
+from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gt4py.cartesian.gtc.dace.utils import (
@@ -37,7 +34,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
     @dataclass
     class SDFGContext:
         sdfg: dace.SDFG
-        last_state: dace.SDFGState
+        current_state: dace.SDFGState
         decls: Dict[str, oir.Decl]
         block_extents: Dict[int, Extent]
         access_infos: Dict[str, dcir.FieldAccessInfo]
@@ -45,7 +42,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
         def __init__(self, stencil: oir.Stencil):
             self.sdfg = dace.SDFG(stencil.name)
-            self.last_state = self.sdfg.add_state(is_start_block=True)
+            self.current_state = self.sdfg.add_state(is_start_block=True)
             self.decls = {decl.name: decl for decl in stencil.params + stencil.declarations}
             self.block_extents = compute_horizontal_block_extents(stencil)
 
@@ -119,17 +116,15 @@ class OirSDFGBuilder(eve.NodeVisitor):
             oir_node=node,
         )
 
-        state = ctx.sdfg.add_state()
-        ctx.sdfg.add_edge(ctx.last_state, state, dace.InterstateEdge())
-        ctx.last_state = state
-
+        state = ctx.sdfg.add_state_after(ctx.current_state)
+        ctx.current_state = state
         state.add_node(library_node)
 
         access_collection = AccessCollector.apply(node)
 
         for field in access_collection.read_fields():
             access_node = state.add_access(field, debuginfo=get_dace_debuginfo(declarations[field]))
-            connector_name = f"{CONNECTOR_PREFIX_IN}{field}"
+            connector_name = f"{prefix.CONNECTOR_IN}{field}"
             library_node.add_in_connector(connector_name)
             subset = ctx.make_input_dace_subset(node, field)
             state.add_edge(
@@ -138,7 +133,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
         for field in access_collection.write_fields():
             access_node = state.add_access(field, debuginfo=get_dace_debuginfo(declarations[field]))
-            connector_name = f"{CONNECTOR_PREFIX_OUT}{field}"
+            connector_name = f"{prefix.CONNECTOR_OUT}{field}"
             library_node.add_out_connector(connector_name)
             subset = ctx.make_output_dace_subset(node, field)
             state.add_edge(

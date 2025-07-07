@@ -128,6 +128,16 @@ class ArgsOnlyCallable(Protocol[_A, _R]):
     def __call__(self, *args: _A) -> _R: ...
 
 
+_T_co = TypeVar("_T_co", covariant=True)
+NestedSequence = Sequence[Union[_T_co, "NestedSequence[_T_co]"]]
+NestedList = List[Union[_T_co, "NestedList[_T_co]"]]
+NestedTuple = Tuple[Union[_T_co, "NestedTuple[_T_co]"], ...]
+
+MaybeNested = Union[_T_co, NestedSequence[_T_co]]
+MaybeNestedInSequence = Union[_T_co, NestedSequence[_T_co]]
+MaybeNestedInList = Union[_T_co, NestedList[_T_co]]
+MaybeNestedInTuple = Union[_T_co, NestedTuple[_T_co]]
+
 # -- Typing annotations --
 if _sys.version_info >= (3, 9):
     SolvedTypeAnnotation = Union[

@@ -36,7 +36,17 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next import astype, broadcast, errors, float32, float64, int32, int64, where
+from gt4py.next import (
+    astype,
+    broadcast,
+    errors,
+    float32,
+    float64,
+    int32,
+    int64,
+    where,
+)
+from gt4py.next.ffront.experimental import concat_where
 from gt4py.next.ffront import field_operator_ast as foast
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
@@ -368,3 +378,27 @@ def test_zero_dims_ternary():
     msg = r"Incompatible datatypes in operator '=='"
     with pytest.raises(errors.DSLError, match=msg):
         _ = FieldOperatorParser.apply_to_function(zero_dims_ternary)
+
+
+def test_domain_chained_comparison_failure():
+    def domain_comparison(a: gtx.Field[[TDim], float], b: gtx.Field[[TDim], float]):
+        return concat_where(0 < TDim < 42, a, b)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=r".*chain.*not.*allowed(?s:.)*\(0 < TDim\) & \(TDim < 42\).*",
+    ):
+        _ = FieldOperatorParser.apply_to_function(domain_comparison)
+
+
+def test_field_chained_comparison_failure():
+    def comparison(
+        cond: gtx.Field[[TDim], float], a: gtx.Field[[TDim], float], b: gtx.Field[[TDim], float]
+    ):
+        return where(0.0 < cond < 42.0, a, b)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=r".*chain.*not.*allowed(?s:.)*\(0.0 < cond\) & \(cond < 42.0\).*",
+    ):
+        _ = FieldOperatorParser.apply_to_function(comparison)

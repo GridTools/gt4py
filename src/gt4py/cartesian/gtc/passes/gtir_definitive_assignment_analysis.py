@@ -9,11 +9,11 @@
 import warnings
 from typing import List, Set
 
+from gt4py import eve
 from gt4py.cartesian.gtc import gtir
-from gt4py.eve import NodeVisitor
 
 
-class DefinitiveAssignmentAnalysis(NodeVisitor):
+class DefinitiveAssignmentAnalysis(eve.NodeVisitor):
     """
     Analyse gtir stencil expression for access to undefined symbols.
 

@@ -38,6 +38,7 @@ from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.iterator import ir as itir
 
 
 Edge = gtx.Dimension("Edge")
@@ -704,7 +705,7 @@ def test_compare_chain():
     def foo(
         a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64], c: gtx.Field[[TDim], float64]
     ) -> gtx.Field[[TDim], bool]:
-        return a > b > c
+        return (a > b) & (b > c)
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
@@ -907,7 +908,10 @@ def test_broadcast():
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.id == "foo"
-    assert lowered.expr == im.as_fieldop("deref")(im.ref("inp"))
+    assert lowered.expr == im.call("broadcast")(
+        im.ref("inp"),
+        im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))),
+    )
 
 
 def test_scalar_broadcast():
@@ -918,4 +922,7 @@ def test_scalar_broadcast():
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.id == "foo"
-    assert lowered.expr == im.as_fieldop("deref")(1)
+    assert lowered.expr == im.call("broadcast")(
+        1,
+        im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))),
+    )

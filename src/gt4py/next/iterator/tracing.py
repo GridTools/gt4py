@@ -9,10 +9,10 @@
 import dataclasses
 import inspect
 import typing
-from typing import ClassVar, List
+from typing import Callable, ClassVar, List
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import Node
+from gt4py.eve import Node, utils as eve_utils
 from gt4py.next import common, iterator
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir import (
@@ -31,6 +31,8 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 TRACING = "tracing"
+
+_tmp_id_generator = eve_utils.UIDGenerator(prefix="tmp")
 
 
 def monkeypatch_method(cls):
@@ -202,6 +204,7 @@ iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
 class TracerContext:
     fundefs: ClassVar[List[FunctionDefinition]] = []
     body: ClassVar[List[itir.Stmt]] = []
+    declarations: ClassVar[List[itir.Temporary]] = []
 
     @classmethod
     def add_fundef(cls, fun):
@@ -212,12 +215,17 @@ class TracerContext:
     def add_stmt(cls, stmt):
         cls.body.append(stmt)
 
+    @classmethod
+    def add_declaration(cls, tmp):
+        cls.declarations.append(tmp)
+
     def __enter__(self):
         iterator.builtins.builtin_dispatch.push_key(TRACING)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         type(self).fundefs = []
         type(self).body = []
+        type(self).declarations = []
         iterator.builtins.builtin_dispatch.pop_key()
 
 
@@ -245,6 +253,22 @@ def if_stmt(
     TracerContext.add_stmt(
         itir.IfStmt(cond=cond, true_branch=true_branch, false_branch=false_branch)
     )
+
+
+@iterator.runtime.temporary.register(TRACING)
+def temporary(
+    domain: itir.Expr,
+    dtype: Callable,  # the gt4py type builtin
+) -> itir.SymRef:
+    id_ = _tmp_id_generator.sequential_id()
+    TracerContext.add_declaration(
+        itir.Temporary(
+            id=id_,
+            domain=domain,
+            dtype=iterator.runtime._dtypebuiltin_to_ts(dtype),
+        )
+    )
+    return itir.SymRef(id=id_)
 
 
 def _contains_tuple_dtype_field(arg):
@@ -305,10 +329,11 @@ def trace_fencil_definition(fun: typing.Callable, args: typing.Iterable) -> itir
         params = _make_program_params(fun, args)
         trace_function_call(fun, args=(_s(param.id) for param in params))
 
-        return itir.Program(
+        prg = itir.Program(
             id=fun.__name__,
             function_definitions=TracerContext.fundefs,
             params=params,
-            declarations=[],  # TODO
+            declarations=TracerContext.declarations,
             body=TracerContext.body,
         )
+        return prg

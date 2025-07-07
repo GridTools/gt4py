@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Collection, Dict, Optional, Union
+from typing import Any, Collection, Dict, Final, Optional, Union
 
 import numpy as np
 
@@ -100,7 +100,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             temp = temp_decls[accessor_ref.name]
             data_index = "+".join(
                 [
-                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i+1:], initial=1))}"
+                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i + 1 :], initial=1))}"
                     for i, index in enumerate(accessor_ref.data_index)
                 ]
             )
@@ -184,7 +184,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
-    DATA_TYPE_TO_CODE = {
+    DATA_TYPE_TO_CODE: Final[dict[DataType, str]] = {
         DataType.BOOL: "bool",
         DataType.INT8: "std::int8_t",
         DataType.INT16: "std::int16_t",
@@ -202,7 +202,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 f"Not implemented DataType '{dtype.name}' encountered."
             ) from error
 
-    UNARY_OPERATOR_TO_CODE = {
+    UNARY_OPERATOR_TO_CODE: Final[dict[UnaryOperator, str]] = {
         UnaryOperator.NOT: "!",
         UnaryOperator.NEG: "-",
         UnaryOperator.POS: "+",

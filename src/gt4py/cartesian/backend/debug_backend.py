@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 @backend_base.register
-class DebugBackend(backend_base.BaseBackend, backend_base.CLIBackendMixin):
+class DebugBackend(backend_base.BaseBackend):
     """Debug backend using plain python loops."""
 
     name = "debug"
@@ -50,10 +50,6 @@ class DebugBackend(backend_base.BaseBackend, backend_base.CLIBackendMixin):
             source_code = codegen.format_source("python", source_code)
 
         return {computation_name: source_code}
-
-    def generate_bindings(self, language_name: str) -> dict[str, Union[str, dict]]:
-        super().generate_bindings(language_name)
-        return {self.builder.module_path.name: self.make_module_source()}
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)

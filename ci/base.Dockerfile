@@ -12,6 +12,7 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     wget \
     curl \
     ca-certificates \
+    jq \
     zlib1g-dev \
     libssl-dev \
     libbz2-dev \

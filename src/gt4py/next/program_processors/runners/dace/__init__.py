@@ -10,9 +10,12 @@
 from gt4py.next.program_processors.runners.dace.gtir_sdfg import build_sdfg_from_gtir
 from gt4py.next.program_processors.runners.dace.sdfg_callable import get_sdfg_args
 from gt4py.next.program_processors.runners.dace.workflow.backend import (
+    make_dace_backend,
     run_dace_cpu,
+    run_dace_cpu_cached,
     run_dace_cpu_noopt,
     run_dace_gpu,
+    run_dace_gpu_cached,
     run_dace_gpu_noopt,
 )
 
@@ -20,8 +23,11 @@ from gt4py.next.program_processors.runners.dace.workflow.backend import (
 __all__ = [
     "build_sdfg_from_gtir",
     "get_sdfg_args",
+    "make_dace_backend",
     "run_dace_cpu",
+    "run_dace_cpu_cached",
     "run_dace_cpu_noopt",
     "run_dace_gpu",
+    "run_dace_gpu_cached",
     "run_dace_gpu_noopt",
 ]

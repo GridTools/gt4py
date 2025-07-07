@@ -17,6 +17,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
 )
 
+pytestmark = pytest.mark.uses_concat_where
+
 
 def test_boundary_same_size_fields(cartesian_case):
     @gtx.field_operator

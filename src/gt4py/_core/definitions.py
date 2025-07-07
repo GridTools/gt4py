@@ -39,15 +39,21 @@ from gt4py.eve.extended_typing import (
 )
 
 
-if TYPE_CHECKING:
+try:
     import cupy as cp
+except ImportError:
+    cp = None
 
+if TYPE_CHECKING:
     CuPyNDArray: TypeAlias = cp.ndarray
 
     import jax.numpy as jnp
 
     JaxNDArray: TypeAlias = jnp.ndarray
 
+# The actual assignment happens after the definition of `DeviceType` enum.
+CUPY_DEVICE_TYPE: Literal[None, DeviceType.CUDA, DeviceType.ROCM]
+"""Type of the GPU accelerator device, if present."""
 
 # -- Scalar types supported by GT4Py --
 bool_ = np.bool_
@@ -393,6 +399,11 @@ DeviceTypeT = TypeVar(
     CPUDeviceTyping,
     CUDADeviceTyping,
     ROCMDeviceTyping,
+)
+
+
+CUPY_DEVICE_TYPE = (
+    None if not cp else (DeviceType.ROCM if cp.cuda.runtime.is_hip else DeviceType.CUDA)
 )
 
 

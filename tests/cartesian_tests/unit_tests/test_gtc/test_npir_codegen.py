@@ -326,7 +326,6 @@ def test_variable_read_outside_bounds(tmp_path) -> None:
 
     This tests whether that is appropriately clipped to support that case by constructing
     `a = b[0, 0, index]` where the read is outside bounds.
-
     """
     computation = ComputationFactory(
         vertical_passes__0__body__0__body__0=VectorAssignFactory(

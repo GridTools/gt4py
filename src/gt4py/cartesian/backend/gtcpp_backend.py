@@ -8,25 +8,24 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
+from typing import TYPE_CHECKING, ClassVar
 
 from gt4py import storage as gt_storage
-from gt4py.cartesian.backend.base import CLIBackendMixin, register
+from gt4py.cartesian.backend.base import register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
+    BaseGTBackend,
+    CUDAPyExtModuleGenerator,
+    GTBackendOptions,
     bindings_main_template,
     pybuffer_to_sid,
 )
-from gt4py.cartesian.gtc import gtir
 from gt4py.cartesian.gtc.common import DataType
 from gt4py.cartesian.gtc.gtcpp import gtcpp, gtcpp_codegen
 from gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
-from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.eve import codegen
-
-from .gtc_common import BaseGTBackend, CUDAPyExtModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -34,14 +33,13 @@ if TYPE_CHECKING:
 
 
 class GTExtGenerator(BackendCodegen):
-    def __init__(self, class_name, module_name, backend):
+    def __init__(self, class_name: str, module_name: str, backend: BaseGTBackend) -> None:
         self.class_name = class_name
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
-        stencil_ir = GtirPipeline(stencil_ir, self.backend.builder.stencil_id).full()
-        base_oir = GTIRToOIR().visit(stencil_ir)
+    def __call__(self) -> dict[str, dict[str, str]]:
+        base_oir = GTIRToOIR().visit(self.backend.builder.gtir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline()
         )
@@ -124,26 +122,21 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return generated_code
 
 
-class GTBaseBackend(BaseGTBackend, CLIBackendMixin):
+class GTBaseBackend(BaseGTBackend):
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTExtGenerator
 
-    def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
+    def _generate_extension(self, uses_cuda: bool) -> None:
         return self.make_extension(uses_cuda=uses_cuda)
 
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)
 
-        pyext_module_name: Optional[str]
-        pyext_file_path: Optional[str]
-
         # TODO(havogt) add bypass if computation has no effect
-        pyext_module_name, pyext_file_path = self.generate_extension()
+        self.generate_extension()
 
         # Generate and return the Python wrapper class
-        return self.make_module(
-            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
-        )
+        return self.make_module()
 
 
 @register
@@ -152,10 +145,10 @@ class GTCpuIfirstBackend(GTBaseBackend):
 
     name = "gt:cpu_ifirst"
     GT_BACKEND_T = "cpu_ifirst"
-    languages = {"computation": "c++", "bindings": ["python"]}
+    languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
     storage_info = gt_storage.layout.CPUIFirstLayout
 
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+    def generate_extension(self) -> None:
         return super()._generate_extension(uses_cuda=False)
 
 
@@ -165,10 +158,10 @@ class GTCpuKfirstBackend(GTBaseBackend):
 
     name = "gt:cpu_kfirst"
     GT_BACKEND_T = "cpu_kfirst"
-    languages = {"computation": "c++", "bindings": ["python"]}
+    languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
     storage_info = gt_storage.layout.CPUKFirstLayout
 
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+    def generate_extension(self) -> None:
         return super()._generate_extension(uses_cuda=False)
 
 
@@ -179,9 +172,12 @@ class GTGpuBackend(GTBaseBackend):
     MODULE_GENERATOR_CLASS = CUDAPyExtModuleGenerator
     name = "gt:gpu"
     GT_BACKEND_T = "gpu"
-    languages = {"computation": "cuda", "bindings": ["python"]}
-    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
+    languages: ClassVar[dict] = {"computation": "cuda", "bindings": ["python"]}
+    options: ClassVar[GTBackendOptions] = {
+        **BaseGTBackend.GT_BACKEND_OPTS,
+        "device_sync": {"versioning": True, "type": bool},
+    }
     storage_info = gt_storage.layout.CUDALayout
 
-    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
+    def generate_extension(self) -> None:
         return super()._generate_extension(uses_cuda=True)

@@ -12,8 +12,7 @@ from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-
-from .utils import AccessCollector, symbol_name_creator
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import AccessCollector, symbol_name_creator
 
 
 """Utilities for cache detection and modifications on the OIR level.
@@ -312,7 +311,6 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
 
         Returns:
             A dict, mapping field names to min and max read offsets relative to loop order (i.e., positive means in the direction of the loop order).
-
         """
 
         def directional_k_offset(offset: Tuple[int, int, int]) -> int:

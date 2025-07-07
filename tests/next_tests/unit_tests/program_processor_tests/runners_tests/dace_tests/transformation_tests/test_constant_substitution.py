@@ -36,7 +36,7 @@ def test_constant_substitution():
     assert "One" in sdfg.used_symbols(True)
 
     # Now replace `One` with 1
-    gtx_transformations.gt_substitute_compiletime_symbols(sdfg, {"One": 1})
+    gtx_transformations.gt_substitute_compiletime_symbols(sdfg, {"One": 1}, simplify_at_entry=True)
 
     assert len(sdfg.symbols) == 1
     assert len(nsdfg.sdfg.symbols) == 1

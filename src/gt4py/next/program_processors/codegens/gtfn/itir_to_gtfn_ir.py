@@ -15,7 +15,11 @@ from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    ir_makers as im,
+    misc as ir_utils_misc,
+)
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.otf import cpp_utils
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
@@ -604,8 +608,12 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if _is_tuple_of_ref_or_literal(node.expr):
             node.expr = im.as_fieldop("deref", node.domain)(node.expr)
 
-        assert cpm.is_applied_as_fieldop(node.expr)
-        stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
+        itir_projector, extracted_expr = ir_utils_misc.extract_projector(node.expr)
+        projector = self.visit(itir_projector, **kwargs) if itir_projector is not None else None
+        node.expr = extracted_expr
+
+        assert cpm.is_applied_as_fieldop(node.expr), node.expr
+        stencil = node.expr.fun.args[0]
         domain = node.domain
         inputs = node.expr.args
         lowered_inputs = []
@@ -636,7 +644,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             scan_lambda = self.visit(stencil.args[0], **kwargs)
             forward = _bool_from_literal(stencil.args[1])
             scan_def = ScanPassDefinition(
-                id=scan_id, params=scan_lambda.params, expr=scan_lambda.expr, forward=forward
+                id=scan_id,
+                params=scan_lambda.params,
+                expr=scan_lambda.expr,
+                forward=forward,
+                projector=projector,
             )
             extracted_functions.append(scan_def)
             scan = Scan(
@@ -653,6 +665,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 args=[self._visit_output_argument(node.target), *lowered_inputs],
                 axis=SymRef(id=column_axis.value),
             )
+        assert projector is None  # only scans have projectors
         return StencilExecution(
             stencil=self.visit(
                 stencil,

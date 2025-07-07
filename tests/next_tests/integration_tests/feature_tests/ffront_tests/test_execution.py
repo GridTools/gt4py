@@ -7,8 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
+
 import numpy as np
 import pytest
+
 import gt4py.next as gtx
 from gt4py.next import (
     astype,
@@ -21,9 +23,9 @@ from gt4py.next import (
     int64,
     minimum,
     neighbor_sum,
+    utils as gt_utils,
 )
 from gt4py.next.ffront.experimental import as_offset
-from gt4py.next import utils as gt_utils
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -31,6 +33,7 @@ from next_tests.integration_tests.cases import (
     E2V,
     V2E,
     E2VDim,
+    Edge,
     IDim,
     Ioff,
     JDim,
@@ -38,7 +41,6 @@ from next_tests.integration_tests.cases import (
     Koff,
     V2EDim,
     Vertex,
-    Edge,
     cartesian_case,
     unstructured_case,
     unstructured_case_3d,
@@ -90,7 +92,7 @@ def test_unstructured_shift(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: a[unstructured_case.offset_provider["E2V"].ndarray[:, 0]],
+        ref=lambda a: a[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]],
     )
 
 
@@ -130,16 +132,16 @@ def test_composed_unstructured_shift(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         composed_shift_unstructured_flat,
-        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].ndarray[:, 0]][
-            unstructured_case.offset_provider["C2E"].ndarray[:, 0]
+        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]][
+            unstructured_case.offset_provider["C2E"].asnumpy()[:, 0]
         ],
     )
 
     cases.verify_with_default_data(
         unstructured_case,
         composed_shift_unstructured_intermediate_result,
-        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].ndarray[:, 0]][
-            unstructured_case.offset_provider["C2E"].ndarray[:, 0]
+        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]][
+            unstructured_case.offset_provider["C2E"].asnumpy()[:, 0]
         ],
         comparison=lambda inp, tmp: np.all(inp == tmp),
     )
@@ -147,8 +149,8 @@ def test_composed_unstructured_shift(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         composed_shift_unstructured,
-        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].ndarray[:, 0]][
-            unstructured_case.offset_provider["C2E"].ndarray[:, 0]
+        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]][
+            unstructured_case.offset_provider["C2E"].asnumpy()[:, 0]
         ],
     )
 
@@ -194,6 +196,21 @@ def test_scalar_arg(unstructured_case):
         ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], a + 1, dtype=int32),
         comparison=lambda a, b: np.all(a == b),
     )
+
+
+def test_np_bool_scalar_arg(unstructured_case):
+    """Test scalar argument being turned into 0-dim field."""
+
+    @gtx.field_operator
+    def testee(a: gtx.bool) -> cases.VBoolField:
+        return broadcast(not a, (Vertex,))
+
+    a = np.bool_(True)  # explicitly using a np.bool
+
+    ref = np.full([unstructured_case.default_sizes[Vertex]], not a, dtype=np.bool_)
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    cases.verify(unstructured_case, testee, a, out=out, ref=ref)
 
 
 def test_nested_scalar_arg(unstructured_case):
@@ -444,7 +461,7 @@ def test_astype_int_local_field(unstructured_case):
         tmp = astype(a(E2V), int64)
         return neighbor_sum(tmp, axis=E2VDim)
 
-    e2v_table = unstructured_case.offset_provider["E2V"].ndarray
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
 
     cases.verify_with_default_data(
         unstructured_case,
@@ -613,11 +630,11 @@ def test_nested_reduction(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a: np.sum(
-            np.sum(a[unstructured_case.offset_provider["E2V"].ndarray], axis=1, initial=0)[
-                unstructured_case.offset_provider["V2E"].ndarray
+            np.sum(a[unstructured_case.offset_provider["E2V"].asnumpy()], axis=1, initial=0)[
+                unstructured_case.offset_provider["V2E"].asnumpy()
             ],
             axis=1,
-            where=unstructured_case.offset_provider["V2E"].ndarray != common._DEFAULT_SKIP_VALUE,
+            where=unstructured_case.offset_provider["V2E"].asnumpy() != common._DEFAULT_SKIP_VALUE,
         ),
         comparison=lambda a, tmp_2: np.all(a == tmp_2),
     )
@@ -636,8 +653,8 @@ def test_nested_reduction_shift_first(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda inp: np.sum(
-            np.sum(inp[unstructured_case.offset_provider["V2E"].ndarray], axis=1)[
-                unstructured_case.offset_provider["E2V"].ndarray
+            np.sum(inp[unstructured_case.offset_provider["V2E"].asnumpy()], axis=1)[
+                unstructured_case.offset_provider["E2V"].asnumpy()
             ],
             axis=1,
         ),
@@ -657,8 +674,8 @@ def test_tuple_return_2(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a, b: [
-            np.sum(a[unstructured_case.offset_provider["V2E"].ndarray], axis=1),
-            np.sum(b[unstructured_case.offset_provider["V2E"].ndarray], axis=1),
+            np.sum(a[unstructured_case.offset_provider["V2E"].asnumpy()], axis=1),
+            np.sum(b[unstructured_case.offset_provider["V2E"].asnumpy()], axis=1),
         ],
         comparison=lambda a, tmp: (np.all(a[0] == tmp[0]), np.all(a[1] == tmp[1])),
     )
@@ -679,11 +696,11 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
         unstructured_case,
         reduce_tuple_element,
         ref=lambda e, v: np.sum(
-            e[v2e.ndarray] + np.tile(v, (v2e.shape[1], 1)).T,
+            e[v2e.asnumpy()] + np.tile(v, (v2e.shape[1], 1)).T,
             axis=1,
             initial=0,
-            where=v2e.ndarray != common._DEFAULT_SKIP_VALUE,
-        )[unstructured_case.offset_provider["E2V"].ndarray[:, 0]],
+            where=v2e.asnumpy() != common._DEFAULT_SKIP_VALUE,
+        )[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]],
     )
 
 
@@ -817,7 +834,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
         tmp = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
         return tmp
 
-    v2e_table = unstructured_case.offset_provider["V2E"].ndarray
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
     cases.verify_with_default_data(
         unstructured_case,
         testee,

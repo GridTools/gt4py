@@ -8,10 +8,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from gt4py import storage as gt_storage
-from gt4py.cartesian.backend.base import BaseBackend, CLIBackendMixin, register
+from gt4py.cartesian.backend.base import BaseBackend, register
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.numpy import npir
@@ -25,6 +25,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.caches import (
     PruneKCacheFlushes,
 )
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline, OirPipeline
+from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.eve.codegen import format_source
 
 
@@ -33,6 +34,9 @@ if TYPE_CHECKING:
 
 
 class ModuleGenerator(BaseModuleGenerator):
+    def __init__(self, builder: StencilBuilder) -> None:
+        super().__init__(builder)
+
     def generate_imports(self) -> str:
         comp_pkg = (
             self.builder.caching.module_prefix + "computation" + self.builder.caching.module_postfix
@@ -57,20 +61,20 @@ class ModuleGenerator(BaseModuleGenerator):
 
 
 @register
-class NumpyBackend(BaseBackend, CLIBackendMixin):
+class NumpyBackend(BaseBackend):
     """NumPy backend using gtc."""
 
     name = "numpy"
-    options: ClassVar[Dict[str, Any]] = {
+    options: ClassVar[dict[str, Any]] = {
         "oir_pipeline": {"versioning": True, "type": OirPipeline},
         # TODO: Implement this option in source code
         "ignore_np_errstate": {"versioning": True, "type": bool},
     }
     storage_info = gt_storage.layout.NaiveCPULayout
-    languages = {"computation": "python", "bindings": ["python"]}
+    languages: ClassVar[dict] = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = ModuleGenerator
 
-    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
+    def generate_computation(self) -> dict[str, str | dict]:
         computation_name = (
             self.builder.caching.module_prefix
             + "computation"
@@ -85,11 +89,7 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
 
         return {computation_name: source}
 
-    def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:
-        super().generate_bindings(language_name)
-        return {self.builder.module_path.name: self.make_module_source()}
-
-    def generate(self) -> Type[StencilObject]:
+    def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)
         src_dir = self.builder.module_path.parent
         if not self.builder.options._impl_opts.get("disable-code-generation", False):

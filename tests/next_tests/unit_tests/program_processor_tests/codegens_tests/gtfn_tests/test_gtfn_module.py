@@ -19,9 +19,10 @@ from gt4py.next.otf import arguments, languages, stages
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_translation
+from gt4py.next import allocators as next_allocators
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import cartesian_case
+from next_tests.integration_tests.cases import cartesian_case, cartesian_case_no_backend
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     KDim,
     exec_alloc_descriptor,
@@ -164,12 +165,15 @@ def test_gtfn_file_cache(program_example):
 
 
 # TODO(egparedes): we should switch to use the cached backend by default and then remove this test
-def test_gtfn_file_cache_whole_workflow(cartesian_case):
-    if cartesian_case.backend != gtfn.run_gtfn:
-        pytest.skip("Skipping backend.")
+def test_gtfn_file_cache_whole_workflow(cartesian_case_no_backend):
+    cartesian_case = cartesian_case_no_backend
     cartesian_case.backend = gtfn.GTFNBackendFactory(
         gpu=False, cached=True, otf_workflow__cached_translation=True
     )
+    cartesian_case.allocator = next_allocators.StandardCPUFieldBufferAllocator()
+
+    assert cartesian_case.backend is not None
+    assert cartesian_case.allocator is not None
 
     @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:

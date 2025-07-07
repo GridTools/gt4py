@@ -6,25 +6,19 @@ Currently, GT4Py releases are published in PyPI (and TestPyPI) and also as commi
 
 1. Make sure all the expected changes (new features, bug fixes, documentation changes, etc.) are already included in the `main` public branch.
 
-2. Use **bump-my-version** to update the version number.
+2. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. Note that this step becomes much simpler when commit messages follow the [Conventional Commits][conventional-commits] convention as encouraged in the [Pull Request and Merge Guidelines](CONTRIBUTING.md#pull-request-and-merge-guidelines) section of the contributing guidelines.
 
-   ```bash
-   $ bump-my-version bump minor # or patch
-   ```
-
-3. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. Note that this step becomes much simpler when commit messages follow the [Conventional Commits][conventional-commits] convention as encouraged in the [Pull Request and Merge Guidelines](CONTRIBUTING.md#pull-request-and-merge-guidelines) section of the contributing guidelines.
-
-4. Commit the changes with the following message:
+3. Commit the changes with the following message:
 
    ```bash
    $ git commit -m 'Releasing {M}.{m}.{p} version.'
    ```
 
-5. On the GitHub website go to _Releases_ and _Draft a new release_. Choose `v{M}.{m}.{p}` as tag and select a branch (usually `main`). Follow the style of the previous releases for the title (`GT4Py v{M}.{m}.{p}`) and description. Then _Publish release_.
+4. On the GitHub website go to _Releases_ and _Create a new release_. Choose `v{M}.{m}.{p}` as tag and select a branch (usually `main`). Follow the style of the previous releases for the title (`GT4Py v{M}.{m}.{p}`) and description. Then _Publish release_.
 
-6. Publishing the release will trigger a Github action to deploy to TestPyPI. Install the package from TestPyPi and do basic tests.
+5. Publishing the release will trigger a GitHub action to deploy to TestPyPI. Install the package from TestPyPi and do basic tests.
 
-7. If tests are ok, manually trigger the deploy Github action selecting the release tag as target. This will publish the package to PyPI. Install the package and test if it works.
+6. If tests are ok, manually trigger the deploy GitHub action selecting the release tag as target. This will publish the package to PyPI. Install the package and test if it works.
 
 ## PyPi and TestPyPi accounts
 

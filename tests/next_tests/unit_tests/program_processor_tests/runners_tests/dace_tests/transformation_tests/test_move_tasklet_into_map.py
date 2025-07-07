@@ -20,8 +20,6 @@ from gt4py.next.program_processors.runners.dace import (
 
 from . import util
 
-import dace
-
 
 def _make_movable_tasklet(
     outer_tasklet_code: str,
@@ -77,8 +75,7 @@ def test_move_tasklet_inside_trivial_memlet_tree():
     B = np.array(np.random.rand(10, 10), dtype=np.float64, copy=True)
     ref = A + 1.2
 
-    csdfg = sdfg.compile()
-    csdfg(A=A, B=B)
+    util.compile_and_run_sdfg(sdfg, A=A, B=B)
     assert np.allclose(B, ref)
 
 
@@ -101,8 +98,7 @@ def test_move_tasklet_inside_non_trivial_memlet_tree():
     B = np.array(np.random.rand(10, 10), dtype=np.float64, copy=True)
     ref = A + 1.2
 
-    csdfg = sdfg.compile()
-    csdfg(A=A, B=B)
+    util.compile_and_run_sdfg(sdfg, A=A, B=B)
     assert np.allclose(B, ref)
 
 
@@ -134,8 +130,7 @@ def test_move_tasklet_inside_two_inner_connector():
     B = np.array(np.random.rand(10, 10), dtype=np.float64, copy=True)
     ref = A + 2 * (32.2)
 
-    csdfg = sdfg.compile()
-    csdfg(A=A, B=B)
+    util.compile_and_run_sdfg(sdfg, A=A, B=B)
     assert np.allclose(B, ref)
 
 
@@ -158,7 +153,6 @@ def test_move_tasklet_inside_outer_scalar_used_outside():
     ref_C = 22.6
     ref_B = A + ref_C
 
-    csdfg = sdfg.compile()
-    csdfg(A=A, B=B, C=C)
+    util.compile_and_run_sdfg(sdfg, A=A, B=B, C=C)
     assert np.allclose(B, ref_B)
     assert np.allclose(C, ref_C)

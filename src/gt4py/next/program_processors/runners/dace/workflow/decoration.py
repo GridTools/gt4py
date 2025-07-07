@@ -8,88 +8,79 @@
 
 from __future__ import annotations
 
-import ctypes
+import functools
 from typing import Any, Sequence
 
 import dace
-from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interface_ptr
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, utils as gtx_utils
+from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
 from gt4py.next.otf import arguments, stages
-from gt4py.next.program_processors.runners.dace import (
-    sdfg_callable,
-    utils as gtx_dace_utils,
-    workflow as dace_worflow,
-)
+from gt4py.next.program_processors.runners.dace import sdfg_callable, workflow as dace_worflow
+
+from . import common as dace_common
 
 
 def convert_args(
-    inp: dace_worflow.compilation.CompiledDaceProgram,
+    fun: dace_worflow.compilation.CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
-    use_field_canonical_representation: bool = False,
 ) -> stages.CompiledProgram:
-    sdfg_program = inp.sdfg_program
-    sdfg = sdfg_program.sdfg
-    on_gpu = True if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM] else False
+    # We use the callback function provided by the compiled program to update the SDFG arglist.
+    update_sdfg_call_args = functools.partial(
+        fun.update_sdfg_ctype_arglist, device, fun.sdfg_argtypes
+    )
 
     def decorated_program(
         *args: Any,
-        offset_provider: common.OffsetProvider,
+        offset_provider: gtx_common.OffsetProvider,
         out: Any = None,
     ) -> None:
         if out is not None:
             args = (*args, out)
-        flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
-        if inp.implicit_domain:
-            # generate implicit domain size arguments only if necessary
+
+        if fun.implicit_domain:
+            # Generate implicit domain size arguments only if necessary
             size_args = arguments.iter_size_args(args)
-            flat_size_args: Sequence[int] = gtx_utils.flatten_nested_tuple(tuple(size_args))
-            flat_args = (*flat_args, *flat_size_args)
+            args = (*args, *size_args)
 
-        if sdfg_program._lastargs:
-            kwargs = dict(zip(sdfg.arg_names, flat_args, strict=True))
-            kwargs.update(sdfg_callable.get_sdfg_conn_args(sdfg, offset_provider, on_gpu))
+        if not fun.sdfg_program._lastargs:
+            # First call, the SDFG is not intitalized, so forward the call to `CompiledSDFG`
+            # to proper initilize it. Later calls to this SDFG will be handled through
+            # the `fast_call()` API.
+            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
+            this_call_args = sdfg_callable.get_sdfg_args(
+                fun.sdfg_program.sdfg,
+                offset_provider,
+                *flat_args,
+                filter_args=False,
+            )
+            with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
+                fun(**this_call_args)
 
-            use_fast_call = True
-            last_call_args = sdfg_program._lastargs[0]
-            # The scalar arguments should be overridden with the new value; for field arguments,
-            # the data pointer should remain the same otherwise fast_call cannot be used and
-            # the arguments list has to be reconstructed.
-            for i, (arg_name, arg_type) in enumerate(inp.sdfg_arglist):
-                if isinstance(arg_type, dace.data.Array):
-                    assert arg_name in kwargs, f"argument '{arg_name}' not found."
-                    data_ptr = get_array_interface_ptr(kwargs[arg_name], arg_type.storage)
-                    assert isinstance(last_call_args[i], ctypes.c_void_p)
-                    if last_call_args[i].value != data_ptr:
-                        use_fast_call = False
-                        break
-                else:
-                    assert isinstance(arg_type, dace.data.Scalar)
-                    assert isinstance(last_call_args[i], ctypes._SimpleCData)
-                    if arg_name in kwargs:
-                        # override the scalar value used in previous program call
-                        actype = arg_type.dtype.as_ctypes()
-                        last_call_args[i] = actype(kwargs[arg_name])
-                    else:
-                        # shape and strides of arrays are supposed not to change, and can therefore be omitted
-                        assert gtx_dace_utils.is_field_symbol(
-                            arg_name
-                        ), f"argument '{arg_name}' not found."
+        else:
+            # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
+            #  so we just update it with the current call arguments.
+            update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
+            fun.fast_call()
 
-            if use_fast_call:
-                return inp.fast_call()
-
-        sdfg_args = sdfg_callable.get_sdfg_args(
-            sdfg,
-            offset_provider,
-            *flat_args,
-            check_args=False,
-            on_gpu=on_gpu,
-        )
-
-        with dace.config.temporary_config():
-            dace.config.Config.set("compiler", "allow_view_arguments", value=True)
-            return inp(**sdfg_args)
+        metric_collection = metrics.get_active_metric_collection()
+        if (metric_collection is not None) and (
+            config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
+        ):
+            # Observe that dace instrumentation adds runtime overhead:
+            # DaCe writes an instrumentation report file for each SDFG run.
+            with dace.config.temporary_config():
+                # We need to set the cache folder and key config in order to retrieve
+                # the SDFG report file.
+                dace_common.set_dace_config(device_type=device)
+                sdfg_events = fun.sdfg_program.sdfg.get_latest_report().events
+                assert len(sdfg_events) == 1
+                # The event name gets truncated in dace, so we only check that
+                # it corresponds to the beginning of SDFG label.
+                assert f"SDFG {fun.sdfg_program.sdfg.label}".startswith(sdfg_events[0].name)
+            duration_secs = (
+                sdfg_events[0].duration / 1e6
+            )  # dace timer returns the duration in microseconds
+            metric_collection.add_sample(metrics.COMPUTE_METRIC, duration_secs)
 
     return decorated_program

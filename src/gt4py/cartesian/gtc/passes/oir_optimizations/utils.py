@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, cast
 
-import gt4py.eve.utils
+from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.passes.horizontal_masks import mask_overlap_with_extent
@@ -67,7 +67,7 @@ class GeneralAccess(GenericAccess[GeneralOffsetTuple]):
 AccessT = TypeVar("AccessT", bound=GenericAccess)
 
 
-class AccessCollector(gt4py.eve.NodeVisitor):
+class AccessCollector(eve.NodeVisitor):
     """Collects all field accesses and corresponding offsets."""
 
     def visit_FieldAccess(
@@ -111,38 +111,34 @@ class AccessCollector(gt4py.eve.NodeVisitor):
         _ordered_accesses: List[AccessT]
 
         @staticmethod
-        def _offset_dict(accesses: gt4py.eve.utils.XIterable) -> Dict[str, Set[OffsetT]]:
+        def _offset_dict(accesses: eve.utils.XIterable) -> Dict[str, Set[OffsetT]]:
             return accesses.reduceby(
                 lambda acc, x: acc | {x.offset}, "field", init=set(), as_dict=True
             )
 
         def offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictionary, mapping all accessed fields' names to sets of offset tuples."""
-            return self._offset_dict(gt4py.eve.utils.XIterable(self._ordered_accesses))
+            return self._offset_dict(eve.utils.XIterable(self._ordered_accesses))
 
         def read_offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictionary, mapping read fields' names to sets of offset tuples."""
             return self._offset_dict(
-                gt4py.eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read)
+                eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read)
             )
 
         def read_accesses(self) -> List[AccessT]:
             """Get the sub-list of read accesses."""
-            return list(
-                gt4py.eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read)
-            )
+            return list(eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read))
 
         def write_offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictionary, mapping written fields' names to sets of offset tuples."""
             return self._offset_dict(
-                gt4py.eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write)
+                eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write)
             )
 
         def write_accesses(self) -> List[AccessT]:
             """Get the sub-list of write accesses."""
-            return list(
-                gt4py.eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write)
-            )
+            return list(eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write))
 
         def fields(self) -> Set[str]:
             """Get a set of all accessed fields' names."""
@@ -182,9 +178,7 @@ class AccessCollector(gt4py.eve.NodeVisitor):
             return any(acc.offset[2] is None for acc in self._ordered_accesses)
 
     @classmethod
-    def apply(
-        cls, node: gt4py.eve.RootNode, **kwargs: Any
-    ) -> AccessCollector.GeneralAccessCollection:
+    def apply(cls, node: eve.RootNode, **kwargs: Any) -> AccessCollector.GeneralAccessCollection:
         result = cls.GeneralAccessCollection([])
         cls().visit(node, accesses=result._ordered_accesses, **kwargs)
         return result
@@ -215,17 +209,17 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
     return new_symbol_name
 
 
-def collect_symbol_names(node: gt4py.eve.RootNode) -> Set[str]:
+def collect_symbol_names(node: eve.RootNode) -> Set[str]:
     return (
-        gt4py.eve.walk_values(node)
-        .if_isinstance(gt4py.eve.SymbolTableTrait)
+        eve.walk_values(node)
+        .if_isinstance(eve.SymbolTableTrait)
         .getattr("annex")
         .getattr("symtable")
         .reduce(lambda names, symtable: names.union(symtable.keys()), init=set())
     )
 
 
-class StencilExtentComputer(gt4py.eve.NodeVisitor):
+class StencilExtentComputer(eve.NodeVisitor):
     @dataclass
     class Context:
         fields: Dict[str, Extent] = dataclasses.field(default_factory=dict)

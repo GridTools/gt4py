@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING, Dict, List
+from typing import TYPE_CHECKING, ClassVar, Dict, List
 
 import dace
 import dace.data
@@ -17,12 +17,10 @@ import dace.library
 import dace.subsets
 import sympy
 
-from gt4py.cartesian.gtc.dace import daceir as dcir
-from gt4py.cartesian.gtc.dace.constants import CONNECTOR_PREFIX_IN, CONNECTOR_PREFIX_OUT
+from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
 from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gt4py.cartesian.gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
-
-from .utils import split_horizontal_executions_regions
+from gt4py.cartesian.gtc.dace.expansion.utils import split_horizontal_executions_regions
 
 
 if TYPE_CHECKING:
@@ -30,7 +28,7 @@ if TYPE_CHECKING:
 
 
 class StencilComputationExpansion(dace.library.ExpandTransformation):
-    environments: List = []
+    environments: ClassVar[List] = []
 
     @staticmethod
     def _solve_for_domain(field_decls: Dict[str, dcir.FieldDecl], outer_subsets):
@@ -78,11 +76,11 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         """
         # change connector names
         for in_edge in parent_state.in_edges(node):
-            assert in_edge.dst_conn.startswith(CONNECTOR_PREFIX_IN)
-            in_edge.dst_conn = in_edge.dst_conn.removeprefix(CONNECTOR_PREFIX_IN)
+            assert in_edge.dst_conn.startswith(prefix.CONNECTOR_IN)
+            in_edge.dst_conn = in_edge.dst_conn.removeprefix(prefix.CONNECTOR_IN)
         for out_edge in parent_state.out_edges(node):
-            assert out_edge.src_conn.startswith(CONNECTOR_PREFIX_OUT)
-            out_edge.src_conn = out_edge.src_conn.removeprefix(CONNECTOR_PREFIX_OUT)
+            assert out_edge.src_conn.startswith(prefix.CONNECTOR_OUT)
+            out_edge.src_conn = out_edge.src_conn.removeprefix(prefix.CONNECTOR_OUT)
 
         # union input and output subsets
         subsets = {}
@@ -120,17 +118,25 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
             if key in nsdfg.symbol_mapping:
                 del nsdfg.symbol_mapping[key]
 
+        for edge in parent_state.in_edges(node):
+            if edge.dst_conn not in nsdfg.in_connectors:
+                # Drop connection if connector is not found in the expansion of the library node
+                parent_state.remove_edge(edge)
+                if parent_state.in_degree(edge.src) + parent_state.out_degree(edge.src) == 0:
+                    # Remove node if it is now isolated
+                    parent_state.remove_node(edge.src)
+
     @staticmethod
     def _get_parent_arrays(
         node: StencilComputation, parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> Dict[str, dace.data.Data]:
         parent_arrays: Dict[str, dace.data.Data] = {}
         for edge in (e for e in parent_state.in_edges(node) if e.dst_conn is not None):
-            parent_arrays[edge.dst_conn.removeprefix(CONNECTOR_PREFIX_IN)] = parent_sdfg.arrays[
+            parent_arrays[edge.dst_conn.removeprefix(prefix.CONNECTOR_IN)] = parent_sdfg.arrays[
                 edge.data.data
             ]
         for edge in (e for e in parent_state.out_edges(node) if e.src_conn is not None):
-            parent_arrays[edge.src_conn.removeprefix(CONNECTOR_PREFIX_OUT)] = parent_sdfg.arrays[
+            parent_arrays[edge.src_conn.removeprefix(prefix.CONNECTOR_OUT)] = parent_sdfg.arrays[
                 edge.data.data
             ]
         return parent_arrays

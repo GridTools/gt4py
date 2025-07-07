@@ -19,7 +19,7 @@ import dace.data
 import dace.frontend.python.common
 from dace.frontend.python.common import SDFGClosure, SDFGConvertible
 
-from gt4py import cartesian as gt4pyc
+from gt4py.cartesian import backend as gt_backend
 from gt4py.cartesian.backend.dace_backend import freeze_origin_domain_sdfg
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo
 from gt4py.cartesian.stencil_object import ArgsInfo, FrozenStencil, StencilObject
@@ -100,30 +100,25 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         self: DaCeStencilObject, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
     ) -> DaCeFrozenStencil:
         key = DaCeStencilObject._get_domain_origin_key(domain, origin)
+
+        # check if same sdfg already cached on disk
         if key in self._frozen_cache:
             return self._frozen_cache[key]
 
-        frozen_hash = shash(origin, domain)
-
-        # check if same sdfg already cached on disk
-        basename = os.path.splitext(self.SDFG_PATH)[0]
-        filename = basename + "_" + str(frozen_hash) + ".sdfg"
-        try:
-            frozen_sdfg = dace.SDFG.from_file(filename)
-        except FileNotFoundError:
-            # otherwise, wrap and save sdfg from scratch
-            inner_sdfg = self.sdfg()
-
-            frozen_sdfg = freeze_origin_domain_sdfg(
-                inner_sdfg,
-                arg_names=self.__sdfg_signature__()[0],
-                field_info=self.field_info,
-                origin=origin,
-                domain=domain,
-            )
-            frozen_sdfg.save(filename)
-
+        # otherwise, wrap and save sdfg from scratch
+        frozen_sdfg = freeze_origin_domain_sdfg(
+            self.sdfg(),
+            arg_names=list(self.__sdfg_signature__()[0]),
+            field_info=self.field_info,
+            origin=origin,
+            domain=domain,
+        )
         self._frozen_cache[key] = DaCeFrozenStencil(self, origin, domain, frozen_sdfg)
+
+        basename = os.path.splitext(self.SDFG_PATH)[0]
+        filename = f"{basename}_{shash(origin, domain)}.sdfg"
+        frozen_sdfg.save(filename)
+
         return self._frozen_cache[key]
 
     @classmethod
@@ -180,8 +175,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         origin: Optional[Dict[str, Tuple[int, ...]]] = None,
         **kwargs,
     ):
-        backend_cls = gt4pyc.backend.from_name(backend)
-        assert backend_cls is not None
+        backend_cls = gt_backend.from_name(backend)
         args_iter = iter(args)
         args_as_kwargs = {
             name: (kwargs[name] if name in kwargs else next(args_iter)) for name in arg_names

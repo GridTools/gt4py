@@ -158,13 +158,8 @@ class NodeTranslator(NodeVisitor):
                     if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 }
             )
-            if self.PRESERVED_ANNEX_ATTRS and (old_annex := getattr(node, "__node_annex__", None)):
-                # access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter
-                new_annex_dict = new_node.annex.__dict__
-                for key in self.PRESERVED_ANNEX_ATTRS:
-                    if (value := getattr(old_annex, key, NOTHING)) is not NOTHING:
-                        assert key not in new_annex_dict
-                        new_annex_dict[key] = value
+            if self.PRESERVED_ANNEX_ATTRS and getattr(node, "__node_annex__", None):
+                self._preserve_annex(node, new_node)
 
             return new_node
 
@@ -189,3 +184,27 @@ class NodeTranslator(NodeVisitor):
             )
 
         return copy.deepcopy(node, memo=memo)
+
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        new_node = super().visit(node, **kwargs)
+
+        if (
+            isinstance(node, concepts.Node)
+            and isinstance(new_node, concepts.Node)
+            and self.PRESERVED_ANNEX_ATTRS
+            and getattr(node, "__node_annex__", None)
+        ):
+            self._preserve_annex(node, new_node)
+
+        return new_node
+
+    def _preserve_annex(self, node: concepts.Node, new_node: concepts.Node) -> None:
+        # access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter
+        new_annex_dict = new_node.annex.__dict__
+        old_annex_dict = node.annex.__dict__
+        for key in (old_annex_dict.keys() & self.PRESERVED_ANNEX_ATTRS) - new_annex_dict.keys():
+            # Note: The annex item's value of the new node might not be equal
+            # (in the sense that an equality comparison returns false), to
+            # the old one, but in the context of the pass, they are
+            # equivalent. Therefore, we don't assert equality here.
+            new_annex_dict[key] = old_annex_dict[key]

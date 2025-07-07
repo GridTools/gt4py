@@ -14,6 +14,7 @@ from typing import Protocol, TypeVar
 
 import factory
 
+from gt4py._core import locking
 from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
@@ -67,17 +68,20 @@ class Compiler(
     ) -> stages.ExtendedCompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
-        data = build_data.read_data(src_dir)
+        # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
+        # we need to make sure that only one of them accesses the same build directory for compilation.
+        with locking.lock(src_dir):
+            data = build_data.read_data(src_dir)
 
-        if not data or not is_compiled(data) or self.force_recompile:
-            self.builder_factory(inp, self.cache_lifetime).build()
+            if not data or not is_compiled(data) or self.force_recompile:
+                self.builder_factory(inp, self.cache_lifetime).build()
 
-        new_data = build_data.read_data(src_dir)
+            new_data = build_data.read_data(src_dir)
 
-        if not new_data or not is_compiled(new_data) or not module_exists(new_data, src_dir):
-            raise CompilationError(
-                f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
-            )
+            if not new_data or not is_compiled(new_data) or not module_exists(new_data, src_dir):
+                raise CompilationError(
+                    f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
+                )
 
         compiled_prog = getattr(
             importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name

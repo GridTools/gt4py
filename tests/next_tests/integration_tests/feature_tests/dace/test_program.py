@@ -28,6 +28,8 @@ dace = pytest.importorskip("dace")
 from gt4py.next.program_processors.runners import dace as dace_backends
 
 
+# Override the exec_alloc_descriptor with a custom Backend,
+# see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture(
     params=[
         pytest.param(dace_backends.run_dace_cpu, marks=pytest.mark.requires_dace),
@@ -36,15 +38,12 @@ from gt4py.next.program_processors.runners import dace as dace_backends
         ),
     ]
 )
-def gtir_dace_backend(request):
+def exec_alloc_descriptor(request):
     yield request.param
 
 
 @pytest.fixture
 def cartesian(request, gtir_dace_backend):
-    if gtir_dace_backend is None:
-        yield None
-
     yield cases.Case(
         backend=gtir_dace_backend,
         offset_provider={
@@ -59,12 +58,9 @@ def cartesian(request, gtir_dace_backend):
 
 
 @pytest.fixture
-def unstructured(request, gtir_dace_backend, mesh_descriptor):  # noqa: F811
-    if gtir_dace_backend is None:
-        yield None
-
+def unstructured(request, exec_alloc_descriptor, mesh_descriptor):  # noqa: F811
     yield cases.Case(
-        backend=gtir_dace_backend,
+        backend=exec_alloc_descriptor,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
@@ -73,7 +69,7 @@ def unstructured(request, gtir_dace_backend, mesh_descriptor):  # noqa: F811
             KDim: 10,
         },
         grid_type=common.GridType.UNSTRUCTURED,
-        allocator=gtir_dace_backend.allocator,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
 

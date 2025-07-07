@@ -8,6 +8,8 @@
 
 """Basic utilities for Python programming."""
 
+from __future__ import annotations
+
 import collections.abc
 import functools
 import hashlib
@@ -19,6 +21,8 @@ import string
 import sys
 import time
 import types
+import warnings
+from typing import Generic, TypeGuard, TypeVar
 
 from gt4py.cartesian import config as gt_config
 
@@ -38,14 +42,18 @@ def jsonify(value, indent=2):
     return json.dumps(value, indent=indent, default=lambda obj: str(obj))
 
 
-def is_identifier_name(value, namespaced=True):
+def is_identifier_name(value: object, namespaced: bool = True) -> TypeGuard[str]:
     if isinstance(value, str):
         if namespaced:
             return all(name.isidentifier() for name in value.split("."))
-        else:
-            return value.isidentifier()
-    else:
-        return False
+
+        return value.isidentifier()
+
+    return False
+
+
+def listify(value):
+    return value if isinstance(value, collections.abc.Sequence) else [value]
 
 
 def flatten(nested_iterables, filter_none=False, *, skip_types=(str, bytes)):
@@ -67,8 +75,8 @@ def get_member(instance, item_name):
             isinstance(instance, collections.abc.Sequence) and isinstance(item_name, int)
         ):
             return instance[item_name]
-        else:
-            return getattr(instance, item_name)
+
+        return getattr(instance, item_name)
     except Exception:
         return NOTHING
 
@@ -77,7 +85,6 @@ def compose(*functions_or_iterable):
     """Return a function that chains the input functions.
 
     Derived from: https://mathieularose.com/function-composition-in-python/
-
     """
     if len(functions_or_iterable) == 1 and isinstance(
         functions_or_iterable[0], collections.abc.Iterable
@@ -165,7 +172,13 @@ def normalize_mapping(mapping, key_types=(object,), *, filter_none=False):
     return result
 
 
-def shash(*args, hash_algorithm=None):
+def shash(*args, hash_algorithm: hashlib._Hash | None = None, length: int | None = None) -> str:
+    """Hash the given arguments.
+
+    Args:
+        hash_algorithm: Specify the hashlib algorithm used. Defaults to sha 256.
+        length: Trim to the first `length` digits of the hash. Returns the full hash by default.
+    """
     if hash_algorithm is None:
         hash_algorithm = hashlib.sha256()
 
@@ -178,22 +191,28 @@ def shash(*args, hash_algorithm=None):
             item = str.encode(repr(item))
         hash_algorithm.update(item)
 
-    return hash_algorithm.hexdigest()
+    digest = hash_algorithm.hexdigest()
+    if length is not None and length > len(digest):
+        warnings.warn(
+            f"Requested hash of length {length}, but the full hash's length is {len(digest)}. Returning the full hash.",
+            stacklevel=2,
+        )
+        length = None
+    return digest[:length] if length is not None else digest
 
 
-def shashed_id(*args, length=10, hash_algorithm=None):
-    return shash(*args, hash_algorithm=hash_algorithm)[:length]
+def shashed_id(*args, length: int = 10) -> str:
+    """Hash the given arguments and trim to length."""
+    return shash(*args, length=length)
 
 
 def classmethod_to_function(class_method, instance=None, owner=None, remove_cls_arg=False):
     if remove_cls_arg:
         return functools.partial(class_method.__get__(instance, owner), None)
-    else:
-        return class_method.__get__(instance, owner)
+    return class_method.__get__(instance, owner)
 
 
-def namespace_from_nested_dict(nested_dict):
-    assert isinstance(nested_dict, dict)
+def namespace_from_nested_dict(nested_dict: dict) -> types.SimpleNamespace:
     return types.SimpleNamespace(
         **{
             key: namespace_from_nested_dict(value) if isinstance(value, dict) else value
@@ -237,7 +256,6 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
     References:
       https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
       https://stackoverflow.com/a/43602645
-
     """
 
     def load():
@@ -298,15 +316,13 @@ def patch_module(module, member, new_value, *, recursive=True):
         if patched:
             originals[current] = patched
 
-    patch = dict(
+    return dict(
         module=module,
         original_value=member,
         patched_value=new_value,
         recursive=recursive,
         originals=originals,
     )
-
-    return patch
 
 
 def restore_module(patch, *, verify=True):
@@ -331,20 +347,23 @@ def restore_module(patch, *, verify=True):
             current.__dict__[name] = original_value
 
 
-class Registry(dict):
+T = TypeVar("T")
+
+
+class Registry(Generic[T], dict[str, T]):
     @property
-    def names(self):
+    def names(self) -> list[str]:
         return list(self.keys())
 
-    def register(self, name, item=NOTHING):
+    def register(self, name: str, item: T) -> T:
         if name in self.keys():
-            raise ValueError("Name already exists in registry")
+            raise ValueError(f"Name {name} already exists in registry.")
 
         def _wrapper(obj):
             self[name] = obj
             return obj
 
-        return _wrapper if item is NOTHING else _wrapper(item)
+        return _wrapper(item)
 
 
 class ClassProperty:

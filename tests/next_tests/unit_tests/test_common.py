@@ -562,9 +562,9 @@ def test_domain_replace(index, named_ranges, domain, expected):
         assert new_domain == expected
 
 
-def dimension_promotion_cases() -> (
-    list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
-):
+def dimension_promotion_cases() -> list[
+    tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]
+]:
     raw_list = [
         # list of list of dimensions, expected result, expected error message
         ([[IDim, JDim], [IDim]], [IDim, JDim], None),
@@ -582,11 +582,11 @@ def dimension_promotion_cases() -> (
             "Dimensions 'KDim[vertical], JDim[horizontal]' are not ordered correctly, expected 'JDim[horizontal], KDim[vertical]'.",
         ),
         (
-            [[JDim, V2E], [IDim, KDim, E2C2V]],
+            [[JDim, V2E], [IDim, E2C2V, KDim]],
             None,
             "There are more than one dimension with DimensionKind 'LOCAL'.",
         ),
-        ([[JDim, V2E], [IDim, KDim]], [IDim, JDim, KDim, V2E], None),
+        ([[JDim, V2E], [IDim, KDim]], [IDim, JDim, V2E, KDim], None),
     ]
     return [
         ([[el for el in arg] for arg in args], [el for el in result] if result else result, msg)

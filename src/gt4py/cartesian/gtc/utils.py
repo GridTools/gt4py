@@ -6,35 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import collections
-from typing import Any, Iterable, List, Sequence, Tuple, Type
-
-
-def listify(value):
-    return value if isinstance(value, collections.abc.Sequence) else [value]
-
-
-def flatten_list(
-    nested_iterables: Iterable[Any],
-    filter_none: bool = False,
-    *,
-    skip_types: Tuple[Type[Any], ...] = (str, bytes),
-) -> List[Any]:
-    return list(flatten_list_iter(nested_iterables, filter_none, skip_types=skip_types))
-
-
-def flatten_list_iter(
-    nested_iterables: Iterable[Any],
-    filter_none: bool = False,
-    *,
-    skip_types: Tuple[Type[Any], ...] = (str, bytes),
-) -> Any:
-    for item in nested_iterables:
-        if isinstance(item, list) and not isinstance(item, skip_types):
-            yield from flatten_list(item, filter_none)
-        else:
-            if item is not None or not filter_none:
-                yield item
+from typing import Any, Sequence, Tuple
 
 
 def dimension_flags_to_names(mask: Tuple[bool, bool, bool]) -> str:
