@@ -94,7 +94,7 @@ dependencies = [
   'devtools>=0.6',
   'diskcache>=5.6.3',
   'factory-boy>=3.3.0',
-  "flufl-lock>=8.1.0",
+  "filelock>=3.18.0",
   'frozendict>=2.3',
   'gridtools-cpp>=2.3.9,==2.*',
   'jinja2>=3.0.0',
@@ -438,7 +438,7 @@ url = 'https://test.pypi.org/simple/'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_02", extra = "dace-next"}
+dace = {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_03", extra = "dace-next"}
 
 # -- versioningit --
 [tool.versioningit]

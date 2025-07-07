@@ -13,7 +13,6 @@ import typing
 from . import (
     backend,
     caching,
-    cli,
     config,
     definitions,
     frontend,
@@ -31,7 +30,6 @@ __all__ = [
     "StencilObject",
     "backend",
     "caching",
-    "cli",
     "config",
     "definitions",
     "frontend",

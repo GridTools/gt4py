@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from gt4py import storage as gt_storage
-from gt4py.cartesian.backend.base import CLIBackendMixin, disabled, register
+from gt4py.cartesian.backend.base import disabled, register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
     BaseGTBackend,
@@ -124,7 +124,7 @@ class CudaBindingsCodegen(codegen.TemplatedGenerator):
     enabled_env_var="GT4PY_GTC_ENABLE_CUDA",
 )
 @register
-class CudaBackend(BaseGTBackend, CLIBackendMixin):
+class CudaBackend(BaseGTBackend):
     """CUDA backend using gtc."""
 
     name = "cuda"
