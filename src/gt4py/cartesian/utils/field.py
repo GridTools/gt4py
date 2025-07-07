@@ -8,14 +8,13 @@
 
 
 import numbers
-from typing import Tuple
 
 import numpy as np
 
 
 class Field:
     def __init__(
-        self, field: np.ndarray, offsets: Tuple[int, ...], dimensions: Tuple[bool, bool, bool]
+        self, field: np.ndarray, offsets: tuple[int, ...], dimensions: tuple[bool, bool, bool]
     ):
         ii = iter(range(3))
         self.idx_to_data = tuple(
