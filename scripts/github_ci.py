@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from typing import Annotated
+from typing import Annotated, cast
 
 import rich
 import typer
@@ -54,7 +54,9 @@ def matrix(
     config: Annotated[
         str, typer.Option("--config", "-c", help="Sessions configuration file")
     ] = nox_sessions.DEFAULT_CONFIG,
-    base_commit: Annotated[str | None, typer.Option("--base", help="Base commit for changes")] = None,
+    base_commit: Annotated[
+        str | None, typer.Option("--base", help="Base commit for changes")
+    ] = None,
     output: Annotated[str | None, typer.Option("--output", help="Output (JSON) file name.")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose output")] = False,
 ) -> None:
@@ -66,10 +68,14 @@ def matrix(
         f"Found {len(sessions)} test sessions in {config_path}: {[session['name'] for session in sessions]}"
     )
 
+    collect_all = base_commit is not None
     affected = [
         session["name"]
         for session in sessions
-        if nox_sessions.should_run_session(session, base_commit=base_commit, verbose=verbose)
+        if collect_all
+        or nox_sessions.should_run_session(
+            session, base_commit=cast(str, base_commit), verbose=verbose
+        )
     ]
 
     matrix = create_github_actions_list(affected, verbose=verbose)

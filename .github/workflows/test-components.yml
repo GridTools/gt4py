@@ -40,9 +40,13 @@ jobs:
         id: test-sessions
         run: |
           if [ "${{ github.event_name }}" == "push" ]; then
-            echo "Push event detected"
-            echo "Notifying team of deployment"
+            # Run all sessions on push to main
+            ./scripts-cli.py github-ci matrix \
+              --config nox-sessions-config.yml \
+              --output gh-test-sessions.json \
+              --verbose
           elif [ "${{ github.event_name }}" == "pull_request" ]; then
+            # Run only sessions related to the changes
             ./scripts-cli.py github-ci matrix \
               --config nox-sessions-config.yml \
               --base "origin/${{ github.base_ref }}" \
