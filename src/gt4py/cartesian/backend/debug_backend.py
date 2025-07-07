@@ -6,20 +6,16 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 from gt4py.cartesian.backend import base as backend_base, numpy_backend
 from gt4py.cartesian.gtc import gtir_to_oir
 from gt4py.cartesian.gtc.debug import debug_codegen
 from gt4py.cartesian.gtc.passes import oir_pipeline
 from gt4py.cartesian.gtc.passes.oir_optimizations import horizontal_execution_merging, temporaries
+from gt4py.cartesian.stencil_object import StencilObject
 from gt4py.eve import codegen
 from gt4py.storage import layout
-
-
-if TYPE_CHECKING:
-    from gt4py.cartesian.stencil_object import StencilObject
 
 
 @backend_base.register

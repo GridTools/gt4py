@@ -319,8 +319,8 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             from typing import Tuple
 
             import numpy as np
-        from gt4py.cartesian.gtc import ufuncs
-        from gt4py.cartesian.utils import Field
+            from gt4py.cartesian.gtc import ufuncs
+            from gt4py.cartesian.utils import Field
 
             def run({{ signature }}):
 
