@@ -8,33 +8,33 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from gt4py import storage as gt_storage
+from gt4py.cartesian import backend
 from gt4py.cartesian.backend import python_common as py_common
-from gt4py.cartesian.backend.base import BaseBackend, register
+from gt4py.cartesian.gtc import numpy, passes
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.numpy import npir
-from gt4py.cartesian.gtc.numpy.npir_codegen import NpirCodegen
-from gt4py.cartesian.gtc.numpy.oir_to_npir import OirToNpir
-from gt4py.cartesian.gtc.numpy.scalars_to_temps import ScalarsToTemporaries
 from gt4py.cartesian.gtc.passes import oir_optimizations as oir_opt
-from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline, OirPipeline
-from gt4py.cartesian.stencil_object import StencilObject
-from gt4py.eve.codegen import format_source
+from gt4py.eve import codegen
+from gt4py.storage import layout
 
 
-@register
-class NumpyBackend(BaseBackend):
+if TYPE_CHECKING:
+    from gt4py.cartesian.stencil_object import StencilObject
+
+
+@backend.register
+class NumpyBackend(backend.BaseBackend):
     """NumPy backend using gtc."""
 
     name = "numpy"
     options: ClassVar[dict[str, Any]] = {
-        "oir_pipeline": {"versioning": True, "type": OirPipeline},
+        "oir_pipeline": {"versioning": True, "type": passes.OirPipeline},
         # TODO: Implement this option in source code
         "ignore_np_errstate": {"versioning": True, "type": bool},
     }
-    storage_info = gt_storage.layout.NaiveCPULayout
+    storage_info = layout.NaiveCPULayout
     languages: ClassVar[dict] = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = py_common.PythonModuleGenerator
 
@@ -47,9 +47,10 @@ class NumpyBackend(BaseBackend):
         )
 
         ignore_np_errstate = self.builder.options.backend_opts.get("ignore_np_errstate", True)
-        source = NpirCodegen.apply(self.npir, ignore_np_errstate=ignore_np_errstate)
+        source = numpy.NpirCodegen.apply(self.npir, ignore_np_errstate=ignore_np_errstate)
+
         if self.builder.options.format_source:
-            source = format_source("python", source)
+            source = codegen.format_source("python", source)
 
         return {computation_name: source}
 
@@ -66,7 +67,7 @@ class NumpyBackend(BaseBackend):
         base_oir = GTIRToOIR().visit(self.builder.gtir)
         oir_pipeline = self.builder.options.backend_opts.get(
             "oir_pipeline",
-            DefaultPipeline(
+            passes.DefaultPipeline(
                 skip=[
                     oir_opt.IJCacheDetection,
                     oir_opt.KCacheDetection,
@@ -76,9 +77,8 @@ class NumpyBackend(BaseBackend):
             ),
         )
         oir_node = oir_pipeline.run(base_oir)
-        base_npir = OirToNpir().visit(oir_node)
-        npir_node = ScalarsToTemporaries().visit(base_npir)
-        return npir_node
+        base_npir = numpy.OirToNpir().visit(oir_node)
+        return numpy.ScalarsToTemporaries().visit(base_npir)
 
     @property
     def npir(self) -> npir.Computation:

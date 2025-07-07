@@ -6,24 +6,31 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, ClassVar
+from __future__ import annotations
 
-from gt4py.cartesian.backend import base as backend_base, python_common as py_common
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from gt4py.cartesian import backend
+from gt4py.cartesian.backend import python_common as py_common
+from gt4py.cartesian.gtc import passes
 from gt4py.cartesian.gtc.debug.debug_codegen import DebugCodeGen
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
-from gt4py.cartesian.gtc.passes import oir_optimizations, oir_pipeline
-from gt4py.cartesian.stencil_object import StencilObject
+from gt4py.cartesian.gtc.passes import oir_optimizations
 from gt4py.eve import codegen
 from gt4py.storage import layout
 
 
-@backend_base.register
-class DebugBackend(backend_base.BaseBackend):
+if TYPE_CHECKING:
+    from gt4py.cartesian.stencil_object import StencilObject
+
+
+@backend.register
+class DebugBackend(backend.BaseBackend):
     """Debug backend using plain python loops."""
 
     name = "debug"
     options: ClassVar[dict[str, Any]] = {
-        "oir_pipeline": {"versioning": True, "type": oir_pipeline.OirPipeline},
+        "oir_pipeline": {"versioning": True, "type": passes.OirPipeline},
         "ignore_np_errstate": {"versioning": True, "type": bool},
     }
     storage_info = layout.NaiveCPULayout
