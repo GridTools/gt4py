@@ -155,8 +155,8 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         if kwargs["direction"] == gtc_common.LoopOrder.BACKWARD:
             return ",".join(
                 [
-                    self.visit(interval.end, **kwargs) + "- 1",
-                    self.visit(interval.start, **kwargs) + "- 1",
+                    f"{self.visit(interval.end, **kwargs)} - 1",
+                    f"{self.visit(interval.start, **kwargs)} - 1",
                 ]
             )
         return ",".join([self.visit(interval.start, **kwargs), self.visit(interval.end, **kwargs)])
@@ -213,9 +213,9 @@ class DebugCodeGen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 [self.visit(data_index) for data_index in field_access.data_index]
             )
             if offset_str == "":
-                return field_access.name + f"[{data_index_access}]"
-            return field_access.name + "[" + offset_str + "," + data_index_access + "]"
-        return field_access.name + "[" + offset_str + "]"
+                return f"{field_access.name}[{data_index_access}]"
+            return f"{field_access.name}[{offset_str},{data_index_access}]"
+        return f"{field_access.name}[{offset_str}]"
 
     def visit_AssignStmt(self, assignment_statement: oir.AssignStmt, **_) -> None:
         self.body.append(
