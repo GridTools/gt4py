@@ -39,19 +39,14 @@ class NumpyBackend(backend.BaseBackend):
     MODULE_GENERATOR_CLASS = py_common.PythonModuleGenerator
 
     def generate_computation(self) -> dict[str, str | dict]:
-        computation_name = (
-            self.builder.caching.module_prefix
-            + "computation"
-            + self.builder.caching.module_postfix
-            + ".py"
-        )
-
         ignore_np_errstate = self.builder.options.backend_opts.get("ignore_np_errstate", True)
         source = numpy.NpirCodegen.apply(self.npir, ignore_np_errstate=ignore_np_errstate)
 
         if self.builder.options.format_source:
             source = codegen.format_source("python", source)
 
+        caching = self.builder.caching
+        computation_name = f"{caching.module_prefix}computation{caching.module_postfix}.py"
         return {computation_name: source}
 
     def generate(self) -> type[StencilObject]:

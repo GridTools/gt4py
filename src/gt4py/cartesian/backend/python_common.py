@@ -19,9 +19,9 @@ class PythonModuleGenerator(BaseModuleGenerator):
         super().__init__(builder)
 
     def generate_imports(self) -> str:
-        comp_pkg = (
-            self.builder.caching.module_prefix + "computation" + self.builder.caching.module_postfix
-        )
+        caching = self.builder.caching
+        comp_pkg = f"{caching.module_prefix}computation{caching.module_postfix}"
+
         return "\n".join(
             [
                 *super().generate_imports().splitlines(),

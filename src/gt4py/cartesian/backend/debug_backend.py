@@ -38,11 +38,6 @@ class DebugBackend(backend.BaseBackend):
     MODULE_GENERATOR_CLASS = py_common.PythonModuleGenerator
 
     def _generate_computation(self) -> dict[str, str | dict]:
-        computation_name = (
-            f"{self.builder.caching.module_prefix}"
-            + f"computation{self.builder.caching.module_postfix}.py"
-        )
-
         oir = GTIRToOIR().visit(self.builder.gtir)
         oir = oir_optimizations.HorizontalExecutionMerging().visit(oir)
         oir = oir_optimizations.LocalTemporariesToScalars().visit(oir)
@@ -51,6 +46,8 @@ class DebugBackend(backend.BaseBackend):
         if self.builder.options.format_source:
             source_code = codegen.format_source("python", source_code)
 
+        caching = self.builder.caching
+        computation_name = f"{caching.module_prefix}computation{caching.module_postfix}.py"
         return {computation_name: source_code}
 
     def generate(self) -> type[StencilObject]:
