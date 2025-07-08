@@ -374,9 +374,9 @@ def _infer_concat_where(
         def mapper(d: NonTupleDomainAccess):
             if isinstance(d, DomainAccessDescriptor):
                 return d
-            promoted_cond = domain_utils.promote_to_same_dimensions(
+            promoted_cond = domain_utils.promote_domain(
                 symbolic_cond if arg == true_field else cond_complement,  # noqa: B023 # function is never used outside the loop
-                d,
+                d.ranges.keys(),
             )
             return domain_utils.domain_intersection(d, promoted_cond)
 

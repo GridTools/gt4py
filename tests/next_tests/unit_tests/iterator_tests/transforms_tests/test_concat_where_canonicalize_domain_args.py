@@ -20,7 +20,7 @@ IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
 field_type = ts.FieldType(dims=[IDim], dtype=int_type)
 
 
-def test_data():
+def cases():
     return [
         # testee, expected
         (
@@ -45,12 +45,24 @@ def test_data():
                 ),
             ),
         ),
+        (  # not transformed
+            im.concat_where(
+                im.domain(common.GridType.CARTESIAN, {IDim: (0, itir.InfinityLiteral.POSITIVE)}),
+                "a",
+                "b",
+            ),
+            im.concat_where(
+                im.domain(common.GridType.CARTESIAN, {IDim: (0, itir.InfinityLiteral.POSITIVE)}),
+                "a",
+                "b",
+            ),
+        ),
     ]
 
 
-@pytest.mark.parametrize("testee, expected", test_data())
+@pytest.mark.parametrize("testee, expected", cases())
 def test_nested_concat_where(testee, expected):
-    actual = concat_where.simplify_domain_argument(testee)
+    actual = concat_where.canonicalize_domain_argument(testee)
     actual = inline_lambdas.InlineLambdas.apply(actual, opcount_preserving=True)
 
     assert actual == expected
