@@ -800,19 +800,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # Special handling of lambda arguments that can be lowered as symbolic expressions:
             # when all the symrefs the lambda argument depends on are SDFG symbols, the argument
             # can be passed to the nested SDFG by means of symbol mapping.
-            symbolic_args = {
-                str(p.id): gtir_sdfg_utils.get_symbolic(lambda_arg)
-                for p, lambda_arg in zip(node.fun.params, node.args, strict=True)
-                if (
-                    isinstance(lambda_arg.type, ts.ScalarType)
-                    and all(
-                        symref in sdfg.symbols
-                        for symref in symbol_ref_utils.collect_symbol_refs(
-                            lambda_arg, self.global_symbols.keys()
-                        )
-                    )
+            symbolic_args = {}
+            for p, lambda_arg in zip(node.fun.params, node.args, strict=True):
+                if not isinstance(lambda_arg.type, ts.ScalarType):
+                    continue
+                symrefs = symbol_ref_utils.collect_symbol_refs(
+                    lambda_arg, self.global_symbols.keys()
                 )
-            }
+                if all(symref in sdfg.symbols for symref in symrefs):
+                    symbolic_args[str(p.id)] = gtir_sdfg_utils.get_symbolic(lambda_arg)
             # All other lambda arguments are lowered to taskgraphs that produce a data node.
             data_args = {
                 param: self.visit(
