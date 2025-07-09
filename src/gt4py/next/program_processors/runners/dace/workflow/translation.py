@@ -137,6 +137,8 @@ class DaCeTranslator(
     make_persistent: bool = False
     blocking_dim: Optional[common.Dimension] = None
     blocking_size: int = 10
+    validate: bool = False
+    validate_all: bool = False
 
     def generate_sdfg(
         self,
@@ -175,6 +177,8 @@ class DaCeTranslator(
                     make_persistent=self.make_persistent,
                     blocking_dim=self.blocking_dim,
                     blocking_size=self.blocking_size,
+                    validate=self.validate,
+                    validate_all=self.validate_all,
                 )
             elif on_gpu:
                 # We run simplify to bring the SDFG into a canonical form that the GPU transformations
