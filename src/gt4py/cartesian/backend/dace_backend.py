@@ -281,7 +281,7 @@ def freeze_origin_domain_sdfg(
 
 
 class SDFGManager:
-    # Cache loaded SDFGs across all instances
+    # Cache loaded SDFGs across all instances (unless caching strategy is "nocaching")
     _loaded_sdfgs: ClassVar[dict[str | pathlib.Path, SDFG]] = dict()
 
     def __init__(self, builder: StencilBuilder) -> None:
@@ -338,7 +338,7 @@ class SDFGManager:
     def sdfg_via_schedule_tree(self) -> SDFG:
         """Lower OIR into an SDFG via Schedule Tree transpile first.
 
-        Cache the SDFG into the manager for re-use.
+        Cache the SDFG into the manager for re-use, unless the builder has a no-caching policy.
         """
         filename = f"{self.builder.module_name}.sdfg"
         path = (
@@ -346,16 +346,17 @@ class SDFGManager:
             / filename
         )
 
-        if path in SDFGManager._loaded_sdfgs:
+        do_cache = self.builder.caching.name == "nocaching"
+        if do_cache and path in SDFGManager._loaded_sdfgs:
             return SDFGManager._loaded_sdfgs[path]
 
         # Create SDFG
         stree = self.schedule_tree()
         sdfg = stree.as_sdfg(validate=True, simplify=True, skip={"ScalarToSymbolPromotion"})
 
-        # Cache SDFG
-        self._save_sdfg(sdfg, str(path))
-        SDFGManager._loaded_sdfgs[path] = sdfg
+        if do_cache:
+            self._save_sdfg(sdfg, str(path))
+            SDFGManager._loaded_sdfgs[path] = sdfg
 
         return sdfg
 
@@ -364,7 +365,8 @@ class SDFGManager:
         path = f"{basename}_{shash(origin, domain)}.sdfg"
 
         # check if the same sdfg is already cached on disk
-        if path in SDFGManager._loaded_sdfgs:
+        do_cache = self.builder.caching.name != "nocache"
+        if do_cache and path in SDFGManager._loaded_sdfgs:
             return SDFGManager._loaded_sdfgs[path]
 
         # Otherwise, wrap and save sdfg from scratch
@@ -377,8 +379,10 @@ class SDFGManager:
             origin=origin,
             domain=domain,
         )
-        SDFGManager._loaded_sdfgs[path] = frozen_sdfg
-        self._save_sdfg(frozen_sdfg, path)
+
+        if do_cache:
+            SDFGManager._loaded_sdfgs[path] = frozen_sdfg
+            self._save_sdfg(frozen_sdfg, path)
 
         return frozen_sdfg
 
