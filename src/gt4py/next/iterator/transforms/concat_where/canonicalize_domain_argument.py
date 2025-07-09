@@ -30,9 +30,13 @@ def _range_complement(
     )
 
 
-class _SimplifyDomainArgument(
+class _CanonicalizeDomainArgument(
     PreserveLocationVisitor, fixed_point_transformation.FixedPointTransformation
 ):
+    """
+    TODO(tehrengruber): Explain why this is the canonical form.
+    """
+
     @classmethod
     def apply(cls, node: itir.Node):
         return cls().visit(node)
@@ -42,26 +46,26 @@ class _SimplifyDomainArgument(
             cond_expr, field_a, field_b = node.args
             if cpm.is_call_to(cond_expr, "and_"):
                 conds = cond_expr.args
-                return im.let(("__cwsda_field_a", field_a), ("__cwsda_field_b", field_b))(
+                return im.let(("__cwcda_field_a", field_a), ("__cwcda_field_b", field_b))(
                     self.fp_transform(
                         im.concat_where(
                             conds[0],
                             self.fp_transform(
-                                im.concat_where(conds[1], "__cwsda_field_a", "__cwsda_field_b")
+                                im.concat_where(conds[1], "__cwcda_field_a", "__cwcda_field_b")
                             ),
-                            "__cwsda_field_b",
+                            "__cwcda_field_b",
                         )
                     )
                 )
             if cpm.is_call_to(cond_expr, "or_"):
                 conds = cond_expr.args
-                return im.let(("__cwsda_field_a", field_a), ("__cwsda_field_b", field_b))(
+                return im.let(("__cwcda_field_a", field_a), ("__cwcda_field_b", field_b))(
                     self.fp_transform(
                         im.concat_where(
                             conds[0],
-                            "__cwsda_field_a",
+                            "__cwcda_field_a",
                             self.fp_transform(
-                                im.concat_where(conds[1], "__cwsda_field_a", "__cwsda_field_b")
+                                im.concat_where(conds[1], "__cwcda_field_a", "__cwcda_field_b")
                             ),
                         )
                     )
@@ -90,4 +94,4 @@ class _SimplifyDomainArgument(
         return None
 
 
-simplify_domain_argument = _SimplifyDomainArgument.apply
+canonicalize_domain_argument = _CanonicalizeDomainArgument.apply

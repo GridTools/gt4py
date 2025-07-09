@@ -28,14 +28,13 @@ def _in(pos: itir.Expr, domain: itir.Expr) -> itir.Expr:
     `in_({i, j, k}, u⟨ Iₕ: [i0, i1[, Iₕ: [j0, j1[, Iₕ: [k0, k1[ ⟩`
     -> `i0 <= i < i1 & j0 <= j < j1 & k0 <= k < k1`
     """
-    ret = []
-    for i, v in enumerate(domain_utils.SymbolicDomain.from_expr(domain).ranges.values()):
-        ret.append(
-            im.and_(
-                im.less_equal(v.start, im.tuple_get(i, pos)),
-                im.less(im.tuple_get(i, pos), v.stop),
-            )
+    ret = [
+        im.and_(
+            im.less_equal(v.start, im.tuple_get(i, pos)),
+            im.less(im.tuple_get(i, pos), v.stop),
         )
+        for i, v in enumerate(domain_utils.SymbolicDomain.from_expr(domain).ranges.values())
+    ]
     return functools.reduce(im.and_, ret)
 
 

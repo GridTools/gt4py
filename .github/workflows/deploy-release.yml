@@ -10,8 +10,21 @@ on:
   workflow_dispatch:
 
 jobs:
+  # First job to read Python versions from .python-versions file
+  get-python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      python-versions: ${{ steps.get-versions.outputs.python-versions }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: get-versions
+        uses: ./.github/actions/get-python-versions
+        with:
+          which: 'default'
+
   build:
     name: Build Python distribution
+    needs: [get-python-versions]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,18 +34,22 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: ".default-python-version"
+          python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
+
       - name: Install pypa/build
         run: |
           python -m pip install build --user
+
       - name: Build a wheel and a source tarball
         run: |
           python -m build --sdist --wheel --outdir dist/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: gt4py-dist
           path: ./dist/**
+
   publish-pypi:
     name: Publish Python distribution to pypi.org
     runs-on: ubuntu-latest
@@ -51,6 +68,7 @@ jobs:
           path: dist
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
   publish-test-pypi:
     name: Publish Python distribution to test.pypi.org
     runs-on: ubuntu-latest
