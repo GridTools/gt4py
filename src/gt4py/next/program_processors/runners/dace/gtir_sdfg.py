@@ -43,6 +43,7 @@ from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import (
     gtir_builtin_translators,
+    gtir_lower_types,
     gtir_sdfg_utils,
     transformations as gtx_transformations,
     utils as gtx_dace_utils,
@@ -155,6 +156,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         sdfg: dace.SDFG,
         parent: dace.SDFG,
         scope_symbols: dict[str, ts.DataType],
+        symbolic_arguments: Iterable[str],
     ) -> SDFGBuilder:
         """
         Create an nested SDFG context to lower a lambda expression, indipendent
@@ -170,6 +172,8 @@ class SDFGBuilder(DataflowBuilder, Protocol):
             parent: The parent SDFG.
             scope_symbols: Mapping from symbol name to data type for the GTIR symbols
                 forwarded to the nested context.
+            symbolic_arguments: Arguments that have to be passed to the nested SDFG
+                as dace symbols.
 
         Returns:
             A visitor object implementing the `SDFGBuilder` protocol.
@@ -355,6 +359,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         parent: dace.SDFG,
         scope_symbols: dict[str, ts.DataType],
+        symbolic_arguments: Iterable[str],
     ) -> SDFGBuilder:
         nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, scope_symbols)
         # We pass to the nested SDFG all symbols in scope, which includes the values
@@ -368,7 +373,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             for sym in params
             if (pname := str(sym.id)) in parent.symbols
         }
-        nsdfg_builder._add_sdfg_params(sdfg, params, symbolic_arguments=parent_symbols)
+        nsdfg_builder._add_sdfg_params(
+            sdfg, params, symbolic_arguments=(set(symbolic_arguments) | parent_symbols)
+        )
         return nsdfg_builder
 
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
@@ -799,21 +806,23 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 if all(symref in sdfg.symbols for symref in symrefs):
                     symbolic_args[str(p.id)] = gtir_sdfg_utils.get_symbolic(lambda_arg)
             # All other lambda arguments are lowered to taskgraphs that produce a data node.
-            data_args = {
-                param: self.visit(
-                    arg,
-                    sdfg=sdfg,
-                    head_state=head_state,
+            args = {
+                str(p.id): (
+                    gtir_lower_types.SymbolicData(p.type, symbolic_args[param])  # type: ignore[arg-type]
+                    if (param := str(p.id)) in symbolic_args
+                    else self.visit(
+                        arg,
+                        sdfg=sdfg,
+                        head_state=head_state,
+                    )
                 )
                 for p, arg in zip(node.fun.params, node.args, strict=True)
-                if (param := str(p.id)) not in symbolic_args
             }
             return self.visit(
                 node.fun,
                 sdfg=sdfg,
                 head_state=head_state,
-                data_args=data_args,
-                symbolic_args=symbolic_args,
+                args=args,
             )
         elif isinstance(node.type, ts.ScalarType):
             return gtir_builtin_translators.translate_scalar_expr(node, sdfg, head_state, self)
@@ -825,8 +834,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Lambda,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
-        data_args: Mapping[str, gtir_builtin_translators.FieldopResult],
-        symbolic_args: Mapping[str, dace.symbolic.SymbolicType],
+        args: Mapping[str, gtir_builtin_translators.FieldopResult | gtir_lower_types.SymbolicData],
     ) -> gtir_builtin_translators.FieldopResult:
         """
         Translates a `Lambda` node to a nested SDFG in the current state.
@@ -842,6 +850,18 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         i.e. a lambda parameter with the same name as a symbol in scope, the parameter will shadow
         the previous symbol during traversal of the lambda expression.
         """
+
+        data_args = {
+            param: arg
+            for param, arg in args.items()
+            if not isinstance(arg, gtir_lower_types.SymbolicData)
+        }
+        symbolic_args = {
+            param: arg
+            for param, arg in args.items()
+            if isinstance(arg, gtir_lower_types.SymbolicData)
+        }
+
         lambda_arg_nodes = dict(
             itertools.chain(
                 *[
@@ -859,13 +879,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             param: gtir_builtin_translators.get_tuple_type(arg)
             if isinstance(arg, tuple)
             else arg.gt_type
-            for param, arg in data_args.items()
+            for param, arg in args.items()
         }
 
         # lower let-statement lambda node as a nested SDFG
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nsdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=sdfg.debuginfo)
-        lambda_translator = self.setup_nested_context(nsdfg, sdfg, lambda_symbols)
+        lambda_translator = self.setup_nested_context(
+            nsdfg, sdfg, lambda_symbols, symbolic_arguments=symbolic_args.keys()
+        )
 
         nstate = nsdfg.add_state("lambda")
         lambda_result = lambda_translator.visit(
@@ -938,8 +960,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # Map a scalar data descriptor to a symbol on the nested SDFG.
                 assert isinstance(lambda_arg_nodes[sym_id].gt_type, ts.ScalarType)
                 nsdfg_symbols_to_args.add(sym_id)
+            elif sym_id in symbolic_args:
+                nsdfg_symbols_mapping[sym_id] = symbolic_args[sym_id].value
             else:
-                nsdfg_symbols_mapping[sym_id] = symbolic_args.get(sym_id, sym)
+                nsdfg_symbols_mapping[sym_id] = sym
         input_memlets |= _map_args_to_symbols_on_nested_sdfg(
             sdfg, nsdfg, nsdfg_symbols_to_args, lambda_arg_nodes
         )
