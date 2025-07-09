@@ -219,6 +219,24 @@ def extract_projector(
         return extract_projector(expr, projector, _depth + 1)
 
 
+def grid_type_from_domain(domain: itir.FunCall) -> common.GridType:
+    if cpm.is_call_to(domain, "cartesian_domain"):
+        return common.GridType.CARTESIAN
+    else:
+        assert cpm.is_call_to(domain, "unstructured_domain")
+        return common.GridType.UNSTRUCTURED
+
+
+def grid_type_from_program(program: itir.Program) -> common.GridType:
+    domains = program.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
+    grid_types = {grid_type_from_domain(d) for d in domains}
+    if len(grid_types) != 1:
+        raise ValueError(
+            f"Found 'set_at' with more than one 'GridType': '{grid_types}'. This is currently not supported."
+        )
+    return grid_types.pop()
+
+
 SymOrStr = TypeVar("SymOrStr", itir.Sym, str)
 
 
