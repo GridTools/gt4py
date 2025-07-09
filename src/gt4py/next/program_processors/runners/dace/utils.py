@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal, Mapping, Union
+from typing import Final, Literal, Mapping, Optional, Union
 
 import dace
 
@@ -58,7 +58,7 @@ def connectivity_identifier(name: str) -> str:
 
 
 def is_connectivity_identifier(
-    name: str, offset_provider_type: gtx_common.OffsetProviderType = None
+    name: str, offset_provider_type: Optional[gtx_common.OffsetProviderType] = None
 ) -> bool:
     m = CONNECTIVITY_INDENTIFIER_RE.match(name)
     if m is None:

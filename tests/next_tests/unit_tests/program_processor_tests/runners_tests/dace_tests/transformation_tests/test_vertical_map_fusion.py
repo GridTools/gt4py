@@ -151,25 +151,20 @@ def test_vertical_map_fusion_with_neighbor_access():
     )
     for name in ["tmp", "gt_conn_E2C"]:
         mentry.add_scope_connectors(name)
-    st.add_edge(
-        tmp_node, None, mentry, "IN_tmp", dace.Memlet(data=tmp, subset="0:80")
-    )
-    st.add_edge(
-        E2C_node, None, mentry, "IN_gt_conn_E2C", dace.Memlet(data=E2C, subset="0:80, 0:2")
-    )
-    st.add_edge(
-        mexit, "OUT_B", B_node, None, dace.Memlet(data=B, subset="0:80")
-    )
+    st.add_edge(tmp_node, None, mentry, "IN_tmp", dace.Memlet(data=tmp, subset="0:80"))
+    st.add_edge(E2C_node, None, mentry, "IN_gt_conn_E2C", dace.Memlet(data=E2C, subset="0:80, 0:2"))
+    st.add_edge(mexit, "OUT_B", B_node, None, dace.Memlet(data=B, subset="0:80"))
 
     mnentry, mnexit = st.add_map(
         "reduction",
         ndrange={"__j": "0:2"},
     )
+    st.add_edge(mentry, "OUT_tmp", mnentry, "IN_tmp", dace.Memlet(data=tmp, subset="0:80"))
     st.add_edge(
-        mentry, "OUT_tmp", mnentry, "IN_tmp", dace.Memlet(data=tmp, subset="0:80")
-    )
-    st.add_edge(
-        mentry, "OUT_gt_conn_E2C", mnentry, "IN_gt_conn_E2C",
+        mentry,
+        "OUT_gt_conn_E2C",
+        mnentry,
+        "IN_gt_conn_E2C",
         dace.Memlet(data=E2C, subset="__i, 0:2"),
     )
     for name in ["tmp", "gt_conn_E2C"]:
@@ -184,29 +179,25 @@ def test_vertical_map_fusion_with_neighbor_access():
         mnentry, "OUT_tmp", reduction_tasklet, "__tmp", dace.Memlet(data=tmp, subset="0:80")
     )
     st.add_edge(
-        mnentry, "OUT_gt_conn_E2C", reduction_tasklet, "__gt_conn_E2C",
+        mnentry,
+        "OUT_gt_conn_E2C",
+        reduction_tasklet,
+        "__gt_conn_E2C",
         dace.Memlet(data=E2C, subset="__i, __j"),
     )
     st.add_edge(
         reduction_tasklet, "__b_out", mnexit, "IN_b_out", dace.Memlet(data=b_out, subset="__j")
     )
-    st.add_edge(
-        mnexit, "OUT_b_out", b_out_node, None, dace.Memlet(data=b_out, subset="0:2")
-    )
+    st.add_edge(mnexit, "OUT_b_out", b_out_node, None, dace.Memlet(data=b_out, subset="0:2"))
     red = st.add_reduce(
-        wcr="lambda a, b: a + b", axes=None,
+        wcr="lambda a, b: a + b",
+        axes=None,
     )
     red.add_in_connector("IN_b_out")
     red.add_out_connector("OUT_t")
-    st.add_edge(
-        b_out_node, None, red, "IN_b_out", dace.Memlet(data=b_out, subset="0:2")
-    )
-    st.add_edge(
-        red, "OUT_t", t_node, None, dace.Memlet(data=t, subset="0")
-    )
-    st.add_edge(
-        t_node, None, mexit, "IN_B", dace.Memlet(data=t, subset="0")
-    )
+    st.add_edge(b_out_node, None, red, "IN_b_out", dace.Memlet(data=b_out, subset="0:2"))
+    st.add_edge(red, "OUT_t", t_node, None, dace.Memlet(data=t, subset="0"))
+    st.add_edge(t_node, None, mexit, "IN_B", dace.Memlet(data=t, subset="0"))
     mnexit.add_in_connector("IN_b_out")
     mnexit.add_out_connector("OUT_b_out")
     mexit.add_in_connector("IN_B")
@@ -233,28 +224,23 @@ def test_vertical_map_fusion_with_neighbor_access():
     )
     for name in ["tmp2", "F", "gt_conn_E2C"]:
         mentry2.add_scope_connectors(name)
-    st.add_edge(
-        tmp2_node, None, mentry2, "IN_tmp2", dace.Memlet(data=tmp2, subset="0:80")
-    )
+    st.add_edge(tmp2_node, None, mentry2, "IN_tmp2", dace.Memlet(data=tmp2, subset="0:80"))
     st.add_edge(
         E2C_node, None, mentry2, "IN_gt_conn_E2C", dace.Memlet(data=E2C, subset="0:80, 0:2")
     )
-    st.add_edge(
-        F_node, None, mentry2, "IN_F", dace.Memlet(data=F, subset="0:80")
-    )
-    st.add_edge(
-        mexit2, "OUT_D", D_node, None, dace.Memlet(data=D, subset="0:80")
-    )
+    st.add_edge(F_node, None, mentry2, "IN_F", dace.Memlet(data=F, subset="0:80"))
+    st.add_edge(mexit2, "OUT_D", D_node, None, dace.Memlet(data=D, subset="0:80"))
 
     mnentry2, mnexit2 = st.add_map(
         "reduction2",
         ndrange={"__j": "0:2"},
     )
+    st.add_edge(mentry2, "OUT_F", mnentry2, "IN_F", dace.Memlet(data=F, subset="0:80"))
     st.add_edge(
-        mentry2, "OUT_F", mnentry2, "IN_F", dace.Memlet(data=F, subset="0:80")
-    )
-    st.add_edge(
-        mentry2, "OUT_gt_conn_E2C", mnentry2, "IN_gt_conn_E2C",
+        mentry2,
+        "OUT_gt_conn_E2C",
+        mnentry2,
+        "IN_gt_conn_E2C",
         dace.Memlet(data=E2C, subset="__i, 0:2"),
     )
     for name in ["F", "gt_conn_E2C"]:
@@ -265,47 +251,37 @@ def test_vertical_map_fusion_with_neighbor_access():
         outputs={"__d_out"},
         code="__d_out = __F[__gt_conn_E2C]",
     )
+    st.add_edge(mnentry2, "OUT_F", reduction_tasklet, "__F", dace.Memlet(data=F, subset="0:80"))
     st.add_edge(
-        mnentry2, "OUT_F", reduction_tasklet, "__F", dace.Memlet(data=F, subset="0:80")
-    )
-    st.add_edge(
-        mnentry2, "OUT_gt_conn_E2C", reduction_tasklet, "__gt_conn_E2C",
+        mnentry2,
+        "OUT_gt_conn_E2C",
+        reduction_tasklet,
+        "__gt_conn_E2C",
         dace.Memlet(data=E2C, subset="__i, __j"),
     )
     st.add_edge(
         reduction_tasklet, "__d_out", mnexit2, "IN_d_out", dace.Memlet(data=d_out, subset="__j")
     )
-    st.add_edge(
-        mnexit2, "OUT_d_out", d_out_node, None, dace.Memlet(data=d_out, subset="0:2")
-    )
+    st.add_edge(mnexit2, "OUT_d_out", d_out_node, None, dace.Memlet(data=d_out, subset="0:2"))
     mnexit2.add_in_connector("IN_d_out")
     mnexit2.add_out_connector("OUT_d_out")
     red2 = st.add_reduce(
-        wcr="lambda a, b: a + b", axes=None,
+        wcr="lambda a, b: a + b",
+        axes=None,
     )
     red2.add_in_connector("IN_d_out")
     red2.add_out_connector("OUT_t2")
-    st.add_edge(
-        d_out_node, None, red2, "IN_d_out", dace.Memlet(data=d_out, subset="0:2")
-    )
-    st.add_edge(
-        red2, "OUT_t2", t2_node, None, dace.Memlet(data=t2, subset="0")
-    )
+    st.add_edge(d_out_node, None, red2, "IN_d_out", dace.Memlet(data=d_out, subset="0:2"))
+    st.add_edge(red2, "OUT_t2", t2_node, None, dace.Memlet(data=t2, subset="0"))
     tasklet2 = st.add_tasklet(
         "tasklet2",
         inputs={"__inp1", "__inp2"},
         outputs={"__out"},
         code="__out = __inp1 + __inp2",
     )
-    st.add_edge(
-        t2_node, None, tasklet2, "__inp1", dace.Memlet(data=t2, subset="0")
-    )
-    st.add_edge(
-        mentry2, "OUT_tmp2", tasklet2, "__inp2", dace.Memlet(data=tmp2, subset="__i")
-    )
-    st.add_edge(
-        tasklet2, "__out", mexit2, "IN_D", dace.Memlet(data=D, subset="__i")
-    )
+    st.add_edge(t2_node, None, tasklet2, "__inp1", dace.Memlet(data=t2, subset="0"))
+    st.add_edge(mentry2, "OUT_tmp2", tasklet2, "__inp2", dace.Memlet(data=tmp2, subset="__i"))
+    st.add_edge(tasklet2, "__out", mexit2, "IN_D", dace.Memlet(data=D, subset="__i"))
     mexit2.add_in_connector("IN_D")
     mexit2.add_out_connector("OUT_D")
 
