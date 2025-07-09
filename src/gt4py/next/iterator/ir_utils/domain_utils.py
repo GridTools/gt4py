@@ -166,18 +166,18 @@ class SymbolicDomain:
             raise AssertionError("Number of shifts must be a multiple of 2.")
 
 
-def _range_op(
-    start_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
-    stop_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
+def _reduce_ranges(
     *ranges: SymbolicRange,
+    start_reduce_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
+    stop_reduce_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
 ) -> SymbolicRange:
     """Uses start_op and stop_op to fold the start and stop of a list of ranges."""
     start = functools.reduce(
-        lambda current_expr, el_expr: start_op(current_expr, el_expr),
+        lambda current_expr, el_expr: start_reduce_op(current_expr, el_expr),
         [range_.start for range_ in ranges],
     )
     stop = functools.reduce(
-        lambda current_expr, el_expr: stop_op(current_expr, el_expr),
+        lambda current_expr, el_expr: stop_reduce_op(current_expr, el_expr),
         [range_.stop for range_ in ranges],
     )
     # constant fold expression to keep the tree small
@@ -185,13 +185,17 @@ def _range_op(
     return SymbolicRange(start, stop)
 
 
-_range_union = functools.partial(_range_op, im.minimum, im.maximum)
-_range_intersection = functools.partial(_range_op, im.maximum, im.minimum)
+_range_union = functools.partial(
+    _reduce_ranges, start_reduce_op=im.minimum, stop_reduce_op=im.maximum
+)
+_range_intersection = functools.partial(
+    _reduce_ranges, start_reduce_op=im.maximum, stop_reduce_op=im.minimum
+)
 
 
-def _domain_op(
-    range_op: Callable[..., SymbolicRange],
+def _reduce_domains(
     *domains: SymbolicDomain,
+    range_reduce_op: Callable[..., SymbolicRange],
 ) -> SymbolicDomain:
     """
     Applies range_op to the ranges of a list of domains with same dimensions and grid_type.
@@ -201,14 +205,14 @@ def _domain_op(
 
     new_domain_ranges = {}
     for dim in domains[0].ranges.keys():
-        new_domain_ranges[dim] = range_op(*[domain.ranges[dim] for domain in domains])
+        new_domain_ranges[dim] = range_reduce_op(*[domain.ranges[dim] for domain in domains])
 
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
 
-domain_union = functools.partial(_domain_op, _range_union)
+domain_union = functools.partial(_reduce_domains, range_reduce_op=_range_union)
 """Return the (set) union of a list of domains."""
-domain_intersection = functools.partial(_domain_op, _range_intersection)
+domain_intersection = functools.partial(_reduce_domains, range_reduce_op=_range_intersection)
 """Return the intersection of a list of domains."""
 
 

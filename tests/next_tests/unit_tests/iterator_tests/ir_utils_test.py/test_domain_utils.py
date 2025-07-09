@@ -28,7 +28,10 @@ left_infinity_range = domain_utils.SymbolicRange(itir.InfinityLiteral.NEGATIVE, 
 def _make_domain(i: int):
     return domain_utils.SymbolicDomain(
         grid_type=common.GridType.CARTESIAN,
-        ranges={I: domain_utils.SymbolicRange(im.ref(f"start{i}"), im.ref(f"end{i}"))},
+        ranges={
+            I: domain_utils.SymbolicRange(im.ref(f"start_I_{i}"), im.ref(f"end_I_{i}")),
+            J: domain_utils.SymbolicRange(im.ref(f"start_J_{i}"), im.ref(f"end_J_{i}")),
+        },
     )
 
 
@@ -49,12 +52,12 @@ def test_domain_op_preconditions():
         ranges={J: domain_utils.SymbolicRange(5, 15)},
     )
     with pytest.raises(AssertionError):
-        domain_utils._domain_op(domain_utils._range_union, domain_a, domain_b)
+        domain_utils._reduce_domains(domain_a, domain_b, range_reduce_op=domain_utils._range_union)
     domain_c = domain_utils.SymbolicDomain(
         grid_type=common.GridType.UNSTRUCTURED, ranges={I: domain_utils.SymbolicRange(0, 10)}
     )
     with pytest.raises(AssertionError):
-        domain_utils._domain_op(domain_utils._range_union, domain_a, domain_c)
+        domain_utils._reduce_domains(domain_a, domain_c, range_reduce_op=domain_utils._range_union)
 
 
 def test_domain_union():
@@ -66,9 +69,17 @@ def test_domain_union():
         grid_type=common.GridType.CARTESIAN,
         ranges={
             I: domain_utils.SymbolicRange(
-                im.minimum(im.minimum(im.ref("start0"), im.ref("start1")), im.ref("start2")),
-                im.maximum(im.maximum(im.ref("end0"), im.ref("end1")), im.ref("end2")),
-            )
+                im.minimum(
+                    im.minimum(im.ref("start_I_0"), im.ref("start_I_1")), im.ref("start_I_2")
+                ),
+                im.maximum(im.maximum(im.ref("end_I_0"), im.ref("end_I_1")), im.ref("end_I_2")),
+            ),
+            J: domain_utils.SymbolicRange(
+                im.minimum(
+                    im.minimum(im.ref("start_J_0"), im.ref("start_J_1")), im.ref("start_J_2")
+                ),
+                im.maximum(im.maximum(im.ref("end_J_0"), im.ref("end_J_1")), im.ref("end_J_2")),
+            ),
         },
     )
     assert expected == domain_utils.domain_union(domain0, domain1, domain2)
@@ -83,9 +94,17 @@ def test_domain_intersection():
         grid_type=common.GridType.CARTESIAN,
         ranges={
             I: domain_utils.SymbolicRange(
-                im.maximum(im.maximum(im.ref("start0"), im.ref("start1")), im.ref("start2")),
-                im.minimum(im.minimum(im.ref("end0"), im.ref("end1")), im.ref("end2")),
-            )
+                im.maximum(
+                    im.maximum(im.ref("start_I_0"), im.ref("start_I_1")), im.ref("start_I_2")
+                ),
+                im.minimum(im.minimum(im.ref("end_I_0"), im.ref("end_I_1")), im.ref("end_I_2")),
+            ),
+            J: domain_utils.SymbolicRange(
+                im.maximum(
+                    im.maximum(im.ref("start_J_0"), im.ref("start_J_1")), im.ref("start_J_2")
+                ),
+                im.minimum(im.minimum(im.ref("end_J_0"), im.ref("end_J_1")), im.ref("end_J_2")),
+            ),
         },
     )
     assert expected == domain_utils.domain_intersection(domain0, domain1, domain2)
