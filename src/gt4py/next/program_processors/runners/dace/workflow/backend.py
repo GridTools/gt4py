@@ -74,6 +74,7 @@ def make_dace_backend(
     gpu: bool,
     async_sdfg_call: bool,
     make_persistent: bool,
+    use_memory_pool: bool,
     blocking_dim: common.Dimension | None,
     blocking_size: int = 10,
     use_zero_origin: bool = False,
@@ -88,6 +89,7 @@ def make_dace_backend(
         async_sdfg_call: Enable asynchronous SDFG execution, only applicable
             when `gpu=True` because it relies on the gpu kernel queue.
         make_persistent: Allocate persistent arrays with constant layout.
+        use_memory_pool: Enable memory pool for allocation of temporary fields.
         blocking_dim: When not 'None', apply 'LoopBlocking' SDFG transformation
             on this dimension.
         blocking_size: Block size to use in 'LoopBlocking' SDFG transformation,
@@ -106,6 +108,7 @@ def make_dace_backend(
         otf_workflow__cached_translation=cached,
         otf_workflow__bare_translation__async_sdfg_call=(gpu if async_sdfg_call else False),
         otf_workflow__bare_translation__make_persistent=make_persistent,
+        otf_workflow__bare_translation__use_memory_pool=use_memory_pool,
         otf_workflow__bare_translation__blocking_dim=blocking_dim,
         otf_workflow__bare_translation__blocking_size=blocking_size,
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
@@ -119,6 +122,7 @@ run_dace_cpu = make_dace_backend(
     gpu=False,
     async_sdfg_call=False,
     make_persistent=False,
+    use_memory_pool=False,
     blocking_dim=None,
 )
 run_dace_cpu_noopt = make_dace_backend(
@@ -127,6 +131,7 @@ run_dace_cpu_noopt = make_dace_backend(
     gpu=False,
     async_sdfg_call=False,
     make_persistent=False,
+    use_memory_pool=False,
     blocking_dim=None,
 )
 run_dace_cpu_cached = make_dace_backend(
@@ -135,6 +140,7 @@ run_dace_cpu_cached = make_dace_backend(
     gpu=False,
     async_sdfg_call=False,
     make_persistent=False,
+    use_memory_pool=False,
     blocking_dim=None,
 )
 
@@ -143,7 +149,8 @@ run_dace_gpu = make_dace_backend(
     cached=False,
     gpu=True,
     async_sdfg_call=False,
-    make_persistent=True,
+    make_persistent=False,
+    use_memory_pool=True,
     blocking_dim=None,
 )
 run_dace_gpu_noopt = make_dace_backend(
@@ -151,7 +158,8 @@ run_dace_gpu_noopt = make_dace_backend(
     cached=False,
     gpu=True,
     async_sdfg_call=False,
-    make_persistent=True,
+    make_persistent=False,
+    use_memory_pool=True,
     blocking_dim=None,
 )
 run_dace_gpu_cached = make_dace_backend(
@@ -159,6 +167,7 @@ run_dace_gpu_cached = make_dace_backend(
     cached=True,
     gpu=True,
     async_sdfg_call=False,
-    make_persistent=True,
+    make_persistent=False,
+    use_memory_pool=True,
     blocking_dim=None,
 )
