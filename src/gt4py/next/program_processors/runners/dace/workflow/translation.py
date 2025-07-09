@@ -173,6 +173,7 @@ class DaCeTranslator(
                     constant_symbols=constant_symbols,
                     assume_pointwise=True,
                     make_persistent=self.make_persistent,
+                    use_memory_pool=True,
                     blocking_dim=self.blocking_dim,
                     blocking_size=self.blocking_size,
                 )
