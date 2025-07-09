@@ -45,6 +45,11 @@ class SymbolicRange:
     start: itir.Expr
     stop: itir.Expr
 
+    def __post_init__(self) -> None:
+        # TODO(havogt): added this defensive checks as code seems to make this reasonable assumption
+        assert self.start is not itir.InfinityLiteral.POSITIVE
+        assert self.stop is not itir.InfinityLiteral.NEGATIVE
+
     def translate(self, distance: int) -> SymbolicRange:
         return SymbolicRange(im.plus(self.start, distance), im.plus(self.stop, distance))
 
