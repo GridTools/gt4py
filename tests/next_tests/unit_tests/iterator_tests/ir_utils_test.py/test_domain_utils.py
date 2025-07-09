@@ -39,6 +39,24 @@ def test_symbolic_range():
         domain_utils.SymbolicRange(0, itir.InfinityLiteral.NEGATIVE)
 
 
+def test_domain_op_preconditions():
+    domain_a = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN,
+        ranges={I: domain_utils.SymbolicRange(0, 10)},
+    )
+    domain_b = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN,
+        ranges={J: domain_utils.SymbolicRange(5, 15)},
+    )
+    with pytest.raises(AssertionError):
+        domain_utils._domain_op(domain_utils._range_union, domain_a, domain_b)
+    domain_c = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.UNSTRUCTURED, ranges={I: domain_utils.SymbolicRange(0, 10)}
+    )
+    with pytest.raises(AssertionError):
+        domain_utils._domain_op(domain_utils._range_union, domain_a, domain_c)
+
+
 def test_domain_union():
     domain0 = _make_domain(0)
     domain1 = _make_domain(1)

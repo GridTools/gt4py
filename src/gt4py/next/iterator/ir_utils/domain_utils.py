@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import Any, Iterable, Literal, Mapping, Optional
+from typing import Any, Callable, Iterable, Literal, Mapping, Optional
 
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
@@ -63,9 +63,7 @@ _GRID_TYPE_MAPPING = {
 @dataclasses.dataclass(frozen=True)
 class SymbolicDomain:
     grid_type: common.GridType
-    ranges: dict[
-        common.Dimension, SymbolicRange
-    ]  # TODO(havogt): remove `AxisLiteral` by `Dimension` everywhere
+    ranges: dict[common.Dimension, SymbolicRange]
 
     def __hash__(self) -> int:
         return hash((self.grid_type, frozenset(self.ranges.items())))
@@ -168,45 +166,50 @@ class SymbolicDomain:
             raise AssertionError("Number of shifts must be a multiple of 2.")
 
 
-def domain_union(*domains: SymbolicDomain) -> SymbolicDomain:
-    """Return the (set) union of a list of domains."""
-    new_domain_ranges = {}
+def _range_op(
+    start_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
+    stop_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
+    *ranges: SymbolicRange,
+) -> SymbolicRange:
+    """Uses start_op and stop_op to fold the start and stop of a list of ranges."""
+    start = functools.reduce(
+        lambda current_expr, el_expr: start_op(current_expr, el_expr),
+        [range_.start for range_ in ranges],
+    )
+    stop = functools.reduce(
+        lambda current_expr, el_expr: stop_op(current_expr, el_expr),
+        [range_.stop for range_ in ranges],
+    )
+    # constant fold expression to keep the tree small
+    start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.Expr
+    return SymbolicRange(start, stop)
+
+
+_range_union = functools.partial(_range_op, im.minimum, im.maximum)
+_range_intersection = functools.partial(_range_op, im.maximum, im.minimum)
+
+
+def _domain_op(
+    range_op: Callable[..., SymbolicRange],
+    *domains: SymbolicDomain,
+) -> SymbolicDomain:
+    """
+    Applies range_op to the ranges of a list of domains with same dimensions and grid_type.
+    """
     assert all(domain.grid_type == domains[0].grid_type for domain in domains)
     assert all(domain.ranges.keys() == domains[0].ranges.keys() for domain in domains)
-    for dim in domains[0].ranges.keys():
-        start = functools.reduce(
-            lambda current_expr, el_expr: im.minimum(current_expr, el_expr),
-            [domain.ranges[dim].start for domain in domains],
-        )
-        stop = functools.reduce(
-            lambda current_expr, el_expr: im.maximum(current_expr, el_expr),
-            [domain.ranges[dim].stop for domain in domains],
-        )
-        # constant fold expression to keep the tree small
-        start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.Expr
-        new_domain_ranges[dim] = SymbolicRange(start, stop)
 
-    return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
-
-
-def domain_intersection(*domains: SymbolicDomain) -> SymbolicDomain:
-    """Return the (set) intersection of a list of domains."""
     new_domain_ranges = {}
-    assert all(domain.grid_type == domains[0].grid_type for domain in domains)
     for dim in domains[0].ranges.keys():
-        start = functools.reduce(
-            lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
-            [domain.ranges[dim].start for domain in domains],
-        )
-        stop = functools.reduce(
-            lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
-            [domain.ranges[dim].stop for domain in domains],
-        )
-        # constant fold expression to keep the tree small
-        start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.Expr
-        new_domain_ranges[dim] = SymbolicRange(start, stop)
+        new_domain_ranges[dim] = range_op(*[domain.ranges[dim] for domain in domains])
 
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
+
+
+domain_union = functools.partial(_domain_op, _range_union)
+"""Return the (set) union of a list of domains."""
+domain_intersection = functools.partial(_domain_op, _range_intersection)
+"""Return the intersection of a list of domains."""
 
 
 def domain_complement(domain: SymbolicDomain) -> SymbolicDomain:
