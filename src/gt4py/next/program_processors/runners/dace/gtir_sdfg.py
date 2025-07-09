@@ -455,10 +455,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def _add_storage(
         self,
         sdfg: dace.SDFG,
-        symbolic_arguments: Iterable[str],
+        symbolic_arguments: set[str] | None,
         name: str,
         gt_type: ts.DataType,
-        scalars_as_dace_symbols: bool,
         transient: bool = True,
         tuple_name: Optional[str] = None,
     ) -> list[tuple[str, ts.DataType]]:
@@ -466,10 +465,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Add storage in the SDFG for a given GT4Py data symbol.
 
         GT4Py fields are allocated as DaCe arrays. GT4Py scalars are represented
-        as SDFG symbols, when `scalars_as_dace_symbols=True`, otherwise as scalar
-        data containers. The exception are the symbols passed as `symbolic_arguments`
-        and the range start/stop symbols, which are always represented as SDFG
-        symbols because they are expected to be used in domain symbolic expressions.
+        as scalar data containers, unless they are listed in `symbolic_arguments`,
+        in which case they are represented as SDFG symbols. This is the case of
+        start/stop symbols for field range or other scalar values accessed in
+        domain symbolic expressions.
 
         The fields used as temporary arrays, when `transient = True`, are allocated
         and exist only within the SDFG; when `transient = False`, the fields have
@@ -478,13 +477,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Args:
             sdfg: The SDFG where storage needs to be allocated.
             symbolic_arguments: Set of GT4Py scalars that must be represented as SDFG symbols.
+                If `None`, all scalar parameters should be represented as dace symbols.
             name: Symbol Name to be allocated.
             gt_type: GT4Py symbol type.
-            scalars_as_dace_symbols: Set to `True` for the top-level SDFG, where
-                all scalar parameters should be represented as dace symbols.
-                When `False`, scalar data is used as default for input parameters,
-                with the exception of those listed in `symbolic_arguments`, for which
-                we enforce symbolic representation.
             transient: True when the data symbol has to be allocated as internal storage.
             tuple_name: Name of the tuple the current GT4Py data symbol belongs to.
                 Set to `None` if the symbol does not belong to a tuple.
@@ -508,7 +503,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                         symbolic_arguments=symbolic_arguments,
                         name=sym.id,
                         gt_type=sym.type,
-                        scalars_as_dace_symbols=scalars_as_dace_symbols,
                         transient=transient,
                         tuple_name=sym_ref,
                     )
@@ -520,10 +514,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # represent zero-dimensional fields as scalar arguments
                 return self._add_storage(
                     sdfg=sdfg,
-                    symbolic_arguments=symbolic_arguments,
+                    symbolic_arguments=set(),  # force use of scalar data container
                     name=name,
                     gt_type=gt_type.dtype,
-                    scalars_as_dace_symbols=False,
                     transient=transient,
                 )
             if not isinstance(gt_type.dtype, ts.ScalarType):
@@ -541,8 +534,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # note that `symbolic_arguments` contains the name of the tuple a scalar belongs to
             sym_ref = name if tuple_name is None else tuple_name
             if (
-                scalars_as_dace_symbols
-                or gtx_dace_utils.is_range_symbol(name)
+                gtx_dace_utils.is_range_symbol(name)
+                or symbolic_arguments is None
                 or sym_ref in symbolic_arguments
             ):
                 if name in sdfg.symbols:
@@ -624,8 +617,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self,
         sdfg: dace.SDFG,
         node_params: Sequence[gtir.Sym],
-        symbolic_arguments: set[str],
-        scalars_as_dace_symbols: bool = False,
+        symbolic_arguments: set[str] | None,
     ) -> list[str]:
         """
         Helper function to add storage for node parameters and connectivity tables.
@@ -643,7 +635,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 symbolic_arguments=symbolic_arguments,
                 name=pname,
                 gt_type=param.type,
-                scalars_as_dace_symbols=scalars_as_dace_symbols,
                 transient=False,
             )
 
@@ -665,7 +656,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 symbolic_arguments=symbolic_arguments,
                 name=gtx_dace_utils.connectivity_identifier(offset),
                 gt_type=gt_type,
-                scalars_as_dace_symbols=scalars_as_dace_symbols,
             )
 
         # the list of all sdfg arguments (aka non-transient arrays) which include tuple-element fields
@@ -697,9 +687,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         else:
             head_state = entry_state
 
-        sdfg_arg_names = self._add_sdfg_params(
-            sdfg, node.params, symbolic_arguments=set(), scalars_as_dace_symbols=True
-        )
+        # by setting `symbolic_arguments=None`, we represent all scalars as dace symbols
+        sdfg_arg_names = self._add_sdfg_params(sdfg, node.params, symbolic_arguments=None)
+
         # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):
             # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
