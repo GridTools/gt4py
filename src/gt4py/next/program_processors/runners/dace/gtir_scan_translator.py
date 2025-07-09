@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any, Iterable
 import dace
 from dace import subsets as dace_subsets
 
+from gt4py import eve
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
@@ -316,8 +317,21 @@ def _lower_lambda_to_nested_sdfg(
     # This property is used by pattern matching in SDFG transformation framework
     # to skip those transformations that do not yet support control flow blocks.
     nsdfg.using_explicit_control_flow = True
+    # We pass an empty set as symbolic arguments, which implies that all scalar
+    # inputs of the scan nested SDFG will be represented as scalar data containers.
+    # The reason why we do not check for dace symbolic expressions and do not map
+    # them to inner symbols is that the scan expression should not contain any domain
+    # expression (no field operator inside)..
+    assert (
+        len(
+            eve.walk_values(lambda_node)
+            .filter(lambda node: cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")))
+            .to_list()
+        )
+        == 0
+    )
     lambda_translator = sdfg_builder.setup_nested_context(
-        lambda_node, nsdfg, sdfg, lambda_symbols, symbolic_arguments={}
+        lambda_node, nsdfg, sdfg, lambda_symbols, symbolic_arguments=set()
     )
 
     # use the vertical dimension in the domain as scan dimension
