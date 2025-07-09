@@ -262,6 +262,17 @@ class MapFusion(transformation.SingleStateTransformation):
         ):
             return False
 
+        # We need to initialize the edges to avoid some issues. However, we will first check
+        #  if the Maps are in the same scope. This will especially critical for parallel map fusion.
+        if expr_index == 1:
+            first_map_entry: nodes.MapEntry = self.first_parallel_map_entry
+            second_map_entry: nodes.MapEntry = self.second_parallel_map_entry
+            assert isinstance(first_map_entry, nodes.MapEntry)
+            assert isinstance(second_map_entry, nodes.MapEntry)
+            scope = graph.scope_dict()
+            if scope[first_map_entry] != scope[second_map_entry]:
+                return False
+
         # To ensures that the `{src,dst}_subset` are properly set, run initialization.
         #  See [issue 1708](https://github.com/spcl/dace/issues/1703)
         for edge in graph.edges():
@@ -1971,13 +1982,11 @@ class MapFusion(transformation.SingleStateTransformation):
             return None
 
         # The ranges, however, we apply some post processing to them.
-        simp = lambda e: symbolic.simplify_ext(symbolic.simplify(e))  # noqa: E731 [lambda-assignment]
         first_rngs: Dict[str, Tuple[Any, Any, Any]] = {
-            param: tuple(simp(r) for r in rng) for param, rng in zip(first_params, first_map.range)
+            param: tuple(r for r in rng) for param, rng in zip(first_params, first_map.range)
         }
         second_rngs: Dict[str, Tuple[Any, Any, Any]] = {
-            param: tuple(simp(r) for r in rng)
-            for param, rng in zip(second_params, second_map.range)
+            param: tuple(r for r in rng) for param, rng in zip(second_params, second_map.range)
         }
 
         # Parameters of the second map that have not yet been matched to a parameter

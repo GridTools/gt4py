@@ -136,7 +136,9 @@ def gt_simplify(
         #  the parts DaCe is not able to do.
         if "FuseStates" not in skip:
             fuse_state_res = sdfg.apply_transformations_repeated(
-                [gtx_transformations.GT4PyStateFusion]
+                [gtx_transformations.GT4PyStateFusion],
+                validate=False,
+                validate_all=validate_all,
             )
             if fuse_state_res:
                 at_least_one_xtrans_run = True
