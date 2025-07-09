@@ -247,7 +247,7 @@ def gt_inline_nested_sdfg(
         # to be updated accordingly. Otherwise, all ID-based accesses are not going
         # to work (which is what pattern matching attempts to do).
         sdfg.reset_cfg_list()
-        nb_preproccess = sdfg.apply_transformations_repeated(
+        nb_preproccess = sdfg.apply_transformations_once_everywhere(
             [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors],
             validate=False,
             validate_all=validate_all,
