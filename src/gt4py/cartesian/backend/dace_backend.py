@@ -346,7 +346,7 @@ class SDFGManager:
             / filename
         )
 
-        do_cache = self.builder.caching.name == "nocaching"
+        do_cache = self.builder.caching.name != "nocaching"
         if do_cache and path in SDFGManager._loaded_sdfgs:
             return SDFGManager._loaded_sdfgs[path]
 
