@@ -143,7 +143,7 @@ run_dace_gpu = make_dace_backend(
     cached=False,
     gpu=True,
     async_sdfg_call=False,
-    make_persistent=False,
+    make_persistent=True,
     blocking_dim=None,
 )
 run_dace_gpu_noopt = make_dace_backend(
@@ -151,7 +151,7 @@ run_dace_gpu_noopt = make_dace_backend(
     cached=False,
     gpu=True,
     async_sdfg_call=False,
-    make_persistent=False,
+    make_persistent=True,
     blocking_dim=None,
 )
 run_dace_gpu_cached = make_dace_backend(
@@ -159,6 +159,6 @@ run_dace_gpu_cached = make_dace_backend(
     cached=True,
     gpu=True,
     async_sdfg_call=False,
-    make_persistent=False,
+    make_persistent=True,
     blocking_dim=None,
 )
