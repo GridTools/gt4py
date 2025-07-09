@@ -454,11 +454,12 @@ def infer_expr(
     Arguments:
     - expr: The expression to be inferred.
     - domain: The domain `expr` is read at.
+
+    Keyword Arguments:
     - symbolic_domain_sizes: A dictionary mapping axes names, e.g., `I`, `Vertex`, to a symbol
       name that evaluates to the length of that axis.
     - allow_uninferred: Allow `as_fieldop` expressions whose domain is either unknown (e.g.
       because of a dynamic shift) or never accessed.
-    actually access domain)
     - keep_existing_domains: If `True`, keep existing domains in `as_fieldop` expressions and
       use them to propagate the domain further. This is useful in cases where after a
       transformation some nodes are missing domain information that needs to be repopulated,
