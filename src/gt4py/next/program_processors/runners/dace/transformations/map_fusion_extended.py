@@ -59,7 +59,7 @@ def gt_horizontal_map_fusion(
 
     ret = sdfg.apply_transformations_repeated(
         transformations,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -69,10 +69,12 @@ def gt_horizontal_map_fusion(
             skip = skip.union(["ConsolidateEdges"])
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
             skip=skip,
         )
+    elif validate and (not validate_all):
+        sdfg.validate()
 
     return ret
 
@@ -108,7 +110,7 @@ def gt_vertical_map_fusion(
 
     ret = sdfg.apply_transformations_repeated(
         transformations,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -122,6 +124,8 @@ def gt_vertical_map_fusion(
             validate_all=validate_all,
             skip=skip,
         )
+    elif validate and (not validate_all):
+        sdfg.validate()
 
     return ret
 
