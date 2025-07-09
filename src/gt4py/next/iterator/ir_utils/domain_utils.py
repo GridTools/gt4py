@@ -203,15 +203,15 @@ def _reduce_domains(
     assert all(domain.grid_type == domains[0].grid_type for domain in domains)
     assert all(domain.ranges.keys() == domains[0].ranges.keys() for domain in domains)
 
-    new_domain_ranges = {}
-    for dim in domains[0].ranges.keys():
-        new_domain_ranges[dim] = range_reduce_op(*[domain.ranges[dim] for domain in domains])
+    dims = domains[0].ranges.keys()
+    new_domain_ranges = {dim: range_reduce_op(*(d.ranges[dim] for d in domains)) for dim in dims}
 
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
 
 domain_union = functools.partial(_reduce_domains, range_reduce_op=_range_union)
 """Return the (set) union of a list of domains."""
+
 domain_intersection = functools.partial(_reduce_domains, range_reduce_op=_range_intersection)
 """Return the intersection of a list of domains."""
 
@@ -241,13 +241,12 @@ def promote_domain(
 ) -> SymbolicDomain:
     """Return a domain that is extended with the dimensions of target_dims."""
     assert set(domain.ranges.keys()).issubset(target_dims)
-    dims_dict = {}
-    for dim in target_dims:
-        dims_dict[dim] = (
-            domain.ranges[dim]
-            if dim in domain.ranges
-            else SymbolicRange(itir.InfinityLiteral.NEGATIVE, itir.InfinityLiteral.POSITIVE)
-        )
+    dims_dict = {
+        dim: domain.ranges[dim]
+        if dim in domain.ranges
+        else SymbolicRange(itir.InfinityLiteral.NEGATIVE, itir.InfinityLiteral.POSITIVE)
+        for dim in target_dims
+    }
     return SymbolicDomain(domain.grid_type, dims_dict)
 
 
@@ -259,12 +258,8 @@ def is_finite(range_or_domain: SymbolicRange | SymbolicDomain) -> bool:
     """
     match range_or_domain:
         case SymbolicRange() as range_:
-            if any(
-                v in [itir.InfinityLiteral.POSITIVE, itir.InfinityLiteral.NEGATIVE]
-                for v in [range_.start, range_.stop]
-            ):
-                return False
-            return True
+            infinity_literals = (itir.InfinityLiteral.POSITIVE, itir.InfinityLiteral.NEGATIVE)
+            return not (range_.start in infinity_literals or range_.stop in infinity_literals)
         case SymbolicDomain() as domain:
             return all(is_finite(range_) for range_ in domain.ranges.values())
         case _:
