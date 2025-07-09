@@ -85,11 +85,11 @@ CodeGenNoxParam: Final = types.SimpleNamespace(
 )
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
     "internal": {"extras": [], "markers": ["not requires_dace"]},
-    "dace": {"extras": ["dace"], "markers": ["requires_dace"]},
+    "dace": {"extras": ["dace-cartesian"], "markers": ["requires_dace"]},
 }
 # Use dace-next for GT4Py-next, to install a different dace version than in cartesian
 CodeGenNextTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": ["dace-next"], "markers": ["requires_dace"]},
+    "dace": {"extras": ["dace-next-dev"], "markers": ["requires_dace"]},
 }
 
 
@@ -146,7 +146,7 @@ def test_cartesian(
     install_session_venv(
         session,
         extras=[
-            "performance",
+            "standard",
             "testing",
             *codegen_settings["extras"],
             *device_settings["extras"],
@@ -239,7 +239,7 @@ def test_next(
 
     install_session_venv(
         session,
-        extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
+        extras=["standard", "testing", *codegen_settings["extras"], *device_settings["extras"]],
         groups=groups,
     )
 
@@ -290,7 +290,7 @@ def test_storage(
     device_settings = DeviceTestSettings[device]
 
     install_session_venv(
-        session, extras=["performance", "testing", *device_settings["extras"]], groups=["test"]
+        session, extras=["standard", "testing", *device_settings["extras"]], groups=["test"]
     )
 
     markers = " and ".join(device_settings["markers"])
