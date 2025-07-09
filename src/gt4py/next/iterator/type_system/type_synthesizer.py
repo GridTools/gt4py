@@ -282,9 +282,9 @@ def concat_where(
 
         tb_dtype, fb_dtype = (type_info.extract_dtype(b) for b in [tb, fb])
 
-        assert (
-            tb_dtype == fb_dtype
-        ), f"Field arguments must be of same dtype, got '{tb_dtype}' != '{fb_dtype}'."
+        assert tb_dtype == fb_dtype, (
+            f"Field arguments must be of same dtype, got '{tb_dtype}' != '{fb_dtype}'."
+        )
         dtype = tb_dtype
 
         return_dims = common.promote_dims(
