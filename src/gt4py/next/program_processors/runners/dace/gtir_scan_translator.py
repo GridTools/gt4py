@@ -317,7 +317,7 @@ def _lower_lambda_to_nested_sdfg(
     # to skip those transformations that do not yet support control flow blocks.
     nsdfg.using_explicit_control_flow = True
     lambda_translator = sdfg_builder.setup_nested_context(
-        nsdfg, sdfg, lambda_symbols, symbolic_arguments={}
+        lambda_node, nsdfg, sdfg, lambda_symbols, symbolic_arguments={}
     )
 
     # use the vertical dimension in the domain as scan dimension

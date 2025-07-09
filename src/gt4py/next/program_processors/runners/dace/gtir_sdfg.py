@@ -17,6 +17,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import itertools
+import operator
 import warnings
 from typing import (
     Any,
@@ -153,6 +154,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     @abc.abstractmethod
     def setup_nested_context(
         self,
+        expr: gtir.Lambda,
         sdfg: dace.SDFG,
         parent: dace.SDFG,
         scope_symbols: dict[str, ts.DataType],
@@ -168,6 +170,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         as dace symbols in the parent SDFG.
 
         Args:
+            expr: The lambda expression to be lowered as a nested SDFG.
             sdfg: The nested SDFG where to lower the nested expression.
             parent: The parent SDFG.
             scope_symbols: Mapping from symbol name to data type for the GTIR symbols
@@ -356,6 +359,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def setup_nested_context(
         self,
+        expr: gtir.Lambda,
         sdfg: dace.SDFG,
         parent: dace.SDFG,
         scope_symbols: dict[str, ts.DataType],
@@ -366,15 +370,30 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # mapped to the parameters of the lambda expression (`node.params`) and
         # the symbols defined in the parent SDFG.
         params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in scope_symbols.items()]
+
+        domain_symbols = set(
+            eve.walk_values(expr)
+            .filter(lambda node: cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")))
+            .map(
+                lambda domain: eve.walk_values(domain)
+                .if_isinstance(gtir.SymRef)
+                .map(lambda symref: str(symref.id))
+                .filter(lambda sym: sym in scope_symbols)
+                .to_list()
+            )
+            .reduce(operator.add, init=[])
+        )
         parent_symbols = {
             # scalar values represented as dace symbols in parent SDFG are mapped
             # to dace symbols in the nested SDFG
-            pname
-            for sym in params
-            if (pname := str(sym.id)) in parent.symbols
+            sym
+            for sym in scope_symbols.keys()
+            if sym in parent.symbols
         }
         nsdfg_builder._add_sdfg_params(
-            sdfg, params, symbolic_arguments=(set(symbolic_arguments) | parent_symbols)
+            sdfg,
+            params,
+            symbolic_arguments=(set(symbolic_arguments) | domain_symbols | parent_symbols),
         )
         return nsdfg_builder
 
@@ -886,7 +905,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nsdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=sdfg.debuginfo)
         lambda_translator = self.setup_nested_context(
-            nsdfg, sdfg, lambda_symbols, symbolic_arguments=symbolic_args.keys()
+            node, nsdfg, sdfg, lambda_symbols, symbolic_arguments=symbolic_args.keys()
         )
 
         nstate = nsdfg.add_state("lambda")
