@@ -213,9 +213,26 @@ def test_propagate_to_if_on_tuples_with_let():
     assert actual == expected
 
 
-def test_propagate_nested_lift():
+def test_propagate_nested_let():
     testee = im.let("a", im.let("b", 1)("a_val"))("a")
     expected = im.let("b", 1)(im.let("a", "a_val")("a"))
+    actual = CollapseTuple.apply(
+        testee,
+        remove_letified_make_tuple_elements=False,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert actual == expected
+
+
+def test_propagate_nested_let_with_collision():
+    testee = im.let(("a", im.let("c", 1)("c")), ("b", im.let("c", 2)("c")))(
+        im.call("plus")("a", "b")
+    )
+    expected = im.let(("c", 1), ("c_", 2))(
+        im.let(("a", "c"), ("b", "c_"))(im.call("plus")("a", "b"))
+    )
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,

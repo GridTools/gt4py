@@ -97,7 +97,7 @@ The `pyproject.toml` file contains both the definition of the `gt4py` Python dis
 
 ### Development Tasks (`dev-tasks.py`)
 
-Recurrent development tasks like bumping versions of used development tools or required third party dependencies have been collected as different subcommands in the [`dev-tasks.py`](./dev-tasks.py) script. Read the tool help for a brief description of every task and always use this tool to update the versions and sync the version configuration accross different files (e.g. `pyproject.toml` and `.pre-commit-config.yaml`).
+Recurrent development tasks like bumping versions of used development tools or required third party dependencies have been collected as different subcommands in the [`dev-tasks.py`](./dev-tasks.py) script. Read the tool help for a brief description of every task and always use this tool to update the versions and sync the version configuration across different files (e.g. `pyproject.toml` and `.pre-commit-config.yaml`).
 
 ## 📖 Documentation
 

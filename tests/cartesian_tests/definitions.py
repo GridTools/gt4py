@@ -60,7 +60,6 @@ def id_version():
 def get_array_library(backend: str):
     """Return device ready array maker library"""
     backend_cls = gt4pyc.backend.from_name(backend)
-    assert backend_cls is not None
     if backend_cls.storage_info["device"] == "gpu":
         assert cp is not None
         return cp

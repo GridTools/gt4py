@@ -29,9 +29,9 @@ def _get_pkg_marks(module_name: str) -> list[pytest.Mark | str]:
     """Collect markers in the `package_pytestmarks` module attribute (and recursively from its parents)."""
     module = sys.modules[module_name]
     pkg_markers = getattr(module, _PKG_MARKS_ATTR_NAME, [])
-    assert isinstance(
-        pkg_markers, collections.abc.Sequence
-    ), f"'{_PKG_MARKS_ATTR_NAME}' content must be a sequence of marks"
+    assert isinstance(pkg_markers, collections.abc.Sequence), (
+        f"'{_PKG_MARKS_ATTR_NAME}' content must be a sequence of marks"
+    )
 
     if (parent := module_name.rsplit(".", 1)[0]) != module_name:
         pkg_markers += _get_pkg_marks(parent)

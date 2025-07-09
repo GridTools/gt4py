@@ -22,7 +22,6 @@ import operator
 import pickle
 import pprint
 import re
-import sys
 import types
 import typing
 import uuid
@@ -572,7 +571,9 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
         >>> @register_subclasses(MyVirtualSubclassA, MyVirtualSubclassB)
         ... class MyBaseClass(abc.ABC):
         ...     pass
-        >>> issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(MyVirtualSubclassB, MyBaseClass)
+        >>> issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(
+        ...     MyVirtualSubclassB, MyBaseClass
+        ... )
         True
 
     """
@@ -624,8 +625,9 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
             Defaults to :class:`xxhash.xxh64`.
 
     """
+    hasher: xtyping.HashlibAlgorithm
     if hash_algorithm is None:
-        hasher = xxhash.xxh64()
+        hasher = xxhash.xxh64()  # type: ignore[assignment]  # fixing this requires https://github.com/ifduyue/python-xxhash/issues/104
     elif isinstance(hash_algorithm, str):
         hasher = hashlib.new(hash_algorithm)
     else:
@@ -858,21 +860,9 @@ class FrozenNamespace(Namespace[T]):
 class UIDGenerator:
     """Simple unique id generator using different methods."""
 
-    prefix: Optional[str] = (
-        dataclasses.field(default=None, kw_only=True)
-        if sys.version_info >= (3, 10)
-        else dataclasses.field(default=None)
-    )
-    width: Optional[int] = (
-        dataclasses.field(default=None, kw_only=True)
-        if sys.version_info >= (3, 10)
-        else dataclasses.field(default=None)
-    )
-    warn_unsafe: Optional[bool] = (
-        dataclasses.field(default=None, kw_only=True)
-        if sys.version_info >= (3, 10)
-        else dataclasses.field(default=None)
-    )
+    prefix: Optional[str] = dataclasses.field(default=None, kw_only=True)
+    width: Optional[int] = dataclasses.field(default=None, kw_only=True)
+    warn_unsafe: Optional[bool] = dataclasses.field(default=None, kw_only=True)
 
     _counter: Iterator[int] = dataclasses.field(
         default_factory=functools.partial(itertools.count, 1), init=False

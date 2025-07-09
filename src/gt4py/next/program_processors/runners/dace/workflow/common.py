@@ -34,6 +34,10 @@ def set_dace_config(
     dace.config.Config.set("default_build_folder", value=str(config.BUILD_CACHE_DIR / "dace_cache"))
     dace.config.Config.set("compiler.use_cache", value=True)
 
+    # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
+    #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
+    dace.Config.set("compiler.cuda.allow_implicit_memlet_to_map", value=False)
+
     if cmake_build_type is not None:
         dace.config.Config.set("compiler.build_type", value=cmake_build_type.value)
 

@@ -78,8 +78,8 @@ class CombinedFixedPointTransform(FixedPointTransformation):
                 method = getattr(self, f"transform_{transformation.name.lower()}")
                 result = method(node, **kwargs)
                 if result is not None:
-                    assert (
-                        result is not node
-                    ), f"Transformation {transformation.name.lower()} should have returned None, since nothing changed."
+                    assert result is not node, (
+                        f"Transformation {transformation.name.lower()} should have returned None, since nothing changed."
+                    )
                     return result
         return None

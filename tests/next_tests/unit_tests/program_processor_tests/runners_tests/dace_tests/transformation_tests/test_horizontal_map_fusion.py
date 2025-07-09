@@ -147,7 +147,7 @@ def _make_sdfg_with_multiple_maps_that_share_inputs(
 
     state.add_mapped_tasklet(
         name="second_computation",
-        map_ranges=[("i", f"0:{N//2}"), ("j", "horizontal_start:horizontal_end")],
+        map_ranges=[("i", f"0:{N // 2}"), ("j", "horizontal_start:horizontal_end")],
         inputs={"__in0": dace.Memlet("b[i, j]")},
         code="__out = __in0 + 1.0",
         outputs={"__out": dace.Memlet("out2[i, j]")},
@@ -156,7 +156,7 @@ def _make_sdfg_with_multiple_maps_that_share_inputs(
 
     state.add_mapped_tasklet(
         name="third_computation",
-        map_ranges=[("i", f"0:{N//2}"), ("j", "horizontal_start:horizontal_end")],
+        map_ranges=[("i", f"0:{N // 2}"), ("j", "horizontal_start:horizontal_end")],
         inputs={"__in0": dace.Memlet("c[i, j]"), "__in1": dace.Memlet("a[i, j]")},
         code="__out = __in0 + __in1 + 1.0",
         outputs={"__out": dace.Memlet("out3[i, j]")},
@@ -165,7 +165,7 @@ def _make_sdfg_with_multiple_maps_that_share_inputs(
 
     state.add_mapped_tasklet(
         name="fourth_computation",
-        map_ranges=[("i", f"{N//4}:{N}"), ("j", "horizontal_start:horizontal_end")],
+        map_ranges=[("i", f"{N // 4}:{N}"), ("j", "horizontal_start:horizontal_end")],
         inputs={"__in0": dace.Memlet("d[i, j]"), "__in1": dace.Memlet("a[i, j]")},
         code="__out = __in0 + __in1 + 2.0",
         outputs={"__out": dace.Memlet("out4[i, j]")},
