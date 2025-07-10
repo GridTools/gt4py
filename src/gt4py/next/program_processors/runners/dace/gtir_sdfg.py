@@ -17,7 +17,6 @@ from __future__ import annotations
 import abc
 import dataclasses
 import itertools
-import operator
 import warnings
 from typing import (
     Any,
@@ -369,7 +368,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # the symbols defined in the parent SDFG.
         params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in scope_symbols.items()]
 
-        domain_symbols = set(
+        domain_symbols = (
             eve.walk_values(expr)
             .filter(lambda node: cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")))
             .map(
@@ -377,9 +376,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 .if_isinstance(gtir.SymRef)
                 .map(lambda symref: str(symref.id))
                 .filter(lambda sym: sym in scope_symbols)
-                .to_list()
+                .to_set()
             )
-            .reduce(operator.add, init=[])
+            .reduce(lambda x, y: x | y, init=set())
         )
         parent_symbols = {
             # scalar values represented as dace symbols in parent SDFG are mapped
@@ -687,7 +686,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         else:
             head_state = entry_state
 
-        # by setting `symbolic_arguments=None`, we represent all scalars as dace symbols
+        # By passing `symbolic_arguments=None` all scalars are represented as dace symbols.
+        #   We do this to allow lowering of scalar expressions in let-statements,
+        #   that only depend on scalar parameters, as dace symbolic expressions
+        #   mapped to symbols on a nested SDFG.
         sdfg_arg_names = self._add_sdfg_params(sdfg, node.params, symbolic_arguments=None)
 
         # visit one statement at a time and expand the SDFG from the current head state

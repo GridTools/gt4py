@@ -321,14 +321,11 @@ def _lower_lambda_to_nested_sdfg(
     # inputs of the scan nested SDFG will be represented as scalar data containers.
     # The reason why we do not check for dace symbolic expressions and do not map
     # them to inner symbols is that the scan expression should not contain any domain
-    # expression (no field operator inside)..
-    assert (
-        len(
-            eve.walk_values(lambda_node)
-            .filter(lambda node: cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")))
-            .to_list()
+    # expression (no field operator inside).
+    assert not any(
+        eve.walk_values(lambda_node).map(
+            lambda node: cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
         )
-        == 0
     )
     lambda_translator = sdfg_builder.setup_nested_context(
         lambda_node, nsdfg, sdfg, lambda_symbols, symbolic_arguments=set()
