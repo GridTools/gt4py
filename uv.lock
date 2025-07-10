@@ -1308,13 +1308,6 @@ next = [
     { name = "pytest" },
     { name = "scipy" },
 ]
-next-dev = [
-    { name = "clang-format" },
-    { name = "hypothesis" },
-    { name = "jax" },
-    { name = "pytest" },
-    { name = "scipy" },
-]
 rocm4-3 = [
     { name = "cupy-rocm-4-3" },
 ]
@@ -1446,8 +1439,7 @@ requires-dist = [
     { name = "frozendict", specifier = ">=2.3" },
     { name = "gridtools-cpp", specifier = "==2.*,>=2.3.9" },
     { name = "gt4py", extras = ["cuda12"], marker = "extra == 'jax-cuda12'" },
-    { name = "gt4py", extras = ["dace-cartesian", "jax", "standard", "testing"], marker = "extra == 'cartesian'" },
-    { name = "gt4py", extras = ["dace-next-dev", "jax", "standard", "testing"], marker = "extra == 'next-dev'" },
+    { name = "gt4py", extras = ["jax", "standard", "testing"], marker = "extra == 'cartesian'" },
     { name = "gt4py", extras = ["jax", "standard", "testing"], marker = "extra == 'next'" },
     { name = "hypothesis", marker = "extra == 'testing'", specifier = ">=6.93" },
     { name = "jax", marker = "extra == 'jax'", specifier = ">=0.4.26" },
@@ -1469,7 +1461,7 @@ requires-dist = [
     { name = "versioningit", specifier = ">=3.1.1" },
     { name = "xxhash", specifier = ">=3.5.0" },
 ]
-provides-extras = ["cartesian", "cuda11", "cuda12", "jax", "jax-cuda12", "next", "next-dev", "rocm4-3", "rocm5-0", "rocm6-0", "standard", "testing"]
+provides-extras = ["cartesian", "cuda11", "cuda12", "jax", "jax-cuda12", "next", "rocm4-3", "rocm5-0", "rocm6-0", "standard", "testing"]
 
 [package.metadata.requires-dev]
 build = [

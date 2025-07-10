@@ -131,7 +131,7 @@ readme = 'README.md'
 requires-python = '>=3.10, <3.14'
 
 [project.optional-dependencies]
-cartesian = ['gt4py[dace-cartesian,jax,standard,testing]']
+cartesian = ['gt4py[jax,standard,testing]']
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
 # 'dace' defined as dependency-group until supported versions are pushed to PyPI
@@ -139,7 +139,6 @@ cuda12 = ['cupy-cuda12x>=12.0']
 jax = ['jax>=0.4.26']
 jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
 next = ['gt4py[jax,standard,testing]']
-next-dev = ['gt4py[dace-next-dev,jax,standard,testing]']
 rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
 rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
 rocm6_0 = ['cupy>=13.4.1']
