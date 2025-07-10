@@ -92,6 +92,7 @@ build_cscs_gh200:
     CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5
+    SLURM_GRES: "gpu:4"
   parallel:
     matrix:
       - SUBPACKAGE: [cartesian]
