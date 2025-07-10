@@ -18,7 +18,7 @@ variables:  # Default values for base variables (can be overriden in jobs defini
   UBUNTU_VERSION: '24.04'
   UV_VERSION: '0.6.12'
 
-.test_python_versions: &test_python_versions ['3.10', '3.13']
+.minor_python_versions: &minor_python_versions ['3.10', '3.13']
 
 stages:
   - build
@@ -40,6 +40,7 @@ stages:
     # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
     # To override the defaults, just define these variables in the actual job.
     DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
+    PY_VERSION: 3.${PY_MINOR_VERSION}
   before_script:
     # We create a tag that depends on the SHA value of ci/Dockerfile,
     # the docker build arguments since the Docker file is heavily parameterized,
@@ -48,14 +49,14 @@ stages:
     - echo "GT4PY_IMAGE_PREFIX=${GT4PY_IMAGE_PREFIX}" >> build.env
     - DOCKER_BUILD_ARGS_VALUES=`for var in $(echo "$DOCKER_BUILD_ARGS" | jq -r '.[]'); do echo "$var=${!var}"; done`
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS_VALUES} $(cat uv.lock)" | sha256sum | head -c 16`
-    - echo "DOCKER_TAG-${PY_VERSION}=${DOCKER_TAG}" >> build.env
+    - echo "DOCKER_TAG_${PY_MINOR_VERSION}=${DOCKER_TAG}" >> build.env
     - export PERSIST_IMAGE_NAME=${GT4PY_IMAGE_PREFIX}-${PY_VERSION}:${DOCKER_TAG}
     - echo "PERSIST_IMAGE_NAME=${PERSIST_IMAGE_NAME}"
     # Uncomment the following line to see the environment variables for debugging 
     # - env | sort 
   parallel:
     matrix:
-      - PY_VERSION: *test_python_versions
+      - PY_MINOR_VERSION: *minor_python_versions
   artifacts:
     reports:
       dotenv: build.env
@@ -89,9 +90,10 @@ build_cscs_gh200:
 # -- Test stage --
 .test_common:
   stage: test
-  image: ${GT4PY_IMAGE_PREFIX}-${PY_VERSION}:${DOCKER_TAG-${PY_VERSION}}
+  image: ${GT4PY_IMAGE_PREFIX}-${PY_VERSION}:${DOCKER_TAG-${PY_MINOR_VERSION}}
   variables:
     CSCS_CUDA_MPS: 1
+    PY_VERSION: "3.${PY_MINOR_VERSION}"
     SLURM_GPUS_PER_NODE: 4
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5
@@ -100,17 +102,17 @@ build_cscs_gh200:
       - SUBPACKAGE: [cartesian]
         VARIANT: ["internal", "dace"]
         SUBVARIANT: ["cuda12", "cpu"]
-        PY_VERSION: *test_python_versions
+        PY_MINOR_VERSION: *minor_python_versions
       - SUBPACKAGE: eve
-        PY_VERSION: *test_python_versions
+        PY_MINOR_VERSION: *minor_python_versions
       - SUBPACKAGE: next
         VARIANT: ["internal", "dace"]
         SUBVARIANT: ["cuda12", "cpu"]
         DETAIL: ["nomesh", "atlas"]
-        PY_VERSION: *test_python_versions
+        PY_MINOR_VERSION: *minor_python_versions
       - SUBPACKAGE: [storage]
         VARIANT: ["cuda12", "cpu"]
-        PY_VERSION: *test_python_versions
+        PY_MINOR_VERSION: *minor_python_versions
   rules:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
