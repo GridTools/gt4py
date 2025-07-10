@@ -57,7 +57,12 @@ from .strides import (
     gt_propagate_strides_from_access_node,
     gt_propagate_strides_of,
 )
-from .utils import gt_find_constant_arguments, gt_make_transients_persistent
+from .utils import (
+    find_nodes_in_scope,
+    gt_find_constant_arguments,
+    gt_make_transients_persistent,
+    gt_propagate_memlets_map_scope,
+)
 
 
 __all__ = [
@@ -81,6 +86,7 @@ __all__ = [
     "SingleStateGlobalSelfCopyElimination",
     "SplitAccessNode",
     "SplitConsumerMemlet",
+    "find_nodes_in_scope",
     "gt_auto_optimize",
     "gt_change_transient_strides",
     "gt_create_local_double_buffering",
@@ -94,6 +100,7 @@ __all__ = [
     "gt_map_strides_to_dst_nested_sdfg",
     "gt_map_strides_to_src_nested_sdfg",
     "gt_multi_state_global_self_copy_elimination",
+    "gt_propagate_memlets_map_scope",
     "gt_propagate_strides_from_access_node",
     "gt_propagate_strides_of",
     "gt_reduce_distributed_buffering",
