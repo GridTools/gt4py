@@ -93,7 +93,10 @@ def _sdfg_add_arrays_and_edges(
     origins,
 ) -> None:
     for name, array in inner_sdfg.arrays.items():
-        if isinstance(array, data.Array) and not array.transient:
+        if array.transient:
+            continue
+
+        if isinstance(array, data.Array):
             axes = field_info[name].axes
 
             shape = [f"__{name}_{axis}_size" for axis in axes] + [
@@ -145,7 +148,6 @@ def _sdfg_add_arrays_and_edges(
                 dtype=array.dtype,
                 storage=array.storage,
                 lifetime=array.lifetime,
-                transient=array.transient,
             )
             if name in inputs:
                 state.add_edge(
