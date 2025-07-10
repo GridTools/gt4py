@@ -265,6 +265,16 @@ class MapFusionParallel(MapFusion):
         assert self.allow_parallel_map_fusion
         assert self.allow_serial_map_fusion is False
 
+        # Because ParallelMapFusion can map anything. To avoid run `try_initialize()` we check
+        #  if they are in the same scope.
+        first_map_entry: dace_nodes.MapEntry = self.first_parallel_map_entry
+        second_map_entry: dace_nodes.MapEntry = self.second_parallel_map_entry
+        assert isinstance(first_map_entry, dace_nodes.MapEntry)
+        assert isinstance(second_map_entry, dace_nodes.MapEntry)
+        scope = graph.scope_dict()
+        if scope[first_map_entry] != scope[second_map_entry]:
+            return False
+
         for edge in graph.edges():
             edge.data.try_initialize(sdfg, graph, edge)
 

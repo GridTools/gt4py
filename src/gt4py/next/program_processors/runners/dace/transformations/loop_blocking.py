@@ -20,7 +20,10 @@ from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import helpers as dace_helpers
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import gtir_sdfg_utils
+from gt4py.next.program_processors.runners.dace import (
+    gtir_sdfg_utils,
+    transformations as gtx_transformations,
+)
 
 
 @dace_properties.make_properties
@@ -229,6 +232,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             name=inner_label,
             ndrange=inner_range,
             schedule=dace.dtypes.ScheduleType.Sequential,
+            debuginfo=copy.copy(outer_map.debuginfo),
         )
 
         # TODO(phimuell): Investigate if we want to prevent unrolling here
@@ -836,9 +840,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # There is an invalid cache state in the SDFG, that makes the memlet
         #  propagation fail, to clear the cache we call the hash function.
         #  See: https://github.com/spcl/dace/issues/1703
-        _ = sdfg.hash_sdfg()
-        # TODO(phimuell): Use a less expensive method.
-        dace.sdfg.propagation.propagate_memlets_state(sdfg, state)
+        _ = sdfg.reset_cfg_list()
+        gtx_transformations.utils.gt_propagate_memlets_map_scope(sdfg, state, outer_entry)
 
     def _check_if_blocking_is_favourable(
         self,

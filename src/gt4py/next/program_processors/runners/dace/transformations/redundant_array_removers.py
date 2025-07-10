@@ -370,8 +370,11 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         a1_range = dace_sbs.Range.from_array(a1_desc)
         if src_subset.covers(a1_range):
             pass
-        elif all(ss.is_constant() for ss in src_subset.size()):
+        elif all(str(ss).isdigit() for ss in src_subset.size()):
             # If the subset is fully known then we require that it is covered.
+            # NOTE: For checking if the subset is constant we should actually use
+            #   `ss.is_constant()` however, it is very slow and in the context of
+            #   this transformation it is enough to check if the size is a number.
             return False
         elif (
             (not a2_desc.transient)
