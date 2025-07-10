@@ -864,7 +864,7 @@ dependencies = [
 [[package]]
 name = "dace"
 version = "1.0.1"
-source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-to-sdfg#1bf841113c0b4fedbef3cbe5b4cdbbe1b1fc787f" }
+source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.13'",
     "python_full_version == '3.12.*'",
@@ -884,6 +884,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "sympy" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/b4/67/fb1be2673868ee1f08e9c7bacc0b9b77d2bd5ff17ab47896f20006a2a1a5/dace-1.0.1.tar.gz", hash = "sha256:6f7a5defb082ed4f1a81f857d4268ed2bb606f6d9ea9c28d2831d1151e3a80f7", size = 5801727, upload-time = "2025-01-23T15:42:34.596Z" }
 
 [[package]]
 name = "debugpy"
@@ -1334,7 +1335,7 @@ build = [
     { name = "wheel" },
 ]
 dace-cartesian = [
-    { name = "dace", version = "1.0.1", source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-to-sdfg#1bf841113c0b4fedbef3cbe5b4cdbbe1b1fc787f" } },
+    { name = "dace", version = "1.0.1", source = { registry = "https://pypi.org/simple" } },
 ]
 dace-next = [
     { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_07_03#178037acd6dc0bf355e7c1b77801d10985ceb3f8" } },
@@ -1470,7 +1471,7 @@ build = [
     { name = "setuptools", specifier = ">=70.0.0" },
     { name = "wheel", specifier = ">=0.33.6" },
 ]
-dace-cartesian = [{ name = "dace", git = "https://github.com/romanc/dace?branch=romanc%2Fstree-to-sdfg" }]
+dace-cartesian = [{ name = "dace", specifier = ">=1.0.0" }]
 dace-next = [{ name = "dace", git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_07_03" }]
 dev = [
     { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple/" },
