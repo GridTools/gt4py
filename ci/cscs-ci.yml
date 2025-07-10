@@ -45,10 +45,10 @@ stages:
     # the docker build arguments since the Docker file is heavily parameterized,
     # and the contents of the `uv.lock` with the python dependencies versions.
     - GT4PY_IMAGE_PREFIX=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci
-    - echo "GT4PY_IMAGE_PREFIX=${GT4PY_IMAGE_PREFIX}" >> base.env
+    - echo "GT4PY_IMAGE_PREFIX=${GT4PY_IMAGE_PREFIX}" >> build.env
     - DOCKER_BUILD_ARGS_VALUES=`for var in $(echo "$DOCKER_BUILD_ARGS" | jq -r '.[]'); do echo "$var=${!var}"; done`
     - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS_VALUES} $(cat uv.lock)" | sha256sum | head -c 16`
-    - echo "DOCKER_TAG=${DOCKER_TAG}" >> base.env
+    - echo "DOCKER_TAG=${DOCKER_TAG}" >> build.env
     - export PERSIST_IMAGE_NAME=${GT4PY_IMAGE_PREFIX}-${PY_VERSION}:${DOCKER_TAG}
     - echo "PERSIST_IMAGE_NAME=${PERSIST_IMAGE_NAME}"
     # Uncomment the following line to see the environment variables for debugging 
@@ -58,7 +58,7 @@ stages:
       - PY_VERSION: *test_python_versions
   artifacts:
     reports:
-      dotenv: base.env
+      dotenv: build.env
 
 .build_extra_cuda:
   variables:
@@ -89,6 +89,8 @@ build_cscs_gh200:
 # -- Test stage --
 .test_common:
   stage: test
+  needs:
+    - "build_cscs_gh200: [$PY_VERSION]"
   image: ${GT4PY_IMAGE_PREFIX}-${PY_VERSION}:${DOCKER_TAG}
   variables:
     CSCS_CUDA_MPS: 1
