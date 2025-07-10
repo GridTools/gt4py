@@ -44,22 +44,13 @@ stages:
     # We create a tag that depends on the SHA value of ci/Dockerfile,
     # the docker build arguments since the Docker file is heavily parameterized,
     # and the contents of the `uv.lock` with the python dependencies versions.
-    # A
-    - DOCKER_BUILD_ARGS_VALUES=`for var in $(echo "$DOCKER_BUILD_ARGS" | jq -r '.[]'); do echo "$var=${!var}"; done`
-    - echo "${DOCKER_BUILD_ARGS_VALUES}"
-    - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS_VALUES} $(cat uv.lock)" | sha256sum | head -c 16`
-    - echo "DOCKER_TAG=${DOCKER_TAG}"
-    # B
-    - export DOCKER_BUILD_ARGS_VALUES=`for var in $(echo "$DOCKER_BUILD_ARGS" | jq -r '.[]'); do echo "$var=${!var}"; done`
-    - echo "${DOCKER_BUILD_ARGS_VALUES}"
-    - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS_VALUES} $(cat uv.lock)" | sha256sum | head -c 16`
-    - echo "DOCKER_TAG=${DOCKER_TAG}"
-    ##
-    - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS_VALUES} $(cat uv.lock)" | sha256sum | head -c 16`
     - GT4PY_IMAGE_PREFIX=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci
     - echo "GT4PY_IMAGE_PREFIX=${GT4PY_IMAGE_PREFIX}" >> base.env
+    - DOCKER_BUILD_ARGS_VALUES=`for var in $(echo "$DOCKER_BUILD_ARGS" | jq -r '.[]'); do echo "$var=${!var}"; done`
+    - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS_VALUES} $(cat uv.lock)" | sha256sum | head -c 16`
     - echo "DOCKER_TAG=${DOCKER_TAG}" >> base.env
     - export PERSIST_IMAGE_NAME=${GT4PY_IMAGE_PREFIX}-${PY_VERSION}:${DOCKER_TAG}
+    - echo "PERSIST_IMAGE_NAME=${PERSIST_IMAGE_NAME}"
     # Uncomment the following line to see the environment variables for debugging 
     # - env | sort 
   parallel:
