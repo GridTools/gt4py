@@ -232,6 +232,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             name=inner_label,
             ndrange=inner_range,
             schedule=dace.dtypes.ScheduleType.Sequential,
+            debuginfo=copy.copy(outer_map.debuginfo),
         )
 
         # TODO(phimuell): Investigate if we want to prevent unrolling here
