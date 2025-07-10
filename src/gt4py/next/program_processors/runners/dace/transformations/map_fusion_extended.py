@@ -16,11 +16,14 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import graph as dace_graph, nodes as dace_nodes, propagation as dace_propagation
+from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-from gt4py.next.program_processors.runners.dace.transformations import map_fusion_utils
+from gt4py.next.program_processors.runners.dace.transformations import (
+    map_fusion_utils as gtx_mfutils,
+    utils as gtx_tutils,
+)
 
 
 def gt_horizontal_map_fusion(
@@ -171,12 +174,17 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
         second_map_exit: dace_nodes.MapExit,
     ) -> None:
         """Split the map range in order to obtain an overlapping range between the first and second map."""
-        splitted_range = map_fusion_utils.split_overlapping_map_range(
+        splitted_range = gtx_mfutils.split_overlapping_map_range(
             first_map_entry.map, second_map_entry.map
         )
         assert splitted_range is not None
 
+        scope_dict = graph.scope_dict()
+        assert scope_dict[first_map_entry] is scope_dict[second_map_entry]
+        containing_scope_or_none = scope_dict[first_map_entry]
+
         first_map_splitted_range, second_map_splitted_range = splitted_range
+        new_map_entries = []
 
         def _replace_ranged_map(
             map_entry: dace_nodes.MapEntry,
@@ -187,12 +195,11 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
 
             # make copies of the map with splitted ranges
             for i, r in enumerate(new_ranges):
-                map_fusion_utils.copy_map_graph_with_new_range(
+                new_map_entry, _ = gtx_mfutils.copy_map_graph_with_new_range(
                     sdfg, graph, map_entry, map_exit, r, str(i)
                 )
-
-            # remove the original first map
-            map_fusion_utils.delete_map(graph, map_entry, map_exit)
+                new_map_entries.append(new_map_entry)
+            gtx_mfutils.delete_map(graph, map_entry, map_exit)  # remove the original first map
 
         _replace_ranged_map(
             first_map_entry,
@@ -205,10 +212,20 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
             second_map_splitted_range,
         )
 
-        dace_propagation.propagate_memlets_state(sdfg, graph)
+        # Now we propagate the Memlets. If the original Maps where located at the global
+        #  scope we have to propagate the maps from the new ones. However, if they are
+        #  not at global scope we simply propagate the surrounding Map, since they are
+        #  by assumption inside the same Map.
+        if containing_scope_or_none is None:
+            for new_map_entry in new_map_entries:
+                gtx_tutils.gt_propagate_memlets_map_scope(sdfg, graph, new_map_entry)
+        else:
+            gtx_tutils.gt_propagate_memlets_map_scope(sdfg, graph, containing_scope_or_none)
 
-        # workaround to refresh `cfg_list` on the SDFG
-        sdfg.hash_sdfg()
+        # Workaround to ensure that some cache in DaCe has been cleared.
+        # TODO(phimuell, iomaganaris): Before `hash_sdfg()` was used, but this was a
+        #   very heavy operation. I think that this is enough.
+        sdfg.reset_cfg_list()
 
 
 @dace_properties.make_properties
@@ -269,7 +286,7 @@ class HorizontalSplitMapRange(SplitMapRange):
             # no common source access node
             return False
 
-        splitted_range = map_fusion_utils.split_overlapping_map_range(first_map, second_map)
+        splitted_range = gtx_mfutils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
             return False
 
@@ -340,7 +357,7 @@ class VerticalSplitMapRange(SplitMapRange):
         if not self.access_node.desc(graph).transient:
             return False
 
-        splitted_range = map_fusion_utils.split_overlapping_map_range(first_map, second_map)
+        splitted_range = gtx_mfutils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
             return False
 
