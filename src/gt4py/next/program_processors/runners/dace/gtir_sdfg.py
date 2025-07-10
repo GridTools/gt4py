@@ -834,11 +834,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             for p, lambda_arg in zip(node.fun.params, node.args, strict=True):
                 if not isinstance(lambda_arg.type, ts.ScalarType):
                     continue
-                symrefs = symbol_ref_utils.collect_symbol_refs(
-                    lambda_arg, self.global_symbols.keys()
-                )
-                if all(symref in sdfg.symbols for symref in symrefs):
-                    symbolic_args[str(p.id)] = gtir_sdfg_utils.get_symbolic(lambda_arg)
+                symbolic_expr = gtir_sdfg_utils.get_symbolic(lambda_arg)
+                if all(s in sdfg.symbols for s in symbolic_expr.free_symbols):
+                    symbolic_args[str(p.id)] = symbolic_expr
             # All other lambda arguments are lowered to some dataflow that produces a data node.
             args = {
                 str(p.id): (
