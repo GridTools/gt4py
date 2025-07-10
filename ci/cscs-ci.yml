@@ -93,6 +93,7 @@ build_cscs_gh200:
   variables:
     CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
+    SLURM_GPUS_PER_NODE: 4
     SLURM_TIMELIMIT: 5
     SLURM_GPUS_PER_NODE: 4
   parallel:
