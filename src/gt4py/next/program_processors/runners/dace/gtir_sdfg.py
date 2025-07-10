@@ -363,11 +363,35 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         symbolic_arguments: set[str],
     ) -> SDFGBuilder:
         nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, scope_symbols)
-        # We pass to the nested SDFG all symbols in scope, which includes the values
-        # mapped to the parameters of the lambda expression (`node.params`) and
-        # the symbols defined in the parent SDFG.
+        # We pass to the nested SDFG all GTIR-symbols in scope, which includes the
+        # values mapped to the parameters of the lambda expression (`node.params`)
+        # and the GTIR-symbols defined in the current context.
         params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in scope_symbols.items()]
 
+        # Below, we build the mapping from scalar variables to the corresponding
+        # GTIR-symbol, which can be either a scalar or a tuple. Tuples need to be
+        # flattened, recursively in case of nested tuples, to iterate over all fields.
+        scalars_to_params_mapping: dict[str, gtir.Sym] = {}
+        for p in params:
+            if isinstance(p.type, ts.TupleType):
+                scalars_to_params_mapping |= {
+                    str(tuple_field.id): p
+                    for tuple_field in gtir_sdfg_utils.flatten_tuple_fields(p.id, p.type)
+                    if isinstance(tuple_field.type, ts.ScalarType)
+                }
+            elif isinstance(p.type, ts.ScalarType):
+                scalars_to_params_mapping[str(p.id)] = p
+
+        # Scalar GTIR-symbols represented as dace symbols in parent SDFG are mapped
+        # to dace symbols in the nested SDFG.
+        parent_symbols = {
+            str(p.id)
+            for scalar_id, p in scalars_to_params_mapping.items()
+            if scalar_id in parent.symbols
+        }
+
+        # All GTIR-symbols accessed in domain expressions by the lambda need to be
+        # represented as dace symbols.
         domain_symbols = (
             eve.walk_values(expr)
             .filter(lambda node: cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")))
@@ -380,17 +404,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             )
             .reduce(lambda x, y: x | y, init=set())
         )
-        parent_symbols = {
-            # scalar values represented as dace symbols in parent SDFG are mapped
-            # to dace symbols in the nested SDFG
-            sym
-            for sym in scope_symbols.keys()
-            if sym in parent.symbols
-        }
+
+        # Sanity check: the symbolic arguments should all be defined in scope.
+        full_symbolic_arguments = domain_symbols | parent_symbols | symbolic_arguments
+        assert all(arg in scope_symbols for arg in full_symbolic_arguments)
+
         nsdfg_builder._add_sdfg_params(
             sdfg,
             params,
-            symbolic_arguments=(domain_symbols | parent_symbols | symbolic_arguments),
+            symbolic_arguments=full_symbolic_arguments,
         )
         return nsdfg_builder
 
@@ -500,7 +522,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     self._add_storage(
                         sdfg=sdfg,
                         symbolic_arguments=symbolic_arguments,
-                        name=sym.id,
+                        name=str(sym.id),
                         gt_type=sym.type,
                         transient=transient,
                         tuple_name=sym_ref,
