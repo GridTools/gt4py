@@ -2,12 +2,7 @@
 
 [build-system]
 build-backend = 'setuptools.build_meta'
-requires = [
-  'cython>=3.0.0',
-  'setuptools>=70.0.0',
-  'versioningit>=3.1.1',
-  'wheel>=0.33.6'
-]
+requires = ['cython>=3.0.0', 'setuptools>=70.0.0', 'versioningit>=3.1.1', 'wheel>=0.33.6']
 
 # -- Dependency groups --
 [dependency-groups]
