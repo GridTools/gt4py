@@ -392,7 +392,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     )
                     assert outer_data.data in inner_sdfg.arrays
                     assert not inner_sdfg.arrays[outer_data.data].transient
-                    new_nodes[outer_data] = branch_state.add_access(outer_data.data)
+                    new_nodes[outer_data] = branch_state.add_access(
+                        outer_data.data, copy.copy(outer_data.debuginfo)
+                    )
 
                 # Now create the edge in the inner state.
                 branch_state.add_edge(

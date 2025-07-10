@@ -1135,7 +1135,10 @@ class MapFusion(transformation.SingleStateTransformation):
                     dtype=inter_desc.dtype,
                     find_new_name=True,
                 )
-            new_inter_node: nodes.AccessNode = state.add_access(new_inter_name)
+            # We reuse the old debug information.
+            new_inter_node: nodes.AccessNode = state.add_access(
+                new_inter_name, copy.copy(inter_node.debuginfo)
+            )
 
             # Get the subset that defined into which part of the old intermediate
             #  the old output edge wrote to. We need that to adjust the producer
