@@ -90,7 +90,7 @@ build_cscs_gh200:
 .test_common:
   stage: test
   needs:
-    - "build_cscs_gh200: [$PY_VERSION]"
+    - 'build_cscs_gh200: [${PY_VERSION}]'
   image: ${GT4PY_IMAGE_PREFIX}-${PY_VERSION}:${DOCKER_TAG}
   variables:
     CSCS_CUDA_MPS: 1
