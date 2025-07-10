@@ -244,36 +244,36 @@ class ConstantFolding(
 
     def transform_fold_infinity_arithmetic(self, node: ir.FunCall) -> Optional[ir.Node]:
         if cpm.is_call_to(node, "plus"):
-            for arg in node.args:
-                # `a + inf` -> `inf`
-                if arg == ir.InfinityLiteral.POSITIVE:
-                    return ir.InfinityLiteral.POSITIVE
-                # `a + (-inf)` -> `-inf`
-                if arg == ir.InfinityLiteral.NEGATIVE:
-                    return ir.InfinityLiteral.NEGATIVE
+            # `a + +/-inf` -> `+/-inf`
+            a, b = node.args
+            assert not (isinstance(a, ir.InfinityLiteral) and isinstance(b, ir.InfinityLiteral))
+            for arg in a, b:
+                if isinstance(arg, ir.InfinityLiteral):
+                    return arg
 
         if cpm.is_call_to(node, "minimum"):
-            a, b = node.args
-            for arg, other_arg in ((a, b), (b, a)):
-                # `minimum(inf, a)` -> `a`
-                if arg == ir.InfinityLiteral.POSITIVE:
-                    return other_arg
+            if ir.InfinityLiteral.NEGATIVE in node.args:
                 # `minimum(-inf, a)` -> `-inf`
-                if arg == ir.InfinityLiteral.NEGATIVE:
-                    return ir.InfinityLiteral.NEGATIVE
+                return ir.InfinityLiteral.NEGATIVE
+            if ir.InfinityLiteral.POSITIVE in node.args:
+                # `minimum(inf, a)` -> `a`
+                a, b = node.args
+                return b if a == ir.InfinityLiteral.POSITIVE else a
 
         if cpm.is_call_to(node, "maximum"):
-            a, b = node.args
-            for arg, other_arg in ((a, b), (b, a)):
+            if ir.InfinityLiteral.POSITIVE in node.args:
                 # `maximum(inf, a)` -> `inf`
-                if arg == ir.InfinityLiteral.POSITIVE:
-                    return ir.InfinityLiteral.POSITIVE
+                return ir.InfinityLiteral.POSITIVE
+            if ir.InfinityLiteral.NEGATIVE in node.args:
                 # `maximum(-inf, a)` -> `a`
-                if arg == ir.InfinityLiteral.NEGATIVE:
-                    return other_arg
+                a, b = node.args
+                return b if a == ir.InfinityLiteral.NEGATIVE else a
 
         if cpm.is_call_to(node, ("less", "less_equal")):
             a, b = node.args
+            # we don't handle `inf < inf` or `-inf < -inf`.args
+            assert a != b or not isinstance(a, ir.InfinityLiteral)
+
             # `-inf < v` -> `True`
             # `v < inf` -> `True`
             if a == ir.InfinityLiteral.NEGATIVE or b == ir.InfinityLiteral.POSITIVE:
@@ -285,6 +285,9 @@ class ConstantFolding(
 
         if cpm.is_call_to(node, ("greater", "greater_equal")):
             a, b = node.args
+            # we don't handle `inf > inf` or `-inf > -inf`.args
+            assert a != b or not isinstance(a, ir.InfinityLiteral)
+
             # `inf > v` -> `True`
             # `v > -inf ` -> `True`
             if a == ir.InfinityLiteral.POSITIVE or b == ir.InfinityLiteral.NEGATIVE:

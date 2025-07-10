@@ -1807,11 +1807,6 @@ def concat_where(*args):
     raise NotImplementedError("To be implemented in frontend embedded.")
 
 
-@builtins.in_.register(EMBEDDED)
-def in_(*args):
-    raise NotImplementedError("To be implemented in frontend embedded.")
-
-
 def closure(
     domain_: runtime.CartesianDomain | runtime.UnstructuredDomain,
     sten: Callable[..., Any],
