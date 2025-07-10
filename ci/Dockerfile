@@ -51,7 +51,7 @@ RUN uv venv -p ${PY_VERSION} --link-mode copy ${VIRTUAL_ENV}
 ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
 
 # Install python packages using uv just to fill the uv cache,
-# since nox will creates its own test session venv anyway
+# since nox will create other test session venvs anyway
 ARG EXTRA_UV_ENV_VARS="" 
 ARG EXTRA_UV_PIP_ARGS=""
 ARG EXTRA_UV_SYNC_ARGS=""
