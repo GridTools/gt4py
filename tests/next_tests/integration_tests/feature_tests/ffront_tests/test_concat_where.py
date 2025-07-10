@@ -51,6 +51,8 @@ def test_concat_where(cartesian_case):
 
 
 def test_concat_where_non_overlapping(cartesian_case):
+    """Fields only defined in their respective region in concat_where."""
+
     @gtx.field_operator
     def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, ground, air)
@@ -85,6 +87,8 @@ def test_concat_where_scalar_broadcast(cartesian_case):
 
 
 def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case):
+    """Output domain such that the scalar branch is never active."""
+
     @gtx.field_operator
     def testee(a: np.int32, b: cases.KField, N: np.int32) -> cases.KField:
         return concat_where(KDim < N, a, b)
@@ -224,7 +228,7 @@ def test_dimension_two_conditions_and(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, nlev, out=out, ref=ref)
 
 
-def test_dimension_two_conditions_eq(cartesian_case):
+def test_dimension_eq_in_middle_of_domain(cartesian_case):
     @gtx.field_operator
     def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
         return concat_where((KDim == 2), interior, boundary)
