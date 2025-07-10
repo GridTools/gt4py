@@ -55,14 +55,12 @@ ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
 ARG EXTRA_UV_ENV_VARS="" 
 ARG EXTRA_UV_PIP_ARGS=""
 ARG EXTRA_UV_SYNC_ARGS=""
-RUN echo "EXTRA_UV_SYNC_ARGS=${EXTRA_UV_SYNC_ARGS}"
 RUN --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml <<EOF
 if [ ! -z "${EXTRA_UV_ENV_VARS}" ]; then
     eval "export ${EXTRA_UV_ENV_VARS}"
 fi
 uv pip install --compile-bytecode setuptools wheel pip
-echo "EXTRA_UV_SYNC_ARGS=${EXTRA_UV_SYNC_ARGS}"
 uv sync --compile-bytecode --frozen --no-install-project \
     --group dev \
     --extra formatting \
