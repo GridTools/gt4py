@@ -55,6 +55,17 @@ test_data = [
             False: im.plus(im.call("opaque")(), im.call("opaque")()),
         },
     ),
+    (
+        # symbol clash when partially inlining (opcount preserving)
+        "symbol_clash",
+        im.call(im.lambda_("x", "y")(im.call("f")("x", im.plus("x", "y"))))(im.plus("y", "y"), "x"),
+        {
+            True: im.call(im.lambda_("x_")(im.call("f")("x_", im.plus("x_", "x"))))(
+                im.plus("y", "y")
+            ),
+            False: im.call("f")(im.plus("y", "y"), im.plus(im.plus("y", "y"), "x")),
+        },
+    ),
 ]
 
 
@@ -91,3 +102,101 @@ def test_type_preservation():
     testee.type = testee.annex.type = ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
     inlined = InlineLambdas.apply(testee)
     assert inlined.type == inlined.annex.type == ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+
+
+def test_dbg1():
+    #      (λ(foo, bar) →
+    #    (λ(foo, bar) →
+    #       if_(c0,
+    #                    foo,
+    #                    if_(c1, foo, bar)))(
+    #      if_(c2, foo, bar), foo
+    #    ))(a, b)
+
+    testee = im.call(
+        im.lambda_("foo", "bar")(
+            im.call(
+                im.lambda_("foo", "bar")(
+                    im.if_(im.ref("c0"), "foo", im.if_(im.ref("c1"), "foo", "bar"))
+                )
+            )(
+                im.if_(im.ref("c2"), "foo", "bar"),
+                "foo",
+            )
+        )
+    )("a", "b")
+    print(testee)
+    inlined = InlineLambdas.apply(testee, opcount_preserving=True)
+    print(inlined)
+    inlined = InlineLambdas.apply(inlined, opcount_preserving=False)
+    print(inlined)
+
+    # if c0 then b else if c1 then b else b
+
+    # expected:
+    #     if_(c0,
+    #   if_(c2, a, b),
+    #   if_(c1,
+    #     if_(c2, a, b),
+    #     a)
+    #   )
+    expected = im.if_(
+        im.ref("c0"),
+        im.if_(im.ref("c2"), "a", "b"),
+        im.if_(im.ref("c1"), im.if_(im.ref("c2"), "a", "b"), "a"),
+    )
+    print(expected)
+    assert inlined == expected
+
+
+# def test_dbg2():
+#     testee = im.call(
+#         im.lambda_("x", "y")(im.multiplies_(im.call(im.lambda_("x")(im.plus("x", 1)))("y"), "x"))
+#     )(im.plus("x", "x"), "x")
+
+#     print(testee)
+#     inlined = InlineLambdas.apply(testee, opcount_preserving=True)
+#     print(inlined)
+
+
+def test_dbg2():
+    testee = im.call(
+        im.lambda_("x", "y")(
+            im.call(im.lambda_("x", "y")(im.call("f")("x", im.plus("x", "y"))))(
+                im.plus("y", "y"), "x"
+            )
+        )
+    )("a", "b")
+
+    print(testee)
+    inlined = InlineLambdas.apply(testee, opcount_preserving=True)
+    print(inlined)
+    inlined = InlineLambdas.apply(inlined, opcount_preserving=False)
+    print(inlined)
+
+    direct = InlineLambdas.apply(testee, opcount_preserving=False)
+    print(direct)
+
+
+def test_dbg3():
+    testee = im.call(im.lambda_("x", "y")(im.call("f")("x", im.plus("x", "y"))))(
+        im.plus("y", "y"), "x"
+    )
+
+    print(testee)
+    # inlined = InlineLambdas.apply(testee, opcount_preserving=True)
+    inlined = InlineLambdas.apply(testee, opcount_preserving=True)
+    print(inlined)
+    # inlined = inline_lambda(testee, opcount_preserving=False)
+    # print(inlined)
+
+    # expected = (λ(x) → f(x_, x_ + x))(y + y)
+    expected = im.call(im.lambda_("x_")(im.call("f")("x_", im.plus("x_", "x"))))(im.plus("y", "y"))
+    print(expected)
+    assert inlined == expected
+
+    # inlined = InlineLambdas.apply(inlined, opcount_preserving=False)
+    # print(inlined)
+
+    # direct = InlineLambdas.apply(testee, opcount_preserving=False)
+    # print(direct)
