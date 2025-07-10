@@ -796,8 +796,8 @@ class DaceCPUBackend(BaseDaceBackend):
     storage_info: ClassVar[layout.LayoutInfo] = {
         "alignment": 1,
         "device": "cpu",
-        "layout_map": layout.layout_maker_factory((0, 1, 2)),
-        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((0, 1, 2))),
+        "layout_map": layout.layout_maker_factory((1, 0, 2)),
+        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((1, 0, 2))),
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
