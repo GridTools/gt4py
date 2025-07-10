@@ -18,7 +18,7 @@ variables:  # Default values for base variables (can be overriden in jobs defini
   UBUNTU_VERSION: '24.04'
   UV_VERSION: '0.6.12'
 
-.minor_python_versions: &minor_python_versions ['3.10', '3.13']
+.minor_python_versions: &minor_python_versions ['10', '13']
 
 stages:
   - build
