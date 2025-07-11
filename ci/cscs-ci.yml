@@ -18,7 +18,7 @@ variables:  # Default values for base variables (can be overriden in jobs defini
   UBUNTU_VERSION: '24.04'
   UV_VERSION: '0.6.12'
 
-.minor_python_versions: &minor_python_versions ['10', '13']
+.test_python_versions: &test_python_versions ['3.10', '3.13']
 
 stages:
   - build
@@ -31,7 +31,7 @@ stages:
   stage: build
   variables:
     # jfrog.svc.cscs.ch/dockerhub/ubuntu is the cached version of docker.io/ubuntu
-    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/ubuntu:${UBUNTU_VERSION
+    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/ubuntu:${UBUNTU_VERSION}
     # CSCS_REBUILD_POLICY: 'always' => rebuild even if target tag exists already
     CSCS_REBUILD_POLICY: if-not-exists  # default, i.e. we could also skip the variable
     DOCKERFILE: ci/Dockerfile
@@ -40,23 +40,23 @@ stages:
     # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
     # To override the defaults, just define these variables in the actual job.
     DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
-    PY_VERSION: 3.${PY_MINOR_VERSION}
+    IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-{PY_VERSION} # the tag will be added in the before_script
+    PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/base/my_base_image
+    WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
   before_script:
-    # We create a tag that depends on the SHA value of ci/Dockerfile,
-    # the docker build arguments since the Docker file is heavily parameterized,
-    # and the contents of the `uv.lock` with the python dependencies versions.
-    - GT4PY_IMAGE_PREFIX=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci
-    - echo "GT4PY_IMAGE_PREFIX=${GT4PY_IMAGE_PREFIX}" >> build.env
-    - DOCKER_BUILD_ARGS_VALUES=`for var in $(echo "$DOCKER_BUILD_ARGS" | jq -r '.[]'); do echo "$var=${!var}"; done`
-    - DOCKER_TAG=`echo "$(cat ${DOCKERFILE}) ${DOCKER_BUILD_ARGS_VALUES} $(cat uv.lock)" | sha256sum | head -c 16`
-    - echo "DOCKER_TAG_${PY_MINOR_VERSION}=${DOCKER_TAG}" >> build.env
-    - export PERSIST_IMAGE_NAME=${GT4PY_IMAGE_PREFIX}-${PY_VERSION}:${DOCKER_TAG}
-    - echo "PERSIST_IMAGE_NAME=${PERSIST_IMAGE_NAME}"
+    # We create a tag that depends on the SHA value of the files in WATCH_FILECHANGES.
+    # The tag is used to create the image name, which is then used to
+    # push the image to the registry. This way, the image will be rebuilt
+    # only if any of these files change.
+    - export DOCKER_TAG=`eval cat $WATCH_FILECHANGES | sha256sum | head -c 16`
+    - echo "DOCKER_TAG=$DOCKER_TAG" > build.env
+    - export PERSIST_IMAGE_NAME=$IMAGE_NAME:$DOCKER_TAG
+    - echo "PERSIST_IMAGE_NAME=$PERSIST_IMAGE_NAME" >> build.env
     # Uncomment the following line to see the environment variables for debugging 
     # - env | sort 
   parallel:
     matrix:
-      - PY_MINOR_VERSION: *minor_python_versions
+      - PY_VERSION: *test_python_versions
   artifacts:
     reports:
       dotenv: build.env
@@ -90,10 +90,9 @@ build_cscs_gh200:
 # -- Test stage --
 .test_common:
   stage: test
-  image: ${GT4PY_IMAGE_PREFIX}-${PY_VERSION}:${DOCKER_TAG-${PY_MINOR_VERSION}}
+  image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-{PY_VERSION}:${DOCKER_TAG}
   variables:
     CSCS_CUDA_MPS: 1
-    PY_VERSION: "3.${PY_MINOR_VERSION}"
     SLURM_GPUS_PER_NODE: 4
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5
@@ -102,17 +101,17 @@ build_cscs_gh200:
       - SUBPACKAGE: [cartesian]
         VARIANT: ["internal", "dace"]
         SUBVARIANT: ["cuda12", "cpu"]
-        PY_MINOR_VERSION: *minor_python_versions
+        PY_VERSION: *test_python_versions
       - SUBPACKAGE: eve
-        PY_MINOR_VERSION: *minor_python_versions
+        PY_VERSION: *test_python_versions
       - SUBPACKAGE: next
         VARIANT: ["internal", "dace"]
         SUBVARIANT: ["cuda12", "cpu"]
         DETAIL: ["nomesh", "atlas"]
-        PY_MINOR_VERSION: *minor_python_versions
+        PY_VERSION: *test_python_versions
       - SUBPACKAGE: [storage]
         VARIANT: ["cuda12", "cpu"]
-        PY_MINOR_VERSION: *minor_python_versions
+        PY_VERSION: *test_python_versions
   rules:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
