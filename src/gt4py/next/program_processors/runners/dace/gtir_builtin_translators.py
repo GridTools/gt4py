@@ -355,13 +355,6 @@ def get_field_layout(
     if len(domain) == 0:
         return [], [], []
     domain_dims, domain_lbs, domain_ubs = zip(*domain)
-    # after introduction of concat_where, the strict order of lower and upper bounds is not guaranteed
-    domain_ubs = tuple(
-        [
-            dace.symbolic.pystr_to_symbolic(f"max({lb}, {ub})")
-            for lb, ub in zip(domain_lbs, domain_ubs, strict=True)
-        ]
-    )
     domain_sizes = [(ub - lb) for lb, ub in zip(domain_lbs, domain_ubs)]
     return list(domain_dims), list(domain_lbs), domain_sizes
 
