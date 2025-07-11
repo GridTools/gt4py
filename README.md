@@ -77,8 +77,8 @@ git clone https://github.com/gridtools/gt4py.git
 cd gt4py
 
 # Let uv create the development environment at `.venv`.
-uv sync --group cartesian-dev --extra cartesian   # for gt4py.cartesian
-uv sync --group next-dev --extra next             # for gt4py.next
+uv sync --group dev-cartesian --extra cartesian   # for gt4py.cartesian
+uv sync --group dev-next --extra next             # for gt4py.next
 
 # The `--extra cartesian` (or `--extra next`) options tells uv to install
 # the optional run-time dependencies of gt4py.cartesian (or gt4py.next),

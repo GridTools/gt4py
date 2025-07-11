@@ -7,8 +7,6 @@ requires = ['cython>=3.0.0', 'setuptools>=70.0.0', 'versioningit>=3.1.1', 'wheel
 # -- Dependency groups --
 [dependency-groups]
 build = ['cython>=3.0.0', 'pip>=22.1.1', 'setuptools>=70.0.0', 'wheel>=0.33.6']
-dace-cartesian = ['dace>=1.0.2,<2']
-dace-next = ['dace>=1.0.0']  # refined in [tool.uv.sources]
 dev = [
   {include-group = 'build'},
   {include-group = 'docs'},
@@ -18,11 +16,11 @@ dev = [
   {include-group = 'typing'}
 ]
 dev-cartesian = [
-  {include-group = 'dace-cartesian'},
+  'dace>=1.0.2,<2',
   {include-group = 'dev'}
 ]
 dev-next = [
-  {include-group = 'dace-next'},
+  'dace>=1.0.0',   # refined in [tool.uv.sources]
   {include-group = 'dev'}
 ]
 docs = [
@@ -418,8 +416,8 @@ conflicts = [
     {extra = 'rocm6_0'}
   ],
   [
-    {group = 'dace-cartesian'},
-    {group = 'dace-next'}
+    {group = 'dev-cartesian'},
+    {group = 'dev-next'}
   ]
 ]
 default-groups = ["dev"]
@@ -433,7 +431,7 @@ url = 'https://test.pypi.org/simple'
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
-  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_03", group = "dace-next"}
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_03", group = "dev-next"}
 ]
 
 # -- versioningit --
