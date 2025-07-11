@@ -9,7 +9,7 @@
 """Implements the lowering of concat_where operator.
 
 This builtin translator implements the `PrimitiveTranslator` protocol as other
-translators in `gtir_builtin_translators` module.
+translators in `gtir_to_sdfg_primitives` module.
 """
 
 from __future__ import annotations
@@ -21,9 +21,10 @@ from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace import (
-    gtir_builtin_translators,
-    gtir_sdfg,
-    gtir_sdfg_utils,
+    gtir_domain,
+    gtir_to_sdfg,
+    gtir_to_sdfg_types,
+    gtir_to_sdfg_utils,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -31,12 +32,12 @@ from gt4py.next.type_system import type_specifications as ts
 def _make_concat_field_slice(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    f: gtir_builtin_translators.FieldopData,
+    f: gtir_to_sdfg_types.FieldopData,
     f_desc: dace.data.Array,
     concat_dim: gtx_common.Dimension,
     concat_dim_index: int,
     concat_dim_origin: dace.symbolic.SymbolicType,
-) -> tuple[gtir_builtin_translators.FieldopData, dace.data.Array]:
+) -> tuple[gtir_to_sdfg_types.FieldopData, dace.data.Array]:
     """
     Helper function called by `translate_concat_where` to create a slice along the
     concat dimension, that is a new array with an extra diimension and a single level.
@@ -57,7 +58,7 @@ def _make_concat_field_slice(
             other_subset=dace_subsets.Range.from_array(slice_data_desc),
         ),
     )
-    fslice = gtir_builtin_translators.FieldopData(
+    fslice = gtir_to_sdfg_types.FieldopData(
         slice_node, ts.FieldType(dims=dims, dtype=f.gt_type.dtype), origin
     )
     return fslice, slice_data_desc
@@ -66,24 +67,24 @@ def _make_concat_field_slice(
 def _make_concat_scalar_broadcast(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    inp: gtir_builtin_translators.FieldopData,
+    inp: gtir_to_sdfg_types.FieldopData,
     inp_desc: dace.data.Array,
-    domain: gtir_builtin_translators.FieldopDomain,
+    domain: gtir_domain.FieldopDomain,
     concat_dim_index: int,
-) -> tuple[gtir_builtin_translators.FieldopData, dace.data.Array]:
+) -> tuple[gtir_to_sdfg_types.FieldopData, dace.data.Array]:
     """
     Helper function called by `translate_concat_where` to create a mapped tasklet
     that broadcasts one scalar value from the 1D-array 'f' on the given domain.
     """
     assert isinstance(inp.gt_type, ts.FieldType)
     assert len(inp.gt_type.dims) == 1
-    out_dims, out_origin, out_shape = gtir_builtin_translators.get_field_layout(domain)
+    out_dims, out_origin, out_shape = gtir_domain.get_field_layout(domain)
     out_type = ts.FieldType(dims=out_dims, dtype=inp.gt_type.dtype)
 
     out_name, out_desc = sdfg.add_temp_transient(out_shape, inp_desc.dtype)
     out_node = state.add_access(out_name)
 
-    map_variables = [gtir_sdfg_utils.get_map_variable(dim) for dim in out_dims]
+    map_variables = [gtir_to_sdfg_utils.get_map_variable(dim) for dim in out_dims]
     inp_index = (
         "0"
         if isinstance(inp.dc_node.desc(sdfg), dace.data.Scalar)
@@ -105,36 +106,35 @@ def _make_concat_scalar_broadcast(
         external_edges=True,
     )
 
-    out_field = gtir_builtin_translators.FieldopData(out_node, out_type, tuple(out_origin))
+    out_field = gtir_to_sdfg_types.FieldopData(out_node, out_type, tuple(out_origin))
     return out_field, out_desc
 
 
 def _translate_concat_where_impl(
-    sdfg_builder: gtir_sdfg.SDFGBuilder,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    mask_domain: gtir_builtin_translators.FieldopDomain,
+    mask_domain: gtir_domain.FieldopDomain,
     node_domain: gtir.Expr,
     tb_node_domain: gtir.Expr,
     fb_node_domain: gtir.Expr,
-    tb_field: gtir_builtin_translators.FieldopData,
-    fb_field: gtir_builtin_translators.FieldopData,
-) -> gtir_builtin_translators.FieldopData:
+    tb_field: gtir_to_sdfg_types.FieldopData,
+    fb_field: gtir_to_sdfg_types.FieldopData,
+) -> gtir_to_sdfg_types.FieldopData:
     tb_data_desc, fb_data_desc = (inp.dc_node.desc(sdfg) for inp in [tb_field, fb_field])
     assert tb_data_desc.dtype == fb_data_desc.dtype
 
     tb_domain, fb_domain = (
-        gtir_builtin_translators.extract_domain(domain)
-        for domain in [tb_node_domain, fb_node_domain]
+        gtir_domain.extract_domain(domain) for domain in [tb_node_domain, fb_node_domain]
     )
     concat_dim, mask_lower_bound, mask_upper_bound = mask_domain[0]
 
     # expect unbound range in the concat domain expression on lower or upper range
-    if mask_lower_bound == gtir_sdfg_utils.get_symbolic(gtir.InfinityLiteral.NEGATIVE):
+    if mask_lower_bound == gtir_to_sdfg_utils.get_symbolic(gtir.InfinityLiteral.NEGATIVE):
         concat_dim_bound = mask_upper_bound
         lower, lower_desc, lower_domain = (tb_field, tb_data_desc, tb_domain)
         upper, upper_desc, upper_domain = (fb_field, fb_data_desc, fb_domain)
-    elif mask_upper_bound == gtir_sdfg_utils.get_symbolic(gtir.InfinityLiteral.POSITIVE):
+    elif mask_upper_bound == gtir_to_sdfg_utils.get_symbolic(gtir.InfinityLiteral.POSITIVE):
         concat_dim_bound = mask_lower_bound
         lower, lower_desc, lower_domain = (fb_field, fb_data_desc, fb_domain)
         upper, upper_desc, upper_domain = (tb_field, tb_data_desc, tb_domain)
@@ -142,10 +142,8 @@ def _translate_concat_where_impl(
         raise ValueError(f"Unexpected concat mask {mask_domain[0]}.")
 
     # we use the concat domain, stored in the annex, as the domain of output field
-    output_domain = gtir_builtin_translators.extract_domain(node_domain)
-    output_dims, output_origin, output_shape = gtir_builtin_translators.get_field_layout(
-        output_domain
-    )
+    output_domain = gtir_domain.extract_domain(node_domain)
+    output_dims, output_origin, output_shape = gtir_domain.get_field_layout(output_domain)
     concat_dim_index = output_dims.index(concat_dim)
 
     # in case one of the arguments is a scalar value, we convert it to a single-element
@@ -153,7 +151,7 @@ def _translate_concat_where_impl(
     if isinstance(lower.gt_type, ts.ScalarType):
         assert len(lower_domain) == 0
         assert isinstance(upper.gt_type, ts.FieldType)
-        lower = gtir_builtin_translators.FieldopData(
+        lower = gtir_to_sdfg_types.FieldopData(
             lower.dc_node,
             ts.FieldType(dims=[concat_dim], dtype=lower.gt_type),
             origin=(concat_dim_bound - 1,),
@@ -163,7 +161,7 @@ def _translate_concat_where_impl(
     elif isinstance(upper.gt_type, ts.ScalarType):
         assert len(upper_domain) == 0
         assert isinstance(lower.gt_type, ts.FieldType)
-        upper = gtir_builtin_translators.FieldopData(
+        upper = gtir_to_sdfg_types.FieldopData(
             upper.dc_node,
             ts.FieldType(dims=[concat_dim], dtype=upper.gt_type),
             origin=(concat_dim_bound,),
@@ -317,17 +315,15 @@ def _translate_concat_where_impl(
         ),
     )
 
-    return gtir_builtin_translators.FieldopData(
-        output_node, lower.gt_type, origin=tuple(output_origin)
-    )
+    return gtir_to_sdfg_types.FieldopData(output_node, lower.gt_type, origin=tuple(output_origin))
 
 
 def translate_concat_where(
     node: gtir.Node,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> gtir_builtin_translators.FieldopResult:
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+) -> gtir_to_sdfg_types.FieldopResult:
     """
     Lowers a `concat_where` expression to a dataflow where two memlets write
     disjoint subsets on one data access node.
@@ -339,7 +335,7 @@ def translate_concat_where(
     # we extract the dimension along which we need to concatenate the field arguments,
     # and determine whether the true branch argument should be on the lower or upper
     # range with respect to the boundary value.
-    mask_domain = gtir_builtin_translators.extract_domain(node.args[0])
+    mask_domain = gtir_domain.extract_domain(node.args[0])
     if len(mask_domain) != 1:
         raise NotImplementedError("Expected `concat_where` along single axis.")
 
