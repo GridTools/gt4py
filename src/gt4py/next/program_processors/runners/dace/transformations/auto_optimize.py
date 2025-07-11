@@ -547,8 +547,11 @@ def _gt_auto_post_processing(
     if use_memory_pool:
         if not gpu:
             raise NotImplementedError("Memory pool only supported for GPU codegn")
-        for _sd, _aname, desc in sdfg.arrays_recursive():
-            if desc.lifetime == dace.AllocationLifetime.Persistent:
+        for _, _, desc in sdfg.arrays_recursive():
+            if (
+                isinstance(desc, dace_data.Array)
+                and desc.lifetime == dace.AllocationLifetime.Persistent
+            ):
                 desc.pool = True
                 desc.lifetime = dace.AllocationLifetime.Scope
 
