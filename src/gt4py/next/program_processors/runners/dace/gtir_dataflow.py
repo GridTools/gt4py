@@ -56,7 +56,7 @@ class ValueExpr:
     This type is used in the context in a dataflow, that is a stencil expression.
     Therefore, it contains either a scalar value (single elements in the fields) or
     a list of values in a local dimension.
-    This is different from `gtir_builtin_translators.FieldopData` which represents
+    This is different from `gtir_lower_types.FieldopData` which represents
     the result of a field operator, basically the data storage outside a global map.
 
     Args:

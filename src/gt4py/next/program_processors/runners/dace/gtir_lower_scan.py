@@ -9,8 +9,8 @@
 """Implements the lowering of scan field operator.
 
 This builtin translator implements the `PrimitiveTranslator` protocol as other
-translators in `gtir_builtin_translators` module. This module implements the scan
-translator, separately from the `gtir_builtin_translators` module, because the
+translators in `gtir_lower_primitives` module. This module implements the scan
+translator, separately from the `gtir_lower_primitives` module, because the
 parsing of input arguments as well as the construction of the map scope differ
 from a regular field operator, which requires slightly different helper methods.
 Besides, the function code is quite large, another reason to keep it separate
@@ -23,7 +23,7 @@ This is likely to change in the future, to enable GTIR optimizations for scan.
 from __future__ import annotations
 
 import itertools
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import Any, Iterable
 
 import dace
 from dace import subsets as dace_subsets
@@ -42,10 +42,6 @@ from gt4py.next.program_processors.runners.dace import (
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
-if TYPE_CHECKING:
-    from gt4py.next.program_processors.runners.dace import gtir_lower
-
-
 def _parse_scan_fieldop_arg(
     node: gtir.Expr,
     sdfg: dace.SDFG,
@@ -58,7 +54,7 @@ def _parse_scan_fieldop_arg(
     On the innermost level, a scan operator is lowered to a loop region which computes
     column elements in the vertical dimension.
 
-    It differs from the helper method `gtir_builtin_translators` in that field arguments
+    It differs from the helper method `gtir_lower_primitives` in that field arguments
     are passed in full shape along the vertical dimension, rather than as iterator.
     """
 
@@ -98,13 +94,13 @@ def _create_scan_field_operator_impl(
 
     This method is called by `_create_scan_field_operator()`.
 
-    Similar to `gtir_builtin_translators._create_field_operator_impl()` but
+    Similar to `gtir_lower_primitives._create_field_operator_impl()` but
     for scan field operators. It differs in that the scan loop region produces
     a field along the vertical dimension, rather than a single point.
     Therefore, the memlet subset will write a slice into the result array, that
     corresponds to the full vertical shape for each horizontal grid point.
 
-    Refer to `gtir_builtin_translators._create_field_operator_impl()` for
+    Refer to `gtir_lower_primitives._create_field_operator_impl()` for
     the description of function arguments and return values.
     """
     dataflow_output_desc = output_edge.result.dc_node.desc(sdfg)
@@ -188,12 +184,12 @@ def _create_scan_field_operator(
     Helper method to build the output of a field operator, which can consist of
     a single field or a tuple of fields.
 
-    Similar to `gtir_builtin_translators._create_field_operator()` but for scan
+    Similar to `gtir_lower_primitives._create_field_operator()` but for scan
     field operators. The main difference is that the scan vertical dimension is
     excluded from the map range. This because the vertical dimension is traversed
     by a loop region in a mapped nested SDFG.
 
-    Refer to `gtir_builtin_translators._create_field_operator()` for the
+    Refer to `gtir_lower_primitives._create_field_operator()` for the
     description of function arguments and return values.
     """
     domain_dims, _, _ = gtir_domain.get_field_layout(domain)
