@@ -39,9 +39,9 @@ def _make_concat_field_slice(
     concat_dim_origin: dace.symbolic.SymbolicType,
 ) -> tuple[gtir_to_sdfg_types.FieldopData, dace.data.Array]:
     """
-    Helper function called by `translate_concat_where` to create a slice along the
-    concat dimension, that is a new array with an extra diimension and a single level.
-    This allows to treat 'f' as a slice and concatanate it to the other argument field.
+    Helper function called by `_translate_concat_where_impl` to create a slice along
+    the concat dimension, that is a new array with an extra dimension and a single
+    level. This allows to treat 'f' as a slice and concatanate it to the other field.
     """
     assert isinstance(f.gt_type, ts.FieldType)
     dims = [*f.gt_type.dims[:concat_dim_index], concat_dim, *f.gt_type.dims[concat_dim_index:]]
@@ -73,8 +73,11 @@ def _make_concat_scalar_broadcast(
     concat_dim_index: int,
 ) -> tuple[gtir_to_sdfg_types.FieldopData, dace.data.Array]:
     """
-    Helper function called by `translate_concat_where` to create a mapped tasklet
-    that broadcasts one scalar value from the 1D-array 'f' on the given domain.
+    Helper function called by `_translate_concat_where_impl` to create a mapped
+    tasklet that broadcasts one scalar value on the given domain.
+
+    The scalar value can come from either a scalar node or from a 1D-array (assuming
+    the array represents a field in the concat dimension).
     """
     assert isinstance(inp.gt_type, ts.FieldType)
     assert len(inp.gt_type.dims) == 1
@@ -111,9 +114,9 @@ def _make_concat_scalar_broadcast(
 
 
 def _translate_concat_where_impl(
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     mask_domain: gtir_domain.FieldopDomain,
     node_domain: gtir.Expr,
     tb_node_domain: gtir.Expr,
@@ -121,6 +124,28 @@ def _translate_concat_where_impl(
     tb_field: gtir_to_sdfg_types.FieldopData,
     fb_field: gtir_to_sdfg_types.FieldopData,
 ) -> gtir_to_sdfg_types.FieldopData:
+    """
+    Helper function to lower 'concat_where' on a single output field.
+
+    It builds the output field by concatanting the two input fields on the lower
+    and upper domain, respectively. These two domain are computed from the intersection
+    of the mask and the input domains.
+
+    Args:
+        sdfg: The SDFG where the primitive subgraph should be instantiated
+        state: The SDFG state where the result of the primitive function should be made available
+        sdfg_builder: The object responsible for visiting child nodes of the primitive node.
+        mask_domain: Domain (only for concat dimension) of the true branch, infinite
+            on lower or upper boundary.
+        node_domain: Domain (all dimensions) of output field.
+        tb_node_domain: Domain of the field passed on the true branch.
+        fb_node_domain: Domain of the field passed on the false branch.
+        tb_field: Input field on the true branch.
+        fb_field: Input field on the false branch.
+
+    Returns:
+        The field resulted from concatanating the input fields on the lower and upper domain.
+    """
     tb_data_desc, fb_data_desc = (inp.dc_node.desc(sdfg) for inp in [tb_field, fb_field])
     assert tb_data_desc.dtype == fb_data_desc.dtype
 
@@ -326,7 +351,12 @@ def translate_concat_where(
 ) -> gtir_to_sdfg_types.FieldopResult:
     """
     Lowers a `concat_where` expression to a dataflow where two memlets write
-    disjoint subsets on one data access node.
+    disjoint subsets, for the lower and upper domain, on one data access node.
+
+    Implements the `PrimitiveTranslator` protocol.
+
+    In case of tuples, this function calls `_translate_concat_where_impl()` on all
+    fields by means of `tree_map`.
     """
     assert cpm.is_call_to(node, "concat_where")
     assert len(node.args) == 3
@@ -344,9 +374,9 @@ def translate_concat_where(
 
     return (
         _translate_concat_where_impl(
-            sdfg_builder,
             sdfg,
             state,
+            sdfg_builder,
             mask_domain,
             node.annex.domain,
             node.args[1].annex.domain,
@@ -365,9 +395,9 @@ def translate_concat_where(
             _sdfg=sdfg,
             _state=state,
             _mask_domain=mask_domain: _translate_concat_where_impl(
-                _sdfg_builder,
                 _sdfg,
                 _state,
+                _sdfg_builder,
                 _mask_domain,
                 _node_domain,
                 _tb_node_domain,
