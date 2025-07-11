@@ -509,23 +509,26 @@ def extract_domain(node: gtir.Node) -> FieldopDomain:
 
     domain = []
 
-    def parse_range_boundary(expr: gtir.Expr) -> str:
-        return dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(expr))
-
     if cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")):
         for named_range in node.args:
             assert cpm.is_call_to(named_range, "named_range")
             assert len(named_range.args) == 3
             axis = named_range.args[0]
             assert isinstance(axis, gtir.AxisLiteral)
-            lower_bound, upper_bound = (parse_range_boundary(arg) for arg in named_range.args[1:3])
+            lower_bound, upper_bound = (
+                gtir_sdfg_utils.get_symbolic(arg) for arg in named_range.args[1:3]
+            )
             dim = gtx_common.Dimension(axis.value, axis.kind)
             domain.append((dim, lower_bound, upper_bound))
 
     elif isinstance(node, domain_utils.SymbolicDomain):
         for dim, drange in node.ranges.items():
             domain.append(
-                (dim, parse_range_boundary(drange.start), parse_range_boundary(drange.stop))
+                (
+                    dim,
+                    gtir_sdfg_utils.get_symbolic(drange.start),
+                    gtir_sdfg_utils.get_symbolic(drange.stop),
+                )
             )
 
     else:
@@ -729,12 +732,12 @@ def translate_if(
 
     # expect true branch as second argument
     true_state = sdfg.add_state(state.label + "_true_branch")
-    sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=f"{if_stmt}"))
+    sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=if_stmt))
     sdfg.add_edge(true_state, state, dace.InterstateEdge())
 
     # and false branch as third argument
     false_state = sdfg.add_state(state.label + "_false_branch")
-    sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=(f"not ({if_stmt})")))
+    sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=f"not({if_stmt})"))
     sdfg.add_edge(false_state, state, dace.InterstateEdge())
 
     true_br_result = sdfg_builder.visit(
