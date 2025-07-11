@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 # Copyright 2019-2021 ETH Zurich and the DaCe authors. All rights reserved.
-"""Implements Helper functionaliyies for map fusion
+"""Implements Helper functionaliyies for Map fusion
 
 THIS FILE WAS COPIED FROM DACE TO FACILITATE DEVELOPMENT UNTIL THE PR#1625 IN
 DACE IS MERGED AND THE VERSION WAS UPGRADED.
@@ -36,8 +36,8 @@ class MapFusion(transformation.SingleStateTransformation):
     From a high level perspective it will remove the MapExit node of the first and the MapEntry node of
     the second Map. It will then rewire and modify the Memlets such that the data flow bypasses the
     intermediate node. For this a new intermediate node will be created, which is much smaller because
-    it has no longer to store the whole output of the first map, but only the data that is produced by
-    a single iteration of the first map. The transformation will then remove the old intermediate.
+    it has no longer to store the whole output of the first Map, but only the data that is produced by
+    a single iteration of the first Map. The transformation will then remove the old intermediate.
     Thus by merging the two Maps together the transformation will reduce the memory footprint. It is
     important that it is not always possible to fully remove the intermediate node. For example the
     data might be used somewhere else. In this case the intermediate will become an output of the Map.
@@ -88,16 +88,16 @@ class MapFusion(transformation.SingleStateTransformation):
     separated by an intermediate array. However, by setting `allow_parallel_map_fusion` to `True`,
     the transformation will be _in addition_ also be able to handle the case where the Maps are
     parallel (parallel here means that neither of the two Map can be reached from the other; see
-    `is_parallel()`). If you only want to perform parallel map fusion you also have to set
+    `is_parallel()`). If you only want to perform parallel Map fusion you also have to set
     `allow_serial_map_fusion` to `False`.
 
     :param only_inner_maps: Only match Maps that are internal, i.e. inside another Map.
     :param only_toplevel_maps: Only consider Maps that are at the top.
     :param strict_dataflow: Which dataflow mode should be used, see above.
     :param assume_always_shared: Assume that all intermediates are shared.
-    :param allow_serial_map_fusion: Allow serial map fusion, by default `True`.
-    :param allow_parallel_map_fusion: Allow to merge parallel maps, by default `False`.
-    :param only_if_common_ancestor: In parallel map fusion mode, only fuse if both map
+    :param allow_serial_map_fusion: Allow serial Pap fusion, by default `True`.
+    :param allow_parallel_map_fusion: Allow to merge parallel Maps, by default `False`.
+    :param only_if_common_ancestor: In parallel Map fusion mode, only fuse if both Maps
         have a common direct ancestor.
     :param consolidate_edges_only_if_not_extending: If `True`, the default is `False`,
         the transformation will only consolidate edges if this does not lead to an
@@ -112,14 +112,14 @@ class MapFusion(transformation.SingleStateTransformation):
             the cache at the expense of the creation of dead dataflow.
     """
 
-    # Pattern Nodes: For the serial map fusion
+    # Pattern Nodes: For the serial Map fusion
     #  NOTE: Can only be accessed in the `can_serial_map_fusion_be_applied()` and the
     #   `apply_serial_map_fusion()` functions.
     first_map_exit = transformation.transformation.PatternNode(nodes.MapExit)
     array = transformation.transformation.PatternNode(nodes.AccessNode)
     second_map_entry = transformation.transformation.PatternNode(nodes.MapEntry)
 
-    # Pattern Nodes: For the parallel map fusion
+    # Pattern Nodes: For the parallel Map fusion
     #  NOTE: Can only be used in the `can_parallel_map_fusion_be_applied()` and the
     #   `apply_map_fusion_parallel()` functions.
     first_parallel_map_entry = transformation.transformation.PatternNode(nodes.MapEntry)
@@ -150,18 +150,18 @@ class MapFusion(transformation.SingleStateTransformation):
     allow_serial_map_fusion = properties.Property(
         dtype=bool,
         default=True,
-        desc="If `True`, the default, then allow serial map fusion.",
+        desc="If `True`, the default, then allow serial Map fusion.",
     )
 
     allow_parallel_map_fusion = properties.Property(
         dtype=bool,
         default=False,
-        desc="If `True` then also perform parallel map fusion, disabled by default.",
+        desc="If `True` then also perform parallel Map fusion, disabled by default.",
     )
     only_if_common_ancestor = properties.Property(
         dtype=bool,
         default=False,
-        desc="If `True` restrict parallel map fusion to maps that have a direct common ancestor.",
+        desc="If `True` restrict parallel Map fusion to maps that have a direct common ancestor.",
     )
 
     never_consolidate_edges = properties.Property(
@@ -217,14 +217,14 @@ class MapFusion(transformation.SingleStateTransformation):
 
         The function returns a list of two expressions.
 
-        The first, index `0`, is used by the serial map fusion. It consists of the
-        exit node of the first map, `first_map_exit`, the intermediate array, `array`,
-        and the map entry node of the second map, `second_map_entry`. An important note
+        The first, index `0`, is used by the serial Map fusion. It consists of the
+        exit node of the first Map, `first_map_exit`, the intermediate array, `array`,
+        and the Map entry node of the second Map, `second_map_entry`. An important note
         is, that the transformation operates not just on the matched nodes, but more
         or less on anything that has an incoming connection from the first Map or an
-        outgoing connection to the second Map entry.
+        outgoing connection to the second MapEntry.
 
-        The second expression, index `1`, is used by parallel map fusion. It matches
+        The second expression, index `1`, is used by parallel Map fusion. It matches
         any two maps entries, `first_parallel_map_entry` and `second_parallel_map_entry
         in a state.
         """
@@ -246,7 +246,7 @@ class MapFusion(transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        """Checks if the map fusion can be applied.
+        """Checks if the Map fusion can be applied.
 
         Depending on the value of `expr_index` the function will dispatch the call
         either to `can_serial_map_fusion_be_applied()` or
@@ -254,7 +254,7 @@ class MapFusion(transformation.SingleStateTransformation):
         """
         # Perform some checks of the deferred configuration data.
         if not (self.allow_parallel_map_fusion or self.allow_serial_map_fusion):
-            raise ValueError("Disabled serial and parallel map fusion.")
+            raise ValueError("Disabled serial and parallel Map fusion.")
         assert expr_index == self.expr_index
         assert self.expr_index in [0, 1], f"Found invalid 'expr_index' {self.expr_index}"
 
@@ -270,7 +270,7 @@ class MapFusion(transformation.SingleStateTransformation):
             return False
 
         # We need to initialize the edges to avoid some issues. However, we will first check
-        #  if the Maps are in the same scope. This will especially critical for parallel map fusion.
+        #  if the Maps are in the same scope. This will especially critical for parallel Map fusion.
         if expr_index == 1:
             first_map_entry: nodes.MapEntry = self.first_parallel_map_entry
             second_map_entry: nodes.MapEntry = self.second_parallel_map_entry
@@ -303,14 +303,14 @@ class MapFusion(transformation.SingleStateTransformation):
         graph: Union[dace.SDFGState, dace.SDFG],
         sdfg: dace.SDFG,
     ) -> None:
-        """Apply the map fusion.
+        """Apply the Map fusion.
 
         Depending on the settings the function will either dispatch to
         `apply_serial_map_fusion()` or to `apply_parallel_map_fusion()`.
         """
         # Perform some checks of the deferred configuration data.
         if not (self.allow_parallel_map_fusion or self.allow_serial_map_fusion):
-            raise ValueError("Disabled serial and parallel map fusion.")
+            raise ValueError("Disabled serial and parallel Map fusion.")
         assert self.expr_index in [0, 1]
 
         # As in [issue 1708](https://github.com/spcl/dace/issues/1703) we should here
@@ -353,7 +353,7 @@ class MapFusion(transformation.SingleStateTransformation):
         assert isinstance(second_map_entry, nodes.MapEntry)
 
         # Since we matched any two Maps in the state, we have to ensure that they
-        #  are in the same scope (e.g. same state, or same parent map), otherwise it could be that one is inside one Map
+        #  are in the same scope (e.g. same state, or same parent Map), otherwise it could be that one is inside one Map
         #  while the other is inside another one.
         scope = graph.scope_dict()
         if scope[first_map_entry] != scope[second_map_entry]:
@@ -448,7 +448,7 @@ class MapFusion(transformation.SingleStateTransformation):
 
         # Two maps can be serially fused if the node decomposition exists and
         #  at least one of the intermediate output sets is not empty. The state
-        #  of the pure outputs is irrelevant for serial map fusion.
+        #  of the pure outputs is irrelevant for serial Map fusion.
         output_partition = self.partition_first_outputs(
             state=graph,
             sdfg=sdfg,
@@ -469,10 +469,10 @@ class MapFusion(transformation.SingleStateTransformation):
         graph: Union[dace.SDFGState, dace.SDFG],
         sdfg: dace.SDFG,
     ) -> None:
-        """Performs parallel map fusion.
+        """Performs parallel Map fusion.
 
-        Essentially this function will move all input connectors from one map,
-        i.e. its MapEntry and MapExit nodes, to the other map.
+        Essentially this function will move all input connectors from one Map,
+        i.e. its MapEntry and MapExit nodes, to the other Map.
         """
 
         # NOTE: The after this point it is not legal to access the matched nodes
@@ -488,7 +488,7 @@ class MapFusion(transformation.SingleStateTransformation):
         scope_dict: Dict = graph.scope_dict().copy()
 
         # Before we do anything we perform the renaming, i.e. we will rename the
-        #  parameters of the second map such that they match the one of the first map.
+        #  parameters of the second Map such that they match the one of the first Map.
         rename_map_parameters(
             first_map=first_map_entry.map,
             second_map=second_map_entry.map,
@@ -496,8 +496,8 @@ class MapFusion(transformation.SingleStateTransformation):
             state=graph,
         )
 
-        # Now we relocate all connectors from the second to the first map and remove
-        #  the respective node of the second map.
+        # Now we relocate all connectors from the second to the first Map and remove
+        #  the respective node of the second Map.
         for to_node, from_node in [
             (first_map_entry, second_map_entry),
             (first_map_exit, second_map_exit),
@@ -521,7 +521,7 @@ class MapFusion(transformation.SingleStateTransformation):
     ) -> None:
         """Performs the serial Map fusing.
 
-        The function first computes the map decomposition and then handles the
+        The function first computes the Map decomposition and then handles the
         three sets. The pure outputs are handled by `relocate_nodes()` while
         the two intermediate sets are handled by `handle_intermediate_set()`.
 
@@ -598,11 +598,11 @@ class MapFusion(transformation.SingleStateTransformation):
                 consolidate_edges_only_if_not_extending=self.consolidate_edges_only_if_not_extending,
             )
 
-        # Now move the input of the second map, that has no connection to the first
-        #  map, to the first map. This is needed because we will later delete the
-        #  exit of the first map (which we have essentially handled above). Now
-        #  we must handle the input of the second map (that has no connection to the
-        #  first map) to the input of the first map.
+        # Now move the input of the second Map, that has no connection to the first
+        #  Map, to the first Map. This is needed because we will later delete the
+        #  exit of the first Map (which we have essentially handled above). Now
+        #  we must handle the input of the second Map (that has no connection to the
+        #  first Map) to the input of the first Map.
         relocate_nodes(
             from_node=second_map_entry,
             to_node=first_map_entry,
@@ -635,22 +635,22 @@ class MapFusion(transformation.SingleStateTransformation):
         ],
         None,
     ]:
-        """Partition the output edges of `first_map_exit` for serial map fusion.
+        """Partition the output edges of `first_map_exit` for serial Map fusion.
 
-        The output edges of the first map are partitioned into three distinct sets,
+        The output edges of the first Map are partitioned into three distinct sets,
         defined as follows:
         * Pure Output Set `\mathbb{P}`:
-            These edges exits the first map and does not enter the second map. These
-            outputs will be simply be moved to the output of the second map.
+            These edges exits the first Map and does not enter the second Map. These
+            outputs will be simply be moved to the output of the second Map.
         * Exclusive Intermediate Set `\mathbb{E}`:
-            Edges in this set leaves the first map exit, enters an access node, from
-            where a Memlet then leads immediately to the second map. The memory
+            Edges in this set leaves the first MapExit, enters an access node, from
+            where a Memlet then leads immediately to the second Map. The memory
             referenced by this access node is not used anywhere else, thus it can
             be removed.
         * Shared Intermediate Set `\mathbb{S}`:
             These edges are very similar to the one in `\mathbb{E}` except that they
             are used somewhere else, thus they can not be removed and have to be
-            recreated as output of the second map.
+            recreated as output of the second Map.
 
         If strict data flow mode is enabled the function is rather strict if an
         output can be added to either intermediate set and might fail to compute
@@ -662,10 +662,10 @@ class MapFusion(transformation.SingleStateTransformation):
 
         :param state: The in which the two maps are located.
         :param sdfg: The full SDFG in whcih we operate.
-        :param first_map_exit: The exit node of the first map.
-        :param second_map_entry: The entry node of the second map.
-        :param param_repl: Use this map to rename the parameter of the second Map, such
-            that they match the one of the first map.
+        :param first_map_exit: The exit node of the first Map.
+        :param second_map_entry: The entry node of the second Map.
+        :param param_repl: Use this Map to rename the parameter of the second Map, such
+            that they match the one of the first Map.
         """
         # The three outputs set.
         pure_outputs: Set[graph.MultiConnectorEdge[dace.Memlet]] = set()
@@ -686,7 +686,7 @@ class MapFusion(transformation.SingleStateTransformation):
                 return None
             processed_inter_nodes.add(intermediate_node)
 
-            # If the second map is not reachable from the intermediate node, then
+            # If the second Map is not reachable from the intermediate node, then
             #  the output is pure and we can end here.
             if not is_node_reachable_from(
                 graph=state,
@@ -717,7 +717,7 @@ class MapFusion(transformation.SingleStateTransformation):
             #  handling intermediate nodes is much more complicated.
 
             # Empty Memlets are only allowed if they are in `\mathbb{P}`, which
-            #  is also the only place they really make sense (for a map exit).
+            #  is also the only place they really make sense (for a MapExit).
             #  Thus if we now found an empty Memlet we reject it.
             if out_edge.data.is_empty():
                 return None
@@ -733,11 +733,11 @@ class MapFusion(transformation.SingleStateTransformation):
                 return None
 
             # It can happen that multiple edges converges at the `IN_` connector
-            #  of the first map exit, but there is only one edge leaving the exit.
+            #  of the first MapExit, but there is only one edge leaving the exit.
             #  This is complicate to handle, so for now we ignore it.
             # TODO(phimuell): Handle this case properly.
             #   To handle this we need to associate a consumer edge (the outgoing edges
-            #   of the second map) with exactly one producer.
+            #   of the second Map) with exactly one producer.
             producer_edges: List[graph.MultiConnectorEdge[dace.Memlet]] = list(
                 state.in_edges_by_connector(first_map_exit, "IN_" + out_edge.src_conn[4:])
             )
@@ -782,14 +782,14 @@ class MapFusion(transformation.SingleStateTransformation):
                             return None
 
             # Now we determine the consumer of nodes. For this we are using the edges
-            #  leaves the second map entry. It is not necessary to find the actual
+            #  leaves the second MapEntry. It is not necessary to find the actual
             #  consumer nodes, as they might depend on symbols of nested Maps.
             #  For the covering test we only need their subsets, but we will perform
             #  some scan and filtering on them.
             found_second_map = False
             consumer_subsets: List[subsets.Subset] = []
             for intermediate_node_out_edge in state.out_edges(intermediate_node):
-                # If the second map entry is not immediately reachable from the intermediate
+                # If the second MapEntry is not immediately reachable from the intermediate
                 #  node, then ensure that there is not path that goes to it.
                 if intermediate_node_out_edge.dst is not second_map_entry:
                     if is_node_reachable_from(
@@ -798,19 +798,19 @@ class MapFusion(transformation.SingleStateTransformation):
                         return None
                     continue
 
-                # Ensure that the second map is found exactly once.
+                # Ensure that the second Map is found exactly once.
                 # TODO(phimuell): Lift this restriction.
                 if found_second_map:
                     return None
                 found_second_map = True
 
-                # The output of the top map can not define a dynamic map range in the
-                #  second map.
+                # The output of the top Map can not define a dynamic Map range in the
+                #  second Map.
                 if not intermediate_node_out_edge.dst_conn.startswith("IN_"):
                     return None
 
-                # Now we look at all edges that leave the second map entry, i.e. the
-                #  edges that feeds the consumer and define what is read inside the map.
+                # Now we look at all edges that leave the second MapEntry, i.e. the
+                #  edges that feeds the consumer and define what is read inside the Map.
                 #  We do not check them, but collect them and inspect them.
                 # NOTE1: The subset still uses the old iteration variables.
                 # NOTE2: In case of consumer Memlet we explicitly allow dynamic Memlets.
@@ -828,7 +828,7 @@ class MapFusion(transformation.SingleStateTransformation):
             )
             assert len(consumer_subsets) != 0
 
-            # The consumer still uses the original symbols of the second map, so we must rename them.
+            # The consumer still uses the original symbols of the second Map, so we must rename them.
             if param_repl:
                 consumer_subsets = copy.deepcopy(consumer_subsets)
                 for consumer_subset in consumer_subsets:
@@ -836,8 +836,8 @@ class MapFusion(transformation.SingleStateTransformation):
                         mapping=param_repl, replace_callback=consumer_subset.replace
                     )
 
-            # Now we are checking if a single iteration of the first (top) map
-            #  can satisfy all data requirements of the second (bottom) map.
+            # Now we are checking if a single iteration of the first (top) Map
+            #  can satisfy all data requirements of the second (bottom) Map.
             #  For this we look if the producer covers the consumer. A consumer must
             #  be covered by exactly one producer.
             for consumer_subset in consumer_subsets:
@@ -850,11 +850,11 @@ class MapFusion(transformation.SingleStateTransformation):
             # After we have ensured coverage, we have to decide if the intermediate
             #  node can be removed (`\mathbb{E}`) or has to be restored (`\mathbb{S}`).
             #  Note that "removed" here means that it is reconstructed by a new
-            #  output of the second map.
+            #  output of the second Map.
             if self.is_shared_data(data=intermediate_node, state=state, sdfg=sdfg):
                 # The intermediate data is used somewhere else, either in this or another state.
                 # NOTE: If the intermediate is shared, then we will turn it into a
-                #   sink node attached to the combined map exit. Technically this
+                #   sink node attached to the combined MapExit. Technically this
                 #   should be enough, even if the same data appears again in the
                 #   dataflow down streams. However, some DaCe transformations,
                 #   I am looking at you `auto_optimizer()` do not like that. Thus
@@ -897,11 +897,11 @@ class MapFusion(transformation.SingleStateTransformation):
         The function assumes that the parameter renaming was already done.
 
         :param intermediate_outputs: The set of outputs, that should be processed.
-        :param state: The state in which the map is processed.
+        :param state: The state in which the Map is processed.
         :param sdfg: The SDFG that should be optimized.
-        :param first_map_exit: The exit of the first/top map.
-        :param second_map_entry: The entry of the second map.
-        :param second_map_exit: The exit of the second map.
+        :param first_map_exit: The exit of the first/top Map.
+        :param second_map_entry: The entry of the second Map.
+        :param second_map_exit: The exit of the second Map.
         :param is_exclusive_set: If `True` `intermediate_outputs` is the exclusive set.
 
         :note: Before the transformation the `state` does not have to be valid and
@@ -914,13 +914,13 @@ class MapFusion(transformation.SingleStateTransformation):
         #  If not stated otherwise the comments assume that we run in exclusive mode.
         for out_edge in intermediate_outputs:
             # This is the intermediate node that, that we want to get rid of.
-            #  In shared mode we want to recreate it after the second map.
+            #  In shared mode we want to recreate it after the second Map.
             inter_node: nodes.AccessNode = out_edge.dst
             inter_name = inter_node.data
             inter_desc = inter_node.desc(sdfg)
 
             # Now we will determine the shape of the new intermediate. This size of
-            #  this temporary is given by the Memlet that goes into the first map exit.
+            #  this temporary is given by the Memlet that goes into the first MapExit.
             pre_exit_edges = list(
                 state.in_edges_by_connector(first_map_exit, "IN_" + out_edge.src_conn[4:])
             )
@@ -1029,22 +1029,22 @@ class MapFusion(transformation.SingleStateTransformation):
 
             # Now after we have handled the input of the new intermediate node,
             #  we must handle its output. For this we have to "inject" the newly
-            #  created intermediate into the second map. We do this by finding
-            #  the input connectors on the map entry, such that we know where we
+            #  created intermediate into the second Map. We do this by finding
+            #  the input connectors on the MapEntry, such that we know where we
             #  have to reroute inside the Map.
-            # NOTE: Assumes that map (if connected is the direct neighbour).
+            # NOTE: Assumes that Map (if connected is the direct neighbour).
             conn_names: Set[str] = set()
             for inter_node_out_edge in state.out_edges(inter_node):
                 if inter_node_out_edge.dst == second_map_entry:
                     assert inter_node_out_edge.dst_conn.startswith("IN_")
                     conn_names.add(inter_node_out_edge.dst_conn)
                 else:
-                    # If we found another target than the second map entry from the
+                    # If we found another target than the second MapEntry from the
                     #  intermediate node it means that the node _must_ survive,
                     #  i.e. we are not in exclusive mode.
                     assert not is_exclusive_set
 
-            # Now we will reroute the connections inside the second map, i.e.
+            # Now we will reroute the connections inside the second Map, i.e.
             #  instead of consuming the old intermediate node, they will now
             #  consume the new intermediate node.
             for in_conn_name in conn_names:
@@ -1113,8 +1113,8 @@ class MapFusion(transformation.SingleStateTransformation):
                             consumer_edge.data.src_subset.offset(consumer_offset, negative=True)
                             consumer_edge.data.src_subset.pop(squeezed_dims)
 
-                # The edge that leaves the second map entry was already deleted. We now delete
-                #  the edges that connected the intermediate node with the second map entry.
+                # The edge that leaves the second MapEntry was already deleted. We now delete
+                #  the edges that connected the intermediate node with the second MapEntry.
                 for edge in list(state.in_edges_by_connector(second_map_entry, in_conn_name)):
                     assert edge.src == inter_node
                     state.remove_edge(edge)
@@ -1138,11 +1138,11 @@ class MapFusion(transformation.SingleStateTransformation):
                 assert pre_exit_edge.data.data == inter_name
 
                 # This is the shared mode, so we have to recreate the intermediate
-                #  node, but this time it is at the exit of the second map.
+                #  node, but this time it is at the exit of the second Map.
                 state.remove_edge(pre_exit_edge)
                 first_map_exit.remove_in_connector(pre_exit_edge.dst_conn)
 
-                # This is the Memlet that goes from the map internal intermediate
+                # This is the Memlet that goes from the Map internal intermediate
                 #  temporary node to the Map output. This will essentially restore
                 #  or preserve the output for the intermediate node. It is important
                 #  that we use the data that `preExitEdge` was used.
@@ -1177,7 +1177,7 @@ class MapFusion(transformation.SingleStateTransformation):
     ) -> Tuple[Tuple[int, ...], Tuple[int, ...], List[int]]:
         """Compute the size of the new (reduced) intermediate.
 
-        `MapFusion` does not only fuses map, but, depending on the situation, also
+        `MapFusion` does not only fuses Map, but, depending on the situation, also
         eliminates intermediate arrays between the two maps. To transmit data between
         the two maps a new, but much smaller intermediate is needed.
 
@@ -1234,9 +1234,9 @@ class MapFusion(transformation.SingleStateTransformation):
         memlet tree that originates at `intermediate_desc`.
 
         :param original_subset: The original subset that was used to write into the
-            intermediate, must be renamed to the final map parameter.
+            intermediate, must be renamed to the final Map parameter.
         :param intermediate_desc: The original intermediate data descriptor.
-        :param map_params: The parameter of the final map.
+        :param map_params: The parameter of the final Map.
         :param producer_offset: The correction that was applied to the producer side.
         """
         assert not isinstance(intermediate_desc, data.View)
@@ -1265,8 +1265,8 @@ class MapFusion(transformation.SingleStateTransformation):
         if producer_offset is not None:
             # Here we are correcting some parts that over approximate (which partially
             #  does under approximate) might screw up. Consider two maps, the first
-            #  map only writes the subset `[:, 2:6]`, thus the new intermediate will
-            #  have shape `(1, 4)`. Now also imagine that the second map only reads
+            #  Map only writes the subset `[:, 2:6]`, thus the new intermediate will
+            #  have shape `(1, 4)`. Now also imagine that the second Map only reads
             #  the elements `[:, 3]`. From this we see that we can only correct the
             #  consumer side if we also take the producer side into consideration!
             #  See also the `transformations/mapfusion_test.py::test_offset_correction_*`
@@ -1306,8 +1306,8 @@ class MapFusion(transformation.SingleStateTransformation):
 
         :return: The function returns `True` if an inconsistency has been found.
 
-        :param first_map_entry: The entry node of the first map.
-        :param second_map_entry: The entry node of the second map.
+        :param first_map_entry: The entry node of the first Map.
+        :param second_map_entry: The entry node of the second Map.
         :param state: The state on which we operate.
         :param sdfg: The SDFG on which we operate.
         """
@@ -1330,7 +1330,7 @@ class MapFusion(transformation.SingleStateTransformation):
         if not first_map_body_data.isdisjoint(second_map_body_data):
             return True
 
-        # We consider it as a problem if any map refers to non-transient data.
+        # We consider it as a problem if any Map refers to non-transient data.
         #  This is an implementation detail and could be dropped if we do further
         #  analysis.
         if any(
@@ -1355,23 +1355,23 @@ class MapFusion(transformation.SingleStateTransformation):
         * The function will make sure that there is no read write dependency between
             the input and output of the fused maps. For that it will inspect the
             respective subsets of the inputs of the MapEntry of the first and the
-            outputs of the MapExit node of the second map.
+            outputs of the MapExit node of the second Map.
         * The second part partially checks the intermediate nodes, it mostly ensures
             that there are not views and that they are not used as output of the
-            combined map. Note that it is allowed that an intermediate node is also
-            an input to the first map.
-        * In case an intermediate node, is also used as input node of the first map,
-            it is forbidden that the data is used as output of the second map, the
+            combined Map. Note that it is allowed that an intermediate node is also
+            an input to the first Map.
+        * In case an intermediate node, is also used as input node of the first Map,
+            it is forbidden that the data is used as output of the second Map, the
             function will do additional checks. This is needed as the partition function
-            only checks the data consumption of the second map can be satisfied by the
-            data production of the first map, it ignores any potential reads made by
-            the first map's MapEntry.
+            only checks the data consumption of the second Map can be satisfied by the
+            data production of the first Map, it ignores any potential reads made by
+            the first Map's MapEntry.
 
         :return: `True` if there is a conflict between the maps that can not be handled.
             If there is no conflict or if the conflict can be handled `False` is returned.
 
-        :param first_map_entry: The entry node of the first map.
-        :param second_map_entry: The entry node of the second map.
+        :param first_map_entry: The entry node of the first Map.
+        :param second_map_entry: The entry node of the second Map.
         :param param_repl: Dict that describes how to rename the parameters of the second Map.
         :param state: The state on which we operate.
         :param sdfg: The SDFG on which we operate.
@@ -1412,9 +1412,9 @@ class MapFusion(transformation.SingleStateTransformation):
                 return False
         real_read_map_1, real_write_map_1, real_read_map_2, real_write_map_2 = resolved_sets
 
-        # We do not allow that the first and second map each write to the same data.
+        # We do not allow that the first and second Map each write to the same data.
         #  This essentially ensures that an intermediate can not be used as output of
-        #  the second map at the same time. It is actually stronger as it does not
+        #  the second Map at the same time. It is actually stronger as it does not
         #  take their role into account.
         if not real_write_map_1.isdisjoint(real_write_map_2):
             return True
@@ -1437,8 +1437,8 @@ class MapFusion(transformation.SingleStateTransformation):
         if any(self.is_view(exchange_node, sdfg) for exchange_node in exchange_nodes):
             return True
 
-        # This is the names of the node that are used as input of the first map and
-        #  as output of the second map. We have to ensure that there is no data
+        # This is the names of the node that are used as input of the first Map and
+        #  as output of the second Map. We have to ensure that there is no data
         #  dependency between these nodes.
         # NOTE: This set is not required to be empty. It might look as this would
         #   create a data race, but it is save. The reason is because all data has
@@ -1451,7 +1451,7 @@ class MapFusion(transformation.SingleStateTransformation):
             return True
 
         # A data container can not be used as output (of the second as well as the
-        #  combined map) and as intermediate. If we would allow that the map would
+        #  combined Map) and as intermediate. If we would allow that the Map would
         #  have two output nodes one the original one and the second is the created
         #  node that is created because the intermediate is shared.
         # TODO(phimuell): Handle this case.
@@ -1459,23 +1459,23 @@ class MapFusion(transformation.SingleStateTransformation):
             return True
 
         # While it is forbidden that a data container, used as intermediate, is also
-        #  used as output of the second map. It is allowed that the data container
-        #  is used as intermediate and as input of the first map. The partition only
+        #  used as output of the second Map. It is allowed that the data container
+        #  is used as intermediate and as input of the first Map. The partition only
         #  checks that the data dependencies are mean, i.e. what is read by the second
-        #  map is also computed (written to the intermediate) it does not take into
-        #  account the first map's read to the data container.
+        #  Map is also computed (written to the intermediate) it does not take into
+        #  account the first Map's read to the data container.
         #  To make an example: The partition function will make sure that if the
-        #  second map reads index `i` from the intermediate that the first map writes
-        #  to that index. But it will not care if the first map reads (through its
+        #  second Map reads index `i` from the intermediate that the first Map writes
+        #  to that index. But it will not care if the first Map reads (through its
         #  MapEntry) index `i + 1`. In order to be valid me must ensure that the first
-        #  map's reads and writes to the intermediate are pointwise.
+        #  Map's reads and writes to the intermediate are pointwise.
         #  Note that we only have to make this check if it is also an intermediate node.
-        #  Because if it is not read by the second map it is not a problem as the node
+        #  Because if it is not read by the second Map it is not a problem as the node
         #  will end up as an pure output node anyway.
         read_write_map_1 = set(read_map_1.keys()).intersection(write_map_1.keys())
         datas_to_inspect = read_write_map_1.intersection(exchange_names)
         for data_to_inspect in datas_to_inspect:
-            # Now get all subsets of the data container that the first map reads
+            # Now get all subsets of the data container that the first Map reads
             #  from or writes to and check if they are pointwise.
             all_subsets: List[subsets.Subset] = []
             all_subsets.extend(
@@ -1506,12 +1506,12 @@ class MapFusion(transformation.SingleStateTransformation):
             return False
 
         # Now we inspect if there is a read write dependency, between data that is
-        #  used as input and output of the fused map. There is no problem is they
+        #  used as input and output of the fused Map. There is no problem is they
         #  are pointwise, i.e. in each iteration the same locations are accessed.
         #  Essentially they all boil down to `a += 1`.
         for inout_data_name in fused_inout_data_names:
             all_subsets = []
-            # The subsets that define reading are given by the first map's entry node
+            # The subsets that define reading are given by the first MapEntry node
             all_subsets.extend(
                 self.find_subsets(
                     node=read_map_1[inout_data_name],
@@ -1521,7 +1521,7 @@ class MapFusion(transformation.SingleStateTransformation):
                     param_repl=None,
                 )
             )
-            #  While the subsets defining writing are given by the second map's exit
+            #  While the subsets defining writing are given by the second MapExit
             #  node, there we also have to apply renaming.
             all_subsets.extend(
                 self.find_subsets(
@@ -1544,7 +1544,7 @@ class MapFusion(transformation.SingleStateTransformation):
         """Point wise means that they are all the same.
 
         If a series of subsets are point wise it means that all Memlets, access
-        the same data. This is an important property because the whole map fusion
+        the same data. This is an important property because the whole Map fusion
         is build upon this.
         If the subsets originates from different maps, then they must have been
         renamed.
@@ -1769,7 +1769,7 @@ class MapFusion(transformation.SingleStateTransformation):
 
         The function will not start a search for all consumer/producers.
         Instead it will locate the edges which is immediately inside the
-        map scope.
+        Map scope.
 
         :param node: The access node that should be examined.
         :param scope_node: We are only interested in data that flows through this node.
