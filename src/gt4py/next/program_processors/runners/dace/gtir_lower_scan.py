@@ -33,24 +33,25 @@ from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.program_processors.runners.dace import (
-    gtir_builtin_translators as gtir_translators,
     gtir_dataflow,
-    gtir_sdfg,
-    gtir_sdfg_utils,
+    gtir_domain,
+    gtir_lower,
+    gtir_lower_types,
+    gtir_lower_utils,
 )
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 if TYPE_CHECKING:
-    from gt4py.next.program_processors.runners.dace import gtir_sdfg
+    from gt4py.next.program_processors.runners.dace import gtir_lower
 
 
 def _parse_scan_fieldop_arg(
     node: gtir.Expr,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    sdfg_builder: gtir_sdfg.SDFGBuilder,
-    domain: gtir_translators.FieldopDomain,
+    sdfg_builder: gtir_lower.SDFGBuilder,
+    domain: gtir_domain.FieldopDomain,
 ) -> gtir_dataflow.MemletExpr | tuple[gtir_dataflow.MemletExpr | tuple[Any, ...], ...]:
     """Helper method to visit an expression passed as argument to a scan field operator.
 
@@ -62,7 +63,7 @@ def _parse_scan_fieldop_arg(
     """
 
     def _parse_fieldop_arg_impl(
-        arg: gtir_translators.FieldopData,
+        arg: gtir_lower_types.FieldopData,
     ) -> gtir_dataflow.MemletExpr:
         arg_expr = arg.get_local_view(domain, sdfg)
         if isinstance(arg_expr, gtir_dataflow.MemletExpr):
@@ -75,7 +76,7 @@ def _parse_scan_fieldop_arg(
 
     arg = sdfg_builder.visit(node, sdfg=sdfg, head_state=state)
 
-    if isinstance(arg, gtir_translators.FieldopData):
+    if isinstance(arg, gtir_lower_types.FieldopData):
         return _parse_fieldop_arg_impl(arg)
     else:
         # handle tuples of fields
@@ -83,14 +84,14 @@ def _parse_scan_fieldop_arg(
 
 
 def _create_scan_field_operator_impl(
-    sdfg_builder: gtir_sdfg.SDFGBuilder,
+    sdfg_builder: gtir_lower.SDFGBuilder,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    domain: gtir_translators.FieldopDomain,
+    domain: gtir_domain.FieldopDomain,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
     map_exit: dace.nodes.MapExit,
-) -> gtir_translators.FieldopData:
+) -> gtir_lower_types.FieldopData:
     """
     Helper method to allocate a temporary array that stores one field computed
     by the scan field operator.
@@ -110,8 +111,8 @@ def _create_scan_field_operator_impl(
     assert isinstance(dataflow_output_desc, dace.data.Array)
 
     # the memory layout of the output field follows the field operator compute domain
-    field_dims, field_origin, field_shape = gtir_translators.get_field_layout(domain)
-    field_indices = gtir_translators.get_domain_indices(field_dims, field_origin)
+    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(domain)
+    field_indices = gtir_domain.get_domain_indices(field_dims, field_origin)
     field_subset = dace_subsets.Range.from_indices(field_indices)
 
     # the vertical dimension used as scan column is computed by the `LoopRegion`
@@ -168,7 +169,7 @@ def _create_scan_field_operator_impl(
     field_node = state.add_access(field_name)
     output_edge.connect(map_exit, field_node, field_subset)
 
-    return gtir_translators.FieldopData(
+    return gtir_lower_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
     )
 
@@ -176,13 +177,13 @@ def _create_scan_field_operator_impl(
 def _create_scan_field_operator(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    domain: gtir_translators.FieldopDomain,
+    domain: gtir_domain.FieldopDomain,
     node_type: ts.FieldType | ts.TupleType,
-    sdfg_builder: gtir_sdfg.SDFGBuilder,
+    sdfg_builder: gtir_lower.SDFGBuilder,
     input_edges: Iterable[gtir_dataflow.DataflowInputEdge],
     output_tree: gtir_dataflow.DataflowOutputEdge
     | tuple[gtir_dataflow.DataflowOutputEdge | tuple[Any, ...], ...],
-) -> gtir_translators.FieldopResult:
+) -> gtir_lower_types.FieldopResult:
     """
     Helper method to build the output of a field operator, which can consist of
     a single field or a tuple of fields.
@@ -195,7 +196,7 @@ def _create_scan_field_operator(
     Refer to `gtir_builtin_translators._create_field_operator()` for the
     description of function arguments and return values.
     """
-    domain_dims, _, _ = gtir_translators.get_field_layout(domain)
+    domain_dims, _, _ = gtir_domain.get_field_layout(domain)
 
     # create a map scope to execute the `LoopRegion` over the horizontal domain
     if len(domain_dims) == 1:
@@ -213,7 +214,7 @@ def _create_scan_field_operator(
             "fieldop",
             state,
             ndrange={
-                gtir_sdfg_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
+                gtir_lower_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
                 for dim, lower_bound, upper_bound in domain
                 if not sdfg_builder.is_column_axis(dim)
             },
@@ -232,7 +233,7 @@ def _create_scan_field_operator(
         # handle tuples of fields
         # the symbol name 'x' in the call below is not used, we only need
         # the tree structure of the `TupleType` definition to pass to `tree_map()`
-        output_symbol_tree = gtir_sdfg_utils.make_symbol_tree("x", node_type)
+        output_symbol_tree = gtir_lower_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
             lambda output_edge, output_sym: (
                 _create_scan_field_operator_impl(
@@ -266,13 +267,13 @@ def _scan_output_name(input_name: str) -> str:
 def _lower_lambda_to_nested_sdfg(
     lambda_node: gtir.Lambda,
     sdfg: dace.SDFG,
-    sdfg_builder: gtir_sdfg.SDFGBuilder,
-    domain: gtir_translators.FieldopDomain,
-    init_data: gtir_translators.FieldopResult,
+    sdfg_builder: gtir_lower.SDFGBuilder,
+    domain: gtir_domain.FieldopDomain,
+    init_data: gtir_lower_types.FieldopResult,
     lambda_symbols: dict[str, ts.DataType],
     scan_forward: bool,
     scan_carry_symbol: gtir.Sym,
-) -> tuple[dace.SDFG, gtir_translators.FieldopResult]:
+) -> tuple[dace.SDFG, gtir_lower_types.FieldopResult]:
     """
     Helper method to lower the lambda node representing the scan stencil dataflow
     inside a separate SDFG.
@@ -312,7 +313,7 @@ def _lower_lambda_to_nested_sdfg(
 
     # the lambda expression, i.e. body of the scan, will be created inside a nested SDFG.
     nsdfg = dace.SDFG(sdfg_builder.unique_nsdfg_name(sdfg, "scan"))
-    nsdfg.debuginfo = gtir_sdfg_utils.debug_info(lambda_node, default=sdfg.debuginfo)
+    nsdfg.debuginfo = gtir_lower_utils.debug_info(lambda_node, default=sdfg.debuginfo)
     # We set `using_explicit_control_flow=True` because the vertical scan is lowered to a `LoopRegion`.
     # This property is used by pattern matching in SDFG transformation framework
     # to skip those transformations that do not yet support control flow blocks.
@@ -341,11 +342,11 @@ def _lower_lambda_to_nested_sdfg(
     scan_dim, scan_lower_bound, scan_upper_bound = scan_domain[0]
 
     # extract the scan loop range
-    scan_loop_var = gtir_sdfg_utils.get_map_variable(scan_dim)
+    scan_loop_var = gtir_lower_utils.get_map_variable(scan_dim)
 
     # in case the scan operator computes a list (not a scalar), we need to add an extra dimension
     def get_scan_output_shape(
-        scan_init_data: gtir_translators.FieldopData,
+        scan_init_data: gtir_lower_types.FieldopData,
     ) -> list[dace.symbolic.SymExpr]:
         scan_column_size = scan_upper_bound - scan_lower_bound
         if isinstance(scan_init_data.gt_type, ts.ScalarType):
@@ -367,7 +368,7 @@ def _lower_lambda_to_nested_sdfg(
     # This dataflow will write the initial value of the scan carry variable.
     init_state = nsdfg.add_state("scan_init", is_start_block=True)
     scan_carry_input = (
-        gtir_sdfg_utils.make_symbol_tree(scan_carry_symbol.id, scan_carry_symbol.type)
+        gtir_lower_utils.make_symbol_tree(scan_carry_symbol.id, scan_carry_symbol.type)
         if isinstance(scan_carry_symbol.type, ts.TupleType)
         else scan_carry_symbol
     )
@@ -440,7 +441,7 @@ def _lower_lambda_to_nested_sdfg(
         scan_output_edge: gtir_dataflow.DataflowOutputEdge,
         scan_output_shape: list[dace.symbolic.SymExpr],
         scan_carry_sym: gtir.Sym,
-    ) -> gtir_translators.FieldopData:
+    ) -> gtir_lower_types.FieldopData:
         scan_result = scan_output_edge.result
         if isinstance(scan_result.gt_dtype, ts.ScalarType):
             assert scan_result.gt_dtype == scan_carry_sym.type
@@ -479,7 +480,7 @@ def _lower_lambda_to_nested_sdfg(
         )
 
         output_type = ts.FieldType(dims=[scan_dim], dtype=scan_result.gt_dtype)
-        return gtir_translators.FieldopData(output_node, output_type, origin=(scan_lower_bound,))
+        return gtir_lower_types.FieldopData(output_node, output_type, origin=(scan_lower_bound,))
 
     # write the stencil result (value on one vertical level) into a 1D field
     # with full vertical shape representing one column
@@ -513,7 +514,7 @@ def _connect_nested_sdfg_output_to_temporaries(
     nsdfg: dace.SDFG,
     nsdfg_node: dace.nodes.NestedSDFG,
     outer_state: dace.SDFGState,
-    inner_data: gtir_translators.FieldopData,
+    inner_data: gtir_lower_types.FieldopData,
 ) -> gtir_dataflow.DataflowOutputEdge:
     """
     Helper function to create the edges to write output data from the nested SDFG
@@ -549,8 +550,8 @@ def translate_scan(
     node: gtir.Node,
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    sdfg_builder: gtir_sdfg.SDFGBuilder,
-) -> gtir_translators.FieldopResult:
+    sdfg_builder: gtir_lower.SDFGBuilder,
+) -> gtir_lower_types.FieldopResult:
     """
     Generates the dataflow subgraph for the `as_fieldop` builtin with a scan operator.
 
@@ -573,7 +574,7 @@ def translate_scan(
     assert cpm.is_call_to(scan_expr, "scan")
 
     # parse the domain of the scan field operator
-    domain = gtir_translators.extract_domain(domain_expr)
+    domain = gtir_domain.extract_domain(domain_expr)
 
     # parse scan parameters
     assert len(scan_expr.args) == 3
@@ -594,8 +595,8 @@ def translate_scan(
     # extract type definition of the scan carry
     scan_carry_type = (
         init_data.gt_type
-        if isinstance(init_data, gtir_translators.FieldopData)
-        else gtir_translators.get_tuple_type(init_data)
+        if isinstance(init_data, gtir_lower_types.FieldopData)
+        else gtir_lower_types.get_tuple_type(init_data)
     )
 
     # define the set of symbols available in the lambda context, which consists of
@@ -633,7 +634,7 @@ def translate_scan(
 
     lambda_arg_nodes = dict(
         itertools.chain(
-            *[gtir_translators.flatten_tuples(psym.id, arg) for psym, arg in lambda_args_mapping]
+            *[gtir_lower_types.flatten_tuples(psym.id, arg) for psym, arg in lambda_args_mapping]
         )
     )
 
@@ -641,7 +642,7 @@ def translate_scan(
     if isinstance(scan_carry_type, ts.TupleType):
         lambda_flat_outs = {
             str(sym.id): sym.type
-            for sym in gtir_sdfg_utils.flatten_tuple_fields(
+            for sym in gtir_lower_utils.flatten_tuple_fields(
                 _scan_output_name(scan_carry), scan_carry_type
             )
         }
@@ -651,7 +652,7 @@ def translate_scan(
     # build the mapping of symbols from nested SDFG to field operator context
     nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
     for psym, arg in lambda_args_mapping:
-        nsdfg_symbols_mapping |= gtir_translators.get_arg_symbol_mapping(psym.id, arg, sdfg)
+        nsdfg_symbols_mapping |= gtir_lower_utils.get_arg_symbol_mapping(psym.id, arg, sdfg)
 
     # the scan nested SDFG is ready: it is instantiated in the field operator context
     # where the map scope over the horizontal domain lives

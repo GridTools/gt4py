@@ -21,7 +21,7 @@ from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
-    gtir_sdfg,
+    gtir_lower,
     transformations as gtx_transformations,
     utils as gtx_dace_utils,
 )
@@ -156,7 +156,7 @@ class DaCeTranslator(
 
         # do not store transformation history in SDFG
         with dace.config.set_temporary("store_history", value=False):
-            sdfg = gtir_sdfg.build_sdfg_from_gtir(
+            sdfg = gtir_lower.build_sdfg_from_gtir(
                 ir,
                 offset_provider_type,
                 column_axis,
