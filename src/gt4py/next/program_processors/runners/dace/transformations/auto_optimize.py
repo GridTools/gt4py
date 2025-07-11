@@ -30,6 +30,7 @@ def gt_auto_optimize(
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
     reuse_transients: bool = False,
+    use_memory_pool: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
     constant_symbols: Optional[dict[str, Any]] = None,
@@ -83,6 +84,7 @@ def gt_auto_optimize(
             blocking if there are independent nodes in the Map, see the
             `require_independent_nodes` option of the `LoopBlocking` transformation.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
+        use_memory_pool: Enable CUDA memory pool in gpu codegen.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             for _all_ GPU Maps.
@@ -191,6 +193,7 @@ def gt_auto_optimize(
             #   scopes, which I do not like. Thus we should fix the transformation
             #   to avoid that.
             reuse_transients=reuse_transients,
+            use_memory_pool=(use_memory_pool if gpu else False),
             validate=validate,
             validate_all=validate_all,
         )
@@ -502,6 +505,7 @@ def _gt_auto_post_processing(
     gpu: bool,
     make_persistent: bool,
     reuse_transients: bool,
+    use_memory_pool: bool,
     validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
@@ -521,7 +525,10 @@ def _gt_auto_post_processing(
     # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
     dace_aoptimize.move_small_arrays_to_stack(sdfg)
 
-    if make_persistent:
+    if make_persistent or use_memory_pool:
+        # When `use_memory_pool=True`, we first make temporary arrays persistent
+        #   to identify which arrays are eligible; then we apply scope lifetime
+        #   and move those arrays to the memory pool.
         device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
         gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)
 
@@ -536,6 +543,17 @@ def _gt_auto_post_processing(
                 assert isinstance(state, dace.SDFGState)
                 for edge in state.edges():
                     edge.data.wcr_nonatomic = False
+
+    if use_memory_pool:
+        if not gpu:
+            raise NotImplementedError("Memory pool only supported for GPU codegn")
+        for _, _, desc in sdfg.arrays_recursive():
+            if (
+                isinstance(desc, dace_data.Array)
+                and desc.lifetime == dace.AllocationLifetime.Persistent
+            ):
+                desc.pool = True
+                desc.lifetime = dace.AllocationLifetime.Scope
 
     return sdfg
 
