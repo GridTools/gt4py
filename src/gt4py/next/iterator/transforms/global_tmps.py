@@ -329,7 +329,7 @@ def create_global_tmps(
     This pass looks at all `as_fieldop` calls and transforms field-typed subexpressions of its
     arguments into temporaries.
     """
-    # TODO: document why to keep existing domains, add test
+    # TODO(tehrengruber): document why to keep existing domains and add test
     program = infer_domain.infer_program(
         program,
         offset_provider=offset_provider,
