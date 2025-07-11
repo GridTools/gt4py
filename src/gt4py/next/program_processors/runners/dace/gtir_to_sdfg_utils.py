@@ -16,7 +16,7 @@ from gt4py import eve
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.program_processors.runners.dace import gtir_lower_types, gtir_python_codegen
+from gt4py.next.program_processors.runners.dace import gtir_python_codegen, gtir_to_sdfg_types
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -37,7 +37,7 @@ def debug_info(
 
 
 def get_arg_symbol_mapping(
-    dataname: str, arg: gtir_lower_types.FieldopResult, sdfg: dace.SDFG
+    dataname: str, arg: gtir_to_sdfg_types.FieldopResult, sdfg: dace.SDFG
 ) -> dict[str, dace.symbolic.SymExpr]:
     """
     Helper method to build the mapping from inner to outer SDFG of all symbols
@@ -52,7 +52,7 @@ def get_arg_symbol_mapping(
         A mapping from inner symbol names to values or symbolic definitions
         in the parent SDFG.
     """
-    if isinstance(arg, gtir_lower_types.FieldopData):
+    if isinstance(arg, gtir_to_sdfg_types.FieldopData):
         return arg.get_symbol_mapping(dataname, sdfg)
 
     symbol_mapping: dict[str, dace.symbolic.SymExpr] = {}

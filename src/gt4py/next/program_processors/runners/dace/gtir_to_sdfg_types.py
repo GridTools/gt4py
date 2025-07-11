@@ -21,8 +21,8 @@ from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_domain,
-    gtir_lower,
-    gtir_lower_utils,
+    gtir_to_sdfg,
+    gtir_to_sdfg_utils,
     utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts
@@ -58,7 +58,7 @@ class FieldopData:
 
     def map_to_parent_sdfg(
         self,
-        sdfg_builder: gtir_lower.SDFGBuilder,
+        sdfg_builder: gtir_to_sdfg.SDFGBuilder,
         inner_sdfg: dace.SDFG,
         outer_sdfg: dace.SDFG,
         outer_sdfg_state: dace.SDFGState,
@@ -200,7 +200,7 @@ def flatten_tuples(name: str, arg: FieldopResult) -> list[tuple[str, FieldopData
     """
     if isinstance(arg, tuple):
         tuple_type = get_tuple_type(arg)
-        tuple_symbols = gtir_lower_utils.flatten_tuple_fields(name, tuple_type)
+        tuple_symbols = gtir_to_sdfg_utils.flatten_tuple_fields(name, tuple_type)
         tuple_data_fields = gtx_utils.flatten_nested_tuple(arg)
         return [
             (str(tsym.id), tfield)

@@ -16,7 +16,7 @@ from dace import subsets as dace_subsets
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
-from gt4py.next.program_processors.runners.dace import gtir_lower_utils
+from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_utils
 
 
 FieldopDomain: TypeAlias = list[
@@ -46,7 +46,7 @@ def extract_domain(node: gtir.Expr) -> FieldopDomain:
             axis = named_range.args[0]
             assert isinstance(axis, gtir.AxisLiteral)
             lower_bound, upper_bound = (
-                gtir_lower_utils.get_symbolic(arg) for arg in named_range.args[1:3]
+                gtir_to_sdfg_utils.get_symbolic(arg) for arg in named_range.args[1:3]
             )
             dim = gtx_common.Dimension(axis.value, axis.kind)
             domain.append((dim, lower_bound, upper_bound))
@@ -56,8 +56,8 @@ def extract_domain(node: gtir.Expr) -> FieldopDomain:
             domain.append(
                 (
                     dim,
-                    gtir_lower_utils.get_symbolic(drange.start),
-                    gtir_lower_utils.get_symbolic(drange.stop),
+                    gtir_to_sdfg_utils.get_symbolic(drange.start),
+                    gtir_to_sdfg_utils.get_symbolic(drange.stop),
                 )
             )
 
@@ -85,7 +85,7 @@ def get_domain_indices(
     """
     assert len(dims) != 0
     index_variables = [
-        dace.symbolic.pystr_to_symbolic(gtir_lower_utils.get_map_variable(dim)) for dim in dims
+        dace.symbolic.pystr_to_symbolic(gtir_to_sdfg_utils.get_map_variable(dim)) for dim in dims
     ]
     origin = [0] * len(index_variables) if origin is None else origin
     return dace_subsets.Indices(
