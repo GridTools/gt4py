@@ -33,6 +33,7 @@ class Context:
 
     inputs: dict[str, Memlet]
     """Mapping connector names to memlets flowing into the Tasklet."""
+
     outputs: dict[str, Memlet]
     """Mapping connector names to memlets flowing out of the Tasklet."""
 
@@ -69,7 +70,7 @@ class OIRToTasklet(eve.NodeVisitor):
 
         memlet = Memlet(data=node.name, subset=subsets.Range([(0, 0, 1)]))
         if is_target:
-            # Nnote: it doesn't matter if we use is_target or target here because if they
+            # Note: it doesn't matter if we use is_target or target here because if they
             # were different, we had a read-after-write situation, which was already
             # handled above.
             ctx.targets.add(node.name)
@@ -94,7 +95,7 @@ class OIRToTasklet(eve.NodeVisitor):
             symbol = tir.Axis.K.iteration_dace_symbol()
             shift = ctx.tree.shift[node.name][tir.Axis.K]
             offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
-            name_parts.append(f"[{symbol} + {shift} + {offset}]")
+            name_parts.append(f"[({symbol}) + ({shift}) + ({offset})]")
 
         # Data dimension subscript
         data_indices: list[str] = []
@@ -328,16 +329,16 @@ def _memlet_subset_cartesian(
     dimensions = ctx.tree.dimensions[node.name]
     shift = ctx.tree.shift[node.name]
 
-    ranges: list[tuple[str, str, int]] = []
+    ranges: list[tuple[str | int, str | int, int]] = []
     # Handle cartesian indices
     for index, axis in enumerate(tir.Axis.dims_3d()):
         if dimensions[index]:
-            i = f"{axis.iteration_dace_symbol()} + {shift[axis]} + {offset_dict[axis.lower()]}"
+            i = f"({axis.iteration_dace_symbol()}) + ({shift[axis]}) + ({offset_dict[axis.lower()]})"
             ranges.append((i, i, 1))
 
     # Append data dimensions
     for domain_size in data_domains:
-        ranges.append(("0", f"{domain_size}-1", 1))  # ranges are inclusive
+        ranges.append((0, domain_size - 1, 1))  # ranges are inclusive
 
     return subsets.Range(ranges)
 
@@ -347,13 +348,13 @@ def _memlet_subset_variable_offset(
 ) -> subsets.Subset:
     # Handle cartesian indices
     shift = ctx.tree.shift[node.name]
-    i = f"{tir.Axis.I.iteration_symbol()} + {shift[tir.Axis.I]}"
-    j = f"{tir.Axis.J.iteration_symbol()} + {shift[tir.Axis.J]}"
-    K = f"{tir.Axis.K.domain_symbol()} + {shift[tir.Axis.K]} - 1"  # ranges are inclusive
-    ranges = [(i, i, 1), (j, j, 1), ("0", K, 1)]
+    i = f"({tir.Axis.I.iteration_symbol()}) + ({shift[tir.Axis.I]})"
+    j = f"({tir.Axis.J.iteration_symbol()}) + ({shift[tir.Axis.J]})"
+    K = f"({tir.Axis.K.domain_symbol()}) + ({shift[tir.Axis.K]}) - 1"  # ranges are inclusive
+    ranges: list[tuple[str | int, str | int, int]] = [(i, i, 1), (j, j, 1), (0, K, 1)]
 
     # Append data dimensions
     for domain_size in data_domains:
-        ranges.append(("0", f"{domain_size}-1", 1))  # ranges are inclusive
+        ranges.append((0, domain_size - 1, 1))  # ranges are inclusive
 
     return subsets.Range(ranges)

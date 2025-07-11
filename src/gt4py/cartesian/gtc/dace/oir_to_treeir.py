@@ -130,10 +130,10 @@ class OIRToTreeIR(eve.NodeVisitor):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, ctx: tir.Context) -> None:
         block_extent = ctx.block_extents[id(node)]
 
-        axis_start_i = f"0 + {block_extent[0][0]}"
-        axis_start_j = f"0 + {block_extent[1][0]}"
-        axis_end_i = f"{tir.Axis.I.domain_dace_symbol()}  + {block_extent[0][1]}"
-        axis_end_j = f"{tir.Axis.J.domain_dace_symbol()}  + {block_extent[1][1]}"
+        axis_start_i = block_extent[0][0]
+        axis_start_j = block_extent[1][0]
+        axis_end_i = f"({tir.Axis.I.domain_dace_symbol()})  + ({block_extent[0][1]})"
+        axis_end_j = f"({tir.Axis.J.domain_dace_symbol()})  + ({block_extent[1][1]})"
 
         loop = tir.HorizontalLoop(
             bounds_i=tir.Bounds(start=axis_start_i, end=axis_end_i),
@@ -228,9 +228,9 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     def visit_AxisBound(self, node: oir.AxisBound, axis_start: str, axis_end: str) -> str:
         if node.level == common.LevelMarker.START:
-            return f"{axis_start} + {node.offset}"
+            return f"({axis_start}) + ({node.offset})"
 
-        return f"{axis_end} + {node.offset}"
+        return f"({axis_end}) + ({node.offset})"
 
     def visit_Interval(
         self, node: oir.Interval, loop_order: common.LoopOrder, axis_start: str, axis_end: str
@@ -239,7 +239,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         end = self.visit(node.end, axis_start=axis_start, axis_end=axis_end)
 
         if loop_order == common.LoopOrder.BACKWARD:
-            return tir.Bounds(start=f"{end} - 1", end=start)
+            return tir.Bounds(start=f"{end - 1}", end=start)
 
         return tir.Bounds(start=start, end=end)
 
@@ -309,7 +309,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             missing_api_parameters.remove(param.name)
             if isinstance(param, oir.ScalarDecl):
                 containers[param.name] = data.Scalar(
-                    utils.data_type_to_dace_typeclass(param.dtype),  # dtype
+                    dtype=utils.data_type_to_dace_typeclass(param.dtype),
                     debuginfo=utils.get_dace_debuginfo(param),
                 )
                 continue
@@ -323,13 +323,13 @@ class OIRToTreeIR(eve.NodeVisitor):
                     tir.Axis.K: max(k_bound[0], 0),
                 }
                 containers[param.name] = data.Array(
-                    utils.data_type_to_dace_typeclass(param.dtype),  # dtype
-                    get_dace_shape(
+                    dtype=utils.data_type_to_dace_typeclass(param.dtype),
+                    shape=get_dace_shape(
                         param,
                         field_without_mask_extents[param.name],
                         k_bound,
                         symbols,
-                    ),  # shape
+                    ),
                     strides=get_dace_strides(param, symbols),
                     storage=DEFAULT_STORAGE_TYPE[self._device_type],
                     debuginfo=utils.get_dace_debuginfo(param),
@@ -348,8 +348,8 @@ class OIRToTreeIR(eve.NodeVisitor):
                 tir.Axis.K: max(k_bound[0], 0),
             }
             containers[field.name] = data.Array(
-                utils.data_type_to_dace_typeclass(field.dtype),  # dtype
-                get_dace_shape(field, field_extent, k_bound, symbols),  # shape
+                dtype=utils.data_type_to_dace_typeclass(field.dtype),
+                shape=get_dace_shape(field, field_extent, k_bound, symbols),
                 strides=get_dace_strides(field, symbols),
                 transient=True,
                 lifetime=dtypes.AllocationLifetime.Persistent,
@@ -495,19 +495,16 @@ def get_dace_shape(
                 i_padding = extent[0][1] - extent[0][0]
                 if i_padding != 0:
                     shape.append(symbol + i_padding)
-                    continue
-
-            if axis == tir.Axis.J:
+            elif axis == tir.Axis.J:
                 j_padding = extent[1][1] - extent[1][0]
                 if j_padding != 0:
                     shape.append(symbol + j_padding)
-                    continue
-
-            if axis == tir.Axis.K:
+            elif axis == tir.Axis.K:
                 k_padding = max(k_bound[0], 0) + max(k_bound[1], 0)
                 if k_padding != 0:
                     shape.append(symbol + k_padding)
-                    continue
+            else:
+                raise ValueError(f"Encountered unexpected axis '{axis}'")
 
             shape.append(symbol)
 

@@ -217,7 +217,7 @@ def freeze_origin_domain_sdfg(
 
     This wrapping is required because we do not expect any of the inner_sdfg bounds to
     have been specialized, e.g. we expect "__I/J/K" symbols to still be present. We wrap
-    the call and specialize at top level, which will then be passed as a parameter to the
+    the call and specialize at top level, which will then be passed as a symbol to the
     inner sdfg.
 
     Once we move specialization of array & maps bounds upstream, this will become moot
