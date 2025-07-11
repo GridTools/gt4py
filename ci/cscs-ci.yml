@@ -29,8 +29,9 @@ stages:
   - test
 
 # -- Build stage --
-# The build job creates a the base image for the CSCS CI only if the external
-# dependencies change. The actual repository is cloned at the test stage.
+# The build job creates the base image for the CSCS CI only if the external
+# dependencies or the pipeline definition change. The actual repository is
+# cloned at the test stage.
 .build_common:
   stage: build
   extends:
@@ -46,7 +47,7 @@ stages:
     # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
     # To override the defaults, just define these variables in the actual job.
     DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
-    PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}  # A tag is added in the before_script of .dynamic-image-name
+    PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}  # The $DOCKER_TAG tag is added in the before_script of .dynamic-image-name
     WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
   parallel:
     matrix:
@@ -87,10 +88,9 @@ build_cscs_gh200:
 # -- Test stage --
 .test_common:
   stage: test
-  image: ${IMAGE_NAME}:${DOCKER_TAG}
+  image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
     CSCS_CUDA_MPS: 1
-    IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}
     SLURM_GPUS_PER_NODE: 4
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5
@@ -124,7 +124,7 @@ build_cscs_gh200:
     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
-    - cd "${WORKDIR}/gt4py" && nox -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
+    - cd "${WORKDIR}/gt4py" && uv run --script noxfile.py -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
 
 test_cscs_gh200:
   extends:

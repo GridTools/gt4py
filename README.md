@@ -4,10 +4,7 @@
 [![slack](https://img.shields.io/badge/slack-join-orange?logo=slack&labelColor=3a3a3a)](https://join.slack.com/t/gridtools/shared_invite/zt-1mceuj747-59swuowC3MKAuCFyNAnc1g)
 
 [![Daily CI](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml/badge.svg)](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml)
-![test-cartesian](https://github.com/GridTools/gt4py/actions/workflows/test-cartesian.yml/badge.svg?branch=main)
-![test-next](https://github.com/GridTools/gt4py/actions/workflows/test-next.yml/badge.svg?branch=main)
-![test-storage](https://github.com/GridTools/gt4py/actions/workflows/test-storage.yml/badge.svg?branch=main)
-![test-eve](https://github.com/GridTools/gt4py/actions/workflows/test-eve.yml/badge.svg?branch=main)
+![test-components](https://github.com/GridTools/gt4py/actions/workflows/test-components.yml/badge.svg?branch=main)
 ![qa](https://github.com/GridTools/gt4py/actions/workflows/code-quality.yml/badge.svg?branch=main)
 
 [![uv](https://img.shields.io/badge/-uv-261230.svg?logo=uv)](https://github.com/astral-sh/uv)
@@ -80,12 +77,17 @@ git clone https://github.com/gridtools/gt4py.git
 cd gt4py
 
 # Let uv create the development environment at `.venv`.
-# The `--extra all` option tells uv to install all the optional
-# dependencies of gt4py, and thus it is not strictly necessary.
+uv sync --group cartesian-dev --extra cartesian   # for gt4py.cartesian
+uv sync --group next-dev --extra next             # for gt4py.next
+
+# The `--extra cartesian` (or `--extra next`) options tells uv to install
+# the optional run-time dependencies of gt4py.cartesian (or gt4py.next),
+# and thus it is not strictly necessary.
 # Note that if no dependency groups are provided as an option,
-# uv uses `--group dev` by default so the development dependencies
-# are installed.
-uv sync --extra all
+# uv uses `--group dev` by default so the core development
+# dependencies will be installed anyway, but not all of them
+# (most notably, DaCe-related dependencies are different for
+# gt4py.cartesian and gt4py.next so they won't be installed).
 
 # Finally, activate the virtual environment and start writing code!
 source .venv/bin/activate
@@ -104,7 +106,7 @@ Recurrent development tasks like bumping versions of used development tools or r
 GT4Py uses the Sphinx tool for the documentation. To build browseable HTML documentation, install the required tools provided in the `docs` dependency group:
 
 ```bash
-uv sync --group docs --extra all  # or --group dev
+uv sync --group docs --extra standard  # or --group dev
 ```
 
 (Note that most likely these tools are already installed in your development environment, since the `docs` group is included in the `dev` group, which installed by default by `uv sync` if no dependency groups are specified.)
