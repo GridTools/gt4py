@@ -157,7 +157,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         sdfg: dace.SDFG,
         parent: dace.SDFG,
         scope_symbols: dict[str, ts.DataType],
-        symbolic_arguments: set[str],
+        symbolic_inputs: set[str],
     ) -> SDFGBuilder:
         """
         Create an nested SDFG context to lower a lambda expression, indipendent
@@ -174,7 +174,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
             parent: The parent SDFG.
             scope_symbols: Mapping from symbol name to data type for the GTIR symbols
                 forwarded to the nested context.
-            symbolic_arguments: Arguments that have to be passed to the nested SDFG
+            symbolic_inputs: Arguments that have to be passed to the nested SDFG
                 as dace symbols.
 
         Returns:
@@ -360,7 +360,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         parent: dace.SDFG,
         scope_symbols: dict[str, ts.DataType],
-        symbolic_arguments: set[str],
+        symbolic_inputs: set[str],
     ) -> SDFGBuilder:
         nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, scope_symbols)
         # We pass to the nested SDFG all GTIR-symbols in scope, which includes the
@@ -368,51 +368,46 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # and the GTIR-symbols defined in the current context.
         params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in scope_symbols.items()]
 
-        # Below, we build the mapping from scalar variables to the corresponding
-        # GTIR-symbol, which can be either a scalar or a tuple. Tuples need to be
-        # flattened, recursively in case of nested tuples, to iterate over all fields.
-        scalars_to_params_mapping: dict[str, gtir.Sym] = {}
-        for p in params:
-            if isinstance(p.type, ts.TupleType):
-                scalars_to_params_mapping |= {
-                    str(tuple_field.id): p
-                    for tuple_field in gtir_sdfg_utils.flatten_tuple_fields(p.id, p.type)
-                    if isinstance(tuple_field.type, ts.ScalarType)
-                }
-            elif isinstance(p.type, ts.ScalarType):
-                scalars_to_params_mapping[str(p.id)] = p
+        # Tuples need to be flattened, recursively in case of nested tuples,
+        # in order to iterate over all fields.
+        def flatten_tuple_syms(params: Iterable[gtir.Sym]) -> list[gtir.Sym]:
+            flat_scalar_params: list[gtir.Sym] = []
+            for p in params:
+                if isinstance(p.type, ts.TupleType):
+                    flat_scalar_params.extend(
+                        f
+                        for f in gtir_sdfg_utils.flatten_tuple_fields(p.id, p.type)
+                        if isinstance(f.type, ts.ScalarType)
+                    )
+                elif isinstance(p.type, ts.ScalarType):
+                    flat_scalar_params.append(p)
+            return flat_scalar_params
 
         # Scalar GTIR-symbols represented as dace symbols in parent SDFG are mapped
         # to dace symbols in the nested SDFG.
         parent_symbols = {
-            str(p.id)
-            for scalar_id, p in scalars_to_params_mapping.items()
-            if scalar_id in parent.symbols
+            name for p in flatten_tuple_syms(params) if (name := str(p.id)) in parent.symbols
         }
 
         # All GTIR-symbols accessed in domain expressions by the lambda need to be
         # represented as dace symbols.
-        domain_symbols = (
+        domain_symrefs = (
             eve.walk_values(expr)
             .filter(lambda node: cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")))
             .map(
                 lambda domain: eve.walk_values(domain)
                 .if_isinstance(gtir.SymRef)
-                .map(lambda symref: str(symref.id))
-                .filter(lambda sym: sym in scope_symbols)
+                .filter(lambda sym: str(sym.id) in scope_symbols)
                 .to_set()
             )
             .reduce(lambda x, y: x | y, init=set())
         )
-
-        # Sanity check: the symbolic arguments should all be defined in scope.
-        full_symbolic_arguments = domain_symbols | parent_symbols | symbolic_arguments
-        assert all(arg in scope_symbols for arg in full_symbolic_arguments)
+        domain_symbols = {str(p.id) for p in flatten_tuple_syms(domain_symrefs)}
 
         nsdfg_builder._add_sdfg_params(
             sdfg,
             params,
-            symbolic_arguments=full_symbolic_arguments,
+            symbolic_params=(domain_symbols | parent_symbols | symbolic_inputs),
         )
         return nsdfg_builder
 
@@ -476,11 +471,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def _add_storage(
         self,
         sdfg: dace.SDFG,
-        symbolic_arguments: set[str] | None,
+        symbolic_params: set[str] | None,
         name: str,
         gt_type: ts.DataType,
         transient: bool = True,
-        tuple_name: Optional[str] = None,
     ) -> list[tuple[str, ts.DataType]]:
         """
         Add storage in the SDFG for a given GT4Py data symbol.
@@ -497,13 +491,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         Args:
             sdfg: The SDFG where storage needs to be allocated.
-            symbolic_arguments: Set of GT4Py scalars that must be represented as SDFG symbols.
+            symbolic_params: GT4Py scalars that must be represented as SDFG symbols.
                 If `None`, all scalar parameters should be represented as dace symbols.
             name: Symbol Name to be allocated.
             gt_type: GT4Py symbol type.
             transient: True when the data symbol has to be allocated as internal storage.
-            tuple_name: Name of the tuple the current GT4Py data symbol belongs to.
-                Set to `None` if the symbol does not belong to a tuple.
 
         Returns:
             List of tuples '(data_name, gt_type)' where 'data_name' is the name of
@@ -516,16 +508,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             tuple_fields = []
             for sym in gtir_sdfg_utils.flatten_tuple_fields(name, gt_type):
                 assert isinstance(sym.type, ts.DataType)
-                # for nested tuples, we always pass the root tuple symbol name
-                sym_ref = name if tuple_name is None else tuple_name
                 tuple_fields.extend(
                     self._add_storage(
                         sdfg=sdfg,
-                        symbolic_arguments=symbolic_arguments,
+                        symbolic_params=symbolic_params,
                         name=str(sym.id),
                         gt_type=sym.type,
                         transient=transient,
-                        tuple_name=sym_ref,
                     )
                 )
             return tuple_fields
@@ -535,7 +524,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # represent zero-dimensional fields as scalar arguments
                 return self._add_storage(
                     sdfg=sdfg,
-                    symbolic_arguments=set(),  # force use of scalar data container
+                    symbolic_params=set(),  # force use of scalar data container
                     name=name,
                     gt_type=gt_type.dtype,
                     transient=transient,
@@ -552,12 +541,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         elif isinstance(gt_type, ts.ScalarType):
             dc_dtype = gtx_dace_utils.as_dace_type(gt_type)
-            # note that `symbolic_arguments` contains the name of the tuple a scalar belongs to
-            sym_ref = name if tuple_name is None else tuple_name
             if (
                 gtx_dace_utils.is_range_symbol(name)
-                or symbolic_arguments is None
-                or sym_ref in symbolic_arguments
+                or symbolic_params is None
+                or name in symbolic_params
             ):
                 if name in sdfg.symbols:
                     # Sometimes, when the field domain is implicitly derived from
@@ -638,7 +625,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self,
         sdfg: dace.SDFG,
         node_params: Sequence[gtir.Sym],
-        symbolic_arguments: set[str] | None,
+        symbolic_params: set[str] | None,
     ) -> list[str]:
         """
         Helper function to add storage for node parameters and connectivity tables.
@@ -653,7 +640,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             assert isinstance(param.type, (ts.DataType))
             sdfg_args += self._add_storage(
                 sdfg=sdfg,
-                symbolic_arguments=symbolic_arguments,
+                symbolic_params=symbolic_params,
                 name=pname,
                 gt_type=param.type,
                 transient=False,
@@ -674,7 +661,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # are removed by the dace simplify pass.
             self._add_storage(
                 sdfg=sdfg,
-                symbolic_arguments=symbolic_arguments,
+                symbolic_params=symbolic_params,
                 name=gtx_dace_utils.connectivity_identifier(offset),
                 gt_type=gt_type,
             )
@@ -712,7 +699,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         #   We do this to allow lowering of scalar expressions in let-statements,
         #   that only depend on scalar parameters, as dace symbolic expressions
         #   mapped to symbols on a nested SDFG.
-        sdfg_arg_names = self._add_sdfg_params(sdfg, node.params, symbolic_arguments=None)
+        sdfg_arg_names = self._add_sdfg_params(sdfg, node.params, symbolic_params=None)
 
         # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):
@@ -827,15 +814,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         elif cpm.is_applied_as_fieldop(node):
             return gtir_builtin_translators.translate_as_fieldop(node, sdfg, head_state, self)
         elif isinstance(node.fun, gtir.Lambda):
-            # Special handling of lambda arguments that can be lowered as symbolic expressions:
-            # when all the symrefs the lambda argument depends on are SDFG symbols, the argument
-            # can be passed to the nested SDFG by means of symbol mapping.
+            # Special handling of scalar arguments of a let-lambda that can be lowered
+            # as symbolic expressions: when all the GTIR-symbols the scalar expression
+            # depends on are dace symbols, the argument can be passed to the nested
+            # SDFG by means of symbol mapping.
             symbolic_args = {}
             for p, lambda_arg in zip(node.fun.params, node.args, strict=True):
                 if not isinstance(lambda_arg.type, ts.ScalarType):
                     continue
+                # convert the scalar argument to a dace symbolic expression
                 symbolic_expr = gtir_sdfg_utils.get_symbolic(lambda_arg)
-                if all(s in sdfg.symbols for s in symbolic_expr.free_symbols):
+                if all(str(s) in sdfg.symbols for s in symbolic_expr.free_symbols):
                     symbolic_args[str(p.id)] = symbolic_expr
             # All other lambda arguments are lowered to some dataflow that produces a data node.
             args = {
@@ -922,7 +911,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg, "lambda"))
         nsdfg.debuginfo = gtir_sdfg_utils.debug_info(node, default=sdfg.debuginfo)
         lambda_translator = self.setup_nested_context(
-            node, nsdfg, sdfg, lambda_symbols, symbolic_arguments=set(symbolic_args.keys())
+            node, nsdfg, sdfg, lambda_symbols, symbolic_inputs=set(symbolic_args.keys())
         )
 
         nstate = nsdfg.add_state("lambda")
@@ -988,7 +977,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if output_data.dc_node.desc(nsdfg).transient
         }
 
-        # map free symbols to parent SDFG
+        # Map free symbols to parent SDFG
         nsdfg_symbols_mapping = {}
         nsdfg_symbols_to_args = set()
         for sym in nsdfg.free_symbols:

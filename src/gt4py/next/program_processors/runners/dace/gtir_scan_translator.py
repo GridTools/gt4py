@@ -328,7 +328,7 @@ def _lower_lambda_to_nested_sdfg(
         )
     )
     lambda_translator = sdfg_builder.setup_nested_context(
-        lambda_node, nsdfg, sdfg, lambda_symbols, symbolic_arguments=set()
+        lambda_node, nsdfg, sdfg, lambda_symbols, symbolic_inputs=set()
     )
 
     # use the vertical dimension in the domain as scan dimension
