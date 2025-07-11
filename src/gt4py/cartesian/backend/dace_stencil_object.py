@@ -53,8 +53,6 @@ def add_optional_fields(
         if info.access == AccessKind.NONE and name in kwargs and name not in sdfg.symbols:
             if isinstance(kwargs[name], dace.data.Scalar):
                 sdfg.add_scalar(name, dtype=kwargs[name].dtype)
-            else:
-                sdfg.add_symbol(name, stype=dace.typeclass(type(kwargs[name])))
     return sdfg
 
 
@@ -106,10 +104,12 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
             return self._frozen_cache[key]
 
         # otherwise, wrap and save sdfg from scratch
+        backend_class = gt_backend.from_name(self.backend)
         frozen_sdfg = freeze_origin_domain_sdfg(
             self.sdfg(),
             arg_names=list(self.__sdfg_signature__()[0]),
             field_info=self.field_info,
+            layout_info=backend_class.storage_info,
             origin=origin,
             domain=domain,
         )

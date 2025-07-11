@@ -135,7 +135,7 @@ all = ['gt4py[dace,formatting,jax,performance,testing]']
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
 # features
-dace = ['dace>=1.0.2,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
+dace-cartesian = ['dace']  # pull dace version with support for schedule trees
 dace-next = ['dace']  # pull dace latest version from the git repository
 formatting = ['clang-format>=9.0']
 jax = ['jax>=0.4.26']
@@ -421,11 +421,12 @@ conflicts = [
     {extra = 'rocm5_0'}
   ],
   [
-    {extra = 'dace'},
+    {extra = 'dace-cartesian'},
     {extra = 'dace-next'}
   ],
   [
     {extra = 'all'},
+    {extra = 'dace-cartesian'},
     {extra = 'dace-next'}
   ]
 ]
@@ -438,7 +439,10 @@ url = 'https://test.pypi.org/simple/'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_03", extra = "dace-next"}
+dace = [
+  {git = "https://github.com/romanc/dace", branch = "romanc/stree-to-sdfg", extra = "dace-cartesian"},
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_03", extra = "dace-next"}
+]
 
 # -- versioningit --
 [tool.versioningit]
