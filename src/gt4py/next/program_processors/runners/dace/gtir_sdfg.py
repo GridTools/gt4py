@@ -763,7 +763,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             for p, lambda_arg in zip(node.fun.params, node.args, strict=True):
                 if not isinstance(lambda_arg.type, ts.ScalarType):
                     continue
-                # convert the scalar argument to a dace symbolic expression
+                # Convert the scalar argument to a dace symbolic expression if all
+                # of its dependencies are symbols to.
                 symbolic_expr = gtir_sdfg_utils.get_symbolic(lambda_arg)
                 if all(str(s) in sdfg.symbols for s in symbolic_expr.free_symbols):
                     symbolic_args[str(p.id)] = symbolic_expr
