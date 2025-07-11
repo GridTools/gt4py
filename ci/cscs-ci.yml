@@ -35,7 +35,7 @@ stages:
 .build_common:
   stage: build
   extends:
-    - .dynamic-image-name # Creates a tag (exported as DOCKER_TAG) depending on the files in WATCH_FILECHANGES
+    - .dynamic-image-name # Creates a tag (exported as DOCKER_TAG in build.env) depending on the files in WATCH_FILECHANGES
   variables:
     # jfrog.svc.cscs.ch/dockerhub/ubuntu is the cached version of docker.io/ubuntu
     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/ubuntu:${UBUNTU_VERSION}
@@ -55,10 +55,7 @@ stages:
   after_script:
     - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
     # If we hit a rate limit in the GitHub API, consider using: -H \"Authorization: token $GITHUB_TOKEN\"
-    - echo "DRAFT_COMMIT=$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.draft')" > shared.env
-  artifacts:
-    reports:
-      dotenv: shared.env
+    - echo "DRAFT_COMMIT=$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.draft')" >> build.env
 
 .build_extra_cuda:
   variables:
