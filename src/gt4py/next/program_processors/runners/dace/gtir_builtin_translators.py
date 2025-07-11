@@ -761,11 +761,14 @@ def translate_concat_where(
             upper_bound = output_domain[concat_dim_index][2]
             upper_domain = [(concat_dim, concat_dim_bound, upper_bound)]
 
-        if concat_dim not in lower.gt_type.dims:
-            assert lower.gt_type.dims == [
-                *upper.gt_type.dims[0:concat_dim_index],
-                *upper.gt_type.dims[concat_dim_index + 1 :],
-            ]
+        if concat_dim not in lower.gt_type.dims:  # type: ignore[union-attr]
+            assert (
+                lower.gt_type.dims  # type: ignore[union-attr]
+                == [
+                    *upper.gt_type.dims[0:concat_dim_index],  # type: ignore[union-attr]
+                    *upper.gt_type.dims[concat_dim_index + 1 :],  # type: ignore[union-attr]
+                ]
+            )
             lower, lower_desc = _make_concat_field_slice(
                 sdfg, state, lower, lower_desc, concat_dim, concat_dim_index, concat_dim_bound - 1
             )
@@ -773,11 +776,14 @@ def translate_concat_where(
                 f"max({concat_dim_bound - 1}, {output_domain[concat_dim_index][1]})"
             )
             lower_domain.insert(concat_dim_index, (concat_dim, lower_bound, concat_dim_bound))
-        elif concat_dim not in upper.gt_type.dims:
-            assert upper.gt_type.dims == [
-                *lower.gt_type.dims[0:concat_dim_index],
-                *lower.gt_type.dims[concat_dim_index + 1 :],
-            ]
+        elif concat_dim not in upper.gt_type.dims:  # type: ignore[union-attr]
+            assert (
+                upper.gt_type.dims  # type: ignore[union-attr]
+                == [
+                    *lower.gt_type.dims[0:concat_dim_index],  # type: ignore[union-attr]
+                    *lower.gt_type.dims[concat_dim_index + 1 :],  # type: ignore[union-attr]
+                ]
+            )
             upper, upper_desc = _make_concat_field_slice(
                 sdfg, state, upper, upper_desc, concat_dim, concat_dim_index, concat_dim_bound
             )
@@ -785,7 +791,7 @@ def translate_concat_where(
                 f"min({concat_dim_bound + 1}, {output_domain[concat_dim_index][2]})"
             )
             upper_domain.insert(concat_dim_index, (concat_dim, concat_dim_bound, upper_bound))
-        elif len(lower.gt_type.dims) == 1 and len(output_domain) > 1:
+        elif len(lower.gt_type.dims) == 1 and len(output_domain) > 1:  # type: ignore[union-attr]
             assert len(lower_domain) == 1 and lower_domain[0][0] == concat_dim
             lower_domain = [
                 *output_domain[:concat_dim_index],
@@ -795,7 +801,7 @@ def translate_concat_where(
             lower, lower_desc = _make_concat_scalar_broadcast(
                 sdfg, state, lower, lower_desc, lower_domain, concat_dim_index
             )
-        elif len(upper.gt_type.dims) == 1 and len(output_domain) > 1:
+        elif len(upper.gt_type.dims) == 1 and len(output_domain) > 1:  # type: ignore[union-attr]
             assert len(upper_domain) == 1 and upper_domain[0][0] == concat_dim
             upper_domain = [
                 *output_domain[:concat_dim_index],
@@ -805,13 +811,13 @@ def translate_concat_where(
             upper, upper_desc = _make_concat_scalar_broadcast(
                 sdfg, state, upper, upper_desc, upper_domain, concat_dim_index
             )
-        elif lower.gt_type.dims != upper.gt_type.dims:
+        elif lower.gt_type.dims != upper.gt_type.dims:  # type: ignore[union-attr]
             raise NotImplementedError(
                 "concat_where on fields with different domain is not supported."
             )
 
         # ensure that the arguments have the same domain as the concat result
-        assert all(ftype.dims == output_dims for ftype in (lower.gt_type, upper.gt_type))
+        assert all(ftype.dims == output_dims for ftype in (lower.gt_type, upper.gt_type))  # type: ignore[union-attr]
 
         lower_range_0 = output_domain[concat_dim_index][1]
         lower_range_1 = dace.symbolic.pystr_to_symbolic(
