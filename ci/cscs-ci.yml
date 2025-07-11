@@ -51,9 +51,6 @@ stages:
   parallel:
     matrix:
       - PY_VERSION: *test_python_versions
-  artifacts:
-    reports:
-      dotenv: build.env
 
 .build_extra_cuda:
   variables:
@@ -84,10 +81,9 @@ build_cscs_gh200:
 # -- Test stage --
 .test_common:
   stage: test
-  image: ${IMAGE_NAME}:${DOCKER_TAG}
+  image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
     CSCS_CUDA_MPS: 1
-    IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}
     SLURM_GPUS_PER_NODE: 4
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5
