@@ -84,6 +84,12 @@ def _make_concat_scalar_broadcast(
     out_dims, out_origin, out_shape = gtir_domain.get_field_layout(domain)
     out_type = ts.FieldType(dims=out_dims, dtype=inp.gt_type.dtype)
 
+    # The strict order of lower and upper bounds of output domain is not guaranteed,
+    #   for concat_where expressions, so we apply a runtime check.
+    out_shape[concat_dim_index] = dace.symbolic.pystr_to_symbolic(
+        f"max(0, {out_shape[concat_dim_index]})"
+    )
+
     out_name, out_desc = sdfg.add_temp_transient(out_shape, inp_desc.dtype)
     out_node = state.add_access(out_name)
 
@@ -168,12 +174,14 @@ def _translate_concat_where_impl(
 
     # we use the concat domain, stored in the annex, as the domain of output field
     output_domain = gtir_domain.extract_domain(node_domain)
+    output_dims, output_origin, output_shape = gtir_domain.get_field_layout(output_domain)
+    concat_dim_index = output_dims.index(concat_dim)
+
     # The strict order of lower and upper bounds of output domain is not guaranteed,
     #   for concat_where expressions, so we apply a runtime check.
-    output_dims, output_origin, output_shape = gtir_domain.get_field_layout(
-        output_domain, check_strict_order=True
+    output_shape[concat_dim_index] = dace.symbolic.pystr_to_symbolic(
+        f"max(0, {output_shape[concat_dim_index]})"
     )
-    concat_dim_index = output_dims.index(concat_dim)
 
     # in case one of the arguments is a scalar value, we convert it to a single-element
     # 1D field with the dimension of the concat expression
