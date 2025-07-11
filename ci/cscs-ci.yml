@@ -54,8 +54,10 @@ stages:
       - PY_VERSION: *test_python_versions
   after_script:
     - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
-    # If we hit a rate limit in the GitHub API, consider using: -H \"Authorization: token $GITHUB_TOKEN\"
-    - echo "DRAFT_COMMIT=$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.draft')" >> build.env
+    - echo "GITHUB_PR=${GITHUB_PR}"
+    - export "DRAFT_COMMIT=$(curl -H \"Authorization: token $GITHUB_TOKEN\" https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.draft')"
+    - echo "DRAFT_COMMIT=${DRAFT_COMMIT}"
+    - echo "DRAFT_COMMIT=${DRAFT_COMMIT}" >> build.env
 
 .build_extra_cuda:
   variables:
