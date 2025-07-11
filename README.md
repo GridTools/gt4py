@@ -106,7 +106,7 @@ Recurrent development tasks like bumping versions of used development tools or r
 GT4Py uses the Sphinx tool for the documentation. To build browseable HTML documentation, install the required tools provided in the `docs` dependency group:
 
 ```bash
-uv sync --group docs --extra all  # or --group dev
+uv sync --group docs --extra standard  # or --group dev
 ```
 
 (Note that most likely these tools are already installed in your development environment, since the `docs` group is included in the `dev` group, which installed by default by `uv sync` if no dependency groups are specified.)
