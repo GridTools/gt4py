@@ -168,7 +168,11 @@ def _translate_concat_where_impl(
 
     # we use the concat domain, stored in the annex, as the domain of output field
     output_domain = gtir_domain.extract_domain(node_domain)
-    output_dims, output_origin, output_shape = gtir_domain.get_field_layout(output_domain)
+    # The strict order of lower and upper bounds of output domain is not guaranteed,
+    #   for concat_where expressions, so we apply a runtime check.
+    output_dims, output_origin, output_shape = gtir_domain.get_field_layout(
+        output_domain, check_strict_order=True
+    )
     concat_dim_index = output_dims.index(concat_dim)
 
     # in case one of the arguments is a scalar value, we convert it to a single-element
