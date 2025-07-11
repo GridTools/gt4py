@@ -119,7 +119,7 @@ wheels = [
 [[package]]
 name = "atlas4py"
 version = "0.41.1.dev1"
-source = { registry = "https://test.pypi.org/simple/" }
+source = { registry = "https://test.pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "(extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-rocm5-0' and extra == 'extra-5-gt4py-rocm6-0') or (extra != 'extra-5-gt4py-rocm6-0' and extra == 'group-5-gt4py-dace-cartesian') or (extra != 'extra-5-gt4py-rocm6-0' and extra == 'group-5-gt4py-dev-cartesian') or (extra != 'extra-5-gt4py-rocm6-0' and extra != 'group-5-gt4py-dace-next' and extra == 'group-5-gt4py-dev-next') or (extra != 'extra-5-gt4py-cuda11' and extra != 'extra-5-gt4py-jax-cuda12' and extra != 'extra-5-gt4py-rocm4-3' and extra != 'extra-5-gt4py-rocm5-0' and extra == 'group-5-gt4py-dace-cartesian') or (extra != 'extra-5-gt4py-cuda11' and extra != 'extra-5-gt4py-jax-cuda12' and extra != 'extra-5-gt4py-rocm4-3' and extra != 'extra-5-gt4py-rocm5-0' and extra == 'group-5-gt4py-dev-cartesian') or (extra != 'extra-5-gt4py-cuda11' and extra != 'extra-5-gt4py-jax-cuda12' and extra != 'extra-5-gt4py-rocm4-3' and extra != 'extra-5-gt4py-rocm5-0' and extra != 'group-5-gt4py-dace-next' and extra == 'group-5-gt4py-dev-next')" },
     { name = "numpy", version = "2.2.2", source = { registry = "https://pypi.org/simple" }, marker = "(extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-rocm5-0' and extra == 'extra-5-gt4py-rocm6-0') or (extra != 'extra-5-gt4py-rocm6-0' and extra == 'group-5-gt4py-dace-next') or (extra != 'extra-5-gt4py-rocm6-0' and extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dev-next') or (extra != 'extra-5-gt4py-rocm6-0' and extra == 'group-5-gt4py-dev-cartesian' and extra == 'group-5-gt4py-dev-next') or (extra != 'extra-5-gt4py-rocm6-0' and extra != 'group-5-gt4py-dace-cartesian' and extra != 'group-5-gt4py-dev-cartesian' and extra != 'group-5-gt4py-dev-next') or (extra != 'extra-5-gt4py-cuda11' and extra != 'extra-5-gt4py-jax-cuda12' and extra != 'extra-5-gt4py-rocm4-3' and extra != 'extra-5-gt4py-rocm5-0' and extra == 'group-5-gt4py-dace-next') or (extra != 'extra-5-gt4py-cuda11' and extra != 'extra-5-gt4py-jax-cuda12' and extra != 'extra-5-gt4py-rocm4-3' and extra != 'extra-5-gt4py-rocm5-0' and extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dev-next') or (extra != 'extra-5-gt4py-cuda11' and extra != 'extra-5-gt4py-jax-cuda12' and extra != 'extra-5-gt4py-rocm4-3' and extra != 'extra-5-gt4py-rocm5-0' and extra == 'group-5-gt4py-dev-cartesian' and extra == 'group-5-gt4py-dev-next') or (extra != 'extra-5-gt4py-cuda11' and extra != 'extra-5-gt4py-jax-cuda12' and extra != 'extra-5-gt4py-rocm4-3' and extra != 'extra-5-gt4py-rocm5-0' and extra != 'group-5-gt4py-dace-cartesian' and extra != 'group-5-gt4py-dev-cartesian' and extra != 'group-5-gt4py-dev-next')" },
@@ -1558,7 +1558,7 @@ build = [
 dace-cartesian = [{ name = "dace", specifier = ">=1.0.2,<2" }]
 dace-next = [{ name = "dace", git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_07_03" }]
 dev = [
-    { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple/" },
+    { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
     { name = "cython", specifier = ">=3.0.0" },
     { name = "esbonio", specifier = ">=0.16.0" },
@@ -1594,7 +1594,7 @@ dev = [
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dev-cartesian = [
-    { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple/" },
+    { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
     { name = "cython", specifier = ">=3.0.0" },
     { name = "dace", specifier = ">=1.0.2,<2" },
@@ -1631,7 +1631,7 @@ dev-cartesian = [
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dev-next = [
-    { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple/" },
+    { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
     { name = "cython", specifier = ">=3.0.0" },
     { name = "dace", specifier = ">=1.0.0" },
@@ -1677,7 +1677,7 @@ docs = [
     { name = "sphinx-rtd-theme", specifier = ">=3.0.1" },
     { name = "sphinx-toolbox", specifier = ">=3.8.1" },
 ]
-frameworks = [{ name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple/" }]
+frameworks = [{ name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" }]
 lint = [
     { name = "pre-commit", specifier = ">=4.0.1" },
     { name = "ruff", specifier = ">=0.8.0" },

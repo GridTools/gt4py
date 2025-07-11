@@ -428,7 +428,7 @@ required-version = ">=0.6.10"
 [[tool.uv.index]]
 explicit = true
 name = 'test.pypi'
-url = 'https://test.pypi.org/simple/'
+url = 'https://test.pypi.org/simple'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
