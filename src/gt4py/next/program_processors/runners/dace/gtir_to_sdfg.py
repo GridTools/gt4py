@@ -42,6 +42,7 @@ from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import (
     gtir_domain,
+    gtir_to_sdfg_concat_where,
     gtir_to_sdfg_primitives,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
@@ -745,7 +746,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         head_state: dace.SDFGState,
     ) -> gtir_to_sdfg_types.FieldopResult:
         # use specialized dataflow builder classes for each builtin function
-        if cpm.is_call_to(node, "if_"):
+        if cpm.is_call_to(node, "concat_where"):
+            return gtir_to_sdfg_concat_where.translate_concat_where(node, sdfg, head_state, self)
+        elif cpm.is_call_to(node, "if_"):
             return gtir_to_sdfg_primitives.translate_if(node, sdfg, head_state, self)
         elif cpm.is_call_to(node, "index"):
             return gtir_to_sdfg_primitives.translate_index(node, sdfg, head_state, self)
