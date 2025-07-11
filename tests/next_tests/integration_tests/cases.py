@@ -356,12 +356,11 @@ def allocate(
     if sizes:
         assert not domain and all(dim in case.default_sizes for dim in sizes)
         domain = {
-            dim: (0, sizes[dim] if dim in sizes else default_size)
+            dim: (0, sizes.get(dim, default_size))
             for dim, default_size in case.default_sizes.items()
         }
 
-    if not domain:
-        domain = {dim: (0, size) for dim, size in case.default_sizes.items()}
+    domain = domain or {dim: (0, size) for dim, size in case.default_sizes.items()}
 
     if not isinstance(domain, gtx.Domain):
         domain = gtx.domain(domain)
