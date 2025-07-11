@@ -16,6 +16,7 @@ from gt4py import eve
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.program_processors.runners.dace import gtir_python_codegen, gtir_to_sdfg_types
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -33,6 +34,33 @@ def debug_info(
             filename=location.filename,
         )
     return default
+
+
+def get_arg_symbol_mapping(
+    dataname: str, arg: gtir_to_sdfg_types.FieldopResult, sdfg: dace.SDFG
+) -> dict[str, dace.symbolic.SymExpr]:
+    """
+    Helper method to build the mapping from inner to outer SDFG of all symbols
+    used for storage of a field or a tuple of fields.
+
+    Args:
+        dataname: The storage name inside the nested SDFG.
+        arg: The argument field in the parent SDFG.
+        sdfg: The parent SDFG where the argument field lives.
+
+    Returns:
+        A mapping from inner symbol names to values or symbolic definitions
+        in the parent SDFG.
+    """
+    if isinstance(arg, gtir_to_sdfg_types.FieldopData):
+        return arg.get_symbol_mapping(dataname, sdfg)
+
+    symbol_mapping: dict[str, dace.symbolic.SymExpr] = {}
+    for i, elem in enumerate(arg):
+        dataname_elem = f"{dataname}_{i}"
+        symbol_mapping |= get_arg_symbol_mapping(dataname_elem, elem, sdfg)
+
+    return symbol_mapping
 
 
 def get_map_variable(dim: gtx_common.Dimension) -> str:
@@ -129,3 +157,13 @@ def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
     # assert that the new symbol names are not used in the IR
     assert ir_sym_ids.isdisjoint(invalid_symbols_mapping.values())
     return ReplaceSymbols().visit(ir, symtable=invalid_symbols_mapping)
+
+
+def get_symbolic(node: gtir.Expr) -> dace.symbolic.SymbolicType:
+    """
+    Specialized visit method for symbolic expressions.
+
+    Returns:
+        A dace symbolic expression of the given GTIR.
+    """
+    return dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(node))
