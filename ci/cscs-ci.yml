@@ -12,6 +12,10 @@ include:
   - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
   - local: 'ci/cscs-ci-ext-config.yml'
 
+# Note:
+#   block-name-with-dashes      -> defined in remote cscs-ci ext include
+#   block_name_with_underscores -> defined in this file or other file in this repo
+
 variables:  # Default values for base variables (can be overriden in jobs definitions)
   CUDA_VERSION: '12.6.2'
   ROCM_VERSION: '6.2.4'
@@ -29,6 +33,8 @@ stages:
 # dependencies change. The actual repository is cloned at the test stage.
 .build_common:
   stage: build
+  extends:
+    - .dynamic-image-name # Creates a tag (exported as DOCKER_TAG) depending on the files in WATCH_FILECHANGES
   variables:
     # jfrog.svc.cscs.ch/dockerhub/ubuntu is the cached version of docker.io/ubuntu
     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/ubuntu:${UBUNTU_VERSION}
@@ -40,20 +46,8 @@ stages:
     # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
     # To override the defaults, just define these variables in the actual job.
     DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
-    IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}  # A tag is added in the before_script
-    PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/base/my_base_image
+    PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}  # A tag is added in the before_script of .dynamic-image-name
     WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
-  before_script:
-    # We create a tag that depends on the SHA value of the files in WATCH_FILECHANGES.
-    # The image will be only rebuilt if the contnet of any of these files change.
-    # The tag is also used to create the image name, which is then used to
-    # push the image to the registry. 
-    - export DOCKER_TAG=`eval cat $WATCH_FILECHANGES | sha256sum | head -c 16`
-    - echo "DOCKER_TAG=$DOCKER_TAG" > build.env
-    - export PERSIST_IMAGE_NAME=$IMAGE_NAME:$DOCKER_TAG
-    - echo "PERSIST_IMAGE_NAME=$PERSIST_IMAGE_NAME" >> build.env
-    # Uncomment the following line to see the environment variables for debugging 
-    # - env | sort
   parallel:
     matrix:
       - PY_VERSION: *test_python_versions
