@@ -30,10 +30,10 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_sdfg_utils,
     utils as gtx_dace_utils,
 )
-from gt4py.next.program_processors.runners.dace.gtir_lower_concat_where import (
+from gt4py.next.program_processors.runners.dace.gtir_scan_translator import translate_scan
+from gt4py.next.program_processors.runners.dace.gtir_to_sdfg_concat_where import (
     translate_concat_where,
 )
-from gt4py.next.program_processors.runners.dace.gtir_scan_translator import translate_scan
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
