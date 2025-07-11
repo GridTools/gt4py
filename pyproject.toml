@@ -17,6 +17,14 @@ dev = [
   {include-group = 'test'},
   {include-group = 'typing'}
 ]
+dev-cartesian = [
+  {include-group = 'dace-cartesian'},
+  {include-group = 'dev'}
+]
+dev-next = [
+  {include-group = 'dace-next'},
+  {include-group = 'dev'}
+]
 docs = [
   'esbonio>=0.16.0',
   'jupytext>=1.14',
@@ -414,6 +422,7 @@ conflicts = [
     {group = 'dace-next'}
   ]
 ]
+default-groups = ["dev"]
 required-version = ">=0.6.10"
 
 [[tool.uv.index]]
