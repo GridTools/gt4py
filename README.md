@@ -77,17 +77,15 @@ git clone https://github.com/gridtools/gt4py.git
 cd gt4py
 
 # Let uv create the development environment at `.venv`.
-uv sync --group cartesian-dev --extra cartesian   # for gt4py.cartesian
-uv sync --group next-dev --extra next             # for gt4py.next
+uv sync --extra cartesian  # for gt4py.cartesian. Include DaCe with: --group dace-cartesian
+uv sync --extra next       # for gt4py.next. Include DaCe with: --group dace-next
 
-# The `--extra cartesian` (or `--extra next`) options tells uv to install
+# The `--extra cartesian` (or `--extra next`) option tells uv to install
 # the optional run-time dependencies of gt4py.cartesian (or gt4py.next),
 # and thus it is not strictly necessary.
-# Note that if no dependency groups are provided as an option,
-# uv uses `--group dev` by default so the core development
-# dependencies will be installed anyway, but not all of them
-# (most notably, DaCe-related dependencies are different for
-# gt4py.cartesian and gt4py.next so they won't be installed).
+# The 'dev' group with the core development dependencies is installed by default.
+# DaCe-related dependencies are different for gt4py.cartesian and gt4py.next,
+# so they won't be installed unless the specific dace group option is added.
 
 # Finally, activate the virtual environment and start writing code!
 source .venv/bin/activate
