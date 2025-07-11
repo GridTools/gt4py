@@ -55,8 +55,8 @@ stages:
   after_script:
     - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
     - echo "GITHUB_PR=${GITHUB_PR}" >> build.env
-    # - export TOKEN_HEADER="-H Authorization: token ${GITHUB_TOKEN}"
-    # - echo "DRAFT_COMMIT=$(curl ${TOKEN_HEADER} https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.draft')" >> build.env
+    #- export TOKEN_HEADER="-H Authorization: token ${GITHUB_TOKEN}"
+    - echo "DRAFT_COMMIT=$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.draft')" >> build.env
     - cat build.env
 
 .build_extra_cuda:
