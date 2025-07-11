@@ -86,7 +86,8 @@ uv sync --group next-dev --extra next             # for gt4py.next
 # Note that if no dependency groups are provided as an option,
 # uv uses `--group dev` by default so the core development dependencies
 # dependencies will be installed anyway, but not all of them
-# (most notably, DaCe-related dependencies are not installed).
+# (most notably, DaCe-related dependencies are different for
+# gt4py.cartesian and gt4py.next so they won't be installed).
 
 # Finally, activate the virtual environment and start writing code!
 source .venv/bin/activate
