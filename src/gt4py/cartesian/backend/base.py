@@ -154,82 +154,6 @@ def register(backend_cls: type[Backend]) -> type[Backend]:
     )
 
 
-class CLIBackendMixin(Backend):
-    @abc.abstractmethod
-    def generate_computation(self) -> dict[str, str | dict]:
-        """
-        Generate the computation source code in a way agnostic of the way it is going to be used.
-
-        Returns
-        -------
-        Dict[str, str | Dict] of source file names / directories -> contents:
-            If a key's value is a string, it is interpreted as a file name and its value as the
-            source code of that file.
-            If a key's value is a Dict, it is interpreted as a directory name and its
-            value as a nested file hierarchy to which the same rules are applied recursively.
-            The root path is relative to the build directory.
-
-        Raises
-        ------
-        NotImplementedError
-            If the backend does not support usage outside of JIT compilation / generation.
-
-        Example
-        -------
-        .. code-block:: python
-
-            def mystencil(...):
-                ...
-
-            options = BuildOptions(name="mystencil", ...)
-            ir = frontend.generate(mystencil, {}, options)
-            stencil_src = backend.generate_computation(ir, options)
-
-            print(stencil_src)
-
-            # this might be output from a fictional backend:
-            {
-                "mystencil_project": {
-                    "src": {
-                        "stencil.cpp",
-                        "helpers.cpp"
-                    },
-                    "include": {
-                        "stencil.hpp"
-                    },
-                }
-            }
-
-        This can now be automatically be turned into a folder hierarchy that makes sense
-        and can be incorporated into an external build system.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def generate_bindings(self, language_name: str) -> dict[str, str | dict]:
-        """
-        Generate bindings source code from ``language_name`` to the target language of the backend.
-
-        Returns
-        -------
-        Analog to :py:meth:`generate_computation` but containing bindings source code. The
-        dictionary contains a tree of directories with leaves being a mapping from filename to
-        source code pairs, relative to the build directory.
-
-        Raises
-        ------
-        RuntimeError
-            If the backend does not support the bindings language.
-        """
-        languages = getattr(self, "languages", {"bindings": {}})
-        name = getattr(self, "name", "")
-        if language_name not in languages["bindings"]:
-            raise NotImplementedError(
-                f"Backend {name} does not implement bindings for {language_name}"
-            )
-        return {}
-
-
 class BaseBackend(Backend):
     MODULE_GENERATOR_CLASS: ClassVar[type[BaseModuleGenerator]]
 
@@ -307,27 +231,6 @@ class BaseBackend(Backend):
 
 class MakeModuleSourceCallable(Protocol):
     def __call__(self, *, args_data: ModuleData | None = None) -> str: ...
-
-
-class PurePythonBackendCLIMixin(CLIBackendMixin):
-    """Mixin for CLI support for backends deriving from BaseBackend."""
-
-    builder: StencilBuilder
-
-    #: stencil python source generator method:
-    #:  In order to use this mixin, the backend class must implement
-    #:  a :py:meth:`make_module_source` method or derive from
-    #:  :py:meth:`BaseBackend`.
-    make_module_source: MakeModuleSourceCallable
-
-    def generate_computation(self) -> dict[str, str | dict]:
-        file_name = self.builder.module_path.name
-        source = self.make_module_source()
-        return {str(file_name): source}
-
-    def generate_bindings(self, language_name: str) -> dict[str, str | dict]:
-        """Pure python backends typically will not support bindings."""
-        return super().generate_bindings(language_name)
 
 
 class BasePyExtBackend(BaseBackend):

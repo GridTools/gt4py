@@ -51,6 +51,8 @@ def test_concat_where(cartesian_case):
 
 
 def test_concat_where_non_overlapping(cartesian_case):
+    """Fields only defined in their respective region in concat_where."""
+
     @gtx.field_operator
     def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, ground, air)
@@ -85,6 +87,8 @@ def test_concat_where_scalar_broadcast(cartesian_case):
 
 
 def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case):
+    """Output domain such that the scalar branch is never active."""
+
     @gtx.field_operator
     def testee(a: np.int32, b: cases.KField, N: np.int32) -> cases.KField:
         return concat_where(KDim < N, a, b)
@@ -224,7 +228,7 @@ def test_dimension_two_conditions_and(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, nlev, out=out, ref=ref)
 
 
-def test_dimension_two_conditions_eq(cartesian_case):
+def test_dimension_eq_in_middle_of_domain(cartesian_case):
     @gtx.field_operator
     def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
         return concat_where((KDim == 2), interior, boundary)
@@ -255,19 +259,17 @@ def test_dimension_two_conditions_or(cartesian_case):
 def test_lap_like(cartesian_case):
     @gtx.field_operator
     def testee(
-        input: cases.IJField, boundary: np.int32, shape: tuple[np.int32, np.int32]
+        inp: cases.IJField, boundary: np.int32, shape: tuple[np.int32, np.int32]
     ) -> cases.IJField:
         # TODO add support for multi-dimensional concat_where masks
         return concat_where(
             (IDim == 0) | (IDim == shape[0] - 1),
             boundary,
-            concat_where((JDim == 0) | (JDim == shape[1] - 1), boundary, input),
+            concat_where((JDim == 0) | (JDim == shape[1] - 1), boundary, inp),
         )
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-    input = cases.allocate(
-        cartesian_case, testee, "input", domain=out.domain.slice_at[1:-1, 1:-1]
-    )()
+    inp = cases.allocate(cartesian_case, testee, "inp", domain=out.domain.slice_at[1:-1, 1:-1])()
     boundary = 2
 
     ref = np.full(out.domain.shape, np.nan)
@@ -275,8 +277,8 @@ def test_lap_like(cartesian_case):
     ref[:, 0] = boundary
     ref[-1, :] = boundary
     ref[:, -1] = boundary
-    ref[1:-1, 1:-1] = input.asnumpy()
-    cases.verify(cartesian_case, testee, input, boundary, out.domain.shape, out=out, ref=ref)
+    ref[1:-1, 1:-1] = inp.asnumpy()
+    cases.verify(cartesian_case, testee, inp, boundary, out.domain.shape, out=out, ref=ref)
 
 
 @pytest.mark.uses_tuple_returns

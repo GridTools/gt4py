@@ -5,12 +5,14 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-from gt4py.next import common
 import pytest
+
+from gt4py.next import common
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
-from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.type_system import type_specifications as it_ts
+from gt4py.next.type_system import type_specifications as ts
+
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)

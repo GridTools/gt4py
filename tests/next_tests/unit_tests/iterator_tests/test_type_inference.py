@@ -276,6 +276,14 @@ def expression_test_cases():
             ),
             ts.TupleType(types=[float_i_field] * 2),
         ),
+        (
+            im.concat_where(
+                im.domain(common.GridType.CARTESIAN, {IDim: (0, 1)}),
+                im.ref("a", ts.TupleType(types=[float_i_field, float_ij_field])),
+                im.ref("b", ts.TupleType(types=[float_i_field] * 2)),
+            ),
+            ts.TupleType(types=[float_i_field, float_ij_field]),
+        ),
     )
 
 

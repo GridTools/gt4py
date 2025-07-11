@@ -219,24 +219,6 @@ def extract_projector(
         return extract_projector(expr, projector, _depth + 1)
 
 
-SymOrStr = TypeVar("SymOrStr", itir.Sym, str)
-
-
-def unique_symbol(sym: SymOrStr, reserved_names: Iterable[str]) -> SymOrStr:
-    """
-    Give a symbol and a list of reserved names return a unique symbol with similar or equal name.
-    """
-    if isinstance(sym, itir.Sym):
-        return im.sym(unique_symbol(sym.id, reserved_names), sym.type)  # type: ignore[return-value]  # mypy not smart enough
-
-    assert isinstance(sym, str)
-    name: str = sym
-    while name in reserved_names:
-        name = name + "_"
-
-    return name
-
-
 def grid_type_from_domain(domain: itir.FunCall) -> common.GridType:
     if cpm.is_call_to(domain, "cartesian_domain"):
         return common.GridType.CARTESIAN
@@ -253,3 +235,21 @@ def grid_type_from_program(program: itir.Program) -> common.GridType:
             f"Found 'set_at' with more than one 'GridType': '{grid_types}'. This is currently not supported."
         )
     return grid_types.pop()
+
+
+SymOrStr = TypeVar("SymOrStr", itir.Sym, str)
+
+
+def unique_symbol(sym: SymOrStr, reserved_names: Iterable[str]) -> SymOrStr:
+    """
+    Give a symbol and a list of reserved names return a unique symbol with similar or equal name.
+    """
+    if isinstance(sym, itir.Sym):
+        return im.sym(unique_symbol(sym.id, reserved_names), sym.type)  # type: ignore[return-value]  # mypy not smart enough
+
+    assert isinstance(sym, str)
+    name: str = sym
+    while name in reserved_names:
+        name = name + "_"
+
+    return name

@@ -8,7 +8,7 @@
 
 # TODO(SF-N): test scan operator
 
-from typing import Iterable, Literal, Optional, Union
+from typing import Iterable, Literal, Optional
 
 import numpy as np
 import pytest
@@ -25,6 +25,7 @@ from gt4py.next.iterator.ir_utils import (
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.type_system import type_specifications as ts
+
 
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
@@ -1248,10 +1249,6 @@ def test_concat_where(offset_provider):
     folded_call = constant_fold_domain_exprs(actual_call)
     assert expected == folded_call
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
-
-
-# Todo: 2 dimensional test with cond  im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 4)})
-# Todo: nested concat wheres
 
 
 def test_concat_where_two_dimensions(offset_provider):
