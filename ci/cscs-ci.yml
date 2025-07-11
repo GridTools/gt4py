@@ -111,7 +111,11 @@ build_cscs_gh200:
         VARIANT: ["cuda12", "cpu"]
         PY_VERSION: *test_python_versions
   rules:
-    - if: $DRAFT_COMMIT == "false"
+    - exists:
+        - build.env
+    - if: '$DRAFT_COMMIT == "true"'
+      when: never
+#    - when: always
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
         # TODO: investigate why the dace tests seem to hang with multiple jobs
