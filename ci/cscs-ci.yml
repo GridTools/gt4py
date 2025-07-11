@@ -51,9 +51,12 @@ stages:
   parallel:
     matrix:
       - PY_VERSION: *test_python_versions
+  after_script:
+    - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
+    - echo "DRAFT_COMMIT=$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.draft')" > shared.env
   artifacts:
     reports:
-      dotenv: build.env
+      dotenv: shared.env
 
 .build_extra_cuda:
   variables:
@@ -108,6 +111,7 @@ build_cscs_gh200:
         VARIANT: ["cuda12", "cpu"]
         PY_VERSION: *test_python_versions
   rules:
+    - if: $DRAFT_COMMIT == "false"
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
         # TODO: investigate why the dace tests seem to hang with multiple jobs
