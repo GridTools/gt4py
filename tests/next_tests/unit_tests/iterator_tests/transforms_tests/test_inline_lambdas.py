@@ -58,11 +58,14 @@ test_data = [
     (
         # symbol clash when partially inlining (opcount preserving)
         "symbol_clash",
+        # (λ(x, y) → f(x, x + y))(y + y, x)
         im.call(im.lambda_("x", "y")(im.call("f")("x", im.plus("x", "y"))))(im.plus("y", "y"), "x"),
         {
+            # (λ(x_) → f(x_, x_ + x))(y + y)
             True: im.call(im.lambda_("x_")(im.call("f")("x_", im.plus("x_", "x"))))(
                 im.plus("y", "y")
             ),
+            # f(y + y, (y + y) + x)  # noqa: ERA001
             False: im.call("f")(im.plus("y", "y"), im.plus(im.plus("y", "y"), "x")),
         },
     ),
