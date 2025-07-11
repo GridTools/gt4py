@@ -44,15 +44,15 @@ stages:
     WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
   before_script:
     # We create a tag that depends on the SHA value of the files in WATCH_FILECHANGES.
-    # The tag is used to create the image name, which is then used to
-    # push the image to the registry. This way, the image will be rebuilt
-    # only if any of these files change.
+    # The image will be only rebuilt if the contnet of any of these files change.
+    # The tag is also used to create the image name, which is then used to
+    # push the image to the registry. 
     - export DOCKER_TAG=`eval cat $WATCH_FILECHANGES | sha256sum | head -c 16`
     - echo "DOCKER_TAG=$DOCKER_TAG" > build.env
     - export PERSIST_IMAGE_NAME=${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-{PY_VERSION}:$DOCKER_TAG
     - echo "PERSIST_IMAGE_NAME=$PERSIST_IMAGE_NAME" >> build.env
     # Uncomment the following line to see the environment variables for debugging 
-    # - env | sort 
+    - env | sort
   parallel:
     matrix:
       - PY_VERSION: *test_python_versions
