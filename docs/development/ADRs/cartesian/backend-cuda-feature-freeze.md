@@ -10,7 +10,7 @@ The introduction of the [`dace:*`](./backend-dace.md) backends brought up the qu
 
 ## Decision
 
-We decided to put a feature freeze on the `cuda` backend, focusing on the `dace:*` backends instead. While we don't drop the backend, new DSL features won't be able in the `cuda` backend. New features will error out cleanly and suggest to use the `dace:gpu` backend instead.
+We decided to put a feature freeze on the `cuda` backend, focusing on the `dace:*` backends instead. While we don't drop the backend, new DSL features won't be available in the `cuda` backend. New features will error out cleanly and suggest to use the `dace:gpu` backend instead.
 
 ## Consequences
 
