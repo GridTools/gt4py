@@ -130,8 +130,8 @@ class OIRToTreeIR(eve.NodeVisitor):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, ctx: tir.Context) -> None:
         block_extent = ctx.block_extents[id(node)]
 
-        axis_start_i = block_extent[0][0]
-        axis_start_j = block_extent[1][0]
+        axis_start_i = f"{block_extent[0][0]}"
+        axis_start_j = f"{block_extent[1][0]}"
         axis_end_i = f"({tir.Axis.I.domain_dace_symbol()})  + ({block_extent[0][1]})"
         axis_end_j = f"({tir.Axis.J.domain_dace_symbol()})  + ({block_extent[1][1]})"
 
@@ -239,7 +239,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         end = self.visit(node.end, axis_start=axis_start, axis_end=axis_end)
 
         if loop_order == common.LoopOrder.BACKWARD:
-            return tir.Bounds(start=f"{end - 1}", end=start)
+            return tir.Bounds(start=f"{end} - 1", end=start)
 
         return tir.Bounds(start=start, end=end)
 
@@ -495,16 +495,19 @@ def get_dace_shape(
                 i_padding = extent[0][1] - extent[0][0]
                 if i_padding != 0:
                     shape.append(symbol + i_padding)
-            elif axis == tir.Axis.J:
+                    continue
+
+            if axis == tir.Axis.J:
                 j_padding = extent[1][1] - extent[1][0]
                 if j_padding != 0:
                     shape.append(symbol + j_padding)
-            elif axis == tir.Axis.K:
+                    continue
+
+            if axis == tir.Axis.K:
                 k_padding = max(k_bound[0], 0) + max(k_bound[1], 0)
                 if k_padding != 0:
                     shape.append(symbol + k_padding)
-            else:
-                raise ValueError(f"Encountered unexpected axis '{axis}'")
+                    continue
 
             shape.append(symbol)
 
