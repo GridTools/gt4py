@@ -236,7 +236,9 @@ def _translate_concat_where_impl(
             f"min({concat_dim_bound + 1}, {output_domain[concat_dim_index][2]})"
         )
         upper_domain.insert(concat_dim_index, (concat_dim, concat_dim_bound, upper_bound))
-    elif len(lower.gt_type.dims) == 1 and len(output_domain) > 1:  # type: ignore[union-attr]
+    elif isinstance(lower_desc, dace.data.Scalar) or (
+        len(lower.gt_type.dims) == 1 and len(output_domain) > 1  # type: ignore[union-attr]
+    ):
         assert len(lower_domain) == 1 and lower_domain[0][0] == concat_dim
         lower_domain = [
             *output_domain[:concat_dim_index],
@@ -246,7 +248,9 @@ def _translate_concat_where_impl(
         lower, lower_desc = _make_concat_scalar_broadcast(
             sdfg, state, lower, lower_desc, lower_domain, concat_dim_index
         )
-    elif len(upper.gt_type.dims) == 1 and len(output_domain) > 1:  # type: ignore[union-attr]
+    elif isinstance(upper_desc, dace.data.Scalar) or (
+        len(upper.gt_type.dims) == 1 and len(output_domain) > 1  # type: ignore[union-attr]
+    ):
         assert len(upper_domain) == 1 and upper_domain[0][0] == concat_dim
         upper_domain = [
             *output_domain[:concat_dim_index],
