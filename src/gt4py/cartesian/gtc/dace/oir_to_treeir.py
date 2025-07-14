@@ -352,7 +352,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                 shape=get_dace_shape(field, field_extent, k_bound, symbols),
                 strides=get_dace_strides(field, symbols),
                 transient=True,
-                lifetime=dtypes.AllocationLifetime.Persistent,  # TODO: change this to AllocationLifetime.Scope as default
+                lifetime=dtypes.AllocationLifetime.Global,  # TODO: change this to AllocationLifetime.Global as default
                 storage=DEFAULT_STORAGE_TYPE[self._device_type],
                 debuginfo=utils.get_dace_debuginfo(field),
             )
