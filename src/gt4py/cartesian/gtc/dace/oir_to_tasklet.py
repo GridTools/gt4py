@@ -95,11 +95,10 @@ class OIRToTasklet(eve.NodeVisitor):
             symbol = tir.Axis.K.iteration_dace_symbol()
             shift = ctx.tree.shift[node.name][tir.Axis.K]
             offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
-            name_parts.append(f"[({symbol}) + ({shift}) + ({offset})]"
+            name_parts.append(f"[({symbol}) + ({shift}) + ({offset})]")
         elif isinstance(node.offset, oir.AbsoluteKIndex):
             index = self.visit(node.offset.k, ctx=ctx, is_target=False)
             name_parts.append(f"[({index})]")
-
 
         # Data dimension subscript
         data_indices: list[str] = []
