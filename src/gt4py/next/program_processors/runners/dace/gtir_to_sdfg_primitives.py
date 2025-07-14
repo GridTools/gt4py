@@ -26,6 +26,9 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_to_sdfg_utils,
     utils as gtx_dace_utils,
 )
+from gt4py.next.program_processors.runners.dace.gtir_to_sdfg_concat_where import (
+    translate_concat_where,
+)
 from gt4py.next.program_processors.runners.dace.gtir_to_sdfg_scan import translate_scan
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
@@ -198,8 +201,10 @@ def _create_field_operator(
     else:
         # create map range corresponding to the field operator domain
         map_range = {
-            gtir_to_sdfg_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
-            for dim, lower_bound, upper_bound in domain
+            gtir_to_sdfg_utils.get_map_variable(
+                domain_range.dim
+            ): f"{domain_range.start}:{domain_range.stop}"
+            for domain_range in domain
         }
     map_entry, map_exit = sdfg_builder.add_map("fieldop", state, map_range)
 
@@ -508,8 +513,7 @@ def translate_index(
     assert "domain" in node.annex
     domain = gtir_domain.extract_domain(node.annex.domain)
     assert len(domain) == 1
-    dim, _, _ = domain[0]
-    dim_index = gtir_to_sdfg_utils.get_map_variable(dim)
+    dim_index = gtir_to_sdfg_utils.get_map_variable(domain[0].dim)
 
     index_data, _ = sdfg_builder.add_temp_scalar(sdfg, gtir_to_sdfg_types.INDEX_DTYPE)
     index_node = state.add_access(index_data)
@@ -766,6 +770,7 @@ if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_fieldop,
+        translate_concat_where,
         translate_if,
         translate_index,
         translate_literal,

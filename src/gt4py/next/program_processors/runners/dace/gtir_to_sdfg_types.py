@@ -115,7 +115,7 @@ class FieldopData:
                 # The `make_field` constructor converts any local dimension, if present, to `ListType`
                 # element type, while leaving the field domain with all global dimensions.
                 assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
-                domain_dims = [dim for dim, _, _ in domain]
+                domain_dims = [domain_range.dim for domain_range in domain]
                 domain_indices = gtir_domain.get_domain_indices(domain_dims, origin=None)
                 it_indices = {
                     dim: gtir_dataflow.SymbolExpr(index, INDEX_DTYPE)

@@ -42,6 +42,7 @@ from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import (
     gtir_domain,
+    gtir_to_sdfg_concat_where,
     gtir_to_sdfg_primitives,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
@@ -196,7 +197,9 @@ def _make_access_index_for_field(
     # since the access indices have to follow the order of dimensions in field domain
     if isinstance(data.gt_type, ts.FieldType) and len(data.gt_type.dims) != 0:
         assert data.origin is not None
-        domain_ranges = {dim: (lb, ub) for dim, lb, ub in domain}
+        domain_ranges = {
+            domain_range.dim: (domain_range.start, domain_range.stop) for domain_range in domain
+        }
         return dace.subsets.Range(
             (domain_ranges[dim][0] - origin, domain_ranges[dim][1] - origin - 1, 1)
             for dim, origin in zip(data.gt_type.dims, data.origin, strict=True)
@@ -745,7 +748,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         head_state: dace.SDFGState,
     ) -> gtir_to_sdfg_types.FieldopResult:
         # use specialized dataflow builder classes for each builtin function
-        if cpm.is_call_to(node, "if_"):
+        if cpm.is_call_to(node, "concat_where"):
+            return gtir_to_sdfg_concat_where.translate_concat_where(node, sdfg, head_state, self)
+        elif cpm.is_call_to(node, "if_"):
             return gtir_to_sdfg_primitives.translate_if(node, sdfg, head_state, self)
         elif cpm.is_call_to(node, "index"):
             return gtir_to_sdfg_primitives.translate_index(node, sdfg, head_state, self)
