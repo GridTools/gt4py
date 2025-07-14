@@ -286,8 +286,16 @@ class SDFGManager:
     # Cache loaded SDFGs across all instances (unless caching strategy is "nocaching")
     _loaded_sdfgs: ClassVar[dict[str | pathlib.Path, SDFG]] = dict()
 
-    def __init__(self, builder: StencilBuilder) -> None:
+    def __init__(self, builder: StencilBuilder, debug_stree: bool = False) -> None:
+        """
+        Initializes the SDFGManager.
+
+        Args:
+          builder: The StencilBuilder instance, used for build options and caching strategy.
+          debug_stree: If true, saves a string representation of the stree next to the cached SDFG.
+        """
         self.builder = builder
+        self.debug_stree = debug_stree
 
     def schedule_tree(self) -> tn.ScheduleTreeRoot:
         """
@@ -360,9 +368,10 @@ class SDFGManager:
             self._save_sdfg(sdfg, str(path))
             SDFGManager._loaded_sdfgs[path] = sdfg
 
-            stree_path = path.with_suffix(".stree.txt")
-            with open(stree_path, "x") as file:
-                file.write(stree.as_string(-1))
+            if self.debug_stree:
+                stree_path = path.with_suffix(".stree.txt")
+                with open(stree_path, "w+") as file:
+                    file.write(stree.as_string(-1))
 
         return sdfg
 
