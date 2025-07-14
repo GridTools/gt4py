@@ -320,6 +320,15 @@ def _translate_concat_where_impl(
             sdfg, state, upper, upper_desc, upper_domain, concat_dim_index
         )
     else:
+        """
+        Handle here the _regular_ case, that is concat_where applied to two fields
+        with same domain:
+        ```python
+        @gtx.field_operator
+        def testee(a: cases.IJKField, b: cases.IJKField) -> cases.IJKField:
+            return concat_where(KDim <=10 , a, b)
+        ```
+        """
         assert isinstance(lower.gt_type, ts.FieldType)
         assert isinstance(lower_desc, dace.data.Array)
         assert isinstance(upper.gt_type, ts.FieldType)
