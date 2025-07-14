@@ -211,8 +211,15 @@ def _translate_concat_where_impl(
     )
     concat_dim_index = output_dims.index(concat_dim)
 
-    # in case one of the arguments is a scalar value, we convert it to a single-element
-    # 1D field with the dimension of the concat expression
+    """
+    In case one of the arguments is a scalar value, for example:
+    ```python
+    @gtx.field_operator
+    def testee(a: np.int32, b: cases.IJKField) -> cases.IJKField:
+        return concat_where(KDim < 1, a, b)
+    ```
+    we convert it to a single-element 1D field with the dimension of the concat expression.
+    """
     if isinstance(lower.gt_type, ts.ScalarType):
         assert len(lower_domain) == 0
         assert isinstance(upper.gt_type, ts.FieldType)
@@ -235,8 +242,17 @@ def _translate_concat_where_impl(
         upper_domain = [(concat_dim, concat_dim_bound, upper_bound)]
 
     if concat_dim not in lower.gt_type.dims:  # type: ignore[union-attr]
-        # The field on the lower domain is to be treated as a slice to add as one
-        # level in the concat dimension, below the upper domain.
+        """
+        The field on the lower domain is to be treated as a slice to add as one
+        level in the concat dimension, on the lower bound.
+        Consider for example the following IR, where a horizontal field is added
+        as level zero in K-dimension:
+        ```python
+        @gtx.field_operator
+        def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
+            return concat_where(KDim == 0, boundary, interior)
+        ```
+        """
         assert (
             lower.gt_type.dims  # type: ignore[union-attr]
             == [
@@ -252,8 +268,7 @@ def _translate_concat_where_impl(
         )
         lower_domain.insert(concat_dim_index, (concat_dim, lower_bound, concat_dim_bound))
     elif concat_dim not in upper.gt_type.dims:  # type: ignore[union-attr]
-        # The field on the upper domain is to be treated as a slice to add as one
-        # level in the concat dimension, above the lower domain.
+        # Same as previous case, but the field slice is added on the upper bound.
         assert (
             upper.gt_type.dims  # type: ignore[union-attr]
             == [
@@ -271,8 +286,17 @@ def _translate_concat_where_impl(
     elif isinstance(lower_desc, dace.data.Scalar) or (
         len(lower.gt_type.dims) == 1 and len(output_domain) > 1  # type: ignore[union-attr]
     ):
-        # The input on the lower domain is either a scalar or a 1d field, representing
-        # the value(s) to be added as one level in the concat dimension below the upper domain.
+        """
+        The input on the lower domain is either a scalar or a 1d field, representing
+        the value(s) to be added as one level in the concat dimension below the upper domain.
+        Consider for example the following IR, where the scalar value is one level
+        (`KDim == 0`) taken from lower input 'a':
+        ```python
+        @gtx.field_operator
+        def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:
+            return concat_where(KDim == 0, a, b)
+        ```
+        """
         assert len(lower_domain) == 1 and lower_domain[0][0] == concat_dim
         lower_domain = [
             *output_domain[:concat_dim_index],
@@ -285,8 +309,7 @@ def _translate_concat_where_impl(
     elif isinstance(upper_desc, dace.data.Scalar) or (
         len(upper.gt_type.dims) == 1 and len(output_domain) > 1  # type: ignore[union-attr]
     ):
-        # The input on the upper domain is either a scalar or a 1d field, representing
-        # the value(s) to be added as one level in the concat dimension above the lower domain.
+        # Same as previous case, but the scalar value is taken from `upper` input.
         assert len(upper_domain) == 1 and upper_domain[0][0] == concat_dim
         upper_domain = [
             *output_domain[:concat_dim_index],
