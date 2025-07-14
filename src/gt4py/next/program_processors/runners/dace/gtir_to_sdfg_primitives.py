@@ -26,6 +26,9 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_to_sdfg_utils,
     utils as gtx_dace_utils,
 )
+from gt4py.next.program_processors.runners.dace.gtir_to_sdfg_concat_where import (
+    translate_concat_where,
+)
 from gt4py.next.program_processors.runners.dace.gtir_to_sdfg_scan import translate_scan
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
@@ -766,6 +769,7 @@ if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_fieldop,
+        translate_concat_where,
         translate_if,
         translate_index,
         translate_literal,
