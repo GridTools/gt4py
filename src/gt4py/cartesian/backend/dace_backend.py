@@ -360,6 +360,10 @@ class SDFGManager:
             self._save_sdfg(sdfg, str(path))
             SDFGManager._loaded_sdfgs[path] = sdfg
 
+            stree_path = path.with_suffix(".stree.txt")
+            with open(stree_path, "x") as file:
+                file.write(stree.as_string(-1))
+
         return sdfg
 
     def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]) -> SDFG:
