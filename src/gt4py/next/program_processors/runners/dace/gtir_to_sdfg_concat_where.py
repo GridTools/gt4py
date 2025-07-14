@@ -185,7 +185,7 @@ def _translate_concat_where_impl(
         gtir_domain.extract_domain(domain) for domain in [tb_node_domain, fb_node_domain]
     )
     assert len(mask_domain) == 1
-    concat_dim, mask_lower_bound, mask_upper_bound = mask_domain[0]
+    concat_domain = mask_domain[0]
 
     # Expect unbound range in the concat domain expression on lower or upper range:
     #  - if the domain expression is unbound on lower side (negative infinite),
@@ -193,12 +193,12 @@ def _translate_concat_where_impl(
     #    lower domain.
     #  - viceversa, if the domain expression is unbound on upper side (positive
     #    infinite), the true expression represents the input for the upper domain.
-    if mask_lower_bound == gtir_to_sdfg_utils.get_symbolic(gtir.InfinityLiteral.NEGATIVE):
-        concat_dim_bound = mask_upper_bound
+    if concat_domain.start == gtir_to_sdfg_utils.get_symbolic(gtir.InfinityLiteral.NEGATIVE):
+        concat_dim_bound = concat_domain.stop
         lower, lower_desc, lower_domain = (tb_field, tb_data_desc, tb_domain)
         upper, upper_desc, upper_domain = (fb_field, fb_data_desc, fb_domain)
-    elif mask_upper_bound == gtir_to_sdfg_utils.get_symbolic(gtir.InfinityLiteral.POSITIVE):
-        concat_dim_bound = mask_lower_bound
+    elif concat_domain.stop == gtir_to_sdfg_utils.get_symbolic(gtir.InfinityLiteral.POSITIVE):
+        concat_dim_bound = concat_domain.start
         lower, lower_desc, lower_domain = (fb_field, fb_data_desc, fb_domain)
         upper, upper_desc, upper_domain = (tb_field, tb_data_desc, tb_domain)
     else:
@@ -207,9 +207,9 @@ def _translate_concat_where_impl(
     # we use the concat domain, stored in the annex, as the domain of output field
     output_domain = gtir_domain.extract_domain(node_domain)
     output_dims, output_origin, output_shape = _get_concat_where_field_layout(
-        output_domain, concat_dim
+        output_domain, concat_domain.dim
     )
-    concat_dim_index = output_dims.index(concat_dim)
+    concat_dim_index = output_dims.index(concat_domain.dim)
 
     """
     In case one of the arguments is a scalar value, for example:
@@ -225,23 +225,27 @@ def _translate_concat_where_impl(
         assert isinstance(upper.gt_type, ts.FieldType)
         lower = gtir_to_sdfg_types.FieldopData(
             lower.dc_node,
-            ts.FieldType(dims=[concat_dim], dtype=lower.gt_type),
+            ts.FieldType(dims=[concat_domain.dim], dtype=lower.gt_type),
             origin=(concat_dim_bound - 1,),
         )
-        lower_bound = output_domain[concat_dim_index][1]
-        lower_domain = [(concat_dim, lower_bound, concat_dim_bound)]
+        lower_bound = output_domain[concat_dim_index].start
+        lower_domain = [
+            gtir_domain.FieldopDomainRange(concat_domain.dim, lower_bound, concat_dim_bound)
+        ]
     elif isinstance(upper.gt_type, ts.ScalarType):
         assert len(upper_domain) == 0
         assert isinstance(lower.gt_type, ts.FieldType)
         upper = gtir_to_sdfg_types.FieldopData(
             upper.dc_node,
-            ts.FieldType(dims=[concat_dim], dtype=upper.gt_type),
+            ts.FieldType(dims=[concat_domain.dim], dtype=upper.gt_type),
             origin=(concat_dim_bound,),
         )
-        upper_bound = output_domain[concat_dim_index][2]
-        upper_domain = [(concat_dim, concat_dim_bound, upper_bound)]
+        upper_bound = output_domain[concat_dim_index].stop
+        upper_domain = [
+            gtir_domain.FieldopDomainRange(concat_domain.dim, concat_dim_bound, upper_bound)
+        ]
 
-    if concat_dim not in lower.gt_type.dims:  # type: ignore[union-attr]
+    if concat_domain.dim not in lower.gt_type.dims:  # type: ignore[union-attr]
         """
         The field on the lower domain is to be treated as a slice to add as one
         level in the concat dimension, on the lower bound.
@@ -261,13 +265,22 @@ def _translate_concat_where_impl(
             ]
         )
         lower, lower_desc = _make_concat_field_slice(
-            sdfg, state, lower, lower_desc, concat_dim, concat_dim_index, concat_dim_bound - 1
+            sdfg=sdfg,
+            state=state,
+            field=lower,
+            field_desc=lower_desc,
+            concat_dim=concat_domain.dim,
+            concat_dim_index=concat_dim_index,
+            concat_dim_origin=concat_dim_bound - 1,
         )
         lower_bound = dace.symbolic.pystr_to_symbolic(
-            f"max({concat_dim_bound - 1}, {output_domain[concat_dim_index][1]})"
+            f"max({concat_dim_bound - 1}, {output_domain[concat_dim_index].start})"
         )
-        lower_domain.insert(concat_dim_index, (concat_dim, lower_bound, concat_dim_bound))
-    elif concat_dim not in upper.gt_type.dims:  # type: ignore[union-attr]
+        lower_domain.insert(
+            concat_dim_index,
+            gtir_domain.FieldopDomainRange(concat_domain.dim, lower_bound, concat_dim_bound),
+        )
+    elif concat_domain.dim not in upper.gt_type.dims:  # type: ignore[union-attr]
         # Same as previous case, but the field slice is added on the upper bound.
         assert (
             upper.gt_type.dims  # type: ignore[union-attr]
@@ -277,12 +290,21 @@ def _translate_concat_where_impl(
             ]
         )
         upper, upper_desc = _make_concat_field_slice(
-            sdfg, state, upper, upper_desc, concat_dim, concat_dim_index, concat_dim_bound
+            sdfg=sdfg,
+            state=state,
+            field=upper,
+            field_desc=upper_desc,
+            concat_dim=concat_domain.dim,
+            concat_dim_index=concat_dim_index,
+            concat_dim_origin=concat_dim_bound,
         )
         upper_bound = dace.symbolic.pystr_to_symbolic(
-            f"min({concat_dim_bound + 1}, {output_domain[concat_dim_index][2]})"
+            f"min({concat_dim_bound + 1}, {output_domain[concat_dim_index].stop})"
         )
-        upper_domain.insert(concat_dim_index, (concat_dim, concat_dim_bound, upper_bound))
+        upper_domain.insert(
+            concat_dim_index,
+            gtir_domain.FieldopDomainRange(concat_domain.dim, concat_dim_bound, upper_bound),
+        )
     elif isinstance(lower_desc, dace.data.Scalar) or (
         len(lower.gt_type.dims) == 1 and len(output_domain) > 1  # type: ignore[union-attr]
     ):
@@ -297,7 +319,7 @@ def _translate_concat_where_impl(
             return concat_where(KDim == 0, a, b)
         ```
         """
-        assert len(lower_domain) == 1 and lower_domain[0][0] == concat_dim
+        assert len(lower_domain) == 1 and lower_domain[0].dim == concat_domain.dim
         lower_domain = [
             *output_domain[:concat_dim_index],
             lower_domain[0],
@@ -310,7 +332,7 @@ def _translate_concat_where_impl(
         len(upper.gt_type.dims) == 1 and len(output_domain) > 1  # type: ignore[union-attr]
     ):
         # Same as previous case, but the scalar value is taken from `upper` input.
-        assert len(upper_domain) == 1 and upper_domain[0][0] == concat_dim
+        assert len(upper_domain) == 1 and upper_domain[0].dim == concat_domain.dim
         upper_domain = [
             *output_domain[:concat_dim_index],
             upper_domain[0],
@@ -341,15 +363,15 @@ def _translate_concat_where_impl(
     # ensure that the arguments have the same domain as the concat result
     assert all(ftype.dims == output_dims for ftype in (lower.gt_type, upper.gt_type))  # type: ignore[union-attr]
 
-    lower_range_0 = output_domain[concat_dim_index][1]
+    lower_range_0 = output_domain[concat_dim_index].start
     lower_range_1 = dace.symbolic.pystr_to_symbolic(
-        f"max({lower_range_0}, {lower_domain[concat_dim_index][2]})"
+        f"max({lower_range_0}, {lower_domain[concat_dim_index].stop})"
     )
     lower_range_size = lower_range_1 - lower_range_0
 
-    upper_range_1 = output_domain[concat_dim_index][2]
+    upper_range_1 = output_domain[concat_dim_index].stop
     upper_range_0 = dace.symbolic.pystr_to_symbolic(
-        f"min({upper_range_1}, {upper_domain[concat_dim_index][1]})"
+        f"min({upper_range_1}, {upper_domain[concat_dim_index].start})"
     )
     upper_range_size = upper_range_1 - upper_range_0
 
@@ -391,15 +413,15 @@ def _translate_concat_where_impl(
         else:
             lower_subset.append(
                 (
-                    output_domain[dim_index][1] - lower.origin[dim_index],
-                    output_domain[dim_index][1] - lower.origin[dim_index] + size - 1,
+                    output_domain[dim_index].start - lower.origin[dim_index],
+                    output_domain[dim_index].start - lower.origin[dim_index] + size - 1,
                     1,
                 )
             )
             upper_subset.append(
                 (
-                    output_domain[dim_index][1] - upper.origin[dim_index],
-                    output_domain[dim_index][1] - upper.origin[dim_index] + size - 1,
+                    output_domain[dim_index].start - upper.origin[dim_index],
+                    output_domain[dim_index].start - upper.origin[dim_index] + size - 1,
                     1,
                 )
             )

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Optional, Sequence, TypeAlias
 
 import dace
@@ -19,15 +20,24 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_u
 from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_utils
 
 
-FieldopDomain: TypeAlias = list[
-    tuple[gtx_common.Dimension, dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]
-]
-"""
-Domain of a field operator represented as a list of tuples with 3 elements:
- - dimension definition
- - symbolic expression for lower bound (inclusive)
- - symbolic expression for upper bound (exclusive)
-"""
+@dataclasses.dataclass(frozen=True)
+class FieldopDomainRange:
+    """
+    Represents the range of a field operator domain in one dimension.
+
+    It contains 3 elements:
+        dim: dimension definition
+        start: symbolic expression for lower bound (inclusive)
+        stop: symbolic expression for upper bound (exclusive)
+    """
+
+    dim: gtx_common.Dimension
+    start: dace.symbolic.SymbolicType
+    stop: dace.symbolic.SymbolicType
+
+
+FieldopDomain: TypeAlias = list[FieldopDomainRange]
+"""Domain of a field operator represented as a list of `FieldopDomainRange` for each dimension."""
 
 
 def extract_domain(node: gtir.Expr) -> FieldopDomain:
@@ -49,12 +59,12 @@ def extract_domain(node: gtir.Expr) -> FieldopDomain:
                 gtir_to_sdfg_utils.get_symbolic(arg) for arg in named_range.args[1:3]
             )
             dim = gtx_common.Dimension(axis.value, axis.kind)
-            domain.append((dim, lower_bound, upper_bound))
+            domain.append(FieldopDomainRange(dim, lower_bound, upper_bound))
 
     elif isinstance(node, domain_utils.SymbolicDomain):
         for dim, drange in node.ranges.items():
             domain.append(
-                (
+                FieldopDomainRange(
                     dim,
                     gtir_to_sdfg_utils.get_symbolic(drange.start),
                     gtir_to_sdfg_utils.get_symbolic(drange.stop),
@@ -119,6 +129,7 @@ def get_field_layout(
     """
     if len(domain) == 0:
         return [], [], []
-    domain_dims, domain_lbs, domain_ubs = zip(*domain)
-    domain_sizes = [(ub - lb) for lb, ub in zip(domain_lbs, domain_ubs)]
-    return list(domain_dims), list(domain_lbs), domain_sizes
+    domain_dims = [domain_range.dim for domain_range in domain]
+    domain_origin = [domain_range.start for domain_range in domain]
+    domain_shape = [(domain_range.stop - domain_range.start) for domain_range in domain]
+    return domain_dims, domain_origin, domain_shape

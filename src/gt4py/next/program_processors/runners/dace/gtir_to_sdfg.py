@@ -197,7 +197,9 @@ def _make_access_index_for_field(
     # since the access indices have to follow the order of dimensions in field domain
     if isinstance(data.gt_type, ts.FieldType) and len(data.gt_type.dims) != 0:
         assert data.origin is not None
-        domain_ranges = {dim: (lb, ub) for dim, lb, ub in domain}
+        domain_ranges = {
+            domain_range.dim: (domain_range.start, domain_range.stop) for domain_range in domain
+        }
         return dace.subsets.Range(
             (domain_ranges[dim][0] - origin, domain_ranges[dim][1] - origin - 1, 1)
             for dim, origin in zip(data.gt_type.dims, data.origin, strict=True)

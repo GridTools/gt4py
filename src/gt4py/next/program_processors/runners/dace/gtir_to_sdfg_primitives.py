@@ -201,8 +201,10 @@ def _create_field_operator(
     else:
         # create map range corresponding to the field operator domain
         map_range = {
-            gtir_to_sdfg_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
-            for dim, lower_bound, upper_bound in domain
+            gtir_to_sdfg_utils.get_map_variable(
+                domain_range.dim
+            ): f"{domain_range.start}:{domain_range.stop}"
+            for domain_range in domain
         }
     map_entry, map_exit = sdfg_builder.add_map("fieldop", state, map_range)
 
@@ -511,8 +513,7 @@ def translate_index(
     assert "domain" in node.annex
     domain = gtir_domain.extract_domain(node.annex.domain)
     assert len(domain) == 1
-    dim, _, _ = domain[0]
-    dim_index = gtir_to_sdfg_utils.get_map_variable(dim)
+    dim_index = gtir_to_sdfg_utils.get_map_variable(domain[0].dim)
 
     index_data, _ = sdfg_builder.add_temp_scalar(sdfg, gtir_to_sdfg_types.INDEX_DTYPE)
     index_node = state.add_access(index_data)

@@ -210,9 +210,11 @@ def _create_scan_field_operator(
             "fieldop",
             state,
             ndrange={
-                gtir_to_sdfg_utils.get_map_variable(dim): f"{lower_bound}:{upper_bound}"
-                for dim, lower_bound, upper_bound in domain
-                if not sdfg_builder.is_column_axis(dim)
+                gtir_to_sdfg_utils.get_map_variable(
+                    domain_range.dim
+                ): f"{domain_range.start}:{domain_range.stop}"
+                for domain_range in domain
+                if not sdfg_builder.is_column_axis(domain_range.dim)
             },
         )
 
@@ -329,22 +331,18 @@ def _lower_lambda_to_nested_sdfg(
     )
 
     # use the vertical dimension in the domain as scan dimension
-    scan_domain = [
-        (dim, lower_bound, upper_bound)
-        for dim, lower_bound, upper_bound in domain
-        if sdfg_builder.is_column_axis(dim)
-    ]
-    assert len(scan_domain) == 1
-    scan_dim, scan_lower_bound, scan_upper_bound = scan_domain[0]
+    scan_domain = next(
+        domain_range for domain_range in domain if sdfg_builder.is_column_axis(domain_range.dim)
+    )
 
     # extract the scan loop range
-    scan_loop_var = gtir_to_sdfg_utils.get_map_variable(scan_dim)
+    scan_loop_var = gtir_to_sdfg_utils.get_map_variable(scan_domain.dim)
 
     # in case the scan operator computes a list (not a scalar), we need to add an extra dimension
     def get_scan_output_shape(
         scan_init_data: gtir_to_sdfg_types.FieldopData,
     ) -> list[dace.symbolic.SymExpr]:
-        scan_column_size = scan_upper_bound - scan_lower_bound
+        scan_column_size = scan_domain.stop - scan_domain.start
         if isinstance(scan_init_data.gt_type, ts.ScalarType):
             return [scan_column_size]
         assert isinstance(scan_init_data.gt_type, ts.ListType)
@@ -391,18 +389,18 @@ def _lower_lambda_to_nested_sdfg(
     if scan_forward:
         scan_loop = dace.sdfg.state.LoopRegion(
             label="scan",
-            condition_expr=f"{scan_loop_var} < {scan_upper_bound}",
+            condition_expr=f"{scan_loop_var} < {scan_domain.stop}",
             loop_var=scan_loop_var,
-            initialize_expr=f"{scan_loop_var} = {scan_lower_bound}",
+            initialize_expr=f"{scan_loop_var} = {scan_domain.start}",
             update_expr=f"{scan_loop_var} = {scan_loop_var} + 1",
             inverted=False,
         )
     else:
         scan_loop = dace.sdfg.state.LoopRegion(
             label="scan",
-            condition_expr=f"{scan_loop_var} >= {scan_lower_bound}",
+            condition_expr=f"{scan_loop_var} >= {scan_domain.start}",
             loop_var=scan_loop_var,
-            initialize_expr=f"{scan_loop_var} = {scan_upper_bound} - 1",
+            initialize_expr=f"{scan_loop_var} = {scan_domain.stop} - 1",
             update_expr=f"{scan_loop_var} = {scan_loop_var} - 1",
             inverted=False,
         )
@@ -431,7 +429,7 @@ def _lower_lambda_to_nested_sdfg(
     for edge in lambda_input_edges:
         edge.connect(map_entry=None)
     # connect the dataflow output nodes, called 'scan_result' below, to a global field called 'output'
-    output_column_index = dace.symbolic.pystr_to_symbolic(scan_loop_var) - scan_lower_bound
+    output_column_index = dace.symbolic.pystr_to_symbolic(scan_loop_var) - scan_domain.start
 
     def connect_scan_output(
         scan_output_edge: gtir_dataflow.DataflowOutputEdge,
@@ -475,8 +473,8 @@ def _lower_lambda_to_nested_sdfg(
             dace.Memlet.from_array(scan_result_data, scan_result_desc),
         )
 
-        output_type = ts.FieldType(dims=[scan_dim], dtype=scan_result.gt_dtype)
-        return gtir_to_sdfg_types.FieldopData(output_node, output_type, origin=(scan_lower_bound,))
+        output_type = ts.FieldType(dims=[scan_domain.dim], dtype=scan_result.gt_dtype)
+        return gtir_to_sdfg_types.FieldopData(output_node, output_type, origin=(scan_domain.start,))
 
     # write the stencil result (value on one vertical level) into a 1D field
     # with full vertical shape representing one column
