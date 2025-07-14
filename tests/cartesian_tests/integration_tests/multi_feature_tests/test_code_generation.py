@@ -191,7 +191,7 @@ def test_lower_dimensional_inputs(backend):
     field_3d = gt_storage.zeros(
         full_shape, dtype, backend=backend, aligned_index=aligned_index, dimensions=None
     )
-    assert field_3d.shape == full_shape[:]
+    assert field_3d.shape == full_shape[:], "field_3d shape"
 
     field_2d = gt_storage.zeros(
         full_shape[:-1],
@@ -200,7 +200,7 @@ def test_lower_dimensional_inputs(backend):
         aligned_index=aligned_index[:-1],
         dimensions="IJ",
     )
-    assert field_2d.shape == full_shape[:-1]
+    assert field_2d.shape == full_shape[:-1], "field_2d shape"
 
     field_1d = gt_storage.ones(
         full_shape[-1:],
@@ -209,13 +209,12 @@ def test_lower_dimensional_inputs(backend):
         aligned_index=(aligned_index[-1],),
         dimensions="K",
     )
-    assert list(field_1d.shape) == [full_shape[-1]]
+    assert list(field_1d.shape) == [full_shape[-1]], "field_1d shape"
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0), domain=(4, 3, 6))
     res_field_3d = storage_utils.cpu_copy(field_3d)
-    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, :1], 2)
-    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, 1:], 1)
-
+    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, :1], 2, err_msg="expected 2 from K=0")
+    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, 1:], 1, err_msg="expected 1 from K>=1")
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0))
 
 
