@@ -21,7 +21,7 @@ from dace.sdfg.utils import inline_sdfgs
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config, definitions
-from gt4py.cartesian.backend.base import CLIBackendMixin, register
+from gt4py.cartesian.backend.base import register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
     BaseGTBackend,
@@ -93,7 +93,10 @@ def _sdfg_add_arrays_and_edges(
     origins,
 ) -> None:
     for name, array in inner_sdfg.arrays.items():
-        if isinstance(array, data.Array) and not array.transient:
+        if array.transient:
+            continue
+
+        if isinstance(array, data.Array):
             axes = field_info[name].axes
 
             shape = [f"__{name}_{axis}_size" for axis in axes] + [
@@ -145,7 +148,6 @@ def _sdfg_add_arrays_and_edges(
                 dtype=array.dtype,
                 storage=array.storage,
                 lifetime=array.lifetime,
-                transient=array.transient,
             )
             if name in inputs:
                 state.add_edge(
@@ -215,7 +217,7 @@ def freeze_origin_domain_sdfg(
 
     This wrapping is required because we do not expect any of the inner_sdfg bounds to
     have been specialized, e.g. we expect "__I/J/K" symbols to still be present. We wrap
-    the call and specialize at top level, which will then be passed as a parameter to the
+    the call and specialize at top level, which will then be passed as a symbol to the
     inner sdfg.
 
     Once we move specialization of array & maps bounds upstream, this will become moot
@@ -281,7 +283,7 @@ def freeze_origin_domain_sdfg(
 
 
 class SDFGManager:
-    # Cache loaded SDFGs across all instances
+    # Cache loaded SDFGs across all instances (unless caching strategy is "nocaching")
     _loaded_sdfgs: ClassVar[dict[str | pathlib.Path, SDFG]] = dict()
 
     def __init__(self, builder: StencilBuilder) -> None:
@@ -338,7 +340,7 @@ class SDFGManager:
     def sdfg_via_schedule_tree(self) -> SDFG:
         """Lower OIR into an SDFG via Schedule Tree transpile first.
 
-        Cache the SDFG into the manager for re-use.
+        Cache the SDFG into the manager for re-use, unless the builder has a no-caching policy.
         """
         filename = f"{self.builder.module_name}.sdfg"
         path = (
@@ -346,16 +348,21 @@ class SDFGManager:
             / filename
         )
 
-        if path in SDFGManager._loaded_sdfgs:
+        do_cache = self.builder.caching.name != "nocaching"
+        if do_cache and path in SDFGManager._loaded_sdfgs:
             return SDFGManager._loaded_sdfgs[path]
 
         # Create SDFG
         stree = self.schedule_tree()
         sdfg = stree.as_sdfg(validate=True, simplify=True, skip={"ScalarToSymbolPromotion"})
 
-        # Cache SDFG
-        self._save_sdfg(sdfg, str(path))
-        SDFGManager._loaded_sdfgs[path] = sdfg
+        if do_cache:
+            self._save_sdfg(sdfg, str(path))
+            SDFGManager._loaded_sdfgs[path] = sdfg
+
+            stree_path = path.with_suffix(".stree.txt")
+            with open(stree_path, "x") as file:
+                file.write(stree.as_string(-1))
 
         return sdfg
 
@@ -364,7 +371,8 @@ class SDFGManager:
         path = f"{basename}_{shash(origin, domain)}.sdfg"
 
         # check if the same sdfg is already cached on disk
-        if path in SDFGManager._loaded_sdfgs:
+        do_cache = self.builder.caching.name != "nocache"
+        if do_cache and path in SDFGManager._loaded_sdfgs:
             return SDFGManager._loaded_sdfgs[path]
 
         # Otherwise, wrap and save sdfg from scratch
@@ -377,8 +385,10 @@ class SDFGManager:
             origin=origin,
             domain=domain,
         )
-        SDFGManager._loaded_sdfgs[path] = frozen_sdfg
-        self._save_sdfg(frozen_sdfg, path)
+
+        if do_cache:
+            SDFGManager._loaded_sdfgs[path] = frozen_sdfg
+            self._save_sdfg(frozen_sdfg, path)
 
         return frozen_sdfg
 
@@ -771,7 +781,7 @@ class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, CUDAPyExtModuleGene
     pass
 
 
-class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
+class BaseDaceBackend(BaseGTBackend):
     GT_BACKEND_T = "dace"
     PYEXT_GENERATOR_CLASS = DaCeExtGenerator
 
@@ -792,8 +802,8 @@ class DaceCPUBackend(BaseDaceBackend):
     storage_info: ClassVar[layout.LayoutInfo] = {
         "alignment": 1,
         "device": "cpu",
-        "layout_map": layout.layout_maker_factory((0, 1, 2)),
-        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((0, 1, 2))),
+        "layout_map": layout.layout_maker_factory((1, 0, 2)),
+        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((1, 0, 2))),
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 

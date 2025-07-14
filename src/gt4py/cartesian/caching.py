@@ -346,7 +346,7 @@ class JITCachingStrategy(CachingStrategy):
 
 class NoCachingStrategy(CachingStrategy):
     """
-    Apply no caching, useful for CLI.
+    Apply no caching.
 
     Instead of calculating paths and names based on a stencil fingerprint, use
     user input or by default the current working dir to output source and build files.
