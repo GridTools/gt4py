@@ -326,7 +326,12 @@ def _translate_concat_where_impl(
             *output_domain[concat_dim_index + 1 :],
         ]
         lower, lower_desc = _make_concat_scalar_broadcast(
-            sdfg, state, lower, lower_desc, lower_domain, concat_dim_index
+            sdfg=sdfg,
+            state=state,
+            inp=lower,
+            inp_desc=lower_desc,
+            domain=lower_domain,
+            concat_dim_index=concat_dim_index,
         )
     elif isinstance(upper_desc, dace.data.Scalar) or (
         len(upper.gt_type.dims) == 1 and len(output_domain) > 1  # type: ignore[union-attr]
@@ -339,7 +344,12 @@ def _translate_concat_where_impl(
             *output_domain[concat_dim_index + 1 :],
         ]
         upper, upper_desc = _make_concat_scalar_broadcast(
-            sdfg, state, upper, upper_desc, upper_domain, concat_dim_index
+            sdfg=sdfg,
+            state=state,
+            inp=upper,
+            inp_desc=upper_desc,
+            domain=upper_domain,
+            concat_dim_index=concat_dim_index,
         )
     else:
         """
