@@ -1,6 +1,6 @@
 # DaCe backends
 
-In the context of performance optimization, facing the fragmentedness of NWP code, we decided to implemented a backend based on DaCe to unlock full-program optimization. We accept the downside of having to maintain that (additional) performance backend.
+In the context of performance optimization, facing the fragmentedness of NWP code, we decided to implement a backend based on DaCe to unlock full-program optimization. We accept the downside of having to maintain that (additional) performance backend.
 
 ## Context
 
