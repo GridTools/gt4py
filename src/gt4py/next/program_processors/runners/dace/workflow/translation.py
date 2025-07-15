@@ -21,7 +21,7 @@ from gt4py.next.otf import arguments, languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
-    gtir_sdfg,
+    gtir_to_sdfg,
     transformations as gtx_transformations,
     utils as gtx_dace_utils,
 )
@@ -98,12 +98,17 @@ def make_sdfg_async(sdfg: dace.SDFG) -> None:
             # We check whether the expressions on an InterState edge (symbols assignment
             # and condition for state transition) do access any data descriptor.
             # If so, we break the loop and leave the default `state.nosync=False`.
+            symbolic_rhs_values = (
+                sym
+                for v in oedge.data.assignments.values()
+                if hasattr(sym := dace.symbolic.pystr_to_symbolic(v), "free_symbols")
+            )
             if any(
                 sym_id in sdfg.arrays for sym_id in oedge.data.condition.get_free_symbols()
             ) or any(
                 str(sym) in sdfg.arrays
-                for v in oedge.data.assignments.values()
-                for sym in dace.symbolic.pystr_to_symbolic(v).free_symbols
+                for rhs_value in symbolic_rhs_values
+                for sym in rhs_value.free_symbols
             ):
                 break
         else:
@@ -151,7 +156,7 @@ class DaCeTranslator(
 
         # do not store transformation history in SDFG
         with dace.config.set_temporary("store_history", value=False):
-            sdfg = gtir_sdfg.build_sdfg_from_gtir(
+            sdfg = gtir_to_sdfg.build_sdfg_from_gtir(
                 ir,
                 offset_provider_type,
                 column_axis,

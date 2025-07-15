@@ -52,12 +52,7 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
    $ git checkout main
    ```
 
-3. Follow instructions in the [README.md](README.md) file to set up an environment for local development. For example:
-
-   ```bash
-   $ uv sync --extra all
-   $ source .venv/bin/activate
-   ```
+3. Follow instructions in the [README.md](README.md) file to set up an environment for local development.
 
 4. Create a branch for local development:
 
