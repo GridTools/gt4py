@@ -21,7 +21,7 @@ from dace.transformation import helpers as dace_helpers
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
-    gtir_sdfg_utils,
+    gtir_to_sdfg_utils,
     transformations as gtx_transformations,
 )
 
@@ -87,7 +87,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     ) -> None:
         super().__init__()
         if isinstance(blocking_parameter, gtx_common.Dimension):
-            blocking_parameter = gtir_sdfg_utils.get_map_variable(blocking_parameter)
+            blocking_parameter = gtir_to_sdfg_utils.get_map_variable(blocking_parameter)
         if blocking_parameter is not None:
             self.blocking_parameter = blocking_parameter
         if blocking_size is not None:
