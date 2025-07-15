@@ -226,6 +226,7 @@ def _make_multi_state_sdfg_0(
         external_edges=True,
     )
     sdfg.out_edges(first_state)[0].data.assignments["R"] = 1
+    sdfg.out_edges(first_state)[0].data.assignments["S"] = "False"
     return sdfg, first_state, second_state
 
 
@@ -238,6 +239,7 @@ def _make_multi_state_sdfg_1(
     """
     sdfg, first_state, second_state = _make_multi_state_sdfg_0(sdfg_name)
     sdfg.out_edges(first_state)[0].data.assignments["R"] = "T"
+    sdfg.out_edges(first_state)[0].data.assignments["S"] = "False"
     return sdfg, first_state, second_state
 
 

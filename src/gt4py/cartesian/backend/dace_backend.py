@@ -369,7 +369,11 @@ class SDFGManager:
 
         # Create SDFG
         stree = self.schedule_tree()
-        sdfg = stree.as_sdfg(validate=True, simplify=True, skip={"ScalarToSymbolPromotion"})
+        sdfg = stree.as_sdfg(
+            validate=True,
+            simplify=True,
+            skip={"ScalarToSymbolPromotion", "DeadDataflowElimination"},
+        )
 
         if do_cache:
             self._save_sdfg(sdfg, str(path))
