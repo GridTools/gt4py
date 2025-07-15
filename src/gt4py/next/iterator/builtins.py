@@ -407,6 +407,11 @@ def bool(*args):  # noqa: A001 [builtin-variable-shadowing]
     raise BackendNotSelectedError()
 
 
+@builtin_dispatch
+def concat_where(*args):
+    raise BackendNotSelectedError()
+
+
 UNARY_MATH_NUMBER_BUILTINS = {"abs", "neg"}
 UNARY_LOGICAL_BUILTINS = {"not_"}
 UNARY_MATH_FP_BUILTINS = {
@@ -494,6 +499,7 @@ BUILTINS = {
     "scan",
     "tuple_get",
     "unstructured_domain",
+    "concat_where",
     *ARITHMETIC_BUILTINS,
     *TYPE_BUILTINS,
 }

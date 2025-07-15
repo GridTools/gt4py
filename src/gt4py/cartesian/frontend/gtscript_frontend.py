@@ -48,7 +48,7 @@ from gt4py.cartesian.frontend.exceptions import (
 from gt4py.cartesian.utils import meta as gt_meta
 
 
-PYTHON_AST_VERSION: Final = (3, 8)
+PYTHON_AST_VERSION: Final = (3, 10)
 
 
 class AssertionChecker(ast.NodeTransformer):
@@ -870,25 +870,9 @@ class IRMaker(ast.NodeVisitor):
         # if sorting didn't change anything it was already sorted
         return compute_blocks == compute_blocks_sorted
 
-    def _parse_region_intervals(
-        self, node: Union[ast.ExtSlice, ast.Index, ast.Tuple], loc: nodes.Location = None
-    ) -> Dict[str, nodes.AxisInterval]:
-        if isinstance(node, ast.Index):
-            # Python 3.8 wraps a Tuple in an Index for region[0, 1]
-            tuple_node = node.value
-            list_of_exprs = tuple_node.elts
-        elif isinstance(node, ast.ExtSlice) or isinstance(node, ast.Tuple):
-            # Python 3.8 returns an ExtSlice for region[0, :]
-            # Python 3.9 directly returns a Tuple for region[0, 1]
-            node_list = node.dims if isinstance(node, ast.ExtSlice) else node.elts
-            list_of_exprs = [
-                axis_node.value if isinstance(axis_node, ast.Index) else axis_node
-                for axis_node in node_list
-            ]
-        else:
-            raise GTScriptSyntaxError(
-                f"Invalid 'region' index at line {loc.line} (column {loc.column})", loc=loc
-            )
+    def _parse_region_intervals(self, node: ast.Tuple) -> Dict[str, nodes.AxisInterval]:
+        # Since Python 3.9: directly returns a Tuple for region[0, 1]
+        list_of_exprs = [axis_node for axis_node in node.elts]
         axes_names = [axis.name for axis in self.domain.parallel_axes]
         return {
             name: AxisIntervalParser.apply(axis_node, name)
@@ -908,7 +892,7 @@ class IRMaker(ast.NodeVisitor):
         ):
             raise syntax_error
 
-        return [self._parse_region_intervals(arg.slice, loc) for arg in call_args]
+        return [self._parse_region_intervals(arg.slice) for arg in call_args]
 
     def _are_intervals_nonoverlapping(self, compute_blocks: List[nodes.ComputationBlock]):
         for i, block in enumerate(compute_blocks[1:]):
@@ -1926,7 +1910,7 @@ class GTScriptParser(ast.NodeVisitor):
             assert isinstance(ann_assign.target, ast.Name)
             name = ann_assign.target.id
 
-            source = gt_meta.ast_unparse(ann_assign.annotation)
+            source = ast.unparse(ann_assign.annotation)
             descriptor = eval(source, ann_assign_context)
             # Scalar annotated are dealt with after inlining
             if descriptor in frontend_types_to_native_types.values():

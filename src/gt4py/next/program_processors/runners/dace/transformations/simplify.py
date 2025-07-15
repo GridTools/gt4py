@@ -324,16 +324,15 @@ def gt_substitute_compiletime_symbols(
         #   `gt_auto_optimizer()` performs the initial simplification before this
         #   function is called. If something is changed here then the change might
         #   be necessary to be applied there as well.
-        # TODO(phimuell, iomaganaris): Explore if `SymbolPropagation` should also be run.
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
-            skip=GT_SIMPLIFY_DEFAULT_SKIP_SET.difference(["ScalarToSymbolPromotion"]),
         )
 
     # We will use the `replace` function of the top SDFG, however, lower levels
     #  are handled using ConstantPropagation.
+    # TODO(phimuell, iomaganaris): Revisit once the replace function in DaCe has been updated.
     sdfg.replace_dict(repl)
 
     # TODO(phimuell): Get rid of the `ConstantPropagation`
