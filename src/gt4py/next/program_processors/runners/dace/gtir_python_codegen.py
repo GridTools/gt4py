@@ -81,7 +81,7 @@ def builtin_cast(val: str, target_type: str) -> str:
 
 
 def builtin_get_domain(field: str, axis: int) -> str:
-    return f"{field}_{axis}_range"
+    return f"__{field}_{axis}_range"
 
 
 def builtin_if(cond: str, true_val: str, false_val: str) -> str:
