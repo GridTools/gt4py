@@ -17,6 +17,7 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from dace.transformation.dataflow import map_fusion_helper as dace_mfhelper
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import (
@@ -55,16 +56,14 @@ def gt_horizontal_map_fusion(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
         ),
-        gtx_transformations.MapFusionParallel(
+        gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
+        gtx_transformations.MapFusionHorizontal(
             only_if_common_ancestor=True,
             only_inner_maps=False,
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
         ),
     ]
-    # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
-    #   has been solved.
-    transformations[-1]._single_use_data = single_use_data  # type: ignore[attr-defined]
 
     ret = sdfg.apply_transformations_repeated(
         transformations,
@@ -107,7 +106,7 @@ def gt_vertical_map_fusion(
             only_toplevel_maps=True,
         ),
         gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
-        gtx_transformations.MapFusionSerial(
+        gtx_transformations.MapFusionVertical(
             only_inner_maps=False,
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
@@ -327,7 +326,9 @@ class HorizontalSplitMapRange(SplitMapRange):
         #   test already, but I can not see it. Because I, phimuell, also thinks that this
         #   check should be done here, I relocated it here. Could you conform that this move
         #   is valid.
-        if not gtx_mfutils.is_parallel(graph=graph, node1=first_map_entry, node2=second_map_entry):
+        if not dace_mfhelper.is_parallel(
+            graph=graph, node1=first_map_entry, node2=second_map_entry
+        ):
             return False
 
         if len(first_map_src_data.intersection(second_map_src_data)) == 0:
@@ -392,7 +393,7 @@ class HorizontalSplitMapRange(SplitMapRange):
         for first_map_entry, first_map_exit, second_map_entry, second_map_exit in matching_maps:
             # Before we do anything we perform the renaming, i.e. we will rename the
             #  parameters of the second map such that they match the one of the first map.
-            gtx_mfutils.rename_map_parameters(
+            dace_mfhelper.rename_map_parameters(
                 first_map=first_map_entry.map,
                 second_map=second_map_entry.map,
                 second_map_entry=second_map_entry,
@@ -405,7 +406,7 @@ class HorizontalSplitMapRange(SplitMapRange):
                 (first_map_entry, second_map_entry),
                 (first_map_exit, second_map_exit),
             ]:
-                gtx_mfutils.relocate_nodes(
+                dace_mfhelper.relocate_nodes(
                     from_node=from_node,
                     to_node=to_node,
                     state=graph,

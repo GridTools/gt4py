@@ -252,39 +252,37 @@ def _gt_auto_process_top_level_maps(
 
     while True:
         # First we do scan the entire SDFG to figure out which data is only
-        #  used once and can be deleted. MapFusion could do this on its own but
-        #  it is more efficient to do it once and then reuse it.
+        #  used once and can be deleted.
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
         # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
 
-        serial_map_fusion = gtx_transformations.MapFusionSerial(
+        vertical_map_fusion = gtx_transformations.MapFusionVertical(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=True,
         )
         # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
         #   has been solved.
-        serial_map_fusion._single_use_data = single_use_data
+        vertical_map_fusion._single_use_data = single_use_data
 
-        parallel_map_fusion = gtx_transformations.MapFusionParallel(
+        horizontal_map_fusion = gtx_transformations.MapFusionHorizontal(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=True,
             # TODO(phimuell): Should we enable this flag?
             only_if_common_ancestor=False,
         )
-        parallel_map_fusion._single_use_data = single_use_data
 
-        # NOTE: Since parallel Map fusion matches _any_ two Maps running it on large
-        #  SDFGs is expensive. Thus we run serial Map fusion first to reduce the search
-        #  space. Then we run serial and parallel Map fusion together.
+        # NOTE: Since horizontal Map fusion matches _any_ two Maps, running it on large
+        #  SDFGs is expensive. Thus we run vertical Map fusion first to reduce the search
+        #  space.
         sdfg.apply_transformations_repeated(
-            serial_map_fusion,
+            vertical_map_fusion,
             validate=False,
             validate_all=validate_all,
         )
         sdfg.apply_transformations_repeated(
-            [serial_map_fusion, parallel_map_fusion],
+            [horizontal_map_fusion, vertical_map_fusion],
             validate=False,
             validate_all=validate_all,
         )
