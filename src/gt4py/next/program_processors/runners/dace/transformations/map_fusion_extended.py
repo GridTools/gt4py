@@ -30,7 +30,7 @@ from gt4py.next.program_processors.runners.dace.transformations import (
 )
 
 
-def gt_horizontal_map_fusion(
+def gt_horizontal_map_split_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
     fuse_possible_maps: bool,
@@ -87,7 +87,7 @@ def gt_horizontal_map_fusion(
     return ret
 
 
-def gt_vertical_map_fusion(
+def gt_vertical_map_split_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
     consolidate_edges_only_if_not_extending: bool,
