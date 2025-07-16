@@ -51,3 +51,43 @@ def test_trivial():
     )
 
     assert actual == expected
+
+
+def test_nested():
+    cond = im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 1)})
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 2)})
+    symbolic_domain = domain_utils.SymbolicDomain.from_expr(domain)
+
+    testee = im.concat_where(
+        cond,
+        im.make_tuple(
+            im.ref("a", field_type), im.make_tuple(im.ref("c", field_type), im.ref("e", field_type))
+        ),
+        im.make_tuple(
+            im.ref("b", field_type), im.make_tuple(im.ref("d", field_type), im.ref("f", field_type))
+        ),
+    )
+    testee, _ = infer_domain.infer_expr(
+        testee,
+        (symbolic_domain, symbolic_domain),
+        keep_existing_domains=True,
+        offset_provider={},
+    )
+
+    expected = im.make_tuple(
+        im.concat_where(cond, "a", "b"),
+        im.make_tuple(
+            im.concat_where(cond, "c", "d"),
+            im.concat_where(cond, "e", "f"),
+        ),
+    )
+
+    actual = concat_where.expand_tuple_args(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+
+    actual = collapse_tuple.CollapseTuple.apply(
+        actual, allow_undeclared_symbols=True, within_stencil=False
+    )
+
+    assert actual == expected
