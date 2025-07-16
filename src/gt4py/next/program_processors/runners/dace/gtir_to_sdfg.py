@@ -771,7 +771,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     continue
                 # Convert the scalar argument to a dace symbolic expression if all
                 # of its dependencies are symbols to.
-                symbolic_expr = gtir_to_sdfg_utils.get_symbolic(lambda_arg)
+                try:
+                    symbolic_expr = gtir_to_sdfg_utils.get_symbolic(lambda_arg)
+                except TypeError:
+                    # sympy parsing failed, it can happen with 'cast_' expressions
+                    if not any(
+                        eve.walk_values(lambda_arg).map(lambda node: cpm.is_call_to(node, "cast_"))
+                    ):
+                        raise
+                    continue
                 if all(str(s) in sdfg.symbols for s in symbolic_expr.free_symbols):
                     symbolic_args[str(p.id)] = symbolic_expr
             # All other lambda arguments are lowered to some dataflow that produces a data node.
