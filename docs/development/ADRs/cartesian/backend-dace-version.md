@@ -10,7 +10,7 @@ The [schedule tree](./backend-dace-schedule-tree.md) feature will need changes i
 
 ## Decision
 
-We decided to build a first version of the schedule tree feature against the `v1.x` version of DaCe.
+We decided to build a first version of the schedule tree feature against the `v1.x` version of DaCe. The temporary branch will live on the [GridTools fork of DaCe](https://github.com/GridTools/dace) until the Schedule Tree feature is available in DaCe `v2` and we can update back to mainline again.
 
 ## Consequences
 
