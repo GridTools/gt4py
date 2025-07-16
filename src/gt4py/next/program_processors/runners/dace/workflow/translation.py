@@ -140,6 +140,7 @@ class DaCeTranslator(
     # auto-optimize arguments
     gpu_block_size: tuple[int, int, int] = (32, 8, 1)
     make_persistent: bool = False
+    use_memory_pool: bool = False
     blocking_dim: Optional[common.Dimension] = None
     blocking_size: int = 10
 
@@ -178,6 +179,7 @@ class DaCeTranslator(
                     constant_symbols=constant_symbols,
                     assume_pointwise=True,
                     make_persistent=self.make_persistent,
+                    use_memory_pool=self.use_memory_pool,
                     blocking_dim=self.blocking_dim,
                     blocking_size=self.blocking_size,
                 )
