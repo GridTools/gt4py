@@ -80,6 +80,10 @@ def builtin_cast(val: str, target_type: str) -> str:
     return MATH_BUILTINS_MAPPING[target_type].format(val)
 
 
+def builtin_get_domain(field: str, axis: int) -> str:
+    return f"{field}_{axis}_range"
+
+
 def builtin_if(cond: str, true_val: str, false_val: str) -> str:
     return f"{true_val} if {cond} else {false_val}"
 
@@ -99,6 +103,7 @@ def make_const_list(arg: str) -> str:
 
 GENERAL_BUILTIN_MAPPING: dict[str, Callable[..., str]] = {
     "cast_": builtin_cast,
+    "get_domain": builtin_get_domain,
     "if_": builtin_if,
     "make_const_list": make_const_list,
     "tuple_get": builtin_tuple_get,
