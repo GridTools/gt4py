@@ -131,5 +131,8 @@ def get_field_layout(
         return [], [], []
     domain_dims = [domain_range.dim for domain_range in domain]
     domain_origin = [domain_range.start for domain_range in domain]
-    domain_shape = [(domain_range.stop - domain_range.start) for domain_range in domain]
+    domain_shape = [
+        dace.symbolic.pystr_to_symbolic(f"max(0, ({domain_range.stop}) - ({domain_range.start}))")
+        for domain_range in domain
+    ]
     return domain_dims, domain_origin, domain_shape
