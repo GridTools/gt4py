@@ -319,7 +319,7 @@ def gt_substitute_compiletime_symbols(
     #   we initially call simplify and hope for the best.
     # For testing purposes we need to be able to disable this initial simplify.
     #  This is an implementation detail that we should get rid of.
-    if not kwargs.get("simplify_at_entry", False):
+    if kwargs.get("simplify_at_entry", True):
         # NOTE: To ensure uniform behaviour and as a performance optimization,
         #   `gt_auto_optimizer()` performs the initial simplification before this
         #   function is called. If something is changed here then the change might

@@ -1595,7 +1595,7 @@ class IRMaker(ast.NodeVisitor):
                         )
                     dtype = nodes.DataType.AUTO
                     if target_annotation is not None:
-                        source = gt_meta.ast_unparse(target_annotation)
+                        source = ast.unparse(target_annotation)
                         try:
                             dtype = eval(source, self.temporary_type_to_native_type)
                         except NameError:

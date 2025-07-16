@@ -372,7 +372,7 @@ class SDFGManager:
         sdfg = stree.as_sdfg(
             validate=True,
             simplify=True,
-            skip={"ScalarToSymbolPromotion", "DeadDataflowElimination"},
+            skip={"ScalarToSymbolPromotion"},
         )
 
         if do_cache:
