@@ -35,28 +35,15 @@ def gt_horizontal_map_split_fusion(
     run_simplify: bool,
     fuse_possible_maps: bool,
     consolidate_edges_only_if_not_extending: bool,
-    single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
-    if single_use_data is None:
-        find_single_use_data = dace_analysis.FindSingleUseData()
-        single_use_data = find_single_use_data.apply_pass(sdfg, None)
-
-    # This transformation is only useful to operate on Maps that translates to
-    #  kernels (OpenMP loops or GPU kernels). Thus we have to restrict them
-    #  such that these Maps are processed. Thus we set `only_toplevel_maps` to
-    #  `True`.
-    # Fuse maps with the same range together, if possible in the HorizontalSplitMapRange
-    # transformation so that MapFusionParallel has less maps to check, improving performance
-    # of this pass.
     transformations = [
         HorizontalSplitMapRange(
             fuse_possible_maps=fuse_possible_maps,
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
         ),
-        gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
         gtx_transformations.MapFusionHorizontal(
             only_if_common_ancestor=True,
             only_inner_maps=False,
