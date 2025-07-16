@@ -168,27 +168,35 @@ def gt_gpu_transform_non_standard_memlet(
 
     # This function allows to restrict any fusion operation to the maps
     #  that we have just created.
-    def restrict_fusion_to_newly_created_maps(
-        self: gtx_transformations.MapFusion,
+    def restrict_fusion_to_newly_created_maps_vertical(
+        self: gtx_transformations.MapFusionVertical,
+        map_exit_1: dace_nodes.MapExit,
+        map_entry_2: dace_nodes.MapEntry,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
+    ) -> bool:
+        return (map_entry_2 in new_maps) or (graph.entry_node(map_exit_1) in new_maps)
+
+    def restrict_fusion_to_newly_created_maps_horizontal(
+        self: gtx_transformations.MapFusionHorizontal,
         map_entry_1: dace_nodes.MapEntry,
         map_entry_2: dace_nodes.MapEntry,
         graph: Union[dace.SDFGState, dace.SDFG],
         sdfg: dace.SDFG,
-        permissive: bool,
     ) -> bool:
-        return any(new_entry in new_maps for new_entry in [map_entry_1, map_entry_2])
+        return (map_entry_1 in new_maps) or (map_entry_2 in new_maps)
 
     # Now try to fuse the maps together, but restrict them that at least one map
     #  needs to be new.
     sdfg.apply_transformations_repeated(
         [
-            gtx_transformations.MapFusionSerial(
+            gtx_transformations.MapFusionVertical(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_fusion_to_newly_created_maps,
+                check_fusion_callback=restrict_fusion_to_newly_created_maps_vertical,
             ),
-            gtx_transformations.MapFusionParallel(
+            gtx_transformations.MapFusionHorizontal(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_fusion_to_newly_created_maps,
+                check_fusion_callback=restrict_fusion_to_newly_created_maps_horizontal,
             ),
         ],
         validate=validate,
@@ -664,13 +672,17 @@ def gt_remove_trivial_gpu_maps(
     # Now we try to fuse them together, however, we restrict the fusion to trivial
     #  GPU map.
     def restrict_to_trivial_gpu_maps(
-        self: gtx_transformations.MapFusion,
-        map_entry_1: dace_nodes.MapEntry,
+        self: Union[gtx_transformations.MapFusionVertical, gtx_transformations.MapFusionHorizontal],
+        map_node_1: Union[dace_nodes.MapEntry, dace_nodes.MapExit],
         map_entry_2: dace_nodes.MapEntry,
         graph: Union[dace.SDFGState, dace.SDFG],
         sdfg: dace.SDFG,
-        permissive: bool,
     ) -> bool:
+        map_entry_1 = (
+            map_node_1
+            if isinstance(map_node_1, dace_nodes.MapEntry)
+            else graph.entry_node(map_node_1)
+        )
         for map_entry in [map_entry_1, map_entry_2]:
             _map = map_entry.map
             if len(_map.params) != 1:
@@ -686,13 +698,13 @@ def gt_remove_trivial_gpu_maps(
 
     sdfg.apply_transformations_repeated(
         [
-            gtx_transformations.MapFusionSerial(
+            gtx_transformations.MapFusionVertical(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_to_trivial_gpu_maps,
+                check_fusion_callback=restrict_to_trivial_gpu_maps,
             ),
-            gtx_transformations.MapFusionParallel(
+            gtx_transformations.MapFusionHorizontal(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_to_trivial_gpu_maps,
+                check_fusion_callback=restrict_to_trivial_gpu_maps,
             ),
         ],
         validate=validate,
@@ -819,8 +831,11 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         org_trivial_map_range = copy.deepcopy(trivial_map.range)
         try:
             self._promote_map(graph, replace_trivail_map_parameter=False)
-            if not gtx_transformations.MapFusionSerial.can_be_applied_to(
+            if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
+                options={
+                    "assume_always_shared": True,  # Avoids a scan.
+                },
                 first_map_exit=trivial_map_exit,
                 array=self.access_node,
                 second_map_entry=self.second_map_entry,
@@ -847,7 +862,7 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
 
         # Perform the fusing if requested.
         if not self.do_not_fuse:
-            gtx_transformations.MapFusionSerial.apply_to(
+            gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
                 first_map_exit=trivial_map_exit,
                 array=access_node,

@@ -23,7 +23,7 @@ from .gpu_utils import (
 )
 from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
-from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
+from .map_fusion import MapFusionHorizontal, MapFusionVertical
 from .map_fusion_extended import gt_horizontal_map_fusion, gt_vertical_map_fusion
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
@@ -68,9 +68,8 @@ __all__ = [
     "GT4PyMoveTaskletIntoMap",
     "GT4PyStateFusion",
     "LoopBlocking",
-    "MapFusion",
-    "MapFusionParallel",
-    "MapFusionSerial",
+    "MapFusionHorizontal",
+    "MapFusionVertical",
     "MapIterationOrder",
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",

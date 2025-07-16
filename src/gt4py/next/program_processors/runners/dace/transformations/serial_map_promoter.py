@@ -339,7 +339,7 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
 
         # Now fuse the maps together.
         if self.fuse_after_promotion:
-            gtx_transformations.MapFusionSerial.apply_to(
+            gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
                 expr_index=0,
                 options={
@@ -419,12 +419,13 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
             #  Map fusion can actually inspect them.
             self._promote_first_map(first_map_exit, second_map_entry)
 
-            if not gtx_transformations.MapFusionSerial.can_be_applied_to(
+            if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
                 expr_index=0,
                 options={
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
+                    "assume_always_shared": True,  # Avoid a scan.
                 },
                 first_map_exit=first_map_exit,
                 array=access_node,
