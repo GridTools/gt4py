@@ -109,14 +109,9 @@ def get_field_layout(
     """
     Parse the field operator domain and generates the shape of the result field.
 
-    It should be enough to allocate an array with shape (upper_bound - lower_bound)
-    but this would require to use array offset for compensate for the start index.
-    Suppose that a field operator executes on domain [2,N-2], the dace array to store
-    the result only needs size (N-4), but this would require to compensate all array
-    accesses with offset -2 (which corresponds to -lower_bound). Instead, we choose
-    to allocate (N-2), leaving positions [0:2] unused. The reason is that array offset
-    is known to cause issues to SDFG inlining. Besides, map fusion will in any case
-    eliminate most of transient arrays.
+    Note that this function also ensures that the array shape computed from the
+    domain range is non-negative. A negative shape can occur in concat_where
+    expressions, where it can happen that 'stop' value is smaller than 'start'.
 
     Args:
         domain: The field operator domain.
