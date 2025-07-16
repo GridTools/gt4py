@@ -347,12 +347,15 @@ class OIRToTreeIR(eve.NodeVisitor):
                 tir.Axis.J: -field_extent[1][0],
                 tir.Axis.K: max(k_bound[0], 0),
             }
+            # TODO / Dev Note: Persistent memory is an overkill here - we should scope
+            # the temporary as close to the tasklets as we can. But any lifetime lower
+            # than persistent will yield memory leaks issues
             containers[field.name] = data.Array(
                 dtype=utils.data_type_to_dace_typeclass(field.dtype),
                 shape=get_dace_shape(field, field_extent, k_bound, symbols),
                 strides=get_dace_strides(field, symbols),
                 transient=True,
-                lifetime=dtypes.AllocationLifetime.Global,  # TODO: change this to AllocationLifetime.Global as default
+                lifetime=dtypes.AllocationLifetime.Persistent,
                 storage=DEFAULT_STORAGE_TYPE[self._device_type],
                 debuginfo=utils.get_dace_debuginfo(field),
             )
