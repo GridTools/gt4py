@@ -249,17 +249,11 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
     - `A1` is a transient and must have the same dimensionality than `A2`.
     - `A1` is fully read by `A2`.
 
-    In certain cases the last rule can not be verified, an alternative formulation,
-    which is a consequence of the lowering and domain interference, will be checked:
-    - `A1` is read from the beginning, i.e. all subsets starts at literal `0`.
-    - `A1` has only one going edge.
-    - `A2` is global memory.
-
     Notes:
-        - The transformation assumes that the domain inference adjusted the ranges of
-            the maps such that, in case they write into a transient, the full shape of the transient array is written.
-            has the same size, i.e. there is not padding, or data that is not written
-            to.
+        The transformation assumes that the domain inference adjusted the ranges of
+        the maps such that, in case they write into a transient, the full shape of
+        the transient array is written, has the same size, i.e. there is not padding,
+        or data that is not written to.
 
     Args:
         single_use_data: List of data containers that are used only at one place.
@@ -362,27 +356,15 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             return False
 
         # Checking if the whole array is read.
-        #  As described in the description of the class there are two different
-        #  formulation of this rule, either the simple one or one that proves this
-        #  indirectly.
-        # NOTE: The main benefit of requiring that the whole array is read is
-        #  that we do not have to adjust maps.
+        # NOTE: The main benefit of requiring that the whole array is read is that we
+        #   do not have to adjust maps.
+        # NOTE: In previous versions there was an ad hoc rule, to bypass the "full
+        #   read rule". However, it caused problems, so it was removed.
+        # TODO: We have to improve this test, because sometimes the expressions are
+        #   so complex that without information about relations, such as
+        #   `vertical_start <= vertical_end` it is not possible to prove this check.
         a1_range = dace_sbs.Range.from_array(a1_desc)
-        if src_subset.covers(a1_range):
-            pass
-        elif all(str(ss).isdigit() for ss in src_subset.size()):
-            # If the subset is fully known then we require that it is covered.
-            # NOTE: For checking if the subset is constant we should actually use
-            #   `ss.is_constant()` however, it is very slow and in the context of
-            #   this transformation it is enough to check if the size is a number.
-            return False
-        elif (
-            (not a2_desc.transient)
-            and (graph.out_degree(a1) == 1)
-            and all(ss_start == 0 for ss_start in src_subset.min_element())
-        ):
-            pass
-        else:
+        if not src_subset.covers(a1_range):
             return False
 
         # We have to ensure that no cycle is created through the removal of `a1`.
