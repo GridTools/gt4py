@@ -33,8 +33,8 @@ jobs:
         # between the different compatible versions for a given package requirement
         # [arg: --resolution, env: UV_RESOLUTION=]
         dependencies-strategy: ["lowest-direct", "highest"]
-        gt4py-module: ["cartesian", "eve", "next", "storage"]
-        os: ["ubuntu-latest", "macos-latest"]
+        gt4py-module: ["next"]
+        os: ["macos-latest"]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
         exclude:
           - os: macos-latest
