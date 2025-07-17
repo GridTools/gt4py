@@ -321,7 +321,6 @@ def _cc_create_compiledb(
     )
 
     path = prototype_project.root_path
-    path = path.resolve()
     name = prototype_project.program_name
     binding_src_name = next(
         name
@@ -350,11 +349,11 @@ def _cc_create_compiledb(
             pathlib.Path(entry["directory"]), path
         )
         print(f"{path=}")
-        print(f"{entry['directory']=}")
+        print(f"{entry=}")
         print(f"{relative_path_from_build_dir=}")
 
         # directory relative to current root directory
-        entry["directory"] = entry["directory"].replace(str(path), ".")
+        entry["directory"] = entry["directory"].replace(str(path.resolve()), ".")
         entry["command"] = (
             entry["command"]
             # this is the relative location of the ".o" (etc.) files, we move them to the top level build dir
@@ -367,7 +366,7 @@ def _cc_create_compiledb(
         entry["file"] = (
             entry["file"]
             .replace(f"CMakeFiles/{name}.dir", ".")
-            .replace(str(path), "$SRC_PATH")
+            .replace(str(path.resolve()), "$SRC_PATH")
             .replace(binding_src_name, "$BINDINGS_FILE")
         )
         entry["output"] = (
