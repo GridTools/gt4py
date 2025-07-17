@@ -122,16 +122,15 @@ def get_field_layout(
     domain: FieldopDomain,
 ) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
     """
-    Parse the field operator domain and generates the shape of the result field.
+    Parse the field operator domain and generate the shape of the result field.
 
-    It should be enough to allocate an array with shape (upper_bound - lower_bound)
-    but this would require to use array offset for compensate for the start index.
-    Suppose that a field operator executes on domain [2,N-2], the dace array to store
-    the result only needs size (N-4), but this would require to compensate all array
-    accesses with offset -2 (which corresponds to -lower_bound). Instead, we choose
-    to allocate (N-2), leaving positions [0:2] unused. The reason is that array offset
-    is known to cause issues to SDFG inlining. Besides, map fusion will in any case
-    eliminate most of transient arrays.
+    Note that this function also ensures that the array shape computed from the
+    domain range is non-negative. A negative shape can occur in concat_where
+    expressions, where it can happen that 'stop' value is smaller than 'start'.
+    Also note that this _strange_ domain with 'start' > 'stop' is usually propagated
+    to the input arguments of a concat_where expression (the child nodes), thus
+    the lowering of regular field operators also needs to apply the sanity check
+    in order to avoid allocation of temporary fields with negative size.
 
     Args:
         domain: The field operator domain.
@@ -146,5 +145,8 @@ def get_field_layout(
         return [], [], []
     domain_dims = [domain_range.dim for domain_range in domain]
     domain_origin = [domain_range.start for domain_range in domain]
-    domain_shape = [(domain_range.stop - domain_range.start) for domain_range in domain]
+    domain_shape = [
+        dace.symbolic.pystr_to_symbolic(f"max(0, ({domain_range.stop}) - ({domain_range.start}))")
+        for domain_range in domain
+    ]
     return domain_dims, domain_origin, domain_shape
