@@ -55,9 +55,9 @@ jobs:
       - name: Install gcc with OpenMP for macos
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          brew install gcc-15 libomp
-          echo "alias gcc=gcc-15" >> $GITHUB_ENV
-          echo "alias g++=g++-15" >> $GITHUB_ENV
+          brew install gcc@14 libomp
+          echo "alias gcc=gcc-14" >> $GITHUB_ENV
+          echo "alias g++=g++-14" >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
