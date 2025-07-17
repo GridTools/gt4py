@@ -321,6 +321,7 @@ def _cc_create_compiledb(
     )
 
     path = prototype_project.root_path
+    path = path.resolve()
     name = prototype_project.program_name
     binding_src_name = next(
         name
