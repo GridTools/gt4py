@@ -52,14 +52,11 @@ jobs:
           cache-dependency-glob: "uv.lock"
           python-version: ${{ matrix.python-version }}
 
-      - name: Install gcc with OpenMP for macos
+      - name: Install OpenMP for macos
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          brew install gcc@14
-          echo "CC=gcc-14" >> $GITHUB_ENV
-          echo "CXX=g++-14" >> $GITHUB_ENV
-          echo 'LDFLAGS="-L/opt/homebrew/opt/libomp/lib"' >> $GITHUB_ENV
-          echo 'CPPFLAGS="-L/opt/homebrew/opt/libomp/lib"' >> $GITHUB_ENV
+          brew install libomp
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix libomp)" >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
