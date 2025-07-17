@@ -454,16 +454,28 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # Add new global symbols to nested SDFG.
         #  The code is based on `SDFGState.add_nested_sdfg()`.
-        symbols = if_block.sdfg.symbols
-        for sym, symval in if_block.symbol_mapping.items():
-            if sym not in symbols:
-                if sym == str(symval):
-                    sym_type = parent.symbols.get(sym, dace_dtypes.typeclass(int))
-                else:
-                    sym_type = dace.codegen.tools.type_inference.infer_expr_type(
-                        symval, if_block.sdfg.symbols
-                    )
-                if_block.sdfg.add_symbol(sym, sym_type)
+        if_block_symbols = if_block.sdfg.symbols
+        parent_symbols = parent.symbols
+        for new_sym in missing_symbols:
+            if new_sym in if_block_symbols:
+                # The symbol is already known, so we check that it is the same type as in the
+                #  parent SDFG.
+                # TODO(phimuell, edopao): Is this check legal.
+                assert if_block_symbols[new_sym] == parent_symbols[new_sym]
+
+            elif new_sym in parent_symbols:
+                # The symbol is known to the parent SDFG, so take the type from there.
+                if_block.sdfg.add_symbol(new_sym, parent_symbols[new_sym])
+
+            else:
+                # Figuring out the type of the symbol based on the computation we do.
+                # TODO(phimuell): Maybe switch to `symbols_defined_at()` as it is indicated
+                #   in the `SDFGState.add_nested_sdfg()` function.
+                if_block.sdfg.add_symbol(
+                    new_sym,
+                    dace.codegen.tools.type_inference.infer_expr_type(new_sym, parent_symbols)
+                    or dace_dtypes.typeclass(int),
+                )
 
     def _find_branch_for(
         self,
