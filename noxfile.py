@@ -254,7 +254,7 @@ def test_next(
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
 
     session.run(
-        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        *"pytest --cache-clear -sv --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
