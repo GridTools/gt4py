@@ -22,7 +22,7 @@ jobs:
 
   # Job to define test sessions based on changed files
   define-test-sessions:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     outputs:
       test-sessions: ${{ steps.test-sessions.outputs.test-sessions }}
     steps:
