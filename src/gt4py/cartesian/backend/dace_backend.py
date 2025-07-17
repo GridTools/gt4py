@@ -118,16 +118,17 @@ def _sdfg_add_arrays_and_edges(
                     origin = [o for a, o in zip("IJK", origin) if a in axes]
 
             # Read boundaries for axis-bound fields
-            ranges = [
-                (o - max(0, e), o - max(0, e) + s - 1, 1)
-                for a, o, e, s in zip(
-                    "IJK",
-                    origin,
-                    field_info[name].boundary.lower_indices,
-                    inner_sdfg.arrays[name].shape,
-                )
-                if a in axes
-            ]
+            if axes != ():
+                ranges = [
+                    (o - max(0, e), o - max(0, e) + s - 1, 1)
+                    for o, e, s in zip(
+                        origin,
+                        field_info[name].boundary.lower_indices,
+                        inner_sdfg.arrays[name].shape,
+                    )
+                ]
+            else:
+                ranges = []
 
             # Add data dimensions to the range
             ranges += [(0, d, 1) for d in field_info[name].data_dims]
