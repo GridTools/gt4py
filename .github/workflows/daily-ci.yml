@@ -52,10 +52,11 @@ jobs:
       - name: Install clang with OpenMP for macos
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          brew install llvm
+          brew install llvm libomp
           echo 'export PATH="/usr/local/opt/llvm/bin:$PATH"' >> $GITHUB_ENV
           echo 'export LDFLAGS="-L/usr/local/opt/llvm/lib"' >> $GITHUB_ENV
           echo 'export CPPFLAGS="-I/usr/local/opt/llvm/include"' >> $GITHUB_ENV
+          echo 'export OPENMP_LDFLAGS="-lomp -L/usr/local/opt/libomp/lib"' >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
