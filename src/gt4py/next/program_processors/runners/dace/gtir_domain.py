@@ -107,11 +107,15 @@ def get_field_layout(
     domain: FieldopDomain,
 ) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
     """
-    Parse the field operator domain and generates the shape of the result field.
+    Parse the field operator domain and generate the shape of the result field.
 
     Note that this function also ensures that the array shape computed from the
     domain range is non-negative. A negative shape can occur in concat_where
     expressions, where it can happen that 'stop' value is smaller than 'start'.
+    Also note that this _strange_ domain with 'start' > 'stop' is usually propagated
+    to the input arguments of a concat_where expression (the child nodes), thus
+    the lowering of regular field operators also needs to apply the sanity check
+    in order to avoid allocation of temporary fields with negative size.
 
     Args:
         domain: The field operator domain.
