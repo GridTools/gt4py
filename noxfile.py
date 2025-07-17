@@ -304,7 +304,7 @@ def test_storage(
     markers = " and ".join(device_settings["markers"])
 
     session.run(
-        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        *"pytest --cache-clear -sv --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,

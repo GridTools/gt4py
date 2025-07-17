@@ -67,6 +67,7 @@ class Compiler(
         inp: stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
     ) -> stages.ExtendedCompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
+        print(f"{src_dir=}")
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.
