@@ -40,20 +40,8 @@ FieldopDomain: TypeAlias = list[FieldopDomainRange]
 """Domain of a field operator represented as a list of `FieldopDomainRange` for each dimension."""
 
 
-class DomainPythonCodegen(gtir_python_codegen.PythonCodegen):
-    def visit_FunCall(self, node: gtir.FunCall, args_map: dict[str, gtir.Node]) -> str:
-        if cpm.is_call_to(node, "get_domain"):
-            field = self.visit(node.args[0], args_map=args_map)
-            axis = node.args[1]
-            assert isinstance(axis, gtir.AxisLiteral)
-            dim = gtx_common.Dimension(axis.value, axis.kind)
-            return f"__{field}_{dim.value}_range"
-
-        return super().visit_FunCall(node, args_map=args_map)
-
-
 def _parse_symbolic_range(ir: gtir.Expr) -> dace.symbolic.SymbolicType:
-    python_source = DomainPythonCodegen.apply(ir, args_map={})
+    python_source = gtir_python_codegen.get_source(ir)
     return dace.symbolic.pystr_to_symbolic(python_source)
 
 

@@ -15,6 +15,7 @@ import sympy
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
+from gt4py.next import common as gtx_common
 from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
@@ -143,6 +144,12 @@ class PythonCodegen(codegen.TemplatedGenerator):
                 # shift expressions are not expected in this visitor context
                 raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
             return self.visit(node.args[0], args_map=args_map)
+        elif cpm.is_call_to(node, "get_domain"):
+            field = self.visit(node.args[0], args_map=args_map)
+            axis = node.args[1]
+            assert isinstance(axis, gtir.AxisLiteral)
+            dim = gtx_common.Dimension(axis.value, axis.kind)
+            return f"__{field}_{dim.value}_range"
         elif isinstance(node.fun, gtir.SymRef):
             args = self.visit(node.args, args_map=args_map)
             builtin_name = str(node.fun.id)
