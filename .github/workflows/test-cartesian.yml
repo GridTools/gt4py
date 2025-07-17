@@ -7,42 +7,40 @@ on:
   pull_request:
     branches:
     - main
-    paths-ignore:  # Skip when only gt4py.next or doc files have been updated
-    - "src/gt4py/next/**"
-    - "tests/next_tests/**"
-    - "examples/**"
-    - "*.md"
-    - "*.rst"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # First job to read Python versions from .python-versions file
+  get-python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      python-versions: ${{ steps.get-versions.outputs.python-versions }}
+    steps:
+    - uses: actions/checkout@v4
+    - id: get-versions
+      uses: ./.github/actions/get-python-versions
+
+  # Test-running job
   test-cartesian:
+    needs: get-python-versions
     strategy:
       matrix:
         codegen-factor: [internal, dace]
         os: ["ubuntu-latest"]
-        python-version: ["3.10", "3.11"]
+        python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
-
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'macos-latest' }}
-      shell: bash
-      run: brew install boost
-
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-      shell: bash
-      run: sudo apt install libboost-dev
+      with:
+        fetch-depth: 0  # Use a deep clone to get target PR branch
 
     - name: Install uv and set the python version
-      uses: astral-sh/setup-uv@v5
+      uses: astral-sh/setup-uv@v6
       with:
         enable-cache: true
         cache-dependency-glob: "uv.lock"
@@ -50,6 +48,10 @@ jobs:
 
     - name: Run CPU 'cartesian' tests with nox
       env:
-        NUM_PROCESSES: auto
+        CI_NOX_RUN_ONLY_IF_CHANGED_FROM: "origin/${{ github.base_ref }}"
+        CI_NOX_VERBOSE: 1
+        # Force a specific compiler for setuptools/distutils
+        CXX: g++
+        CC: gcc
       shell: bash
-      run: uv run nox -s 'test_cartesian-${{ matrix.python-version }}(${{ matrix.codegen-factor }}, cpu)'
+      run: uv run --script noxfile.py -s 'test_cartesian-${{ matrix.python-version }}(${{ matrix.codegen-factor }}, cpu)'

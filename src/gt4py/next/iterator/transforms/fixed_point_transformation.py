@@ -29,6 +29,8 @@ class FixedPointTransformation(eve.NodeTranslator):
     #: Usually the default value is chosen to be all transformations.
     enabled_transformations: enum.Flag
 
+    REINFER_TYPES: ClassVar[bool] = False
+
     def visit(self, node, **kwargs):
         node = super().visit(node, **kwargs)
         return self.fp_transform(node, **kwargs) if isinstance(node, ir.Node) else node
@@ -62,6 +64,8 @@ class FixedPointTransformation(eve.NodeTranslator):
                     assert (
                         result is not node
                     ), f"Transformation {transformation.name.lower()} should have returned None, since nothing changed."
-                    itir_type_inference.reinfer(result)
+                    if self.REINFER_TYPES:
+                        itir_type_inference.reinfer(result)
+                    self._preserve_annex(node, result)
                     return result
         return None

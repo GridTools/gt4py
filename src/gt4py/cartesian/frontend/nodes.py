@@ -236,15 +236,13 @@ class Builtin(enum.Enum):
     TRUE = 1
 
     @classmethod
-    def from_value(cls, value):
+    def from_value(cls, value: bool | None) -> Builtin:
         if value is None:
-            result = cls.NONE
-        elif value is True:
-            result = cls.TRUE
-        elif value is False:
-            result = cls.FALSE
-
-        return result
+            return cls.NONE
+        if value is True:
+            return cls.TRUE
+        if value is False:
+            return cls.FALSE
 
     def __str__(self) -> str:
         return self.name
@@ -655,9 +653,9 @@ class IterationOrder(enum.Enum):
     def symbol(self):
         if self == self.BACKWARD:
             return "<-"
-        elif self == self.PARALLEL:
+        if self == self.PARALLEL:
             return "||"
-        elif self == self.FORWARD:
+        if self == self.FORWARD:
             return "->"
 
     def __str__(self) -> str:
@@ -684,19 +682,17 @@ class AxisInterval(Node):
     loc = attribute(of=Location, optional=True)
 
     @classmethod
-    def full_interval(cls, order=IterationOrder.PARALLEL):
+    def full_interval(cls, order=IterationOrder.PARALLEL) -> AxisInterval:
         if order != IterationOrder.BACKWARD:
-            interval = cls(
+            return cls(
                 start=AxisBound(level=LevelMarker.START, offset=0),
                 end=AxisBound(level=LevelMarker.END, offset=0),
             )
-        else:
-            interval = cls(
-                start=AxisBound(level=LevelMarker.END, offset=-1),
-                end=AxisBound(level=LevelMarker.START, offset=-1),
-            )
 
-        return interval
+        return cls(
+            start=AxisBound(level=LevelMarker.END, offset=-1),
+            end=AxisBound(level=LevelMarker.START, offset=-1),
+        )
 
     @property
     def is_single_index(self) -> bool:

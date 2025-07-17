@@ -9,18 +9,31 @@ on:
     - functional
 
 jobs:
+  # First job to read Python versions from .python-versions file
+  get-python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      python-versions: ${{ steps.set-matrix.outputs.python-versions }}
+    steps:
+    - uses: actions/checkout@v4
+    - id: set-matrix
+      run: |
+        PYTHON_VERSIONS=$(cat .python-versions | jq -R -s -c 'split("\n") | map(select(length > 0))')
+        echo "python-versions=${PYTHON_VERSIONS}" >> $GITHUB_OUTPUT
+
   quickstart-guide:
+    needs: get-python-versions
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10"]
+        python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version-file: ".default-python-version"
     - name: Install python dependencies
       run: |
         python -m pip install --upgrade pip setuptools wheel

@@ -4,7 +4,23 @@ Any test job that runs on CI is encoded in automation tools like **nox** and **p
 
 ## GitHub Workflows
 
-The following workflows are currently active:
+The following workflows are currently active.
+
+### Code Quality
+
+A `Code Quality` workflow runs `pre-commit` to check code quality requirements through tools like **mypy** or **ruff**. Code coverage workflows are currently disabled.
+
+### Tests
+
+The `Test Cartesian (CPU)`, `Test Eve`, `Test Next (CPU)`, `Test Storage (CPU)` and `Test Package Root` workflows run the correspondent `nox` sessions testing the respective subpackages (`Test Package Root` tests the root package code). In all cases only tests are run that do not require the presence of a GPU.
+
+#### When are workflows triggered
+
+The idea is to run workflows only when needed. This means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, `eve` tests will not be run when only GT4Py sources are changed.
+
+In the past we used the `paths` and `paths-ignore` workflow options together with an always-succeeding _fallback_ workflow for this, but a similar mechanism has now been defined directly with `nox`. The conditional execution of tests is disabled by default and it has to be activated through `CI_NOX_*` environment variables (check [`noxfile.py`](../../../noxfile.py) and [`noxfile_utils.py`](../../../noxfile_utils.py_) for details.
+
+The overall dependencies between subprojects and tests can be visualized as:
 
 ```mermaid
 %%{
@@ -15,6 +31,7 @@ The following workflows are currently active:
 }%%
 flowchart LR
     always[always] --> qua[Code Quality]
+    always --> pkg[Test Package Root]
 
     src_eve[eve sources changed] --> eve["Test Eve"]
     src_eve --> car["Test Cartesian (CPU)"]
@@ -22,13 +39,9 @@ flowchart LR
 
     src_car[cartesian sources changed] --> car["Test Cartesian (CPU)"]
 
-    src_cab[cartesian backend sources changed] --> sto["Test Storage (CPU)"]
-
-    src_sto[storage sources changed] --> sto
-    src_sto --> car
-    src_sto --> nxt
-
     src_nxt[next sources changed] --> nxt
+
+    src_cab[cartesian backend sources changed] --> sto["Test Storage (CPU)"]
 
     cfg_wfl[workflows changed] --> car
     cfg_wfl --> eve
@@ -38,8 +51,14 @@ flowchart LR
     other["other files changed, excluding examples (the examples folder) and docs (.md and .rst files)"] --> car
     other --> nxt
 
-    pkg_cfg[package config files changed] --> eve
-    pkg_cfg --> sto
+    cfg[config files changed] --> car
+    cfg --> eve
+    cfg --> nxt
+    cfg --> sto
+
+    src_sto[storage sources changed] --> sto
+    src_sto --> car
+    src_sto --> nxt
 
     style always fill:White,stroke:black,text:black;
     style src_eve fill:Plum,stroke:MediumOrchid,text:black;
@@ -49,7 +68,7 @@ flowchart LR
     style src_nxt fill:LightBlue,stroke:CornFlowerBlue,text:black;
     style cfg_wfl fill:Coral,stroke:Tomato,text:black;
     style other fill:PaleGreen,stroke:ForestGreen,text:black;
-    style pkg_cfg fill:PaleGreen,stroke:ForestGreen,text:black;
+    style cfg fill:PaleGreen,stroke:ForestGreen,text:black;
 
     style qua fill:White,stroke:black,text:black;
     style eve fill:Plum,stroke:MediumOrchid,text:black;
@@ -58,40 +77,31 @@ flowchart LR
     style nxt fill:LightBlue,stroke:CornFlowerBlue,text:black;
 
     linkStyle 0 stroke:#999,stroke-width:2px;
+    linkStyle 1 stroke:#999,stroke-width:2px;
 
-    linkStyle 1 stroke:MediumOrchid,stroke-width:2px;
     linkStyle 2 stroke:MediumOrchid,stroke-width:2px;
     linkStyle 3 stroke:MediumOrchid,stroke-width:2px;
+    linkStyle 4 stroke:MediumOrchid,stroke-width:2px;
 
-    linkStyle 4 stroke:Brown,stroke-width:2px;
     linkStyle 5 stroke:Brown,stroke-width:2px;
+    linkStyle 6 stroke:Brown,stroke-width:2px;
 
-    linkStyle 6 stroke:DarkCyan,stroke-width:2px;
     linkStyle 7 stroke:DarkCyan,stroke-width:2px;
     linkStyle 8 stroke:DarkCyan,stroke-width:2px;
+    linkStyle 9 stroke:DarkCyan,stroke-width:2px;
 
-    linkStyle 9 stroke:CornFlowerBlue,stroke-width:2px;
+    linkStyle 10 stroke:CornFlowerBlue,stroke-width:2px;
 
-    linkStyle 10 stroke:Tomato,stroke-width:2px;
     linkStyle 11 stroke:Tomato,stroke-width:2px;
     linkStyle 12 stroke:Tomato,stroke-width:2px;
     linkStyle 13 stroke:Tomato,stroke-width:2px;
+    linkStyle 14 stroke:Tomato,stroke-width:2px;
 
-    linkStyle 14 stroke:ForestGreen,stroke-width:2px;
     linkStyle 15 stroke:ForestGreen,stroke-width:2px;
     linkStyle 16 stroke:ForestGreen,stroke-width:2px;
     linkStyle 17 stroke:ForestGreen,stroke-width:2px;
+    linkStyle 18 stroke:ForestGreen,stroke-width:2px;
 ```
-
-The `Test Eve`, `Test Storage (CPU)`, `Test Cartesian (CPU)`, and `Test Next (CPU)` workflows run the automated tests for the respective subpackages. In all cases only tests are run that do not require the presence of a GPU.
-
-The `Code Quality` workflow runs pre-commit to check code quality requirements through tools like **mypy** or **ruff**.
-
-Code coverage workflows are currently disabled.
-
-### When are workflows triggered
-
-The general idea is to run workflows only when needed. In this monorepo structure, this practically means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, `eve` tests will not be run when only GT4Py sources are changed. In those cases where some subpackage workflows are not triggered, replacement (always-succeeding) `Fallback:` workflows will be executed instead to satisfy the GitHub merge protection rules.
 
 ### Daily CI
 
@@ -101,7 +111,7 @@ There is an extra CI workflow on GitHub scheduled to run daily and testing `main
 
 CI pipelines for all tests can be triggered via CSCS-CI. These automatically run from a Gitlab mirror for whitelisted users only, and have to be explicitly run by a whitelisted user via the comment "cscs-ci run default" on PRs from other users. There is currently no finegrained control over which subpackage tests are run. Neither can a subset be started manually from the comments nor can tests be skipped based on which files have been changed. Both are achievable (the latter with considerable effort), however given the current duration of the pipeline it does not seem worth doing so.
 
-Since all tests routinely run here, this might be a better match for reintroducing test coverage in the future than github workflows.
+Since all tests routinely run here, this might be a better match for reintroducing test coverage in the future than GitHub workflows.
 
 Additional information on how to change this process, such as adding whitelisted users, regenerating tokens etc can be found in [cscs-ci.md](cscs-ci.md)
 

@@ -26,7 +26,8 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.stages import AOT_PRG
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.otf import stages, workflow
+from gt4py.next.iterator.transforms import remap_symbols
+from gt4py.next.otf import arguments, stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -89,6 +90,23 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
 
     itir_program = ProgramLowering.apply(
         inp.data.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+    )
+
+    static_args_index = {
+        i: arg.value for i, arg in enumerate(inp.args.args) if isinstance(arg, arguments.StaticArg)
+    }
+    static_args = {
+        itir_program.params[i].id: im.literal_from_tuple_value(value)
+        for i, value in static_args_index.items()
+    }
+    body = remap_symbols.RemapSymbolRefs().visit(itir_program.body, symbol_map=static_args)
+    itir_program = itir.Program(
+        id=itir_program.id,
+        function_definitions=itir_program.function_definitions,
+        params=itir_program.params,
+        declarations=itir_program.declarations,
+        body=body,
+        implicit_domain=itir_program.implicit_domain,
     )
 
     if config.DEBUG or inp.data.debug:

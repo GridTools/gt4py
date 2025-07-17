@@ -38,7 +38,7 @@ class PowerUnrolling(NodeTranslator):
     def apply(cls, node: ir.Node, max_unroll: int = 5) -> ir.Node:
         return cls(max_unroll=max_unroll).visit(node)
 
-    def visit_FunCall(self, node: ir.FunCall):
+    def visit_FunCall(self, node: ir.FunCall) -> ir.Expr:
         new_node = self.generic_visit(node)
 
         if _is_power_call(new_node):
@@ -53,13 +53,13 @@ class PowerUnrolling(NodeTranslator):
                 remainder = exponent
 
                 # Build target expression
-                ret = im.ref(f"power_{2 ** pow_max}")
+                ret: ir.Expr = im.ref(f"power_{2**pow_max}")
                 remainder -= 2**pow_cur
                 while remainder > 0:
                     pow_cur = _compute_integer_power_of_two(remainder)
                     remainder -= 2**pow_cur
 
-                    ret = im.multiplies_(ret, f"power_{2 ** pow_cur}")
+                    ret = im.multiplies_(ret, f"power_{2**pow_cur}")
 
                 # Nest target expression to avoid multiple redundant evaluations
                 for i in range(pow_max, 0, -1):

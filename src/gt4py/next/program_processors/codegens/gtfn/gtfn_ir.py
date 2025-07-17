@@ -74,6 +74,7 @@ class ScanPassDefinition(Node, SymbolTableTrait):
     params: list[Sym]
     expr: Expr
     forward: bool
+    projector: Optional[Lambda]
 
 
 class TaggedValues(Node):

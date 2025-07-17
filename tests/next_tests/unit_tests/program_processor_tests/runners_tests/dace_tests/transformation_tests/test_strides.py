@@ -65,7 +65,7 @@ def _make_strides_propagation_level2_sdfg() -> tuple[dace.SDFG, dace_nodes.Neste
     for name in names:
         stride_name = name + "_stride"
         stride_sym = dace_symbolic.pystr_to_symbolic(stride_name)
-        sdfg.add_symbol(stride_name, dace.int64)
+        sdfg.add_symbol(stride_name, dace.int32)
         sdfg.add_array(
             name,
             shape=(10,),
@@ -133,7 +133,7 @@ def _make_strides_propagation_level1_sdfg() -> (
     for name in names:
         stride_name = name + "_stride"
         stride_sym = dace_symbolic.pystr_to_symbolic(stride_name)
-        sdfg.add_symbol(stride_name, dace.int64)
+        sdfg.add_symbol(stride_name, dace.int32)
         sdfg.add_array(
             name,
             shape=(10,),
@@ -309,7 +309,7 @@ def _make_strides_propagation_dependent_symbol_nsdfg() -> dace.SDFG:
 
     array_names = ["a2", "b2"]
     for name in array_names:
-        stride_sym = dace.symbol(f"{name}_stride", dtype=dace.uint64)
+        stride_sym = dace.symbol(f"{name}_stride", dtype=dace.uint32)
         sdfg.add_symbol(stride_sym.name, stride_sym.dtype)
         sdfg.add_array(
             name,
@@ -337,8 +337,8 @@ def _make_strides_propagation_dependent_symbol_sdfg() -> tuple[dace.SDFG, dace_n
 
     array_names = ["a1", "b1"]
     for name in array_names:
-        stride_sym1 = dace.symbol(f"{name}_1stride", dtype=dace.uint64)
-        stride_sym2 = dace.symbol(f"{name}_2stride", dtype=dace.int64)
+        stride_sym1 = dace.symbol(f"{name}_1stride", dtype=dace.uint32)
+        stride_sym2 = dace.symbol(f"{name}_2stride", dtype=dace.int32)
         sdfg_level1.add_symbol(stride_sym1.name, stride_sym1.dtype)
         sdfg_level1.add_symbol(stride_sym2.name, stride_sym2.dtype)
         stride_sym = stride_sym1 * stride_sym2
@@ -372,8 +372,8 @@ def _make_strides_propagation_dependent_symbol_sdfg() -> tuple[dace.SDFG, dace_n
 
 def test_strides_propagation_dependent_symbol():
     sdfg_level1, nsdfg_level2 = _make_strides_propagation_dependent_symbol_sdfg()
-    sym1_dtype = dace.uint64
-    sym2_dtype = dace.int64
+    sym1_dtype = dace.uint32
+    sym2_dtype = dace.int32
 
     # Ensure that the special symbols are not already present inside the nested SDFG.
     for aname, adesc in sdfg_level1.arrays.items():
@@ -414,8 +414,8 @@ def _make_strides_propagation_shared_symbols_nsdfg() -> dace.SDFG:
 
     # NOTE: Both arrays have the same symbols used for strides.
     array_names = ["a2", "b2"]
-    stride_sym0 = dace.symbol(f"__stride_0", dtype=dace.uint64)
-    stride_sym1 = dace.symbol(f"__stride_1", dtype=dace.uint64)
+    stride_sym0 = dace.symbol(f"__stride_0", dtype=dace.uint32)
+    stride_sym1 = dace.symbol(f"__stride_1", dtype=dace.uint32)
     sdfg.add_symbol(stride_sym0.name, stride_sym0.dtype)
     sdfg.add_symbol(stride_sym1.name, stride_sym1.dtype)
     for name in array_names:
@@ -449,8 +449,8 @@ def _make_strides_propagation_shared_symbols_sdfg() -> tuple[dace.SDFG, dace_nod
     # NOTE: Both arrays use the same symbols as strides.
     #   Furthermore, they are the same as in the nested SDFG, i.e. they are shared.
     array_names = ["a1", "b1"]
-    stride_sym0 = dace.symbol(f"__stride_0", dtype=dace.uint64)
-    stride_sym1 = dace.symbol(f"__stride_1", dtype=dace.uint64)
+    stride_sym0 = dace.symbol(f"__stride_0", dtype=dace.uint32)
+    stride_sym1 = dace.symbol(f"__stride_1", dtype=dace.uint32)
     sdfg_level1.add_symbol(stride_sym0.name, stride_sym0.dtype)
     sdfg_level1.add_symbol(stride_sym1.name, stride_sym1.dtype)
     for name in array_names:
@@ -512,8 +512,8 @@ def test_strides_propagation_shared_symbols_sdfg():
 
     # Now we change the strides of `b1`, and then we propagate the new strides
     #  into the nested SDFG. We want to keep (for whatever reasons) strides of `a1`.
-    stride_b1_sym0 = dace.symbol(f"__b1_stride_0", dtype=dace.uint64)
-    stride_b1_sym1 = dace.symbol(f"__b1_stride_1", dtype=dace.uint64)
+    stride_b1_sym0 = dace.symbol(f"__b1_stride_0", dtype=dace.uint32)
+    stride_b1_sym1 = dace.symbol(f"__b1_stride_1", dtype=dace.uint32)
     sdfg_level1.add_symbol(stride_b1_sym0.name, stride_b1_sym0.dtype)
     sdfg_level1.add_symbol(stride_b1_sym1.name, stride_b1_sym1.dtype)
 
@@ -545,8 +545,8 @@ def _make_strides_propagation_stride_1_nsdfg() -> dace.SDFG:
     sdfg_level1 = dace.SDFG(util.unique_name("strides_propagation_stride_1_nsdfg"))
     state = sdfg_level1.add_state(is_start_block=True)
 
-    a_stride_sym = dace.symbol("a_stride", dtype=dace.uint64)
-    b_stride_sym = dace.symbol("b_stride", dtype=dace.uint64)
+    a_stride_sym = dace.symbol("a_stride", dtype=dace.uint32)
+    b_stride_sym = dace.symbol("b_stride", dtype=dace.uint32)
     stride_syms = {"a": a_stride_sym, "b": b_stride_sym}
 
     for name in ["a", "b"]:
@@ -574,8 +574,8 @@ def _make_strides_propagation_stride_1_sdfg() -> tuple[dace.SDFG, dace_nodes.Nes
     sdfg = dace.SDFG(util.unique_name("strides_propagation_stride_1_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
-    a_stride_sym = dace.symbol("a_stride", dtype=dace.uint64)
-    b_stride_sym = dace.symbol("b_stride", dtype=dace.uint64)
+    a_stride_sym = dace.symbol("a_stride", dtype=dace.uint32)
+    b_stride_sym = dace.symbol("b_stride", dtype=dace.uint32)
     stride_syms = {"a": a_stride_sym, "b": b_stride_sym}
 
     for name in ["a", "b"]:

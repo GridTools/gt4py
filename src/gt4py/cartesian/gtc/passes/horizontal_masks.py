@@ -105,7 +105,6 @@ def compute_relative_mask(
 
     This is used in the numpy backend to compute HorizontalMask bounds relative to
     the start/end bounds of the horizontal axes.
-
     """
     i_interval = _compute_relative_interval(extent[0], mask.i)
     j_interval = _compute_relative_interval(extent[1], mask.j)

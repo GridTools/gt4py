@@ -19,7 +19,7 @@ from gt4py.cartesian.gtc import common
 
 
 if TYPE_CHECKING:
-    import gt4py.cartesian.gtc.dace.daceir as dcir
+    from gt4py.cartesian.gtc.dace import daceir as dcir
 
 
 def data_type_to_dace_typeclass(data_type):

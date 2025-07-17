@@ -305,10 +305,7 @@ def callable_type_info_cases():
                 ts.FieldType(dims=[KDim], dtype=int_type),
             ],
             {},
-            [
-                r"Dimensions can not be promoted. Could not determine order of the "
-                r"following dimensions: J, K."
-            ],
+            [],
             ts.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
         ),
         (

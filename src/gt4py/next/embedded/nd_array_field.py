@@ -761,7 +761,8 @@ def _hyperslice(
     nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
 
     slices = tuple(
-        slice(xp.min(dim_nnz_indices), xp.max(dim_nnz_indices) + 1) for dim_nnz_indices in nnz
+        slice(xp.min(dim_nnz_indices).item(), xp.max(dim_nnz_indices).item() + 1)
+        for dim_nnz_indices in nnz
     )
     hcube = select_mask[tuple(slices)]
     if skip_value is not None:
@@ -993,7 +994,7 @@ def _make_reduction(
                 "Reducing a field with more than one local dimension is not supported."
             )
         reduce_dim_index = field.domain.dims.index(axis)
-        current_offset_provider = embedded_context.offset_provider.get(None)
+        current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[
             axis.value

@@ -27,8 +27,8 @@ class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
             if len(node.annex.recorded_shifts) == 0:
                 return
 
-            if isinstance(node.fun.args[0], ir.Lambda):  # type: ignore[attr-defined]  # ensured by is_applied_lift
-                stencil = node.fun.args[0]  # type: ignore[attr-defined]  # ensured by is_applied_lift
+            if isinstance(node.fun.args[0], ir.Lambda):
+                stencil = node.fun.args[0]
                 for param in stencil.params:
                     assert hasattr(param.annex, "recorded_shifts")
 

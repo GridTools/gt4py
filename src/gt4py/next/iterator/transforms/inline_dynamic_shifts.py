@@ -21,7 +21,7 @@ def _dynamic_shift_args(node: itir.Expr) -> None | list[bool]:
     if not cpm.is_applied_as_fieldop(node):
         return None
     params_shifts = trace_shifts.trace_stencil(
-        node.fun.args[0],  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop
+        node.fun.args[0],
         num_args=len(node.args),
         save_to_annex=True,
     )
@@ -47,10 +47,11 @@ class InlineDynamicShifts(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         node = self.generic_visit(node, **kwargs)
 
         if cpm.is_let(node) and (
-            dynamic_shift_args := _dynamic_shift_args(let_body := node.fun.expr)  # type: ignore[attr-defined]  # ensured by is_let
+            dynamic_shift_args := _dynamic_shift_args(let_body := node.fun.expr)
         ):
-            inline_let_params = {p.id: False for p in node.fun.params}  # type: ignore[attr-defined]  # ensured by is_let
+            inline_let_params: dict[str, bool] = {p.id: False for p in node.fun.params}
 
+            assert isinstance(let_body, itir.FunCall)
             for inp, is_dynamic_shift_arg in zip(let_body.args, dynamic_shift_args, strict=True):
                 for ref in collect_symbol_refs(inp):
                     if ref in inline_let_params and is_dynamic_shift_arg:

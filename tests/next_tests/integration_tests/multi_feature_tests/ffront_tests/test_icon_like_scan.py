@@ -207,7 +207,6 @@ def test_setup(exec_alloc_descriptor):
 
 
 @pytest.mark.uses_tuple_returns
-@pytest.mark.uses_scan_requiring_projector
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
     cases.verify(
         test_setup.case,

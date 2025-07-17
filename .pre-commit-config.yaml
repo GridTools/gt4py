@@ -9,7 +9,7 @@ repos:
 
 - repo: https://github.com/astral-sh/uv-pre-commit
   # uv version.
-  rev: 0.5.25
+  rev: 0.6.10
   hooks:
   - id: uv-lock
 
@@ -58,6 +58,20 @@ repos:
   rev: v0.23.0
   hooks:
   - id: tach
+
+- repo: local
+  hooks:
+  - id: noxfile-utils
+    name: noxfile-utils checker
+    entry: >
+      bash -c 'uv export --no-hashes | grep "^\(mypy\|nox\)==" > .reqs.txt ; 
+               uv run --with-requirements .reqs.txt --script noxfile_utils.py ;
+               uv run --with-requirements .reqs.txt mypy noxfile_utils.py ;
+               rm .reqs.txt'
+    language: python
+    pass_filenames: false
+    additional_dependencies: [uv]
+    stages: [pre-commit]
 
 - repo: local
   hooks:

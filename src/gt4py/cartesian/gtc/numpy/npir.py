@@ -40,7 +40,6 @@ class ScalarDecl(Decl):
     """Scalar per grid point.
 
     Used for API scalar parameters. Local scalars never have data_dims.
-
     """
 
     pass
@@ -50,7 +49,6 @@ class LocalScalarDecl(Decl):
     """Scalar per grid point.
 
     Used for API scalar parameters. Local scalars never have data_dims.
-
     """
 
     pass
@@ -72,7 +70,6 @@ class TemporaryDecl(Decl):
     ----------
     offset: Origin of the temporary field.
     padding: Buffer added to compute domain as field size.
-
     """
 
     data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)

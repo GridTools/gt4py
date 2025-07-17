@@ -13,6 +13,7 @@ import numpy as np
 
 dace = pytest.importorskip("dace")
 
+from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
@@ -22,7 +23,7 @@ from . import util
 
 def _perform_reorder_test(
     sdfg: dace.SDFG,
-    leading_dim: list[str],
+    unit_strides_dim: list[str],
     expected_order: list[str],
 ) -> None:
     """Performs the reorder transformation and test it.
@@ -36,7 +37,7 @@ def _perform_reorder_test(
 
     apply_count = sdfg.apply_transformations_repeated(
         gtx_transformations.MapIterationOrder(
-            leading_dims=leading_dim,
+            unit_strides_dims=unit_strides_dim,
         ),
         validate=True,
         validate_all=True,
@@ -80,21 +81,58 @@ def _make_test_sdfg(map_params: list[str]) -> dace.SDFG:
     return sdfg
 
 
-def test_map_order_1():
+def test_map_order_unit_strides_kind_1():
+    sdfg = _make_test_sdfg(["EDim_horizontal", "KDim_vertical", "VDim_horizontal"])
+    map_entrie: dace.nodes.MapEntry = util.count_nodes(sdfg, dace.nodes.MapEntry, True)[0]
+    original_map_order = map_entrie.map.params.copy()
+    assert not original_map_order[0].endswith("_vertical")
+
+    gtx_transformations.gt_set_iteration_order(
+        sdfg=sdfg,
+        unit_strides_kind=gtx_common.DimensionKind.HORIZONTAL,
+    )
+    new_map_order = map_entrie.map.params.copy()
+
+    # The order of the horizontal is unspecific, but vertical must be at
+    #  position 0, because position 1 and 2 are occupied by the other two.
+    assert new_map_order[0].endswith("_vertical")
+    assert all(map_param.endswith("_horizontal") for map_param in new_map_order[1:])
+    assert set(original_map_order) == set(new_map_order)
+    assert len(new_map_order) == len(original_map_order)
+
+
+def test_map_order_unit_strides_kind_2():
+    sdfg = _make_test_sdfg(["EDim_horizontal", "VDim_horizontal"])
+    map_entrie: dace.nodes.MapEntry = util.count_nodes(sdfg, dace.nodes.MapEntry, True)[0]
+    original_map_order = map_entrie.map.params.copy()
+    assert not original_map_order[0].endswith("_vertical")
+
+    nb_applies = gtx_transformations.gt_set_iteration_order(
+        sdfg=sdfg,
+        unit_strides_kind=gtx_common.DimensionKind.VERTICAL,
+    )
+    new_map_order = map_entrie.map.params.copy()
+
+    # Because there is no vertical, the transformation should not apply.
+    assert nb_applies == 0
+    assert original_map_order == new_map_order
+
+
+def test_map_order_unit_strides_dim_1():
     sdfg = _make_test_sdfg(["EDim", "KDim", "VDim"])
     _perform_reorder_test(sdfg, ["EDim", "VDim"], ["KDim", "VDim", "EDim"])
 
 
-def test_map_order_2():
+def test_map_order_unit_strides_dim_2():
     sdfg = _make_test_sdfg(["VDim", "KDim"])
     _perform_reorder_test(sdfg, ["EDim", "VDim"], ["KDim", "VDim"])
 
 
-def test_map_order_3():
+def test_map_order_unit_strides_dim_3():
     sdfg = _make_test_sdfg(["EDim", "KDim"])
     _perform_reorder_test(sdfg, ["EDim", "VDim"], ["KDim", "EDim"])
 
 
-def test_map_order_4():
+def test_map_order_unit_strides_dim_4():
     sdfg = _make_test_sdfg(["CDim", "KDim"])
     _perform_reorder_test(sdfg, ["EDim", "VDim"], [])

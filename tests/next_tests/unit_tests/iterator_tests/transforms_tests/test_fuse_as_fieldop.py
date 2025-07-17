@@ -145,8 +145,8 @@ def test_staged_inlining():
     )
     expected = im.as_fieldop(
         im.lambda_("a", "b")(
-            im.let("_icdlv_1", im.lambda_()(im.plus(im.deref("a"), im.deref("b"))))(
-                im.plus(im.plus(im.call("_icdlv_1")(), 1), im.plus(im.call("_icdlv_1")(), 2))
+            im.let("_icdlv_5", im.lambda_()(im.plus(im.deref("a"), im.deref("b"))))(
+                im.plus(im.plus(im.call("_icdlv_5")(), 1), im.plus(im.call("_icdlv_5")(), 2))
             )
         ),
         d,
@@ -261,7 +261,7 @@ def test_make_tuple_fusion_different_domains():
             ),
         ),
         (
-            "__fasfop_2",
+            "__fasfop_4",
             im.as_fieldop(im.lambda_("b", "d")(im.make_tuple(im.deref("b"), im.deref("d"))), d2)(
                 "b", "d"
             ),
@@ -269,9 +269,9 @@ def test_make_tuple_fusion_different_domains():
     )(
         im.make_tuple(
             im.tuple_get(0, "__fasfop_1"),
-            im.tuple_get(0, "__fasfop_2"),
+            im.tuple_get(0, "__fasfop_4"),
             im.tuple_get(1, "__fasfop_1"),
-            im.tuple_get(1, "__fasfop_2"),
+            im.tuple_get(1, "__fasfop_4"),
         )
     )
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
@@ -328,8 +328,8 @@ def test_chained_fusion():
     )
     expected = im.as_fieldop(
         im.lambda_("inp1", "inp2")(
-            im.let("_icdlv_1", im.lambda_()(im.plus(im.deref("inp1"), im.deref("inp2"))))(
-                im.plus(im.call("_icdlv_1")(), im.call("_icdlv_1")())
+            im.let("_icdlv_5", im.lambda_()(im.plus(im.deref("inp1"), im.deref("inp2"))))(
+                im.plus(im.call("_icdlv_5")(), im.call("_icdlv_5")())
             )
         ),
         d,
@@ -379,3 +379,16 @@ def test_no_inline_into_scan():
         testee, offset_provider_type={}, allow_undeclared_symbols=True
     )
     assert actual == testee
+
+
+def test_opage_arg_deduplication():
+    d = im.domain("cartesian_domain", {IDim: (0, 1)})
+    testee = im.op_as_fieldop("plus", d)(im.as_fieldop("deref", d)(im.index(IDim)), im.index(IDim))
+    expected = im.as_fieldop(
+        im.lambda_("__arg1")(im.plus(im.deref("__arg1"), im.deref("__arg1"))),
+        d,
+    )(im.index(IDim))
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+    assert actual == expected

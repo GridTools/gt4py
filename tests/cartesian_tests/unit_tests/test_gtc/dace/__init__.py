@@ -6,10 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import pytest
 
-from typing import Final
-
-
-# StencilComputation in/out connector prefixes
-CONNECTOR_PREFIX_IN: Final = "__in_"
-CONNECTOR_PREFIX_OUT: Final = "__out_"
+# Skip this entire folder when we collecting tests and "dace" is not installed as a dependency.
+pytest.importorskip("dace")

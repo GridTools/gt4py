@@ -567,12 +567,11 @@ def promote(
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
 
-    >>> promote(
+    >>> promoted: ts.FieldType = promote(
     ...     ts.FieldType(dims=[I, J], dtype=dtype), ts.FieldType(dims=[K], dtype=dtype)
-    ... )  # doctest: +ELLIPSIS
-    Traceback (most recent call last):
-     ...
-    ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
+    ... )
+    >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
+    True
     """
     if not always_field and all(isinstance(type_, ts.ScalarType) for type_ in types):
         if not all(type_ == types[0] for type_ in types):
@@ -598,7 +597,7 @@ def return_type(
     with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.TypeSpec:
     raise NotImplementedError(
-        f"Return type deduction of type " f"'{type(callable_type).__name__}' not implemented."
+        f"Return type deduction of type '{type(callable_type).__name__}' not implemented."
     )
 
 
@@ -656,7 +655,7 @@ def canonicalize_arguments(
     *,
     ignore_errors: bool = False,
     use_signature_ordering: bool = False,
-) -> tuple[list, dict]:
+) -> tuple[tuple, dict]:
     raise NotImplementedError(f"Not implemented for type '{type(func_type).__name__}'.")
 
 
@@ -668,7 +667,7 @@ def canonicalize_function_arguments(
     *,
     ignore_errors: bool = False,
     use_signature_ordering: bool = False,
-) -> tuple[list, dict]:
+) -> tuple[tuple, dict]:
     num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
     cargs = [UNDEFINED_ARG] * max(num_pos_params, len(args))
     ckwargs = {**kwargs}
@@ -696,7 +695,7 @@ def canonicalize_function_arguments(
     if use_signature_ordering:
         ckwargs = {k: ckwargs[k] for k in func_type.kw_only_args.keys() if k in ckwargs}
 
-    return list(cargs), ckwargs
+    return tuple(cargs), ckwargs
 
 
 def structural_function_signature_incompatibilities(
@@ -826,7 +825,6 @@ def function_signature_incompatibilities_field(
 
     source_dim = args[0].source  # type: ignore[attr-defined] # ensured by loop above
     target_dims = args[0].target  # type: ignore[attr-defined] # ensured by loop above
-    # TODO: This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     if field_type.dims and source_dim not in field_type.dims:
         yield (
@@ -837,6 +835,8 @@ def function_signature_incompatibilities_field(
         )
 
 
+# TODO(havogt): Consider inlining the usage of this function in the call sites
+# to get rid of the `raise_exception` case and because the error message here is possibly too specific.
 def accepts_args(
     callable_type: ts.CallableType,
     *,

@@ -61,14 +61,15 @@ def gt_gpu_transformation(
         validate_all: Perform extensive validation.
 
     Notes:
-        The function might modify the order of the iteration variables of some
-        maps.
-        In addition it might fuse Maps together that should not be fused. To prevent
-        that you should set `try_removing_trivial_maps` to `False`.
+        - In addition it might fuse Maps together that should not be fused. To prevent
+            that you should set `try_removing_trivial_maps` to `False`.
+        - The function assumes that the iteration order has been set correctly before
+            it is called.
 
     Todo:
-        - Solve the fusing problem.
         - Currently only one block size for all maps is given, add more options.
+        - Investigate if the order of iteration is not changed (it should not).
+        - Investigate if the trivial GPU map remover is still needed.
     """
     assert (
         len(kwargs) == 0
@@ -92,19 +93,16 @@ def gt_gpu_transformation(
     gtx_transformations.gt_simplify(sdfg)
 
     if try_removing_trivial_maps:
-        # In DaCe a Tasklet, outside of a Map, can not write into an _array_ that is on
-        #  GPU. `sdfg.apply_gpu_transformations()` will wrap such Tasklets in a Map. So
-        #  we might end up with lots of these trivial Maps, each requiring a separate
-        #  kernel launch. To prevent this we will combine these trivial maps, if
-        #  possible, with their downstream maps.
-        sdfg.apply_transformations_once_everywhere(
-            TrivialGPUMapElimination(),
-            validate=False,
-            validate_all=False,
+        # TODO(phimuell): Figuring out if it is still important/needed to do or if
+        #   it can be removed, it should definitely be reworked.
+        gt_remove_trivial_gpu_maps(
+            sdfg=sdfg,
+            validate=validate,
+            validate_all=validate_all,
         )
         gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
 
-    # TODO(phimuell): Fixing the stride problem.
+    # TODO(phimuell): Fixing the stride problem in DaCe.
     sdfg = gt_gpu_transform_non_standard_memlet(
         sdfg=sdfg,
         map_postprocess=True,
@@ -133,7 +131,7 @@ def gt_gpu_transform_non_standard_memlet(
     validate: bool = True,
     validate_all: bool = False,
 ) -> dace.SDFG:
-    """Transform some non standard Melets to Maps.
+    """Transform some non-standard Melets to Maps.
 
     The GPU code generator is not able to handle certain sets of Memlets. To
     handle them, the code generator transforms them into copy Maps. The main
@@ -161,7 +159,7 @@ def gt_gpu_transform_non_standard_memlet(
         - This function should be called after `gt_set_iteration_order()` has run.
     """
 
-    # Expand all non standard memlets and get the new MapEntries.
+    # Expand all non-standard memlets and get the new MapEntries.
     new_maps: set[dace_nodes.MapEntry] = _gt_expand_non_standard_memlets(sdfg)
 
     # If there are no Memlets that are translated to copy-Maps, then we have nothing to do.
@@ -180,7 +178,8 @@ def gt_gpu_transform_non_standard_memlet(
     ) -> bool:
         return any(new_entry in new_maps for new_entry in [map_entry_1, map_entry_2])
 
-    # Using the callback to restrict the fusing
+    # Now try to fuse the maps together, but restrict them that at least one map
+    #  needs to be new.
     sdfg.apply_transformations_repeated(
         [
             gtx_transformations.MapFusionSerial(
@@ -196,18 +195,6 @@ def gt_gpu_transform_non_standard_memlet(
         validate_all=validate_all,
     )
 
-    # Now we have to find the maps that were not fused. We rely here on the fact
-    #  that at least one of the map that is involved in fusing still exists.
-    maps_to_modify: set[dace_nodes.MapEntry] = set()
-    for nsdfg in sdfg.all_sdfgs_recursive():
-        for state in nsdfg.states():
-            for map_entry in state.nodes():
-                if not isinstance(map_entry, dace_nodes.MapEntry):
-                    continue
-                if map_entry in new_maps:
-                    maps_to_modify.add(map_entry)
-    assert 0 < len(maps_to_modify) <= len(new_maps)
-
     # This is a gross hack, but it is needed, for the following reasons:
     #  - The transients have C order while the non-transients have (most
     #       likely) FORTRAN order. So there is not an unique stride dimension.
@@ -216,7 +203,27 @@ def gt_gpu_transform_non_standard_memlet(
     #  For these reasons we do the simplest thing, which is assuming that the maps
     #  are created in C order and we must make them in FORTRAN order, which means
     #  just swapping the order of the map parameters.
-    # TODO(phimuell): Do it properly.
+    #  We further assume here, that we only have to process the maps that we have
+    #  newly created.
+    # NOTE: We can stop relying on this once [PR#1913](https://github.com/GridTools/gt4py/pull/1913)
+    #   Has been merged, which is currently blocked by a DaCe PR that has not been
+    #   merged.
+
+    maps_to_modify: set[dace_nodes.MapEntry] = set()
+    for nsdfg in sdfg.all_sdfgs_recursive():
+        for state in nsdfg.states():
+            for map_entry in state.nodes():
+                if not isinstance(map_entry, dace_nodes.MapEntry):
+                    continue
+                if map_entry in new_maps:
+                    maps_to_modify.add(map_entry)
+
+    # We did not found any of the newly created Map. Thus we **hope** that all new
+    #  Maps have been integrated into other Maps, that have the correct names.
+    #  But as written above, this is a gross hack!
+    if len(maps_to_modify) == 0:
+        return sdfg
+
     for me_to_modify in maps_to_modify:
         map_to_modify: dace_nodes.Map = me_to_modify.map
         map_to_modify.params = list(reversed(map_to_modify.params))
@@ -233,7 +240,7 @@ def gt_gpu_transform_non_standard_memlet(
 def _gt_expand_non_standard_memlets(
     sdfg: dace.SDFG,
 ) -> set[dace_nodes.MapEntry]:
-    """Finds all non standard Memlet in the SDFG and expand them.
+    """Finds all non-standard Memlet in the SDFG and expand them.
 
     The function is used by `gt_gpu_transform_non_standard_memlet()` and performs
     the actual expansion of the Memlet, i.e. turning all Memlets that can not be
@@ -253,12 +260,16 @@ def _gt_expand_non_standard_memlets_sdfg(
 ) -> set[dace_nodes.MapEntry]:
     """Implementation of `_gt_expand_non_standard_memlets()` that process a single SDFG."""
     new_maps: set[dace_nodes.MapEntry] = set()
-    # The implementation is based on DaCe's code generator.
+    # The implementation is based on DaCe's code generator, see `dace/codegen/targets/cuda.py`
+    #  in the function `preprocess()`
+    # NOTE: This implementation needs a DaCe version that includes https://github.com/spcl/dace/pull/1976
     for state in sdfg.states():
         for e in state.edges():
             # We are only interested in edges that connects two access nodes of GPU memory.
+            #  However, we must exclude Memlets that are empty.
             if not (
-                isinstance(e.src, dace_nodes.AccessNode)
+                (not e.data.is_empty())
+                and isinstance(e.src, dace_nodes.AccessNode)
                 and isinstance(e.dst, dace_nodes.AccessNode)
                 and e.src.desc(sdfg).storage == dace_dtypes.StorageType.GPU_Global
                 and e.dst.desc(sdfg).storage == dace_dtypes.StorageType.GPU_Global
@@ -274,16 +285,9 @@ def _gt_expand_non_standard_memlets_sdfg(
             if dims == 1:
                 continue
             elif dims == 2:
-                if src_strides[-1] != 1 or dst_strides[-1] != 1:
-                    try:
-                        is_src_cont = src_strides[0] / src_strides[1] == copy_shape[1]
-                        is_dst_cont = dst_strides[0] / dst_strides[1] == copy_shape[1]
-                    except (TypeError, ValueError):
-                        is_src_cont = False
-                        is_dst_cont = False
-                    if is_src_cont and is_dst_cont:
-                        continue
-                else:
+                is_fortran_order = src_strides[0] == 1 and dst_strides[0] == 1
+                is_c_order = src_strides[-1] == 1 and dst_strides[-1] == 1
+                if is_c_order or is_fortran_order:
                     continue
             elif dims > 2:
                 if not (src_strides[-1] != 1 or dst_strides[-1] != 1):
@@ -297,7 +301,14 @@ def _gt_expand_non_standard_memlets_sdfg(
             # Turn unsupported copy to a map
             try:
                 dace_transformation.dataflow.CopyToMap.apply_to(
-                    sdfg, save=False, annotate=False, a=a, b=b
+                    sdfg,
+                    save=False,
+                    annotate=False,
+                    a=a,
+                    b=b,
+                    options={
+                        "ignore_strides": True
+                    },  # apply 'CopyToMap' even if src/dst strides are different
                 )
             except ValueError:  # If transformation doesn't match, continue normally
                 continue
@@ -331,6 +342,10 @@ def gt_set_gpu_blocksize(
         launch_bounds: The value for the launch bound that should be used.
         launch_factor: If no `launch_bounds` was given use the number of threads
             in a block multiplied by this number.
+
+    Note:
+        If a Map is found whose range is smaller than the specified block size for
+        that dimension then the block size for that map is reduced.
     """
     for dim in [1, 2, 3]:
         for arg, val in {
@@ -436,6 +451,12 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     three dimensional). If no value is specified then the block size `(32, 1, 1)`
     will be used an no launch bound will be be emitted.
 
+    If a Map is found whose iteration size in a particular dimension is smaller than
+    the block size, the block size for that dimension is reduced to that value. For
+    example, the block size for 2D Maps is `(32, 8, 1)` and a Map that only performs
+    four iteration in the second dimension, will get a block size of `(32, 4, 1)`.
+    Note that this modification will not influence the launch bound value.
+
     Args:
         block_size_Xd: The size of a thread block on the GPU for `X` dimensional maps.
         launch_bounds_Xd: The value for the launch bound that should be used for `X`
@@ -447,6 +468,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         - You should use the `gt_set_gpu_blocksize()` function.
         - "Over specification" is ignored, i.e. if `(32, 3, 1)` is passed as block
             size for 1 dimensional maps, then it is changed to `(32, 1, 1)`.
+        - In case the Map has more than 3 dimension, normal DaCe semantic is used.
     """
 
     _block_size_default: Final[tuple[int, int, int]] = (32, 1, 1)
@@ -557,18 +579,113 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     ) -> None:
         """Modify the map as requested."""
         gpu_map: dace_nodes.Map = self.map_entry.map
-        if len(gpu_map.params) == 1:
-            block_size = self.block_size_1d
+        map_size = gpu_map.range.size()
+        num_map_params = len(gpu_map.params)
+
+        # Because of a particularity of the DaCe code generator, the iteration
+        #  variable that is associated to the `x` dimension of the block is the
+        #  last parameter, i.e. `gpu_map.params[-1]`. The one for `y` the second last.
+        if num_map_params == 1:
+            block_size = list(self.block_size_1d)
             launch_bounds = self.launch_bounds_1d
-        elif len(gpu_map.params) == 2:
-            block_size = self.block_size_2d
+            dims_to_inspect = 1
+        elif num_map_params == 2:
+            block_size = list(self.block_size_2d)
             launch_bounds = self.launch_bounds_2d
+            dims_to_inspect = 2
         else:
-            block_size = self.block_size_3d
+            block_size = list(self.block_size_3d)
             launch_bounds = self.launch_bounds_3d
-        gpu_map.gpu_block_size = block_size
+            # If there are more than three dimensions DaCe will condense them into
+            #  the `z` dimension of the block, so we have to ignore the `z` dimension,
+            #  when we modify the block sizes.
+            dims_to_inspect = 3 if num_map_params == 3 else 2
+
+        # Cut down the block size.
+        # TODO(phimuell): Think if it is useful to also modify the launch bounds.
+        # TODO(phimuell): Also think of how to connect this with the loop blocking.
+        for i in range(dims_to_inspect):
+            map_dim_idx_to_inspect = num_map_params - 1 - i
+            if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
+                block_size[i] = map_size[map_dim_idx_to_inspect]
+
+        gpu_map.gpu_block_size = tuple(block_size)
         if launch_bounds is not None:  # Note: empty string has a meaning in DaCe
             gpu_map.gpu_launch_bounds = launch_bounds
+
+
+def gt_remove_trivial_gpu_maps(
+    sdfg: dace.SDFG,
+    validate: bool = True,
+    validate_all: bool = False,
+) -> dace.SDFG:
+    """Removes trivial maps that were created by the GPU transformation.
+
+    The main problem is that a Tasklet outside of a Map cannot write into an
+    _array_ that is on GPU. `sdfg.apply_gpu_transformations()` will wrap such
+    Tasklets in a Map. The `GT4PyMoveTaskletIntoMap` pass, that runs before,
+    but only works if the tasklet is adjacent to a map.
+
+    It first tries to promote them such that they can be fused in other non-trivial
+    maps, it will then also perform fusion on them, to reduce the number of kernel
+    calls.
+
+    Args:
+        sdfg: The SDFG that we process.
+        validate: Perform validation at the end of the function.
+        validate_all: Perform validation also on intermediate steps.
+    """
+
+    # First we try to promote and fuse them with other non-trivial maps.
+    sdfg.apply_transformations_once_everywhere(
+        TrivialGPUMapElimination(
+            do_not_fuse=False,
+            only_gpu_maps=True,
+        ),
+        validate=False,
+        validate_all=False,
+    )
+    gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+
+    # Now we try to fuse them together, however, we restrict the fusion to trivial
+    #  GPU map.
+    def restrict_to_trivial_gpu_maps(
+        self: gtx_transformations.MapFusion,
+        map_entry_1: dace_nodes.MapEntry,
+        map_entry_2: dace_nodes.MapEntry,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
+        permissive: bool,
+    ) -> bool:
+        for map_entry in [map_entry_1, map_entry_2]:
+            _map = map_entry.map
+            if len(_map.params) != 1:
+                return False
+            if _map.range[0][0] != _map.range[0][1]:
+                return False
+            if _map.schedule not in [
+                dace.dtypes.ScheduleType.GPU_Device,
+                dace.dtypes.ScheduleType.GPU_Default,
+            ]:
+                return False
+        return True
+
+    sdfg.apply_transformations_repeated(
+        [
+            gtx_transformations.MapFusionSerial(
+                only_toplevel_maps=True,
+                apply_fusion_callback=restrict_to_trivial_gpu_maps,
+            ),
+            gtx_transformations.MapFusionParallel(
+                only_toplevel_maps=True,
+                apply_fusion_callback=restrict_to_trivial_gpu_maps,
+            ),
+        ],
+        validate=validate,
+        validate_all=validate_all,
+    )
+
+    return sdfg
 
 
 @dace_properties.make_properties

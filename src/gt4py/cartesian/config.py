@@ -12,31 +12,16 @@ from typing import Any, Dict, List, Optional
 
 import gridtools_cpp
 
+from gt4py._core import definitions as core_defs
+
 
 GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
-
-# Default paths (taken from user's environment vars when possible)
-BOOST_ROOT: str = os.environ.get(
-    "BOOST_ROOT", os.environ.get("BOOST_HOME", os.path.abspath("/usr/local"))
-)
 
 CUDA_ROOT: str = os.environ.get(
     "CUDA_HOME", os.environ.get("CUDA_PATH", os.path.abspath("/usr/local/cuda"))
 )
 
 CUDA_HOST_CXX: Optional[str] = os.environ.get("CUDA_HOST_CXX", None)
-
-if "GT4PY_USE_HIP" in os.environ:
-    GT4PY_USE_HIP: bool = bool(int(os.environ["GT4PY_USE_HIP"]))
-else:
-    # Autodetect cupy with ROCm/HIP support
-    try:
-        import cupy as _cp
-
-        GT4PY_USE_HIP = _cp.cuda.get_hipcc_path() is not None
-        del _cp
-    except Exception:
-        GT4PY_USE_HIP = False
 
 GT_INCLUDE_PATH: str = os.path.abspath(gridtools_cpp.get_include_dir())
 
@@ -54,7 +39,6 @@ GT4PY_EXTRA_LINK_ARGS: str = os.environ.get("GT4PY_EXTRA_LINK_ARGS", "")
 extra_link_args: List[str] = list(GT4PY_EXTRA_LINK_ARGS.split(" ")) if GT4PY_EXTRA_LINK_ARGS else []
 
 build_settings: Dict[str, Any] = {
-    "boost_include_path": os.path.join(BOOST_ROOT, "include"),
     "cuda_bin_path": os.path.join(CUDA_ROOT, "bin"),
     "cuda_include_path": os.path.join(CUDA_ROOT, "include"),
     "cuda_arch": os.environ.get("CUDA_ARCH", None),
@@ -66,7 +50,7 @@ build_settings: Dict[str, Any] = {
     "parallel_jobs": multiprocessing.cpu_count(),
     "cpp_template_depth": os.environ.get("GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH),
 }
-if GT4PY_USE_HIP:
+if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
     build_settings["cuda_library_path"] = os.path.join(CUDA_ROOT, "lib")
 else:
     build_settings["cuda_library_path"] = os.path.join(CUDA_ROOT, "lib64")

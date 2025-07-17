@@ -11,7 +11,7 @@ from __future__ import annotations
 import base64
 import pickle
 import typing
-from typing import Dict, List, Optional, Set, Union
+from typing import Dict, Final, List, Optional, Set, Union
 
 import dace.data
 import dace.dtypes
@@ -80,7 +80,7 @@ class PickledDictProperty(PickledProperty, dace.properties.DictProperty):
 
 @library.node
 class StencilComputation(library.LibraryNode):
-    implementations: Dict[str, dace.library.ExpandTransformation] = {
+    implementations: Final[Dict[str, dace.library.ExpandTransformation]] = {
         "default": StencilComputationExpansion
     }
     default_implementation = "default"

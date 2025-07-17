@@ -19,11 +19,11 @@ from typing import Any, Callable, ClassVar, Dict, Literal, Optional, Tuple, Unio
 
 import numpy as np
 
-import gt4py.cartesian.gtc.utils as gtc_utils
-import gt4py.storage.cartesian.utils as storage_utils
-from gt4py import cartesian as gt4pyc
+from gt4py.cartesian import backend as gt_backend
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
+from gt4py.cartesian.gtc import utils as gtc_utils
 from gt4py.cartesian.gtc.definitions import Index, Shape
+from gt4py.storage.cartesian import utils as storage_utils
 
 
 try:
@@ -182,7 +182,6 @@ class StencilObject(abc.ABC):
         performance statistics. These include the stencil calls count, the
         cumulative time spent in all stencil calls, and the actual time spent
         in carrying out the computations.
-
     """
 
     # Those attributes are added to the class at loading time:
@@ -390,7 +389,7 @@ class StencilObject(abc.ABC):
                 f"Compute domain too small. Sequential axis is {domain[2]}, but must be at least {self.domain_info.min_sequential_axis_size}."
             )
 
-        backend_cls = gt4pyc.backend.from_name(self.backend)
+        backend_cls = gt_backend.from_name(self.backend)
 
         # assert compatibility of fields with stencil
         for name, field_info in self.field_info.items():
@@ -400,7 +399,7 @@ class StencilObject(abc.ABC):
                 arg_info = arg_infos[name]
                 assert arg_info is not None
 
-                backend_cls = gt4pyc.backend.from_name(self.backend)
+                backend_cls = gt_backend.from_name(self.backend)
                 assert backend_cls is not None
 
                 if not backend_cls.storage_info["is_optimal_layout"](
@@ -560,7 +559,7 @@ class StencilObject(abc.ABC):
         """
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
-        backend_cls = gt4pyc.backend.from_name(self.backend)
+        backend_cls = gt_backend.from_name(self.backend)
         assert backend_cls is not None
         device = backend_cls.storage_info["device"]
         array_infos = _extract_array_infos(field_args, device)

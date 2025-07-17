@@ -34,11 +34,11 @@ def build_gridtools_test(tmp_path: Path, code: str):
         "--build-lib=" + str(tmp_src.parent),
         "--force",
     ]
-    setuptools.setup(
+    pyext_builder.setuptools_setup(
         name="test",
         ext_modules=[ext_module],
         script_args=args,
-        cmdclass={"build_ext": pyext_builder.CUDABuildExtension},
+        build_ext_class=pyext_builder.CUDABuildExtension,
     )
 
 

@@ -20,7 +20,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
 from gt4py.next.ffront.stages import AOT_FOP, AOT_PRG
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import toolchain, workflow
+from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -34,7 +34,7 @@ class ItirShim:
     """
 
     definition: AOT_FOP
-    foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr]
+    foast_to_itir: workflow.Workflow[AOT_FOP, itir.FunctionDefinition]
 
     def __gt_closure_vars__(self) -> Optional[dict[str, Any]]:
         return self.definition.data.closure_vars
@@ -42,11 +42,11 @@ class ItirShim:
     def __gt_type__(self) -> ts.CallableType:
         return self.definition.data.foast_node.type
 
-    def __gt_itir__(self) -> itir.Expr:
+    def __gt_itir__(self) -> itir.FunctionDefinition:
         return self.foast_to_itir(self.definition)
 
     # FIXME[#1582](tehrengruber): remove after refactoring to GTIR
-    def __gt_gtir__(self) -> itir.Expr:
+    def __gt_gtir__(self) -> itir.FunctionDefinition:
         # backend should have self.foast_to_itir set to foast_to_gtir
         return self.foast_to_itir(self.definition)
 
@@ -85,7 +85,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         >>> assert copy_program.data.closure_vars["copy"].definition.data is copy.foast_stage
     """
 
-    foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr]
+    foast_to_itir: workflow.Workflow[AOT_FOP, itir.FunctionDefinition]
 
     def __call__(self, inp: AOT_FOP) -> AOT_PRG:
         # TODO(tehrengruber): implement mechanism to deduce default values
@@ -93,8 +93,13 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
 
-        arg_types = inp.args.args
-        kwarg_types = inp.args.kwargs
+        arg_types = tuple(
+            arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
+        )
+        kwarg_types = {
+            k: v.type_ if isinstance(v, arguments.StaticArg) else v
+            for k, v in inp.args.kwargs.items()
+        }
 
         loc = inp.data.foast_node.location
         # use a new UID generator to allow caching
@@ -164,7 +169,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
 
 
 def operator_to_program_factory(
-    foast_to_itir_step: Optional[workflow.Workflow[AOT_FOP, itir.Expr]] = None,
+    foast_to_itir_step: Optional[workflow.Workflow[AOT_FOP, itir.FunctionDefinition]] = None,
     cached: bool = True,
 ) -> workflow.Workflow[AOT_FOP, AOT_PRG]:
     """Optionally wrap `OperatorToProgram` in a `CachedStep`."""

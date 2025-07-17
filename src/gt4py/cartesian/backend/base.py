@@ -33,9 +33,12 @@ from typing_extensions import deprecated
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import definitions as gt_definitions, utils as gt_utils
-
-from . import pyext_builder
-from .module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_gtir
+from gt4py.cartesian.backend import pyext_builder
+from gt4py.cartesian.backend.module_generator import (
+    BaseModuleGenerator,
+    ModuleData,
+    make_args_data_from_gtir,
+)
 
 
 if TYPE_CHECKING:
@@ -172,9 +175,9 @@ class CLIBackendMixin(Backend):
         Returns
         -------
         Dict[str, str | Dict] of source file names / directories -> contents:
-            If a key's value is a string it is interpreted as a file name and the value as the
-            source code of that file
-            If a key's value is a Dict, it is interpreted as a directory name and it's
+            If a key's value is a string, it is interpreted as a file name and its value as the
+            source code of that file.
+            If a key's value is a Dict, it is interpreted as a directory name and its
             value as a nested file hierarchy to which the same rules are applied recursively.
             The root path is relative to the build directory.
 
@@ -211,7 +214,6 @@ class CLIBackendMixin(Backend):
 
         This can now be automatically be turned into a folder hierarchy that makes sense
         and can be incorporated into an external build system.
-
         """
         raise NotImplementedError
 
@@ -222,15 +224,14 @@ class CLIBackendMixin(Backend):
 
         Returns
         -------
-        Analog to :py:meth:`generate_computation` but containing bindings source code, The
+        Analog to :py:meth:`generate_computation` but containing bindings source code. The
         dictionary contains a tree of directories with leaves being a mapping from filename to
         source code pairs, relative to the build directory.
 
         Raises
         ------
         RuntimeError
-            If the backend does not support the bindings language
-
+            If the backend does not support the bindings language.
         """
         languages = getattr(self, "languages", {"bindings": {}})
         name = getattr(self, "name", "")

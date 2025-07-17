@@ -75,7 +75,7 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.CompilableProgram]):
         default_factory=func_to_past.adapted_func_to_past_factory
     )
 
-    foast_to_itir: workflow.Workflow[AOT_FOP, itir.Expr] = dataclasses.field(
+    foast_to_itir: workflow.Workflow[AOT_FOP, itir.FunctionDefinition] = dataclasses.field(
         default_factory=foast_to_gtir.adapted_foast_to_gtir_factory
     )
 

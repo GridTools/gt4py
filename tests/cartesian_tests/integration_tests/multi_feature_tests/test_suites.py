@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
-import pytest
 
 from gt4py.cartesian import gtscript, testing as gt_testing
 from gt4py.cartesian.gtscript import (
@@ -25,7 +24,6 @@ from ...definitions import ALL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields
 
 
-# ---- Identity stencil ----
 class TestIdentity(gt_testing.StencilTestSuite):
     """Identity stencil."""
 
@@ -43,7 +41,6 @@ class TestIdentity(gt_testing.StencilTestSuite):
         pass
 
 
-# ---- Copy stencil ----
 class TestCopy(gt_testing.StencilTestSuite):
     """Copy stencil."""
 
@@ -86,7 +83,6 @@ class TestAugAssign(gt_testing.StencilTestSuite):
         field_b[...] = (field_b[...] - 1.0) / 2.0
 
 
-# ---- Scale stencil ----
 class TestGlobalScale(gt_testing.StencilTestSuite):
     """Scale stencil using a global global_name."""
 
@@ -108,7 +104,6 @@ class TestGlobalScale(gt_testing.StencilTestSuite):
         field_a[...] = SCALE_FACTOR * field_a  # noqa: F821 [undefined-name]
 
 
-# ---- Parametric scale stencil -----
 class TestParametricScale(gt_testing.StencilTestSuite):
     """Scale stencil using a parameter."""
 
@@ -128,7 +123,6 @@ class TestParametricScale(gt_testing.StencilTestSuite):
         field_a[...] = scale * field_a
 
 
-# --- Parametric-mix stencil ----
 class TestParametricMix(gt_testing.StencilTestSuite):
     """Linear combination of input fields using several parameters."""
 

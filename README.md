@@ -41,14 +41,7 @@ The following backends are supported:
 
 GT4Py can be installed as a regular Python package using [uv](https://docs.astral.sh/uv/), [pip](https://pip.pypa.io/en/stable/) or any other PEP-517 compatible frontend. We strongly recommended to use`uv` to create and manage virtual environments for your own projects.
 
-The performance backends also require the [Boost](https://www.boost.org) library, a dependency of [GridTools C++](https://github.com/GridTools/gridtools), which needs to be installed by the user.
-
 ## ⚙ Configuration
-
-To explicitly set the [GridTools-C++](https://gridtools.github.io/gridtools) or [Boost](https://www.boost.org) versions used by the code generation backends, the following environment variables can be used:
-
-- `GT_INCLUDE_PATH`: Path to the GridTools installation.
-- `BOOST_ROOT`: Path to a boost installation.
 
 Other useful available environment variables are:
 
@@ -73,7 +66,7 @@ GT4Py uses the [`uv`](https://docs.astral.sh/uv/) project manager for the develo
 - The `uv tool` subcommand serves as a runner for Python applications in isolation, similar to [`pipx`](https://pipx.pypa.io/stable/).
 - The `uv python` subcommands manage different Python installations and versions, much like [`pyenv`](https://github.com/pyenv/pyenv).
 
-`uv` can be installed in various ways (see its [installation instructions](https://docs.astral.sh/uv/getting-started/installation/)), with the recommended method being the standalone installer:
+We require a reasonably recent version of `uv`, which can be installed in various ways (see its [installation instructions](https://docs.astral.sh/uv/getting-started/installation/)), with the recommended method being the standalone installer:
 
 ```bash
 $ curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -111,7 +104,7 @@ Recurrent development tasks like bumping versions of used development tools or r
 GT4Py uses the Sphinx tool for the documentation. To build browseable HTML documentation, install the required tools provided in the `docs` dependency group:
 
 ```bash
-uv install --group docs --extra all  # or --group dev
+uv sync --group docs --extra all  # or --group dev
 ```
 
 (Note that most likely these tools are already installed in your development environment, since the `docs` group is included in the `dev` group, which installed by default by `uv sync` if no dependency groups are specified.)

@@ -1,16 +1,14 @@
-# Architecture Decision Records Index
+# Architecture Decision Records Index (`gt4py.next`)
 
-This document contains links to all _Architecture Decision Record_ (ADR) documents written in this project. Existing ADRs should convey the rationale for the design decisions in the current codebase and their associated trade-offs.
+This document contains links to all _Architecture Decision Record_ (ADR) documents written in the `gt4py.next` project. The [top-level README](../README.md) explains when and why we write ADRs.
 
-## Writing ADRs
+## How to write ADRs
 
-New ADRs should be written at the time when significant decisions for the project are taken, and they should capture both the final decision and the thought process that led to it. Basically, they should explain why a feature is built the current way and not some other way. Note that even if the reasons might look simple for the author, it could be complicated for others to understand the chosen option without the proper context.
-
-Using ADRs to document the context and the design process of the technical decisions gives other team members more information about how the framework components work and how they fit within the whole design. In the long term, it also helps the decision maker to recall the forces driving his decisions.
+See [top-level README](../README.md) on when and why we write ADRs.
 
 Writing a new ADR is simple:
 
-1. Use the existing [Template](Template.md) as an ice-breaker to start a new ADR file, but modify it and simplify it as much as possible to fit the type of decision being documented. If extra files (e.g. images) are needed for whatever reason, add them to the `_static/` folder.
+1. Use the existing [Template](../Template.md) as an ice-breaker to start a new ADR file, but modify it and simplify it as much as possible to fit the type of decision being documented. If extra files (e.g. images) are needed for whatever reason, add them to the `_static/` folder.
 2. Add a link to the new ADR file to the fitting topic in the index section below.
 3. Open a PR to merge the changes into the main branch and let the team know about the new ADR.
 

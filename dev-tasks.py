@@ -1,4 +1,4 @@
-#! /usr/bin/env -S uv run -q
+#! /usr/bin/env -S uv run -q --script
 #
 # GT4Py - GridTools Framework
 #
@@ -37,7 +37,7 @@ def gather_versions() -> dict[str, str]:
         [*"uv export --frozen --no-hashes --project".split(), ROOT_DIR], stdout=subprocess.PIPE
     ) as proc:
         return dict(
-            line.split("==")
+            line.split("==")[:2]  # grab only the package name and version
             for line in proc.stdout.read().decode().splitlines()
             if not any(line.startswith(c) for c in ["-", "#"])
         )

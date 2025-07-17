@@ -81,20 +81,18 @@ def test_adding_bool():
 
 
 def test_binop_nonmatching_dims():
-    """Binary operations can only work when both fields have the same dimensions."""
+    """Dimension promotion is applied before Binary operations, i.e., they can also work on two fields that don't have the same dimensions."""
     X = Dimension("X")
     Y = Dimension("Y")
 
     def nonmatching(a: Field[[X], float64], b: Field[[Y], float64]):
         return a + b
 
-    with pytest.raises(
-        errors.DSLError,
-        match=(
-            r"Could not promote 'Field\[\[X], float64\]' and 'Field\[\[Y\], float64\]' to common type in call to +."
-        ),
-    ):
-        _ = FieldOperatorParser.apply_to_function(nonmatching)
+    parsed = FieldOperatorParser.apply_to_function(nonmatching)
+
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
+        dims=[X, Y], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
 
 
 def test_bitopping_float():
@@ -162,6 +160,20 @@ def test_premap_nbfield(premap_setup):
 
     assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[Y, Y2XDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
+    )
+
+
+def test_premap_nbfield_with_vertical(premap_setup):
+    X, Y, Y2XDim, Y2X = premap_setup
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+
+    def premap_fo(bar: Field[[X, K], int64]) -> Field[[Y, Y2XDim, K], int64]:
+        return bar(Y2X)
+
+    parsed = FieldOperatorParser.apply_to_function(premap_fo)
+
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
+        dims=[Y, Y2XDim, K], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
     )
 
 

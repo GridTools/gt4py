@@ -8,13 +8,12 @@
 
 from typing import List
 
+from gt4py import eve
 from gt4py.cartesian.gtc import oir
-from gt4py.eve import NodeTranslator
-
-from .utils import AccessCollector
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import AccessCollector
 
 
-class MaskStmtMerging(NodeTranslator):
+class MaskStmtMerging(eve.NodeTranslator):
     def _merge(self, stmts: List[oir.Stmt]) -> List[oir.Stmt]:
         merged = [self.visit(stmts[0])]
         for stmt in stmts[1:]:

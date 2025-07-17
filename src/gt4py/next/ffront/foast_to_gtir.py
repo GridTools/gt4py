@@ -31,7 +31,7 @@ from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
+def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.FunctionDefinition:
     """
     Lower a FOAST field operator node to GTIR.
 
@@ -40,7 +40,7 @@ def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
     return FieldOperatorLowering.apply(inp.foast_node)
 
 
-def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Expr]:
+def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.FunctionDefinition]:
     """Wrap `foast_to_gtir` into a chainable and, optionally, cached workflow step."""
     wf = foast_to_gtir
     if cached:
@@ -48,7 +48,9 @@ def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Ex
     return wf
 
 
-def adapted_foast_to_gtir_factory(**kwargs: Any) -> workflow.Workflow[AOT_FOP, itir.Expr]:
+def adapted_foast_to_gtir_factory(
+    **kwargs: Any,
+) -> workflow.Workflow[AOT_FOP, itir.FunctionDefinition]:
     """Wrap the `foast_to_gtir` workflow step into an adapter to fit into backend transform workflows."""
     return toolchain.StripArgsAdapter(foast_to_gtir_factory(**kwargs))
 
@@ -93,8 +95,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     )
 
     @classmethod
-    def apply(cls, node: foast.LocatedNode) -> itir.Expr:
-        return cls().visit(node)
+    def apply(cls, node: foast.LocatedNode) -> itir.FunctionDefinition:
+        result = cls().visit(node)
+        assert isinstance(result, itir.FunctionDefinition)
+        return result
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs: Any
@@ -224,8 +228,17 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_Symbol(self, node: foast.Symbol, **kwargs: Any) -> itir.Sym:
         return im.sym(node.id)
 
-    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef:
+    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef | itir.AxisLiteral:
+        if isinstance(node.type, ts.DimensionType):
+            return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
         return im.ref(node.id)
+
+    def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> itir.AxisLiteral:
+        if isinstance(node.type, ts.DimensionType):
+            return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
+        raise AssertionError(
+            "Unexpected attribute access. At this point all accesses should have been removed by `ClosureVarFolding`."
+        )
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         return im.tuple_get(node.index, self.visit(node.value, **kwargs))
@@ -397,8 +410,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     _visit_concat_where = _visit_where  # TODO(havogt): upgrade concat_where
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        expr = self.visit(node.args[0], **kwargs)
-        return im.as_fieldop(im.ref("deref"))(expr)
+        return im.call("broadcast")(*self.visit(node.args, **kwargs))
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self._lower_and_map(self.visit(node.func, **kwargs), *node.args)

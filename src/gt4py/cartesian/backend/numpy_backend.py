@@ -78,7 +78,7 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
         "ignore_np_errstate": {"versioning": True, "type": bool},
     }
     storage_info = gt_storage.layout.NaiveCPULayout
-    languages = {"computation": "python", "bindings": ["python"]}
+    languages: ClassVar[dict] = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = ModuleGenerator
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:

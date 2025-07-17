@@ -92,8 +92,7 @@ class ListType(DataType):
     """
 
     element_type: DataType
-    # TODO(havogt): the `offset_type` is not yet used in type_inference,
-    # it is meant to describe the neighborhood (via the local dimension)
+    # TODO(tehrengruber): make `offset_type` mandatory
     offset_type: Optional[common.Dimension] = None
 
 
@@ -104,6 +103,12 @@ class FieldType(DataType, CallableType):
     def __str__(self) -> str:
         dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
         return f"Field[{dims}, {self.dtype}]"
+
+    @eve_datamodels.validator("dims")
+    def _dims_validator(
+        self, attribute: eve_datamodels.Attribute, dims: list[common.Dimension]
+    ) -> None:
+        common.check_dims(dims)
 
 
 class TupleType(DataType):

@@ -19,7 +19,7 @@ import numpy as np
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.common import CartesianOffset, VariableKOffset
-from gt4py.cartesian.gtc.dace import daceir as dcir
+from gt4py.cartesian.gtc.dace import daceir as dcir, prefix
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
@@ -67,22 +67,25 @@ def replace_strides(arrays: List[dace.data.Array], get_layout_map) -> Dict[str, 
 
 
 def get_tasklet_symbol(
-    name: eve.SymbolRef, offset: Union[CartesianOffset, VariableKOffset], is_target: bool
+    name: str,
+    *,
+    offset: Optional[CartesianOffset | VariableKOffset] = None,
+    is_target: bool,
 ):
-    if is_target:
-        return f"gtOUT__{name}"
+    access_name = f"{prefix.TASKLET_OUT}{name}" if is_target else f"{prefix.TASKLET_IN}{name}"
+    if offset is None:
+        return access_name
 
-    acc_name = f"gtIN__{name}"
-    if offset is not None:
-        offset_strs = []
-        for axis in dcir.Axis.dims_3d():
-            off = offset.to_dict()[axis.lower()]
-            if off is not None and off != 0:
-                offset_strs.append(axis.lower() + ("m" if off < 0 else "p") + f"{abs(off):d}")
-        suffix = "_".join(offset_strs)
-        if suffix != "":
-            acc_name += suffix
-    return acc_name
+    # add (per axis) offset markers, e.g. gtIN__A_km1 for A[0, 0, -1]
+    offset_strings = []
+    for axis in dcir.Axis.dims_3d():
+        axis_offset = offset.to_dict()[axis.lower()]
+        if axis_offset is not None and axis_offset != 0:
+            offset_strings.append(
+                axis.lower() + ("m" if axis_offset < 0 else "p") + f"{abs(axis_offset):d}"
+            )
+
+    return access_name + "_".join(offset_strings)
 
 
 def axes_list_from_flags(flags):
@@ -196,7 +199,8 @@ class AccessInfoCollector(eve.NodeVisitor):
         self.visit(node.body, is_conditional=True, **kwargs)
 
     def visit_While(self, node: oir.While, *, is_conditional=False, **kwargs):
-        self.generic_visit(node, is_conditional=True, **kwargs)
+        self.visit(node.cond, is_conditional=is_conditional, **kwargs)
+        self.visit(node.body, is_conditional=True, **kwargs)
 
     @staticmethod
     def _global_grid_subset(
@@ -242,12 +246,8 @@ class AccessInfoCollector(eve.NodeVisitor):
         is_write,
     ) -> dcir.FieldAccessInfo:
         # Check we have expression offsets in K
-        # OR write offsets in K
         offset = [offset_node.to_dict()[k] for k in "ijk"]
-        if isinstance(offset_node, oir.VariableKOffset) or (offset[2] != 0 and is_write):
-            variable_offset_axes = [dcir.Axis.K]
-        else:
-            variable_offset_axes = []
+        variable_offset_axes = [dcir.Axis.K] if isinstance(offset_node, oir.VariableKOffset) else []
 
         global_subset = self._global_grid_subset(region, he_grid, offset)
         intervals = {}
@@ -266,7 +266,6 @@ class AccessInfoCollector(eve.NodeVisitor):
         return dcir.FieldAccessInfo(
             grid_subset=grid_subset,
             global_grid_subset=global_subset,
-            dynamic_access=len(variable_offset_axes) > 0 or is_conditional or region is not None,
             variable_offset_axes=variable_offset_axes,
         )
 
@@ -347,6 +346,170 @@ def compute_dcir_access_infos(
     return ctx.access_infos
 
 
+class TaskletAccessInfoCollector(eve.NodeVisitor):
+    @dataclass
+    class Context:
+        axes: dict[str, list[dcir.Axis]]
+        access_infos: dict[str, dcir.FieldAccessInfo] = field(default_factory=dict)
+
+    def __init__(
+        self, collect_read: bool, collect_write: bool, *, horizontal_extent, k_interval, grid_subset
+    ):
+        self.collect_read: bool = collect_read
+        self.collect_write: bool = collect_write
+
+        self.ij_grid = dcir.GridSubset.from_gt4py_extent(horizontal_extent)
+        self.he_grid = self.ij_grid.set_interval(dcir.Axis.K, k_interval)
+        self.grid_subset = grid_subset
+
+    def visit_CodeBlock(self, _node: oir.CodeBlock, **_kwargs):
+        raise RuntimeError("We shouldn't reach code blocks anymore")
+
+    def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
+        self.visit(node.right, is_write=False, **kwargs)
+        self.visit(node.left, is_write=True, **kwargs)
+
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs):
+        self.visit(node.mask, is_write=False, **kwargs)
+        self.visit(node.body, **kwargs)
+
+    def visit_While(self, node: oir.While, **kwargs):
+        self.visit(node.cond, is_write=False, **kwargs)
+        self.visit(node.body, **kwargs)
+
+    def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs):
+        self.visit(node.mask, is_write=False, **kwargs)
+        self.visit(node.body, region=node.mask, **kwargs)
+
+    def _global_grid_subset(
+        self,
+        region: Optional[common.HorizontalMask],
+        offset: list[Optional[int]],
+    ):
+        res: dict[dcir.Axis, dcir.DomainInterval | dcir.IndexWithExtent | dcir.TileInterval] = {}
+        if region is not None:
+            for axis, oir_interval in zip(dcir.Axis.dims_horizontal(), region.intervals):
+                he_grid_interval = self.he_grid.intervals[axis]
+                assert isinstance(he_grid_interval, dcir.DomainInterval)
+                start = (
+                    oir_interval.start if oir_interval.start is not None else he_grid_interval.start
+                )
+                end = oir_interval.end if oir_interval.end is not None else he_grid_interval.end
+                dcir_interval = dcir.DomainInterval(
+                    start=dcir.AxisBound.from_common(axis, start),
+                    end=dcir.AxisBound.from_common(axis, end),
+                )
+                res[axis] = dcir.DomainInterval.union(dcir_interval, res.get(axis, dcir_interval))
+        if dcir.Axis.K in self.he_grid.intervals:
+            off = offset[dcir.Axis.K.to_idx()] or 0
+            he_grid_k_interval = self.he_grid.intervals[dcir.Axis.K]
+            assert not isinstance(he_grid_k_interval, dcir.TileInterval)
+            res[dcir.Axis.K] = he_grid_k_interval.shifted(off)
+        for axis in dcir.Axis.dims_horizontal():
+            iteration_interval = self.he_grid.intervals[axis]
+            mask_interval = res.get(axis, iteration_interval)
+            res[axis] = dcir.DomainInterval.intersection(
+                axis, iteration_interval, mask_interval
+            ).shifted(offset[axis.to_idx()])
+        return dcir.GridSubset(intervals=res)
+
+    def _make_access_info(
+        self,
+        offset_node: CartesianOffset | VariableKOffset,
+        axes,
+        region: Optional[common.HorizontalMask],
+    ) -> dcir.FieldAccessInfo:
+        # Check we have expression offsets in K
+        offset = [offset_node.to_dict()[k] for k in "ijk"]
+        variable_offset_axes = [dcir.Axis.K] if isinstance(offset_node, VariableKOffset) else []
+
+        global_subset = self._global_grid_subset(region, offset)
+        intervals = {}
+        for axis in axes:
+            extent = (
+                (0, 0)
+                if axis in variable_offset_axes
+                else (offset[axis.to_idx()], offset[axis.to_idx()])
+            )
+            intervals[axis] = dcir.IndexWithExtent(
+                axis=axis, value=axis.iteration_symbol(), extent=extent
+            )
+
+        return dcir.FieldAccessInfo(
+            grid_subset=dcir.GridSubset(intervals=intervals),
+            global_grid_subset=global_subset,
+            # Field access inside horizontal regions might or might not happen
+            dynamic_access=region is not None,
+            variable_offset_axes=variable_offset_axes,
+        )
+
+    def visit_FieldAccess(
+        self,
+        node: oir.FieldAccess,
+        *,
+        is_write: bool,
+        region: Optional[common.HorizontalMask] = None,
+        ctx: TaskletAccessInfoCollector.Context,
+        **kwargs,
+    ):
+        self.visit(node.offset, ctx=ctx, is_write=False, region=region, **kwargs)
+
+        if (is_write and not self.collect_write) or (not is_write and not self.collect_read):
+            return
+
+        access_info = self._make_access_info(
+            node.offset,
+            axes=ctx.axes[node.name],
+            region=region,
+        )
+        ctx.access_infos[node.name] = access_info.union(
+            ctx.access_infos.get(node.name, access_info)
+        )
+
+
+def compute_tasklet_access_infos(
+    node: oir.CodeBlock | oir.MaskStmt | oir.While,
+    *,
+    collect_read: bool = True,
+    collect_write: bool = True,
+    declarations: dict[str, oir.Decl],
+    horizontal_extent,
+    k_interval,
+    grid_subset,
+):
+    """
+    Compute access information needed to build Memlets for the Tasklet
+    associated with the given `node`.
+    """
+    axes = {
+        name: axes_list_from_flags(declaration.dimensions)
+        for name, declaration in declarations.items()
+        if isinstance(declaration, oir.FieldDecl)
+    }
+    ctx = TaskletAccessInfoCollector.Context(axes=axes, access_infos=dict())
+    collector = TaskletAccessInfoCollector(
+        collect_read=collect_read,
+        collect_write=collect_write,
+        horizontal_extent=horizontal_extent,
+        k_interval=k_interval,
+        grid_subset=grid_subset,
+    )
+    if isinstance(node, oir.CodeBlock):
+        collector.visit(node.body, ctx=ctx)
+    elif isinstance(node, oir.MaskStmt):
+        # node.mask is a simple expression.
+        # Pass `is_write` explicitly since we don't automatically set it in `visit_AssignStmt()`
+        collector.visit(node.mask, ctx=ctx, is_write=False)
+    elif isinstance(node, oir.While):
+        # node.cond is a simple expression.
+        # Pass `is_write` explicitly since we don't automatically set it in `visit_AssignStmt()`
+        collector.visit(node.cond, ctx=ctx, is_write=False)
+    else:
+        raise ValueError("Unexpected node type.")
+
+    return ctx.access_infos
+
+
 def make_dace_subset(
     context_info: dcir.FieldAccessInfo,
     access_info: dcir.FieldAccessInfo,
@@ -357,7 +520,7 @@ def make_dace_subset(
     for axis in access_info.axes():
         if axis in access_info.variable_offset_axes:
             clamped_access_info = clamped_access_info.clamp_full_axis(axis)
-        if axis in clamped_context_info.variable_offset_axes:
+        if axis in context_info.variable_offset_axes:
             clamped_context_info = clamped_context_info.clamp_full_axis(axis)
     res_ranges = []
 

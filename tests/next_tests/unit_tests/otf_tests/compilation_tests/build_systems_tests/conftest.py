@@ -47,6 +47,7 @@ def make_program_source(name: str) -> stages.ProgramSource:
             ),
             interface.Parameter(name="sc", type_=ts.ScalarType(ts.ScalarKind.FLOAT32)),
         ],
+        returns=True,
     )
     func = cpp_interface.render_function_declaration(
         entry_point,

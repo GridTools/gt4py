@@ -23,7 +23,7 @@ def is_center_derefed_only(node: itir.Node) -> bool:
     return hasattr(node.annex, "recorded_shifts") and node.annex.recorded_shifts in [set(), {()}]
 
 
-T = TypeVar("T", bound=itir.Program | itir.Lambda)
+T = TypeVar("T", bound=itir.Node)
 
 
 @dataclasses.dataclass
