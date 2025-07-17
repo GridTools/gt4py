@@ -457,11 +457,13 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         symbols = if_block.sdfg.symbols
         for sym, symval in if_block.symbol_mapping.items():
             if sym not in symbols:
-                if_block.sdfg.add_symbol(
-                    sym,
-                    parent.symbols.get(sym, None) or
-                    dace.codegen.tools.type_inference.infer_expr_type(symval, if_block.sdfg.symbols),
-                )
+                if sym == str(symval):
+                    sym_type = parent.symbols.get(sym, dace_dtypes.typeclass(int))
+                else:
+                    sym_type = dace.codegen.tools.type_inference.infer_expr_type(
+                        symval, if_block.sdfg.symbols
+                    )
+                if_block.sdfg.add_symbol(sym, sym_type)
 
     def _find_branch_for(
         self,
