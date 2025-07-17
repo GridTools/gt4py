@@ -276,11 +276,9 @@ def _cc_get_compiledb(
     cmake_flags: list[str],
     cache_lifetime: config.BuildCacheLifetime,
 ) -> pathlib.Path:
-    # Resolve symlinks to workaround an issue on MacOS where the default tmp directory is a symlink,
-    # which is sometimes resolved by CMake.
     cache_path = cache.get_cache_folder(
         stages.CompilableSource(prototype_program_source, None), cache_lifetime
-    ).resolve()
+    )
 
     # In a multi-threaded environment, multiple threads may try to create the compiledb at the same time
     # leading to compilation errors.
@@ -350,9 +348,6 @@ def _cc_create_compiledb(
         relative_path_from_build_dir = _relative_path_to_parent(
             pathlib.Path(entry["directory"]), path
         )
-        print(f"{path=}")
-        print(f"{entry=}")
-        print(f"{relative_path_from_build_dir=}")
 
         # directory relative to current root directory
         entry["directory"] = entry["directory"].replace(str(path), ".")
@@ -377,7 +372,6 @@ def _cc_create_compiledb(
             .replace(binding_src_name, "$BINDINGS_FILE")
             .replace(name, "$NAME")
         )
-        print(f"{entry=}")
 
     compile_db_path = path / "compile_commands.json"
     compile_db_path.write_text(json.dumps(compile_db))

@@ -63,7 +63,7 @@ jobs:
     needs: [get-python-versions, define-test-sessions]
     strategy:
       matrix:
-        os: ["macos-latest"]
+        os: ["ubuntu-latest", "macos-latest"]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
         test-session: ${{ fromJson(needs.define-test-sessions.outputs.test-sessions) }}
       fail-fast: false
@@ -81,4 +81,4 @@ jobs:
       - name: Run '${{ matrix.test-session.name }}-${{ matrix.python-version }}(${{ matrix.test-session.args }})' nox session
         shell: bash
         run: |
-          uv run --script noxfile.py -v -s '${{ matrix.test-session.name }}-${{ matrix.python-version }}${{ matrix.test-session.args }}'
+          uv run --script noxfile.py -s '${{ matrix.test-session.name }}-${{ matrix.python-version }}${{ matrix.test-session.args }}'

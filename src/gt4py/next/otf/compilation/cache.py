@@ -74,4 +74,6 @@ def get_cache_folder(
     complete_path = base_path / folder_name
     complete_path.mkdir(exist_ok=True)
 
+    # Resolve symlinks to workaround an issue on MacOS where the default tmp directory is a symlink
+    # which might sometimes get resolved in a way we don't control.
     return complete_path.resolve()
