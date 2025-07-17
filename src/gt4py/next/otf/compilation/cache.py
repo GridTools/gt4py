@@ -74,4 +74,4 @@ def get_cache_folder(
     complete_path = base_path / folder_name
     complete_path.mkdir(exist_ok=True)
 
-    return complete_path
+    return complete_path.resolve()
