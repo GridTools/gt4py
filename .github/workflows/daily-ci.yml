@@ -56,8 +56,8 @@ jobs:
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
           brew install libomp
-          echo 'export LDFLAGS="-L/opt/homebrew/opt/libomp/lib"' >> $GITHUB_ENV
-          echo 'export CPPFLAGS="-I/opt/homebrew/opt/libomp/include"' >> $GITHUB_ENV
+          OPENMP_ROOT=$(brew --prefix libomp)
+          echo "export CMAKE_PREFIX_PATH=${OPENMP_ROOT}" >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
