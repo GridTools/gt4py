@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   # First job to read Python versions from .python-versions file
@@ -34,16 +35,24 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
-          # python-version: "3.12" # Use a fixed Python version for defining test sessions
 
-      - name: Define test sessions base on changed files
+      - name: Define test sessions based on changed files
         id: test-sessions
         run: |
-          ./scripts-cli.py github-ci matrix \
-            --config nox-sessions-config.yml \
-            --base "origin/${{ github.base_ref }}" \
-            --output gh-test-sessions.json \
-            --verbose
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # Run only sessions related to the changes
+            ./scripts-cli.py github-ci matrix \
+              --config nox-sessions-config.yml \
+              --base "origin/${{ github.base_ref }}" \
+              --output gh-test-sessions.json \
+              --verbose
+          else
+            # Run all sessions
+            ./scripts-cli.py github-ci matrix \
+              --config nox-sessions-config.yml \
+              --output gh-test-sessions.json \
+              --verbose
+          fi
           echo 'test-sessions<<EOF' >> $GITHUB_OUTPUT
           cat gh-test-sessions.json >> $GITHUB_OUTPUT
           echo '' >> $GITHUB_OUTPUT
