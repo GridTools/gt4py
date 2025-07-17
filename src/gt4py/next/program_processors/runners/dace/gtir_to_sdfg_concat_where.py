@@ -228,9 +228,12 @@ def _translate_concat_where_impl(
             ts.FieldType(dims=[concat_domain.dim], dtype=lower.gt_type),
             origin=(concat_dim_bound - 1,),
         )
-        lower_bound = output_domain[concat_dim_index].start
         lower_domain = [
-            gtir_domain.FieldopDomainRange(concat_domain.dim, lower_bound, concat_dim_bound)
+            gtir_domain.FieldopDomainRange(
+                dim=concat_domain.dim,
+                start=output_domain[concat_dim_index].start,
+                stop=concat_dim_bound,
+            )
         ]
     elif isinstance(upper.gt_type, ts.ScalarType):
         assert len(upper_domain) == 0
@@ -240,9 +243,12 @@ def _translate_concat_where_impl(
             ts.FieldType(dims=[concat_domain.dim], dtype=upper.gt_type),
             origin=(concat_dim_bound,),
         )
-        upper_bound = output_domain[concat_dim_index].stop
         upper_domain = [
-            gtir_domain.FieldopDomainRange(concat_domain.dim, concat_dim_bound, upper_bound)
+            gtir_domain.FieldopDomainRange(
+                dim=concat_domain.dim,
+                start=concat_dim_bound,
+                stop=output_domain[concat_dim_index].stop,
+            )
         ]
 
     if concat_domain.dim not in lower.gt_type.dims:  # type: ignore[union-attr]
@@ -273,12 +279,15 @@ def _translate_concat_where_impl(
             concat_dim_index=concat_dim_index,
             concat_dim_origin=concat_dim_bound - 1,
         )
-        lower_bound = dace.symbolic.pystr_to_symbolic(
-            f"max({concat_dim_bound - 1}, {output_domain[concat_dim_index].start})"
-        )
         lower_domain.insert(
             concat_dim_index,
-            gtir_domain.FieldopDomainRange(concat_domain.dim, lower_bound, concat_dim_bound),
+            gtir_domain.FieldopDomainRange(
+                dim=concat_domain.dim,
+                start=dace.symbolic.pystr_to_symbolic(
+                    f"max({concat_dim_bound - 1}, {output_domain[concat_dim_index].start})"
+                ),
+                stop=concat_dim_bound,
+            ),
         )
     elif concat_domain.dim not in upper.gt_type.dims:  # type: ignore[union-attr]
         # Same as previous case, but the field slice is added on the upper bound.
@@ -298,12 +307,15 @@ def _translate_concat_where_impl(
             concat_dim_index=concat_dim_index,
             concat_dim_origin=concat_dim_bound,
         )
-        upper_bound = dace.symbolic.pystr_to_symbolic(
-            f"min({concat_dim_bound + 1}, {output_domain[concat_dim_index].stop})"
-        )
         upper_domain.insert(
             concat_dim_index,
-            gtir_domain.FieldopDomainRange(concat_domain.dim, concat_dim_bound, upper_bound),
+            gtir_domain.FieldopDomainRange(
+                dim=concat_domain.dim,
+                start=concat_dim_bound,
+                stop=dace.symbolic.pystr_to_symbolic(
+                    f"min({concat_dim_bound + 1}, {output_domain[concat_dim_index].stop})"
+                ),
+            ),
         )
     elif isinstance(lower_desc, dace.data.Scalar) or (
         len(lower.gt_type.dims) == 1 and len(output_domain) > 1  # type: ignore[union-attr]
