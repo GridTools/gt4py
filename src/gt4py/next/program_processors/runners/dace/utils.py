@@ -19,16 +19,16 @@ from gt4py.next.type_system import type_specifications as ts
 
 # arrays for connectivity tables use the following prefix
 CONNECTIVITY_INDENTIFIER_PREFIX: Final[str] = "gt_conn_"
-CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^gt_conn_(.+)$")
+CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^gt_conn_(\S+)$")
 
 # regex for domain range symbols
-RANGE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(.+)_\d+_range_[01]$")
+RANGE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(\S+)_(\S+)_range_[01]$")
 
 # regex for field stride symbols
-SIZE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(.+)_size_\d+$")
+SIZE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(\S+)_size_\d+$")
 
 # regex for field stride symbols
-STRIDE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(.+)_stride_\d+$")
+STRIDE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(\S+)_stride_\d+$")
 
 
 def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
@@ -92,14 +92,14 @@ def field_stride_symbol_name(field_name: str, axis: int) -> str:
     return field_symbol_name(field_name, axis, "stride")
 
 
-def range_start_symbol(field_name: str, axis: int) -> str:
+def range_start_symbol(field_name: str, dim: gtx_common.Dimension) -> str:
     """Format name of start symbol for domain range, as expected by GTIR."""
-    return f"__{field_name}_{axis}_range_0"
+    return f"__{field_name}_{dim.value}_range_0"
 
 
-def range_stop_symbol(field_name: str, axis: int) -> str:
+def range_stop_symbol(field_name: str, dim: gtx_common.Dimension) -> str:
     """Format name of stop symbol for domain range, as expected by GTIR."""
-    return f"__{field_name}_{axis}_range_1"
+    return f"__{field_name}_{dim.value}_range_1"
 
 
 def is_range_symbol(name: str) -> bool:

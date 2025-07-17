@@ -22,6 +22,7 @@ from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace import (
     gtir_domain,
+    gtir_python_codegen,
     gtir_to_sdfg,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
@@ -193,11 +194,11 @@ def _translate_concat_where_impl(
     #    lower domain.
     #  - viceversa, if the domain expression is unbound on upper side (positive
     #    infinite), the true expression represents the input for the upper domain.
-    if concat_domain.start == gtir_to_sdfg_utils.get_symbolic(gtir.InfinityLiteral.NEGATIVE):
+    if str(concat_domain.start) == gtir_python_codegen.get_source(gtir.InfinityLiteral.NEGATIVE):
         concat_dim_bound = concat_domain.stop
         lower, lower_desc, lower_domain = (tb_field, tb_data_desc, tb_domain)
         upper, upper_desc, upper_domain = (fb_field, fb_data_desc, fb_domain)
-    elif concat_domain.stop == gtir_to_sdfg_utils.get_symbolic(gtir.InfinityLiteral.POSITIVE):
+    elif str(concat_domain.stop) == gtir_python_codegen.get_source(gtir.InfinityLiteral.POSITIVE):
         concat_dim_bound = concat_domain.start
         lower, lower_desc, lower_domain = (fb_field, fb_data_desc, fb_domain)
         upper, upper_desc, upper_domain = (tb_field, tb_data_desc, tb_domain)

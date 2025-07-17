@@ -42,6 +42,7 @@ from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import (
     gtir_domain,
+    gtir_python_codegen,
     gtir_to_sdfg_concat_where,
     gtir_to_sdfg_primitives,
     gtir_to_sdfg_types,
@@ -287,8 +288,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 "Fields with more than one local dimension are not supported."
             )
         field_origin = tuple(
-            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.range_start_symbol(data_node.data, axis))
-            for axis in range(len(field_type.dims))
+            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.range_start_symbol(data_node.data, dim))
+            for dim in field_type.dims
         )
         return gtir_to_sdfg_types.FieldopData(data_node, field_type, field_origin)
 
@@ -402,8 +403,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 shape.append(
                     dace.symbolic.pystr_to_symbolic(
                         "{} - {}".format(
-                            gtx_dace_utils.range_stop_symbol(name, i),
-                            gtx_dace_utils.range_start_symbol(name, i),
+                            gtx_dace_utils.range_stop_symbol(name, dim),
+                            gtx_dace_utils.range_start_symbol(name, dim),
                         )
                     )
                 )
@@ -772,7 +773,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # Convert the scalar argument to a dace symbolic expression if all
                 # of its dependencies are symbols to.
                 try:
-                    symbolic_expr = gtir_to_sdfg_utils.get_symbolic(lambda_arg)
+                    symbolic_expr = dace.symbolic.pystr_to_symbolic(
+                        gtir_python_codegen.get_source(lambda_arg)
+                    )
                 except TypeError:
                     # sympy parsing failed, it can happen with 'cast_' expressions
                     if not any(
@@ -1062,8 +1065,7 @@ def _remove_field_origin_symbols(ir: gtir.Program, sdfg: dace.SDFG) -> None:
             dataname = str(psymbol.id)
             # set all range start symbols to constant value 0
             range_start_symbols |= {
-                gtx_dace_utils.range_start_symbol(dataname, i): 0
-                for i in range(len(psymbol.type.dims))
+                gtx_dace_utils.range_start_symbol(dataname, dim): 0 for dim in psymbol.type.dims
             }
     # we set all range start symbols to 0 in the top-level SDFG and proagate them to nested SDFGs
     gtx_transformations.gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
