@@ -126,6 +126,11 @@ class CompiledbProject(
     compile_commands_cache: pathlib.Path
     bindings_file_name: str
 
+    def __post_init__(self) -> None:
+        # Works around and issue on MacOS where the default tmp directory is a symlink,
+        # which are sometimes resolved by CMake.
+        object.__setattr__(self, "root_path", self.root_path.resolve())
+
     def build(self) -> None:
         self._write_files()
         current_data = build_data.read_data(self.root_path)
@@ -353,9 +358,7 @@ def _cc_create_compiledb(
         print(f"{relative_path_from_build_dir=}")
 
         # directory relative to current root directory
-        entry["directory"] = (
-            entry["directory"].replace(str(path.resolve()), ".").replace(str(path), ".")
-        )
+        entry["directory"] = entry["directory"].replace(str(path), ".")
         entry["command"] = (
             entry["command"]
             # this is the relative location of the ".o" (etc.) files, we move them to the top level build dir
@@ -368,7 +371,6 @@ def _cc_create_compiledb(
         entry["file"] = (
             entry["file"]
             .replace(f"CMakeFiles/{name}.dir", ".")
-            .replace(str(path.resolve()), "$SRC_PATH")
             .replace(str(path), "$SRC_PATH")
             .replace(binding_src_name, "$BINDINGS_FILE")
         )
