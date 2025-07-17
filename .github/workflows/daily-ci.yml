@@ -49,6 +49,14 @@ jobs:
           cache-dependency-glob: "uv.lock"
           python-version: ${{ matrix.python-version }}
 
+      - name: Install clang with OpenMP for macos
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: |
+          brew install llvm
+          echo 'export PATH="/usr/local/opt/llvm/bin:$PATH"' >> $GITHUB_ENV
+          echo 'export LDFLAGS="-L/usr/local/opt/llvm/lib"' >> $GITHUB_ENV
+          echo 'export CPPFLAGS="-I/usr/local/opt/llvm/include"' >> $GITHUB_ENV
+
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
           UV_RESOLUTION: ${{ matrix.dependencies-strategy }}

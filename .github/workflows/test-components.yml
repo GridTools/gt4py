@@ -63,7 +63,7 @@ jobs:
     needs: [get-python-versions, define-test-sessions]
     strategy:
       matrix:
-        os: ["ubuntu-latest", "macos-latest"]
+        os: ["ubuntu-latest"]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
         test-session: ${{ fromJson(needs.define-test-sessions.outputs.test-sessions) }}
       fail-fast: false
