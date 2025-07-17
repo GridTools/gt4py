@@ -55,18 +55,15 @@ jobs:
       - name: Install gcc with OpenMP for macos
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          brew install gcc@14 libomp
-          echo "alias gcc=gcc-14" >> $GITHUB_ENV
-          echo "alias g++=g++-14" >> $GITHUB_ENV
-          echo 'export LDFLAGS="-L/opt/homebrew/opt/libomp/lib"' >> $GITHUB_ENV
-          echo 'export CPPFLAGS="-L/opt/homebrew/opt/libomp/lib"' >> $GITHUB_ENV
+          brew install gcc@14
+          echo "CC=gcc-14" >> $GITHUB_ENV
+          echo "CXX=g++-14" >> $GITHUB_ENV
+          echo 'LDFLAGS="-L/opt/homebrew/opt/libomp/lib"' >> $GITHUB_ENV
+          echo 'CPPFLAGS="-L/opt/homebrew/opt/libomp/lib"' >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
           UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
-        # Force a specific compiler for setuptools/distutils (used in gt4py.cartesian)
-          CXX: g++
-          CC: gcc
         run: uv run --script noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu' -t 'dace'
 
       - name: Notify slack
