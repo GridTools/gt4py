@@ -22,7 +22,7 @@ jobs:
 
   # Job to define test sessions based on changed files
   define-test-sessions:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     outputs:
       test-sessions: ${{ steps.test-sessions.outputs.test-sessions }}
     steps:
@@ -63,7 +63,7 @@ jobs:
     needs: [get-python-versions, define-test-sessions]
     strategy:
       matrix:
-        os: ["ubuntu-latest"]
+        os: ["macos-latest"]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
         test-session: ${{ fromJson(needs.define-test-sessions.outputs.test-sessions) }}
       fail-fast: false
