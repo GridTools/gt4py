@@ -460,7 +460,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             if new_sym in if_block_symbols:
                 # The symbol is already known, so we check that it is the same type as in the
                 #  parent SDFG.
-                # TODO(phimuell, edopao): Is this check legal.
                 assert if_block_symbols[new_sym] == parent_symbols[new_sym]
 
             elif new_sym in parent_symbols:
