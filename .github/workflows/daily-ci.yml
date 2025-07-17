@@ -58,6 +58,8 @@ jobs:
           brew install gcc@14 libomp
           echo "alias gcc=gcc-14" >> $GITHUB_ENV
           echo "alias g++=g++-14" >> $GITHUB_ENV
+          echo 'export LDFLAGS="-L/opt/homebrew/opt/libomp/lib"' >> $GITHUB_ENV
+          echo 'export CPPFLAGS="-L/opt/homebrew/opt/libomp/lib"' >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
