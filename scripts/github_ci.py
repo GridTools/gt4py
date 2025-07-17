@@ -29,7 +29,7 @@ def create_github_actions_list(
 ) -> list[dict[str, str]]:
     """Create a GitHub Actions matrix from the affected CPU-only sessions."""
 
-    sessions = nox_sessions.get_sessions("-k", "cpu", verbose=verbose)
+    sessions = nox_sessions.get_sessions("-k", "cpu", "--session", "test_next", verbose=verbose)
     entries: list[dict[str, str]] = []
 
     processed_sessions = set()

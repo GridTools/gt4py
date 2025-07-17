@@ -348,6 +348,9 @@ def _cc_create_compiledb(
         relative_path_from_build_dir = _relative_path_to_parent(
             pathlib.Path(entry["directory"]), path
         )
+        print(f"{path=}")
+        print(f"{entry['directory']=}")
+        print(f"{relative_path_from_build_dir=}")
 
         # directory relative to current root directory
         entry["directory"] = entry["directory"].replace(str(path), ".")
@@ -372,6 +375,7 @@ def _cc_create_compiledb(
             .replace(binding_src_name, "$BINDINGS_FILE")
             .replace(name, "$NAME")
         )
+        print(f"{entry=}")
 
     compile_db_path = path / "compile_commands.json"
     compile_db_path.write_text(json.dumps(compile_db))
