@@ -88,7 +88,7 @@ def _make_concat_scalar_broadcast(
     """
     assert isinstance(inp.gt_type, ts.FieldType)
     assert len(inp.gt_type.dims) == 1
-    out_dims, out_origin, out_shape = _get_concat_where_field_layout(domain, concat_dim_index)
+    out_dims, out_origin, out_shape = gtir_domain.get_field_layout(domain)
     out_type = ts.FieldType(dims=out_dims, dtype=inp.gt_type.dtype)
 
     out_name, out_desc = sdfg.add_temp_transient(out_shape, inp_desc.dtype)
@@ -115,28 +115,6 @@ def _make_concat_scalar_broadcast(
 
     out_field = gtir_to_sdfg_types.FieldopData(out_node, out_type, tuple(out_origin))
     return out_field, out_desc
-
-
-def _get_concat_where_field_layout(
-    domain: gtir_domain.FieldopDomain, concat_dim: gtx_common.Dimension | int
-) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
-    """
-    Helper function that wraps `gtir_domain.get_field_layout()` and adds a check
-    on the array shape.
-
-    The concat_where domain expressions require special handling, because the lower
-    bound is not necessarily smaller than the upper. When the upper bound is smaller,
-    it indicates an empty range to copy. This can only be resolved at runtime, which
-    is why we use dynamic memlets.
-    """
-    out_dims, out_origin, out_shape = gtir_domain.get_field_layout(domain)
-    concat_dim_index = (
-        out_dims.index(concat_dim) if isinstance(concat_dim, gtx_common.Dimension) else concat_dim
-    )
-    out_shape[concat_dim_index] = dace.symbolic.pystr_to_symbolic(
-        f"max(0, {out_shape[concat_dim_index]})"
-    )
-    return out_dims, out_origin, out_shape
 
 
 def _translate_concat_where_impl(
@@ -206,9 +184,7 @@ def _translate_concat_where_impl(
 
     # we use the concat domain, stored in the annex, as the domain of output field
     output_domain = gtir_domain.extract_domain(node_domain)
-    output_dims, output_origin, output_shape = _get_concat_where_field_layout(
-        output_domain, concat_domain.dim
-    )
+    output_dims, output_origin, output_shape = gtir_domain.get_field_layout(output_domain)
     concat_dim_index = output_dims.index(concat_domain.dim)
 
     """

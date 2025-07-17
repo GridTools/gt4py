@@ -67,6 +67,19 @@ def test_concat_where_non_overlapping(cartesian_case):
     cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
 
 
+def test_concat_where_empty_branch(cartesian_case):
+    @gtx.field_operator
+    def testee(a: cases.IJKField, b: cases.IJKField, N: np.int32) -> cases.IJKField:
+        return concat_where(IDim < N, a, b * 2)
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    a = cases.allocate(cartesian_case, testee, "a")()
+    b = cases.allocate(cartesian_case, testee, "b")()
+
+    N = out.shape[2] + 1
+    cases.verify(cartesian_case, testee, a, b, N, out=out, ref=a.asnumpy())
+
+
 def test_concat_where_scalar_broadcast(cartesian_case):
     @gtx.field_operator
     def testee(a: np.int32, b: cases.IJKField, N: np.int32) -> cases.IJKField:
