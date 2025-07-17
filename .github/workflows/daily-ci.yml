@@ -33,8 +33,8 @@ jobs:
         # between the different compatible versions for a given package requirement
         # [arg: --resolution, env: UV_RESOLUTION=]
         dependencies-strategy: ["lowest-direct", "highest"]
-        gt4py-module: ["next"]
-        os: ["macos-latest"]
+        gt4py-module: ["cartesian", "eve", "next", "storage"]
+        os: ["ubuntu-latest", "macos-latest"]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
         exclude:
           - os: macos-latest
@@ -64,7 +64,7 @@ jobs:
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
           UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
-        run: uv run --script noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu' -t 'dace'
+        run: uv run --script noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
       - name: Notify slack
         if: ${{ failure() && (github.event_name == 'schedule') }}
