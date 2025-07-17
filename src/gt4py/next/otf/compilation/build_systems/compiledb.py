@@ -126,11 +126,6 @@ class CompiledbProject(
     compile_commands_cache: pathlib.Path
     bindings_file_name: str
 
-    def __post_init__(self) -> None:
-        # Works around and issue on MacOS where the default tmp directory is a symlink,
-        # which are sometimes resolved by CMake.
-        object.__setattr__(self, "root_path", self.root_path.resolve())
-
     def build(self) -> None:
         self._write_files()
         current_data = build_data.read_data(self.root_path)
@@ -281,9 +276,11 @@ def _cc_get_compiledb(
     cmake_flags: list[str],
     cache_lifetime: config.BuildCacheLifetime,
 ) -> pathlib.Path:
+    # Resolve symlinks to workaround an issue on MacOS where the default tmp directory is a symlink,
+    # which is sometimes resolved by CMake.
     cache_path = cache.get_cache_folder(
         stages.CompilableSource(prototype_program_source, None), cache_lifetime
-    )
+    ).resolve()
 
     # In a multi-threaded environment, multiple threads may try to create the compiledb at the same time
     # leading to compilation errors.
