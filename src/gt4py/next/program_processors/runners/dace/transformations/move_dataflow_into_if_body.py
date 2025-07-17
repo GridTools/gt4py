@@ -212,7 +212,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 connector=conn_name,
             )
 
-        self._update_symbol_mapping(if_block)
+        self._update_symbol_mapping(if_block, sdfg)
 
         self._remove_outside_dataflow(
             sdfg=sdfg,
@@ -440,6 +440,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     def _update_symbol_mapping(
         self,
         if_block: dace_nodes.NestedSDFG,
+        parent: dace.SDFG,
     ) -> None:
         """Updates the symbol mapping of the nested SDFG.
 
@@ -458,8 +459,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             if sym not in symbols:
                 if_block.sdfg.add_symbol(
                     sym,
-                    dace.codegen.tools.type_inference.infer_expr_type(symval, if_block.sdfg.symbols)
-                    or dace_dtypes.typeclass(int),
+                    parent.symbols.get(sym, None) or
+                    dace.codegen.tools.type_inference.infer_expr_type(symval, if_block.sdfg.symbols),
                 )
 
     def _find_branch_for(
