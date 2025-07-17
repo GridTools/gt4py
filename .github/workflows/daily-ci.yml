@@ -57,8 +57,10 @@ jobs:
         run: |
           brew install libomp
           OPENMP_ROOT=$(brew --prefix libomp)
-          echo "export CPATH=$CPATH:${OPENMP_ROOT}/include" >> $GITHUB_ENV
-          tail $GITHUB_ENV
+          echo "export CMAKE_PREFIX_PATH=${OPENMP_ROOT}/include" >> $GITHUB_ENV
+          echo 'export CFLAGS="-Xclang -fopenmp"'' >> $GITHUB_ENV
+          echo 'export CPPFLAGS="-Xclang -fopenmp"'' >> $GITHUB_ENV
+          tail -4 $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
