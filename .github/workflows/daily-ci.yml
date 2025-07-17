@@ -58,7 +58,7 @@ jobs:
         run: uv run --script noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
       - name: Notify slack
-        if: ${{ failure() && github.event_name == 'schedule' }}
+        if: ${{ failure() && (github.event_name == 'schedule') }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         uses: slackapi/slack-github-action@v1.23.0
