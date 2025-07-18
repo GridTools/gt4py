@@ -137,17 +137,19 @@ def gt_auto_optimize(
                 repl=constant_symbols,
                 simplify=True,  # Simplify again after.
                 simplify_at_entry=False,
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
 
-        gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+        gtx_transformations.gt_reduce_distributed_buffering(
+            sdfg, validate=False, validate_all=validate_all
+        )
 
         # Process top level Maps
         sdfg = _gt_auto_process_top_level_maps(
             sdfg=sdfg,
             assume_pointwise=assume_pointwise,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
@@ -163,7 +165,7 @@ def gt_auto_optimize(
             blocking_dim=blocking_dim,
             blocking_size=blocking_size,
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
@@ -177,7 +179,7 @@ def gt_auto_optimize(
             gpu_block_size=gpu_block_size,
             gpu_launch_factor=gpu_launch_factor,
             gpu_launch_bounds=gpu_launch_bounds,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
@@ -191,12 +193,15 @@ def gt_auto_optimize(
             #   scopes, which I do not like. Thus we should fix the transformation
             #   to avoid that.
             reuse_transients=reuse_transients,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
         # Set the implementation of the library nodes.
         dace_aoptimize.set_fast_implementations(sdfg, device)
+
+        if validate:
+            sdfg.validate()
 
         return sdfg
 
@@ -273,12 +278,12 @@ def _gt_auto_process_top_level_maps(
         #  space.
         sdfg.apply_transformations_repeated(
             vertical_map_fusion,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
         sdfg.apply_transformations_repeated(
             [horizontal_map_fusion, vertical_map_fusion],
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
@@ -299,19 +304,21 @@ def _gt_auto_process_top_level_maps(
                 promotion_callback=_check_if_horizontal_map_promotion_is_appropriate,
                 single_use_data=single_use_data,
             ),
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.
-        gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+        gtx_transformations.gt_reduce_distributed_buffering(
+            sdfg, validate=False, validate_all=validate_all
+        )
 
         # TODO(phimuell): Find out how to skip the propagation and integrating it
         #   into the split transformation.
         sdfg.apply_transformations_repeated(
             gtx_transformations.SplitConsumerMemlet(single_use_data=single_use_data),
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
         dace_propagation.propagate_memlets_sdfg(sdfg)
@@ -328,27 +335,27 @@ def _gt_auto_process_top_level_maps(
                     assume_pointwise=assume_pointwise,
                 ),
             ],
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
         # Call vertical and horizontal map fusion to fuse together maps on partially
         #  overlapping range. This is an iterative process that splits the maps to
         #  expose overlapping range and applies serial/parallel map fusion.
-        gtx_transformations.gt_vertical_map_fusion(
+        gtx_transformations.gt_vertical_map_split_fusion(
             sdfg=sdfg,
             run_simplify=False,
             consolidate_edges_only_if_not_extending=True,
             single_use_data=single_use_data,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
-        gtx_transformations.gt_horizontal_map_fusion(
+        gtx_transformations.gt_horizontal_map_split_fusion(
             sdfg=sdfg,
             run_simplify=False,
+            fuse_possible_maps=True,
             consolidate_edges_only_if_not_extending=True,
-            single_use_data=single_use_data,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
@@ -361,12 +368,15 @@ def _gt_auto_process_top_level_maps(
         #  modified. Call Simplify and try again to further optimize.
         gtx_transformations.gt_simplify(
             sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
             skip=gtx_transformations.simplify.GT_SIMPLIFY_DEFAULT_SKIP_SET.union(
                 ["ConsolidateEdges"]
             ),
         )
+
+    if validate:
+        sdfg.validate()
 
     return sdfg
 
@@ -395,10 +405,10 @@ def _gt_auto_process_dataflow_inside_maps(
     #  arguments to a kernel but be present inside the body.
     sdfg.apply_transformations_once_everywhere(
         gtx_transformations.GT4PyMoveTaskletIntoMap,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
-    gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+    gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     # Blocking is performed first, because this ensures that as much as possible
     #  is moved into the k independent part.
@@ -409,7 +419,7 @@ def _gt_auto_process_dataflow_inside_maps(
                 blocking_parameter=blocking_dim,
                 require_independent_nodes=blocking_only_if_independent_nodes,
             ),
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
@@ -423,9 +433,12 @@ def _gt_auto_process_dataflow_inside_maps(
         gtx_transformations.MoveDataflowIntoIfBody(
             ignore_upstream_blocks=False,
         ),
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
+
+    if validate:
+        sdfg.validate()
 
     return sdfg
 
@@ -463,7 +476,7 @@ def _gt_auto_configure_maps_and_strides(
     gtx_transformations.gt_set_iteration_order(
         sdfg=sdfg,
         unit_strides_kind=unit_strides_kind,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -487,10 +500,13 @@ def _gt_auto_configure_maps_and_strides(
             gpu_block_size=gpu_block_size,
             gpu_launch_bounds=gpu_launch_bounds,
             gpu_launch_factor=gpu_launch_factor,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
             try_removing_trivial_maps=True,
         )
+
+    if validate:
+        sdfg.validate()
 
     return sdfg
 
@@ -534,6 +550,9 @@ def _gt_auto_post_processing(
                 assert isinstance(state, dace.SDFGState)
                 for edge in state.edges():
                     edge.data.wcr_nonatomic = False
+
+    if validate_all or validate:
+        sdfg.validate()
 
     return sdfg
 

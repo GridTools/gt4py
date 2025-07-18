@@ -110,7 +110,7 @@ def gt_simplify(
                 sdfg=sdfg,
                 multistate=True,
                 permissive=False,
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if inline_res is not None:
@@ -119,7 +119,7 @@ def gt_simplify(
                 result.update(inline_res)
 
         simplify_res = dace_passes.SimplifyPass(
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
             verbose=False,
             skip=(skip | {"InlineSDFGs"}),
@@ -136,7 +136,9 @@ def gt_simplify(
         #  the parts DaCe is not able to do.
         if "FuseStates" not in skip:
             fuse_state_res = sdfg.apply_transformations_repeated(
-                [gtx_transformations.GT4PyStateFusion]
+                [gtx_transformations.GT4PyStateFusion],
+                validate=False,
+                validate_all=validate_all,
             )
             if fuse_state_res:
                 at_least_one_xtrans_run = True
@@ -162,7 +164,7 @@ def gt_simplify(
         if "CopyChainRemover" not in skip:
             copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
                 sdfg=sdfg,
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if copy_chain_remover_result is not None:
@@ -175,7 +177,7 @@ def gt_simplify(
         if "SingleStateGlobalDirectSelfCopyElimination" not in skip:
             direct_self_copy_removal_result = sdfg.apply_transformations_repeated(
                 gtx_transformations.SingleStateGlobalDirectSelfCopyElimination(),
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if direct_self_copy_removal_result > 0:
@@ -190,7 +192,7 @@ def gt_simplify(
         if "SingleStateGlobalSelfCopyElimination" not in skip:
             self_copy_removal_result = sdfg.apply_transformations_repeated(
                 gtx_transformations.SingleStateGlobalSelfCopyElimination(),
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if self_copy_removal_result > 0:
@@ -212,6 +214,9 @@ def gt_simplify(
                 if "MultiStateGlobalSelfCopyElimination" not in result:
                     result["MultiStateGlobalSelfCopyElimination"] = set()
                 result["MultiStateGlobalSelfCopyElimination"].update(distributed_self_copy_result)
+
+    if validate:
+        sdfg.validate()
 
     return result
 
@@ -247,7 +252,7 @@ def gt_inline_nested_sdfg(
         # to be updated accordingly. Otherwise, all ID-based accesses are not going
         # to work (which is what pattern matching attempts to do).
         sdfg.reset_cfg_list()
-        nb_preproccess = sdfg.apply_transformations_repeated(
+        nb_preproccess = sdfg.apply_transformations_once_everywhere(
             [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors],
             validate=False,
             validate_all=validate_all,
@@ -279,6 +284,10 @@ def gt_inline_nested_sdfg(
         result["InlineSDFGs"] = nb_inlines_total
     if nb_preproccess_total != 0:
         result["PruneSymbols|PruneConnectors"] = nb_preproccess_total
+
+    if validate or validate_all:
+        sdfg.validate()
+
     return result if result else None
 
 
@@ -348,14 +357,19 @@ def gt_substitute_compiletime_symbols(
     if simplify:
         gt_simplify(
             sdfg=sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
     dace.sdfg.propagation.propagate_memlets_sdfg(sdfg)
 
+    if validate:
+        sdfg.validate()
+
 
 def gt_reduce_distributed_buffering(
     sdfg: dace.SDFG,
+    validate: bool = True,
+    validate_all: bool = False,
 ) -> Optional[dict[dace.SDFG, dict[dace.SDFGState, set[str]]]]:
     """Removes distributed write back buffers."""
     pipeline = dace_ppl.Pipeline([DistributedBufferRelocator()])
@@ -366,8 +380,14 @@ def gt_reduce_distributed_buffering(
         if ret is not None:
             all_result[rsdfg] = ret
 
+        if validate_all:
+            rsdfg.validate()
+
     if len(all_result) == 0:
         return None
+
+    if validate:
+        sdfg.validate()
 
     return all_result
 
@@ -477,7 +497,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 def_state.add_edge(
                     def_an,
                     wb_edge.src_conn,
-                    def_state.add_access(final_dest_name),
+                    def_state.add_access(final_dest_name, copy.copy(wb_edge.dst.debuginfo)),
                     wb_edge.dst_conn,
                     copy.deepcopy(wb_memlet),
                 )
@@ -890,7 +910,9 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         )
         inner_desc: dace_data.Scalar = access_desc.clone()
         inner_data_name: str = sdfg.add_datadesc(access_node.data, inner_desc, find_new_name=True)
-        inner_an: dace_nodes.AccessNode = graph.add_access(inner_data_name)
+        inner_an: dace_nodes.AccessNode = graph.add_access(
+            inner_data_name, copy.copy(access_node.debuginfo)
+        )
 
         # Connect the tasklet with the map entry and the access node.
         graph.add_nedge(map_entry, inner_tasklet, dace.Memlet())

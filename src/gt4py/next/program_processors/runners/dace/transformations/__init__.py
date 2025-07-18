@@ -24,7 +24,7 @@ from .gpu_utils import (
 from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
 from .map_fusion import MapFusionHorizontal, MapFusionVertical
-from .map_fusion_extended import gt_horizontal_map_fusion, gt_vertical_map_fusion
+from .map_fusion_extended import gt_horizontal_map_split_fusion, gt_vertical_map_split_fusion
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import MapPromoter
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
@@ -57,7 +57,12 @@ from .strides import (
     gt_propagate_strides_from_access_node,
     gt_propagate_strides_of,
 )
-from .utils import gt_find_constant_arguments, gt_make_transients_persistent
+from .utils import (
+    find_nodes_in_scope,
+    gt_find_constant_arguments,
+    gt_make_transients_persistent,
+    gt_propagate_memlets_map_scope,
+)
 
 
 __all__ = [
@@ -79,6 +84,7 @@ __all__ = [
     "SingleStateGlobalSelfCopyElimination",
     "SplitAccessNode",
     "SplitConsumerMemlet",
+    "find_nodes_in_scope",
     "gt_auto_optimize",
     "gt_change_transient_strides",
     "gt_create_local_double_buffering",
@@ -86,12 +92,13 @@ __all__ = [
     "gt_find_constant_arguments",
     "gt_gpu_transform_non_standard_memlet",
     "gt_gpu_transformation",
-    "gt_horizontal_map_fusion",
+    "gt_horizontal_map_split_fusion",
     "gt_inline_nested_sdfg",
     "gt_make_transients_persistent",
     "gt_map_strides_to_dst_nested_sdfg",
     "gt_map_strides_to_src_nested_sdfg",
     "gt_multi_state_global_self_copy_elimination",
+    "gt_propagate_memlets_map_scope",
     "gt_propagate_strides_from_access_node",
     "gt_propagate_strides_of",
     "gt_reduce_distributed_buffering",
@@ -101,6 +108,6 @@ __all__ = [
     "gt_simplify",
     "gt_split_access_nodes",
     "gt_substitute_compiletime_symbols",
-    "gt_vertical_map_fusion",
+    "gt_vertical_map_split_fusion",
     "splitting_tools",
 ]
