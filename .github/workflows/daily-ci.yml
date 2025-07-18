@@ -59,7 +59,8 @@ jobs:
         #   On macos-14 we see the error: call to 'isfinite' is ambiguous.
         if: ${{ matrix.os == 'macos-15' }}
         run: |
-          xcode-select --install
+          xcode-select -p
+          xcode-select -v
           gcc --version
           brew install libomp
           echo "CMAKE_PREFIX_PATH=$(brew --prefix libomp)" >> $GITHUB_ENV
