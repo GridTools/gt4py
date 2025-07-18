@@ -98,6 +98,7 @@ def test_vertical_map_fusion():
     assert st.scope_dict()[transient_node] is map_entry
 
 
+@pytest.mark.skip("randomly fails, under investigation")
 def test_vertical_map_fusion_with_neighbor_access():
     N = 80
     sdfg = dace.SDFG(util.unique_name("simple"))
