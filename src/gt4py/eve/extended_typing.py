@@ -14,6 +14,7 @@ Definitions in 'typing_extensions' take priority over those in 'typing'.
 
 from __future__ import annotations
 
+# ruff: noqa: F401, F405
 import array as _array
 import dataclasses as _dataclasses
 import functools as _functools

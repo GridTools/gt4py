@@ -16,8 +16,8 @@ In contrast to "backend" we can clearly define a **program processor**: Any func
 This was done to
 
 1. Give a single semantic meaning to calling a `@fendef` decorated function or FieldView program: executing the program.
-1. Reduce the potential for circular imports.
-1. Prepare for compiled backends integration, which needs to distinguish between these two (and possibly more) types of `program_processors`.
+2. Reduce the potential for circular imports.
+3. Prepare for compiled backends integration, which needs to distinguish between these two (and possibly more) types of `program_processors`.
 
 ## Changelog
 

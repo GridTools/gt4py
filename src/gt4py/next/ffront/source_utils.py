@@ -22,7 +22,7 @@ MISSING_FILENAME = "<string>"
 
 
 def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
-    (nonlocals, globals, builtins, unbound) = inspect.getclosurevars(function)  # noqa: A001 [builtin-variable-shadowing]
+    (nonlocals, globals, builtins, _unbound) = inspect.getclosurevars(function)  # noqa: A001 [builtin-variable-shadowing]
     return {**builtins, **globals, **nonlocals}  # nonlocals override globals
 
 

@@ -1319,8 +1319,10 @@ class IRMaker(ast.NodeVisitor):
             condition = self.visit(node.test)
         except KeyError as e:
             raise GTScriptSyntaxError(
-                message="Using function calls in the condition of an if is not allowed,"
-                + " the function needs to be assigned to a variable outside the condition.",
+                message=(
+                    "Using function calls in the condition of an if is not allowed,"
+                    " the function needs to be assigned to a variable outside the condition."
+                ),
                 loc=nodes.Location.from_ast_node(node),
             ) from e
         result.append(
@@ -1642,7 +1644,7 @@ class GTScriptParser(ast.NodeVisitor):
         assert isinstance(definition, types.FunctionType)
         self.definition = definition
         self.filename = inspect.getfile(definition)
-        self.source, decorators_source = gt_meta.split_def_decorators(self.definition)
+        self.source, _decorators_source = gt_meta.split_def_decorators(self.definition)
         self.ast_root = ast.parse(self.source, feature_version=PYTHON_AST_VERSION)
         self.options = options
         self.build_info = options.build_info
