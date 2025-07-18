@@ -839,8 +839,11 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
             self._promote_map(graph, replace_trivail_map_parameter=False)
             if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
+                # `assume_always_shared` does not influences if Maps can be fused or not,
+                #  it only influences what happens to the intermediate storage. If we set
+                #  it we do not need to scan the entire SDFG.
                 options={
-                    "assume_always_shared": True,  # Avoids a scan.
+                    "assume_always_shared": True,
                 },
                 first_map_exit=trivial_map_exit,
                 array=self.access_node,
@@ -868,6 +871,8 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
 
         # Perform the fusing if requested.
         if not self.do_not_fuse:
+            # We can not specify `assume_always_shared` here, because we have to handle the
+            #  intermediate properly.
             gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
                 first_map_exit=trivial_map_exit,

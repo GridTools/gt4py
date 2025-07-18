@@ -23,9 +23,9 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 MapPromotionCallBack: TypeAlias = Callable[
     [dace.SDFGState, dace.SDFG, dace_nodes.MapExit, dace_nodes.MapEntry, list[str]], bool
 ]
-"""Callback for the `SerialMapPromoter`.
+"""Callback for the `MapPromoter`.
 
-After the `SerialMapPromoter` has checked that the map would be promoted, the
+After the `MapPromoter` has checked that the map would be promoted, the
 callback is called. If the function returns `True` then transformation will
 perform the promotion and in case of `False` the transformation will not
 perform the promotion.
@@ -42,7 +42,7 @@ Args:
 
 
 @dace_properties.make_properties
-class SerialMapPromoter(dace_transformation.SingleStateTransformation):
+class MapPromoter(dace_transformation.SingleStateTransformation):
     """Promotes a Map such that it can be fused together.
 
     The transformation essentially matches `MapExit -> (Intermediate) -> MapEntry`
@@ -339,6 +339,11 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
 
         # Now fuse the maps together.
         if self.fuse_after_promotion:
+            # NOTE: In `can_be_applied()` we have made sure that the intermediate is single use
+            #   data. There we avoid the global scan by setting `assume_always_shared`. But here
+            #   this is not possible, this call will scan the entire SDFG, despite the fact that
+            #   it is not needed.
+            # TODO(phimuell): Implement a `assume_always_single_use` flag in DaCe.
             gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
                 expr_index=0,
@@ -419,13 +424,17 @@ class SerialMapPromoter(dace_transformation.SingleStateTransformation):
             #  Map fusion can actually inspect them.
             self._promote_first_map(first_map_exit, second_map_entry)
 
+            # NOTE: The transformation has already made sure that the intermediate is
+            #   a single use data. Since we do not have a way to pass the scan result
+            #   to `MapFusionVertical` we simply set `assume_always_shared` to `True`.
+            #   This _is_ wrong, but will not influence the result if the maps can
+            #   be fused or not.
             if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
-                expr_index=0,
                 options={
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
-                    "assume_always_shared": True,  # Avoid a scan.
+                    "assume_always_shared": True,
                 },
                 first_map_exit=first_map_exit,
                 array=access_node,
