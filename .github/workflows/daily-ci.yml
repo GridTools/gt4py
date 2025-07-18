@@ -62,6 +62,7 @@ jobs:
           brew install libomp
           echo "CMAKE_PREFIX_PATH=$(brew --prefix libomp)" >> $GITHUB_ENV
           ls -l /Library/Developer/CommandLineTools/SDKs
+          gcc --version
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
