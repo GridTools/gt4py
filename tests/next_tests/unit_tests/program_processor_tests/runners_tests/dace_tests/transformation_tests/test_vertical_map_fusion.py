@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from copy import deepcopy
+import copy
 import numpy as np
 import pytest
 
@@ -311,7 +311,7 @@ def test_vertical_map_fusion_with_neighbor_access():
 
     res, ref = util.make_sdfg_args(sdfg)
     ref["gt_conn_E2C"] = np.random.randint(0, N, ref["gt_conn_E2C"].shape, dtype=np.int32)
-    res["gt_conn_E2C"] = deepcopy(ref["gt_conn_E2C"])
+    res["gt_conn_E2C"] = copy.deepcopy(ref["gt_conn_E2C"])
     util.compile_and_run_sdfg(sdfg, **ref)
 
     ret = gtx_transformations.gt_vertical_map_fusion(
