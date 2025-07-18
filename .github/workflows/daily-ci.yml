@@ -59,10 +59,10 @@ jobs:
         #   On macos-14 we see the error: call to 'isfinite' is ambiguous.
         if: ${{ matrix.os == 'macos-15' }}
         run: |
+          xcode-select --install
+          gcc --version
           brew install libomp
           echo "CMAKE_PREFIX_PATH=$(brew --prefix libomp)" >> $GITHUB_ENV
-          ls -l /Library/Developer/CommandLineTools/SDKs
-          gcc --version
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
