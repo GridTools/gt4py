@@ -19,6 +19,7 @@ Example
 def stencil():
     return 42, 43
 
+
 # What is the type of
 lift(stencil)()
 ```
@@ -45,16 +46,17 @@ def foo(inp0, inp1, inp2):
 ### Iterator of tuples
 
 ```python
-def uniform(inp0,inp1,inp2):
-    res = lift(foo)(inp0,inp1,inp2)
+def uniform(inp0, inp1, inp2):
+    res = lift(foo)(inp0, inp1, inp2)
     shifted = shift(O)(res)
     return deref(shifted)
 
-def non_uniform(inp0,inp1,inp2):
-    res_it = lift(foo)(inp0,inp1,inp2)
-    shifted_vals_O = deref(shift(O)(res_it)) # everything is shifted
-    shifted_vals_L = deref(shift(L)(res_it)) # everything is shifted
-    return tuple_get(1, shifted_vals_O), tuple_get(2, shifted_vals_L) # we throw away element 0
+
+def non_uniform(inp0, inp1, inp2):
+    res_it = lift(foo)(inp0, inp1, inp2)
+    shifted_vals_O = deref(shift(O)(res_it))  # everything is shifted
+    shifted_vals_L = deref(shift(L)(res_it))  # everything is shifted
+    return tuple_get(1, shifted_vals_O), tuple_get(2, shifted_vals_L)  # we throw away element 0
 ```
 
 In a naive (non-optimized) implementation of the `non_uniform` case we pay for 4 extra shifts (ptr updates) that are not needed.
@@ -69,9 +71,10 @@ def uniform(inp0, inp1, inp2):
     shifted2 = shift(O)(tuple_get(2, res))
     return make_tuple(deref(shifted0), deref(shifted1), deref(shifted2))
 
+
 def non_uniform(inp0, inp1, inp2):
     res = lift(foo)(inp0, inp1, inp2)
-    return deref(shift(O)(tuple_get(1, res))),deref(shift(L)(tuple_get(2, res)))
+    return deref(shift(O)(tuple_get(1, res))), deref(shift(L)(tuple_get(2, res)))
 ```
 
 In a naive implementation of the `uniform` case we might do extra stride-computations/lookups for each of the shifts.
