@@ -308,7 +308,6 @@ respect-gitignore = true
 show-fixes = true
 # show-source = true
 target-version = 'py310'
-typing-modules = ['gt4py.eve.extended_typing']
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -344,7 +343,7 @@ docstring-code-format = true
 # YTT: flake8-2020
 exclude = ['docs/**', "examples/**", "tests/**"]
 explicit-preview-rules = true
-extend-select = ["F822"]
+extend-select = ["F822"]  # TODO(egparedes): remove when not longer in preview
 ignore = [
   'E501',  # [line-too-long]
   'B905',  # [zip-without-explicit-strict]  # TODO(egparedes): remove when possible
