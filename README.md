@@ -95,9 +95,9 @@ The newly created _venv_ is a standard Python virtual environment preconfigured 
 
 The `pyproject.toml` file contains both the definition of the `gt4py` Python distribution package and the settings of the development tools used in this project, most notably `uv`, `ruff`, and `mypy`. It also contains _dependency groups_ (see [PEP 735](https://peps.python.org/pep-0735/) for further reference) with the development requirements listed in different groups (`build`, `docs`, `lint`, `test`, `typing`, ...) and collected together in the general `dev` group, which gets installed by default by `uv` as mentioned above.
 
-### Development Tasks (`dev-tasks.py`)
+### Development Tasks (`/scripts`)
 
-Recurrent development tasks like bumping versions of used development tools or required third party dependencies have been collected as different subcommands in the [`dev-tasks.py`](./dev-tasks.py) script. Read the tool help for a brief description of every task and always use this tool to update the versions and sync the version configuration across different files (e.g. `pyproject.toml` and `.pre-commit-config.yaml`).
+Recurrent development tasks like bumping versions of used development tools or required third party dependencies have been collected as separate modules in the `/scripts` folder, and collected as subcommands of the [`scripts-cli.py`](./scripts-cli.py) tool. Read the tool help for a brief description of every task and always use this tool to update the versions and sync the version configuration across different files (e.g. `pyproject.toml` and `.pre-commit-config.yaml`).
 
 ## 📖 Documentation
 
