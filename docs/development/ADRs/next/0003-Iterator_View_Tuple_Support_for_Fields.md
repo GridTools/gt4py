@@ -48,7 +48,7 @@ We don't distinguish between field of tuple and tuple of fields. They are both t
 We could represent tuple of fields as tuple of iterators, but then we cannot shift the components in a single shift call, instead it would look like
 
 ```python
-make_tuple(shift(offset)(tuple_get(0,inp)), shift(offset)(tuple_get(1,inp)), ...)
+make_tuple(shift(offset)(tuple_get(0, inp)), shift(offset)(tuple_get(1, inp)), ...)
 ```
 
 This would only make sense if each component needs a different shift, however then most likely the input should be represented as separate fields, not as tuple.
