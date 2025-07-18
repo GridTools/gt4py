@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import numpy as np
 import pytest
 
 dace = pytest.importorskip("dace")
@@ -192,6 +193,7 @@ def test_vertical_map_fusion_with_neighbor_access():
     red = st.add_reduce(
         wcr="lambda a, b: a + b",
         axes=None,
+        identity=0.0,
     )
     red.add_in_connector("IN_b_out")
     red.add_out_connector("OUT_t")
@@ -268,6 +270,7 @@ def test_vertical_map_fusion_with_neighbor_access():
     red2 = st.add_reduce(
         wcr="lambda a, b: a + b",
         axes=None,
+        identity=0.0,
     )
     red2.add_in_connector("IN_d_out")
     red2.add_out_connector("OUT_t2")
@@ -305,6 +308,7 @@ def test_vertical_map_fusion_with_neighbor_access():
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 7
 
     res, ref = util.make_sdfg_args(sdfg)
+    res["gt_conn_E2C"] = ref["gt_conn_E2C"] = np.zeros_like(ref["gt_conn_E2C"], dtype=np.int32)
     util.compile_and_run_sdfg(sdfg, **ref)
 
     ret = gtx_transformations.gt_vertical_map_fusion(
