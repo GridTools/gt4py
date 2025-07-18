@@ -10,6 +10,7 @@ from warnings import warn
 
 from .base import REGISTRY, Backend, BaseBackend, BasePyExtBackend, from_name, register
 from .cuda_backend import CudaBackend
+from .debug_backend import DebugBackend
 from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend
 from .module_generator import BaseModuleGenerator
 from .numpy_backend import NumpyBackend
@@ -22,6 +23,7 @@ __all__ = [
     "BaseModuleGenerator",
     "BasePyExtBackend",
     "CudaBackend",
+    "DebugBackend",
     "GTCpuIfirstBackend",
     "GTCpuKfirstBackend",
     "GTGpuBackend",
