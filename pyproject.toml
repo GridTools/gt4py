@@ -405,10 +405,6 @@ split-on-trailing-comma = false
 [tool.ruff.lint.mccabe]
 max-complexity = 15
 
-[tool.ruff.lint.per-file-ignores]
-'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
-'src/gt4py/next/__init__.py' = ['F401']
-
 # -- setuptools build backend --
 [tool.setuptools]
 platforms = ['Linux', 'Mac']
