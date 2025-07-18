@@ -54,7 +54,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
           python-version: ${{ matrix.python-version }}
 
-      - name: Install lastest-stable xcode version for macos
+      - name: Install latest-stable xcode for macos
         if: ${{ matrix.os == 'macos-15' }}
         uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -63,8 +63,6 @@ jobs:
       - name: Install OpenMP for macos
         if: ${{ matrix.os == 'macos-15' }}
         run: |
-          xcode-select -p
-          xcode-select -v
           gcc --version
           brew install libomp
           echo "CMAKE_PREFIX_PATH=$(brew --prefix libomp)" >> $GITHUB_ENV
