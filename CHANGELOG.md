@@ -67,7 +67,7 @@ First version including the experimental `gt4py.next` aka _Declarative GT4Py_. T
 
 ### Cartesian
 
-- Parametrized dtype: see option 4 of [the gtscript concept workshop](https://github.com/GridTools/concepts/blob/master/collaboration/gtscript-workshop/GTScript-Syntax-Discussion.md#gtscript-syntax-discussed-issues-20200829])
+- Parametrized dtype: see option 4 of [the gtscript concept workshop](https://github.com/GridTools/concepts/blob/master/collaboration/gtscript-workshop/GTScript-Syntax-Discussion.md#gtscript-syntax-discussed-issues-20200829)
 
 ## [1.0.0] - 2022-12-21
 
