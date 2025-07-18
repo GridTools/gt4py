@@ -23,9 +23,9 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 MapPromotionCallBack: TypeAlias = Callable[
     [dace.SDFGState, dace.SDFG, dace_nodes.MapExit, dace_nodes.MapEntry, list[str]], bool
 ]
-"""Callback for the `SerialMapPromoter`.
+"""Callback for the `MapPromoter`.
 
-After the `SerialMapPromoter` has checked that the map would be promoted, the
+After the `MapPromoter` has checked that the map would be promoted, the
 callback is called. If the function returns `True` then transformation will
 perform the promotion and in case of `False` the transformation will not
 perform the promotion.
@@ -42,7 +42,7 @@ Args:
 
 
 @dace_properties.make_properties
-class SerialMapPromoter(dace_transformation.SingleStateTransformation):
+class MapPromoter(dace_transformation.SingleStateTransformation):
     """Promotes a Map such that it can be fused together.
 
     The transformation essentially matches `MapExit -> (Intermediate) -> MapEntry`

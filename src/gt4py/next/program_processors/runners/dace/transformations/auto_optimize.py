@@ -291,7 +291,7 @@ def _gt_auto_process_top_level_maps(
         #  but such cases should be rare.
         # TODO(phimuell): Add a criteria to decide if we should promote or not.
         sdfg.apply_transformations_repeated(
-            gtx_transformations.SerialMapPromoter(
+            gtx_transformations.MapPromoter(
                 only_toplevel_maps=True,
                 promote_vertical=True,
                 promote_horizontal=True,
