@@ -256,16 +256,15 @@ def test_next(
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
-        *("-k", "isfinite"),
-        str(pathlib.Path("tests") / "next_tests/integration_tests/feature_tests/ffront_tests/test_math_builtin_execution.py"),
+        str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
-    # session.run(
-    #     *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
-    #     str(pathlib.Path("src") / "gt4py" / "next"),
-    #     success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
-    # )
+    session.run(
+        *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
+        str(pathlib.Path("src") / "gt4py" / "next"),
+        success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+    )
 
 
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian", "next", "cpu"])
