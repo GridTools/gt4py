@@ -58,7 +58,7 @@ jobs:
         if: ${{ matrix.os == 'macos-15' }}
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable  
+          xcode-version: latest-stable
 
       - name: Install OpenMP for macos
         if: ${{ matrix.os == 'macos-15' }}
