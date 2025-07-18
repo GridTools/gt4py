@@ -26,4 +26,4 @@ On the flip side, the `debug` backend will be (painfully) slow to run even moder
 ### Prototype in existing backends
 
 - Good, because we don't need an extra backend.
-- Bad, because non of the backends are trivial to prototype. Compiled backends incur the cost of compilation and an explicit python <-> C++ interface, which is detrimental for rapid prototyping of new DSL features. The `numpy` backend has to shape everything into a vector operation, obfuscating algorithmic design.
+- Bad, because non of the backends are trivial to prototype. Compiled backends incur the cost of compilation and an explicit python \<-> C++ interface, which is detrimental for rapid prototyping of new DSL features. The `numpy` backend has to shape everything into a vector operation, obfuscating algorithmic design.
