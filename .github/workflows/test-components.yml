@@ -66,21 +66,21 @@ jobs:
         os: ["ubuntu-latest"]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
         nox-session:
-          - session: test_cartesian
-            params: "(internal, cpu)"
-          - session: test_cartesian
-            params: "(dace, cpu)"
-          - session: test_eve
-            params: ""
-          - session: test_next
+          - name: test_cartesian
+            args: "(internal, cpu)"
+          - name: test_cartesian
+            args: "(dace, cpu)"
+          - name: test_eve
+            args: ""
+          - name: test_next
             args: "(internal, cpu, nomesh)"
-          - session: test_next
+          - name: test_next
             args: "(dace, cpu, nomesh)"
-          - session: test_next
+          - name: test_next
             args: "(internal, cpu, atlas)"
-          - session: test_next
+          - name: test_next
             args: "(dace, cpu, atlas)"
-          - session: test_storage
+          - name: test_storage
             args: "(cpu)"
         exclude: ${{ fromJson(needs.define-test-sessions.outputs.test-sessions) }}
       fail-fast: false
