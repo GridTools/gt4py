@@ -54,7 +54,7 @@ jobs:
               --verbose
           fi
           echo 'test-sessions<<EOF' >> $GITHUB_OUTPUT
-          cat gh-test-sessions.json >> $GITHUB_OUTPUT
+          cat gh-exclude-test-sessions.json >> $GITHUB_OUTPUT
           echo '' >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
 
@@ -65,7 +65,24 @@ jobs:
       matrix:
         os: ["ubuntu-latest"]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
-        test-session: ${{ fromJson(needs.define-test-sessions.outputs.test-sessions) }}
+        nox-session:
+          - session: test_cartesian
+            params: "(internal, cpu)"
+          - session: test_cartesian
+            params: "(dace, cpu)"
+          - session: test_eve
+            params: ""
+          - session: test_next
+            args: "(internal, cpu, nomesh)"
+          - session: test_next
+            args: "(dace, cpu, nomesh)"
+          - session: test_next
+            args: "(internal, cpu, atlas)"
+          - session: test_next
+            args: "(dace, cpu, atlas)"
+          - session: test_storage
+            args: "(cpu)"
+        exclude: ${{ fromJson(needs.define-test-sessions.outputs.test-sessions) }}
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -78,7 +95,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
           python-version: ${{ matrix.python-version }}
 
-      - name: Run '${{ matrix.test-session.name }}-${{ matrix.python-version }}(${{ matrix.test-session.args }})' nox session
+      - name: Run '${{ matrix.nox-session.name }}-${{ matrix.python-version }}(${{ matrix.nox-session.args }})' nox session
         shell: bash
         run: |
-          uv run --script noxfile.py -s '${{ matrix.test-session.name }}-${{ matrix.python-version }}${{ matrix.test-session.args }}'
+          uv run --script noxfile.py -s '${{ matrix.nox-session.name }}-${{ matrix.python-version }}${{ matrix.nox-session.args }}'
