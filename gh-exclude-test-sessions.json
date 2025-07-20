@@ -1,8 +1,0 @@
-[
-  {
-    "nox-session": {"name": "test_cartesian"}
-  },
-  {
-    "nox-session": {"name": "test_next"}
-  }
-]
