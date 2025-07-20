@@ -20,11 +20,11 @@ jobs:
       - id: get-versions
         uses: ./.github/actions/get-python-versions
 
-  # Job to define test sessions based on changed files
-  define-test-sessions:
+  # Job to exclude unnecessary test sessions based on the changed files
+  define-test-sessions-exclusions:
     runs-on: ubuntu-latest
     outputs:
-      test-sessions: ${{ steps.test-sessions.outputs.test-sessions }}
+      test-sessions-exclusions: ${{ steps.test-sessions.outputs.test-sessions-exclusions }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,34 +37,31 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Define test sessions based on changed files
-        id: test-sessions
+        id: test-sessions-exclusions
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            # Run only sessions related to the changes
+            # Exclude test sessions not affected by the PR changes
             ./scripts-cli.py github-ci matrix \
               --config nox-sessions-config.yml \
               --base "origin/${{ github.base_ref }}" \
               --output gh-test-sessions.json \
               --verbose
           else
-            # Run all sessions
-            ./scripts-cli.py github-ci matrix \
-              --config nox-sessions-config.yml \
-              --output gh-test-sessions.json \
-              --verbose
+            # Run all sessions without any exclusions
+            echo "{}" > gh-exclude-test-sessions.json
           fi
-          echo 'test-sessions<<EOF' >> $GITHUB_OUTPUT
+          echo 'test-sessions-exclusions<<EOF' >> $GITHUB_OUTPUT
           cat gh-exclude-test-sessions.json >> $GITHUB_OUTPUT
           echo '' >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
 
   # Test-running job
   test-component:
-    needs: [get-python-versions, define-test-sessions]
+    needs: [get-python-versions, define-test-sessions-exclusions]
     strategy:
       matrix:
         os: ["ubuntu-latest"]
-        python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
+        python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
         nox-session:
           - name: test_cartesian
             args: "(internal, cpu)"
@@ -82,7 +79,7 @@ jobs:
             args: "(dace, cpu, atlas)"
           - name: test_storage
             args: "(cpu)"
-        exclude: ${{ fromJson(needs.define-test-sessions.outputs.test-sessions) }}
+        exclude: ${{ fromJSON(needs.define-test-sessions-exclusions.outputs.test-sessions-exclusions) }}
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
