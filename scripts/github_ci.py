@@ -62,7 +62,7 @@ def collect_affected_sessions(
     return affected, all_session_names
 
 
-def compute_result(
+def compute_output(
     sessions: Sequence[str],
     kind: Literal["affected", "excluded"],
     output: str | None,
@@ -71,15 +71,17 @@ def compute_result(
 ) -> None:
     entries = globals()[f"make_{kind}_matrix_entries"](sessions, verbose=verbose)
 
+    rich.print(
+        "\n--------------------------------------------------------\n"
+        f"{kind} test sessions entries of GitHub Actions matrix:"
+        "\n--------------------------------------------------------\n"
+    )
+    pretty.pprint(entries)
+
     if output:
         with open(output, "w") as f:
             json.dump(entries, f, indent=2)
         rich.print(f"Saved {kind} test sessions entries of GitHub Actions matrix to '{output}'")
-    else:
-        rich.print(
-            f"{kind} test sessions entries of GitHub Actions matrix: (use '--output <filename>' to save it)\n---------------------\n"
-        )
-        pretty.pprint(entries)
 
 
 def make_affected_matrix_entries(
@@ -124,7 +126,9 @@ def matrix_exclude(
     base_commit: Annotated[
         str | None, typer.Option("--base", "-b", help="Base commit for changes")
     ] = None,
-    output: Annotated[str | None, typer.Option("--output", help="Output (JSON) file name.")] = None,
+    output: Annotated[
+        str | None, typer.Option("--output", "-o", help="Output (JSON) file name.")
+    ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose output")] = False,
 ) -> None:
     """Define excluded entries in a GitHub Actions matrix if not affected by changes from a base commit."""
@@ -133,7 +137,7 @@ def matrix_exclude(
         config=config, base_commit=base_commit, verbose=verbose
     )
     excluded_sessions = sorted(set(all_sessions) - set(affected))
-    compute_result(excluded_sessions, "excluded", output, verbose=verbose)
+    compute_output(excluded_sessions, "excluded", output, verbose=verbose)
 
 
 @cli.command("matrix-sessions")
@@ -145,7 +149,9 @@ def matrix_sessions(
     base_commit: Annotated[
         str | None, typer.Option("--base", "-b", help="Base commit for changes")
     ] = None,
-    output: Annotated[str | None, typer.Option("--output", help="Output (JSON) file name.")] = None,
+    output: Annotated[
+        str | None, typer.Option("--output", "-o", help="Output (JSON) file name.")
+    ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose output")] = False,
 ) -> None:
     """Define entries of the test sessions affected by changes from a base commit as a factor definition in a GitHub Actions matrix."""
@@ -153,7 +159,7 @@ def matrix_sessions(
     affected, _all_sessions = collect_affected_sessions(
         config=config, base_commit=base_commit, verbose=verbose
     )
-    compute_result(affected, "affected", output, verbose=verbose)
+    compute_output(affected, "affected", output, verbose=verbose)
 
 
 if __name__ == "__main__":
