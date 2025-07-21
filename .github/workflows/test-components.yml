@@ -50,8 +50,12 @@ jobs:
             # Run all sessions without any exclusions
             echo "{}" > gh-exclude-test-sessions.json
           fi
+          # Combine with other exclusions (if needed). Example: $ echo '[{"nox-session": "test_foo"}]' > static-exclude.json
+          echo '[]' > static-exclude.json
+          jq -s 'add' static-exclude.json gh-exclude-test-sessions.json > all-exclusions.json
+          # Output the final exclusions for the test sessions
           echo 'test-sessions-exclusions<<EOF' >> $GITHUB_OUTPUT
-          cat gh-exclude-test-sessions.json >> $GITHUB_OUTPUT
+          cat all-exclusions.json >> $GITHUB_OUTPUT
           echo '' >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
 
