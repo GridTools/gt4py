@@ -214,10 +214,10 @@ def test_horizontal_map_fusion():
     sdfg = _make_sdfg_with_multiple_maps_that_share_inputs(N)
 
     _ = gtx_transformations.gt_horizontal_map_split_fusion(
-        sdfg,
-        False,
-        True,
-        False,
+        sdfg=sdfg,
+        run_simplify=False,
+        fuse_possible_maps=True,
+        consolidate_edges_only_if_not_extending=False,
         validate=True,
         validate_all=True,
     )
