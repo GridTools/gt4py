@@ -57,7 +57,7 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - name: Install gcc (with OpenMP) for macos
+      - name: Install gcc for macos
         if: ${{ (matrix.os == 'macos-15') && (matrix.gt4py-module == 'cartesian') }}
         run: |
           brew install gcc@14
@@ -66,12 +66,16 @@ jobs:
           echo "CXX=g++-14" >> $GITHUB_ENV
           echo "SDKROOT=$(xcrun --show-sdk-path)" >> $GITHUB_ENV
 
-      - name: Install libomp for macos clang
+      - name: Use default gcc-clang on macos
         if: ${{ (matrix.os == 'macos-15') && (matrix.gt4py-module != 'cartesian') }}
         run: |
           gcc --version
           echo "CC=gcc" >> $GITHUB_ENV
           echo "CXX=g++" >> $GITHUB_ENV
+
+      - name: Install libomp for macos
+        if: ${{ matrix.os == 'macos-15' }}
+        run: |
           brew install libomp
           echo "CMAKE_PREFIX_PATH=$(brew --prefix libomp)" >> $GITHUB_ENV
 
