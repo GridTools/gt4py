@@ -134,7 +134,7 @@ In the long-term, this alternative seems to combine the best features from other
 
 ## References <!-- optional -->
 
-- [\[Numpy-discussion\] A case for rank-0 arrays](https://mail.python.org/pipermail/numpy-discussion/2006-February/006384.html)
+- [[Numpy-discussion] A case for rank-0 arrays](https://mail.python.org/pipermail/numpy-discussion/2006-February/006384.html)
 - [Python - annotating the decorated function](https://github.com/python/typing/issues/412)
 - [Python array API standard - Array object](https://data-apis.org/array-api/latest/API_specification/array_object.html)
 - [GT4Py discussion and notes (HackMD)](https://hackmd.io/@gridtools/SyQ4vJ9Js)
