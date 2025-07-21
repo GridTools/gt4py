@@ -337,19 +337,16 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         # Now promote the second map such that it maps the first map.
         self._promote_first_map(first_map_exit, second_map_entry)
 
-        # Now fuse the maps together.
         if self.fuse_after_promotion:
-            # NOTE: In `can_be_applied()` we have made sure that the intermediate is single use
-            #   data. There we avoid the global scan by setting `assume_always_shared`. But here
-            #   this is not possible, this call will scan the entire SDFG, despite the fact that
-            #   it is not needed.
-            # TODO(phimuell): Implement a `assume_always_single_use` flag in DaCe.
+            # NOTE: `can_be_applied()` has made sure that the intermediates are single
+            #   use data, thus make we skip the scan.
             gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
                 expr_index=0,
                 options={
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
+                    "assume_always_single_use_data": True,
                 },
                 first_map_exit=first_map_exit,
                 array=access_node,
@@ -424,17 +421,15 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
             #  Map fusion can actually inspect them.
             self._promote_first_map(first_map_exit, second_map_entry)
 
-            # NOTE: The transformation has already made sure that the intermediate is
-            #   a single use data. Since we do not have a way to pass the scan result
-            #   to `MapFusionVertical` we simply set `assume_always_shared` to `True`.
-            #   This _is_ wrong, but will not influence the result if the maps can
-            #   be fused or not.
+            # We must now check if the Maps can be fused. Note if we are here, then the
+            #   `self` has already made sure that the intermediates are single use data.
+            #   Thus, we specify `assume_always_single_use_data` to avoid a scan.
             if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
                 options={
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
-                    "assume_always_shared": True,
+                    "assume_always_single_use_data": True,
                 },
                 first_map_exit=first_map_exit,
                 array=access_node,
