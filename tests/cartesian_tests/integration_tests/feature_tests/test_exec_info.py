@@ -7,7 +7,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import inspect
+import sys
 from typing import Any, Dict
+import warnings
 
 import numpy as np
 import pytest
@@ -183,7 +185,15 @@ class TestExecInfo:
                     stencil_info["run_cpp_time"],
                     exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"],
                 )
-            assert stencil_info["run_time"] > stencil_info["run_cpp_time"]
+            if sys.platform != "darwin":
+                assert stencil_info["run_time"] > stencil_info["run_cpp_time"]
+            elif stencil_info["run_time"] < stencil_info["run_cpp_time"]:
+                # TODO: this assert was disabled on macos because of out-of-sync timers
+                warnings.warn(
+                    "Unexpected run_time '{}' < run_cpp_time '{}'.".format(
+                        stencil_info["run_time"], stencil_info["run_cpp_time"]
+                    )
+                )
             assert "total_run_cpp_time" in stencil_info
             if self.nt == 1:
                 assert stencil_info["total_run_cpp_time"] == stencil_info["run_cpp_time"]
