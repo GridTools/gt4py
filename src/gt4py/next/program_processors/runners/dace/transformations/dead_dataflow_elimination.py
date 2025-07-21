@@ -60,7 +60,7 @@ def gt_eliminate_dead_dataflow(
             validate=False,
             validate_all=validate_all,
         )
-    elif validate and (not validate_all):
+    if validate and (not validate_all):
         sdfg.validate()
 
     return ret
