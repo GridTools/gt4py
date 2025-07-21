@@ -165,7 +165,7 @@ def test_cartesian(
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
-        str(pathlib.Path("tests") / "cartesian_tests"),
+        "tests/cartesian_tests/integration_tests/multi_feature_tests",
         *session.posargs,
     )
     session.run(
