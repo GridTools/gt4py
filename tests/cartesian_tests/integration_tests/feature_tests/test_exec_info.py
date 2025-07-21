@@ -183,7 +183,7 @@ class TestExecInfo:
                     stencil_info["run_cpp_time"],
                     exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"],
                 )
-                assert stencil_info["run_time"] > stencil_info["run_cpp_time"]
+            assert stencil_info["run_time"] > stencil_info["run_cpp_time"]
             assert "total_run_cpp_time" in stencil_info
             if self.nt == 1:
                 assert stencil_info["total_run_cpp_time"] == stencil_info["run_cpp_time"]
