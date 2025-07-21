@@ -38,9 +38,6 @@ jobs:
         #   On macos-14 we see the error: call to 'isfinite' is ambiguous.
         os: ["ubuntu-latest", "macos-15"]
         python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
-        exclude:
-          - os: macos-15
-            gt4py-module: cartesian
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -54,25 +51,31 @@ jobs:
           cache-dependency-glob: "uv.lock"
           python-version: ${{ matrix.python-version }}
 
+      - name: Install gcc for macos
+        if: ${{ matrix.os == 'macos-15' && matrix.gt4py-module == 'cartesian' }}
+        run: |
+          brew install gcc@14
+          echo "CC=$(brew --prefix gcc)/bin/gcc-14" >> $GITHUB_ENV
+          echo "CXX=$(brew --prefix gcc)/bin/g++-14" >> $GITHUB_ENV
+
       - name: Install latest-stable xcode for macos
-        if: ${{ matrix.os == 'macos-15' }}
+        if: ${{ matrix.os == 'macos-15' && matrix.gt4py-module != 'cartesian' }}
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
 
-      - name: Install OpenMP for macos
-        if: ${{ matrix.os == 'macos-15' }}
+      - name: Install libomp for macos
+        if: ${{ matrix.os == 'macos-15' && matrix.gt4py-module != 'cartesian' }}
         run: |
           gcc --version
+          echo "CC=gcc" >> $GITHUB_ENV
+          echo "CXX=g++" >> $GITHUB_ENV
           brew install libomp
           echo "CMAKE_PREFIX_PATH=$(brew --prefix libomp)" >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
           UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
-        # Force a specific compiler for setuptools/distutils (used in gt4py.cartesian)
-          CXX: g++
-          CC: gcc
         run: uv run --script noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
       - name: Notify slack
