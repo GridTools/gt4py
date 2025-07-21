@@ -131,13 +131,16 @@ def test_origin_offsetting_frozen(domain, outp_origin):
 
     assert np.allclose(inp, 7.0)
 
-    outp_subset = np.asarray(outp)[
-        outp_origin[0] : outp_origin[0] + domain[0],
-        outp_origin[1] : outp_origin[1] + domain[1],
-        outp_origin[2] : outp_origin[2] + domain[2],
-    ]
-    assert np.allclose(outp_subset, 7.0)
-    assert np.sum(outp_subset, axis=(0, 1, 2)) == np.prod(domain) * 7.0
+    assert np.allclose(
+        np.asarray(outp)[
+            outp_origin[0] : outp_origin[0] + domain[0],
+            outp_origin[1] : outp_origin[1] + domain[1],
+            outp_origin[2] : outp_origin[2] + domain[2],
+        ],
+        7.0,
+    )
+
+    assert np.sum(outp, axis=(0, 1, 2)) == np.prod(domain) * 7.0
 
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
@@ -177,13 +180,15 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
 
     assert np.allclose(inp, 7.0)
 
-    outp_subset = np.asarray(outp)[
-        outp_origin[0] : outp_origin[0] + domain[0],
-        outp_origin[1] : outp_origin[1] + domain[1],
-        outp_origin[2] : outp_origin[2] + domain[2],
-    ]
-    assert np.allclose(outp_subset, 7.0)
-    assert np.sum(outp_subset, axis=(0, 1, 2)) == np.prod(domain) * 7.0
+    assert np.allclose(
+        np.asarray(outp)[
+            outp_origin[0] : outp_origin[0] + domain[0],
+            outp_origin[1] : outp_origin[1] + domain[1],
+            outp_origin[2] : outp_origin[2] + domain[2],
+        ],
+        7.0,
+    )
+    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == np.prod(domain) * 7.0
 
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
@@ -220,14 +225,15 @@ def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
     call_stencil_object(locinp=inp, locoutp=outp)
 
     assert np.allclose(np.asarray(inp), 7.0)
-
-    outp_subset = np.asarray(outp)[
-        outp_origin[0] : outp_origin[0] + domain[0],
-        outp_origin[1] : outp_origin[1] + domain[1],
-        outp_origin[2] : outp_origin[2] + domain[2],
-    ]
-    assert np.allclose(outp_subset, 7.0)
-    assert np.sum(outp_subset, axis=(0, 1, 2)) == np.prod(domain) * 7.0
+    assert np.allclose(
+        np.asarray(outp)[
+            outp_origin[0] : outp_origin[0] + domain[0],
+            outp_origin[1] : outp_origin[1] + domain[1],
+            outp_origin[2] : outp_origin[2] + domain[2],
+        ],
+        7.0,
+    )
+    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == np.prod(domain) * 7.0
 
 
 def test_optional_arg_noprovide():
@@ -271,10 +277,8 @@ def test_optional_arg_noprovide():
     call_frozen_stencil()
 
     assert np.allclose(inp, 7.0)
-
-    outp_subset = np.asarray(outp)[2:5, 2:5, :]
-    assert np.allclose(outp_subset, 7.0)
-    assert np.sum(outp_subset, axis=(0, 1, 2)) == 90 * 7.0
+    assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
+    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
 
 def test_optional_arg_provide(decorator):
@@ -327,10 +331,8 @@ def test_optional_arg_provide(decorator):
     call_stencil()
 
     assert np.allclose(inp, 7.0)
-
-    outp_subset = np.asarray(outp)[2:5, 2:5, :]
-    assert np.allclose(outp_subset, 7.0)
-    assert np.sum(outp_subset, axis=(0, 1, 2)) == 90 * 7.0
+    assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
+    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
 
 def test_optional_arg_provide_aot(decorator):
@@ -389,10 +391,8 @@ def test_optional_arg_provide_aot(decorator):
     csdfg(inp=inp, outp=outp, unused_field=unused_field, unused_par=7.0)
 
     assert np.allclose(inp, 7.0)
-
-    outp_subset = np.asarray(outp)[2:5, 2:5, :]
-    assert np.allclose(outp_subset, 7.0)
-    assert np.sum(outp_subset, axis=(0, 1, 2)) == 90 * 7.0
+    assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
+    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
 
 def test_nondace_raises(decorator):
