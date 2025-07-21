@@ -190,7 +190,7 @@ class TestExecInfo:
             elif stencil_info["run_time"] < stencil_info["run_cpp_time"]:
                 # TODO: this assert was disabled on macos because of out-of-sync timers
                 warnings.warn(
-                    "Unexpected run_time '{}' < run_cpp_time '{}'.".format(
+                    "Unexpected run_time '{}' < run_cpp_time '{}' on macos.".format(
                         stencil_info["run_time"], stencil_info["run_cpp_time"]
                     )
                 )
