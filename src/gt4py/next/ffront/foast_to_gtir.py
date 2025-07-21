@@ -288,8 +288,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     )(current_expr)
                 # `field(Dim + idx)`
                 case foast.BinOp(
-                    op=dialect_ast_enums.BinaryOperator.ADD
-                    | dialect_ast_enums.BinaryOperator.SUB,
+                    op=dialect_ast_enums.BinaryOperator.ADD | dialect_ast_enums.BinaryOperator.SUB,
                     left=foast.Name(id=dimension),  # TODO(tehrengruber): use type of lhs
                     right=foast.Constant(value=offset_index),
                 ):
@@ -407,7 +406,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
         return im.let(cond_symref_name, cond_)(result)
 
-    _visit_concat_where = _visit_where  # TODO(havogt): upgrade concat_where
+    def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        domain, true_branch, false_branch = self.visit(node.args, **kwargs)
+        return im.concat_where(domain, true_branch, false_branch)
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return im.call("broadcast")(*self.visit(node.args, **kwargs))
@@ -489,7 +490,7 @@ def _map(
     Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_`ing lists.
     """
     if all(
-        isinstance(t, ts.ScalarType)
+        isinstance(t, (ts.ScalarType, ts.DimensionType, ts.DomainType))
         for arg_type in original_arg_types
         for t in type_info.primitive_constituents(arg_type)
     ):

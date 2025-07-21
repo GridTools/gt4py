@@ -47,7 +47,9 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         ...     return a
 
         >>> @gtx.program
-        ... def copy_program(a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]):
+        ... def copy_program(
+        ...     a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]
+        ... ):
         ...     copy(a, out=out)
 
         >>> compile_time_args = arguments.CompileTimeArgs(
@@ -142,15 +144,13 @@ def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]
         return None
 
     if len(scanops_per_axis.values()) != 1:
-        scanops_per_axis_strs = [
+        scanops_per_axis_str = "\n".join(
             f"- {dim.value}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
-        ]
+        )
 
         raise TypeError(
             "Only 'ScanOperator's defined on the same axis "
-            + "can be used in a 'Program', found:\n"
-            + "\n".join(scanops_per_axis_strs)
-            + "."
+            f"can be used in a 'Program', found:\n{scanops_per_axis_str}\n"
         )
 
     return iter(scanops_per_axis.keys()).__next__()
@@ -478,9 +478,9 @@ class ProgramLowering(
 
             field_slice = None
             if isinstance(first_field, past.Subscript):
-                assert all(
-                    isinstance(field, past.Subscript) for field in flattened
-                ), "Incompatible field in tuple: either all fields or no field must be sliced."
+                assert all(isinstance(field, past.Subscript) for field in flattened), (
+                    "Incompatible field in tuple: either all fields or no field must be sliced."
+                )
                 assert all(
                     concepts.eq_nonlocated(
                         first_field.slice_,

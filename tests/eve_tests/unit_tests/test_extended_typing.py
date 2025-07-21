@@ -199,14 +199,9 @@ ACTUAL_TYPE_SAMPLES = [
     (list, type),
     (Tuple[int, float], type(Tuple[int, float])),
     (List[int], type(List[int])),
+    (tuple[int, float], types.GenericAlias),
+    (list[int], types.GenericAlias),
 ]
-if sys.version_info >= (3, 9):
-    ACTUAL_TYPE_SAMPLES.extend(
-        [
-            (tuple[int, float], types.GenericAlias),  # type: ignore[misc]   # ignore false positive bug: https://github.com/python/mypy/issues/11098
-            (list[int], types.GenericAlias),
-        ]
-    )
 
 
 @pytest.mark.parametrize(["instance", "expected"], ACTUAL_TYPE_SAMPLES)
@@ -267,6 +262,7 @@ class TestHashableTypings:
 
     def test_has_custom_hash_abc(self):
         assert isinstance(4, xtyping.HasCustomHash)
+        assert isinstance(True, xtyping.HasCustomHash)
         assert isinstance((), xtyping.HasCustomHash)
 
         class A:
@@ -275,14 +271,15 @@ class TestHashableTypings:
 
         assert isinstance(A(), xtyping.HasCustomHash)
 
+        # PEP-683 Immortal objects have custom hash
+        assert isinstance(None, xtyping.HasCustomHash) == (sys.version_info >= (3, 12))
+
         class B:
             __hash__ = None
 
         assert not isinstance(B(), xtyping.HasCustomHash)
 
-        assert not isinstance(None, xtyping.HasCustomHash)
         assert not isinstance(object(), xtyping.HasCustomHash)
-        assert not isinstance(tuple, xtyping.HasCustomHash)
         assert not isinstance(type, xtyping.HasCustomHash)
 
 
@@ -390,11 +387,7 @@ def test_eval_forward_ref():
             globalns={"Annotated": Annotated, "Callable": Callable},
             localns={"MissingRef": MissingRef},
         )
-    ) == Callable[[int], MissingRef] or (  # some patch versions of cpython3.9 show weird behaviors
-        sys.version_info >= (3, 9)
-        and sys.version_info < (3, 10)
-        and (ref == Callable[[Annotated[int, "Foo"]], MissingRef])
-    )
+    ) == Callable[[int], MissingRef]
 
     assert (
         xtyping.eval_forward_ref(

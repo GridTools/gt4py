@@ -26,9 +26,9 @@ class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
         return ir.Lambda(params=node.params, expr=self.visit(node.expr, symbol_map=new_symbol_map))
 
     def generic_visit(self, node: ir.Node, **kwargs: Any):  # type: ignore[override]
-        assert isinstance(node, SymbolTableTrait) == isinstance(
-            node, ir.Lambda
-        ), "found unexpected new symbol scope"
+        assert isinstance(node, SymbolTableTrait) == isinstance(node, ir.Lambda), (
+            "found unexpected new symbol scope"
+        )
         return super().generic_visit(node, **kwargs)
 
 

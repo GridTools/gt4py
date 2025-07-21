@@ -14,6 +14,7 @@ Definitions in 'typing_extensions' take priority over those in 'typing'.
 
 from __future__ import annotations
 
+# ruff: noqa: F401, F405
 import array as _array
 import dataclasses as _dataclasses
 import functools as _functools
@@ -139,31 +140,23 @@ MaybeNestedInList = Union[_T_co, NestedList[_T_co]]
 MaybeNestedInTuple = Union[_T_co, NestedTuple[_T_co]]
 
 # -- Typing annotations --
-if _sys.version_info >= (3, 9):
-    SolvedTypeAnnotation = Union[
-        Type,
-        _typing._SpecialForm,
-        _types.GenericAlias,  # type: ignore[name-defined]  # Python 3.8 does not include `_types.GenericAlias`
-        _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
-    ]
-else:
-    SolvedTypeAnnotation = Union[  # type: ignore[misc]  # mypy consider this assignment a redefinition
-        Type, _typing._SpecialForm, _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
-    ]
+SolvedTypeAnnotation = Union[
+    Type,
+    _typing._SpecialForm,
+    _types.GenericAlias,
+    _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
+]
 
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
 
 StdGenericAliasType: Final[Type] = type(List[int])
 
-if _sys.version_info >= (3, 9):
-    if TYPE_CHECKING:
-        StdGenericAlias: TypeAlias = _types.GenericAlias  # type: ignore[name-defined,attr-defined]  # Python 3.8 does not include `_types.GenericAlias`
+if TYPE_CHECKING:
+    StdGenericAlias: TypeAlias = _types.GenericAlias
 
 _TypingSpecialFormType: Final[Type] = _typing._SpecialForm
-_TypingGenericAliasType: Final[Type] = (
-    _typing._BaseGenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
-)
+_TypingGenericAliasType: Final[Type] = _typing._BaseGenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
 
 
 # -- Standard Python protocols --
@@ -326,13 +319,11 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # -- Added functionality --
-_ArtefactTypes: tuple[type, ...] = tuple()
-if _sys.version_info >= (3, 9):
-    _ArtefactTypes = (_types.GenericAlias,)  # type: ignore[attr-defined]  # GenericAlias only from >= 3.8
+_ArtefactTypes: tuple[type, ...] = (_types.GenericAlias,)
 
-    # `Any` is a class since Python 3.11
-    if isinstance(_typing.Any, type):  # Python >= 3.11
-        _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
+# `Any` is a class since Python 3.11
+if isinstance(_typing.Any, type):  # Python >= 3.11
+    _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
 
 # `Any` is a class since typing_extensions >= 4.4 and Python 3.11
 if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
@@ -468,14 +459,14 @@ def get_partial_type_hints(
 ) -> Dict[str, Union[Type, ForwardRef]]:
     """Return a dictionary with type hints (using forward refs for undefined names) for a function, method, module or class object.
 
-    For each member type hint in the object a :class:`typing.ForwarRef` instance will be
+    For each member type hint in the object a :class:`typing.ForwardRef` instance will be
     returned if some names in the string annotation have not been found. For additional
     information see :func:`typing.get_type_hints`.
     """
     if getattr(obj, "__no_type_check__", None):
         return {}
     if not hasattr(obj, "__annotations__"):
-        return get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+        return get_type_hints(
             obj, globalns=globalns, localns=localns, include_extras=include_extras
         )
 
@@ -484,7 +475,7 @@ def get_partial_type_hints(
     for name, hint in annotations.items():
         obj.__annotations__ = {name: hint}
         try:
-            resolved_hints = get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+            resolved_hints = get_type_hints(
                 obj, globalns=globalns, localns=localns, include_extras=include_extras
             )
             hints[name] = resolved_hints[name]
@@ -540,7 +531,7 @@ def eval_forward_ref(
     else:
         safe_localns = {"typing": _sys.modules[__name__], "NoneType": type(None)}
 
-    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]
     assert not isinstance(actual_type, ForwardRef)
 
     return actual_type

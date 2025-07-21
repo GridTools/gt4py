@@ -87,9 +87,19 @@ def _is_collectable_expr(node: itir.Node) -> bool:
         #  backend (single pass eager depth first visit approach)
         # do also not collect lifts or applied lifts as they become invisible to the lift inliner
         #  otherwise
-        if cpm.is_call_to(node, ("lift", "shift", "reduce", "map_")) or cpm.is_applied_lift(node):
+        # do also not collect index nodes because otherwise the right hand side of SetAts becomes a let statement
+        #  instead of an as_fieldop
+        if cpm.is_call_to(
+            node, ("lift", "shift", "reduce", "map_", "index")
+        ) or cpm.is_applied_lift(node):
             return False
         return True
+    # do also not collect make_tuple(index) nodes because otherwise the right hand side of SetAts becomes a let statement
+    #  instead of an as_fieldop
+    if cpm.is_call_to(node, "make_tuple") and all(
+        cpm.is_call_to(arg, "index") for arg in node.args
+    ):
+        return False
     elif isinstance(node, itir.Lambda):
         return True
 
@@ -443,9 +453,9 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
             assert within_stencil is None
             within_stencil = False
         else:
-            assert (
-                within_stencil is not None
-            ), "The expression's context must be specified using `within_stencil`."
+            assert within_stencil is not None, (
+                "The expression's context must be specified using `within_stencil`."
+            )
 
         offset_provider_type = offset_provider_type or {}
         node = itir_type_inference.infer(

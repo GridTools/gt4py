@@ -244,7 +244,8 @@ def is_reachable(
     """Explores the graph from `start` and checks if `target` is reachable.
 
     The exploration of the graph is done in a way that ignores the connector names.
-    It is possible to pass multiple start nodes and targets. In case of multiple target nodes, the function returns True if any of them is reachable.
+    It is possible to pass multiple start nodes and targets. In case of multiple target
+    nodes, the function returns True if any of them is reachable.
 
     Args:
         start: The node from where to start.
@@ -261,6 +262,42 @@ def is_reachable(
             return True
         seen.add(node)
         to_visit.extend(oedge.dst for oedge in state.out_edges(node) if oedge.dst not in seen)
+
+    return False
+
+
+def is_source_node_of(
+    sink: dace_nodes.Node,
+    possible_sources: Union[dace_nodes.Node, Sequence[dace_nodes.Node]],
+    state: dace.SDFGState,
+) -> bool:
+    """Explores the graph and checks if `possible_sources` produce data for `sink`.
+
+    The function is similar to `is_reachable()` except that it explores the
+    graph in the reverse direction of the data flow. The function starts a
+    revers depth first search at `sink` and checks if it is possible to reach
+    any nodes listed in `possible_sources`.
+
+    Args:
+        sink: Start of the reverse DFS.
+        possible_sources: Look for these nodes.
+        state: The SDFG state on which we operate.
+    """
+    # TODO(phimuell): Think if this function could be implemented in terms of `is_reachable()`.
+    to_visit: list[dace_nodes.Node] = [sink] if isinstance(sink, dace_nodes.Node) else list(sink)
+    possible_sources = (
+        {possible_sources}
+        if isinstance(possible_sources, dace_nodes.Node)
+        else set(possible_sources)
+    )
+    seen: set[dace_nodes.Node] = set()
+
+    while to_visit:
+        node = to_visit.pop()
+        if node in possible_sources:
+            return True
+        seen.add(node)
+        to_visit.extend(iedge.src for iedge in state.in_edges(node) if iedge.src not in seen)
 
     return False
 

@@ -193,6 +193,71 @@ def test_value_from_literal(value, expected):
                 im.plus(im.maximum(im.minus(1, "a"), im.plus("a", 1)), im.minus(1, "a")),
             ),
         ),
+        # InfinityLiteral folding
+        (
+            im.call("maximum")(im.literal_from_value(1), itir.InfinityLiteral.POSITIVE),
+            itir.InfinityLiteral.POSITIVE,
+        ),
+        (
+            im.call("maximum")(itir.InfinityLiteral.POSITIVE, im.literal_from_value(1)),
+            itir.InfinityLiteral.POSITIVE,
+        ),
+        (
+            im.call("maximum")(im.literal_from_value(1), itir.InfinityLiteral.NEGATIVE),
+            im.literal_from_value(1),
+        ),
+        (
+            im.call("maximum")(itir.InfinityLiteral.NEGATIVE, im.literal_from_value(1)),
+            im.literal_from_value(1),
+        ),
+        (
+            im.call("minimum")(im.literal_from_value(1), itir.InfinityLiteral.POSITIVE),
+            im.literal_from_value(1),
+        ),
+        (
+            im.call("minimum")(itir.InfinityLiteral.POSITIVE, im.literal_from_value(1)),
+            im.literal_from_value(1),
+        ),
+        (
+            im.call("minimum")(im.literal_from_value(1), itir.InfinityLiteral.NEGATIVE),
+            itir.InfinityLiteral.NEGATIVE,
+        ),
+        (
+            im.call("minimum")(itir.InfinityLiteral.NEGATIVE, im.literal_from_value(1)),
+            itir.InfinityLiteral.NEGATIVE,
+        ),
+        (
+            im.call("greater")(im.literal_from_value(1), itir.InfinityLiteral.POSITIVE),
+            im.literal_from_value(False),
+        ),
+        (
+            im.call("greater")(im.literal_from_value(1), itir.InfinityLiteral.NEGATIVE),
+            im.literal_from_value(True),
+        ),
+        (
+            im.call("less")(im.literal_from_value(1), itir.InfinityLiteral.POSITIVE),
+            im.literal_from_value(True),
+        ),
+        (
+            im.call("less")(im.literal_from_value(1), itir.InfinityLiteral.NEGATIVE),
+            im.literal_from_value(False),
+        ),
+        (
+            im.call("greater")(itir.InfinityLiteral.POSITIVE, im.literal_from_value(1)),
+            im.literal_from_value(True),
+        ),
+        (
+            im.call("greater")(itir.InfinityLiteral.NEGATIVE, im.literal_from_value(1)),
+            im.literal_from_value(False),
+        ),
+        (
+            im.call("less")(itir.InfinityLiteral.POSITIVE, im.literal_from_value(1)),
+            im.literal_from_value(False),
+        ),
+        (
+            im.call("less")(itir.InfinityLiteral.NEGATIVE, im.literal_from_value(1)),
+            im.literal_from_value(True),
+        ),
     ),
     ids=lambda x: str(x[0]),
 )

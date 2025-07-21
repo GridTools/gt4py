@@ -154,82 +154,6 @@ def register(backend_cls: type[Backend]) -> type[Backend]:
     )
 
 
-class CLIBackendMixin(Backend):
-    @abc.abstractmethod
-    def generate_computation(self) -> dict[str, str | dict]:
-        """
-        Generate the computation source code in a way agnostic of the way it is going to be used.
-
-        Returns
-        -------
-        Dict[str, str | Dict] of source file names / directories -> contents:
-            If a key's value is a string, it is interpreted as a file name and its value as the
-            source code of that file.
-            If a key's value is a Dict, it is interpreted as a directory name and its
-            value as a nested file hierarchy to which the same rules are applied recursively.
-            The root path is relative to the build directory.
-
-        Raises
-        ------
-        NotImplementedError
-            If the backend does not support usage outside of JIT compilation / generation.
-
-        Example
-        -------
-        .. code-block:: python
-
-            def mystencil(...):
-                ...
-
-            options = BuildOptions(name="mystencil", ...)
-            ir = frontend.generate(mystencil, {}, options)
-            stencil_src = backend.generate_computation(ir, options)
-
-            print(stencil_src)
-
-            # this might be output from a fictional backend:
-            {
-                "mystencil_project": {
-                    "src": {
-                        "stencil.cpp",
-                        "helpers.cpp"
-                    },
-                    "include": {
-                        "stencil.hpp"
-                    },
-                }
-            }
-
-        This can now be automatically be turned into a folder hierarchy that makes sense
-        and can be incorporated into an external build system.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def generate_bindings(self, language_name: str) -> dict[str, str | dict]:
-        """
-        Generate bindings source code from ``language_name`` to the target language of the backend.
-
-        Returns
-        -------
-        Analog to :py:meth:`generate_computation` but containing bindings source code. The
-        dictionary contains a tree of directories with leaves being a mapping from filename to
-        source code pairs, relative to the build directory.
-
-        Raises
-        ------
-        RuntimeError
-            If the backend does not support the bindings language.
-        """
-        languages = getattr(self, "languages", {"bindings": {}})
-        name = getattr(self, "name", "")
-        if language_name not in languages["bindings"]:
-            raise NotImplementedError(
-                f"Backend {name} does not implement bindings for {language_name}"
-            )
-        return {}
-
-
 class BaseBackend(Backend):
     MODULE_GENERATOR_CLASS: ClassVar[type[BaseModuleGenerator]]
 
@@ -262,10 +186,9 @@ class BaseBackend(Backend):
         stencil_class_name = self.builder.class_name
         file_name = str(self.builder.module_path)
         stencil_module = gt_utils.make_module_from_file(stencil_class_name, file_name)
-        stencil_class = getattr(stencil_module, stencil_class_name)
+        stencil_class: type[StencilObject] = getattr(stencil_module, stencil_class_name)
         stencil_class.__module__ = self.builder.module_qualname
         stencil_class._gt_id_ = self.builder.stencil_id.version
-        stencil_class._file_name = file_name
         stencil_class.definition_func = staticmethod(self.builder.definition)
 
         return stencil_class
@@ -280,13 +203,13 @@ class BaseBackend(Backend):
                 stacklevel=2,
             )
 
-    def make_module(self, **kwargs: Any) -> type[StencilObject]:
+    def make_module(self) -> type[StencilObject]:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
 
         file_path = self.builder.module_path
-        module_source = self.make_module_source(**kwargs)
+        module_source = self.make_module_source()
 
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -300,36 +223,14 @@ class BaseBackend(Backend):
 
         return module
 
-    def make_module_source(self, *, args_data: ModuleData | None = None, **kwargs: Any) -> str:
+    def make_module_source(self, *, args_data: ModuleData | None = None) -> str:
         """Generate the module source code with or without stencil id."""
         args_data = args_data or make_args_data_from_gtir(self.builder.gtir_pipeline)
-        source = self.MODULE_GENERATOR_CLASS()(args_data, self.builder, **kwargs)
-        return source
+        return self.MODULE_GENERATOR_CLASS(self.builder)(args_data)
 
 
 class MakeModuleSourceCallable(Protocol):
-    def __call__(self, *, args_data: ModuleData | None = None, **kwargs: Any) -> str: ...
-
-
-class PurePythonBackendCLIMixin(CLIBackendMixin):
-    """Mixin for CLI support for backends deriving from BaseBackend."""
-
-    builder: StencilBuilder
-
-    #: stencil python source generator method:
-    #:  In order to use this mixin, the backend class must implement
-    #:  a :py:meth:`make_module_source` method or derive from
-    #:  :py:meth:`BaseBackend`.
-    make_module_source: MakeModuleSourceCallable
-
-    def generate_computation(self) -> dict[str, str | dict]:
-        file_name = self.builder.module_path.name
-        source = self.make_module_source(ir=self.builder.gtir)
-        return {str(file_name): source}
-
-    def generate_bindings(self, language_name: str) -> dict[str, str | dict]:
-        """Pure python backends typically will not support bindings."""
-        return super().generate_bindings(language_name)
+    def __call__(self, *, args_data: ModuleData | None = None) -> str: ...
 
 
 class BasePyExtBackend(BaseBackend):
@@ -378,7 +279,7 @@ class BasePyExtBackend(BaseBackend):
         pyext_build_opts: dict[str, str],
         *,
         uses_cuda: bool = False,
-    ) -> tuple[str, str]:
+    ) -> None:
         # Build extension module
         pyext_build_path = pathlib.Path(
             os.path.relpath(self.pyext_build_dir_path, pathlib.Path.cwd())
@@ -416,29 +317,26 @@ class BasePyExtBackend(BaseBackend):
             {"pyext_module_name": module_name, "pyext_file_path": file_path}
         )
 
-        return module_name, file_path
-
 
 def disabled(message: str, *, enabled_env_var: str) -> Callable[[type[Backend]], type[Backend]]:
     # We push for hard deprecation here by raising by default and warning if enabling has been forced.
     enabled = bool(int(os.environ.get(enabled_env_var, "0")))
     if enabled:
         return deprecated(message)
-    else:
 
-        def _decorator(cls: type[Backend]) -> type[Backend]:
-            def _no_generate(obj) -> type[StencilObject]:
-                raise NotImplementedError(
-                    f"Disabled '{cls.name}' backend: 'f{message}'\n",
-                    f"You can still enable the backend by hand using the environment variable '{enabled_env_var}=1'",
-                )
+    def _decorator(cls: type[Backend]) -> type[Backend]:
+        def _no_generate(obj) -> type[StencilObject]:
+            raise NotImplementedError(
+                f"Disabled '{cls.name}' backend: 'f{message}'\n",
+                f"You can still enable the backend by hand using the environment variable '{enabled_env_var}=1'",
+            )
 
-            # Replace generate method with raise
-            if not hasattr(cls, "generate"):
-                raise ValueError(f"Coding error. Expected a generate method on {cls}")
-            # Flag that it got disabled for register lookup
-            cls.disabled = True  # type: ignore
-            cls.generate = _no_generate  # type: ignore
-            return cls
+        # Replace generate method with raise
+        if not hasattr(cls, "generate"):
+            raise ValueError(f"Coding error. Expected a generate method on {cls}")
+        # Flag that it got disabled for register lookup
+        cls.disabled = True  # type: ignore
+        cls.generate = _no_generate  # type: ignore
+        return cls
 
-        return _decorator
+    return _decorator

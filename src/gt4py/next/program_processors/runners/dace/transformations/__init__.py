@@ -12,7 +12,7 @@ Please also see [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/deve
 that explains the general structure and requirements on the SDFGs.
 """
 
-from . import spliting_tools
+from . import splitting_tools
 from .auto_optimize import gt_auto_optimize
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow
 from .gpu_utils import (
@@ -23,22 +23,17 @@ from .gpu_utils import (
 )
 from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
-from .map_fusion import MapFusion, MapFusionParallel, MapFusionSerial
+from .map_fusion import MapFusionHorizontal, MapFusionVertical
 from .map_fusion_extended import gt_horizontal_map_fusion, gt_vertical_map_fusion
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
+from .map_promoter import MapPromoter
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
 from .multi_state_global_self_copy_elimination import (
     MultiStateGlobalSelfCopyElimination,
     MultiStateGlobalSelfCopyElimination2,
     gt_multi_state_global_self_copy_elimination,
 )
-from .redundant_array_removers import (
-    CopyChainRemover,
-    SingleStateGlobalDirectSelfCopyElimination,
-    SingleStateGlobalSelfCopyElimination,
-    gt_remove_copy_chain,
-)
-from .serial_map_promoter import SerialMapPromoter
+from .redundant_array_removers import CopyChainRemover, gt_remove_copy_chain
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
     GT4PyMapBufferElimination,
@@ -47,6 +42,10 @@ from .simplify import (
     gt_reduce_distributed_buffering,
     gt_simplify,
     gt_substitute_compiletime_symbols,
+)
+from .single_state_global_self_copy_elimination import (
+    SingleStateGlobalDirectSelfCopyElimination,
+    SingleStateGlobalSelfCopyElimination,
 )
 from .split_access_nodes import SplitAccessNode, gt_split_access_nodes
 from .split_memlet import SplitConsumerMemlet
@@ -69,15 +68,13 @@ __all__ = [
     "GT4PyMoveTaskletIntoMap",
     "GT4PyStateFusion",
     "LoopBlocking",
-    "MapFusion",
-    "MapFusionParallel",
-    "MapFusionSerial",
+    "MapFusionHorizontal",
+    "MapFusionVertical",
     "MapIterationOrder",
+    "MapPromoter",
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
     "MultiStateGlobalSelfCopyElimination2",
-    "SerialMapPromoter",
-    "SerialMapPromoterGPU",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
     "SplitAccessNode",
@@ -105,5 +102,5 @@ __all__ = [
     "gt_split_access_nodes",
     "gt_substitute_compiletime_symbols",
     "gt_vertical_map_fusion",
-    "spliting_tools",
+    "splitting_tools",
 ]

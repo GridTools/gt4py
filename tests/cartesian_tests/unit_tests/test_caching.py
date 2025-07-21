@@ -100,7 +100,7 @@ def test_jit_version(builder):
     withdoc.backend.generate()
     assert could_load_stencil_from_cache(withdoc)
 
-    original.definition.__doc__ = "Added docstring." ""
+    original.definition.__doc__ = "Added docstring."
     assert not could_load_stencil_from_cache(original, catch_exceptions=True)
     assert not could_load_stencil_from_cache(duplicate, catch_exceptions=True)
     # fingerprint has changed and with it the file paths, new cache_info file does not exist.

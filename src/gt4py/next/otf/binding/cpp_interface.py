@@ -36,7 +36,7 @@ def render_function_declaration(function: interface.Function, body: str) -> str:
     }}"""
     if template_params:
         return f"""
-        template <{', '.join(template_params)}>
+        template <{", ".join(template_params)}>
         {rendered_decl}
         """.strip()
     return rendered_decl

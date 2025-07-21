@@ -123,15 +123,24 @@ def gt_auto_optimize(
         dace.Config.set("store_history", value=False)
 
         # Initial Cleanup
+        # NOTE: The initial simplification stage must be synchronized with the one that
+        #   `gt_substitute_compiletime_symbols()` performs!
+        gtx_transformations.gt_simplify(
+            sdfg=sdfg,
+            validate=False,
+            validate_all=validate_all,
+        )
+
         if constant_symbols:
             gtx_transformations.gt_substitute_compiletime_symbols(
                 sdfg=sdfg,
                 repl=constant_symbols,
-                simplify=False,
+                simplify=True,  # Simplify again after.
+                simplify_at_entry=False,
                 validate=validate,
                 validate_all=validate_all,
             )
-        gtx_transformations.gt_simplify(sdfg)
+
         gtx_transformations.gt_reduce_distributed_buffering(sdfg)
 
         # Process top level Maps
@@ -238,39 +247,37 @@ def _gt_auto_process_top_level_maps(
 
     while True:
         # First we do scan the entire SDFG to figure out which data is only
-        #  used once and can be deleted. MapFusion could do this on its own but
-        #  it is more efficient to do it once and then reuse it.
+        #  used once and can be deleted.
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
         # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
 
-        serial_map_fusion = gtx_transformations.MapFusionSerial(
+        vertical_map_fusion = gtx_transformations.MapFusionVertical(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=True,
         )
         # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
         #   has been solved.
-        serial_map_fusion._single_use_data = single_use_data
+        vertical_map_fusion._single_use_data = single_use_data
 
-        parallel_map_fusion = gtx_transformations.MapFusionParallel(
+        horizontal_map_fusion = gtx_transformations.MapFusionHorizontal(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=True,
             # TODO(phimuell): Should we enable this flag?
             only_if_common_ancestor=False,
         )
-        parallel_map_fusion._single_use_data = single_use_data
 
-        # NOTE: Since parallel Map fusion matches _any_ two Maps running it on large
-        #  SDFGs is expensive. Thus we run serial Map fusion first to reduce the search
-        #  space. Then we run serial and parallel Map fusion together.
+        # NOTE: Since horizontal Map fusion matches _any_ two Maps, running it on large
+        #  SDFGs is expensive. Thus we run vertical Map fusion first to reduce the search
+        #  space.
         sdfg.apply_transformations_repeated(
-            serial_map_fusion,
+            vertical_map_fusion,
             validate=validate,
             validate_all=validate_all,
         )
         sdfg.apply_transformations_repeated(
-            [serial_map_fusion, parallel_map_fusion],
+            [horizontal_map_fusion, vertical_map_fusion],
             validate=validate,
             validate_all=validate_all,
         )
@@ -284,7 +291,7 @@ def _gt_auto_process_top_level_maps(
         #  but such cases should be rare.
         # TODO(phimuell): Add a criteria to decide if we should promote or not.
         sdfg.apply_transformations_repeated(
-            gtx_transformations.SerialMapPromoter(
+            gtx_transformations.MapPromoter(
                 only_toplevel_maps=True,
                 promote_vertical=True,
                 promote_horizontal=True,

@@ -285,14 +285,14 @@ class SuiteMeta(type):
         assert isinstance(cls_dict["symbols"], collections.abc.Mapping), "Invalid 'symbols' mapping"
 
         # Check domain and ndims
-        assert 1 <= len(domain_range) <= 3 and all(
-            len(d) == 2 for d in domain_range
-        ), "Invalid 'domain_range' definition"
+        assert 1 <= len(domain_range) <= 3 and all(len(d) == 2 for d in domain_range), (
+            "Invalid 'domain_range' definition"
+        )
 
         if any(cls_name.endswith(suffix) for suffix in ("1D", "2D", "3D")):
-            assert cls_dict["ndims"] == int(
-                cls_name[-2:-1]
-            ), "Suite name does not match the actual 'ndims'"
+            assert cls_dict["ndims"] == int(cls_name[-2:-1]), (
+                "Suite name does not match the actual 'ndims'"
+            )
 
         # Check dtypes
         assert isinstance(
@@ -403,7 +403,10 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
         .. code-block:: python
 
-                    {"float_symbols": (np.float32, np.float64), "int_symbols": (int, np.int_, np.int64)}
+                    {
+                        "float_symbols": (np.float32, np.float64),
+                        "int_symbols": (int, np.int_, np.int64),
+                    }
 
     domain_range : `Sequence` of pairs like `((int, int), (int, int) ... )`
         Required class attribute.
@@ -613,9 +616,9 @@ class StencilTestSuite(metaclass=SuiteMeta):
         test execution.
         """
         implementation = test["implementation"]
-        assert (
-            implementation is not None
-        ), "Stencil implementation not found. This usually means code generation failed."
+        assert implementation is not None, (
+            "Stencil implementation not found. This usually means code generation failed."
+        )
         assert isinstance(implementation, StencilObject)
 
         cls._run_test_implementation(parameters_dict, implementation)

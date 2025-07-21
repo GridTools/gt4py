@@ -36,8 +36,8 @@ def _serialize_source(source: stages.ProgramSource) -> str:
     return f"""\
     language: {source.language}
     name: {source.entry_point.name}
-    params: {', '.join(parameters)}
-    deps: {', '.join(dependencies)}
+    params: {", ".join(parameters)}
+    deps: {", ".join(dependencies)}
     src: {source.source_code}
     implicit_domain: {source.implicit_domain}
     """
@@ -74,4 +74,6 @@ def get_cache_folder(
     complete_path = base_path / folder_name
     complete_path.mkdir(exist_ok=True)
 
-    return complete_path
+    # Resolve symlinks to workaround an issue on MacOS where the default tmp directory is a symlink
+    # which might sometimes get resolved in a way we don't control.
+    return complete_path.resolve()
