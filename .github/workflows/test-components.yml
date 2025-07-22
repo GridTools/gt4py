@@ -24,7 +24,7 @@ jobs:
   define-test-sessions-exclusions:
     runs-on: ubuntu-latest
     outputs:
-      test-sessions-exclusions: ${{ steps.test-sessions.outputs.test-sessions-exclusions }}
+      test-sessions-exclusions: ${{ steps.test-sessions-exclusions.outputs.test-sessions-exclusions }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,9 +48,11 @@ jobs:
               --verbose
           else
             # Run all sessions without any exclusions
-            echo "{}" > gh-exclude-test-sessions.json
+            echo "[]" > gh-exclude-test-sessions.json
           fi
-          # Combine with other exclusions (if needed). Example: $ echo '[{"nox-session": "test_foo"}]' > static-exclude.json
+          # If needed, more static exclusions can be added here and they will be
+          # combined with the dynamically generated array of exclusions.
+          # Example: $ echo '[{"nox-session": "test_foo"}]' > static-exclude.json
           echo '[]' > static-exclude.json
           jq -s 'add' static-exclude.json gh-exclude-test-sessions.json > all-exclusions.json
           # Output the final exclusions for the test sessions
