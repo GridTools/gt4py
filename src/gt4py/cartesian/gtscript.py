@@ -60,6 +60,9 @@ MATH_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "round",
+    "erf",
+    "erfc",
 }
 
 TYPE_HINT_AND_CAST_BUILTINS = {
@@ -948,4 +951,19 @@ def ceil(x) -> _gt_all_op_types:  # type: ignore[empty-body]
 
 def trunc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the Real value x truncated to an Integral (usually an integer)"""
+    pass
+
+
+def round(x) -> _gt_all_op_types:  # type: ignore[empty-body] # noqa: A001 [builtin-variable-shadowing]e
+    """Return the rounded value into original type"""
+    pass
+
+
+def erf(x) -> _gt_all_op_types:  # type: ignore[empty-body]
+    """Error function"""
+    pass
+
+
+def erfc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
+    """Return the complementary error function, which is 1.0 - erf"""
     pass

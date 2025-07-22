@@ -105,8 +105,8 @@ class OIRToTasklet(eve.NodeVisitor):
         for index in node.data_index:
             data_indices.append(self.visit(index, ctx=ctx, is_target=False))
 
-        if data_indices:
-            name_parts.append(f"[{', '.join(data_indices)}]")
+            if data_indices:
+                name_parts.append(f"[{', '.join(data_indices)}]")
 
         # In case this is the second access (inside the same tasklet), we can just return the
         # name and don't have to build a Memlet anymore.
@@ -216,6 +216,9 @@ class OIRToTasklet(eve.NodeVisitor):
             common.NativeFunction.FLOOR: "dace.math.ifloor",
             common.NativeFunction.CEIL: "ceil",
             common.NativeFunction.TRUNC: "trunc",
+            common.NativeFunction.ERF: "erf",
+            common.NativeFunction.ERFC: "erfc",
+            common.NativeFunction.ROUND: "round",
             common.NativeFunction.I32: "dace.int32",
             common.NativeFunction.I64: "dace.int64",
             common.NativeFunction.F32: "dace.float32",

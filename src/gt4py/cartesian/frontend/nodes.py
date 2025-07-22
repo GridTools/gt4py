@@ -35,7 +35,7 @@ UnaryOperator enumeration (:class:`UnaryOperator`)
 BinaryOperator enumeration (:class:`BinaryOperator`)
     Binary operators
     [`ADD`, `SUB`, `MUL`, `DIV`, `POW`, `AND`, `OR`,
-    `EQ`, `NE`, `LT`, `LE`, `GT`, `GE`]
+    `ROUND`, `ERF`, `ERFC`, `EQ`, `NE`, `LT`, `LE`, `GT`, `GE`]
 
 NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
@@ -440,6 +440,9 @@ class NativeFunction(enum.Enum):
     FLOOR = enum.auto()
     CEIL = enum.auto()
     TRUNC = enum.auto()
+    ROUND = enum.auto()
+    ERF = enum.auto()
+    ERFC = enum.auto()
 
     # Cast operations - share a keyword with type hints
     I32 = enum.auto()
@@ -481,6 +484,9 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.FLOOR: 1,
     NativeFunction.CEIL: 1,
     NativeFunction.TRUNC: 1,
+    NativeFunction.ROUND: 1,
+    NativeFunction.ERF: 1,
+    NativeFunction.ERFC: 1,
     NativeFunction.I32: 1,
     NativeFunction.I64: 1,
     NativeFunction.F32: 1,
