@@ -4,7 +4,7 @@ In the context of [DaCe backends](./backend-dace.md), facing tech-debt, a lack o
 
 ## Context
 
-Basically three forces were driving this drastic change:
+Basically, three forces were driving this drastic change:
 
 1. We were unhappy with the performance of the DaCe backends, especially on CPU.
 2. We had little understanding of the previous GT4Py-DaCe bridge.
