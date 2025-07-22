@@ -81,6 +81,10 @@ def make_dace_backend(
     """Helper function to create a dace cached backend with custom config for SDFG
     lowering and auto-optimize.
 
+    Note that `async_sdfg_call=True` on GPU device relies on the dace configuration
+    with 1 cuda stream, so that all kernels and memory operations are executed
+    sequentially on the default stream.
+
     Args:
         auto_optimize: Enable SDFG auto-optimize pipeline.
         cached: Cache the lowered SDFG as a JSON file and the compiled programs.
@@ -142,7 +146,7 @@ run_dace_gpu = make_dace_backend(
     auto_optimize=True,
     cached=False,
     gpu=True,
-    async_sdfg_call=False,
+    async_sdfg_call=True,
     make_persistent=False,
     blocking_dim=None,
 )
@@ -150,7 +154,7 @@ run_dace_gpu_noopt = make_dace_backend(
     auto_optimize=False,
     cached=False,
     gpu=True,
-    async_sdfg_call=False,
+    async_sdfg_call=True,
     make_persistent=False,
     blocking_dim=None,
 )
@@ -158,7 +162,7 @@ run_dace_gpu_cached = make_dace_backend(
     auto_optimize=True,
     cached=True,
     gpu=True,
-    async_sdfg_call=False,
+    async_sdfg_call=True,
     make_persistent=False,
     blocking_dim=None,
 )
