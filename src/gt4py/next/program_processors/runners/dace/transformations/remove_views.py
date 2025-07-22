@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Any, Optional
-from copy import deepcopy
 
 import dace
 from dace import (
@@ -17,11 +16,18 @@ from dace import (
 )
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import helpers
+
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 @dace_properties.make_properties
 class RemovePointwiseViews(dace_transformation.SingleStateTransformation):
+    """
+    Remove pointwise views from the SDFG.
+    This transformation is used to remove views that are created for pointwise operations.
+    It redirects the edges from the view to the original data and removes the view node.
+    The view generation is non-deterministic and usually happens after reduction `Library` nodes.
+    """
 
     source_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     destination_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
@@ -82,10 +88,15 @@ class RemovePointwiseViews(dace_transformation.SingleStateTransformation):
         src_node: dace_nodes.AccessNode = self.source_node
         dst_node: dace_nodes.AccessNode = self.destination_node
 
-
         dst_in_edge = graph.in_edges(dst_node)[0]
         edge_to_redirect = graph.in_edges(src_node)[0]
-        helpers.redirect_edge(graph, edge_to_redirect, new_dst=dst_in_edge.dst, new_dst_conn=dst_in_edge.dst_conn, new_memlet=dace.Memlet(dst_node.data))
+        helpers.redirect_edge(
+            graph,
+            edge_to_redirect,
+            new_dst=dst_in_edge.dst,
+            new_dst_conn=dst_in_edge.dst_conn,
+            new_memlet=dace.Memlet(dst_node.data),
+        )
 
         graph.remove_edge(dst_in_edge)
         graph.remove_node(src_node)

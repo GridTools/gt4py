@@ -34,6 +34,7 @@ from .multi_state_global_self_copy_elimination import (
     gt_multi_state_global_self_copy_elimination,
 )
 from .redundant_array_removers import CopyChainRemover, gt_remove_copy_chain
+from .remove_views import RemovePointwiseViews
 from .simplify import (
     GT_SIMPLIFY_DEFAULT_SKIP_SET,
     GT4PyMapBufferElimination,
@@ -58,7 +59,7 @@ from .strides import (
     gt_propagate_strides_of,
 )
 from .utils import gt_find_constant_arguments, gt_make_transients_persistent
-from .remove_views import RemovePointwiseViews
+
 
 __all__ = [
     "GT_SIMPLIFY_DEFAULT_SKIP_SET",

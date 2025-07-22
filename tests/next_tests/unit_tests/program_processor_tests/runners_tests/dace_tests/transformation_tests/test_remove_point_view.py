@@ -35,9 +35,7 @@ def _make_sdfg_with_map_with_view(
             transient=False,
         )
 
-    a, out = (
-        state.add_access(name) for name in ["a", "out"]
-    )
+    a, out = (state.add_access(name) for name in ["a", "out"])
     sdfg.add_symbol("horizontal_start", dace.int32)
     sdfg.add_symbol("horizontal_end", dace.int32)
 
@@ -61,7 +59,7 @@ def _make_sdfg_with_map_with_view(
 
     tmp_access_node = state.add_access("tmp")
     tmp_access_node.transient = True
-    
+
     sdfg.add_view(
         "tmp",
         shape=(1,),
@@ -69,13 +67,12 @@ def _make_sdfg_with_map_with_view(
     )
 
     tmp_access_node2 = state.add_transient("tmp2", shape=(1,), dtype=dace.float64)
-    
+
     state.add_edge(a, None, mentry, "IN_a", dace.Memlet("a[i, j]"))
     state.add_edge(mentry, "OUT_a", task1, "__in0", dace.Memlet("a[i, j]"))
     state.add_edge(task1, "__out0", tmp_access_node, None, dace.Memlet("tmp[0]"))
     state.add_edge(tmp_access_node, None, tmp_access_node2, None, dace.Memlet("tmp[0]"))
     state.add_edge(tmp_access_node2, None, mexit, "IN_out", dace.Memlet("tmp2[0]"))
-
 
     mentry.add_scope_connectors("a")
     mentry.add_in_connector("IN_a")
@@ -94,7 +91,17 @@ def test_horizontal_map_fusion():
     sdfg = _make_sdfg_with_map_with_view(N)
 
     assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 4
-    assert len([access_node for access_node, _ in sdfg.all_nodes_recursive() if isinstance(access_node, dace_nodes.AccessNode) and isinstance(access_node.desc(sdfg), dace.data.ArrayView)]) == 1
+    assert (
+        len(
+            [
+                access_node
+                for access_node, _ in sdfg.all_nodes_recursive()
+                if isinstance(access_node, dace_nodes.AccessNode)
+                and isinstance(access_node.desc(sdfg), dace.data.ArrayView)
+            ]
+        )
+        == 1
+    )
 
     res, ref = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
@@ -110,5 +117,15 @@ def test_horizontal_map_fusion():
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
     assert util.count_nodes(sdfg, dace_nodes.MapExit) == 1
     assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 3
-    assert len([access_node for access_node, _ in sdfg.all_nodes_recursive() if isinstance(access_node, dace_nodes.AccessNode) and isinstance(access_node.desc(sdfg), dace.data.ArrayView)]) == 0
+    assert (
+        len(
+            [
+                access_node
+                for access_node, _ in sdfg.all_nodes_recursive()
+                if isinstance(access_node, dace_nodes.AccessNode)
+                and isinstance(access_node.desc(sdfg), dace.data.ArrayView)
+            ]
+        )
+        == 0
+    )
     util.compare_sdfg_res(ref=ref, res=res)
