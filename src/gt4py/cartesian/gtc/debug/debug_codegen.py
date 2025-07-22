@@ -221,8 +221,8 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
             return data_type.name.lower()
         return f"np.{data_type.name.lower()}"
 
-    def visit_VariableKOffset(self, variable_k_offset: oir.VariableKOffset, **_) -> str:
-        return f"i,j,k+int({self.visit(variable_k_offset.k)})"
+    def visit_VariableKOffset(self, variable_k_offset: oir.VariableKOffset, **kwargs) -> str:
+        return f"i,j,k+int({self.visit(variable_k_offset.k, **kwargs)})"
 
     def visit_CartesianOffset(self, cartesian_offset: gtc_common.CartesianOffset, **kwargs) -> str:
         if "dimensions" in kwargs.keys():
@@ -249,6 +249,7 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
     ) -> str:
         if str(field_access.name) in symtable:
             dimensions = symtable[str(field_access.name)].dimensions
+            kwargs.pop("dimensions", None)
             offset_str = self.visit(
                 field_access.offset, dimensions=dimensions, symtable=symtable, **kwargs
             )
