@@ -50,7 +50,7 @@ Symbols as well as expressions must have a type in all dialects. This deviates f
 
 All nodes that represent code must hold the location of that code.
 
-##### Correspondence Python AST <-> dialect AST
+##### Correspondence Python AST \<-> dialect AST
 
 In some cases there are Python constructs which would directly map to a function call in the iterator model (such as binary operators). It was chosen to still represent them as binary operators to keep the analogy to Python AST and clearly separate parsing and lowering. The correspondence between Python and dialect AST also means it would be relatively easy to "unparse" the dialect AST into valid Python code for debugging.
 

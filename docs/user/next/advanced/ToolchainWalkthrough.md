@@ -71,7 +71,6 @@ linkStyle 0 stroke:red,stroke-width:4px,color:pink
 ```
 
 ```python
-
 foast = backend.DEFAULT_TRANSFORMS.func_to_foast(
     gtx.otf.toolchain.CompilableProgram(start, gtx.otf.arguments.CompileTimeArgs.empty())
 )
@@ -137,7 +136,7 @@ So far we have gotten away with empty compile time arguments, now we need to sup
 jit_args = gtx.otf.arguments.JITArgs.from_signature(
     gtx.ones(domain={I: 10}, dtype=gtx.float64),
     out=gtx.zeros(domain={I: 10}, dtype=gtx.float64),
-    offset_provider=OFFSET_PROVIDER
+    offset_provider=OFFSET_PROVIDER,
 )
 
 aot_args = gtx.otf.arguments.CompileTimeArgs.from_concrete_no_size(
@@ -146,7 +145,9 @@ aot_args = gtx.otf.arguments.CompileTimeArgs.from_concrete_no_size(
 ```
 
 ```python
-pclos = backend.DEFAULT_TRANSFORMS.field_view_op_to_prog(gtx.otf.toolchain.CompilableProgram(data=foast.data, args=aot_args))
+pclos = backend.DEFAULT_TRANSFORMS.field_view_op_to_prog(
+    gtx.otf.toolchain.CompilableProgram(data=foast.data, args=aot_args)
+)
 ```
 
 ```python
@@ -281,9 +282,7 @@ linkStyle 0,2,3,4,5 stroke:red,stroke-width:4px,color:pink
 ### Starting from DSL
 
 ```python
-pitir2 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.toolchain.CompilableProgram(data=start, args=aot_args)
-)
+pitir2 = backend.DEFAULT_TRANSFORMS(gtx.otf.toolchain.CompilableProgram(data=start, args=aot_args))
 assert pitir2 == pitir
 ```
 
@@ -313,10 +312,7 @@ Note that it is the exact same call but with a different input stage
 
 ```python
 pitir3 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.toolchain.CompilableProgram(
-        data=foast.data,
-        args=aot_args
-    )
+    gtx.otf.toolchain.CompilableProgram(data=foast.data, args=aot_args)
 )
 assert pitir3 == pitir
 ```
@@ -360,7 +356,10 @@ linkStyle 6 stroke:red,stroke-width:4px,color:pink
 
 ```python
 p_past = backend.DEFAULT_TRANSFORMS.func_to_past(
-    gtx.otf.toolchain.CompilableProgram(data=p_start, args=gtx.otf.arguments.CompileTimeArgs.empty()))
+    gtx.otf.toolchain.CompilableProgram(
+        data=p_start, args=gtx.otf.arguments.CompileTimeArgs.empty()
+    )
+)
 ```
 
 ## Full Program Toolchain
@@ -388,19 +387,13 @@ linkStyle 3,4,5,6 stroke:red,stroke-width:4px,color:pink
 
 ```python
 p_itir1 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.toolchain.CompilableProgram(
-        data=p_start,
-        args=jit_args
-    )
+    gtx.otf.toolchain.CompilableProgram(data=p_start, args=jit_args)
 )
 ```
 
 ```python
 p_itir2 = backend.DEFAULT_TRANSFORMS(
-    gtx.otf.toolchain.CompilableProgram(
-        data=p_past.data,
-        args=aot_args
-    )
+    gtx.otf.toolchain.CompilableProgram(data=p_past.data, args=aot_args)
 )
 ```
 

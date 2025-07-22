@@ -49,16 +49,13 @@ def gt_horizontal_map_fusion(
             only_toplevel_maps=True,
         ),
         gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
-        gtx_transformations.MapFusionParallel(
+        gtx_transformations.MapFusionHorizontal(
             only_if_common_ancestor=True,
             only_inner_maps=False,
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
         ),
     ]
-    # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
-    #   has been solved.
-    transformations[-1]._single_use_data = single_use_data  # type: ignore[attr-defined]
 
     ret = sdfg.apply_transformations_repeated(
         transformations,
@@ -99,7 +96,7 @@ def gt_vertical_map_fusion(
             only_toplevel_maps=True,
         ),
         gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
-        gtx_transformations.MapFusionSerial(
+        gtx_transformations.MapFusionVertical(
             only_inner_maps=False,
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
