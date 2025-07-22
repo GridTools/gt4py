@@ -128,4 +128,4 @@ def test_horizontal_map_fusion():
         )
         == 0
     )
-    util.compare_sdfg_res(ref=ref, res=res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
