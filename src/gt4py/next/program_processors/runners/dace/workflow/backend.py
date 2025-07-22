@@ -82,6 +82,10 @@ def make_dace_backend(
     """Helper function to create a dace cached backend with custom config for SDFG
     lowering and auto-optimize.
 
+    Note that `async_sdfg_call=True` on GPU device relies on the dace configuration
+    with 1 cuda stream, so that all kernels and memory operations are executed
+    sequentially on the default stream.
+
     Args:
         auto_optimize: Enable SDFG auto-optimize pipeline.
         cached: Cache the lowered SDFG as a JSON file and the compiled programs.
@@ -106,12 +110,12 @@ def make_dace_backend(
         auto_optimize=auto_optimize,
         cached=cached,
         otf_workflow__cached_translation=cached,
-        otf_workflow__bare_translation__async_sdfg_call=(gpu if async_sdfg_call else False),
-        otf_workflow__bare_translation__make_persistent=make_persistent,
-        otf_workflow__bare_translation__use_memory_pool=use_memory_pool,
         otf_workflow__bare_translation__blocking_dim=blocking_dim,
         otf_workflow__bare_translation__blocking_size=blocking_size,
+        otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
+        otf_workflow__bare_translation__make_persistent=make_persistent,
+        otf_workflow__bare_translation__use_memory_pool=use_memory_pool,
         otf_workflow__bindings__make_persistent=make_persistent,
     )
 
@@ -120,54 +124,54 @@ run_dace_cpu = make_dace_backend(
     auto_optimize=True,
     cached=False,
     gpu=False,
+    blocking_dim=None,
     async_sdfg_call=False,
     make_persistent=False,
     use_memory_pool=False,
-    blocking_dim=None,
 )
 run_dace_cpu_noopt = make_dace_backend(
     auto_optimize=False,
     cached=False,
     gpu=False,
+    blocking_dim=None,
     async_sdfg_call=False,
     make_persistent=False,
     use_memory_pool=False,
-    blocking_dim=None,
 )
 run_dace_cpu_cached = make_dace_backend(
     auto_optimize=True,
     cached=True,
     gpu=False,
+    blocking_dim=None,
     async_sdfg_call=False,
     make_persistent=False,
     use_memory_pool=False,
-    blocking_dim=None,
 )
 
 run_dace_gpu = make_dace_backend(
     auto_optimize=True,
     cached=False,
     gpu=True,
-    async_sdfg_call=False,
+    blocking_dim=None,
+    async_sdfg_call=True,
     make_persistent=False,
     use_memory_pool=True,
-    blocking_dim=None,
 )
 run_dace_gpu_noopt = make_dace_backend(
     auto_optimize=False,
     cached=False,
     gpu=True,
-    async_sdfg_call=False,
+    blocking_dim=None,
+    async_sdfg_call=True,
     make_persistent=False,
     use_memory_pool=True,
-    blocking_dim=None,
 )
 run_dace_gpu_cached = make_dace_backend(
     auto_optimize=True,
     cached=True,
     gpu=True,
-    async_sdfg_call=False,
+    blocking_dim=None,
+    async_sdfg_call=True,
     make_persistent=False,
     use_memory_pool=True,
-    blocking_dim=None,
 )
