@@ -20,11 +20,11 @@ jobs:
       - id: get-versions
         uses: ./.github/actions/get-python-versions
 
-  # Job to define test sessions based on changed files
-  define-test-sessions:
+  # Job to exclude unnecessary test sessions based on the changed files
+  define-test-sessions-exclusions:
     runs-on: ubuntu-latest
     outputs:
-      test-sessions: ${{ steps.test-sessions.outputs.test-sessions }}
+      test-sessions-exclusions: ${{ steps.test-sessions.outputs.test-sessions-exclusions }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,35 +37,53 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Define test sessions based on changed files
-        id: test-sessions
+        id: test-sessions-exclusions
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            # Run only sessions related to the changes
-            ./scripts-cli.py github-ci matrix \
+            # Exclude test sessions not affected by the PR changes
+            ./scripts-cli.py github-ci matrix-exclude \
               --config nox-sessions-config.yml \
               --base "origin/${{ github.base_ref }}" \
-              --output gh-test-sessions.json \
+              --output gh-exclude-test-sessions.json \
               --verbose
           else
-            # Run all sessions
-            ./scripts-cli.py github-ci matrix \
-              --config nox-sessions-config.yml \
-              --output gh-test-sessions.json \
-              --verbose
+            # Run all sessions without any exclusions
+            echo "{}" > gh-exclude-test-sessions.json
           fi
-          echo 'test-sessions<<EOF' >> $GITHUB_OUTPUT
-          cat gh-test-sessions.json >> $GITHUB_OUTPUT
+          # Combine with other exclusions (if needed). Example: $ echo '[{"nox-session": "test_foo"}]' > static-exclude.json
+          echo '[]' > static-exclude.json
+          jq -s 'add' static-exclude.json gh-exclude-test-sessions.json > all-exclusions.json
+          # Output the final exclusions for the test sessions
+          echo 'test-sessions-exclusions<<EOF' >> $GITHUB_OUTPUT
+          cat all-exclusions.json >> $GITHUB_OUTPUT
           echo '' >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
 
   # Test-running job
   test-component:
-    needs: [get-python-versions, define-test-sessions]
+    needs: [get-python-versions, define-test-sessions-exclusions]
     strategy:
       matrix:
         os: ["ubuntu-latest"]
-        python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
-        test-session: ${{ fromJson(needs.define-test-sessions.outputs.test-sessions) }}
+        python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
+        nox-session:
+          - name: test_cartesian
+            args: "(internal, cpu)"
+          - name: test_cartesian
+            args: "(dace, cpu)"
+          - name: test_eve
+            args: ""
+          - name: test_next
+            args: "(internal, cpu, nomesh)"
+          - name: test_next
+            args: "(dace, cpu, nomesh)"
+          - name: test_next
+            args: "(internal, cpu, atlas)"
+          - name: test_next
+            args: "(dace, cpu, atlas)"
+          - name: test_storage
+            args: "(cpu)"
+        exclude: ${{ fromJSON(needs.define-test-sessions-exclusions.outputs.test-sessions-exclusions) }}
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -78,7 +96,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
           python-version: ${{ matrix.python-version }}
 
-      - name: Run '${{ matrix.test-session.name }}-${{ matrix.python-version }}(${{ matrix.test-session.args }})' nox session
+      - name: Run '${{ matrix.nox-session.name }}-${{ matrix.python-version }}(${{ matrix.nox-session.args }})' nox session
         shell: bash
         run: |
-          uv run --script noxfile.py -s '${{ matrix.test-session.name }}-${{ matrix.python-version }}${{ matrix.test-session.args }}'
+          uv run --script noxfile.py -s '${{ matrix.nox-session.name }}-${{ matrix.python-version }}${{ matrix.nox-session.args }}'

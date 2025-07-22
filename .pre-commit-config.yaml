@@ -68,7 +68,7 @@ repos:
       - <<: *uv-managed-hook
         id: ruff-check
         name: ruff checker
-        entry: uv run --frozen --isolated --group dev ruff check --force-exclude --fix
+        entry: uv run --group dev --frozen --isolated ruff check --force-exclude --fix
         types_or: [python, pyi, jupyter]
         exclude: "^(tests/|docs/|examples/)" # TODO(egparedes): remove the exclusions
         require_serial: true
@@ -76,26 +76,26 @@ repos:
       - <<: *uv-managed-hook
         id: ruff-format
         name: ruff formatter
-        entry: uv run --frozen --isolated --group dev ruff format --force-exclude
+        entry: uv run --group dev --frozen --isolated ruff format --force-exclude
         types_or: [python, pyi, jupyter]
         require_serial: true
 
       - <<: *uv-managed-hook
         id: tach
         name: tach module dependency checker
-        entry: uv run --frozen --isolated --group dev tach check
+        entry: uv run --group dev --frozen --isolated tach check
         pass_filenames: false
 
       - <<: *uv-managed-hook
         id: mypy
         name: mypy static type checker
-        entry: uv run --frozen --isolated --group dev mypy --no-install-types src/
+        entry: uv run --group dev --frozen --isolated mypy --no-install-types src/
         types_or: [python, pyi]
         pass_filenames: false
 
       - <<: *uv-managed-hook
         id: validate
         name: validate pyproject.toml
-        entry: uv run --frozen --isolated --group dev validate-pyproject pyproject.toml
+        entry: uv run --group dev --frozen --isolated validate-pyproject pyproject.toml
         files: ^pyproject\.toml$
         pass_filenames: false
