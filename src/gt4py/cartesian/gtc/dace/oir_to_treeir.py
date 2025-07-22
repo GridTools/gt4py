@@ -8,7 +8,7 @@
 
 from typing import Any, List, TypeAlias
 
-from dace import data, dtypes, nodes, symbolic
+from dace import data, dtypes, symbolic
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, definitions, oir
@@ -27,17 +27,18 @@ DEFAULT_STORAGE_TYPE = {
     dtypes.DeviceType.CPU: dtypes.StorageType.Default,
     dtypes.DeviceType.GPU: dtypes.StorageType.GPU_Global,
 }
-"""Default dace residency types for device type"""
+"""Default dace residency types per device type."""
 
 DEFAULT_MAP_SCHEDULE = {
     dtypes.DeviceType.CPU: dtypes.ScheduleType.Default,
     dtypes.DeviceType.GPU: dtypes.ScheduleType.GPU_Device,
 }
-"""Default kernel target for device type"""
+"""Default kernel target per device type."""
 
 
 class OIRToTreeIR(eve.NodeVisitor):
-    """Translate the GT4Py OIR into a Dace-centric TreeIR
+    """
+    Translate the GT4Py OIR into a Dace-centric TreeIR.
 
     TreeIR is built to be a minimum representation of DaCe's Schedule
     Tree. No transformation is done on TreeIR, though should be done
@@ -62,12 +63,8 @@ class OIRToTreeIR(eve.NodeVisitor):
         self._k_bounds = compute_k_boundary(builder.gtir)
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
-        code, inputs, outputs = oir_to_tasklet.generate(node, tree=ctx.root)
-        dace_tasklet = nodes.Tasklet(
-            label=node.label,
-            code=code,
-            inputs=inputs.keys(),
-            outputs=outputs.keys(),
+        dace_tasklet, inputs, outputs = oir_to_tasklet.OIRToTasklet().visit_CodeBlock(
+            node, root=ctx.root
         )
 
         tasklet = tir.Tasklet(
@@ -79,9 +76,11 @@ class OIRToTreeIR(eve.NodeVisitor):
         ctx.current_scope.children.append(tasklet)
 
     def _group_statements(self, node: ControlFlow) -> list[oir.CodeBlock | ControlFlow]:
-        """Group the body of a control flow node into CodeBlocks and other ControlFlow
+        """
+        Group the body of a control flow node into CodeBlocks and other ControlFlow.
 
-        Visitor on statements is left to the caller.
+        This function only groups statements. The job of visiting the groups statements is
+        left to the caller.
         """
         statements: List[ControlFlow | oir.CodeBlock | common.Stmt] = []
         groups: List[ControlFlow | oir.CodeBlock] = []
@@ -147,7 +146,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             # Push local scalars to the tree repository
             for local_scalar in node.declarations:
                 ctx.root.containers[local_scalar.name] = data.Scalar(
-                    utils.data_type_to_dace_typeclass(local_scalar.dtype),  # dtype
+                    dtype=utils.data_type_to_dace_typeclass(local_scalar.dtype),
                     transient=True,
                     storage=dtypes.StorageType.Register,
                     debuginfo=utils.get_dace_debuginfo(local_scalar),
@@ -170,7 +169,7 @@ class OIRToTreeIR(eve.NodeVisitor):
     def visit_HorizontalRestriction(
         self, node: oir.HorizontalRestriction, ctx: tir.Context
     ) -> None:
-        """Translate `region` concept into If control flow in TreeIR"""
+        """Translate `region` concept into If control flow in TreeIR."""
         condition_code = self.visit(node.mask, ctx=ctx)
         if_else = tir.IfElse(
             if_condition_code=condition_code, children=[], parent=ctx.current_scope
@@ -244,11 +243,12 @@ class OIRToTreeIR(eve.NodeVisitor):
         return tir.Bounds(start=start, end=end)
 
     def _vertical_loop_schedule(self) -> dtypes.ScheduleType:
-        """Defines the vertical loop schedule.
+        """
+        Defines the vertical loop schedule.
 
         Current strategy is to
           - keep the vertical loop on the host for both, CPU and GPU targets
-          - run in parallel on CPU and sequential on GPU
+          - and run it in parallel on CPU and sequential on GPU.
         """
         if self._device_type == dtypes.DeviceType.GPU:
             return dtypes.ScheduleType.Sequential
@@ -348,8 +348,8 @@ class OIRToTreeIR(eve.NodeVisitor):
                 tir.Axis.K: max(k_bound[0], 0),
             }
             # TODO / Dev Note: Persistent memory is an overkill here - we should scope
-            # the temporary as close to the tasklets as we can. But any lifetime lower
-            # than persistent will yield memory leaks issues
+            # the temporary as close to the tasklets as we can, but any lifetime lower
+            # than persistent will yield issues with memory leaks.
             containers[field.name] = data.Array(
                 dtype=utils.data_type_to_dace_typeclass(field.dtype),
                 shape=get_dace_shape(field, field_extent, k_bound, symbols),

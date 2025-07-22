@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from functools import reduce
 from typing import Any, Final
 
-from dace import Memlet, subsets
+from dace import Memlet, nodes, subsets
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
@@ -42,7 +42,8 @@ class Context:
 
 
 class OIRToTasklet(eve.NodeVisitor):
-    """Translate the numerical code from OIR to DaCe Tasklets.
+    """
+    Translate the numerical code from OIR to DaCe Tasklets.
 
     This visitor should neither attempt transformations nor do any control flow
     work. Control flow is the responsibility of OIRToTreeIR.
@@ -50,13 +51,20 @@ class OIRToTasklet(eve.NodeVisitor):
 
     def visit_CodeBlock(
         self, node: oir.CodeBlock, root: tir.TreeRoot
-    ) -> tuple[str, dict[str, Memlet], dict[str, Memlet]]:
-        """Entry point to gather all code, inputs and outputs"""
+    ) -> tuple[nodes.Tasklet, dict[str, Memlet], dict[str, Memlet]]:
+        """Entry point to gather all code, inputs and outputs."""
         ctx = Context(code=[], targets=set(), inputs={}, outputs={}, tree=root)
 
         self.visit(node.body, ctx=ctx)
 
-        return ("\n".join(ctx.code), ctx.inputs, ctx.outputs)
+        tasklet = nodes.Tasklet(
+            label=node.label,
+            code="\n".join(ctx.code),
+            inputs=ctx.inputs.keys(),
+            outputs=ctx.outputs.keys(),
+        )
+
+        return (tasklet, ctx.inputs, ctx.outputs)
 
     def visit_ScalarAccess(self, node: oir.ScalarAccess, ctx: Context, is_target: bool) -> str:
         target = is_target or node.name in ctx.targets
@@ -90,23 +98,30 @@ class OIRToTasklet(eve.NodeVisitor):
         # Gather all parts of the variable name in this list
         name_parts = [tasklet_name]
 
-        # Variable K offset subscript
-        if isinstance(node.offset, oir.VariableKOffset):
-            symbol = tir.Axis.K.iteration_dace_symbol()
-            shift = ctx.tree.shift[node.name][tir.Axis.K]
-            offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
-            name_parts.append(f"[({symbol}) + ({shift}) + ({offset})]")
-        elif isinstance(node.offset, oir.AbsoluteKIndex):
-            index = self.visit(node.offset.k, ctx=ctx, is_target=False)
-            name_parts.append(f"[({index})]")
-
         # Data dimension subscript
         data_indices: list[str] = []
         for index in node.data_index:
             data_indices.append(self.visit(index, ctx=ctx, is_target=False))
 
+        # Variable K offset subscript
+        if isinstance(node.offset, oir.AbsoluteKIndex):
+            index = self.visit(node.offset.k, ctx=ctx, is_target=False)
+            if data_indices:
+                name_parts.append(f"[({index}, {', '.join(data_indices)})]")
+            else:
+                name_parts.append(f"[({index})]")
+        else:
+            if isinstance(node.offset, oir.VariableKOffset):
+                symbol = tir.Axis.K.iteration_dace_symbol()
+                shift = ctx.tree.shift[node.name][tir.Axis.K]
+                offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
+                name_parts.append(f"[({symbol}) + ({shift}) + ({offset})]")
+
             if data_indices:
                 name_parts.append(f"[{', '.join(data_indices)}]")
+
+        if data_indices:
+            name_parts.append(f"[{', '.join(data_indices)}]")
 
         # In case this is the second access (inside the same tasklet), we can just return the
         # name and don't have to build a Memlet anymore.
@@ -123,7 +138,7 @@ class OIRToTasklet(eve.NodeVisitor):
         memlet = Memlet(
             data=node.name,
             subset=_memlet_subset(node, data_domains, ctx),
-            volume=reduce(operator.mul, data_domains, 1),
+            volume=reduce(operator.mul, data_domains, 1),  # correct volume for VariableK offsets
         )
         if is_target:
             # Note: it doesn't matter if we use is_target or target here because if they
@@ -301,16 +316,6 @@ class OIRToTasklet(eve.NodeVisitor):
         raise RuntimeError("visit_VerticalLoopSection should not be called")
 
 
-def generate(
-    node: oir.CodeBlock, tree: tir.TreeRoot
-) -> tuple[str, dict[str, Memlet], dict[str, Memlet]]:
-    # This function is basically only here to be able to easily type-hint the
-    # return value of the CodeBlock visitor.
-    # (OIRToTasklet().visit(node) returns an Any type, which looks ugly in the
-    #  CodeBlock visitor of OIRToTreeIR)
-    return OIRToTasklet().visit(node, root=tree)
-
-
 def _tasklet_name(
     node: oir.FieldAccess | oir.ScalarAccess, is_target: bool, postfix: str = ""
 ) -> str:
@@ -348,6 +353,13 @@ def _memlet_subset(node: oir.FieldAccess, data_domains: list[int], ctx: Context)
 def _memlet_subset_cartesian(
     node: oir.FieldAccess, data_domains: list[int], ctx: Context
 ) -> subsets.Subset:
+    """
+    Generates the memlet subset for a field access with a cartesian offset.
+
+    Note that we pass data dimensions as a full array into the Tasklet. For cases with data dimensions
+    we thus need a Range subset. We could use the more narrow Indices subset for cases without data
+    dimensions. For the sake of simplicity, we choose to always return a Range.
+    """
     offset_dict = node.offset.to_dict()
     dimensions = ctx.tree.dimensions[node.name]
     shift = ctx.tree.shift[node.name]
@@ -369,10 +381,17 @@ def _memlet_subset_cartesian(
 def _memlet_subset_variable_offset(
     node: oir.FieldAccess, data_domains: list[int], ctx: Context
 ) -> subsets.Subset:
+    """
+    Generates the memlet subset for a field access with a variable K offset.
+
+    While we know that we are reading at one specific i/j/k access, the K-access point is only
+    determined at runtime. We thus pass the K-axis as array into the Tasklet.
+    """
     # Handle cartesian indices
     shift = ctx.tree.shift[node.name]
-    i = f"({tir.Axis.I.iteration_symbol()}) + ({shift[tir.Axis.I]})"
-    j = f"({tir.Axis.J.iteration_symbol()}) + ({shift[tir.Axis.J]})"
+    offset_dict = node.offset.to_dict()
+    i = f"({tir.Axis.I.iteration_symbol()}) + ({shift[tir.Axis.I]}) + ({offset_dict[tir.Axis.I.lower()]})"
+    j = f"({tir.Axis.J.iteration_symbol()}) + ({shift[tir.Axis.J]}) + ({offset_dict[tir.Axis.J.lower()]})"
     K = f"({tir.Axis.K.domain_symbol()}) + ({shift[tir.Axis.K]}) - 1"  # ranges are inclusive
     ranges: list[tuple[str | int, str | int, int]] = [(i, i, 1), (j, j, 1), (0, K, 1)]
 
