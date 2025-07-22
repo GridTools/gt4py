@@ -50,9 +50,9 @@ jobs:
             # Run all sessions without any exclusions
             echo "[]" > gh-exclude-test-sessions.json
           fi
-          # We add a fake item which doesn't match any session to the list to make sure
-          # it is not empty. If needed, more static exclusions can be added here and 
-          # they will be combined with dynamically generated array of exclusions.
+          # We add a fake item which doesn't match any session to the exclude list to make
+          # sure it is not empty. If needed, more static exclusions can be added here and
+          # they will be combined with the dynamically generated array of exclusions.
           # Example: $ echo '[{"nox-session": "test_foo"}]' > static-exclude.json
           echo '["not-existing-factor"]' > static-exclude.json
           jq -s 'add' static-exclude.json gh-exclude-test-sessions.json > all-exclusions.json
@@ -61,6 +61,7 @@ jobs:
           cat all-exclusions.json >> $GITHUB_OUTPUT
           echo '' >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
+          echo "OUT: $GITHUB_OUTPUT"
 
   # Test-running job
   test-component:
