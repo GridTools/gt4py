@@ -61,6 +61,7 @@ MATH_BUILTINS = {
     "trunc",
     "erf",
     "erfc",
+    "round",
 }
 
 TYPE_HINT_AND_CAST_BUILTINS = {
@@ -955,11 +956,16 @@ def trunc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     pass
 
 
-def erf(x):
+def erf(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Computes the error function of `x`."""
     pass
 
 
-def erfc(x):
+def erfc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Computes the complementary error function of `x`, which is `1.0 - erf(x)`."""
+    pass
+
+
+def round(x) -> _gt_all_op_types:  # type: ignore[empty-body] # noqa: A001 [builtin-variable-shadowing]
+    """Computes the nearest integer value to `x`, rounding halfway cases away from zero."""
     pass

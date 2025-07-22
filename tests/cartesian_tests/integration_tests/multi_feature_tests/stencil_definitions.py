@@ -41,6 +41,7 @@ from gt4py.cartesian.gtscript import (
     log10,
     mod,
     region,
+    round,
     sin,
     sinh,
     sqrt,
@@ -161,7 +162,8 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         floor_res = floor(cbrt_res)
         ceil_res = ceil(floor_res)
         trunc_res = trunc(ceil_res)
-        erf_res = erf(trunc_res)
+        round_res = round(trunc_res)
+        erf_res = erf(round_res)
         erfc_res = erfc(erf_res)
         field_b = (
             trunc_res
