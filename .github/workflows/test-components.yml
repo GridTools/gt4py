@@ -48,7 +48,7 @@ jobs:
               --verbose
           else
             # Run all sessions without any exclusions
-            echo "{}" > gh-exclude-test-sessions.json
+            echo "[]" > gh-exclude-test-sessions.json
           fi
           # Combine with other exclusions (if needed). Example: $ echo '[{"nox-session": "test_foo"}]' > static-exclude.json
           echo '[]' > static-exclude.json
