@@ -14,8 +14,8 @@ from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
+    gtir_to_sdfg_utils as gtx_sdfg_utils,
     transformations as gtx_transformations,
-    gtir_sdfg_utils as gtx_sdfg_utils,
 )
 
 import copy
@@ -88,7 +88,7 @@ def test_serial_map_promotion_only_promote():
 
     # Now apply the promotion
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.SerialMapPromoter(
+        gtx_transformations.MapPromoter(
             promote_everything=True,
             # Do not fuse to inspect that the promotion worked.
             fuse_after_promotion=False,
@@ -133,7 +133,7 @@ def test_serial_map_promotion_promote_and_merge(use_symbolic_range, single_use_d
 
     # Now apply the promotion
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.SerialMapPromoter(
+        gtx_transformations.MapPromoter(
             promote_everything=True,
             fuse_after_promotion=True,
             single_use_data={sdfg: single_use_data},
@@ -202,7 +202,7 @@ def test_serial_map_promotion_on_symbolic_range(use_symbolic_range):
     )
 
     count = sdfg.apply_transformations(
-        gtx_transformations.SerialMapPromoter(
+        gtx_transformations.MapPromoter(
             promote_everything=True,
             fuse_after_promotion=True,
             single_use_data={sdfg: {"tmp"}},
@@ -267,7 +267,7 @@ def test_serial_map_promotion_2d_top_1d_bottom():
     )
     sdfg.validate()
 
-    map_promoter = gtx_transformations.SerialMapPromoter(
+    map_promoter = gtx_transformations.MapPromoter(
         promote_everything=True,
         fuse_after_promotion=False,
         single_use_data={sdfg: {"t"}},
@@ -361,7 +361,7 @@ def test_horizonal_promotion_only_promotion(d1_map_is_vertical: bool):
 
     # If we do not allow promotion in horizontal it will not work.
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.SerialMapPromoter(
+        gtx_transformations.MapPromoter(
             promote_horizontal=False,
             promote_vertical=False,
             promote_local=True,
@@ -375,7 +375,7 @@ def test_horizonal_promotion_only_promotion(d1_map_is_vertical: bool):
 
     # We have to allow the promotion of horizontal explicitly.
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.SerialMapPromoter(
+        gtx_transformations.MapPromoter(
             promote_horizontal=d1_map_is_vertical,
             promote_vertical=not d1_map_is_vertical,
             promote_local=False,
@@ -405,7 +405,7 @@ def test_horizonal_promotion_promotion_and_merge(d1_map_is_vertical: bool):
     util.compile_and_run_sdfg(sdfg, **ref)
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.SerialMapPromoter(
+        gtx_transformations.MapPromoter(
             promote_horizontal=d1_map_is_vertical,
             promote_vertical=not d1_map_is_vertical,
             promote_local=False,
@@ -475,7 +475,7 @@ def test_map_promotion_different_parameter_names():
     sdfg_k, _ = _make_sdfg_different_1d_map_name("__k")
     assert util.count_nodes(sdfg_k, dace_nodes.MapEntry) == 2
     count = sdfg_k.apply_transformations_repeated(
-        gtx_transformations.SerialMapPromoter(
+        gtx_transformations.MapPromoter(
             promote_everything=True,
             fuse_after_promotion=True,
             single_use_data={sdfg_k: {"t"}},
@@ -489,7 +489,7 @@ def test_map_promotion_different_parameter_names():
     sdfg_i, _ = _make_sdfg_different_1d_map_name("__i")
     assert util.count_nodes(sdfg_i, dace_nodes.MapEntry) == 2
     count = sdfg_i.apply_transformations_repeated(
-        gtx_transformations.SerialMapPromoter(
+        gtx_transformations.MapPromoter(
             promote_everything=True,
             fuse_after_promotion=True,
             single_use_data={sdfg_i: {"t"}},

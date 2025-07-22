@@ -50,8 +50,11 @@ class Dimension:
     value: str
     kind: DimensionKind
 
+
 # the following field doesn't have correct default order, as without remapping we would interpret first dimension as dim::horizontal
-np_as_located_field(Dimension("K", DimensionKind.VERTICAL), Dimension("Vertex", DimensionKind.HORIZONTAL))
+np_as_located_field(
+    Dimension("K", DimensionKind.VERTICAL), Dimension("Vertex", DimensionKind.HORIZONTAL)
+)
 ```
 
 ### Mapping of Cartesian Offsets to Dimensions

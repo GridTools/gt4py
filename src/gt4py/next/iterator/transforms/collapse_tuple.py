@@ -50,7 +50,7 @@ def _with_altered_iterator_position_dims(
     )
 
 
-def _is_trivial_make_tuple_call(node: ir.Expr):
+def _is_trivial_make_tuple_call(node: itir.Expr):
     """Return if node is a `make_tuple` call with all elements `SymRef`s, `Literal`s or tuples thereof."""
     if not cpm.is_call_to(node, "make_tuple"):
         return False
@@ -112,7 +112,7 @@ def _flattened_as_fieldop_param_el_name(param: str, idx: int) -> str:
 #  should revisit the pattern here and try to find a more general mechanism.
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class CollapseTuple(
-    fixed_point_transformation.FixedPointTransformation, eve.PreserveLocationVisitor
+    fixed_point_transformation.CombinedFixedPointTransform, eve.PreserveLocationVisitor
 ):
     """
     Simplifies `make_tuple`, `tuple_get` calls.
@@ -307,9 +307,10 @@ class CollapseTuple(
                         self.fp_transform(im.tuple_get(idx.value, expr.fun.expr), **kwargs)
                     )
                 )(*expr.args)
-            elif cpm.is_call_to(expr, "if_"):
+            elif cpm.is_call_to(expr, ("if_", "concat_where")):
+                fun = expr.fun
                 cond, true_branch, false_branch = expr.args
-                return im.if_(
+                return im.call(fun)(
                     cond,
                     self.fp_transform(im.tuple_get(idx.value, true_branch), **kwargs),
                     self.fp_transform(im.tuple_get(idx.value, false_branch), **kwargs),
