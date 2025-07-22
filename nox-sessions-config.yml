@@ -1,6 +1,6 @@
 # This file is used by some of the development scripts (at '/scripts')
-# to configure which Nox test sessions are run based on the changed files
-# from a base commit.
+# to configure which Nox test sessions should be run based on the changed
+# files from a base commit.
 sessions:
   - name: test_cartesian
     ignore-paths: # Skip when only gt4py.next or doc files have been updated
@@ -40,3 +40,4 @@ sessions:
       - "*.toml"
       - "*.yml"
       - "noxfile.py"
+
