@@ -24,7 +24,7 @@ jobs:
   define-test-sessions-exclusions:
     runs-on: ubuntu-latest
     outputs:
-      test-sessions-exclusions: ${{ steps.test-sessions.outputs.test-sessions-exclusions }}
+      test-sessions-exclusions: ${{ steps.test-sessions-exclusions.outputs.test-sessions-exclusions }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,7 +61,6 @@ jobs:
           cat all-exclusions.json >> $GITHUB_OUTPUT
           echo '' >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
-          echo "OUT: $(cat $GITHUB_OUTPUT)"
 
   # Test-running job
   test-component:
