@@ -55,7 +55,6 @@ jobs:
           # Example: $ echo '[{"nox-session": "test_foo"}]' > static-exclude.json
           echo '[]' > static-exclude.json
           jq -s 'add' static-exclude.json gh-exclude-test-sessions.json > all-exclusions.json
-          echo '[]' > all-exclusions.json
           # Output the final exclusions for the test sessions
           echo 'test-sessions-exclusions<<EOF' >> $GITHUB_OUTPUT
           cat all-exclusions.json >> $GITHUB_OUTPUT
