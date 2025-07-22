@@ -59,6 +59,9 @@ MATH_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "round",
+    "erf",
+    "erfc",
 }
 
 builtins = {
@@ -906,4 +909,19 @@ def ceil(x):
 
 def trunc(x):
     """Return the Real value x truncated to an Integral (usually an integer)"""
+    pass
+
+
+def round(x):  # noqa: A001 [builtin-variable-shadowing]e
+    """Return the rounded value into original type"""
+    pass
+
+
+def erf(x):
+    """Error function"""
+    pass
+
+
+def erfc(x):
+    """Return the complementary error function, which is 1.0 - erf"""
     pass
