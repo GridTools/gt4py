@@ -299,7 +299,7 @@ class SDFGManager:
 
         Args:
           builder: The StencilBuilder instance, used for build options and caching strategy.
-          debug_stree: If true, saves a string representation of the stree next to the cached SDFG.
+          debug_stree: If true, saves a string representation of the schedule tree next to the cached SDFG.
         """
         self.builder = builder
         self.debug_stree = debug_stree
@@ -390,7 +390,7 @@ class SDFGManager:
         basename = self.builder.module_path.with_suffix("")
         path = f"{basename}_{shash(origin, domain)}.sdfg"
 
-        # check if the same sdfg is already cached on disk
+        # check if the same sdfg is already loaded
         do_cache = self.builder.caching.name != "nocache"
         if do_cache and path in SDFGManager._loaded_sdfgs:
             return SDFGManager._loaded_sdfgs[path]

@@ -230,13 +230,13 @@ def collect_symbol_names(node: eve.RootNode) -> Set[str]:
 
 
 class StencilExtentComputer(eve.NodeVisitor):
-    """Compute extend per fields and horizontal blocks.
+    """Compute extent for fields and horizontal blocks.
 
     Args:
-        add_k: add an extent for the K axis. Default to False.
-        centered_extent: center the extent on 0 (negative left, positive right). Default to False.
-        ignore_horizontal_mask: when computing extent, do not restrict it by reading the
-            horizontal regions masks. Default to False.
+        add_k: Add an extent for the K axis. Defaults to `False`.
+        centered_extent: Center the extent on 0 (negative left, positive right). Defaults to `False`.
+        ignore_horizontal_mask: When computing extent, do not restrict it by reading the masks of
+            horizontal regions. Defaults to `False`.
     """
 
     @dataclass

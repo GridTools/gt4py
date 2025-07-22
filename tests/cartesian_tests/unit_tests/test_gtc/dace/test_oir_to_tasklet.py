@@ -12,7 +12,7 @@ from gt4py.cartesian.gtc.dace import oir_to_tasklet
 from gt4py.cartesian.gtc import oir, common
 
 # Because "dace tests" filter by `requires_dace`, we still need to add the marker.
-# This global variable add the marker to all test functions in this module.
+# This global variable adds the marker to all test functions in this module.
 pytestmark = pytest.mark.requires_dace
 
 
