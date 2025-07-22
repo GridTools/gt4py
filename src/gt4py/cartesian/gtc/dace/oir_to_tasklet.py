@@ -98,27 +98,20 @@ class OIRToTasklet(eve.NodeVisitor):
         # Gather all parts of the variable name in this list
         name_parts = [tasklet_name]
 
+        # Variable K offset subscript
+        if isinstance(node.offset, oir.VariableKOffset):
+            symbol = tir.Axis.K.iteration_dace_symbol()
+            shift = ctx.tree.shift[node.name][tir.Axis.K]
+            offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
+            name_parts.append(f"[({symbol}) + ({shift}) + ({offset})]")
+
         # Data dimension subscript
         data_indices: list[str] = []
         for index in node.data_index:
             data_indices.append(self.visit(index, ctx=ctx, is_target=False))
 
-        # Variable K offset subscript
-        if isinstance(node.offset, oir.AbsoluteKIndex):
-            index = self.visit(node.offset.k, ctx=ctx, is_target=False)
-            if data_indices:
-                name_parts.append(f"[({index}, {', '.join(data_indices)})]")
-            else:
-                name_parts.append(f"[({index})]")
-        else:
-            if isinstance(node.offset, oir.VariableKOffset):
-                symbol = tir.Axis.K.iteration_dace_symbol()
-                shift = ctx.tree.shift[node.name][tir.Axis.K]
-                offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
-                name_parts.append(f"[({symbol}) + ({shift}) + ({offset})]")
-
-            if data_indices:
-                name_parts.append(f"[{', '.join(data_indices)}]")
+        if data_indices:
+            name_parts.append(f"[{', '.join(data_indices)}]")
 
         # In case this is the second access (inside the same tasklet), we can just return the
         # name and don't have to build a Memlet anymore.
