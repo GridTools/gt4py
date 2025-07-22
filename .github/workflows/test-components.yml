@@ -61,7 +61,7 @@ jobs:
           cat all-exclusions.json >> $GITHUB_OUTPUT
           echo '' >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
-          echo "OUT: $GITHUB_OUTPUT"
+          echo "OUT: $(cat $GITHUB_OUTPUT)"
 
   # Test-running job
   test-component:
