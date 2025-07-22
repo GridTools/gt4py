@@ -54,7 +54,7 @@ jobs:
           # sure it is not empty. If needed, more static exclusions can be added here and
           # they will be combined with the dynamically generated array of exclusions.
           # Example: $ echo '[{"nox-session": "test_foo"}]' > static-exclude.json
-          echo '["not-existing-factor"]' > static-exclude.json
+          echo '[{"nox-session": "_not-existing-factor_"}]' > static-exclude.json
           jq -s 'add' static-exclude.json gh-exclude-test-sessions.json > all-exclusions.json
           # Output the final exclusions for the test sessions
           echo 'test-sessions-exclusions<<EOF' >> $GITHUB_OUTPUT
