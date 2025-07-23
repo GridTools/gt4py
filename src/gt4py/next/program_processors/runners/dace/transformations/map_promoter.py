@@ -217,17 +217,6 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
                 stacklevel=1,
             )
 
-    def is_single_use_data(
-        self,
-        sdfg: dace.SDFG,
-        data: str | dace_nodes.AccessNode,
-    ) -> bool:
-        """Checks if `data` is used in a single location."""
-        assert sdfg in self._single_use_data
-        if isinstance(data, dace_nodes.AccessNode):
-            data = data.data
-        return data in self._single_use_data[sdfg]
-
     def can_be_applied(
         self,
         graph: Union[dace.SDFGState, dace.SDFG],
@@ -409,6 +398,20 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         access_node: dace_nodes.AccessNode = self.access_node
         second_map_entry: dace_nodes.MapEntry = self.entry_second_map
 
+        # It is impossible to pass `self._single_use_data` to the Map transformation. Thus it
+        #  will to the scan if they are single use data on its own. To avoid this if this is
+        #  not the case we will now check the intermediates. As explained bellow, we also check
+        #  if the only connection is the second Map.
+        single_use_data = self._single_use_data[sdfg]
+        for oedge in state.out_edges(first_map_exit):
+            onode = oedge.dst
+            if not isinstance(onode, dace_nodes.AccessNode):
+                return False
+            if onode.data not in single_use_data:
+                return False
+            if any(e.dst is not second_map_entry for e in state.out_edges(onode)):
+                return False
+
         # Since we force a promotion of the map we have to store the old parameters
         #  of the map such that we can later restore them.
         first_map = first_map_exit.map
@@ -427,7 +430,7 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
             #  an "exclusive intermediate", which is a concept from the Map fusion
             #  transformation. Thus, to ensure that we get a valid SDFG after promotion,
             #  we check if we can fuse it and the intermediate goes away. To that end
-            #  we specify `require_exclusive_intermediates`.
+            #  we specify `require_exclusive_intermediates` and `allow_only_intermediate_nodes`.
             # TODO(phimuell): Because of [issue#1911](https://github.com/spcl/dace/issues/1911)
             #   it is not possible to pass the single use data to the transformation.
             #   The effect is that we will scan the SDFG unnecessarily.
@@ -437,6 +440,7 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
                     "require_exclusive_intermediates": True,
+                    "allow_only_intermediate_nodes": True,
                 },
                 first_map_exit=first_map_exit,
                 array=access_node,
