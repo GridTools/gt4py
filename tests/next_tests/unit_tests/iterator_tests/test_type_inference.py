@@ -44,7 +44,6 @@ from next_tests.integration_tests.cases import (
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import simple_mesh
-from next_tests.integration_tests.cases import IField, JField
 
 bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
@@ -258,6 +257,31 @@ def expression_test_cases():
                 im.make_tuple(im.ref("inp", float_i_field), im.ref("inp", float_i_field)),
             ),
             ts.TupleType(types=[float_i_field, float_i_field]),
+        ),
+        # concat_where
+        (
+            im.concat_where(
+                im.domain(common.GridType.CARTESIAN, {IDim: (0, 1)}),
+                im.ref("a", float_i_field),
+                im.ref("b", float_ij_field),
+            ),
+            float_ij_field,
+        ),
+        (
+            im.concat_where(
+                im.domain(common.GridType.CARTESIAN, {IDim: (0, 1)}),
+                im.ref("a", ts.TupleType(types=[float_i_field] * 2)),
+                im.ref("b", ts.TupleType(types=[float_i_field] * 2)),
+            ),
+            ts.TupleType(types=[float_i_field] * 2),
+        ),
+        (
+            im.concat_where(
+                im.domain(common.GridType.CARTESIAN, {IDim: (0, 1)}),
+                im.ref("a", ts.TupleType(types=[float_i_field, float_ij_field])),
+                im.ref("b", ts.TupleType(types=[float_i_field] * 2)),
+            ),
+            ts.TupleType(types=[float_i_field, float_ij_field]),
         ),
     )
 

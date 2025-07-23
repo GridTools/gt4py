@@ -14,10 +14,10 @@ from typing import Any, Optional
 import diskcache
 import factory
 import numpy as np
-from flufl import lock
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
+from gt4py._core import locking
 from gt4py.next import backend, common, config, field_utils, metrics
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.otf import arguments, recipes, stages, workflow
@@ -125,8 +125,7 @@ class FileCache(diskcache.Cache):
             lock_dir = pathlib.Path(tempfile.gettempdir())
 
         lock_dir.mkdir(parents=True, exist_ok=True)
-        lockfile = str(lock_dir / "file_cache.lock")
-        with lock.Lock(lockfile, lifetime=10):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
+        with locking.lock(lock_dir):
             super().__init__(directory=directory, **settings)
 
         self._init_complete = True
@@ -224,7 +223,9 @@ run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translati
 
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
-run_gtfn_gpu_cached = GTFNBackendFactory(gpu=True, cached=True)
+run_gtfn_gpu_cached = GTFNBackendFactory(
+    gpu=True, cached=True, otf_workflow__cached_translation=True
+)
 
 run_gtfn_no_transforms = GTFNBackendFactory(
     otf_workflow__bare_translation__enable_itir_transforms=False
