@@ -548,7 +548,6 @@ def _gt_auto_post_processing(
         for _, _, desc in sdfg.arrays_recursive():
             if (
                 isinstance(desc, dace_data.Array)
-                and desc.lifetime == dace.AllocationLifetime.Scope
                 and desc.storage == dace.StorageType.GPU_Global
                 and desc.transient
             ):
