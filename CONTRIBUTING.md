@@ -170,16 +170,16 @@ Before submitting a pull request, check that it meets the following criteria:
 
 As mentioned above, we use several tools to help us write high-quality code. New tools could be added in the future, especially if they do not add a large overhead to our workflow and they bring extra benefits to keep our codebase in shape. The most important ones which we currently rely on are:
 
-- [nox][nox] for testing and task automation with different environments.
-- [pre-commit][pre-commit] for automating the execution of QA tools.
-- [pytest][pytest] for writing readable tests, extended with:
-  - [Coverage.py][coverage] and [pytest-cov][pytest-cov] for test coverage reports.
-  - [pytest-xdist][pytest-xdist] for running tests in parallel.
-- [ruff][ruff] for style enforcement and code linting.
-- [sphinx][sphinx] for generating documentation, extended with:
-  - [sphinx-autodoc][sphinx-autodoc] and [sphinx-napoleon][sphinx-napoleon] for extracting API documentation from docstrings.
-  - [jupytext][jupytext] for writing new user documentation with code examples.
-- [uv][uv] for managing dependencies and environments.
+- [nox] for testing and task automation with different environments.
+- [pre-commit] for automating the execution of QA tools.
+- [pytest] for writing readable tests, extended with:
+  - [Coverage.py][coverage] and [pytest-cov] for test coverage reports.
+  - [pytest-xdist] for running tests in parallel.
+- [ruff] for style enforcement and code linting.
+- [sphinx] for generating documentation, extended with:
+  - [sphinx-autodoc] and [sphinx-napoleon] for extracting API documentation from docstrings.
+  - [jupytext] for writing new user documentation with code examples.
+- [uv] for managing dependencies and environments.
 
 <!-- Reference links -->
 
