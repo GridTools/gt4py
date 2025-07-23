@@ -486,28 +486,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         elif isinstance(gt_type, ts.ScalarType):
             dc_dtype = gtx_dace_utils.as_dace_type(gt_type)
-            if (
-                gtx_dace_utils.is_range_symbol(name)
-                or symbolic_params is None
-                or name in symbolic_params
-            ):
-                if name in sdfg.symbols:
-                    # Sometimes, when the field domain is implicitly derived from
-                    # the field shape, the gt4py lowering adds the field domain
-                    # range symbols as scalar arguments to the program IR.
-                    # Suppose a field '__sym', then gt4py will add '__sym_0_range_0'
-                    # and '__sym_0_range_1'.
-                    # Therefore, here we check whether the shape symbol was already
-                    # created by `_make_array_shape_and_strides()`, when allocating
-                    # storage for field arguments. We assume that the scalar argument
-                    # for field domain, if present, always follows the field argument.
-                    assert gtx_dace_utils.is_range_symbol(name)
-                    if sdfg.symbols[name].dtype != dc_dtype:
-                        raise ValueError(
-                            f"Type mismatch on argument {name}: got {dc_dtype}, expected {sdfg.symbols[name].dtype}."
-                        )
-                else:
-                    sdfg.add_symbol(name, dc_dtype)
+            if symbolic_params is None or name in symbolic_params:
+                sdfg.add_symbol(name, dc_dtype)
             else:
                 sdfg.add_scalar(name, dc_dtype, transient=transient)
 
