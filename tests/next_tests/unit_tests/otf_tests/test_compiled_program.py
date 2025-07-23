@@ -16,8 +16,6 @@ from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
 
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import simple_mesh
-
 
 class SomeEnum(eve.IntEnum):
     FOO = 1
