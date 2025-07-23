@@ -332,6 +332,7 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
                     "require_exclusive_intermediates": True,
+                    "allow_only_intermediate_nodes": True,
                 },
                 # This will not run `MapFusionVertical.can_be_applied()`, thus we will scan
                 #  the SDFG only once unnecessarily here.
