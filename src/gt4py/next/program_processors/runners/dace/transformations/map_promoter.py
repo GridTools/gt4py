@@ -336,21 +336,17 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
 
         # Now fuse the maps together.
         if self.fuse_after_promotion:
-            # NOTE: In `can_be_applied()` we have made sure that the intermediate is single use
-            #   data. There we avoid the global scan by setting `assume_always_shared`. But here
-            #   this is not possible, this call will scan the entire SDFG, despite the fact that
-            #   it is not needed.
-            # TODO(phimuell): Implement a `assume_always_single_use` flag in DaCe.
             gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
                 expr_index=0,
                 options={
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
-                    "_single_use_data": self._single_use_data,
                     "require_exclusive_intermediates": True,
                 },
-                verify=False,  # Do not run `can_be_applied()`.
+                # This will not run `MapFusionVertical.can_be_applied()`, thus we will scan
+                #  the SDFG only once unnecessarily here.
+                verify=False,
                 first_map_exit=first_map_exit,
                 array=access_node,
                 second_map_entry=second_map_entry,
@@ -432,12 +428,14 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
             #  transformation. Thus, to ensure that we get a valid SDFG after promotion,
             #  we check if we can fuse it and the intermediate goes away. To that end
             #  we specify `require_exclusive_intermediates`.
+            # TODO(phimuell): Because of [issue#1911](https://github.com/spcl/dace/issues/1911)
+            #   it is not possible to pass the single use data to the transformation.
+            #   The effect is that we will scan the SDFG unnecessarily.
             if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
                 options={
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
-                    "_single_use_data": self._single_use_data,
                     "require_exclusive_intermediates": True,
                 },
                 first_map_exit=first_map_exit,
