@@ -16,6 +16,7 @@ dev = [
   {include-group = 'docs'},
   {include-group = 'frameworks'},
   {include-group = 'lint'},
+  {include-group = 'scripts'},
   {include-group = 'test'},
   {include-group = 'typing'}
 ]
@@ -39,6 +40,7 @@ lint = [
   'tach>=0.23.0',
   'validate-pyproject-schema-store[all]>=2025.06.13'
 ]
+scripts = ["pyyaml>=6.0.1", "typer>=0.12.3"]
 test = [
   'coverage[toml]>=7.6.1',
   'hypothesis>=6.0.0',
@@ -446,7 +448,7 @@ url = 'https://test.pypi.org/simple'
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
-  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_21_I", group = "dace-next"}
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_23_II", group = "dace-next"}
 ]
 
 # -- versioningit --

@@ -7,9 +7,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+import warnings
 from typing import Any, Callable, Mapping, Optional, TypeAlias, Union
 
 import dace
+import sympy
 from dace import (
     properties as dace_properties,
     subsets as dace_subsets,
@@ -209,16 +211,11 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         #  Maps can be fused after promotion.
         self._bypass_fusion_test = False
 
-    def is_single_use_data(
-        self,
-        sdfg: dace.SDFG,
-        data: str | dace_nodes.AccessNode,
-    ) -> bool:
-        """Checks if `data` is used in a single location."""
-        assert sdfg in self._single_use_data
-        if isinstance(data, dace_nodes.AccessNode):
-            data = data.data
-        return data in self._single_use_data[sdfg]
+        if not self.fuse_after_promotion:
+            warnings.warn(
+                "Created a `MapPromoter` that does not fuse immediately, which might lead to borderline invalid SDFGs.",
+                stacklevel=1,
+            )
 
     def can_be_applied(
         self,
@@ -268,46 +265,35 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
                 ):
                     return False
 
-        # We need to know - at compile time - whether the range of the second map
-        # is not empty. Without this certainty (that is when the map range is purely
-        # symbolic), we cannot promote the first map, because it could potentially
-        # get an empty range from the second map. With an empty range, the temporary
-        # data would never be produced, and any other consumer - either in current
-        # state or in a different state - would get uninitialized data.
-        is_second_map_range_unknown = (second_map_entry.map.range.num_elements() > 0) != True  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
+        # It might be that the ranges that we add to the first Map from the second Map
+        #  are empty. Which means that the second Map is never executed and after
+        #  promotion, the first Map that was executed before would no longer be run.
+        #  To prevent that we require that the number of iterations the second Map
+        #  performs, at compile time, is larger than zero.
+        #  It is also important that we have to do this check at compile time.
+        second_map_iterations: Any = second_map_entry.map.range.num_elements()
+        if str(second_map_iterations).isdigit():
+            second_map_iterations = int(str(second_map_iterations))
+            if second_map_iterations <= 0:
+                return False
+        elif hasattr(second_map_iterations, "free_symbols"):
+            # According to [issue#2095](https://github.com/spcl/dace/issues/2095) DaCe is quite
+            #  liberal concerning the positivity assumption, but in GT4Py this is not possible.
+            second_map_iterations = second_map_iterations.subs(
+                (
+                    (sym, sympy.Symbol(sym.name, nonnegative=False))
+                    for sym in list(second_map_iterations.free_symbols)
+                )
+            )
+            if (second_map_iterations > 0) != True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
+                return False
+        else:
+            warnings.warn(
+                "Was unable to determine if the second Map ({second_map_entry}) is executed.",
+                stacklevel=0,
+            )
+            return False
 
-        # Technically the promotion creates an invalid SDFG, going back to the example
-        #  in the doc string, after the promotion, but before the fusion, `a[i]` is
-        #  written `M` times. This is not an issue per see, since each time the same
-        #  value is written and if we fuse the write to `a` disappears, if `a` is
-        #  a single use transient. Thus we have to make sure that we do not write
-        #  into global memory.
-        # We also check if any node other than the second map is consuming the data
-        #  produced by the first map. We consider both the consumers directly connected
-        #  to the temporary node in current state and the nodes consuming this data
-        #  in a different state. If so, and the range of the second map is unknown
-        #  at compile time - because purely symbolic - we cannot promote the first
-        #  map, because it could happen that the range of the map is empty and the
-        #  data - actually needed by other SDFG nodes - is never produced.
-        # NOTE: We could accept the fact that we write into global memory multiple
-        #   times the same value, but we will not do it. Furthermore, we ignore the
-        #   case where `t` can not be removed.
-        for oedge in graph.out_edges(first_map_exit):
-            if not isinstance(oedge.dst, dace_nodes.AccessNode):
-                return False
-            if not oedge.dst.desc(sdfg).transient:
-                return False
-            if is_second_map_range_unknown:
-                # Here we check whether the data is used within the state
-                if any(
-                    oedge_next.dst is not second_map_entry
-                    for oedge_next in graph.out_edges(oedge.dst)
-                ):
-                    return False
-                # Here we check whether the data is used in other states.
-                if not self.is_single_use_data(sdfg, oedge.dst):
-                    return False
-        # Test if after the promotion the maps could be fused.
         if self._bypass_fusion_test:
             pass
         elif not self._test_if_promoted_maps_can_be_fused(graph, sdfg):
@@ -338,16 +324,18 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         self._promote_first_map(first_map_exit, second_map_entry)
 
         if self.fuse_after_promotion:
-            # NOTE: `can_be_applied()` has made sure that the intermediates are single
-            #   use data, thus make we skip the scan.
             gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
                 expr_index=0,
                 options={
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
-                    "assume_always_single_use_data": True,
+                    "require_exclusive_intermediates": True,
+                    "allow_only_intermediate_nodes": True,
                 },
+                # This will not run `MapFusionVertical.can_be_applied()`, thus we will scan
+                #  the SDFG only once unnecessarily here.
+                verify=False,
                 first_map_exit=first_map_exit,
                 array=access_node,
                 second_map_entry=second_map_entry,
@@ -410,6 +398,20 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         access_node: dace_nodes.AccessNode = self.access_node
         second_map_entry: dace_nodes.MapEntry = self.entry_second_map
 
+        # It is impossible to pass `self._single_use_data` to the Map transformation. Thus it
+        #  will to the scan if they are single use data on its own. To avoid this if this is
+        #  not the case we will now check the intermediates. As explained bellow, we also check
+        #  if the only connection is the second Map.
+        single_use_data = self._single_use_data[sdfg]
+        for oedge in state.out_edges(first_map_exit):
+            onode = oedge.dst
+            if not isinstance(onode, dace_nodes.AccessNode):
+                return False
+            if onode.data not in single_use_data:
+                return False
+            if any(e.dst is not second_map_entry for e in state.out_edges(onode)):
+                return False
+
         # Since we force a promotion of the map we have to store the old parameters
         #  of the map such that we can later restore them.
         first_map = first_map_exit.map
@@ -421,15 +423,24 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
             #  Map fusion can actually inspect them.
             self._promote_first_map(first_map_exit, second_map_entry)
 
-            # We must now check if the Maps can be fused. Note if we are here, then the
-            #   `self` has already made sure that the intermediates are single use data.
-            #   Thus, we specify `assume_always_single_use_data` to avoid a scan.
+            # Technically the promotion creates an invalid SDFG, going back to the example
+            #  in the doc string, after the promotion, but before the fusion, `a[i]` is
+            #  written `M` times. This is not an issue per see, since each time the same
+            #  value is written and if we fuse the writes to `a` disappears, if `a` is
+            #  an "exclusive intermediate", which is a concept from the Map fusion
+            #  transformation. Thus, to ensure that we get a valid SDFG after promotion,
+            #  we check if we can fuse it and the intermediate goes away. To that end
+            #  we specify `require_exclusive_intermediates` and `allow_only_intermediate_nodes`.
+            # TODO(phimuell): Because of [issue#1911](https://github.com/spcl/dace/issues/1911)
+            #   it is not possible to pass the single use data to the transformation.
+            #   The effect is that we will scan the SDFG unnecessarily.
             if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
                 options={
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
-                    "assume_always_single_use_data": True,
+                    "require_exclusive_intermediates": True,
+                    "allow_only_intermediate_nodes": True,
                 },
                 first_map_exit=first_map_exit,
                 array=access_node,
