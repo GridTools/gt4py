@@ -523,10 +523,10 @@ def _gt_auto_post_processing(
     # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
     dace_aoptimize.move_small_arrays_to_stack(sdfg)
 
-    if make_persistent or use_memory_pool:
-        # When `use_memory_pool=True`, we first make temporary arrays persistent
-        #   to identify which arrays are eligible; then we apply scope lifetime
-        #   and move those arrays to the memory pool.
+    if make_persistent and use_memory_pool:
+        raise ValueError("Cannot set both 'make_persistent' and 'use_memory_pool'.")
+
+    if make_persistent:
         device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
         gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)
 
@@ -544,14 +544,15 @@ def _gt_auto_post_processing(
 
     if use_memory_pool:
         if not gpu:
-            raise NotImplementedError("Memory pool only supported for GPU codegn")
+            raise NotImplementedError("Memory pool only available for GPU device.")
         for _, _, desc in sdfg.arrays_recursive():
             if (
                 isinstance(desc, dace_data.Array)
-                and desc.lifetime == dace.AllocationLifetime.Persistent
+                and desc.lifetime == dace.AllocationLifetime.Scope
+                and desc.storage == dace.StorageType.GPU_Global
+                and desc.transient
             ):
                 desc.pool = True
-                desc.lifetime = dace.AllocationLifetime.Scope
 
     return sdfg
 
