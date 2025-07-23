@@ -19,7 +19,7 @@ from gt4py.next.iterator.transforms import collapse_tuple
 @dataclasses.dataclass(frozen=True)
 class TransformGetDomain(PreserveLocationVisitor, NodeTranslator):
     """
-    Transforms `get_domain` calls into `named_range` calls with given size.
+    Transforms `get_domain` calls into a tuple containing start and stop.
 
     Example:
         >>> from gt4py import next as gtx
@@ -31,8 +31,16 @@ class TransformGetDomain(PreserveLocationVisitor, NodeTranslator):
         ... }
 
         >>> unstructured_domain_get_out = im.call("unstructured_domain")(
-        ...     im.call("get_domain")("out", im.axis_literal(Vertex)),
-        ...     im.call("get_domain")("out", im.axis_literal(KDim)),
+        ...     im.named_range(
+        ...         im.axis_literal(Vertex),
+        ...         im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Vertex))),
+        ...         im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Vertex))),
+        ...     ),
+        ...     im.named_range(
+        ...         im.axis_literal(KDim),
+        ...         im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(KDim))),
+        ...         im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(KDim))),
+        ...     ),
         ... )
         >>> ir = itir.Program(
         ...     id="test",
@@ -50,7 +58,7 @@ class TransformGetDomain(PreserveLocationVisitor, NodeTranslator):
         >>> result = TransformGetDomain.apply(ir, sizes=sizes)
         >>> print(result)
         test(inp, out) {
-          out @ u⟨ Vertexₕ: [0, 10[, KDimᵥ: [0, 20[ ⟩ ← (⇑deref)(inp);
+          out @ u⟨ Vertexₕ: [{0, 10}[0], {0, 10}[1][, KDimᵥ: [{0, 20}[0], {0, 20}[1][ ⟩ ← (⇑deref)(inp);
         }
     """
 
@@ -58,7 +66,7 @@ class TransformGetDomain(PreserveLocationVisitor, NodeTranslator):
     def apply(cls, program: itir.Program, sizes: Dict[str, common.Domain]):
         return cls().visit(program, sizes=sizes)
 
-    def visit_FunCall(self, node: itir.SetAt, **kwargs) -> itir.FunCall:
+    def visit_FunCall(self, node: itir.FunCall, **kwargs) -> itir.FunCall:
         sizes = kwargs["sizes"]
 
         if not cpm.is_call_to(node, "get_domain"):
@@ -89,7 +97,7 @@ class TransformGetDomain(PreserveLocationVisitor, NodeTranslator):
         index = next((i for i, d in enumerate(input_dims) if d.value == dim.value), None)
         assert index is not None, f"Dimension {dim.value} not found in {input_dims}"
 
-        dim = input_dims[index]
         start = domain.ranges[index].start
         stop = domain.ranges[index].stop
-        return im.call("named_range")(im.axis_literal(dim), start, stop)
+        node = im.make_tuple(start, stop)
+        return node

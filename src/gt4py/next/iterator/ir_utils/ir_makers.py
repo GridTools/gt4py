@@ -445,7 +445,7 @@ def domain(
         grid_type = f"{grid_type!s}_domain"
     expr = call(grid_type)(
         *[
-            call("named_range")(
+            named_range(
                 axis_literal(d),
                 r[0],
                 r[1],
@@ -455,6 +455,10 @@ def domain(
     )
     expr.type = ts.DomainType(dims=list(ranges.keys()))
     return expr
+
+
+def named_range(dim: itir.AxisLiteral, start: itir.Expr, stop: itir.Expr) -> itir.FunCall:
+    return call("named_range")(dim, start, stop)
 
 
 def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Callable:
