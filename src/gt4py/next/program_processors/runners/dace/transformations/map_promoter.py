@@ -11,7 +11,6 @@ import warnings
 from typing import Any, Callable, Mapping, Optional, TypeAlias, Union
 
 import dace
-import sympy
 from dace import (
     properties as dace_properties,
     subsets as dace_subsets,
@@ -270,7 +269,6 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         #  promotion, the first Map that was executed before would no longer be run.
         #  To prevent that we require that the number of iterations the second Map
         #  performs, at compile time, is larger than zero.
-        #  It is also important that we have to do this check at compile time.
         second_map_iterations: Any = second_map_entry.map.range.num_elements()
         if str(second_map_iterations).isdigit():
             second_map_iterations = int(str(second_map_iterations))
@@ -281,7 +279,7 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
             #  liberal concerning the positivity assumption, but in GT4Py this is not possible.
             second_map_iterations = second_map_iterations.subs(
                 (
-                    (sym, sympy.Symbol(sym.name, nonnegative=False))
+                    (sym, dace.symbol(sym.name, nonnegative=False))
                     for sym in list(second_map_iterations.free_symbols)
                 )
             )
@@ -334,8 +332,8 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
                     "require_exclusive_intermediates": True,
                     "allow_only_intermediate_nodes": True,
                 },
-                # This will not run `MapFusionVertical.can_be_applied()`, thus we will scan
-                #  the SDFG only once unnecessarily here.
+                # This will not run `MapFusionVertical.can_be_applied()`, thus we scan the
+                #  SDFG only once instead of twice for every intermediate.
                 verify=False,
                 first_map_exit=first_map_exit,
                 array=access_node,
@@ -427,10 +425,10 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
             # Technically the promotion creates an invalid SDFG, going back to the example
             #  in the doc string, after the promotion, but before the fusion, `a[i]` is
             #  written `M` times. This is not an issue per see, since each time the same
-            #  value is written and if we fuse the writes to `a` disappears, if `a` is
+            #  value is written and if we fuse the writes to `a` disappear, if `a` is
             #  an "exclusive intermediate", which is a concept from the Map fusion
             #  transformation. Thus, to ensure that we get a valid SDFG after promotion,
-            #  we check if we can fuse it and the intermediate goes away. To that end
+            #  we check if the intermediate goes away after we have fused. To that end
             #  we specify `require_exclusive_intermediates` and `allow_only_intermediate_nodes`.
             # TODO(phimuell): Because of [issue#1911](https://github.com/spcl/dace/issues/1911)
             #   it is not possible to pass the single use data to the transformation.
