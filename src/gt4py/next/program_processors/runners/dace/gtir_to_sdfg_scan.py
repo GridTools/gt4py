@@ -116,10 +116,10 @@ def _create_scan_field_operator_impl(
     scan_dim_index = [sdfg_builder.is_column_axis(dim) for dim in field_dims].index(True)
 
     # the map scope writes the full-shape dimension corresponding to the scan column
-    field_subset = (
-        dace_subsets.Range(field_subset[:scan_dim_index])
-        + dace_subsets.Range.from_string(f"0:{dataflow_output_desc.shape[0]}")
-        + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
+    field_subset = dace_subsets.Range(
+        field_subset[:scan_dim_index]
+        + [(0, dataflow_output_desc.shape[0], 1)]
+        + field_subset[scan_dim_index + 1 :]
     )
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
@@ -145,9 +145,7 @@ def _create_scan_field_operator_impl(
         # the lines below extend the array with the local dimension added by the field operator
         assert output_edge.result.gt_dtype.offset_type is not None
         field_shape = [*field_shape, dataflow_output_desc.shape[1]]
-        field_subset = field_subset + dace_subsets.Range.from_string(
-            f"0:{dataflow_output_desc.shape[1]}"
-        )
+        field_subset = dace_subsets.Range(field_subset[:] + [(0, dataflow_output_desc.shape[1], 1)])
 
     # allocate local temporary storage
     field_name, field_desc = sdfg_builder.add_temp_array(
@@ -452,6 +450,7 @@ def _lower_lambda_to_nested_sdfg(
             )
         scan_result_data = scan_result.dc_node.data
         scan_result_desc = scan_result.dc_node.desc(nsdfg)
+        scan_result_subset = dace_subsets.Range.from_array(scan_result_desc)
 
         # `sym` represents the global output data, that is the nested-SDFG output connector
         scan_carry_data = str(scan_carry_sym.id)
@@ -462,7 +461,9 @@ def _lower_lambda_to_nested_sdfg(
         # in the 'compute' state, we write the current vertical level data to the output field
         # (the output field is mapped to an external array)
         compute_state.add_nedge(
-            scan_result.dc_node, output_node, dace.Memlet(data=output, subset=output_subset)
+            scan_result.dc_node,
+            output_node,
+            dace.Memlet(data=output, subset=output_subset, other_subset=scan_result_subset),
         )
 
         # in the 'update' state, the value of the current vertical level is written
@@ -470,7 +471,9 @@ def _lower_lambda_to_nested_sdfg(
         update_state.add_nedge(
             update_state.add_access(scan_result_data),
             update_state.add_access(scan_carry_data),
-            dace.Memlet.from_array(scan_result_data, scan_result_desc),
+            dace.Memlet(
+                data=scan_result_data, subset=scan_result_subset, other_subset=scan_result_subset
+            ),
         )
 
         output_type = ts.FieldType(dims=[scan_domain.dim], dtype=scan_result.gt_dtype)
