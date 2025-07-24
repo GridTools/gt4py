@@ -14,6 +14,7 @@ import dace
 import copy
 from dace.sdfg import nodes as dace_nodes
 from dace import data as dace_data
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 @overload
@@ -81,6 +82,8 @@ def compile_and_run_sdfg(
 
     with dace.config.set_temporary("compiler.use_cache", value=False):
         sdfg_clone = copy.deepcopy(sdfg)
+
+        gtx_transformations.gt_gpu_transformation(sdfg_clone, use_gpu_storage=False)
 
         sdfg_clone.name = unique_name(sdfg_clone.name)
         sdfg_clone._recompile = True
