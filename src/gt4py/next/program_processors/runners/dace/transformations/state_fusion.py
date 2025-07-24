@@ -217,13 +217,17 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 }
             )
             if not all_data_producers.isdisjoint(data_producers[-1]):
+                # TODO(phimuell): It is certainly possible to lift this restriction. A
+                #   possible cause is that we found once a source node and then an
+                #   AccessNode to the same data. In case it is global this is most likely
+                #   valid. However, I think that simply allow it, is not okay, because
+                #   it might break some assumption in the fuse code.
                 warnings.warn(
-                    f"While fusing states '{first_state}' and '{second_state}'"
-                    f"found data {', '.join(all_data_producers.intersection(data_producers[-1]))}"
-                    " that is written to in both states. This might be an error.",
+                    f"Detected that '{first_state}' writes to the data"
+                    f" `{', '.join(all_data_producers.intersection(data_producers[-1]))}`"
+                    " in multiple concurrent subgraphs. This might indicate an error.",
                     stacklevel=0,
                 )
-                # This might create a conflict, so reject the operation.
                 return True
             all_data_producers.update(data_producers[-1])
 
