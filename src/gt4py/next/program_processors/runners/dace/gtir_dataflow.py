@@ -233,7 +233,7 @@ class DataflowOutputEdge:
         self,
         map_exit: Optional[dace.nodes.MapExit],
         dest: dace.nodes.AccessNode,
-        subset: dace_subsets.Range,
+        dest_subset: dace_subsets.Range,
     ) -> None:
         write_edge = self.state.in_edges(self.result.dc_node)[0]
         write_size = write_edge.data.dst_subset.num_elements()
@@ -263,28 +263,28 @@ class DataflowOutputEdge:
             remove_last_node = False
 
         if remove_last_node:
-            last_node = write_edge.src
-            last_node_connector = write_edge.src_conn
+            src_node = write_edge.src
+            src_node_connector = write_edge.src_conn
             self.state.remove_node(self.result.dc_node)
         else:
-            last_node = self.result.dc_node
-            last_node_connector = None
+            src_node = self.result.dc_node
+            src_node_connector = None
 
         if map_exit is None:
             self.state.add_edge(
-                last_node,
-                last_node_connector,
+                src_node,
+                src_node_connector,
                 dest,
                 None,
-                dace.Memlet(data=dest.data, subset=subset),
+                dace.Memlet(data=dest.data, subset=dest_subset),
             )
         else:
             self.state.add_memlet_path(
-                last_node,
+                src_node,
                 map_exit,
                 dest,
-                src_conn=last_node_connector,
-                memlet=dace.Memlet(data=dest.data, subset=subset),
+                src_conn=src_node_connector,
+                memlet=dace.Memlet(data=dest.data, subset=dest_subset),
             )
 
 
