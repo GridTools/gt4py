@@ -116,10 +116,10 @@ def _create_scan_field_operator_impl(
     scan_dim_index = [sdfg_builder.is_column_axis(dim) for dim in field_dims].index(True)
 
     # the map scope writes the full-shape dimension corresponding to the scan column
-    field_subset = dace_subsets.Range(
-        field_subset[:scan_dim_index]
-        + [(0, dataflow_output_desc.shape[0] - 1, 1)]
-        + field_subset[scan_dim_index + 1 :]
+    field_subset = (
+        dace_subsets.Range(field_subset[:scan_dim_index])
+        + dace_subsets.Range.from_string(f"0:{dataflow_output_desc.shape[0]}")
+        + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
     )
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
@@ -145,8 +145,8 @@ def _create_scan_field_operator_impl(
         # the lines below extend the array with the local dimension added by the field operator
         assert output_edge.result.gt_dtype.offset_type is not None
         field_shape = [*field_shape, dataflow_output_desc.shape[1]]
-        field_subset = dace_subsets.Range(
-            field_subset[:] + [(0, dataflow_output_desc.shape[1] - 1, 1)]
+        field_subset = field_subset + dace_subsets.Range.from_string(
+            f"0:{dataflow_output_desc.shape[1]}"
         )
 
     # allocate local temporary storage
