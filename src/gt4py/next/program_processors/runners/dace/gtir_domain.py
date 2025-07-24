@@ -83,8 +83,8 @@ def simplify_domain_expr(
 ) -> dace.symbolic.SymbolicType:
     """Simplifies a symbolic expression by applying constraints from domain range.
 
-    Dace uses sympy for symbolic expression in the SDFG. By applying assumptions
-    on the sympy expression, we may obtain a simplified expression.
+    Dace uses sympy for symbolic expressions in the SDFG. By applying assumptions
+    on a sympy expression, we may obtain a simplified expression.
     This is particularly important in the lowering of concat_where domain expressions,
     because it usually results in cleaner memlet subsets and better map fusion.
 
@@ -146,7 +146,7 @@ def get_field_layout(
 
     Args:
         field_domain: The field operator domain.
-        target_domain: Domain of the target field of the `SetAt` expression.
+        target_domain: Domain of the target field in the root `SetAt` expression.
 
     Returns:
         A tuple of three lists containing:

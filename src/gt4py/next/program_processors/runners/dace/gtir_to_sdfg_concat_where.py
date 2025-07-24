@@ -140,7 +140,7 @@ def _translate_concat_where_impl(
     of the concat_where expression, passed as second and third argument, respectively.
 
     Args:
-        ctx: The SDFG context where the primitive subgraph should be instantiated
+        ctx: The SDFG context where the primitive subgraph should be instantiated.
         sdfg_builder: The object responsible for SubgraphContexting child nodes of the primitive node.
         mask_domain: Domain (only for concat dimension) of the true branch, infinite
             on lower or upper boundary.
@@ -473,7 +473,7 @@ def translate_concat_where(
     if len(mask_domain) != 1:
         raise NotImplementedError("Expected `concat_where` along single axis.")
 
-    # we SubgraphContext the field arguments for the true and false branch
+    # we visit the field arguments for the true and false branch
     tb, fb = (sdfg_builder.visit(node.args[i], ctx=ctx) for i in [1, 2])
 
     return (
