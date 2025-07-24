@@ -41,44 +41,6 @@ FieldopDomain: TypeAlias = list[FieldopDomainRange]
 """Domain of a field operator represented as a list of `FieldopDomainRange` for each dimension."""
 
 
-class GTIRDomainParser:
-    """Utility class to apply domain constraints on a dace symbolic expression.
-
-    Dace uses sympy for symbolic expression in the SDFG. By applying assumptions
-    on the sympy expression, we may obtain a simplified expression.
-    This is particularly important in the lowering of concat_where domain expressions,
-    because it usually results in cleaner memlet subsets and better map fusion.
-    """
-
-    domain_constraints: set[
-        tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType, sympy.Basic]
-    ]
-
-    def __init__(self, domain: FieldopDomain):
-        # We create a set of variables to represent the domain extent. The actual constraint
-        # is given by the assumption that this variable should be integer and non-negative.
-        self.domain_constraints = {
-            (
-                dim_range.start,
-                dim_range.stop,
-                sympy.var(f"__gtir_{dim_range.dim.value}_size", integer=True, negative=False),
-            )
-            for dim_range in domain
-        }
-
-    def simplify(self, expr: dace.symbolic.SymbolicType) -> dace.symbolic.SymbolicType:
-        """Simplifies a symbolic domain expression by applying some constraints.
-        Args:
-            expr: The symbolic expression to simplify.
-        Returns:
-            A new symbolic expression.
-        """
-        for lb, ub, size in self.domain_constraints:
-            # we want to enforce the constraint `ub = lb + size`
-            expr = expr.subs(lb, ub - size).subs(size, ub - lb)
-        return expr.simplify()
-
-
 def extract_domain(node: gtir.Expr) -> FieldopDomain:
     """
     Visits the domain of a field operator and returns a list of dimensions and
@@ -116,6 +78,31 @@ def extract_domain(node: gtir.Expr) -> FieldopDomain:
     return domain
 
 
+def simplify_domain_expr(
+    expr: dace.symbolic.SymbolicType, domain: FieldopDomain
+) -> dace.symbolic.SymbolicType:
+    """Simplifies a symbolic expression by applying constraints from domain range.
+
+    Dace uses sympy for symbolic expression in the SDFG. By applying assumptions
+    on the sympy expression, we may obtain a simplified expression.
+    This is particularly important in the lowering of concat_where domain expressions,
+    because it usually results in cleaner memlet subsets and better map fusion.
+
+    Args:
+        expr: The symbolic expression to simplify.
+    Returns:
+        A new symbolic expression.
+    """
+    for dim_range in domain:
+        # We want to enforce the constraint `ub = lb + size`. The actual constraint
+        # is given by the assumption that the `size` variable is integer and non-negative.
+        size = sympy.var(f"__gtir_{dim_range.dim.value}_size", integer=True, negative=False)
+        expr = expr.subs(dim_range.start, dim_range.stop - size).subs(
+            size, dim_range.stop - dim_range.start
+        )
+    return expr.simplify()
+
+
 def get_domain_indices(
     dims: Sequence[gtx_common.Dimension], origin: Optional[Sequence[dace.symbolic.SymExpr]]
 ) -> dace_subsets.Indices:
@@ -143,8 +130,8 @@ def get_domain_indices(
 
 
 def get_field_layout(
-    domain: FieldopDomain,
-    domain_parser: GTIRDomainParser,
+    field_domain: FieldopDomain,
+    target_domain: FieldopDomain,
 ) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
     """
     Parse the field operator domain and generate the shape of the result field.
@@ -158,7 +145,8 @@ def get_field_layout(
     in order to avoid allocation of temporary fields with negative size.
 
     Args:
-        domain: The field operator domain.
+        field_domain: The field operator domain.
+        target_domain: Domain of the target field of the `SetAt` expression.
 
     Returns:
         A tuple of three lists containing:
@@ -166,12 +154,12 @@ def get_field_layout(
             - the domain origin, that is the start indices in all dimensions
             - the domain size in each dimension
     """
-    if len(domain) == 0:
+    if len(field_domain) == 0:
         return [], [], []
-    domain_dims = [domain_range.dim for domain_range in domain]
-    domain_origin = [domain_range.start for domain_range in domain]
+    domain_dims = [domain_range.dim for domain_range in field_domain]
+    domain_origin = [domain_range.start for domain_range in field_domain]
     domain_shape = [
-        domain_parser.simplify(sympy.Max(0, (domain_range.stop - domain_range.start)))
-        for domain_range in domain
+        simplify_domain_expr(sympy.Max(0, (domain_range.stop - domain_range.start)), target_domain)
+        for domain_range in field_domain
     ]
     return domain_dims, domain_origin, domain_shape

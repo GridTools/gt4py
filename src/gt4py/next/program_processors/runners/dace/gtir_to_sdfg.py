@@ -135,7 +135,7 @@ class SubgraphContext:
 
     sdfg: dace.SDFG
     state: dace.SDFGState
-    domain_parser: gtir_domain.GTIRDomainParser
+    target_domain: gtir_domain.FieldopDomain
 
 
 class SDFGBuilder(DataflowBuilder, Protocol):
@@ -319,7 +319,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg = dace.SDFG(name=self.unique_nsdfg_name(parent_ctx.sdfg, sdfg_name))
         sdfg.debuginfo = gtir_to_sdfg_utils.debug_info(expr, default=parent_ctx.sdfg.debuginfo)
         state = sdfg.add_state(f"{sdfg_name}_entry")
-        nested_ctx = SubgraphContext(sdfg, state, parent_ctx.domain_parser)
+        nested_ctx = SubgraphContext(sdfg, state, parent_ctx.target_domain)
         nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, scope_symbols)
 
         # We pass to the nested SDFG all GTIR-symbols in scope, which includes the
@@ -557,8 +557,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             A list of array nodes containing the result fields.
         """
 
-        domain_parser = gtir_domain.GTIRDomainParser(domain)
-        ctx = SubgraphContext(sdfg, head_state, domain_parser)
+        ctx = SubgraphContext(sdfg, head_state, domain)
         result = self.visit(node, ctx=ctx)
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
