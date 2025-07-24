@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from . import attrib, meta, text
+from . import attrib, meta
 from .base import (
     NOTHING,
     BaseFrozen,
@@ -43,7 +43,6 @@ __all__ = [  # noqa: RUF022 `__all__` is not sorted
     # Modules
     "attrib",
     "meta",
-    "text",
     # Objects
     "NOTHING",
     "BaseFrozen",
