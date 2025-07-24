@@ -9,6 +9,7 @@ from typing import Optional
 
 import pytest
 from next_tests.integration_tests.cases import (
+    IField,
     IDim,
     KDim,
     Vertex,
@@ -24,7 +25,6 @@ from gt4py.next.iterator.transforms import inline_fundefs, global_tmps, inline_l
 from gt4py.next.iterator.transforms.transform_get_domain import TransformGetDomain
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_specifications as ts
-from tests.next_tests.integration_tests import cases
 from tests.next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     simple_cartesian_grid,
     Edge,
@@ -252,26 +252,26 @@ def test_get_domain_nested_tuples():
 @pytest.fixture
 def testee():
     @gtx.field_operator
-    def testee_tmp(x: cases.IField) -> cases.IField:
+    def testee_tmp(x: IField) -> IField:
         y = x(IOff[2])
         return y(IOff[3])
 
     # @gtx.field_operator
-    # def testee_tmp(x: cases.IField) -> cases.IField:
+    # def testee_tmp(x: IField) -> IField:
     #     return x(IOff[1])
 
     # @gtx.field_operator
-    # def testee_op(x: cases.IField) -> cases.IField:
+    # def testee_op(x: IField) -> IField:
     #     return testee_tmp(x)
 
     @gtx.field_operator
-    def testee_op(x: cases.IField) -> cases.IField:
+    def testee_op(x: IField) -> IField:
         return testee_tmp(x) + testee_tmp(x)
 
     @gtx.program(static_domain_sizes=True, grid_type=gtx.GridType.UNSTRUCTURED)
     def prog(
-        inp: cases.IField,
-        out: cases.IField,
+        inp: IField,
+        out: IField,
     ):
         testee_op(inp, out=out)
 
