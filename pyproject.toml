@@ -18,6 +18,7 @@ dev = [
   {include-group = 'docs'},
   {include-group = 'frameworks'},
   {include-group = 'lint'},
+  {include-group = 'scripts'},
   {include-group = 'test'},
   {include-group = 'typing'}
 ]
@@ -41,6 +42,7 @@ lint = [
   'tach>=0.23.0',
   'validate-pyproject-schema-store[all]>=2025.06.13'
 ]
+scripts = ["pyyaml>=6.0.1", "typer>=0.12.3"]
 test = [
   'coverage[toml]>=7.6.1',
   'hypothesis>=6.0.0',
@@ -313,21 +315,44 @@ target-version = 'py310'
 docstring-code-format = true
 
 [tool.ruff.lint]
-# # Rules sets:
-# E: pycodestyle
-# F: Pyflakes
-# I: isort
-# B: flake8-bugbear
+# -- Rules set to be considered --
 # A: flake8-builtins
-# T10: flake8-debugger
+# B: flake8-bugbear
+# C4: flake8-comprehensions
+# CPY: flake8-copyright
+# D: pydocstyle
+# DOC: pydoclint
+# E: pycodestyle
 # ERA: eradicate
+# F: Pyflakes
+# FA100: future-rewritable-type-annotation
+# FBT: flake8-boolean-trap
+# FLY: flynt
+# I: isort
+# ICN: flake8-import-conventions
+# ISC: flake8-implicit-str-concat
+# N: pep8-naming
 # NPY: NumPy-specific rules
+# PERF: Perflint
+# PGH: pygrep-hooks
+# PTH: flake8-use-pathlib
+# Q: flake8-quotes
 # RUF: Ruff-specific rules
+# SIM: flake8-simplify
+# T10: flake8-debugger
+# TD: flake8-todos
+# UP: pyupgrade
+# YTT: flake8-2020
+exclude = ['docs/**', "examples/**", "tests/**"]
+explicit-preview-rules = true
+extend-select = ["F822"]  # TODO(egparedes): remove when not longer in preview
 ignore = [
   'E501',  # [line-too-long]
-  'B905'  # [zip-without-explicit-strict]  # TODO(egparedes): Reevaluate this rule
+  'B905',  # [zip-without-explicit-strict]  # TODO(egparedes): remove when possible
+  'TD003'  # [missing-todo-link]
 ]
-select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
+preview = true  # use only with explicit-preview-rules=true
+select = ['A', 'B', 'CPY', 'E', 'ERA', 'F', 'FA100', 'I', 'ISC', 'NPY', 'Q', 'RUF', 'T10', 'YTT']
 typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 
@@ -381,10 +406,6 @@ split-on-trailing-comma = false
 [tool.ruff.lint.mccabe]
 max-complexity = 15
 
-[tool.ruff.lint.per-file-ignores]
-'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
-'src/gt4py/next/__init__.py' = ['F401']
-
 # -- setuptools build backend --
 [tool.setuptools]
 platforms = ['Linux', 'Mac']
@@ -428,7 +449,7 @@ url = 'https://test.pypi.org/simple'
 atlas4py = {index = "test.pypi"}
 dace = [
   {git = "https://github.com/GridTools/dace", branch = "romanc/stree-to-sdfg", group = "dace-cartesian"},
-  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_16", group = "dace-next"}
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_23", group = "dace-next"}
 ]
 
 # -- versioningit --
