@@ -12,6 +12,7 @@ import dataclasses
 from typing import Optional, Sequence, TypeAlias
 
 import dace
+import sympy
 from dace import subsets as dace_subsets
 
 from gt4py.next import common as gtx_common
@@ -38,6 +39,44 @@ class FieldopDomainRange:
 
 FieldopDomain: TypeAlias = list[FieldopDomainRange]
 """Domain of a field operator represented as a list of `FieldopDomainRange` for each dimension."""
+
+
+class GTIRDomainParser:
+    """Utility class to apply domain constraints on a dace symbolic expression.
+
+    Dace uses sympy for symbolic expression in the SDFG. By applying assumptions
+    on the sympy expression, we may obtain a simplified expression.
+    This is particularly important in the lowering of concat_where domain expressions,
+    because it usually results in cleaner memlet subsets and better map fusion.
+    """
+
+    domain_constraints: set[
+        tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType, sympy.Basic]
+    ]
+
+    def __init__(self, domain: FieldopDomain):
+        # We create a set of variables to represent the domain extent. The actual constraint
+        # is given by the assumption that this variable should be integer and non-negative.
+        self.domain_constraints = {
+            (
+                dim_range.start,
+                dim_range.stop,
+                sympy.var(f"__gtir_{dim_range.dim.value}_size", integer=True, negative=False),
+            )
+            for dim_range in domain
+        }
+
+    def simplify(self, expr: dace.symbolic.SymbolicType) -> dace.symbolic.SymbolicType:
+        """Simplifies a symbolic domain expression by applying some constraints.
+        Args:
+            expr: The symbolic expression to simplify.
+        Returns:
+            A new symbolic expression.
+        """
+        for lb, ub, size in self.domain_constraints:
+            # we want to enforce the constraint `ub = lb + size`
+            expr = expr.subs(lb, ub - size).subs(size, ub - lb)
+        return expr.simplify()
 
 
 def extract_domain(node: gtir.Expr) -> FieldopDomain:
@@ -105,6 +144,7 @@ def get_domain_indices(
 
 def get_field_layout(
     domain: FieldopDomain,
+    domain_parser: GTIRDomainParser,
 ) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
     """
     Parse the field operator domain and generate the shape of the result field.
@@ -131,7 +171,7 @@ def get_field_layout(
     domain_dims = [domain_range.dim for domain_range in domain]
     domain_origin = [domain_range.start for domain_range in domain]
     domain_shape = [
-        dace.symbolic.pystr_to_symbolic(f"max(0, ({domain_range.stop}) - ({domain_range.start}))")
+        domain_parser.simplify(sympy.Max(0, (domain_range.stop - domain_range.start)))
         for domain_range in domain
     ]
     return domain_dims, domain_origin, domain_shape
