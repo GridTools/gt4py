@@ -145,7 +145,9 @@ def _create_field_operator_impl(
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         assert output_edge.result.gt_dtype.offset_type is not None
         field_shape = [*field_shape, dataflow_output_desc.shape[0]]
-        field_subset = field_subset + dace_subsets.Range.from_array(dataflow_output_desc)
+        field_subset = dace_subsets.Range(
+            field_subset[:] + [(0, dataflow_output_desc.shape[0] - 1, 1)]
+        )
 
     # allocate local temporary storage
     if len(field_shape) == 0:  # zero-dimensional field
