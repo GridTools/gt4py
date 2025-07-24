@@ -17,7 +17,7 @@ import numpy as np
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.iterator.transforms import trace_shifts
+from gt4py.next.iterator.transforms import collapse_tuple, trace_shifts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
 
@@ -149,10 +149,23 @@ class SymbolicDomain:
                         )
                         for k, v in _max_domain_sizes_by_location_type(offset_provider).items()
                     }
-                    min_ = np.min(
-                        offset_provider[off.value].ndarray[:, val.value]
-                    )  # TODO: multible shifts? multible occurences of that dimension?
-                    max_ = np.max(offset_provider[off.value].ndarray[:, val.value]) + 1
+                    start = 0
+                    stop = -1
+                    start_ = collapse_tuple.CollapseTuple.apply(
+                        new_ranges[old_dim].start,
+                        within_stencil=False,
+                        allow_undeclared_symbols=True,
+                    )
+                    stop_ = collapse_tuple.CollapseTuple.apply(
+                        new_ranges[old_dim].stop,
+                        within_stencil=False,
+                        allow_undeclared_symbols=True,
+                    )
+                    if isinstance(start_, itir.Literal) and isinstance(stop_, itir.Literal):
+                        start = int(start_.value)
+                        stop = int(stop_.value)
+                    min_ = np.min(offset_provider[off.value].ndarray[start:stop, val.value])
+                    max_ = np.max(offset_provider[off.value].ndarray[start:stop, val.value]) + 1
                     horizontal_sizes[new_dim.value] = (
                         im.literal(str(min_), builtins.INTEGER_INDEX_BUILTIN),
                         im.literal(str(max_), builtins.INTEGER_INDEX_BUILTIN),
