@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import warnings
 from typing import Any
 
 import dace
@@ -215,9 +216,15 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                     if first_scope_dict[dnode] is None and first_subgraph.out_degree(dnode) != 0
                 }
             )
-            assert all_data_producers.isdisjoint(data_producers[-1]), (
-                "Found multiple AccessNodes that writes to data in one state."
-            )
+            if not all_data_producers.isdisjoint(data_producers[-1]):
+                warnings.warn(
+                    f"While fusing states '{first_state}' and '{second_state}'"
+                    f"found data {', '.join(all_data_producers.intersection(data_producers[-1]))}"
+                    " that is written to in both states. This might be an error.",
+                    stacklevel=0,
+                )
+                # This might create a conflict, so reject the operation.
+                return True
             all_data_producers.update(data_producers[-1])
 
         # Now determine the concurrent subgraphs of the second state, i.e. the parts
