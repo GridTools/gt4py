@@ -36,6 +36,7 @@ from .base import (
     shashed_id,
     slugify,
 )
+from .field import Field
 
 
 __all__ = [  # noqa: RUF022 `__all__` is not sorted
@@ -52,6 +53,7 @@ __all__ = [  # noqa: RUF022 `__all__` is not sorted
     "classmethod_to_function",
     "classproperty",
     "compose",
+    "Field",
     "flatten",
     "flatten_iter",
     "get_member",
