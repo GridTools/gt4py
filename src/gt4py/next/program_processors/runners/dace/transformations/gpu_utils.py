@@ -906,3 +906,22 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         # Now copy parameter and the ranges from the second to the trivial map.
         trivial_map.params = copy.deepcopy(second_map.params)
         trivial_map.range = copy.deepcopy(second_map.range)
+
+
+def gt_gpu_apply_mempool(sdfg: dace.SDFG) -> None:
+    """Enables the stream ordered memory allocator in CUDA code generation.
+
+    It sets the `pool` flag on all transients allocated in GPU global memory.
+    The dace code genarator will handle this flag by calling `cudaMallocAsync`
+    and `cudaFreeAsync` in the CUDA code for allocation/release of the buffers.
+
+    Args:
+        sdfg: The SDFG that should be processed.
+    """
+    for _, _, desc in sdfg.arrays_recursive():
+        if (
+            isinstance(desc, dace.data.Array)
+            and desc.storage == dace.StorageType.GPU_Global
+            and desc.transient
+        ):
+            desc.pool = True
