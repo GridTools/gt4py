@@ -265,10 +265,12 @@ class DataflowOutputEdge:
         if remove_last_node:
             src_node = write_edge.src
             src_node_connector = write_edge.src_conn
+            src_subset = write_edge.data.src_subset
             self.state.remove_node(self.result.dc_node)
         else:
-            src_node = self.result.dc_node
-            src_node_connector = None
+            src_node = write_edge.dst
+            src_node_connector = write_edge.dst_conn
+            src_subset = write_edge.data.dst_subset
 
         if map_exit is None:
             self.state.add_edge(
@@ -276,7 +278,7 @@ class DataflowOutputEdge:
                 src_node_connector,
                 dest,
                 None,
-                dace.Memlet(data=dest.data, subset=dest_subset),
+                dace.Memlet(data=dest.data, subset=dest_subset, other_subset=src_subset),
             )
         else:
             self.state.add_memlet_path(
@@ -284,7 +286,7 @@ class DataflowOutputEdge:
                 map_exit,
                 dest,
                 src_conn=src_node_connector,
-                memlet=dace.Memlet(data=dest.data, subset=dest_subset),
+                memlet=dace.Memlet(data=dest.data, subset=dest_subset, other_subset=src_subset),
             )
 
 
