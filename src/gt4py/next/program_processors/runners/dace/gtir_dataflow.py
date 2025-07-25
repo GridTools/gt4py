@@ -269,7 +269,7 @@ class DataflowOutputEdge:
             self.state.remove_node(self.result.dc_node)
         else:
             src_node = write_edge.dst
-            src_node_connector = write_edge.dst_conn
+            src_node_connector = None
             src_subset = write_edge.data.dst_subset
 
         if map_exit is None:
