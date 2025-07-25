@@ -30,9 +30,9 @@ def gt_auto_optimize(
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
     reuse_transients: bool = False,
-    use_memory_pool: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
+    gpu_memory_pool: bool = False,
     constant_symbols: Optional[dict[str, Any]] = None,
     assume_pointwise: bool = True,
     validate: bool = True,
@@ -84,10 +84,10 @@ def gt_auto_optimize(
             blocking if there are independent nodes in the Map, see the
             `require_independent_nodes` option of the `LoopBlocking` transformation.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
-        use_memory_pool: Enable CUDA memory pool in gpu codegen.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             for _all_ GPU Maps.
+        gpu_memory_pool: Enable CUDA memory pool in gpu codegen.
         constant_symbols: Symbols listed in this `dict` will be replaced by the
             respective value inside the SDFG. This might increase performance.
         assume_pointwise: Assume that the SDFG has no risk for race condition in
@@ -193,7 +193,7 @@ def gt_auto_optimize(
             #   scopes, which I do not like. Thus we should fix the transformation
             #   to avoid that.
             reuse_transients=reuse_transients,
-            use_memory_pool=(use_memory_pool if gpu else False),
+            gpu_memory_pool=gpu_memory_pool,
             validate=validate,
             validate_all=validate_all,
         )
@@ -503,7 +503,7 @@ def _gt_auto_post_processing(
     gpu: bool,
     make_persistent: bool,
     reuse_transients: bool,
-    use_memory_pool: bool,
+    gpu_memory_pool: bool,
     validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
@@ -523,8 +523,8 @@ def _gt_auto_post_processing(
     # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
     dace_aoptimize.move_small_arrays_to_stack(sdfg)
 
-    if make_persistent and use_memory_pool:
-        raise ValueError("Cannot set both 'make_persistent' and 'use_memory_pool'.")
+    if make_persistent and gpu_memory_pool:
+        raise ValueError("Cannot set both 'make_persistent' and 'gpu_memory_pool'.")
 
     if make_persistent:
         device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
@@ -542,16 +542,8 @@ def _gt_auto_post_processing(
                 for edge in state.edges():
                     edge.data.wcr_nonatomic = False
 
-    if use_memory_pool:
-        if not gpu:
-            raise NotImplementedError("Memory pool only available for GPU device.")
-        for _, _, desc in sdfg.arrays_recursive():
-            if (
-                isinstance(desc, dace_data.Array)
-                and desc.storage == dace.StorageType.GPU_Global
-                and desc.transient
-            ):
-                desc.pool = True
+    if gpu and gpu_memory_pool:
+        gtx_transformations.gpu_utils.gt_gpu_apply_mempool(sdfg)
 
     return sdfg
 
