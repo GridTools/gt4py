@@ -32,6 +32,7 @@ def gt_auto_optimize(
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
+    gpu_memory_pool: bool = False,
     constant_symbols: Optional[dict[str, Any]] = None,
     assume_pointwise: bool = True,
     validate: bool = True,
@@ -86,6 +87,7 @@ def gt_auto_optimize(
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             for _all_ GPU Maps.
+        gpu_memory_pool: Enable CUDA memory pool in gpu codegen.
         constant_symbols: Symbols listed in this `dict` will be replaced by the
             respective value inside the SDFG. This might increase performance.
         assume_pointwise: Assume that the SDFG has no risk for race condition in
@@ -193,6 +195,7 @@ def gt_auto_optimize(
             #   scopes, which I do not like. Thus we should fix the transformation
             #   to avoid that.
             reuse_transients=reuse_transients,
+            gpu_memory_pool=gpu_memory_pool,
             validate=False,
             validate_all=validate_all,
         )
@@ -517,6 +520,7 @@ def _gt_auto_post_processing(
     gpu: bool,
     make_persistent: bool,
     reuse_transients: bool,
+    gpu_memory_pool: bool,
     validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
@@ -536,6 +540,9 @@ def _gt_auto_post_processing(
     # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
     dace_aoptimize.move_small_arrays_to_stack(sdfg)
 
+    if make_persistent and gpu_memory_pool:
+        raise ValueError("Cannot set both 'make_persistent' and 'gpu_memory_pool'.")
+
     if make_persistent:
         device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
         gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)
@@ -551,6 +558,9 @@ def _gt_auto_post_processing(
                 assert isinstance(state, dace.SDFGState)
                 for edge in state.edges():
                     edge.data.wcr_nonatomic = False
+
+    if gpu and gpu_memory_pool:
+        gtx_transformations.gpu_utils.gt_gpu_apply_mempool(sdfg)
 
     if validate_all or validate:
         sdfg.validate()
