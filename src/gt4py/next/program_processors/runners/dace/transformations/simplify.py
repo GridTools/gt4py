@@ -295,7 +295,7 @@ def gt_substitute_compiletime_symbols(
     sdfg: dace.SDFG,
     repl: dict[str, Any],
     simplify: bool = False,
-    validate: bool = False,
+    validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
 ) -> None:
