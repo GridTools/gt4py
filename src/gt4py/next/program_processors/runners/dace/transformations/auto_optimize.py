@@ -32,6 +32,7 @@ def gt_auto_optimize(
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
+    gpu_memory_pool: bool = False,
     constant_symbols: Optional[dict[str, Any]] = None,
     assume_pointwise: bool = True,
     validate: bool = True,
@@ -86,6 +87,7 @@ def gt_auto_optimize(
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             for _all_ GPU Maps.
+        gpu_memory_pool: Enable CUDA memory pool in gpu codegen.
         constant_symbols: Symbols listed in this `dict` will be replaced by the
             respective value inside the SDFG. This might increase performance.
         assume_pointwise: Assume that the SDFG has no risk for race condition in
@@ -149,7 +151,6 @@ def gt_auto_optimize(
         sdfg = _gt_auto_process_top_level_maps(
             sdfg=sdfg,
             assume_pointwise=assume_pointwise,
-            validate=False,
             validate_all=validate_all,
         )
 
@@ -165,7 +166,6 @@ def gt_auto_optimize(
             blocking_dim=blocking_dim,
             blocking_size=blocking_size,
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
-            validate=False,
             validate_all=validate_all,
         )
 
@@ -179,7 +179,6 @@ def gt_auto_optimize(
             gpu_block_size=gpu_block_size,
             gpu_launch_factor=gpu_launch_factor,
             gpu_launch_bounds=gpu_launch_bounds,
-            validate=False,
             validate_all=validate_all,
         )
 
@@ -193,7 +192,7 @@ def gt_auto_optimize(
             #   scopes, which I do not like. Thus we should fix the transformation
             #   to avoid that.
             reuse_transients=reuse_transients,
-            validate=False,
+            gpu_memory_pool=gpu_memory_pool,
             validate_all=validate_all,
         )
 
@@ -209,7 +208,6 @@ def gt_auto_optimize(
 def _gt_auto_process_top_level_maps(
     sdfg: dace.SDFG,
     assume_pointwise: bool,
-    validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimize the Maps at the top level of the SDFG inplace.
@@ -376,9 +374,6 @@ def _gt_auto_process_top_level_maps(
             ),
         )
 
-    if validate:
-        sdfg.validate()
-
     return sdfg
 
 
@@ -387,7 +382,6 @@ def _gt_auto_process_dataflow_inside_maps(
     blocking_dim: Optional[gtx_common.Dimension],
     blocking_size: int,
     blocking_only_if_independent_nodes: Optional[bool],
-    validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
@@ -438,9 +432,6 @@ def _gt_auto_process_dataflow_inside_maps(
         validate_all=validate_all,
     )
 
-    if validate:
-        sdfg.validate()
-
     return sdfg
 
 
@@ -451,7 +442,6 @@ def _gt_auto_configure_maps_and_strides(
     gpu_block_size: Optional[Sequence[int | str] | str],
     gpu_launch_bounds: Optional[int | str],
     gpu_launch_factor: Optional[int],
-    validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Configure the Maps and the strides of the SDFG inplace.
@@ -506,9 +496,6 @@ def _gt_auto_configure_maps_and_strides(
             try_removing_trivial_maps=True,
         )
 
-    if validate:
-        sdfg.validate()
-
     return sdfg
 
 
@@ -517,7 +504,7 @@ def _gt_auto_post_processing(
     gpu: bool,
     make_persistent: bool,
     reuse_transients: bool,
-    validate: bool,
+    gpu_memory_pool: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Perform post processing on the SDFG.
@@ -536,6 +523,9 @@ def _gt_auto_post_processing(
     # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
     dace_aoptimize.move_small_arrays_to_stack(sdfg)
 
+    if make_persistent and gpu_memory_pool:
+        raise ValueError("Cannot set both 'make_persistent' and 'gpu_memory_pool'.")
+
     if make_persistent:
         device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
         gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)
@@ -552,7 +542,10 @@ def _gt_auto_post_processing(
                 for edge in state.edges():
                     edge.data.wcr_nonatomic = False
 
-    if validate_all or validate:
+    if gpu and gpu_memory_pool:
+        gtx_transformations.gpu_utils.gt_gpu_apply_mempool(sdfg)
+
+    if validate_all:
         sdfg.validate()
 
     return sdfg

@@ -140,6 +140,7 @@ class DaCeTranslator(
     # auto-optimize arguments
     gpu_block_size: tuple[int, int, int] = (32, 8, 1)
     make_persistent: bool = False
+    use_memory_pool: bool = False
     blocking_dim: Optional[common.Dimension] = None
     blocking_size: int = 10
     validate: bool = False
@@ -155,6 +156,9 @@ class DaCeTranslator(
             ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type == core_defs.CUPY_DEVICE_TYPE
+
+        if self.use_memory_pool and not on_gpu:
+            raise NotImplementedError("Memory pool only available for GPU device.")
 
         # do not store transformation history in SDFG
         with dace.config.set_temporary("store_history", value=False):
@@ -180,6 +184,7 @@ class DaCeTranslator(
                     constant_symbols=constant_symbols,
                     assume_pointwise=True,
                     make_persistent=self.make_persistent,
+                    gpu_memory_pool=self.use_memory_pool,
                     blocking_dim=self.blocking_dim,
                     blocking_size=self.blocking_size,
                     validate=self.validate,
