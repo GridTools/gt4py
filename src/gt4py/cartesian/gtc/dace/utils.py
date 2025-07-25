@@ -14,6 +14,7 @@ from dace import data, dtypes, symbolic
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
+from gt4py.storage.cartesian import layout
 
 
 def get_dace_debuginfo(node: common.LocNode) -> dtypes.DebugInfo:
@@ -41,20 +42,21 @@ def array_dimensions(array: data.Array) -> list[bool]:
     ]
 
 
-def replace_strides(arrays: list[data.Array], get_layout_map) -> dict[str, str]:
+def replace_strides(arrays: list[data.Array], layout_info: layout.LayoutInfo) -> dict[str, str]:
     symbol_mapping = {}
     for array in arrays:
         dims = array_dimensions(array)
         ndata_dims = len(array.shape) - sum(dims)
         axes = [ax for ax, m in zip("IJK", dims) if m] + [str(i) for i in range(ndata_dims)]
-        layout = get_layout_map(axes)
-        if array.transient:
-            stride = 1
-            for idx in reversed(np.argsort(layout)):
-                symbol = array.strides[idx]
-                if symbol.is_symbol:
-                    symbol_mapping[str(symbol)] = symbolic.pystr_to_symbolic(stride)
-                stride *= array.shape[idx]
+        layout = layout_info["layout_map"](tuple(axes))
+
+        stride = 1
+        for idx in reversed(np.argsort(layout)):
+            symbol = array.strides[idx]
+            if symbol.is_symbol:
+                symbol_mapping[str(symbol)] = symbolic.pystr_to_symbolic(stride)
+            stride *= array.shape[idx]
+
     return symbol_mapping
 
 
