@@ -286,6 +286,7 @@ def gt_substitute_compiletime_symbols(
     sdfg: dace.SDFG,
     repl: dict[str, Any],
     simplify: bool = False,
+    skip: Optional[set[str]] = None,
     validate: bool = False,
     validate_all: bool = False,
     **kwargs: Any,
@@ -300,6 +301,8 @@ def gt_substitute_compiletime_symbols(
         sdfg: The SDFG to process.
         repl: Maps the name of the symbol to the value it should be replaced with.
         simplify: If `False` do not call `gt_simplify()` after the substitution.
+        skip: List of simplify stages that should not run. Is passed to the `skip` argument
+            of `gt_simplify()`.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
 
@@ -326,6 +329,7 @@ def gt_substitute_compiletime_symbols(
         #   be necessary to be applied there as well.
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
+            skip=skip,
             validate=False,
             validate_all=validate_all,
         )
@@ -348,6 +352,7 @@ def gt_substitute_compiletime_symbols(
     if simplify:
         gt_simplify(
             sdfg=sdfg,
+            skip=skip,
             validate=validate,
             validate_all=validate_all,
         )
