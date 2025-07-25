@@ -23,7 +23,7 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 
 def gt_remove_copy_chain(
     sdfg: dace.SDFG,
-    validate: bool = False,
+    validate: bool = True,
     validate_all: bool = False,
     single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
 ) -> Optional[int]:

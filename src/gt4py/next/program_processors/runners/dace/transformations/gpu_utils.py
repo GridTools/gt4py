@@ -84,7 +84,7 @@ def gt_gpu_transformation(
 
     # Now turn it into a GPU SDFG
     sdfg.apply_gpu_transformations(
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
         simplify=False,
     )
@@ -97,16 +97,16 @@ def gt_gpu_transformation(
         #   it can be removed, it should definitely be reworked.
         gt_remove_trivial_gpu_maps(
             sdfg=sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
-        gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+        gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     # TODO(phimuell): Fixing the stride problem in DaCe.
     sdfg = gt_gpu_transform_non_standard_memlet(
         sdfg=sdfg,
         map_postprocess=True,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -199,7 +199,7 @@ def gt_gpu_transform_non_standard_memlet(
                 check_fusion_callback=restrict_fusion_to_newly_created_maps_horizontal,
             ),
         ],
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -241,6 +241,9 @@ def gt_gpu_transform_non_standard_memlet(
                 reversed(map_to_modify.range.ranges), reversed(map_to_modify.range.tile_sizes)
             )
         )
+
+    if validate or validate_all:
+        sdfg.validate()
 
     return sdfg
 
@@ -665,9 +668,9 @@ def gt_remove_trivial_gpu_maps(
             only_gpu_maps=True,
         ),
         validate=False,
-        validate_all=False,
+        validate_all=validate_all,
     )
-    gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+    gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     # Now we try to fuse them together, however, we restrict the fusion to trivial
     #  GPU map.
@@ -707,9 +710,12 @@ def gt_remove_trivial_gpu_maps(
                 check_fusion_callback=restrict_to_trivial_gpu_maps,
             ),
         ],
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
+
+    if validate:
+        sdfg.validate()
 
     return sdfg
 

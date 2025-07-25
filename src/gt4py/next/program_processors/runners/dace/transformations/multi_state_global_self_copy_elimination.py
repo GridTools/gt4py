@@ -27,7 +27,7 @@ AccessLocation: TypeAlias = tuple[dace.SDFGState, dace_nodes.AccessNode]
 
 def gt_multi_state_global_self_copy_elimination(
     sdfg: dace.SDFG,
-    validate: bool = False,
+    validate: bool = True,
 ) -> Optional[dict[dace.SDFG, set[str]]]:
     """Runs `MultiStateGlobalSelfCopyElimination` on the SDFG recursively.
 
