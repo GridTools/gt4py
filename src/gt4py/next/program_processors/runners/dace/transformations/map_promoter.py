@@ -323,9 +323,12 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
 
         # Now fuse the maps together.
         if self.fuse_after_promotion:
+            # Unlike in the `can_be_applied()` function we do specify here the right
+            #  parameter, i.e. ensure that the intermediate can be removed. Because
+            #  we can not pass the single use data, this will lead to a scan of the
+            #  SDFG. However, we have to do it that way to get the desired result.
             gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
-                expr_index=0,
                 options={
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
@@ -397,14 +400,18 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         access_node: dace_nodes.AccessNode = self.access_node
         second_map_entry: dace_nodes.MapEntry = self.entry_second_map
 
-        # It is impossible to pass `self._single_use_data` to the Map transformation. Thus it
-        #  will to the scan if they are single use data on its own. To avoid this if this is
-        #  not the case we will now check the intermediates. As explained bellow, we also check
-        #  if the only connection is the second Map.
+        # Since it is not possible to pass `self._single_use_data` to the Map fusion
+        #  transformation, Map fusion would have to scan the SDFG on its own to
+        #  figuring out if something is single use data or not. In order to avoid
+        #  that we will now do the check ourselves. We not only check if the data is
+        #  single use, but if it is only used (in this state) by the second Map. See
+        #  bellow for why this is important.
         single_use_data = self._single_use_data[sdfg]
         for oedge in state.out_edges(first_map_exit):
             onode = oedge.dst
             if not isinstance(onode, dace_nodes.AccessNode):
+                return False
+            if not onode.desc(sdfg).transient:
                 return False
             if onode.data not in single_use_data:
                 return False
@@ -422,24 +429,29 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
             #  Map fusion can actually inspect them.
             self._promote_first_map(first_map_exit, second_map_entry)
 
-            # Technically the promotion creates an invalid SDFG, going back to the example
+            # Technically the promotion creates an invalid SDFG. Going back to the example
             #  in the doc string, after the promotion, but before the fusion, `a[i]` is
-            #  written `M` times. This is not an issue per see, since each time the same
-            #  value is written and if we fuse the writes to `a` disappear, if `a` is
-            #  an "exclusive intermediate", which is a concept from the Map fusion
-            #  transformation. Thus, to ensure that we get a valid SDFG after promotion,
-            #  we check if the intermediate goes away after we have fused. To that end
-            #  we specify `require_exclusive_intermediates` and `allow_only_intermediate_nodes`.
-            # TODO(phimuell): Because of [issue#1911](https://github.com/spcl/dace/issues/1911)
-            #   it is not possible to pass the single use data to the transformation.
-            #   The effect is that we will scan the SDFG unnecessarily.
+            #  written `M` times. This is not an issue per se, since each time the same
+            #  value is written and after the fusion `a` will disappear, which ensures
+            #  a valid SDFG. However, the removal of `a`, is only possible if the Map
+            #  fusion classifies `a` as an "exclusive intermediate" (see `MapFusionVertical`).
+            #  This is the reason why we have to set `require_all_intermediates`, to
+            #  ensure that there are no "pure outputs" of the first Map.
+            #  This also means that we would also have to specify `require_exclusive_intermediates`,
+            #  because "shared intermediates" are not removed. But the test above has
+            #  ensured that this is the case. As an optimization, to avoid that the
+            #  Map fusion transformation scans the SDFG, we will specify `assume_always_shared`.
+            #  This _is_ wrong, but since we only want to test if the Maps can be fused
+            #  and this value has no influence on that outcome, we can specify it here.
+            # TODO(phimuell): Once `single_use_data` can be passed, remove the optimization
+            #   with `assume_always_shared`.
             if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
                 options={
                     "only_inner_maps": self.only_inner_maps,
                     "only_toplevel_maps": self.only_toplevel_maps,
-                    "require_exclusive_intermediates": True,
                     "require_all_intermediates": True,
+                    "assume_always_shared": True,
                 },
                 first_map_exit=first_map_exit,
                 array=access_node,
