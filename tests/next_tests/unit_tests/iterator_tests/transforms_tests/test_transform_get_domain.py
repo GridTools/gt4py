@@ -558,7 +558,6 @@ def test_trivial_cartesian():
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = TransformGetDomain.apply(ir, sizes=sizes)
     ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider)
-    # ir = infer_domain.infer_program(ir, offset_provider=offset_provider) # TODO: domain inference does not seem to be necessary anymore since it is already done in create_global_tmps
 
     expected = program_factory(
         params=[im.sym("i_values", i_field_type), im.sym("out", i_field_type)],
