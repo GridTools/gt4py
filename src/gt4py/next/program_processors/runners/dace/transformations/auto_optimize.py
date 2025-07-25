@@ -295,6 +295,7 @@ def _gt_auto_process_top_level_maps(
         #  on the horizontal are very complicated, it might degrade performance
         #  but such cases should be rare.
         # TODO(phimuell): Add a criteria to decide if we should promote or not.
+        # TODO(phimuell): Think about relocating this before horizontal Map fusion.
         sdfg.apply_transformations_repeated(
             gtx_transformations.MapPromoter(
                 only_toplevel_maps=True,
