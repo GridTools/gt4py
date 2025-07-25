@@ -72,8 +72,7 @@ class RemovePointwiseViews(dace_transformation.SingleStateTransformation):
             return False
         if not dst_desc.transient:
             return False
-        first_node_out_edges = graph.out_edges(src_node)
-        if len(first_node_out_edges) != 1 and first_node_out_edges[0].dst != dst_node:
+        if graph.out_degree(src_node) != 1:
             return False
         if len(graph.in_edges(src_node)) != 1:
             return False
