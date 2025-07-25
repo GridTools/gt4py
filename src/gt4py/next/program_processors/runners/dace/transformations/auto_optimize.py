@@ -425,7 +425,7 @@ def _gt_auto_process_top_level_maps(
         #  modified. Call Simplify and try again to further optimize.
         gtx_transformations.gt_simplify(
             sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
             skip=_GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
