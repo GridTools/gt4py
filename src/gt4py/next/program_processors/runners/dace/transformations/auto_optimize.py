@@ -20,14 +20,21 @@ from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
-_GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
-    gtx_transformations.GT_SIMPLIFY_DEFAULT_SKIP_SET
-)
+_GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST: Final[set[str]] = {
+    "ScalarToSymbolPromotion",
+    "ConstantPropagation",
+}
 """Steps that are disabled in the initial phase of simplification.
+
+Note:
+    For some reasons.
+
+
+
 """
 
 _GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
-    gtx_transformations.GT_SIMPLIFY_DEFAULT_SKIP_SET
+    _GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST
     | {
         "InlineSDFGs",
         "InlineControlFlowRegions",
@@ -44,7 +51,7 @@ _GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
 
 
 _GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
-    gtx_transformations.GT_SIMPLIFY_DEFAULT_SKIP_SET
+    _GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST
     | {
         "FuseStates",
         "DeadDataflowElimination",
