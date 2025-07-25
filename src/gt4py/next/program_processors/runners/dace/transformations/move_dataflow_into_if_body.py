@@ -17,7 +17,7 @@ from dace import (
     subsets as dace_sbs,
     transformation as dace_transformation,
 )
-from dace.sdfg import nodes as dace_nodes, utils as dace_sutils
+from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sutils
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -227,7 +227,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # Readjust the Subsets.
         #  As a side effect this call will also properly propagate the nested SDFG `if_block`.
-        gtx_transformations.utils.gt_propagate_memlets_map_scope(sdfg, graph, enclosing_map)
+        dace_propagation.propagate_memlets_map_scope(sdfg, graph, enclosing_map)
 
     def _replicate_dataflow_into_branch(
         self,

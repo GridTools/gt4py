@@ -16,7 +16,7 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from dace.sdfg import graph as dace_graph, nodes as dace_nodes, propagation as dace_propagation
 from dace.transformation.dataflow import map_fusion_helper as dace_mfhelper
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -26,7 +26,6 @@ from gt4py.next.program_processors.runners.dace import (
 )
 from gt4py.next.program_processors.runners.dace.transformations import (
     map_fusion_utils as gtx_mfutils,
-    utils as gtx_tutils,
 )
 
 
@@ -214,9 +213,9 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
         #  by assumption inside the same Map.
         if containing_scope_or_none is None:
             for new_map_entry in new_map_entries_from_first + new_map_entries_from_second:
-                gtx_tutils.gt_propagate_memlets_map_scope(sdfg, graph, new_map_entry)
+                dace_propagation.propagate_memlets_map_scope(sdfg, graph, new_map_entry)
         else:
-            gtx_tutils.gt_propagate_memlets_map_scope(sdfg, graph, containing_scope_or_none)
+            dace_propagation.propagate_memlets_map_scope(sdfg, graph, containing_scope_or_none)
 
         # Workaround to ensure that some cache in DaCe has been cleared.
         # TODO(phimuell, iomaganaris): Before `hash_sdfg()` was used, but this was a

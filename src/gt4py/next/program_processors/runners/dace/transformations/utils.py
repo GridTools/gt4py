@@ -12,7 +12,7 @@ from typing import Any, Container, Optional, Sequence, TypeVar, Union
 
 import dace
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
-from dace.sdfg import graph as dace_graph, nodes as dace_nodes, propagation as dace_mprop
+from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -657,72 +657,3 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
             all_successors.extend(successor.all_states())
 
     return all_successors
-
-
-def find_nodes_in_scope(
-    state: dace.SDFGState,
-    map_entry: dace_nodes.MapEntry,
-) -> set[dace_nodes.Node]:
-    """Finds all nodes contained inside a state.
-
-    Essentially the same, but more efficient, than `state.scope_subgraph(map_entry).nodes()`
-    but much more efficient.
-    """
-    assert isinstance(map_entry, dace_nodes.MapEntry)
-
-    nodes_in_scope: set[dace_nodes.Node] = set()
-
-    def _find_nodes_in_single_level_scope(
-        scope_children: dict[dace_nodes.MapEntry, list[dace_nodes.Node]],
-        state: dace.SDFGState,
-        map_entry: dace_nodes.MapEntry,
-    ) -> None:
-        nodes_in_scope.add(map_entry)
-        for new_node in scope_children[map_entry]:
-            if new_node is map_entry:
-                continue
-            if new_node is not map_entry and isinstance(new_node, dace_nodes.MapEntry):
-                _find_nodes_in_single_level_scope(scope_children, state, new_node)
-            else:
-                nodes_in_scope.add(new_node)
-
-    scope_children = state.scope_children()
-    _find_nodes_in_single_level_scope(scope_children, state, map_entry)
-
-    return nodes_in_scope
-
-
-def gt_propagate_memlets_map_scope(
-    sdfg: dace.SDFG, state: dace.SDFGState, map_entry: dace_nodes.MapEntry
-) -> None:
-    """Restrict propagation into a Map scope.
-
-    It is the same as DaCe's `propagate_memlets_scope()` function, but instead of a
-    `ScopeTree` object to select propagation, the function takes a Map entry node.
-
-    Todo:
-        Port this function to DaCe.
-    """
-    assert isinstance(map_entry, dace_nodes.MapEntry)
-
-    # This code is an adapted version of `propagate_memlet_scope()` and as there we
-    #  propagate the Memlets of nested SDFGs, but we restrict ourselves to the
-    #  ones that are inside the scope we are in.
-    nodes_in_scope = find_nodes_in_scope(state, map_entry)
-    for node in nodes_in_scope:
-        if isinstance(node, dace_nodes.NestedSDFG):
-            dace_mprop.propagate_memlets_sdfg(node.sdfg)
-            dace_mprop.propagate_memlets_nested_sdfg(sdfg, state, node)
-
-    # Now perform propagation starting at the lowest scope. The main difference to the
-    #  DaCe function is that we restrict ourselves to the ones that are contained
-    #  within us.
-    contained_leaf_scopes = [
-        scope_leaf for scope_leaf in state.scope_leaves() if scope_leaf.entry in nodes_in_scope
-    ]
-    assert len(contained_leaf_scopes) > 0
-    dace_mprop.propagate_memlets_scope(
-        sdfg,
-        state,
-        contained_leaf_scopes,
-    )
