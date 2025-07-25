@@ -164,8 +164,13 @@ class SymbolicDomain:
                     if isinstance(start_, itir.Literal) and isinstance(stop_, itir.Literal):
                         start = int(start_.value)
                         stop = int(stop_.value)
-                    min_ = np.min(offset_provider[off.value].ndarray[start:stop, val.value])
-                    max_ = np.max(offset_provider[off.value].ndarray[start:stop, val.value]) + 1
+
+                    off_index = (
+                        slice(None) if val == trace_shifts.Sentinel.ALL_NEIGHBORS else val.value
+                    )
+                    accessed = offset_provider[off.value].ndarray[start:stop, off_index]
+                    min_ = np.min(accessed)
+                    max_ = np.max(accessed) + 1
                     horizontal_sizes[new_dim.value] = (
                         im.literal(str(min_), builtins.INTEGER_INDEX_BUILTIN),
                         im.literal(str(max_), builtins.INTEGER_INDEX_BUILTIN),

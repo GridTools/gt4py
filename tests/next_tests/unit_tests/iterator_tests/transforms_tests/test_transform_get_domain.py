@@ -25,7 +25,7 @@ from gt4py.next.iterator.transforms import inline_fundefs, global_tmps, inline_l
 from gt4py.next.iterator.transforms.transform_get_domain import TransformGetDomain
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_specifications as ts
-from tests.next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     simple_cartesian_grid,
     Edge,
     simple_mesh,
@@ -290,9 +290,9 @@ def test_get_domain_inference_temporary_symbols(testee, unstructured_case):
     ir = global_tmps.create_global_tmps(
         ir, offset_provider={**unstructured_case.offset_provider, "IOff": IDim}
     )
-    ir = infer_domain.infer_program(
-        ir, offset_provider={**unstructured_case.offset_provider, "IOff": IDim}
-    )
+    # ir = infer_domain.infer_program(
+    #    ir, offset_provider={**unstructured_case.offset_provider, "IOff": IDim}
+    # ) # TODO: domain inference does not seem to be necessary anymore since it is already done in create_global_tmps
     unstructured_domain = im.call("unstructured_domain")(
         im.call("named_range")(
             im.axis_literal(IDim),
@@ -364,10 +364,6 @@ def test_trivial_shift(unstructured_case):
         )
     )
 
-    unstructured_domain_V_p1 = im.call("unstructured_domain")(
-        im.call("named_range")(im.axis_literal(Vertex), 1, 9),
-    )
-
     unstructured_domain_V_37 = im.call("unstructured_domain")(
         im.call("named_range")(im.axis_literal(Vertex), 3, 7),
     )
@@ -390,7 +386,7 @@ def test_trivial_shift(unstructured_case):
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = TransformGetDomain.apply(ir, sizes=sizes)
     ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider)
-    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    # ir = infer_domain.infer_program(ir, offset_provider=offset_provider) # TODO: domain inference does not seem to be necessary anymore since it is already done in create_global_tmps
 
     expected = program_factory(
         params=[im.sym("vertex_values", v_field_type), im.sym("out", e_field_type)],
@@ -454,7 +450,7 @@ def test_trivial_shift_switched(unstructured_case):
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = TransformGetDomain.apply(ir, sizes=sizes)
     ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider)
-    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    # ir = infer_domain.infer_program(ir, offset_provider=offset_provider) # TODO: domain inference does not seem to be necessary anymore since it is already done in create_global_tmps
 
     expected = program_factory(
         params=[im.sym("vertex_values", v_field_type), im.sym("out", e_field_type)],
@@ -521,7 +517,7 @@ def test_two_shifts(unstructured_case):
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = TransformGetDomain.apply(ir, sizes=sizes)
     ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider)
-    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    # ir = infer_domain.infer_program(ir, offset_provider=offset_provider) # TODO: domain inference does not seem to be necessary anymore since it is already done in create_global_tmps
 
     expected = program_factory(
         params=[im.sym("vertex_values", v_field_type), im.sym("out", e_field_type)],
@@ -609,7 +605,7 @@ def test_nested_shift(unstructured_case):
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = TransformGetDomain.apply(ir, sizes=sizes)
     ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider)
-    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    # ir = infer_domain.infer_program(ir, offset_provider=offset_provider) # TODO: domain inference does not seem to be necessary anymore since it is already done in create_global_tmps
 
     expected = program_factory(
         params=[im.sym("vertex_values", v_field_type), im.sym("out", e_field_type)],
@@ -676,7 +672,7 @@ def test_trivial_cartesian():  # TODO: fix/remove?
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = TransformGetDomain.apply(ir, sizes=sizes)
     ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider)
-    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    # ir = infer_domain.infer_program(ir, offset_provider=offset_provider) # TODO: domain inference does not seem to be necessary anymore since it is already done in create_global_tmps
 
     expected = program_factory(
         params=[im.sym("i_values", i_field_type), im.sym("out", i_field_type)],
@@ -735,7 +731,7 @@ def test_trivial_cartesian_forward():  # TODO: fix/remove?
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = TransformGetDomain.apply(ir, sizes=sizes)
     ir = global_tmps.create_global_tmps(ir, offset_provider=offset_provider)
-    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    # ir = infer_domain.infer_program(ir, offset_provider=offset_provider) # TODO: domain inference does not seem to be necessary anymore since it is already done in create_global_tmps
 
     cartesian_domain_m2 = im.call("cartesian_domain")(
         im.call("named_range")(
