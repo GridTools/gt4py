@@ -711,7 +711,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # visit the domain expression
         domain = gtir_domain.extract_domain(stmt.domain)
-
         source_fields = self._visit_expression(stmt.expr, domain, sdfg, state)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression

@@ -78,9 +78,7 @@ def extract_domain(node: gtir.Expr) -> FieldopDomain:
     return domain
 
 
-def simplify_domain_expr(
-    expr: dace.symbolic.SymbolicType, domain: FieldopDomain
-) -> dace.symbolic.SymbolicType:
+def simplify_domain_expr(expr: sympy.Basic, domain: FieldopDomain) -> dace.symbolic.SymbolicType:
     """Simplifies a symbolic expression by applying constraints from domain range.
 
     Dace uses sympy for symbolic expressions in the SDFG. By applying assumptions
@@ -100,7 +98,7 @@ def simplify_domain_expr(
         expr = expr.subs(dim_range.start, dim_range.stop - size).subs(
             size, dim_range.stop - dim_range.start
         )
-    return expr.simplify()
+    return dace.symbolic.simplify_ext(expr)
 
 
 def get_domain_indices(
