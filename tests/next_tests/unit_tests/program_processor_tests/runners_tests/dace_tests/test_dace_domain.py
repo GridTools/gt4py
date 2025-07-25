@@ -27,7 +27,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     [
         (
             "-horizontal_start + Max(horizontal_start, Min(horizontal_end, start_nudge_line_idx_e))",
-            "Max(0, -horizontal_start + Min(horizontal_end, start_2nd_nudge_line_idx_e))",
+            "Max(0, -horizontal_start + Min(horizontal_end, start_nudge_line_idx_e))",
         ),
         ("Max(0, vertical_end - vertical_start)", "vertical_end - vertical_start"),
     ],
