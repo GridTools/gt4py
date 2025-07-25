@@ -44,20 +44,24 @@ def gt_eliminate_dead_dataflow(
 
     ret = sdfg.apply_transformations_once_everywhere(
         DeadMapElimination(single_use_data=single_use_data),
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
     ret += gt_dead_memlet_elimination(
         sdfg=sdfg,
         single_use_data=single_use_data,
+        validate=False,
+        validate_all=validate_all,
     )
 
     if run_simplify:
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
+    if validate and (not validate_all):
+        sdfg.validate()
 
     return ret
 
@@ -164,6 +168,8 @@ class DeadMapElimination(dace_transformation.SingleStateTransformation):
 def gt_dead_memlet_elimination(
     sdfg: dace.SDFG,
     single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+    validate: bool = True,
+    validate_all: bool = False,
 ) -> int:
     """Removes Memlets that do not carry any dataflow.
 
@@ -185,6 +191,13 @@ def gt_dead_memlet_elimination(
     ret = 0
     for rsdfg in sdfg.all_sdfgs_recursive():
         ret += _gt_dead_memlet_elimination_sdfg(sdfg=rsdfg, single_use_data=single_use_data)
+
+        if validate_all:
+            rsdfg.validate()
+
+    if validate and (not validate_all):
+        sdfg.validate()
+
     return ret
 
 

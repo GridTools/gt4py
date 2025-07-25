@@ -71,7 +71,7 @@ def test_vertical_map_fusion():
     res, ref = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
 
-    ret = gtx_transformations.gt_vertical_map_fusion(
+    ret = gtx_transformations.gt_vertical_map_split_fusion(
         sdfg=sdfg,
         run_simplify=True,
         consolidate_edges_only_if_not_extending=False,
@@ -307,7 +307,7 @@ def test_vertical_map_fusion_with_neighbor_access():
     res, ref = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
 
-    ret = gtx_transformations.gt_vertical_map_fusion(
+    ret = gtx_transformations.gt_vertical_map_split_fusion(
         sdfg=sdfg,
         run_simplify=True,
         consolidate_edges_only_if_not_extending=False,
