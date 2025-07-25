@@ -23,6 +23,7 @@ from typing import Annotated, Final, NotRequired, TypedDict
 import rich
 import typer
 import yaml
+from rich import pretty
 
 from . import _common as common
 
@@ -163,9 +164,10 @@ def get_sessions(*args: str, verbose: bool = False) -> list[NoxSessionDefinition
         out = subprocess.run(
             cmd_args, capture_output=True, text=True, cwd=common.REPO_ROOT, check=True
         ).stdout
-        if verbose:
-            rich.print(f"nox output: {out}")
         nox_sessions = json.loads(out)
+        if verbose:
+            rich.print("\nnox sessions:")
+            pretty.pprint(nox_sessions)
     except subprocess.CalledProcessError as e:
         rich.print(f"[red]Error:[/red] Failed to get test session info from nox: {e}")
         raise typer.Exit(ExitCode.GH_MATRIX_CREATION_ERROR) from e

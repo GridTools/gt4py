@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
+        python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
 
     steps:
       - uses: actions/checkout@v3

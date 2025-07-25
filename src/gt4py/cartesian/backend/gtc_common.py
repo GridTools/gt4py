@@ -19,21 +19,12 @@ from gt4py.cartesian.backend import Backend
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.cartesian.gtc import gtir, utils as gtc_utils
 from gt4py.cartesian.gtc.passes.oir_pipeline import OirPipeline
-from gt4py.eve.codegen import MakoTemplate as as_mako
+from gt4py.eve import codegen
 
 
 if TYPE_CHECKING:
     from gt4py.cartesian.stencil_builder import StencilBuilder
     from gt4py.cartesian.stencil_object import StencilObject
-
-
-def _get_unit_stride_dim(backend, domain_dim_flags, data_ndim):
-    make_layout_map = backend.storage_info["layout_map"]
-    dimensions = list(gtc_utils.dimension_flags_to_names(domain_dim_flags).upper()) + [
-        str(d) for d in range(data_ndim)
-    ]
-    layout_map = [x for x in make_layout_map(dimensions) if x is not None]
-    return layout_map.index(max(layout_map))
 
 
 def pybuffer_to_sid(
@@ -72,7 +63,7 @@ def pybuffer_to_sid(
 
 
 def bindings_main_template():
-    return as_mako(
+    return codegen.MakoTemplate(
         """
         #include <chrono>
         #include <pybind11/pybind11.h>
@@ -152,7 +143,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
 
     def generate_implementation(self) -> str:
         ir = self.builder.gtir
-        sources = gt_utils.text.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
+        sources = codegen.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
 
         args: list[str] = []
         for decl in ir.params:

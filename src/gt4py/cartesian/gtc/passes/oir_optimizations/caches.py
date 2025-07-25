@@ -537,7 +537,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
             first_unfilled: Dict[str, int] = dict()
             split_sections: List[oir.VerticalLoopSection] = []
             for section in node.sections:
-                split_section, previous_fills = self._split_section_with_multiple_fills(
+                split_section, _previous_fills = self._split_section_with_multiple_fills(
                     node.loop_order, section, filling_fields, first_unfilled, new_symbol_name
                 )
                 split_sections += split_section

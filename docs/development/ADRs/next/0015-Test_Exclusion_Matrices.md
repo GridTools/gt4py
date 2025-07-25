@@ -60,7 +60,11 @@ Following the previous example, the GTFN backend with temporaries does not suppo
 ```python
 BACKEND_SKIP_TEST_MATRIX = {
     GTFN_CPU_WITH_TEMPORARIES: [
-        ("uses_dynamic_offsets", pytest.XFAIL, "'{marker}' tests not supported by '{backend}' backend"),
+        (
+            "uses_dynamic_offsets",
+            pytest.XFAIL,
+            "'{marker}' tests not supported by '{backend}' backend",
+        ),
     ]
 }
 ```
