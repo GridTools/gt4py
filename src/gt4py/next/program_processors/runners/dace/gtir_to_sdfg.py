@@ -135,6 +135,7 @@ class SubgraphContext:
 
     sdfg: dace.SDFG
     state: dace.SDFGState
+    target_domain: gtir_domain.FieldopDomain
 
 
 class SDFGBuilder(DataflowBuilder, Protocol):
@@ -318,7 +319,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg = dace.SDFG(name=self.unique_nsdfg_name(parent_ctx.sdfg, sdfg_name))
         sdfg.debuginfo = gtir_to_sdfg_utils.debug_info(expr, default=parent_ctx.sdfg.debuginfo)
         state = sdfg.add_state(f"{sdfg_name}_entry")
-        nested_ctx = SubgraphContext(sdfg, state)
+        nested_ctx = SubgraphContext(sdfg, state, parent_ctx.target_domain)
         nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, scope_symbols)
 
         # We pass to the nested SDFG all GTIR-symbols in scope, which includes the
@@ -541,6 +542,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def _visit_expression(
         self,
         node: gtir.Expr,
+        domain: gtir_domain.FieldopDomain,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
         use_temp: bool = True,
@@ -555,7 +557,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             A list of array nodes containing the result fields.
         """
 
-        ctx = SubgraphContext(sdfg, head_state)
+        ctx = SubgraphContext(sdfg, head_state, domain)
         result = self.visit(node, ctx=ctx)
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
@@ -707,14 +709,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
           The SDFG head state, eventually updated if the target write requires a new state.
         """
 
-        source_fields = self._visit_expression(stmt.expr, sdfg, state)
+        # visit the domain expression
+        domain = gtir_domain.extract_domain(stmt.domain)
+        source_fields = self._visit_expression(stmt.expr, domain, sdfg, state)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        target_fields = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
-
-        # visit the domain expression
-        domain = gtir_domain.extract_domain(stmt.domain)
+        target_fields = self._visit_expression(stmt.target, domain, sdfg, state, use_temp=False)
 
         expr_input_args = {
             sym_id
