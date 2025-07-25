@@ -30,8 +30,7 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 def _make_concat_field_slice(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_to_sdfg.SubgraphContext,
     field: gtir_to_sdfg_types.FieldopData,
     field_desc: dace.data.Array,
     concat_dim: gtx_common.Dimension,
@@ -54,9 +53,9 @@ def _make_concat_field_slice(
         [*field.origin[:concat_dim_index], concat_dim_origin, *field.origin[concat_dim_index:]]
     )
     shape = tuple([*field_desc.shape[:concat_dim_index], 1, *field_desc.shape[concat_dim_index:]])
-    extended_field_data, extended_field_desc = sdfg.add_temp_transient(shape, field_desc.dtype)
-    extended_field_node = state.add_access(extended_field_data)
-    state.add_nedge(
+    extended_field_data, extended_field_desc = ctx.sdfg.add_temp_transient(shape, field_desc.dtype)
+    extended_field_node = ctx.state.add_access(extended_field_data)
+    ctx.state.add_nedge(
         field.dc_node,
         extended_field_node,
         dace.Memlet(
@@ -72,8 +71,7 @@ def _make_concat_field_slice(
 
 
 def _make_concat_scalar_broadcast(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_to_sdfg.SubgraphContext,
     inp: gtir_to_sdfg_types.FieldopData,
     inp_desc: dace.data.Array,
     domain: gtir_domain.FieldopDomain,
@@ -91,18 +89,18 @@ def _make_concat_scalar_broadcast(
     out_dims, out_origin, out_shape = gtir_domain.get_field_layout(domain)
     out_type = ts.FieldType(dims=out_dims, dtype=inp.gt_type.dtype)
 
-    out_name, out_desc = sdfg.add_temp_transient(out_shape, inp_desc.dtype)
-    out_node = state.add_access(out_name)
+    out_name, out_desc = ctx.sdfg.add_temp_transient(out_shape, inp_desc.dtype)
+    out_node = ctx.state.add_access(out_name)
 
     map_variables = [gtir_to_sdfg_utils.get_map_variable(dim) for dim in out_dims]
     inp_index = (
         "0"
-        if isinstance(inp.dc_node.desc(sdfg), dace.data.Scalar)
+        if isinstance(inp.dc_node.desc(ctx.sdfg), dace.data.Scalar)
         else (
             f"({map_variables[concat_dim_index]} + {out_origin[concat_dim_index] - inp.origin[0]})"
         )
     )
-    state.add_mapped_tasklet(
+    ctx.state.add_mapped_tasklet(
         "broadcast",
         map_ranges=dict(zip(map_variables, dace_subsets.Range.from_array(out_desc), strict=True)),
         code="__out = __inp",
@@ -118,8 +116,7 @@ def _make_concat_scalar_broadcast(
 
 
 def _translate_concat_where_impl(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     mask_domain: gtir_domain.FieldopDomain,
     node_domain: gtir.Expr,
@@ -142,9 +139,8 @@ def _translate_concat_where_impl(
     of the concat_where expression, passed as second and third argument, respectively.
 
     Args:
-        sdfg: The SDFG where the primitive subgraph should be instantiated
-        state: The SDFG state where the result of the primitive function should be made available
-        sdfg_builder: The object responsible for visiting child nodes of the primitive node.
+        ctx: The SDFG context where the primitive subgraph should be instantiated.
+        sdfg_builder: The object responsible for SubgraphContexting child nodes of the primitive node.
         mask_domain: Domain (only for concat dimension) of the true branch, infinite
             on lower or upper boundary.
         node_domain: Domain (all dimensions) of output field.
@@ -156,7 +152,7 @@ def _translate_concat_where_impl(
     Returns:
         The field resulted from concatanating the input fields on the lower and upper domain.
     """
-    tb_data_desc, fb_data_desc = (inp.dc_node.desc(sdfg) for inp in [tb_field, fb_field])
+    tb_data_desc, fb_data_desc = (inp.dc_node.desc(ctx.sdfg) for inp in [tb_field, fb_field])
     assert tb_data_desc.dtype == fb_data_desc.dtype
 
     tb_domain, fb_domain = (
@@ -247,8 +243,7 @@ def _translate_concat_where_impl(
             ]
         )
         lower, lower_desc = _make_concat_field_slice(
-            sdfg=sdfg,
-            state=state,
+            ctx=ctx,
             field=lower,
             field_desc=lower_desc,
             concat_dim=concat_domain.dim,
@@ -275,8 +270,7 @@ def _translate_concat_where_impl(
             ]
         )
         upper, upper_desc = _make_concat_field_slice(
-            sdfg=sdfg,
-            state=state,
+            ctx=ctx,
             field=upper,
             field_desc=upper_desc,
             concat_dim=concat_domain.dim,
@@ -314,8 +308,7 @@ def _translate_concat_where_impl(
             *output_domain[concat_dim_index + 1 :],
         ]
         lower, lower_desc = _make_concat_scalar_broadcast(
-            sdfg=sdfg,
-            state=state,
+            ctx=ctx,
             inp=lower,
             inp_desc=lower_desc,
             domain=lower_domain,
@@ -332,8 +325,7 @@ def _translate_concat_where_impl(
             *output_domain[concat_dim_index + 1 :],
         ]
         upper, upper_desc = _make_concat_scalar_broadcast(
-            sdfg=sdfg,
-            state=state,
+            ctx=ctx,
             inp=upper,
             inp_desc=upper_desc,
             domain=upper_domain,
@@ -373,8 +365,8 @@ def _translate_concat_where_impl(
     )
     upper_range_size = upper_range_1 - upper_range_0
 
-    output, output_desc = sdfg_builder.add_temp_array(sdfg, output_shape, lower_desc.dtype)
-    output_node = state.add_access(output)
+    output, output_desc = sdfg_builder.add_temp_array(ctx.sdfg, output_shape, lower_desc.dtype)
+    output_node = ctx.state.add_access(output)
 
     lower_subset = []
     lower_output_subset = []
@@ -428,7 +420,7 @@ def _translate_concat_where_impl(
             upper_output_subset.append((0, size - 1, 1))
 
     # use dynamic memlets because the subset range could be empty, but this is known only at runtime
-    state.add_nedge(
+    ctx.state.add_nedge(
         lower.dc_node,
         output_node,
         dace.Memlet(
@@ -438,7 +430,7 @@ def _translate_concat_where_impl(
             dynamic=True,
         ),
     )
-    state.add_nedge(
+    ctx.state.add_nedge(
         upper.dc_node,
         output_node,
         dace.Memlet(
@@ -454,8 +446,7 @@ def _translate_concat_where_impl(
 
 def translate_concat_where(
     node: gtir.Node,
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
+    ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
 ) -> gtir_to_sdfg_types.FieldopResult:
     """
@@ -476,12 +467,11 @@ def translate_concat_where(
         raise NotImplementedError("Expected `concat_where` along single axis.")
 
     # we visit the field arguments for the true and false branch
-    tb, fb = (sdfg_builder.visit(node.args[i], sdfg=sdfg, head_state=state) for i in [1, 2])
+    tb, fb = (sdfg_builder.visit(node.args[i], ctx=ctx) for i in [1, 2])
 
     return (
         _translate_concat_where_impl(
-            sdfg,
-            state,
+            ctx,
             sdfg_builder,
             mask_domain,
             node.annex.domain,
@@ -498,11 +488,9 @@ def translate_concat_where(
             _tb_field,
             _fb_field,
             _sdfg_builder=sdfg_builder,
-            _sdfg=sdfg,
-            _state=state,
+            _ctx=ctx,
             _mask_domain=mask_domain: _translate_concat_where_impl(
-                _sdfg,
-                _state,
+                _ctx,
                 _sdfg_builder,
                 _mask_domain,
                 _node_domain,

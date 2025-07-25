@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import warnings
 from typing import Any
 
 import dace
@@ -215,9 +216,19 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                     if first_scope_dict[dnode] is None and first_subgraph.out_degree(dnode) != 0
                 }
             )
-            assert all_data_producers.isdisjoint(data_producers[-1]), (
-                "Found multiple AccessNodes that writes to data in one state."
-            )
+            if not all_data_producers.isdisjoint(data_producers[-1]):
+                # TODO(phimuell): It is certainly possible to lift this restriction. A
+                #   possible cause is that we found once a source node and then an
+                #   AccessNode to the same data. In case it is global this is most likely
+                #   valid. However, I think that simply allow it, is not okay, because
+                #   it might break some assumption in the fuse code.
+                warnings.warn(
+                    f"Detected that '{first_state}' writes to the data"
+                    f" `{', '.join(all_data_producers.intersection(data_producers[-1]))}`"
+                    " in multiple concurrent subgraphs. This might indicate an error.",
+                    stacklevel=0,
+                )
+                return True
             all_data_producers.update(data_producers[-1])
 
         # Now determine the concurrent subgraphs of the second state, i.e. the parts
