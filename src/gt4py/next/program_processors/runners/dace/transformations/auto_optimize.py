@@ -151,7 +151,6 @@ def gt_auto_optimize(
         sdfg = _gt_auto_process_top_level_maps(
             sdfg=sdfg,
             assume_pointwise=assume_pointwise,
-            validate=False,
             validate_all=validate_all,
         )
 
@@ -167,7 +166,6 @@ def gt_auto_optimize(
             blocking_dim=blocking_dim,
             blocking_size=blocking_size,
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
-            validate=False,
             validate_all=validate_all,
         )
 
@@ -181,7 +179,6 @@ def gt_auto_optimize(
             gpu_block_size=gpu_block_size,
             gpu_launch_factor=gpu_launch_factor,
             gpu_launch_bounds=gpu_launch_bounds,
-            validate=False,
             validate_all=validate_all,
         )
 
@@ -196,7 +193,6 @@ def gt_auto_optimize(
             #   to avoid that.
             reuse_transients=reuse_transients,
             gpu_memory_pool=gpu_memory_pool,
-            validate=False,
             validate_all=validate_all,
         )
 
@@ -212,7 +208,6 @@ def gt_auto_optimize(
 def _gt_auto_process_top_level_maps(
     sdfg: dace.SDFG,
     assume_pointwise: bool,
-    validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimize the Maps at the top level of the SDFG inplace.
@@ -379,9 +374,6 @@ def _gt_auto_process_top_level_maps(
             ),
         )
 
-    if validate:
-        sdfg.validate()
-
     return sdfg
 
 
@@ -390,7 +382,6 @@ def _gt_auto_process_dataflow_inside_maps(
     blocking_dim: Optional[gtx_common.Dimension],
     blocking_size: int,
     blocking_only_if_independent_nodes: Optional[bool],
-    validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
@@ -441,9 +432,6 @@ def _gt_auto_process_dataflow_inside_maps(
         validate_all=validate_all,
     )
 
-    if validate:
-        sdfg.validate()
-
     return sdfg
 
 
@@ -454,7 +442,6 @@ def _gt_auto_configure_maps_and_strides(
     gpu_block_size: Optional[Sequence[int | str] | str],
     gpu_launch_bounds: Optional[int | str],
     gpu_launch_factor: Optional[int],
-    validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Configure the Maps and the strides of the SDFG inplace.
@@ -509,9 +496,6 @@ def _gt_auto_configure_maps_and_strides(
             try_removing_trivial_maps=True,
         )
 
-    if validate:
-        sdfg.validate()
-
     return sdfg
 
 
@@ -521,7 +505,6 @@ def _gt_auto_post_processing(
     make_persistent: bool,
     reuse_transients: bool,
     gpu_memory_pool: bool,
-    validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Perform post processing on the SDFG.
@@ -562,7 +545,7 @@ def _gt_auto_post_processing(
     if gpu and gpu_memory_pool:
         gtx_transformations.gpu_utils.gt_gpu_apply_mempool(sdfg)
 
-    if validate_all or validate:
+    if validate_all:
         sdfg.validate()
 
     return sdfg
