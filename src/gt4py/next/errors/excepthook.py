@@ -21,16 +21,16 @@ from typing import Optional
 
 from gt4py.next import config
 
-from . import exceptions, formatting
+from .exceptions import DSLError
+from .formatting import format_compilation_error
 
-
-def _format_uncaught_error(err: exceptions.DSLError, verbose_exceptions: bool) -> list[str]:
+def _format_uncaught_error(err: DSLError, verbose_exceptions: bool) -> list[str]:
     if verbose_exceptions:
-        return formatting.format_compilation_error(
+        return format_compilation_error(
             type(err), err.message, err.location, err.__traceback__, err.__cause__
         )
     else:
-        return formatting.format_compilation_error(type(err), err.message, err.location)
+        return format_compilation_error(type(err), err.message, err.location)
 
 
 def compilation_error_hook(
@@ -43,7 +43,7 @@ def compilation_error_hook(
     verbose exceptions are enabled, the stack trace and cause of the error is
     also printed.
     """
-    if isinstance(value, exceptions.DSLError):
+    if isinstance(value, DSLError):
         exc_strs = _format_uncaught_error(value, config.VERBOSE_EXCEPTIONS)
         print("".join(exc_strs), file=sys.stderr)
     else:
