@@ -62,24 +62,17 @@ def find_constant_symbols(
 
 def make_sdfg_async(sdfg: dace.SDFG) -> None:
     """Make an SDFG call immediatly return, without waiting for execution to complete.
+
     This allows to run the SDFG asynchronously, thus letting GPU kernel execution
     to overlap with host python code.
 
-    The asynchronous call is implemented by the following changes to SDFG:
-
-    - Set all cuda streams to the default stream. This allows to serialize all
-      kernels on one GPU queue, avoiding synchronization between different cuda
-      streams. Besides, device-to-host copies are performed on the default cuda
-      stream, which allows to synchronize the last GPU kernel on the host side.
-
-    - Set `nosync=True` on the states of the top-level SDFG. This flag is used
-      by dace codegen to skip emission of `cudaStreamSynchronize()` at the end
-      of each state. An exception is made for state transitions where data descriptors
-      are accessed on an InterState edge. The typical example is a symbol set to
-      the scalar value produced by the previous state, or a condition accessing
-      some data descriptor. In this case, we have to wait for the previous state
-      to complete.
-
+    The asynchronous call is implemented by setting `nosync=True` on the states
+    of the top-level SDFG. This flag is used in dace codegen to skip emission
+    of `cudaStreamSynchronize()` at the end of each state.
+    An exception is made for state transitions where data descriptors are accessed
+    on an InterState edge. The typical example is a symbol set to the scalar value
+    produced by the previous state, or a condition accessing some data descriptor.
+    In this case, we have to wait for the previous state to complete.
     """
 
     has_gpu_code = any(getattr(node, "schedule", False) for node, _ in sdfg.all_nodes_recursive())
@@ -89,7 +82,6 @@ def make_sdfg_async(sdfg: dace.SDFG) -> None:
         return
 
     # Loop over all states in the top-level SDFG
-    is_nosync_used = False
     for state in sdfg.states():
         if state.parent_graph is not sdfg:
             # We ignore states that are used inside 'ControlFlowRegion' nodes
@@ -114,14 +106,6 @@ def make_sdfg_async(sdfg: dace.SDFG) -> None:
         else:
             # No data descriptor is accessed on the InterState edge, we make the state async.
             state.nosync = True
-            is_nosync_used = True
-
-    if is_nosync_used:
-        # Emit cuda code for the SDFG to use only the default cuda stream.
-        # This allows to serialize all kernels on one GPU queue.
-        sdfg.append_init_code(
-            "__dace_gpu_set_all_streams(__state, cudaStreamDefault);", location="cuda"
-        )
 
 
 @dataclasses.dataclass(frozen=True)
