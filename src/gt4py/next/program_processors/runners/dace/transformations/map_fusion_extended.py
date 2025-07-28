@@ -23,7 +23,9 @@ from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
     utils as gtx_dace_utils,
 )
-from gt4py.next.program_processors.runners.dace.transformations import map_fusion_utils
+from gt4py.next.program_processors.runners.dace.transformations import (
+    map_fusion_utils as gtx_mfutils,
+)
 
 
 def gt_horizontal_map_fusion(
@@ -49,20 +51,17 @@ def gt_horizontal_map_fusion(
             only_toplevel_maps=True,
         ),
         gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
-        gtx_transformations.MapFusionParallel(
+        gtx_transformations.MapFusionHorizontal(
             only_if_common_ancestor=True,
             only_inner_maps=False,
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
         ),
     ]
-    # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
-    #   has been solved.
-    transformations[-1]._single_use_data = single_use_data  # type: ignore[attr-defined]
 
     ret = sdfg.apply_transformations_repeated(
         transformations,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -72,10 +71,12 @@ def gt_horizontal_map_fusion(
             skip = skip.union(["ConsolidateEdges"])
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
             skip=skip,
         )
+    elif validate and (not validate_all):
+        sdfg.validate()
 
     return ret
 
@@ -99,7 +100,7 @@ def gt_vertical_map_fusion(
             only_toplevel_maps=True,
         ),
         gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
-        gtx_transformations.MapFusionSerial(
+        gtx_transformations.MapFusionVertical(
             only_inner_maps=False,
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
@@ -111,7 +112,7 @@ def gt_vertical_map_fusion(
 
     ret = sdfg.apply_transformations_repeated(
         transformations,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -125,6 +126,8 @@ def gt_vertical_map_fusion(
             validate_all=validate_all,
             skip=skip,
         )
+    elif validate and (not validate_all):
+        sdfg.validate()
 
     return ret
 
@@ -170,7 +173,7 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
         second_map_exit: dace_nodes.MapExit,
     ) -> None:
         """Split the map range in order to obtain an overlapping range between the first and second map."""
-        splitted_range = map_fusion_utils.split_overlapping_map_range(
+        splitted_range = gtx_mfutils.split_overlapping_map_range(
             first_map_entry.map, second_map_entry.map
         )
         assert splitted_range is not None
@@ -186,12 +189,12 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
 
             # make copies of the map with splitted ranges
             for i, r in enumerate(new_ranges):
-                map_fusion_utils.copy_map_graph_with_new_range(
+                gtx_mfutils.copy_map_graph_with_new_range(
                     sdfg, graph, map_entry, map_exit, r, str(i)
                 )
 
             # remove the original first map
-            map_fusion_utils.delete_map(graph, map_entry, map_exit)
+            gtx_mfutils.delete_map(graph, map_entry, map_exit)
 
         _replace_ranged_map(
             first_map_entry,
@@ -268,7 +271,7 @@ class HorizontalSplitMapRange(SplitMapRange):
             # no common source access node
             return False
 
-        splitted_range = map_fusion_utils.split_overlapping_map_range(first_map, second_map)
+        splitted_range = gtx_mfutils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
             return False
 
@@ -339,7 +342,7 @@ class VerticalSplitMapRange(SplitMapRange):
         if not self.access_node.desc(graph).transient:
             return False
 
-        splitted_range = map_fusion_utils.split_overlapping_map_range(first_map, second_map)
+        splitted_range = gtx_mfutils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
             return False
 

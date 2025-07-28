@@ -30,27 +30,27 @@ def set_dace_config(
     #   is translating from `CompilableProgram` (ITIR.Program + CompileTimeArgs)
     #   to `ProgramSource`, so this step is storing in cache only the result
     #   of the SDFG transformations, not the compiled program binary.
-    dace.config.Config.set("cache", value="hash")  # use the SDFG hash as cache key
-    dace.config.Config.set("default_build_folder", value=str(config.BUILD_CACHE_DIR / "dace_cache"))
-    dace.config.Config.set("compiler.use_cache", value=True)
+    dace.Config.set("cache", value="hash")  # use the SDFG hash as cache key
+    dace.Config.set("default_build_folder", value=str(config.BUILD_CACHE_DIR / "dace_cache"))
+    dace.Config.set("compiler.use_cache", value=True)
 
     # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
     dace.Config.set("compiler.cuda.allow_implicit_memlet_to_map", value=False)
 
     if cmake_build_type is not None:
-        dace.config.Config.set("compiler.build_type", value=cmake_build_type.value)
+        dace.Config.set("compiler.build_type", value=cmake_build_type.value)
 
     # dace dafault setting use fast-math in both cpu and gpu compilation, don't use it here
-    dace.config.Config.set(
+    dace.Config.set(
         "compiler.cpu.args",
         value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
     )
-    dace.config.Config.set(
+    dace.Config.set(
         "compiler.cuda.args",
         value="-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
     )
-    dace.config.Config.set(
+    dace.Config.set(
         "compiler.cuda.hip_args",
         value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
     )
@@ -58,10 +58,13 @@ def set_dace_config(
     # In some stencils, mostly in `apply_diffusion_to_w` the cuda codegen messes
     #  up with the cuda streams, i.e. it allocates N streams but uses N+1.
     #  This is a workaround until this issue if fixed in DaCe.
-    dace.config.Config.set("compiler.cuda.max_concurrent_streams", value=1)
+    # However, when using asynchronous SDFG call (see `backend.make_dace_backend()`),
+    #  we currently rely on this setting to ensure sequential execution of all kernels
+    #  and memory operations on the default cuda stream.
+    dace.Config.set("compiler.cuda.max_concurrent_streams", value=1)
 
     if device_type == core_defs.DeviceType.ROCM:
-        dace.config.Config.set("compiler.cuda.backend", value="hip")
+        dace.Config.set("compiler.cuda.backend", value="hip")
 
     # Instrumentation of SDFG timers
-    dace.config.Config.set("instrumentation", "report_each_invocation", value=True)
+    dace.Config.set("instrumentation", "report_each_invocation", value=True)

@@ -44,7 +44,6 @@ from next_tests.integration_tests.cases import (
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import simple_mesh
-from next_tests.integration_tests.cases import IField, JField
 
 bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
