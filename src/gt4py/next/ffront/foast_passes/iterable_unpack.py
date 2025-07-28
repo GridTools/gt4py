@@ -11,6 +11,7 @@ from typing import Any
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, traits
 from gt4py.next.ffront.foast_passes.utils import compute_assign_indices
+from gt4py.next.type_system import type_specifications as ts
 
 
 class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
@@ -73,7 +74,10 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         slice_indices = list(range(lower, upper))
                         tuple_slice = [
                             foast.Subscript(
-                                value=tuple_name, index=i, type=el_type, location=stmt.location
+                                value=tuple_name,
+                                index=foast.Constant(i),
+                                type=el_type,
+                                location=stmt.location,
                             )
                             for i in slice_indices
                         ]
@@ -88,7 +92,14 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         new_assign = foast.Assign(
                             target=subtarget,
                             value=foast.Subscript(
-                                value=tuple_name, index=index, type=el_type, location=stmt.location
+                                value=tuple_name,
+                                index=foast.Constant(
+                                    value=index,
+                                    location=tuple_name.location,
+                                    type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+                                ),
+                                type=el_type,
+                                location=stmt.location,
                             ),
                             location=stmt.location,
                         )

@@ -537,7 +537,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 )
 
         return foast.Subscript(
-            value=new_value, index=node.index, type=new_type, location=node.location
+            value=new_value, index=self.visit(node.index), type=new_type, location=node.location
         )
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> foast.BinOp:

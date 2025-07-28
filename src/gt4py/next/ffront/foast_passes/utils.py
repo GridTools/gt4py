@@ -59,7 +59,7 @@ def expr_to_index(expr: foast.Expr) -> int:
         return expr.value
     if (
         isinstance(expr, foast.UnaryOp)
-        and isinstance(expr.op, foast.UnaryOp)
+        and isinstance(expr.op, dialect_ast_enums.UnaryOperator)
         and isinstance(expr.operand, foast.Constant)
     ):
         if expr.op is dialect_ast_enums.UnaryOperator.USUB:
