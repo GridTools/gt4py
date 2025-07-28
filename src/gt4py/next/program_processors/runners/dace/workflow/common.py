@@ -55,15 +55,11 @@ def set_dace_config(
         value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
     )
 
-    # Setting 'max_concurrent_streams=-1' configures dace to only use the default
-    # cuda stream. This is different from setting `max_concurrent_streams=1` which
-    # would also use only one stream, but a random one and possibly different in
-    # each stencil. When using asynchronous SDFG call, we currently rely on this
-    # setting to ensure sequential execution of all kernels and memory operations,
-    # from different stencils, on the default cuda stream.
-    # In some stencils, mostly in `apply_diffusion_to_w` the cuda codegen messes
-    # up with the cuda streams, i.e. it allocates N streams but uses N+1.
-    # Using only one stream is a workaround until this issue if fixed in DaCe.
+    # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
+    # up with the cuda streams, i.e. it allocates N streams but uses N+1. Therefore,
+    # setting up 1 cuda stream results in cuda code that uses 2 streams.
+    # As a workaround, we set 'max_concurrent_streams=-1' to configure dace to only
+    # use the default cuda stream.
     dace.Config.set("compiler.cuda.max_concurrent_streams", value=-1)
 
     if device_type == core_defs.DeviceType.ROCM:
