@@ -12,6 +12,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
+    check_inout_field,
     concat_where,
     dead_code_elimination,
     fuse_as_fieldop,
@@ -83,6 +84,7 @@ def apply_common_transforms(
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir
     )  # domain inference does not support dynamic offsets yet
+    ir = check_inout_field.CheckInOutField.apply(ir, offset_provider=offset_provider)
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
 
