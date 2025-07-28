@@ -67,6 +67,8 @@ TYPE_HINT_AND_CAST_BUILTINS = {
     "i64",
     "f32",
     "f64",
+    "int",
+    "float",
 }
 
 builtins = {
@@ -101,7 +103,9 @@ IGNORE_WHEN_INLINING = {
     "compile_assert",
 }
 
-__all__ = [*list(builtins), "function", "stencil", "lazy_stencil"]
+IGNORE_IN_ALL = {"int", "float"}
+
+__all__ = [*[b for b in builtins if b not in IGNORE_IN_ALL], "function", "stencil", "lazy_stencil"]
 
 __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
