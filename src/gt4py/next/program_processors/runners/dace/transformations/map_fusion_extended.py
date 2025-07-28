@@ -379,7 +379,7 @@ class HorizontalSplitMapRange(SplitMapRange):
             # Before we do anything we perform the renaming, i.e. we will rename the
             #  parameters of the second map such that they match the one of the first map.
             dace_mfhelper.rename_map_parameters(
-                first_map=first_map_fragment.map,
+                first_map=first_map_fragment_entry.map,
                 second_map=second_map_fragment_entry.map,
                 second_map_entry=second_map_fragment_entry,
                 state=graph,
