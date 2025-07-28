@@ -1908,7 +1908,6 @@ class TestTemporaryTypes:
             literal_precision=64,
         )
 
-        print(def_ir)
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.INT64
 
@@ -1920,7 +1919,6 @@ class TestTemporaryTypes:
             literal_precision=32,
         )
 
-        print(def_ir)
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.INT32
 
@@ -1932,7 +1930,6 @@ class TestTemporaryTypes:
             literal_precision=64,
         )
 
-        print(def_ir)
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.FLOAT64
 
@@ -1944,6 +1941,5 @@ class TestTemporaryTypes:
             literal_precision=32,
         )
 
-        print(def_ir)
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.FLOAT32
