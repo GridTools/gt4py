@@ -348,7 +348,7 @@ class ReturnReplacer(gt_meta.ASTTransformPass):
 
 
 def _filter_absolute_K_index_method(node: ast.Call) -> bool:
-    """Detects `var.at(...)` calls to route toward Absolute K IR"""
+    """Detects `var.at(...)` calls to route towards Absolute K IR."""
     return isinstance(node.func, ast.Attribute) and node.func.attr == "at"
 
 
@@ -421,7 +421,8 @@ class CallInliner(ast.NodeTransformer):
         if isinstance(node.value, ast.Call):
             if _filter_absolute_K_index_method(node.value):
                 return node
-            elif gt_meta.get_qualified_name_from_node(
+
+            if gt_meta.get_qualified_name_from_node(
                 node.value.func
             ) not in gtscript.MATH_BUILTINS.union(gtscript.TYPE_HINT_AND_CAST_BUILTINS):
                 assert len(node.targets) == 1
@@ -429,10 +430,10 @@ class CallInliner(ast.NodeTransformer):
                 # This node can be now removed since the trivial assignment has been already done
                 # in the Call visitor
                 return None
-            else:
-                return self.generic_visit(node)
-        else:
+
             return self.generic_visit(node)
+
+        return self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call, *, target_node=None):  # Cyclomatic complexity too high
         if _filter_absolute_K_index_method(node):
@@ -1432,20 +1433,18 @@ class IRMaker(ast.NodeVisitor):
         assert _filter_absolute_K_index_method(node)
         if len(node.keywords) not in [1, 2]:
             raise GTScriptSyntaxError(
-                message="Absolute K index bad syntax. Must be of the form`.at(K=..., ddim=[...])` "
-                " with the `ddim` argument optional",
+                message="Absolute K index: Bad syntax. Must be of the form `.at(K=..., ddim=[...])` "
+                " where the `ddim` argument is optional.",
                 loc=nodes.Location.from_ast_node(node),
             )
         if node.keywords[0].arg != "K":
             raise GTScriptSyntaxError(
-                message="Absolute K index: bad syntax, first argument must be `K`. "
-                "Must be of the form`.at(K=...)`",
+                message="Absolute K index: Bad syntax. First argument must be `K`, e.g. `.at(K=...)`.",
                 loc=nodes.Location.from_ast_node(node),
             )
         if len(node.keywords) > 1 and node.keywords[1].arg != "ddim":
             raise GTScriptSyntaxError(
-                message="Absolute K index: bad syntax, second argument (optional) must be `ddim`. "
-                "Must be of the form`.at(K=..., ddim=[...])`",
+                message="Absolute K index: Bad syntax. Second argument (optional) must be `ddim`, e.g. `.at(K=..., ddim=[...])`.",
                 loc=nodes.Location.from_ast_node(node),
             )
         if (
@@ -1454,8 +1453,8 @@ class IRMaker(ast.NodeVisitor):
             and not isinstance(node.keywords[1].value, ast.List)
         ):
             raise GTScriptSyntaxError(
-                message="Absolute K index: bad syntax, second argument `ddim` (optional) must be "
-                "a list of values. Must be of the form`.at(K=..., ddim=[...])`",
+                message="Absolute K index: Bad syntax. Second argument `ddim` (optional) must be "
+                "a list of values, e.g. `.at(K=..., ddim=[...])`.",
                 loc=nodes.Location.from_ast_node(node),
             )
         field: nodes.FieldRef = self.visit(node.func.value)

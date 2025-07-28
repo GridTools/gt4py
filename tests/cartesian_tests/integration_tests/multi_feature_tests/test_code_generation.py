@@ -857,7 +857,23 @@ def test_read_after_write_stencil(backend):
             lev = lev - 1
 
 
-@pytest.mark.parametrize("backend", ["dace:cpu"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param(backend, marks=pytest.mark.xfail)
+        for backend in ["gt:cpu_ifirst", "numpy", "debug", "cuda"]
+    ],
+)
+def test_absolute_K_index_raise(backend):
+    @gtscript.stencil(backend=backend)
+    def test_absolute_k_index(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
+        with computation(PARALLEL), interval(...):
+            out_field = in_field.at(K=2)
+
+
+@pytest.mark.parametrize(
+    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
+)
 def test_absolute_K_index(backend):
     domain = (5, 5, 5)
 

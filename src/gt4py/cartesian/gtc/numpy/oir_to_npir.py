@@ -82,9 +82,8 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self, node: oir.AbsoluteKIndex, **kwargs: Any
     ) -> Tuple[int, int, Union[int, eve.Node]]:
         raise NotImplementedError(
-            "Absolute K indexation (e.g. `field.at(...)`) is not implemented for numpy"
+            "Absolute K indexation (e.g. `field.at(...)`) is not implemented for the `numpy` backend."
         )
-        return 0, 0, npir.AbsoluteKIndex(k=self.visit(node.k, **kwargs))
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> npir.FieldSlice:
         i_offset, j_offset, k_offset = self.visit(node.offset, **kwargs)

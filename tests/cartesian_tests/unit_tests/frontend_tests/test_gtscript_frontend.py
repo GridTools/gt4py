@@ -1847,7 +1847,7 @@ class TestAbsoluteIndex:
                 out_field = in_field.at(2)
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match=r".*Absolute K index bad syntax.*"
+            gt_frontend.GTScriptSyntaxError, match=r".*Absolute K index: Bad syntax.*"
         ):
             parse_definition(
                 definition_func,
@@ -1861,7 +1861,7 @@ class TestAbsoluteIndex:
                 out_field = in_field.at(I=1, K=0)
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match=r".*Absolute K index: bad syntax.*"
+            gt_frontend.GTScriptSyntaxError, match=r".*Absolute K index: Bad syntax.*"
         ):
             parse_definition(
                 definition_func,

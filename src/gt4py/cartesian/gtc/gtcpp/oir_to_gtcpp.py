@@ -186,9 +186,8 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self, node: oir.AbsoluteKIndex, **kwargs: Any
     ) -> Tuple[int, int, Union[int, eve.Node]]:
         raise NotImplementedError(
-            "Absolute K indexation (e.g. `field.at(...)`) is not implemented for gt:X backends"
+            "Absolute K indexation (e.g. `field.at(...)`) is not implemented for the `gt:X` backends."
         )
-        return 0, 0, gtcpp.AbsoluteKIndex(k=self.visit(node.k, **kwargs))
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> gtcpp.AccessorRef:
         return gtcpp.AccessorRef(

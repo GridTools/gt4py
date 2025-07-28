@@ -689,9 +689,9 @@ class IterationOrder(enum.Enum):
     def symbol(self):
         if self == self.BACKWARD:
             return "<-"
-        elif self == self.PARALLEL:
+        if self == self.PARALLEL:
             return "||"
-        elif self == self.FORWARD:
+        if self == self.FORWARD:
             return "->"
 
     def __str__(self) -> str:
