@@ -75,7 +75,11 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         tuple_slice = [
                             foast.Subscript(
                                 value=tuple_name,
-                                index=foast.Constant(i),
+                                index=foast.Constant(
+                                    value=i,
+                                    location=tuple_name.location,
+                                    type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+                                ),
                                 type=el_type,
                                 location=stmt.location,
                             )
