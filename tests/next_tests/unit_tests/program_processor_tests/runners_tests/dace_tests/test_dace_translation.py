@@ -98,16 +98,33 @@ def test_find_constant_symbols(has_unit_stride):
         assert len(constant_symbols) == 0
 
 
+def _is_present_async_sdfg_init_code(sdfg: dace.SDFG) -> bool:
+    async_sdfg_init_code = "__dace_gpu_set_all_streams(__state, cudaStreamDefault);"
+
+    if "cuda" not in sdfg.init_code:
+        return False
+
+    n_match_lines = len(
+        [line for line in sdfg.init_code["cuda"].code.splitlines() if line == async_sdfg_init_code]
+    )
+    assert n_match_lines <= 1
+    return n_match_lines == 1
+
+
 def _check_sdfg_with_async_call(sdfg: dace.SDFG) -> None:
     assert len(sdfg.states()) == 1
     st = sdfg.states()[0]
     assert st.nosync == True
+
+    assert _is_present_async_sdfg_init_code(sdfg)
 
 
 def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
     assert len(sdfg.states()) == 1
     st = sdfg.states()[0]
     assert st.nosync == False
+
+    assert not _is_present_async_sdfg_init_code(sdfg)
 
 
 @pytest.mark.parametrize(
@@ -255,6 +272,8 @@ def test_generate_sdfg_async_call_multi_state(multi_state_config):
     sdfg, first_state, second_state = make_multi_state_sdfg()
 
     dace_translation_stage.make_sdfg_async(sdfg)
+
+    assert _is_present_async_sdfg_init_code(sdfg)
 
     if expect_async_sdfg_call_on_first_state:
         assert first_state.nosync == True
