@@ -920,7 +920,7 @@ def gt_gpu_apply_mempool(sdfg: dace.SDFG) -> None:
     """
     for _, _, desc in sdfg.arrays_recursive():
         if (
-            isinstance(desc, dace.dace_data.Array)
+            isinstance(desc, dace.data.Array)
             and desc.storage == dace.StorageType.GPU_Global
             and desc.transient
         ):
