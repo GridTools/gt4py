@@ -273,26 +273,14 @@ def gt_inline_nested_sdfg(
                 cleaner.apply(parent_state, parent_sdfg)
                 nb_preproccess_total += 1
 
-        # Try to inline the SDFG using the single state version of the transformation.
-        #  We try first this one, because it is simpler and does not increases the numbers
-        #  of state.
-        # NOTE: In DaCe `inline_sdfg()` function the multistate version is called first.
-        single_state_candidate = {dace_interstate.InlineSDFG.nested_sdfg: nsdfg_node}
-        single_state_inliner = dace_interstate.InlineSDFG()
-        single_state_inliner.setup_match(
-            sdfg=parent_sdfg,
-            cfg_id=parent_state.parent_graph.cfg_id,
-            state_id=parent_state_id,
-            subgraph=single_state_candidate,
-            expr_index=0,
-            override=True,
-        )
-        if single_state_inliner.can_be_applied(parent_state, 0, parent_sdfg, permissive=permissive):
-            single_state_inliner.apply(parent_state, parent_sdfg)
-            nb_inlines_total += 1
-            continue
-
-        # If the single state inliner failed try the multi state version.
+        # NOTE: In [PR#2178](https://github.com/GridTools/gt4py/pull/2178) this function was
+        #   modified to be more efficient. It also changed the order in which the inlining
+        #   transformations of DaCe where applied. Instead of trying `InlineMultistateSDFG`
+        #   it changed that such that `InlineSDFG` was used. However, this triggered
+        #   [issue#2108](https://github.com/spcl/dace/issues/2108) which lead to the removals
+        #   of some writes. As a temporary solution we no longer use `InlineSDFG` but only
+        #   the multistate version.
+        # TODO(phimuell): As soon as the DaCe issue is resolved start using `InlineSDFG` again.
         multi_state_candidate = {dace_interstate.InlineMultistateSDFG.nested_sdfg: nsdfg_node}
         multi_state_inliner = dace_interstate.InlineMultistateSDFG()
         multi_state_inliner.setup_match(
