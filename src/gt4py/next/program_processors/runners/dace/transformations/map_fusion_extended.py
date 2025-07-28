@@ -34,6 +34,7 @@ def gt_horizontal_map_split_fusion(
     run_simplify: bool,
     fuse_possible_maps: bool,
     consolidate_edges_only_if_not_extending: bool,
+    skip: Optional[set[str]] = None,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
@@ -58,7 +59,8 @@ def gt_horizontal_map_split_fusion(
     )
 
     if run_simplify:
-        skip = gtx_transformations.simplify.GT_SIMPLIFY_DEFAULT_SKIP_SET
+        if skip is None:
+            skip = gtx_transformations.simplify.GT_SIMPLIFY_DEFAULT_SKIP_SET
         if not consolidate_edges_only_if_not_extending:
             skip = skip.union(["ConsolidateEdges"])
         gtx_transformations.gt_simplify(
@@ -78,6 +80,7 @@ def gt_vertical_map_split_fusion(
     run_simplify: bool,
     consolidate_edges_only_if_not_extending: bool,
     single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+    skip: Optional[set[str]] = None,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
@@ -109,7 +112,8 @@ def gt_vertical_map_split_fusion(
     )
 
     if run_simplify:
-        skip = gtx_transformations.simplify.GT_SIMPLIFY_DEFAULT_SKIP_SET
+        if skip is None:
+            skip = gtx_transformations.simplify.GT_SIMPLIFY_DEFAULT_SKIP_SET
         if not consolidate_edges_only_if_not_extending:
             skip = skip.union(["ConsolidateEdges"])
         gtx_transformations.gt_simplify(
