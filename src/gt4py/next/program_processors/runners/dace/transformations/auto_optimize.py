@@ -121,8 +121,17 @@ def gt_auto_optimize(
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
 
     with dace.config.temporary_config():
-        dace.Config.set("optimizer", "match_exception", value=True)
+        # Do not store which transformations were applied inside the SDFG.
         dace.Config.set("store_history", value=False)
+
+        # If there is an exception during `can_be_applied()` propagate it instead
+        #  of ignoring it.
+        dace.Config.set("optimizer", "match_exception", value=True)
+
+        # Do not assume that symbols are positive. The only reason for this is
+        #  that the origin can potentially be negative.
+        #  See also [issue#2095](https://github.com/spcl/dace/issues/2095)
+        dace.Config.set("optimizer", "symbolic_positive", value=False)
 
         # Initial Cleanup
         # NOTE: The initial simplification stage must be synchronized with the one that
