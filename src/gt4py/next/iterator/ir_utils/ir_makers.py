@@ -394,7 +394,7 @@ def as_fieldop_neighbors(
     return as_fieldop(lambda_("it")(neighbors(offset, "it")), domain)(field)
 
 
-def as_fieldop_list_get(
+def as_fieldop_deref_list_get(
     list_idx: str | itir.Expr, local_field: str | itir.Expr, domain: Optional[itir.FunCall] = None
 ) -> itir.Expr:
     """
@@ -402,10 +402,10 @@ def as_fieldop_list_get(
 
     Examples
     --------
-    >>> str(as_fieldop_list_get("idx", "lst"))
+    >>> str(as_fieldop_deref_list_get("idx", "lst"))
     '(⇑(λ(it) → list_get(idx, ·it)))(lst)'
     """
-    return op_as_fieldop(lambda_("it")(list_get(list_idx, "it")), domain)(local_field)
+    return as_fieldop(lambda_("it")(list_get(list_idx, deref("it"))), domain)(local_field)
 
 
 def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:

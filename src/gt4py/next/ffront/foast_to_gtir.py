@@ -247,7 +247,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             # `field[LocalDim(42)]`
             assert isinstance(node.index, foast.Call)
             assert isinstance(node.index.args[0], foast.Constant)
-            return im.as_fieldop_list_get(
+            return im.as_fieldop_deref_list_get(
                 node.index.args[0].value, self.visit(node.value, **kwargs)
             )
         return im.tuple_get(foast_utils.expr_to_index(node.index), self.visit(node.value, **kwargs))
