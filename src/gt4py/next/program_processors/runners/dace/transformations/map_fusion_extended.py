@@ -307,11 +307,6 @@ class HorizontalSplitMapRange(SplitMapRange):
         }
 
         # Test if the Maps are parallel.
-        # TODO(iomaganaris): Before this test was located in the `apply()` function. However,
-        #   Its comment indicated that the `can_be_applied()` function, has performed that
-        #   test already, but I can not see it. Because I, phimuell, also thinks that this
-        #   check should be done here, I relocated it here. Could you conform that this move
-        #   is valid.
         if not dace_mfhelper.is_parallel(
             graph=graph, node1=first_map_entry, node2=second_map_entry
         ):
@@ -333,16 +328,20 @@ class HorizontalSplitMapRange(SplitMapRange):
         sdfg: dace.SDFG,
     ) -> None:
         first_map_entry: dace_nodes.MapEntry = self.first_map_entry
-        first_map_exit: dace_nodes.MapExit = graph.exit_node(first_map_entry)
         second_map_entry: dace_nodes.MapEntry = self.second_map_entry
-        second_map_exit: dace_nodes.MapExit = graph.exit_node(second_map_entry)
 
-        new_map_entries_from_first, new_map_entries_from_second = self.split_maps(
-            graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit
+        # Now split the first and second Map.
+        first_map_fragments, second_map_fragments = self.split_maps(
+            graph,
+            sdfg,
+            first_map_entry,
+            graph.exit_node(first_map_entry),
+            second_map_entry,
+            graph.exit_node(second_map_entry),
         )
 
+        # If we do not want to fuse the maps, we can stop here.
         if not self.fuse_possible_maps:
-            # If we do not want to fuse the maps, we can stop here.
             return
 
         # Look which Maps can be fused together. It is important that a Map can be listed multiple
@@ -350,47 +349,43 @@ class HorizontalSplitMapRange(SplitMapRange):
         #  this by always using "first Maps" as `to_node`, thus they survive. Furthermore, we
         #  only assign a second Map once.
         # TODO(phimuell, iomaganaris): Check and improve that.
-        matching_maps: list[
-            tuple[dace_nodes.MapEntry, dace_nodes.MapExit, dace_nodes.MapEntry, dace_nodes.MapExit]
-        ] = []
-        unmatched_second_map_entries: list[dace_nodes.MapEntry] = new_map_entries_from_second.copy()
-        for first_map_entry in new_map_entries_from_first:
-            for second_map_entry in unmatched_second_map_entries:
-                if first_map_entry.map.range == second_map_entry.map.range:
-                    matching_maps.append(
-                        (
-                            first_map_entry,
-                            graph.exit_node(first_map_entry),
-                            second_map_entry,
-                            graph.exit_node(second_map_entry),
-                        )
+        matched_map_fragments: list[tuple[dace_nodes.MapEntry, dace_nodes.MapEntry]] = []
+        unmatched_second_map_fragments = second_map_fragments.copy()
+        for first_map_fragment in first_map_fragments:
+            for unmatched_second_map_fragment in unmatched_second_map_fragments:
+                if first_map_fragment.map.range == unmatched_second_map_fragment.map.range:
+                    matched_map_fragments.append(
+                        (first_map_fragment, unmatched_second_map_fragment)
                     )
-                    unmatched_second_map_entries.remove(second_map_entry)
+                    unmatched_second_map_fragments.remove(unmatched_second_map_fragment)
                     break
 
-        assert len(matching_maps) > 0
+        assert len(matched_map_fragments) > 0
 
         # We have to get the original scope dict before we start mutating the graph. Actually we
         #  would need to obtain the scope dict after every iteration again, which would require
         #  a rescan. But since the operations do not alter the scopes, at least not in a way that
-        #  would affect it, we can be more efficient and get the thing at the beginning.
+        #  would affect us, we can be more efficient and get the thing at the beginning.
         scope_dict: Dict = graph.scope_dict()
 
-        for first_map_entry, first_map_exit, second_map_entry, second_map_exit in matching_maps:
+        for first_map_fragment_entry, second_map_fragment_entry in matched_map_fragments:
+            first_map_fragment_exit = graph.exit_node(first_map_fragment_entry)
+            second_map_fragment_exit = graph.exit_node(second_map_fragment_entry)
+
             # Before we do anything we perform the renaming, i.e. we will rename the
             #  parameters of the second map such that they match the one of the first map.
             dace_mfhelper.rename_map_parameters(
-                first_map=first_map_entry.map,
-                second_map=second_map_entry.map,
-                second_map_entry=second_map_entry,
+                first_map=first_map_fragment.map,
+                second_map=second_map_fragment_entry.map,
+                second_map_entry=second_map_fragment_entry,
                 state=graph,
             )
 
             # Now we relocate all connectors from the second to the first map and remove
             #  the respective node of the second map.
             for to_node, from_node in [
-                (first_map_entry, second_map_entry),
-                (first_map_exit, second_map_exit),
+                (first_map_fragment_entry, second_map_fragment_entry),
+                (first_map_fragment_exit, second_map_fragment_exit),
             ]:
                 dace_mfhelper.relocate_nodes(
                     from_node=from_node,
