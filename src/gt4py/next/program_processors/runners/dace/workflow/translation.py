@@ -115,7 +115,7 @@ def make_sdfg_async(sdfg: dace.SDFG) -> None:
             state.nosync = True
 
     # Emit cuda code for the SDFG to use only the default cuda stream.
-    # This allows to serialize all kernels on one GPU queue.
+    # This allows to serialize all kernels and memory operations on the same GPU queue.
     sdfg.append_init_code(
         "__dace_gpu_set_all_streams(__state, cudaStreamDefault);", location="cuda"
     )
