@@ -324,10 +324,15 @@ def _field_offset_postfix(node: oir.FieldAccess) -> str:
     if isinstance(node.offset, oir.AbsoluteKIndex):
         return "abs_k"
 
-    offset_indicators = [
-        f"{k}{'p' if v > 0 else 'm'}{abs(v)}" for k, v in node.offset.to_dict().items() if v != 0
-    ]
-    return "_".join(offset_indicators)
+    if isinstance(node.offset, common.CartesianOffset):
+        offset_indicators = [
+            f"{k}{'p' if v > 0 else 'm'}{abs(v)}"
+            for k, v in node.offset.to_dict().items()
+            if v != 0
+        ]
+        return "_".join(offset_indicators)
+
+    raise NotImplementedError(f"_field_offset_postfix(): unknown offset type {type(node.offset)}")
 
 
 def _memlet_subset(node: oir.FieldAccess, data_domains: list[int], ctx: Context) -> subsets.Subset:
