@@ -7,7 +7,9 @@ requires = ['cython>=3.0.0', 'setuptools>=70.0.0', 'versioningit>=3.1.1', 'wheel
 # -- Dependency groups --
 [dependency-groups]
 build = ['cython>=3.0.0', 'pip>=22.1.1', 'setuptools>=70.0.0', 'wheel>=0.33.6']
-dace-cartesian = ['dace>=1.0.2,<2']
+dace-cartesian = [
+  'dace>=1.0.2,<2'  # renfined in [tool.uv.sources]
+]
 dace-next = [
   'dace>=1.0.0'  # refined in [tool.uv.sources]
 ]
@@ -133,8 +135,6 @@ requires-python = '>=3.10, <3.14'
 cartesian = ['gt4py[jax,standard,testing]']
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
-# 'dace' defined as dependency-group until supported versions are pushed to PyPI
-# dace = ['dace>=1.0.2,<1.1.0']
 jax = ['jax>=0.4.26']
 jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
 next = ['gt4py[jax,standard,testing]']
@@ -448,6 +448,7 @@ url = 'https://test.pypi.org/simple'
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
+  {git = "https://github.com/GridTools/dace", branch = "romanc/stree-to-sdfg", group = "dace-cartesian"},
   {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_25", group = "dace-next"}
 ]
 
