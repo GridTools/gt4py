@@ -24,6 +24,7 @@ from gt4py.next import config
 from .exceptions import DSLError
 from .formatting import format_compilation_error
 
+
 def _format_uncaught_error(err: DSLError, verbose_exceptions: bool) -> list[str]:
     if verbose_exceptions:
         return format_compilation_error(
