@@ -15,7 +15,6 @@ definitions for the keywords of the DSL.
 import collections
 import inspect
 import numbers
-import platform
 import types
 from typing import Callable, Dict, Type, Union
 
@@ -124,10 +123,6 @@ _VALID_DATA_TYPES = (
     np.float64,
 )
 
-# since platform.architecture() returns "('64bit', 'ELF')" for example, we extract the number from here
-ARCHITECTURE_LITERAL_PRECISION = int(platform.architecture()[0][:2])
-"literal precision of the architecture - 64 or 32"
-
 
 def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
     def _parse_annotation(arg, annotation):
@@ -181,7 +176,7 @@ def stencil(
     rebuild=False,
     cache_settings=None,
     raise_if_not_cached=False,
-    literal_precision=ARCHITECTURE_LITERAL_PRECISION,
+    literal_precision=gt_definitions.LITERAL_PRECISION,
     **kwargs,
 ):
     """Generate an implementation of the stencil definition with the specified backend.

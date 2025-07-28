@@ -282,11 +282,12 @@ class DataType(enum.Enum):
         return result
 
 
-def frontend_type_to_native_type(literal_precision: int = 64) -> dict[str, DataType]:
+def frontend_type_to_native_type(literal_precision: int) -> dict[str, DataType]:
     """Return the mapping of frontend types to native types.
+
     Args:
-        literal_precision (int, optional): Literal precision used for mapping.
-            Defaults to 64.
+        literal_precision (int): Literal precision used for mapping `int` and `float` to either 32 or 64 bit precision.
+
     Returns:
         dict[str, DataType]: Mapping of the frontend types to our DataTypes.
     """

@@ -8,6 +8,8 @@
 
 import enum
 import functools
+import os
+import platform
 from dataclasses import dataclass
 from typing import Literal, Tuple, Union
 
@@ -23,6 +25,16 @@ from gt4py.cartesian.utils.attrib import (
     attribkwclass,
     attribute,
 )
+
+
+# Dev note: platform.architecture() returns "('64bit', 'ELF')" for example.
+_ARCHITECTURE_LITERAL_PRECISION = platform.architecture()[0][:2]
+"""Literal precision of the architecture; expected 64 or 32."""
+
+LITERAL_PRECISION = int(
+    os.environ.get("GT4PY_LITERAL_PRECISION", default=_ARCHITECTURE_LITERAL_PRECISION)
+)
+"""Default literal precision used for unspecific `int` and `float` types and casts."""
 
 
 @enum.unique
@@ -102,8 +114,8 @@ class BuildOptions(AttributeClassLike):
     raise_if_not_cached = attribute(of=bool, default=False)
     cache_settings = attribute(of=DictOf[str, Any], factory=dict)
     _impl_opts = attribute(of=DictOf[str, Any], factory=dict)
-    literal_precision = attribute(of=int, default=64)
-    "Specify the literal precision for automatic casts. Defaults to 64-bit"
+    literal_precision = attribute(of=int, default=LITERAL_PRECISION)
+    "Specify the literal precision for automatic casts. Defaults to architecture precision unless overwritten by the `GT4PY_LITERAL_PRECISION` environment variable."
 
     @property
     def qualified_name(self):

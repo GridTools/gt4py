@@ -33,7 +33,6 @@ from typing import (
 import numpy as np
 
 from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
-from gt4py.cartesian.config import build_settings
 from gt4py.cartesian.frontend import node_util, nodes
 from gt4py.cartesian.frontend.base import Frontend, register
 from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
@@ -737,6 +736,7 @@ class IRMaker(ast.NodeVisitor):
         self.parameters = parameters
         self.local_symbols = local_symbols
         self.domain = domain or nodes.Domain.LatLonGrid()
+        self.literal_precision = options.literal_precision
         self.temp_decls = temp_decls or {}
         self.parsing_context = None
         self.iteration_order = None
@@ -779,12 +779,12 @@ class IRMaker(ast.NodeVisitor):
             "f64": nodes.NativeFunction.F64,
             "int": (
                 nodes.NativeFunction.I32
-                if options.literal_precision == 32
+                if self.literal_precision == 32
                 else nodes.NativeFunction.I64
             ),
             "float": (
                 nodes.NativeFunction.F32
-                if options.literal_precision == 32
+                if self.literal_precision == 32
                 else nodes.NativeFunction.F64
             ),
         }  # Conversion table for functions to NativeFunctions
@@ -794,11 +794,9 @@ class IRMaker(ast.NodeVisitor):
             "i64": nodes.DataType.INT64,
             "f32": nodes.DataType.FLOAT32,
             "f64": nodes.DataType.FLOAT64,
-            "int": nodes.DataType.INT32
-            if options.literal_precision == 32
-            else nodes.DataType.INT64,
+            "int": nodes.DataType.INT32 if self.literal_precision == 32 else nodes.DataType.INT64,
             "float": nodes.DataType.FLOAT32
-            if options.literal_precision == 32
+            if self.literal_precision == 32
             else nodes.DataType.FLOAT64,
         }  # Conversion table for types to DataTypes
 
@@ -929,7 +927,7 @@ class IRMaker(ast.NodeVisitor):
         if len(args) == 2:
             if any(isinstance(arg, ast.Subscript) for arg in args):
                 raise GTScriptSyntaxError(
-                    "Two-argument syntax should not use AxisIndexs or AxisIntervals"
+                    "Two-argument syntax should not use AxisIndices or AxisIntervals"
                 )
             interval_node = ast.Slice(lower=args[0], upper=args[1])
             ast.copy_location(interval_node, node)
@@ -1032,17 +1030,14 @@ class IRMaker(ast.NodeVisitor):
             if self.dtypes and type(value) in self.dtypes.keys():
                 value_type = self.dtypes[type(value)]
             else:
-                if build_settings["literal_floating_point_precision"] is not None:
-                    if isinstance(value, int):
-                        value_type = np.dtype(
-                            f"i{int(int(build_settings['literal_floating_point_precision']) / 8)}"
-                        )
-                    else:
-                        value_type = np.dtype(
-                            f"f{int(int(build_settings['literal_floating_point_precision']) / 8)}"
-                        )
+                if isinstance(value, int):
+                    value_type = np.dtype(f"i{int(self.literal_precision / 8)}")
+                elif isinstance(value, float):
+                    value_type = np.dtype(f"f{int(self.literal_precision / 8)}")
                 else:
-                    value_type = np.dtype(type(value))
+                    raise GTScriptSyntaxError(
+                        f"Unexpected constant value `{value}`. Expected integer or float."
+                    )
             data_type = nodes.DataType.from_dtype(value_type)
             return nodes.ScalarLiteral(value=value, data_type=data_type)
         else:
@@ -1828,12 +1823,9 @@ class GTScriptParser(ast.NodeVisitor):
         temp_annotations: Dict[str, gtscript._FieldDescriptor] = {}
         temp_init_values: Dict[str, numbers.Number] = {}
 
-        if options is not None:
-            frontend_types_to_native_types = nodes.frontend_type_to_native_type(
-                options.literal_precision
-            )
-        else:
-            frontend_types_to_native_types = nodes.frontend_type_to_native_type()
+        frontend_types_to_native_types = nodes.frontend_type_to_native_type(
+            options.literal_precision if options is not None else gt_definitions.LITERAL_PRECISION
+        )
 
         ann_assign_context = {
             "Field": gtscript.Field,
@@ -2225,7 +2217,7 @@ class GTScriptFrontend(Frontend):
         Args:
             definition (Callable): Stencil to annotate.
             externals: externals to use
-            options (gt_definitions.BuildOptions, optional): Options for buidling the stencil.
+            options (gt_definitions.BuildOptions, optional): Options for building the stencil.
                 Defaults to None.
 
         Returns:

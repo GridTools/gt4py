@@ -49,20 +49,23 @@ def parse_definition(
     module: str,
     externals: Optional[Dict[str, Any]] = None,
     dtypes: Dict[Type, Type] = None,
-    literal_precision=64,
+    literal_precision: int | None = None,
     rebuild=False,
     **kwargs,
 ) -> nodes.StencilDefinition:
     original_annotations = gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
 
-    build_options = gt_definitions.BuildOptions(
-        name=name,
-        module=module,
-        rebuild=rebuild,
-        backend_opts=kwargs,
-        literal_precision=literal_precision,
-        build_info=None,
-    )
+    build_args = {
+        "name": name,
+        "module": module,
+        "rebuild": rebuild,
+        "build_info": None,
+        "backend_opts": kwargs,
+    }
+    if literal_precision is not None:
+        build_args["literal_precision"] = literal_precision
+
+    build_options = gt_definitions.BuildOptions(**build_args)
 
     gt_frontend.GTScriptFrontend.prepare_stencil_definition(
         definition_func, externals=externals or {}
