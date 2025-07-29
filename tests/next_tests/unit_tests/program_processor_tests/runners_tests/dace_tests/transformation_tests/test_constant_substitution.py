@@ -99,7 +99,6 @@ def _make_sdfg() -> tuple[dace.SDFG, dace.nodes.NestedSDFG]:
     nested_sdfg: dace.SDFG = _make_nested_sdfg()
     nsdfg = first_state.add_nested_sdfg(
         nested_sdfg,
-        parent=sdfg,
         inputs={"A", "B"},
         outputs={"C"},
         symbol_mapping={"One": "One", "N": "N"},
