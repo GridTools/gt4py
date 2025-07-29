@@ -18,7 +18,7 @@ from dace import subsets as dace_subsets
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
-from gt4py.next.program_processors.runners.dace import gtir_python_codegen, gtir_to_sdfg_utils
+from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_utils
 
 
 @dataclasses.dataclass(frozen=True)
@@ -41,11 +41,6 @@ FieldopDomain: TypeAlias = list[FieldopDomainRange]
 """Domain of a field operator represented as a list of `FieldopDomainRange` for each dimension."""
 
 
-def _parse_symbolic_range(ir: gtir.Expr) -> dace.symbolic.SymbolicType:
-    python_source = gtir_python_codegen.get_source(ir)
-    return dace.symbolic.pystr_to_symbolic(python_source)
-
-
 def extract_domain(node: gtir.Expr) -> FieldopDomain:
     """
     Visits the domain of a field operator and returns a list of dimensions and
@@ -61,7 +56,9 @@ def extract_domain(node: gtir.Expr) -> FieldopDomain:
             assert len(named_range.args) == 3
             axis = named_range.args[0]
             assert isinstance(axis, gtir.AxisLiteral)
-            lower_bound, upper_bound = (_parse_symbolic_range(arg) for arg in named_range.args[1:3])
+            lower_bound, upper_bound = (
+                gtir_to_sdfg_utils.get_symbolic(arg) for arg in named_range.args[1:3]
+            )
             dim = gtx_common.Dimension(axis.value, axis.kind)
             domain.append(FieldopDomainRange(dim, lower_bound, upper_bound))
 
@@ -70,8 +67,8 @@ def extract_domain(node: gtir.Expr) -> FieldopDomain:
             domain.append(
                 FieldopDomainRange(
                     dim,
-                    _parse_symbolic_range(drange.start),
-                    _parse_symbolic_range(drange.stop),
+                    gtir_to_sdfg_utils.get_symbolic(drange.start),
+                    gtir_to_sdfg_utils.get_symbolic(drange.stop),
                 )
             )
 
