@@ -139,6 +139,7 @@ def gt_auto_optimize(
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
             validate=False,
+            skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
             validate_all=validate_all,
         )
 
@@ -147,6 +148,7 @@ def gt_auto_optimize(
                 sdfg=sdfg,
                 repl=constant_symbols,
                 simplify=True,  # Simplify again after.
+                skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
                 simplify_at_entry=False,
                 validate=False,
                 validate_all=validate_all,
