@@ -307,7 +307,7 @@ def test_map_buffer_elimination_with_nested_sdfgs():
     )
     state2.add_nedge(tmp2_node, state2.add_access(out2), dace.Memlet.from_array(out2, out2_desc))
 
-    nsdfg2_node = state1.add_nested_sdfg(nsdfg2, nsdfg1, inputs={"__inp"}, outputs={"__out"})
+    nsdfg2_node = state1.add_nested_sdfg(nsdfg2, inputs={"__inp"}, outputs={"__out"})
     me1, mx1 = state1.add_map("broadcast1", ndrange={"__i": "0:10"})
     state1.add_memlet_path(
         state1.add_access(inp1),
@@ -321,7 +321,7 @@ def test_map_buffer_elimination_with_nested_sdfgs():
     )
     state1.add_nedge(tmp1_node, state1.add_access(out1), dace.Memlet.from_array(out1, out1_desc))
 
-    nsdfg1_node = state.add_nested_sdfg(nsdfg1, sdfg, inputs={"__inp"}, outputs={"__out"})
+    nsdfg1_node = state.add_nested_sdfg(nsdfg1, inputs={"__inp"}, outputs={"__out"})
     me, mx = state.add_map("broadcast", ndrange={"__i": "0:10"})
     state.add_memlet_path(
         state.add_access(inp),

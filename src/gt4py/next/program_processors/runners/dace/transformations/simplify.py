@@ -20,9 +20,11 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
+from dace.cli import progress as dace_cliprogress
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import (
     dataflow as dace_dataflow,
+    interstate as dace_interstate,
     pass_pipeline as dace_ppl,
     passes as dace_passes,
 )
@@ -110,7 +112,7 @@ def gt_simplify(
                 sdfg=sdfg,
                 multistate=True,
                 permissive=False,
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if inline_res is not None:
@@ -119,7 +121,7 @@ def gt_simplify(
                 result.update(inline_res)
 
         simplify_res = dace_passes.SimplifyPass(
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
             verbose=False,
             skip=(skip | {"InlineSDFGs"}),
@@ -136,7 +138,9 @@ def gt_simplify(
         #  the parts DaCe is not able to do.
         if "FuseStates" not in skip:
             fuse_state_res = sdfg.apply_transformations_repeated(
-                [gtx_transformations.GT4PyStateFusion]
+                [gtx_transformations.GT4PyStateFusion],
+                validate=False,
+                validate_all=validate_all,
             )
             if fuse_state_res:
                 at_least_one_xtrans_run = True
@@ -162,7 +166,7 @@ def gt_simplify(
         if "CopyChainRemover" not in skip:
             copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
                 sdfg=sdfg,
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if copy_chain_remover_result is not None:
@@ -175,7 +179,7 @@ def gt_simplify(
         if "SingleStateGlobalDirectSelfCopyElimination" not in skip:
             direct_self_copy_removal_result = sdfg.apply_transformations_repeated(
                 gtx_transformations.SingleStateGlobalDirectSelfCopyElimination(),
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if direct_self_copy_removal_result > 0:
@@ -190,7 +194,7 @@ def gt_simplify(
         if "SingleStateGlobalSelfCopyElimination" not in skip:
             self_copy_removal_result = sdfg.apply_transformations_repeated(
                 gtx_transformations.SingleStateGlobalSelfCopyElimination(),
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if self_copy_removal_result > 0:
@@ -213,6 +217,9 @@ def gt_simplify(
                     result["MultiStateGlobalSelfCopyElimination"] = set()
                 result["MultiStateGlobalSelfCopyElimination"].update(distributed_self_copy_result)
 
+    if validate:
+        sdfg.validate()
+
     return result
 
 
@@ -222,6 +229,7 @@ def gt_inline_nested_sdfg(
     permissive: bool = False,
     validate: bool = True,
     validate_all: bool = False,
+    progress: Optional[bool] = None,
 ) -> Optional[dict[str, int]]:
     """Perform inlining of nested SDFG into their parent SDFG.
 
@@ -237,48 +245,65 @@ def gt_inline_nested_sdfg(
         validate: Perform validation after the transformation has finished.
         validate_all: Performs extensive validation.
     """
-    first_iteration = True
+
     nb_preproccess_total = 0
     nb_inlines_total = 0
-    while True:
-        # TODO(edopao): we call `reset_cfg_list()` as temporary workaround for a
-        # dace issue with pattern matching. Any time the SDFG's CFG-tree is modified,
-        # i.e. a loop is added/removed or something similar, the CFG list needs
-        # to be updated accordingly. Otherwise, all ID-based accesses are not going
-        # to work (which is what pattern matching attempts to do).
-        sdfg.reset_cfg_list()
-        nb_preproccess = sdfg.apply_transformations_repeated(
-            [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors],
-            validate=False,
-            validate_all=validate_all,
+    nsdfgs = [n for n, _ in sdfg.all_nodes_recursive() if isinstance(n, dace_nodes.NestedSDFG)]
+    for nsdfg_node in dace_cliprogress.optional_progressbar(
+        reversed(nsdfgs), title="Inlining SDFGs", n=len(nsdfgs), progress=progress
+    ):
+        nsdfg: dace.SDFG = nsdfg_node.sdfg
+        parent_state = nsdfg.parent
+        parent_sdfg = parent_state.sdfg
+        parent_state_id = parent_state.block_id
+
+        # Clean the symbols and connectors of the nested SDFG.
+        for xform in [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors]:
+            candidate = {xform.nsdfg: nsdfg_node}
+            cleaner = xform()
+            cleaner.setup_match(
+                sdfg=parent_sdfg,
+                cfg_id=parent_state.parent_graph.cfg_id,
+                state_id=parent_state_id,
+                subgraph=candidate,
+                expr_index=0,
+                override=True,
+            )
+            if cleaner.can_be_applied(parent_state, 0, parent_sdfg, permissive=False):
+                cleaner.apply(parent_state, parent_sdfg)
+                nb_preproccess_total += 1
+
+        # NOTE: In [PR#2178](https://github.com/GridTools/gt4py/pull/2178) this function was
+        #   modified to be more efficient. It also changed the order in which the inlining
+        #   transformations of DaCe were applied. Instead of trying `InlineMultistateSDFG`
+        #   it changed that such that `InlineSDFG` was used. However, this triggered
+        #   [issue#2108](https://github.com/spcl/dace/issues/2108) which lead to the removals
+        #   of some writes. As a temporary solution we no longer use `InlineSDFG` but only
+        #   the multistate version.
+        # TODO(phimuell): As soon as the DaCe issue is resolved start using `InlineSDFG` again.
+        multi_state_candidate = {dace_interstate.InlineMultistateSDFG.nested_sdfg: nsdfg_node}
+        multi_state_inliner = dace_interstate.InlineMultistateSDFG()
+        multi_state_inliner.setup_match(
+            sdfg=parent_sdfg,
+            cfg_id=parent_state.parent_graph.cfg_id,
+            state_id=parent_state_id,
+            subgraph=multi_state_candidate,
+            expr_index=0,
+            override=True,
         )
-        nb_preproccess_total += nb_preproccess
-        if (nb_preproccess == 0) and (not first_iteration):
-            break
-
-        # Create and configure the inline pass
-        inline_sdfg = dace_passes.InlineSDFGs()
-        inline_sdfg.progress = False
-        inline_sdfg.permissive = permissive
-        inline_sdfg.multistate = multistate
-
-        # Apply the inline pass
-        #  The pass returns `None` no indicate "nothing was done"
-        nb_inlines = inline_sdfg.apply_pass(sdfg, {}) or 0
-        nb_inlines_total += nb_inlines
-
-        # Check result, if needed and test if we can stop
-        if validate_all or validate:
-            sdfg.validate()
-        if nb_inlines == 0:
-            break
-        first_iteration = False
+        if multi_state_inliner.can_be_applied(parent_state, 0, parent_sdfg, permissive=permissive):
+            multi_state_inliner.apply(parent_state, parent_sdfg)
+            nb_inlines_total += 1
 
     result: dict[str, int] = {}
     if nb_inlines_total != 0:
         result["InlineSDFGs"] = nb_inlines_total
     if nb_preproccess_total != 0:
         result["PruneSymbols|PruneConnectors"] = nb_preproccess_total
+
+    if validate or validate_all:
+        sdfg.validate()
+
     return result if result else None
 
 
@@ -286,7 +311,7 @@ def gt_substitute_compiletime_symbols(
     sdfg: dace.SDFG,
     repl: dict[str, Any],
     simplify: bool = False,
-    validate: bool = False,
+    validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
 ) -> None:
@@ -348,14 +373,19 @@ def gt_substitute_compiletime_symbols(
     if simplify:
         gt_simplify(
             sdfg=sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
     dace.sdfg.propagation.propagate_memlets_sdfg(sdfg)
 
+    if validate:
+        sdfg.validate()
+
 
 def gt_reduce_distributed_buffering(
     sdfg: dace.SDFG,
+    validate: bool = True,
+    validate_all: bool = False,
 ) -> Optional[dict[dace.SDFG, dict[dace.SDFGState, set[str]]]]:
     """Removes distributed write back buffers."""
     pipeline = dace_ppl.Pipeline([DistributedBufferRelocator()])
@@ -366,8 +396,14 @@ def gt_reduce_distributed_buffering(
         if ret is not None:
             all_result[rsdfg] = ret
 
+        if validate_all:
+            rsdfg.validate()
+
     if len(all_result) == 0:
         return None
+
+    if validate:
+        sdfg.validate()
 
     return all_result
 
