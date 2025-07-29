@@ -64,6 +64,13 @@ class RemovePointwiseViews(dace_transformation.SingleStateTransformation):
         src_desc: dace_data.Data = src_node.desc(sdfg)
         dst_desc: dace_data.Data = dst_node.desc(sdfg)
 
+        scope = graph.scope_dict()
+
+        # Currently handle only pointwise views inside a Map. If the view is not inside a Map,
+        # it is probably not a pointwise view.
+        if scope[src_node] is None or scope[dst_node] is None:
+            return False  # Not inside a Map.
+
         if not src_desc.transient:
             return False
         if not gtx_transformations.utils.is_view(src_desc, sdfg):
@@ -75,6 +82,10 @@ class RemovePointwiseViews(dace_transformation.SingleStateTransformation):
         if graph.out_degree(src_node) != 1:
             return False
         if len(graph.in_edges(src_node)) != 1:
+            return False
+        if isinstance(src_desc, dace_data.ArrayView) and src_desc.total_size != 1:
+            return False
+        if isinstance(dst_desc, dace_data.Array) and dst_desc.total_size != 1:
             return False
 
         return True
