@@ -139,6 +139,7 @@ def gt_auto_optimize(
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
             validate=False,
+            skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
             validate_all=validate_all,
         )
 
@@ -147,6 +148,7 @@ def gt_auto_optimize(
                 sdfg=sdfg,
                 repl=constant_symbols,
                 simplify=True,  # Simplify again after.
+                skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
                 simplify_at_entry=False,
                 validate=False,
                 validate_all=validate_all,
@@ -353,6 +355,7 @@ def _gt_auto_process_top_level_maps(
         gtx_transformations.gt_vertical_map_split_fusion(
             sdfg=sdfg,
             run_simplify=False,
+            skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
             consolidate_edges_only_if_not_extending=True,
             single_use_data=single_use_data,
             validate=False,
@@ -361,6 +364,7 @@ def _gt_auto_process_top_level_maps(
         gtx_transformations.gt_horizontal_map_split_fusion(
             sdfg=sdfg,
             run_simplify=False,
+            skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
             fuse_possible_maps=True,
             consolidate_edges_only_if_not_extending=True,
             validate=False,
@@ -378,9 +382,7 @@ def _gt_auto_process_top_level_maps(
             sdfg,
             validate=False,
             validate_all=validate_all,
-            skip=gtx_transformations.simplify.GT_SIMPLIFY_DEFAULT_SKIP_SET.union(
-                ["ConsolidateEdges"]
-            ),
+            skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
 
     return sdfg
@@ -412,7 +414,12 @@ def _gt_auto_process_dataflow_inside_maps(
         validate=False,
         validate_all=validate_all,
     )
-    gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
+    gtx_transformations.gt_simplify(
+        sdfg,
+        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
+        validate=False,
+        validate_all=validate_all,
+    )
 
     # Blocking is performed first, because this ensures that as much as possible
     #  is moved into the k independent part.
@@ -437,6 +444,12 @@ def _gt_auto_process_dataflow_inside_maps(
         gtx_transformations.MoveDataflowIntoIfBody(
             ignore_upstream_blocks=False,
         ),
+        validate=False,
+        validate_all=validate_all,
+    )
+    gtx_transformations.gt_simplify(
+        sdfg,
+        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
         validate=False,
         validate_all=validate_all,
     )

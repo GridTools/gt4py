@@ -2,11 +2,11 @@
 
 [build-system]
 build-backend = 'setuptools.build_meta'
-requires = ['cython>=3.0.0', 'setuptools>=70.0.0', 'versioningit>=3.1.1', 'wheel>=0.33.6']
+requires = ['cython>=3.0.0', 'setuptools>=77.0.3', 'versioningit>=3.1.1', 'wheel>=0.33.6']
 
 # -- Dependency groups --
 [dependency-groups]
-build = ['cython>=3.0.0', 'pip>=22.1.1', 'setuptools>=70.0.0', 'wheel>=0.33.6']
+build = ['cython>=3.0.0', 'pip>=22.1.1', 'setuptools>=77.0.3', 'wheel>=0.33.6']
 dace-cartesian = [
   'dace>=1.0.2,<2'  # renfined in [tool.uv.sources]
 ]
@@ -73,7 +73,6 @@ classifiers = [
   'Environment :: Console',
   'Environment :: GPU :: NVIDIA CUDA',
   'Intended Audience :: Science/Research',
-  'License :: OSI Approved :: BSD License',
   'Operating System :: POSIX',
   'Programming Language :: Python',
   'Programming Language :: Python :: 3.10',
@@ -108,7 +107,7 @@ dependencies = [
   'numpy>=1.26.4',
   'packaging>=20.0',
   'pybind11>=2.10.1',
-  'setuptools>=70.0.0',
+  'setuptools>=77.0.3',
   'tabulate>=0.8.10',
   'toolz>=0.12.1',
   'typing-extensions>=4.12.0',
@@ -126,7 +125,8 @@ keywords = [
   'portable',
   'hpc'
 ]
-license = {text = 'BSD-3 License'}  # TODO: waiting for PEP 639 being implemented by setuptools (https://github.com/codecov/codecov-cli/issues/605)
+license = 'BSD-3-Clause'
+license-files = ['LICENSE']
 name = 'gt4py'
 readme = 'README.md'
 requires-python = '>=3.10, <3.14'
@@ -449,7 +449,7 @@ url = 'https://test.pypi.org/simple'
 atlas4py = {index = "test.pypi"}
 dace = [
   {git = "https://github.com/GridTools/dace", branch = "romanc/stree-to-sdfg", group = "dace-cartesian"},
-  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_25", group = "dace-next"}
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_29", group = "dace-next"}
 ]
 
 # -- versioningit --
