@@ -20,18 +20,16 @@ from collections.abc import Callable
 from typing import Optional
 
 from gt4py.next import config
-
-from .exceptions import DSLError
-from .formatting import format_compilation_error
+from gt4py.next.errors import exceptions, formatting
 
 
-def _format_uncaught_error(err: DSLError, verbose_exceptions: bool) -> list[str]:
+def _format_uncaught_error(err: exceptions.DSLError, verbose_exceptions: bool) -> list[str]:
     if verbose_exceptions:
-        return format_compilation_error(
+        return formatting.format_compilation_error(
             type(err), err.message, err.location, err.__traceback__, err.__cause__
         )
     else:
-        return format_compilation_error(type(err), err.message, err.location)
+        return formatting.format_compilation_error(type(err), err.message, err.location)
 
 
 def compilation_error_hook(
@@ -44,7 +42,7 @@ def compilation_error_hook(
     verbose exceptions are enabled, the stack trace and cause of the error is
     also printed.
     """
-    if isinstance(value, DSLError):
+    if isinstance(value, exceptions.DSLError):
         exc_strs = _format_uncaught_error(value, config.VERBOSE_EXCEPTIONS)
         print("".join(exc_strs), file=sys.stderr)
     else:
