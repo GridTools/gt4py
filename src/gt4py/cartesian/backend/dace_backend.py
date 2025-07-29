@@ -62,7 +62,7 @@ def _specialize_transient_strides(
             for array in sdfg.arrays.values()
             if isinstance(array, data.Array) and array.transient
         ],
-        layout_info["layout_map"],
+        layout_info,
     )
 
     # In case of nested SDFGs (see below), merge with replacement dict that was passed down.

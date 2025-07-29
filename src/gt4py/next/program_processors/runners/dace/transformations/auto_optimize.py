@@ -8,7 +8,7 @@
 
 """Fast access to the auto optimization on DaCe."""
 
-from typing import Any, Final, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import dace
 from dace import data as dace_data
@@ -18,63 +18,6 @@ from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-
-
-_GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST: Final[set[str]] = {
-    "ScalarToSymbolPromotion",
-    "ConstantPropagation",
-}
-"""Steps that are disabled in the initial phase of simplification.
-
-Note:
-    For some reasons.
-
-
-
-"""
-
-_GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
-    _GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST
-    | {
-        "InlineSDFGs",
-        "InlineControlFlowRegions",
-        "ControlFlowRaising",
-        "OptionalArrayInference",
-        "ConstantPropagation",
-        "PruneEmptyConditionalBranches",
-        "RemoveUnusedSymbols",
-        "ReferenceToView",
-        "ConsolidateEdges",
-    }
-)
-"""Steps that are deactivated in `gt_simplify()` during the dataflow optimization of the top level Mas."""
-
-
-_GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
-    _GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST
-    | {
-        "FuseStates",
-        "DeadDataflowElimination",
-        "DeadStateElimination",
-        "InlineSDFGs",
-        "InlineControlFlowRegions",
-        "ControlFlowRaising",
-        "OptionalArrayInference",
-        "ConstantPropagation",
-        "PruneEmptyConditionalBranches",
-        "RemoveUnusedSymbols",
-        "ReferenceToView",
-        "ContinueToCondition",
-        "ConsolidateEdges",
-        "GT4PyDeadDataflowElimination",
-        "CopyChainRemover",
-        "SingleStateGlobalDirectSelfCopyElimination",
-        "SingleStateGlobalSelfCopyElimination",
-        "MultiStateGlobalSelfCopyElimination",
-    }
-)
-"""Steps that are deactivated in `gt_simplify()` during the optimization of the dataflow inside Maps.
-"""
 
 
 def gt_auto_optimize(
@@ -195,8 +138,8 @@ def gt_auto_optimize(
         #   `gt_substitute_compiletime_symbols()` performs!
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
-            skip=_GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
             validate=False,
+            skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
             validate_all=validate_all,
         )
 
@@ -205,7 +148,7 @@ def gt_auto_optimize(
                 sdfg=sdfg,
                 repl=constant_symbols,
                 simplify=True,  # Simplify again after.
-                skip=_GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
+                skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
                 simplify_at_entry=False,
                 validate=False,
                 validate_all=validate_all,
@@ -412,7 +355,7 @@ def _gt_auto_process_top_level_maps(
         gtx_transformations.gt_vertical_map_split_fusion(
             sdfg=sdfg,
             run_simplify=False,
-            skip=_GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
+            skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
             consolidate_edges_only_if_not_extending=True,
             single_use_data=single_use_data,
             validate=False,
@@ -421,8 +364,8 @@ def _gt_auto_process_top_level_maps(
         gtx_transformations.gt_horizontal_map_split_fusion(
             sdfg=sdfg,
             run_simplify=False,
+            skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
             fuse_possible_maps=True,
-            skip=_GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
             consolidate_edges_only_if_not_extending=True,
             validate=False,
             validate_all=validate_all,
@@ -439,7 +382,7 @@ def _gt_auto_process_top_level_maps(
             sdfg,
             validate=False,
             validate_all=validate_all,
-            skip=_GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
+            skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
 
     return sdfg
@@ -473,7 +416,7 @@ def _gt_auto_process_dataflow_inside_maps(
     )
     gtx_transformations.gt_simplify(
         sdfg,
-        skip=_GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
+        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
         validate=False,
         validate_all=validate_all,
     )
@@ -506,7 +449,7 @@ def _gt_auto_process_dataflow_inside_maps(
     )
     gtx_transformations.gt_simplify(
         sdfg,
-        skip=_GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
+        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
         validate=False,
         validate_all=validate_all,
     )

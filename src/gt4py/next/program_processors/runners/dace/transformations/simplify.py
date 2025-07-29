@@ -11,7 +11,7 @@
 import collections
 import copy
 import uuid
-from typing import Any, Final, Iterable, Optional, TypeAlias
+from typing import Any, Iterable, Optional, TypeAlias
 
 import dace
 from dace import (
@@ -30,17 +30,6 @@ from dace.transformation import (
 )
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-
-
-GT_SIMPLIFY_DEFAULT_SKIP_SET: Final[set[str]] = {"ScalarToSymbolPromotion", "ConstantPropagation"}
-"""Set of simplify passes `gt_simplify()` skips by default.
-
-The following passes are included:
-- `ScalarToSymbolPromotion`: The lowering has sometimes to turn a scalar into a
-    symbol or vice versa and at a later point to invert this again. However, this
-    pass has some problems with this pattern so for the time being it is disabled.
-- `ConstantPropagation`: Same reasons as `ScalarToSymbolPromotion`.
-"""
 
 
 def gt_simplify(
@@ -91,7 +80,7 @@ def gt_simplify(
         that `gt_simplify()` results in a fix point.
     """
     # Ensure that `skip` is a `set`
-    skip = GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
+    skip = gtx_transformations.constants.GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
 
     result: Optional[dict[str, Any]] = None
 
@@ -275,7 +264,7 @@ def gt_inline_nested_sdfg(
 
         # NOTE: In [PR#2178](https://github.com/GridTools/gt4py/pull/2178) this function was
         #   modified to be more efficient. It also changed the order in which the inlining
-        #   transformations of DaCe where applied. Instead of trying `InlineMultistateSDFG`
+        #   transformations of DaCe were applied. Instead of trying `InlineMultistateSDFG`
         #   it changed that such that `InlineSDFG` was used. However, this triggered
         #   [issue#2108](https://github.com/spcl/dace/issues/2108) which lead to the removals
         #   of some writes. As a temporary solution we no longer use `InlineSDFG` but only
