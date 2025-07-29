@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import functools
-import warnings
 from typing import Any, Sequence
 
 import dace
@@ -76,18 +75,18 @@ def convert_args(
                 dace_common.set_dace_config(device_type=device)
                 prof_report = fun.sdfg_program.sdfg.get_latest_report()
             if prof_report is None:
-                warnings.warn(
-                    "Config 'COLLECT_METRICS_LEVEL' is set but SDFG profiling report not found.",
-                    stacklevel=2,
+                raise RuntimeError(
+                    "Config 'COLLECT_METRICS_LEVEL' is set but the SDFG profiling report was not found."
+                    " This might indicate that the backend is using a precompiled SDFG from persistent cache"
+                    " without instrumentation."
                 )
-            else:
-                assert len(prof_report.events) == 1
-                # The event name gets truncated in dace, so we only check that
-                # it corresponds to the beginning of SDFG label.
-                assert f"SDFG {fun.sdfg_program.sdfg.label}".startswith(prof_report.events[0].name)
-                duration_secs = (
-                    prof_report.events[0].duration / 1e6
-                )  # dace timer returns the duration in microseconds
-                metric_collection.add_sample(metrics.COMPUTE_METRIC, duration_secs)
+            assert len(prof_report.events) == 1
+            # The event name gets truncated in dace, so we only check that
+            # it corresponds to the beginning of SDFG label.
+            assert f"SDFG {fun.sdfg_program.sdfg.label}".startswith(prof_report.events[0].name)
+            duration_secs = (
+                prof_report.events[0].duration / 1e6
+            )  # dace timer returns the duration in microseconds
+            metric_collection.add_sample(metrics.COMPUTE_METRIC, duration_secs)
 
     return decorated_program
