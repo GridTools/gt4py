@@ -860,8 +860,13 @@ def test_read_after_write_stencil(backend):
 @pytest.mark.parametrize(
     "backend",
     [
-        pytest.param(backend, marks=pytest.mark.xfail)
-        for backend in ["gt:cpu_ifirst", "numpy", "debug", "cuda"]
+        pytest.param(
+            backend,
+            marks=pytest.mark.xfail(
+                raises=NotImplementedError, reason="Absolute K indexing not yet supported."
+            ),
+        )
+        for backend in ["gt:cpu_ifirst", "numpy", "debug"]
     ],
 )
 def test_absolute_K_index_raise(backend):
