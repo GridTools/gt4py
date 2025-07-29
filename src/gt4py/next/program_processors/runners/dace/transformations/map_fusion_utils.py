@@ -78,10 +78,9 @@ def copy_map_graph(
         elif isinstance(node, dace_nodes.NestedSDFG):
             node_ = graph.add_nested_sdfg(
                 sdfg=copy.deepcopy(node.sdfg),
-                parent=sdfg,
-                inputs=node.in_connectors,
-                outputs=node.out_connectors,
-                symbol_mapping=node.symbol_mapping,
+                inputs=set(node.in_connectors.keys()),
+                outputs=set(node.out_connectors.keys()),
+                symbol_mapping=node.symbol_mapping.copy(),
                 debuginfo=copy.copy(node.debuginfo),
             )
             # ensure the correct reference to parent
