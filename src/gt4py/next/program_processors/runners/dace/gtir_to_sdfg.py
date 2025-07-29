@@ -499,6 +499,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype.element_type)
                 dims = [*gt_type.dims, gt_type.dtype.offset_type]
             else:
+                # By design, the domain of temporary fields used by SDFG lowering
+                # contains only the global dimensions. The local dimension is extracted,
+                # when needed, from the GTIR data type (`ts.ListType`).
                 raise ValueError("Unexpected local dimension in temporary field domain.")
             # Use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.

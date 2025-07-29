@@ -237,7 +237,7 @@ class DataflowOutputEdge:
     ) -> None:
         write_edge = self.state.in_edges(self.result.dc_node)[0]
         write_size = (
-            dace.symbolic.SymExpr(1)
+            dace.symbolic.SymExpr(1)  # subset `None` not expected, but it can appear for scalars
             if write_edge.data.dst_subset is None
             else write_edge.data.dst_subset.num_elements()
         )
@@ -1096,7 +1096,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             src_subset = dace_subsets.Range(src_subset[:-1]) + dace_subsets.Range.from_string(
                 index_arg.value
             )
-            if isinstance(src_arg, ValueExpr):
+            if isinstance(src_arg, MemletExpr):
+                self._add_input_data_edge(src_arg.dc_node, src_subset, dst_node)
+            else:
                 self._add_edge(
                     src_arg.dc_node,
                     None,
@@ -1104,8 +1106,6 @@ class LambdaToDataflow(eve.NodeVisitor):
                     None,
                     dace.Memlet(data=src_arg.dc_node.data, subset=src_subset, other_subset="0"),
                 )
-            else:
-                self._add_input_data_edge(src_arg.dc_node, src_subset, dst_node)
         elif isinstance(index_arg, ValueExpr):
             tasklet_node = self._add_tasklet(
                 "list_get",
