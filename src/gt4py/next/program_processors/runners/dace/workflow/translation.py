@@ -89,7 +89,6 @@ def make_sdfg_async(sdfg: dace.SDFG) -> None:
         return
 
     # Loop over all states in the top-level SDFG
-    is_nosync_used = False
     for state in sdfg.states():
         if state.parent_graph is not sdfg:
             # We ignore states that are used inside 'ControlFlowRegion' nodes
@@ -114,14 +113,27 @@ def make_sdfg_async(sdfg: dace.SDFG) -> None:
         else:
             # No data descriptor is accessed on the InterState edge, we make the state async.
             state.nosync = True
-            is_nosync_used = True
 
-    if is_nosync_used:
-        # Emit cuda code for the SDFG to use only the default cuda stream.
-        # This allows to serialize all kernels on one GPU queue.
-        sdfg.append_init_code(
-            "__dace_gpu_set_all_streams(__state, cudaStreamDefault);", location="cuda"
-        )
+    # Emit init code for the SDFG to use only the default cuda stream.
+    # This allows to serialize all kernels and memory operations on the same GPU queue.
+    # Note that the SDFG is configured to use the default cuda stream in two different
+    # places, for two different reasons:
+    #  - In current module ('translation.py'), the function `__dace_gpu_set_all_streams()``
+    #    is added to the init code, to set all cuda streams to default stream.
+    #    The reason here is to implement fully async kernel execution and memory
+    #    operations, with respect to the python driver code. This currently relies
+    #    on serializing all them on the default cuda stream. No matter how many
+    #    streams the SDFG uses, all are set to the default one.
+    #  - In 'common.py' dace is configured to only use the default cuda stream in
+    #    code generation, by setting `max_concurrent_streams=-1`. This applies always,
+    #    not only when we want to generate SDFG with asynchronous call. The reason
+    #    here is to work around the issue in code generation, that uses more streams
+    #    than what is set up. See the comments in 'common.py' for more details.
+    # Note that by using the default cuda stream the dace codegen will use different
+    # codepaths, because it will not need to emit synchronization among streams.
+    sdfg.append_init_code(
+        "__dace_gpu_set_all_streams(__state, cudaStreamDefault);", location="cuda"
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -140,6 +152,7 @@ class DaCeTranslator(
     # auto-optimize arguments
     gpu_block_size: tuple[int, int, int] = (32, 8, 1)
     make_persistent: bool = False
+    use_memory_pool: bool = False
     blocking_dim: Optional[common.Dimension] = None
     blocking_size: int = 10
 
@@ -153,6 +166,9 @@ class DaCeTranslator(
             ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type == core_defs.CUPY_DEVICE_TYPE
+
+        if self.use_memory_pool and not on_gpu:
+            raise NotImplementedError("Memory pool only available for GPU device.")
 
         # do not store transformation history in SDFG
         with dace.config.set_temporary("store_history", value=False):
@@ -178,6 +194,7 @@ class DaCeTranslator(
                     constant_symbols=constant_symbols,
                     assume_pointwise=True,
                     make_persistent=self.make_persistent,
+                    gpu_memory_pool=self.use_memory_pool,
                     blocking_dim=self.blocking_dim,
                     blocking_size=self.blocking_size,
                 )

@@ -233,7 +233,7 @@ class DataflowOutputEdge:
         self,
         map_exit: Optional[dace.nodes.MapExit],
         dest: dace.nodes.AccessNode,
-        subset: dace_subsets.Range,
+        dest_subset: dace_subsets.Range,
     ) -> None:
         write_edge = self.state.in_edges(self.result.dc_node)[0]
         write_size = write_edge.data.dst_subset.num_elements()
@@ -263,28 +263,30 @@ class DataflowOutputEdge:
             remove_last_node = False
 
         if remove_last_node:
-            last_node = write_edge.src
-            last_node_connector = write_edge.src_conn
+            src_node = write_edge.src
+            src_node_connector = write_edge.src_conn
+            src_subset = write_edge.data.src_subset
             self.state.remove_node(self.result.dc_node)
         else:
-            last_node = self.result.dc_node
-            last_node_connector = None
+            src_node = write_edge.dst
+            src_node_connector = None
+            src_subset = write_edge.data.dst_subset
 
         if map_exit is None:
             self.state.add_edge(
-                last_node,
-                last_node_connector,
+                src_node,
+                src_node_connector,
                 dest,
                 None,
-                dace.Memlet(data=dest.data, subset=subset),
+                dace.Memlet(data=dest.data, subset=dest_subset, other_subset=src_subset),
             )
         else:
             self.state.add_memlet_path(
-                last_node,
+                src_node,
                 map_exit,
                 dest,
-                src_conn=last_node_connector,
-                memlet=dace.Memlet(data=dest.data, subset=subset),
+                src_conn=src_node_connector,
+                memlet=dace.Memlet(data=dest.data, subset=dest_subset, other_subset=src_subset),
             )
 
 
@@ -933,7 +935,6 @@ class LambdaToDataflow(eve.NodeVisitor):
             nsdfg_symbols_mapping["__cond"] = condition_value.value
         nsdfg_node = self.state.add_nested_sdfg(
             nsdfg,
-            self.sdfg,
             inputs=set(input_memlets.keys()),
             outputs=outputs,
             symbol_mapping=nsdfg_symbols_mapping,
@@ -1361,7 +1362,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
         nsdfg_node = self.state.add_nested_sdfg(
-            nsdfg, self.sdfg, inputs={"values", "neighbor_indices"}, outputs={"acc"}
+            nsdfg, inputs={"values", "neighbor_indices"}, outputs={"acc"}
         )
 
         if isinstance(input_expr, MemletExpr):
