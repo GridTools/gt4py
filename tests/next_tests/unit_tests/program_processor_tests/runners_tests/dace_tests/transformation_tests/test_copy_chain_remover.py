@@ -308,7 +308,6 @@ def _make_linear_chain_with_nested_sdfg_sdfg() -> tuple[dace.SDFG, dace.SDFG]:
 
     nsdfg = state.add_nested_sdfg(
         inner_sdfg,
-        parent=sdfg,
         inputs={"i0"},
         outputs={"o0"},
         symbol_mapping={},

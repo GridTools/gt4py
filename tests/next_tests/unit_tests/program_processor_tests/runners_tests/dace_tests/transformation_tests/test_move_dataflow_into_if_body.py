@@ -72,7 +72,6 @@ def _make_if_block(
 
     return state.add_nested_sdfg(
         sdfg=inner_sdfg,
-        parent=outer_sdfg,
         inputs={b1_name, b2_name, cond_name},
         outputs={output_name},
     )
