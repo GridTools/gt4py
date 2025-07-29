@@ -60,6 +60,8 @@ def set_dace_config(
     # setting up 1 cuda stream results in cuda code that uses 2 streams.
     # As a workaround, we set 'max_concurrent_streams=-1' to configure dace to only
     # use the default cuda stream.
+    # Note that by using the default cuda stream the dace codegen will use different
+    # codepaths, because it will not need to emit synchronization among streams.
     dace.Config.set("compiler.cuda.max_concurrent_streams", value=-1)
 
     if device_type == core_defs.DeviceType.ROCM:
