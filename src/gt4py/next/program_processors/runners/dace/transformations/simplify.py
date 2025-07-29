@@ -11,7 +11,7 @@
 import collections
 import copy
 import uuid
-from typing import Any, Final, Iterable, Optional, TypeAlias
+from typing import Any, Iterable, Optional, TypeAlias
 
 import dace
 from dace import (
@@ -30,17 +30,6 @@ from dace.transformation import (
 )
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-
-
-GT_SIMPLIFY_DEFAULT_SKIP_SET: Final[set[str]] = {"ScalarToSymbolPromotion", "ConstantPropagation"}
-"""Set of simplify passes `gt_simplify()` skips by default.
-
-The following passes are included:
-- `ScalarToSymbolPromotion`: The lowering has sometimes to turn a scalar into a
-    symbol or vice versa and at a later point to invert this again. However, this
-    pass has some problems with this pattern so for the time being it is disabled.
-- `ConstantPropagation`: Same reasons as `ScalarToSymbolPromotion`.
-"""
 
 
 def gt_simplify(
@@ -91,7 +80,7 @@ def gt_simplify(
         that `gt_simplify()` results in a fix point.
     """
     # Ensure that `skip` is a `set`
-    skip = GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
+    skip = gtx_transformations.constants.GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
 
     result: Optional[dict[str, Any]] = None
 
@@ -311,6 +300,7 @@ def gt_substitute_compiletime_symbols(
     sdfg: dace.SDFG,
     repl: dict[str, Any],
     simplify: bool = False,
+    skip: Optional[set[str]] = None,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -325,6 +315,8 @@ def gt_substitute_compiletime_symbols(
         sdfg: The SDFG to process.
         repl: Maps the name of the symbol to the value it should be replaced with.
         simplify: If `False` do not call `gt_simplify()` after the substitution.
+        skip: List of simplify stages that should not run. Is passed to the `skip` argument
+            of `gt_simplify()`.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
 
@@ -351,6 +343,7 @@ def gt_substitute_compiletime_symbols(
         #   be necessary to be applied there as well.
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
+            skip=skip,
             validate=False,
             validate_all=validate_all,
         )
@@ -373,6 +366,7 @@ def gt_substitute_compiletime_symbols(
     if simplify:
         gt_simplify(
             sdfg=sdfg,
+            skip=skip,
             validate=False,
             validate_all=validate_all,
         )
