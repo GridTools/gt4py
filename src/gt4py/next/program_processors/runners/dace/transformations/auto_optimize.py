@@ -24,14 +24,7 @@ _GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST: Final[set[str]] = {
     "ScalarToSymbolPromotion",
     "ConstantPropagation",
 }
-"""Steps that are disabled in the initial phase of simplification.
-
-Note:
-    For some reasons.
-
-
-
-"""
+"""Simplify stages disabled during the initial simplification."""
 
 _GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
     _GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST
@@ -47,7 +40,7 @@ _GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
         "ConsolidateEdges",
     }
 )
-"""Steps that are deactivated in `gt_simplify()` during the dataflow optimization of the top level Mas."""
+"""Simplify stages disabled during the optimization of dataflow of the top level Maps"."""
 
 
 _GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
@@ -73,8 +66,7 @@ _GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
         "MultiStateGlobalSelfCopyElimination",
     }
 )
-"""Steps that are deactivated in `gt_simplify()` during the optimization of the dataflow inside Maps.
-"""
+"""Simplify stages disabled during the optimization of dataflow inside the Maps."""
 
 
 def gt_auto_optimize(
