@@ -4,9 +4,9 @@ Notable changes to this project will be documented in this file. The format is b
 
 ## [1.0.6] - 2025-07-30
 
-### DaCe support in Cartesian
+### Cartesian
 
-- Introduced a DaCe Debug backend, a plain python backend for debugging and rapid prototyping of features.
+- Introduced a debug backend, a plain python backend for debugging and rapid prototyping of features.
 - Refactoring of the lowering to SDFG using DaCe ScheduleTree: the current bridge OIR -> TreeIR -> SDFG is replaced with OIR -> TreeIR -> ScheduleTree, then it relies on DaCe to expand ScheduleTree to SDFG.
 
 ### Development
