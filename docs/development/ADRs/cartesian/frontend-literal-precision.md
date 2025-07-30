@@ -20,8 +20,8 @@ We chose to address this problem with the following (frontend) features:
 1. A configurable global default for literal precision. Defaults to the system's architecture (e.g. 64-bit calculations 64-bit systems) with the environment variable `GT4PY_LITERAL_PRECISION` as override.
 2. Per stencil, the precision can be tuned via `literal_precision` as part of the `BuildOptions`.
 3. Within stencil code, literals like `42` and `42.0` will adhere the (global) precision default.
-4. Type annotations `int` and `float` adhere to the (global) precision default. Annotations `i32`, `i64`, `f32`, and `f64` are added to specialize if needed.
-5. Similarly, `int()` and `float()` casts adhere to the (global) precision default. Casts `i32()`, `i64()`, `f32()`, and `f64()` are added to specialize if needed.
+4. Type annotations `int` and `float` adhere to the (global) precision default. Annotations `int32`, `int64`, `float32`, and `float64` are added to specialize if needed.
+5. Similarly, `int()` and `float()` casts adhere to the (global) precision default. Casts `int32()`, `int64()`, `float32()`, and `float64()` are added to specialize if needed.
 
 ## Consequences
 

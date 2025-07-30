@@ -124,7 +124,11 @@ class BuildOptions(AttributeClassLike):
     @property
     def shashed_id(self):
         return gt_utils.shashed_id(
-            self.name, self.module, self.format_source, *tuple(sorted(self.backend_opts.items()))
+            self.name,
+            self.module,
+            self.format_source,
+            self.literal_precision,
+            *tuple(sorted(self.backend_opts.items())),
         )
 
 

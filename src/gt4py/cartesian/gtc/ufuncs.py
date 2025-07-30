@@ -10,6 +10,8 @@ from typing import Type
 
 import numpy as np
 
+from gt4py._core.definitions import float32, float64, int8, int16, int32, int64  # noqa: F401
+
 
 try:
     from scipy.special import gamma as gamma_
@@ -69,7 +71,3 @@ isnan: np.ufunc = np.isnan
 floor: np.ufunc = np.floor
 ceil: np.ufunc = np.ceil
 trunc: np.ufunc = np.trunc
-i32: Type[np.signedinteger] = np.int32
-i64: Type[np.signedinteger] = np.int64
-f32: Type[np.floating] = np.float32
-f64: Type[np.floating] = np.float64

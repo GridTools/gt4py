@@ -773,10 +773,10 @@ class IRMaker(ast.NodeVisitor):
             "floor": nodes.NativeFunction.FLOOR,
             "ceil": nodes.NativeFunction.CEIL,
             "trunc": nodes.NativeFunction.TRUNC,
-            "i32": nodes.NativeFunction.I32,
-            "i64": nodes.NativeFunction.I64,
-            "f32": nodes.NativeFunction.F32,
-            "f64": nodes.NativeFunction.F64,
+            "int32": nodes.NativeFunction.I32,
+            "int64": nodes.NativeFunction.I64,
+            "float32": nodes.NativeFunction.F32,
+            "float64": nodes.NativeFunction.F64,
             "int": (
                 nodes.NativeFunction.I32
                 if self.literal_precision == 32
@@ -790,10 +790,10 @@ class IRMaker(ast.NodeVisitor):
         }  # Conversion table for functions to NativeFunctions
 
         self.temporary_type_to_native_type = {
-            "i32": nodes.DataType.INT32,
-            "i64": nodes.DataType.INT64,
-            "f32": nodes.DataType.FLOAT32,
-            "f64": nodes.DataType.FLOAT64,
+            "int32": nodes.DataType.INT32,
+            "int64": nodes.DataType.INT64,
+            "float32": nodes.DataType.FLOAT32,
+            "float64": nodes.DataType.FLOAT64,
             "int": nodes.DataType.INT32 if self.literal_precision == 32 else nodes.DataType.INT64,
             "float": nodes.DataType.FLOAT32
             if self.literal_precision == 32

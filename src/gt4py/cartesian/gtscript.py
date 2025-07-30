@@ -62,10 +62,10 @@ MATH_BUILTINS = {
 }
 
 TYPE_HINT_AND_CAST_BUILTINS = {
-    "i32",
-    "i64",
-    "f32",
-    "f64",
+    "int32",
+    "int64",
+    "float32",
+    "float64",
     "int",
     "float",
 }
@@ -793,11 +793,11 @@ def compile_assert(expr):
 
 
 # GTScript builtins: type cast & hints
-i32 = np.int32
-i64 = np.int64
-f64 = np.float64
-f32 = np.float32
-_gt_all_op_types = Union[i32, i64, f32, f64]
+int32 = np.int32
+int64 = np.int64
+float32 = np.float32
+float64 = np.float64
+_gt_all_op_types = Union[int32, int64, float32, float64]
 
 
 # GTScript builtins: math functions

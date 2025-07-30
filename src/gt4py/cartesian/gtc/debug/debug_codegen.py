@@ -45,6 +45,7 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
 
     def generate_imports(self) -> None:
         self.body.append("import numpy as np")
+        self.body.empty_line()
         self.body.append("from gt4py.cartesian.gtc import ufuncs")
         self.body.append("from gt4py.cartesian.utils import Field")
 
@@ -303,7 +304,8 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
     def visit_NativeFuncCall(self, native_function_call: oir.NativeFuncCall, **kwargs) -> str:
         arglist = [self.visit(arg, **kwargs) for arg in native_function_call.args]
         arguments = ",".join(arglist)
-        return f"ufuncs.{native_function_call.func.value}({arguments})"
+        function = gtc_common.OP_TO_UFUNC_NAME[gtc_common.NativeFunction][native_function_call.func]
+        return f"ufuncs.{function}({arguments})"
 
     def visit_UnaryOp(self, unary_operator: oir.UnaryOp, **kwargs) -> str:
         return f"{unary_operator.op.value} {self.visit(unary_operator.expr, **kwargs)}"
