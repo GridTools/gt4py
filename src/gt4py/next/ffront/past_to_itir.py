@@ -9,11 +9,13 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 from typing import Any, Optional, cast
 
 import devtools
 
 from gt4py.eve import NodeTranslator, concepts, traits
+from gt4py.eve import utils as eve_utils
 from gt4py.next import common, config, errors
 from gt4py.next.ffront import (
     fbuiltins,
@@ -362,13 +364,17 @@ class ProgramLowering(
                 " fields defined on the same dimensions. This error should be "
                 " caught in type deduction already."
             )
+        # if the out_field is a (potentially nested) tuple we get the domain from its first
+        # element
+        first_out_el_path = eve_utils.first(type_info.primitive_constituents(out_field.type, with_path_arg=True))[1]
+        first_out_el = functools.reduce(lambda expr, i: im.tuple_get(i, expr), first_out_el_path, out_field.id)
 
         domain_args = []
         domain_args_kind = []
         for dim_i, dim in enumerate(out_dims):
             # an expression for the range of a dimension
             dim_range = im.call("get_domain")(
-                out_field.id, itir.AxisLiteral(value=dim.value, kind=dim.kind)
+                first_out_el, itir.AxisLiteral(value=dim.value, kind=dim.kind)
             )
             dim_start, dim_stop = im.tuple_get(0, dim_range), im.tuple_get(1, dim_range)
             # bounds
