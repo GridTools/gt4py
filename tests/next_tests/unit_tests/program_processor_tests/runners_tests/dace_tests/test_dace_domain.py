@@ -17,7 +17,7 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_domain,
     utils as gtx_dace_utils,
 )
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
 from gt4py.next.program_processors.runners.dace import gtir_domain as gtx_dace_domain
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
