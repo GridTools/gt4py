@@ -90,7 +90,7 @@ def gt_gpu_transformation(
     )
 
     # The documentation recommends to run simplify afterwards
-    gtx_transformations.gt_simplify(sdfg)
+    gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     if try_removing_trivial_maps:
         # TODO(phimuell): Figuring out if it is still important/needed to do or if
@@ -117,6 +117,8 @@ def gt_gpu_transformation(
             block_size=gpu_block_size,
             launch_bounds=gpu_launch_bounds,
             launch_factor=gpu_launch_factor,
+            validate=False,
+            validate_all=validate_all,
         )
 
     if validate_all or validate:
@@ -353,6 +355,8 @@ def gt_set_gpu_blocksize(
     block_size: Optional[Sequence[int | str] | str],
     launch_bounds: Optional[int | str] = None,
     launch_factor: Optional[int] = None,
+    validate: bool = True,
+    validate_all: bool = False,
     **kwargs: Any,
 ) -> Any:
     """Set the block size related properties of _all_ Maps.
@@ -367,6 +371,8 @@ def gt_set_gpu_blocksize(
         launch_bounds: The value for the launch bound that should be used.
         launch_factor: If no `launch_bounds` was given use the number of threads
             in a block multiplied by this number.
+        validate: Perform validation at the end of the function.
+        validate_all: Perform validation also on intermediate steps.
 
     Note:
         If a Map is found whose range is smaller than the specified block size for
@@ -380,7 +386,9 @@ def gt_set_gpu_blocksize(
         }.items():
             if f"{arg}_{dim}d" not in kwargs:
                 kwargs[f"{arg}_{dim}d"] = val
-    return sdfg.apply_transformations_once_everywhere(GPUSetBlockSize(**kwargs))
+    return sdfg.apply_transformations_once_everywhere(
+        GPUSetBlockSize(**kwargs), validate=validate, validate_all=validate_all
+    )
 
 
 def _make_gpu_block_parser_for(
