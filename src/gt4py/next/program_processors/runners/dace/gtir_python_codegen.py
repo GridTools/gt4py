@@ -15,7 +15,6 @@ import sympy
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.next import common as gtx_common
 from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
@@ -81,7 +80,10 @@ def builtin_cast(val: str, target_type: str) -> str:
     return MATH_BUILTINS_MAPPING[target_type].format(val)
 
 
-def builtin_get_domain(field: str, axis: int) -> str:
+def builtin_get_domain(field: str, axis: str) -> str:
+    # The 'get_domain' returns a tuple of two values, the range start and stop.
+    # Here we return part of the symbol name: the full name also contains an additional
+    # suffix '_0' for range start or '_1' for stop, which correspond to the tuple fields.
     return f"__{field}_{axis}_range"
 
 
@@ -131,6 +133,9 @@ class PythonCodegen(codegen.TemplatedGenerator):
 
     Literal = as_fmt("{value}")
 
+    def visit_AxisLiteral(self, node: gtir.AxisLiteral, **kwargs) -> str:
+        return node.value
+
     def visit_FunCall(self, node: gtir.FunCall, args_map: dict[str, gtir.Node]) -> str:
         if isinstance(node.fun, gtir.Lambda):
             # update the mapping from lambda parameters to corresponding argument expressions
@@ -144,21 +149,13 @@ class PythonCodegen(codegen.TemplatedGenerator):
                 # shift expressions are not expected in this visitor context
                 raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
             return self.visit(node.args[0], args_map=args_map)
-        elif cpm.is_call_to(node, "get_domain"):
-            field = self.visit(node.args[0], args_map=args_map)
-            axis = node.args[1]
-            assert isinstance(axis, gtir.AxisLiteral)
-            dim = gtx_common.Dimension(axis.value, axis.kind)
-            return f"__{field}_{dim.value}_range"
         elif isinstance(node.fun, gtir.SymRef):
             args = self.visit(node.args, args_map=args_map)
             builtin_name = str(node.fun.id)
             return format_builtin(builtin_name, *args)
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
 
-    def visit_InfinityLiteral(
-        self, node: gtir.InfinityLiteral, args_map: dict[str, gtir.Node]
-    ) -> str:
+    def visit_InfinityLiteral(self, node: gtir.InfinityLiteral, **kwargs) -> str:
         return str(sympy.oo) if node == gtir.InfinityLiteral.POSITIVE else str(-sympy.oo)
 
     def visit_SymRef(self, node: gtir.SymRef, args_map: dict[str, gtir.Node]) -> str:
