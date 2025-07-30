@@ -110,8 +110,8 @@ class OIRToTasklet(eve.NodeVisitor):
         for index in node.data_index:
             data_indices.append(self.visit(index, ctx=ctx, is_target=False))
 
-            if data_indices:
-                name_parts.append(f"[{', '.join(data_indices)}]")
+        if data_indices:
+            name_parts.append(f"[{', '.join(data_indices)}]")
 
         # In case this is the second access (inside the same tasklet), we can just return the
         # name and don't have to build a Memlet anymore.
