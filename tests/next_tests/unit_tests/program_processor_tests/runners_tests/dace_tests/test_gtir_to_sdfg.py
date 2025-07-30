@@ -130,9 +130,6 @@ def build_dace_sdfg(
     return dace_backend.build_sdfg_from_gtir(ir, offset_provider_type)
 
 
-#### TODO: check if the changes below really make sense! ####
-
-
 def test_gtir_broadcast():
     val = np.random.rand()
     domain = im.domain(
@@ -811,7 +808,15 @@ def test_gtir_cond(s1, s2):
 
 @pytest.mark.xfail(reason="requires function to retrieve the annex tuple domain")
 def test_gtir_cond_with_tuple_return():
-    domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
+    domain = im.domain(
+        gtx_common.GridType.CARTESIAN,
+        ranges={
+            IDim: (
+                im.tuple_get(0, im.call("get_domain")(im.tuple_get(0, "z"), im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain")(im.tuple_get(0, "z"), im.axis_literal(IDim))),
+            )
+        },
+    )
     testee = gtir.Program(
         id="cond_with_tuple_return",
         function_definitions=[],
@@ -846,9 +851,11 @@ def test_gtir_cond_with_tuple_return():
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     tuple_symbols = {
-        "__z_0_0_range_1": N,
+        "__z_0_IDim_range_0": 0,
+        "__z_0_IDim_range_1": N,
         "__z_0_stride_0": 1,
-        "__z_1_0_range_1": N,
+        "__z_1_IDim_range_1": 0,
+        "__z_1_IDim_range_1": N,
         "__z_1_stride_0": 1,
     }
 
