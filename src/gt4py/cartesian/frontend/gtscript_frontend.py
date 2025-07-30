@@ -1034,9 +1034,11 @@ class IRMaker(ast.NodeVisitor):
                     value_type = np.dtype(f"i{int(self.literal_precision / 8)}")
                 elif isinstance(value, float):
                     value_type = np.dtype(f"f{int(self.literal_precision / 8)}")
+                elif hasattr(value, "dtype") and isinstance(value.dtype, np.dtype):
+                    value_type = value.dtype
                 else:
                     raise GTScriptSyntaxError(
-                        f"Unexpected constant value `{value}`. Expected integer or float."
+                        f"Unexpected constant type `{type(value)}`. Expected integer or float."
                     )
             data_type = nodes.DataType.from_dtype(value_type)
             return nodes.ScalarLiteral(value=value, data_type=data_type)
