@@ -59,6 +59,9 @@ jobs:
 
       - name: Configure OpenMP for macos clang
         if: ${{ matrix.os == 'macos-15' }}
+        # Note that the compiler flag 'CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw'
+        # is only needed in cartesian dace backend. For next, a proper fix has been merged
+        # to dace main branch, see https://github.com/spcl/dace/pull/2084"
         run: |
           gcc --version
           echo "CC=gcc" >> $GITHUB_ENV
