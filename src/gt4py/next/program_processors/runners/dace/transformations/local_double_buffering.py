@@ -138,7 +138,9 @@ def _add_local_double_buffering_to_single_data(
         storage=dace_dtypes.StorageType.Register,
         find_new_name=True,
     )
-    new_double_inner_buff_node = state.add_access(new_double_inner_buff_name)
+    new_double_inner_buff_node = state.add_access(
+        new_double_inner_buff_name, copy.copy(input_node.debuginfo)
+    )
 
     # Now reroute the data flow through the new access node.
     reconfigured_dataflow: set[tuple[dace_nodes.Node, str]] = set()

@@ -18,6 +18,7 @@ from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, 
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
+from dace.transformation.passes import SimplifyPass
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config, definitions
@@ -62,7 +63,7 @@ def _specialize_transient_strides(
             for array in sdfg.arrays.values()
             if isinstance(array, data.Array) and array.transient
         ],
-        layout_info["layout_map"],
+        layout_info,
     )
 
     # In case of nested SDFGs (see below), merge with replacement dict that was passed down.
@@ -352,10 +353,14 @@ class SDFGManager:
         SDFGManager._strip_history(sdfg)
         sdfg.save(path)
 
-    def sdfg_via_schedule_tree(self) -> SDFG:
+    def sdfg_via_schedule_tree(self, *, validate: bool = True, simplify: bool = True) -> SDFG:
         """Lower OIR into an SDFG via Schedule Tree transpile first.
 
         Cache the SDFG into the manager for re-use, unless the builder has a no-caching policy.
+
+        Args:
+            validate: Validate resulting SDFG
+            simplify: Simplify resulting SDFG
         """
         filename = f"{self.builder.module_name}.sdfg"
         path = (
@@ -370,8 +375,8 @@ class SDFGManager:
         # Create SDFG
         stree = self.schedule_tree()
         sdfg = stree.as_sdfg(
-            validate=True,
-            simplify=True,
+            validate=validate,
+            simplify=simplify,
             skip={"ScalarToSymbolPromotion"},
         )
 
@@ -430,6 +435,7 @@ class DaCeExtGenerator(BackendCodegen):
             sdfg,
             self.backend.storage_info,
         )
+        SimplifyPass(validate=True, skip={"ScalarToSymbolPromotion"}).apply_pass(sdfg, {})
 
         # NOTE
         # The glue code in DaCeComputationCodegen.apply() (just below) will define all the

@@ -283,7 +283,8 @@ def split_node(
         split_description=split_description,
     )
     new_access_nodes: dict[dace_sbs.Subset, dace_nodes.AccessNode] = {
-        split: state.add_access(dname) for split, dname in new_data_descriptors.items()
+        split: state.add_access(dname, copy.copy(node_to_split.debuginfo))
+        for split, dname in new_data_descriptors.items()
     }
 
     # This will also remove the `node_to_split` node but not the data descriptor

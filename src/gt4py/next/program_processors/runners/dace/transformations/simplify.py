@@ -11,7 +11,7 @@
 import collections
 import copy
 import uuid
-from typing import Any, Final, Iterable, Optional, TypeAlias
+from typing import Any, Iterable, Optional, TypeAlias
 
 import dace
 from dace import (
@@ -30,17 +30,6 @@ from dace.transformation import (
 )
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-
-
-GT_SIMPLIFY_DEFAULT_SKIP_SET: Final[set[str]] = {"ScalarToSymbolPromotion", "ConstantPropagation"}
-"""Set of simplify passes `gt_simplify()` skips by default.
-
-The following passes are included:
-- `ScalarToSymbolPromotion`: The lowering has sometimes to turn a scalar into a
-    symbol or vice versa and at a later point to invert this again. However, this
-    pass has some problems with this pattern so for the time being it is disabled.
-- `ConstantPropagation`: Same reasons as `ScalarToSymbolPromotion`.
-"""
 
 
 def gt_simplify(
@@ -91,7 +80,7 @@ def gt_simplify(
         that `gt_simplify()` results in a fix point.
     """
     # Ensure that `skip` is a `set`
-    skip = GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
+    skip = gtx_transformations.constants.GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
 
     result: Optional[dict[str, Any]] = None
 
@@ -273,26 +262,14 @@ def gt_inline_nested_sdfg(
                 cleaner.apply(parent_state, parent_sdfg)
                 nb_preproccess_total += 1
 
-        # Try to inline the SDFG using the single state version of the transformation.
-        #  We try first this one, because it is simpler and does not increases the numbers
-        #  of state.
-        # NOTE: In DaCe `inline_sdfg()` function the multistate version is called first.
-        single_state_candidate = {dace_interstate.InlineSDFG.nested_sdfg: nsdfg_node}
-        single_state_inliner = dace_interstate.InlineSDFG()
-        single_state_inliner.setup_match(
-            sdfg=parent_sdfg,
-            cfg_id=parent_state.parent_graph.cfg_id,
-            state_id=parent_state_id,
-            subgraph=single_state_candidate,
-            expr_index=0,
-            override=True,
-        )
-        if single_state_inliner.can_be_applied(parent_state, 0, parent_sdfg, permissive=permissive):
-            single_state_inliner.apply(parent_state, parent_sdfg)
-            nb_inlines_total += 1
-            continue
-
-        # If the single state inliner failed try the multi state version.
+        # NOTE: In [PR#2178](https://github.com/GridTools/gt4py/pull/2178) this function was
+        #   modified to be more efficient. It also changed the order in which the inlining
+        #   transformations of DaCe were applied. Instead of trying `InlineMultistateSDFG`
+        #   it changed that such that `InlineSDFG` was used. However, this triggered
+        #   [issue#2108](https://github.com/spcl/dace/issues/2108) which lead to the removals
+        #   of some writes. As a temporary solution we no longer use `InlineSDFG` but only
+        #   the multistate version.
+        # TODO(phimuell): As soon as the DaCe issue is resolved start using `InlineSDFG` again.
         multi_state_candidate = {dace_interstate.InlineMultistateSDFG.nested_sdfg: nsdfg_node}
         multi_state_inliner = dace_interstate.InlineMultistateSDFG()
         multi_state_inliner.setup_match(
@@ -323,6 +300,7 @@ def gt_substitute_compiletime_symbols(
     sdfg: dace.SDFG,
     repl: dict[str, Any],
     simplify: bool = False,
+    skip: Optional[set[str]] = None,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -337,6 +315,8 @@ def gt_substitute_compiletime_symbols(
         sdfg: The SDFG to process.
         repl: Maps the name of the symbol to the value it should be replaced with.
         simplify: If `False` do not call `gt_simplify()` after the substitution.
+        skip: List of simplify stages that should not run. Is passed to the `skip` argument
+            of `gt_simplify()`.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
 
@@ -363,6 +343,7 @@ def gt_substitute_compiletime_symbols(
         #   be necessary to be applied there as well.
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
+            skip=skip,
             validate=False,
             validate_all=validate_all,
         )
@@ -385,6 +366,7 @@ def gt_substitute_compiletime_symbols(
     if simplify:
         gt_simplify(
             sdfg=sdfg,
+            skip=skip,
             validate=False,
             validate_all=validate_all,
         )
@@ -525,7 +507,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 def_state.add_edge(
                     def_an,
                     wb_edge.src_conn,
-                    def_state.add_access(final_dest_name),
+                    def_state.add_access(final_dest_name, copy.copy(wb_edge.dst.debuginfo)),
                     wb_edge.dst_conn,
                     copy.deepcopy(wb_memlet),
                 )
@@ -938,7 +920,9 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         )
         inner_desc: dace_data.Scalar = access_desc.clone()
         inner_data_name: str = sdfg.add_datadesc(access_node.data, inner_desc, find_new_name=True)
-        inner_an: dace_nodes.AccessNode = graph.add_access(inner_data_name)
+        inner_an: dace_nodes.AccessNode = graph.add_access(
+            inner_data_name, copy.copy(access_node.debuginfo)
+        )
 
         # Connect the tasklet with the map entry and the access node.
         graph.add_nedge(map_entry, inner_tasklet, dace.Memlet())

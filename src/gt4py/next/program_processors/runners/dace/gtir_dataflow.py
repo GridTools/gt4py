@@ -935,7 +935,6 @@ class LambdaToDataflow(eve.NodeVisitor):
             nsdfg_symbols_mapping["__cond"] = condition_value.value
         nsdfg_node = self.state.add_nested_sdfg(
             nsdfg,
-            self.sdfg,
             inputs=set(input_memlets.keys()),
             outputs=outputs,
             symbol_mapping=nsdfg_symbols_mapping,
@@ -1363,7 +1362,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
         nsdfg_node = self.state.add_nested_sdfg(
-            nsdfg, self.sdfg, inputs={"values", "neighbor_indices"}, outputs={"acc"}
+            nsdfg, inputs={"values", "neighbor_indices"}, outputs={"acc"}
         )
 
         if isinstance(input_expr, MemletExpr):
