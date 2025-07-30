@@ -84,7 +84,7 @@ def gt_gpu_transformation(
 
     # Now turn it into a GPU SDFG
     sdfg.apply_gpu_transformations(
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
         simplify=False,
     )
@@ -97,16 +97,16 @@ def gt_gpu_transformation(
         #   it can be removed, it should definitely be reworked.
         gt_remove_trivial_gpu_maps(
             sdfg=sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
-        gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+        gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     # TODO(phimuell): Fixing the stride problem in DaCe.
     sdfg = gt_gpu_transform_non_standard_memlet(
         sdfg=sdfg,
         map_postprocess=True,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -199,7 +199,7 @@ def gt_gpu_transform_non_standard_memlet(
                 check_fusion_callback=restrict_fusion_to_newly_created_maps_horizontal,
             ),
         ],
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -241,6 +241,9 @@ def gt_gpu_transform_non_standard_memlet(
                 reversed(map_to_modify.range.ranges), reversed(map_to_modify.range.tile_sizes)
             )
         )
+
+    if validate or validate_all:
+        sdfg.validate()
 
     return sdfg
 
@@ -665,9 +668,9 @@ def gt_remove_trivial_gpu_maps(
             only_gpu_maps=True,
         ),
         validate=False,
-        validate_all=False,
+        validate_all=validate_all,
     )
-    gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+    gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     # Now we try to fuse them together, however, we restrict the fusion to trivial
     #  GPU map.
@@ -707,9 +710,12 @@ def gt_remove_trivial_gpu_maps(
                 check_fusion_callback=restrict_to_trivial_gpu_maps,
             ),
         ],
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
+
+    if validate:
+        sdfg.validate()
 
     return sdfg
 
@@ -906,3 +912,22 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         # Now copy parameter and the ranges from the second to the trivial map.
         trivial_map.params = copy.deepcopy(second_map.params)
         trivial_map.range = copy.deepcopy(second_map.range)
+
+
+def gt_gpu_apply_mempool(sdfg: dace.SDFG) -> None:
+    """Enables the stream ordered memory allocator in CUDA code generation.
+
+    It sets the `pool` flag on all transients allocated in GPU global memory.
+    The dace code genarator will handle this flag by calling `cudaMallocAsync`
+    and `cudaFreeAsync` in the CUDA code for allocation/release of the buffers.
+
+    Args:
+        sdfg: The SDFG that should be processed.
+    """
+    for _, _, desc in sdfg.arrays_recursive():
+        if (
+            isinstance(desc, dace.data.Array)
+            and desc.storage == dace.StorageType.GPU_Global
+            and desc.transient
+        ):
+            desc.pool = True

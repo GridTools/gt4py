@@ -111,15 +111,9 @@ def test_serial_map_promotion_only_promote():
     )
 
 
-@pytest.mark.parametrize(
-    "use_symbolic_range",
-    [False, True],
-)
-@pytest.mark.parametrize(
-    "single_use_data",
-    [{"tmp"}, {}],
-)
-def test_serial_map_promotion_promote_and_merge(use_symbolic_range, single_use_data):
+@pytest.mark.parametrize("use_symbolic_range", [True, False])
+@pytest.mark.parametrize("single_use_data", [{"tmp"}, {}])
+def test_serial_map_promotion_single_use_data(use_symbolic_range, single_use_data):
     sdfg, state, map_entry_1d, map_entry_2d = _make_serial_map_promotion_sdfg(use_symbolic_range)
 
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
@@ -144,16 +138,20 @@ def test_serial_map_promotion_promote_and_merge(use_symbolic_range, single_use_d
 
     mes = util.count_nodes(sdfg, dace_nodes.MapEntry, True)
 
-    if use_symbolic_range and len(single_use_data) == 0:
-        # The range of the second map is purely symbolic, therefore it is unknown
-        # whether the range is empty or not at compile time. Besides, the temporary
-        # produced by the first map (1d) is not single-use data, thus it is needed
-        # in another state of the SDFG. Since the temporary is needed in another
-        # location and we are not sure that the extended range will be not-empty,
-        # map promotion should not be applied.
+    if use_symbolic_range:
+        # If symbolic ranges are used the transformation will never apply.
         assert count == 0
         assert len(mes) == 2
+
+    elif len(single_use_data) == 0:
+        # `tmp` was not classified as single use data, thus it can not be promoted.
+        # NOTE: That `tmp` _is_ single use data, but `single_use_data` does not say
+        #   that. This test essentially tests if `MapPromoter` can influence the fusion.
+        assert count == 0
+        assert len(mes) == 2
+
     else:
+        # `tmp` is single use data, thus the promotion happens.
         assert count == 1
         assert len(mes) == 1
         me = mes[0]
@@ -164,10 +162,54 @@ def test_serial_map_promotion_promote_and_merge(use_symbolic_range, single_use_d
         assert me.map.range == original_2d_range
 
 
-@pytest.mark.parametrize(
-    "use_symbolic_range",
-    [False, True],
-)
+def test_serial_map_promotion_multi_consumer_transient():
+    sdfg, state, map_entry_1d, map_entry_2d = _make_serial_map_promotion_sdfg(False)
+
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    assert len(map_entry_1d.map.params) == 1
+    assert len(map_entry_1d.map.range) == 1
+    assert len(map_entry_2d.map.params) == 2
+    assert len(map_entry_2d.map.range) == 2
+
+    tmp_nodes = list(
+        iedge.src
+        for iedge in state.in_edges(map_entry_2d)
+        if isinstance(iedge.src, dace_nodes.AccessNode) and iedge.src.desc(sdfg).transient
+    )
+    assert len(tmp_nodes) == 1
+    sdfg.add_array(
+        name="d",
+        shape=(N, N),
+        dtype=dace.float64,
+        transient=False,
+    )
+    state.add_mapped_tasklet(
+        name="another_two_d_map",
+        map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{N}")],
+        input_nodes={"tmp": tmp_nodes[0]},
+        inputs={"__in0": dace.Memlet("tmp[__i0]"), "__in1": dace.Memlet("b[__i0, __i1]")},
+        code="__out = __in0 + __in1",
+        outputs={"__out": dace.Memlet("d[__i0, __i1]")},
+        external_edges=True,
+    )
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.MapPromoter(
+            promote_everything=True,
+            fuse_after_promotion=True,
+            single_use_data={sdfg: {"tmp"}},
+        ),
+        validate=True,
+        validate_all=True,
+    )
+
+    # The transformation will not apply because `tmp` is not an exclusive intermediate,
+    #  since it is also consumed by the second Map. Thus the transformation will not
+    #  apply, even though it is single use.
+    assert count == 0
+
+
+@pytest.mark.parametrize("use_symbolic_range", [False, True])
 def test_serial_map_promotion_on_symbolic_range(use_symbolic_range):
     sdfg, state, map_entry_1d, map_entry_2d = _make_serial_map_promotion_sdfg(use_symbolic_range)
 
@@ -177,29 +219,8 @@ def test_serial_map_promotion_on_symbolic_range(use_symbolic_range):
     assert len(map_entry_2d.map.params) == 2
     assert len(map_entry_2d.map.range) == 2
 
-    # Now add a nother map that consumes the temporary array
-    S = dace.symbol("S", dace.int32)
-    tmp_nodes = list(
-        iedge.src
-        for iedge in state.in_edges(map_entry_2d)
-        if isinstance(iedge.src, dace_nodes.AccessNode) and iedge.src.desc(sdfg).transient
-    )
-    assert len(tmp_nodes) == 1
-    sdfg.add_array(
-        name="d",
-        shape=(N, S),
-        dtype=dace.float64,
-        transient=False,
-    )
-    state.add_mapped_tasklet(
-        name="another_two_d_map",
-        map_ranges=[("__i0", f"0:{N}"), ("__i1", f"0:{S}")],
-        input_nodes={"tmp": tmp_nodes[0]},
-        inputs={"__in0": dace.Memlet("tmp[__i0]"), "__in1": dace.Memlet("b[__i0, __i1]")},
-        code="__out = __in0 + __in1",
-        outputs={"__out": dace.Memlet("d[__i0, __i1]")},
-        external_edges=True,
-    )
+    original_2d_params = list(map_entry_2d.map.params)
+    original_2d_range = copy.deepcopy(map_entry_2d.map.range)
 
     count = sdfg.apply_transformations(
         gtx_transformations.MapPromoter(
@@ -211,18 +232,21 @@ def test_serial_map_promotion_on_symbolic_range(use_symbolic_range):
         validate_all=True,
     )
 
-    mes = util.count_nodes(sdfg, dace_nodes.MapEntry, True)
     if use_symbolic_range:
-        # The promotion should not apply because there are two consumer maps, both
-        # with symbolic range. If the symbolic range happens to be empty, there won't
-        # be valid data in the temporay for the other consumer map.
+        # If symbolic ranges are used then the transformation will not apply, because the second
+        #  Map could have an empty range.
         assert count == 0
-        assert len(mes) == 3
     else:
-        # One the of the two consumer maps has compile-time size, with not-empty range.
-        # We can apply map promotion because we know that the temporary will be computed.
+        # If the second Map does not have symbolic ranges then the promotion works.
         assert count == 1
-        assert len(mes) == 2
+        mes = util.count_nodes(sdfg, dace_nodes.MapEntry, True)
+        assert len(mes) == 1
+        me = mes[0]
+
+        assert len(me.map.params) == 2
+        assert me.map.params == original_2d_params
+        assert len(me.map.range) == 2
+        assert me.map.range == original_2d_range
 
 
 def test_serial_map_promotion_2d_top_1d_bottom():

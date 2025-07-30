@@ -1,6 +1,53 @@
 # GT4Py Changelog
 
-Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [1.0.6] - 2025-07-30
+
+### Cartesian
+
+- Introduced a debug backend, a plain python backend for debugging and rapid prototyping of features.
+- Refactoring of the lowering to SDFG using DaCe ScheduleTree: the current bridge OIR -> TreeIR -> SDFG is replaced with OIR -> TreeIR -> ScheduleTree, then it relies on DaCe to expand ScheduleTree to SDFG.
+
+### Development
+
+- GitHub Actions CI infrastructure updated with (optional) `test-components` exclusions loaded from a dynamically generated JSON file.
+
+### Next
+
+See commit history.
+
+## [1.0.5] - 2025-07-21
+
+### General
+
+- We dropped support for Python < 3.10.
+- We moved to versioningit for versioning: each commit will now have a version following the format `{major}.{minor}.{path}[.post{#commits since release}+{rev}[.dirty]]`, see section `[tool.versioningit.format]` in `pyproject.toml`.
+- The GridTools C++ library doesn't require Boost anymore, therefore there is no implicit dependency to Boost in GT4Py.
+
+### Cartesian
+
+- New feature: Allow writes with K-offsets in `FORWARD` and `BACKWARD` computations.
+- Undeprecated `__INLINED` as no concrete plans exist to implement an alternative.
+- Fixes cases with while-loops in conditionals.
+- Fix @gtscript.function inlining in while-loops.
+- Fixes in CuPy-ROCm storage allocation.
+- Improved test coverage for horizontal regions.
+- Improved some error messages and warnings.
+- Various style modernizations (especially related to dropped support for Python < 3.10)
+
+#### DaCe support in Cartesian
+
+- Expose control flow elements to DaCe
+- Fixes argument validation in intersection code of DaCeIR's `DomainInterval`.
+
+### Development
+
+- Switched to `uv` is the standard project management tool.
+
+### Next
+
+See commit history.
 
 ## [1.0.4] - 2024-09-20
 

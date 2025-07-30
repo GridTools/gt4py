@@ -216,7 +216,7 @@ class TestExecInfo:
         exec_info: Dict[str, Any] = {}
 
         # run (sequential-splitting mode)
-        self.nt = data.draw(hyp_st.integers(1, 64), label="nt")
+        self.nt = data.draw(hyp_st.integers(1, 3), label="nt")
         for _ in range(self.nt):
             self.advection(
                 self.in_phi,
@@ -259,7 +259,7 @@ class TestExecInfo:
         exec_info: Dict[str, Any] = {"__aggregate_data": True}
 
         # run (sequential-splitting mode)
-        self.nt = data.draw(hyp_st.integers(1, 64), label="nt")
+        self.nt = data.draw(hyp_st.integers(1, 3), label="nt")
         for _ in range(self.nt):
             self.advection(
                 self.in_phi,

@@ -39,22 +39,26 @@ def _extract_array_infos(field_args, device) -> Dict[str, Optional[ArgsInfo]]:
 
 
 def add_optional_fields(
-    sdfg: dace.SDFG, field_info: Dict[str, Any], parameter_info: Dict[str, Any], **kwargs: Any
+    sdfg: dace.SDFG,
+    field_info: Dict[str, Any],
+    parameter_info: Dict[str, Any],
+    **kwargs: Any,
 ) -> dace.SDFG:
     sdfg = copy.deepcopy(sdfg)
     for name, info in field_info.items():
         if info.access == AccessKind.NONE and name in kwargs and name not in sdfg.arrays:
             outer_array = kwargs[name]
             sdfg.add_array(
-                name, shape=outer_array.shape, dtype=outer_array.dtype, strides=outer_array.strides
+                name,
+                shape=outer_array.shape,
+                dtype=outer_array.dtype,
+                strides=outer_array.strides,
             )
 
     for name, info in parameter_info.items():
         if info.access == AccessKind.NONE and name in kwargs and name not in sdfg.symbols:
             if isinstance(kwargs[name], dace.data.Scalar):
                 sdfg.add_scalar(name, dtype=kwargs[name].dtype)
-            else:
-                sdfg.add_symbol(name, stype=dace.typeclass(type(kwargs[name])))
     return sdfg
 
 
@@ -67,7 +71,10 @@ class DaCeFrozenStencil(FrozenStencil, SDFGConvertible):
 
     def __sdfg__(self, **kwargs):
         return add_optional_fields(
-            self.sdfg, self.stencil_object.field_info, self.stencil_object.parameter_info, **kwargs
+            self.sdfg,
+            self.stencil_object.field_info,
+            self.stencil_object.parameter_info,
+            **kwargs,
         )
 
     def __sdfg_signature__(self):
@@ -97,7 +104,10 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         return domain, origins_tuple
 
     def freeze(
-        self: DaCeStencilObject, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
+        self: DaCeStencilObject,
+        *,
+        origin: Dict[str, Tuple[int, ...]],
+        domain: Tuple[int, ...],
     ) -> DaCeFrozenStencil:
         key = DaCeStencilObject._get_domain_origin_key(domain, origin)
 
@@ -106,10 +116,12 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
             return self._frozen_cache[key]
 
         # otherwise, wrap and save sdfg from scratch
+        backend_class = gt_backend.from_name(self.backend)
         frozen_sdfg = freeze_origin_domain_sdfg(
             self.sdfg(),
             arg_names=list(self.__sdfg_signature__()[0]),
             field_info=self.field_info,
+            layout_info=backend_class.storage_info,
             origin=origin,
             domain=domain,
         )
@@ -138,7 +150,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
 
     def __sdfg__(self, *args, **kwargs) -> dace.SDFG:
         arg_names, _ = self.__sdfg_signature__()
-        norm_kwargs = DaCeStencilObject.normalize_args(
+        norm_kwargs = DaCeStencilObject.normalize_arg_fields(
             *args,
             backend=self.backend,
             arg_names=arg_names,
@@ -165,7 +177,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         return (args, [])
 
     @staticmethod
-    def normalize_args(
+    def normalize_arg_fields(
         *args,
         backend: str,
         arg_names: Iterable[str],
@@ -175,11 +187,19 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         origin: Optional[Dict[str, Tuple[int, ...]]] = None,
         **kwargs,
     ):
+        """Normalize Fields in argument list to the proper domain/origin"""
         backend_cls = gt_backend.from_name(backend)
         args_iter = iter(args)
-        args_as_kwargs = {
-            name: (kwargs[name] if name in kwargs else next(args_iter)) for name in arg_names
-        }
+
+        args_as_kwargs = {}
+        for name in arg_names:
+            if name not in field_info.keys():
+                continue
+            if name in kwargs.keys():
+                args_as_kwargs[name] = kwargs[name]
+            else:
+                args_as_kwargs[name] = next(args_iter)
+
         arg_infos = _extract_array_infos(
             field_args=args_as_kwargs, device=backend_cls.storage_info["device"]
         )
