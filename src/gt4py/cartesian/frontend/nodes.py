@@ -35,12 +35,13 @@ UnaryOperator enumeration (:class:`UnaryOperator`)
 BinaryOperator enumeration (:class:`BinaryOperator`)
     Binary operators
     [`ADD`, `SUB`, `MUL`, `DIV`, `POW`, `AND`, `OR`,
-    `ROUND`, `ERF`, `ERFC`, `EQ`, `NE`, `LT`, `LE`, `GT`, `GE`]
+    `EQ`, `NE`, `LT`, `LE`, `GT`, `GE`]
 
 NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
     [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
-    `SQRT`, `EXP`, `LOG`, `LOG10`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
+    `SQRT`, `EXP`, `LOG`, `LOG10`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`,
+    `TRUNC`, `ROUND`, `ERF`, `ERFC`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
