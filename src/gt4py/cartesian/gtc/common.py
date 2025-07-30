@@ -179,10 +179,10 @@ class NativeFunction(eve.StrEnum):
     CEIL = "ceil"
     TRUNC = "trunc"
 
-    I32 = enum.auto()
-    I64 = enum.auto()
-    F32 = enum.auto()
-    F64 = enum.auto()
+    I32 = "int32"
+    I64 = "int64"
+    F32 = "float32"
+    F64 = "float64"
 
     IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
