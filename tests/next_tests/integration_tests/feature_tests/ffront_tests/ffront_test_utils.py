@@ -239,7 +239,7 @@ def simple_mesh(allocator) -> MeshDescriptor:
     c2v_arr = np.array(
         [
             [0, 1, 4, 3],
-            [1, 2, 5, 6],
+            [1, 2, 5, 4],
             [3, 4, 7, 6],
             [4, 5, 8, 7],
             [6, 7, 1, 0],

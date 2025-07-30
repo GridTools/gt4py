@@ -34,7 +34,7 @@ from gt4py.cartesian.frontend.exceptions import (
 from gt4py.cartesian.utils import meta as gt_meta
 
 
-PYTHON_AST_VERSION: Final = (3, 8)
+PYTHON_AST_VERSION: Final = (3, 10)
 
 
 class AssertionChecker(ast.NodeTransformer):
@@ -480,7 +480,7 @@ class CallInliner(ast.NodeTransformer):
             if isinstance(value, ast.Name) and name not in assigned_symbols
         }
 
-        call_id = gt_utils.shashed_id(call_name)[:3]
+        call_id = gt_utils.shashed_id(call_name, length=3)
         call_id_suffix = f"{call_id}_{node.lineno}_{node.col_offset}"
         template_fmt = "{name}__" + call_id_suffix
 
@@ -817,25 +817,9 @@ class IRMaker(ast.NodeVisitor):
         # if sorting didn't change anything it was already sorted
         return compute_blocks == compute_blocks_sorted
 
-    def _parse_region_intervals(
-        self, node: Union[ast.ExtSlice, ast.Index, ast.Tuple], loc: nodes.Location = None
-    ) -> Dict[str, nodes.AxisInterval]:
-        if isinstance(node, ast.Index):
-            # Python 3.8 wraps a Tuple in an Index for region[0, 1]
-            tuple_node = node.value
-            list_of_exprs = tuple_node.elts
-        elif isinstance(node, ast.ExtSlice) or isinstance(node, ast.Tuple):
-            # Python 3.8 returns an ExtSlice for region[0, :]
-            # Python 3.9 directly returns a Tuple for region[0, 1]
-            node_list = node.dims if isinstance(node, ast.ExtSlice) else node.elts
-            list_of_exprs = [
-                axis_node.value if isinstance(axis_node, ast.Index) else axis_node
-                for axis_node in node_list
-            ]
-        else:
-            raise GTScriptSyntaxError(
-                f"Invalid 'region' index at line {loc.line} (column {loc.column})", loc=loc
-            )
+    def _parse_region_intervals(self, node: ast.Tuple) -> Dict[str, nodes.AxisInterval]:
+        # Since Python 3.9: directly returns a Tuple for region[0, 1]
+        list_of_exprs = [axis_node for axis_node in node.elts]
         axes_names = [axis.name for axis in self.domain.parallel_axes]
         return {
             name: AxisIntervalParser.apply(axis_node, name)
@@ -855,7 +839,7 @@ class IRMaker(ast.NodeVisitor):
         ):
             raise syntax_error
 
-        return [self._parse_region_intervals(arg.slice, loc) for arg in call_args]
+        return [self._parse_region_intervals(arg.slice) for arg in call_args]
 
     def _are_intervals_nonoverlapping(self, compute_blocks: List[nodes.ComputationBlock]):
         for i, block in enumerate(compute_blocks[1:]):
@@ -1335,8 +1319,10 @@ class IRMaker(ast.NodeVisitor):
             condition = self.visit(node.test)
         except KeyError as e:
             raise GTScriptSyntaxError(
-                message="Using function calls in the condition of an if is not allowed,"
-                + " the function needs to be assigned to a variable outside the condition.",
+                message=(
+                    "Using function calls in the condition of an if is not allowed,"
+                    " the function needs to be assigned to a variable outside the condition."
+                ),
                 loc=nodes.Location.from_ast_node(node),
             ) from e
         result.append(
@@ -1658,7 +1644,7 @@ class GTScriptParser(ast.NodeVisitor):
         assert isinstance(definition, types.FunctionType)
         self.definition = definition
         self.filename = inspect.getfile(definition)
-        self.source, decorators_source = gt_meta.split_def_decorators(self.definition)
+        self.source, _decorators_source = gt_meta.split_def_decorators(self.definition)
         self.ast_root = ast.parse(self.source, feature_version=PYTHON_AST_VERSION)
         self.options = options
         self.build_info = options.build_info
@@ -1761,7 +1747,7 @@ class GTScriptParser(ast.NodeVisitor):
             assert isinstance(ann_assign.target, ast.Name)
             name = ann_assign.target.id
 
-            source = gt_meta.ast_unparse(ann_assign.annotation)
+            source = ast.unparse(ann_assign.annotation)
             descriptor = eval(source, ann_assign_context)
             temp_annotations[name] = descriptor
             if descriptor.axes != gtscript.IJK:

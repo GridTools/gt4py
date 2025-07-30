@@ -16,8 +16,7 @@ import shutil
 import subprocess
 from typing import Optional, TypeVar
 
-from flufl import lock
-
+from gt4py._core import locking
 from gt4py.next import config, errors
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import interface
@@ -88,6 +87,22 @@ class CompiledbFactory(
             bindings_file_name=bindings_name,
             compile_commands_cache=compiledb_template,
         )
+
+
+def _relative_path_to_parent(current: pathlib.Path, parent: pathlib.Path) -> str:
+    """
+    Compute the relative path from a directory to its parent.
+
+    This is used to replace absolute paths in the compiledb with relative paths.
+    """
+    # Count the difference in depth between the two paths
+    dir_parts = len(current.parts)
+    parent_parts = len(parent.parts)
+    # Compute relative path to parent (upward path with '../' segments)
+    relative_path_to_parent = "/".join([".."] * (dir_parts - parent_parts))
+    if not relative_path_to_parent:  # If they're the same directory
+        relative_path_to_parent = "."
+    return relative_path_to_parent
 
 
 @dataclasses.dataclass()
@@ -176,7 +191,16 @@ class CompiledbProject(
         (self.root_path / "compile_commands.json").write_text(json.dumps(compile_db))
 
         (build_script_path := self.root_path / "build.sh").write_text(
-            "\n".join(["#!/bin/sh", "cd build", *(entry["command"] for entry in compile_db)])
+            "\n".join(
+                [
+                    "#!/bin/sh",
+                    'SCRIPT_DIR=$(dirname "$(readlink -f "$0")")',
+                    *(
+                        f"cd $SCRIPT_DIR/{entry['directory']} && {entry['command']}"
+                        for entry in compile_db
+                    ),
+                ]
+            )
         )
         try:
             build_script_path.chmod(0o755)
@@ -204,7 +228,7 @@ class CompiledbProject(
                     log_file_pointer.flush()
                     subprocess.check_call(
                         entry["command"],
-                        cwd=entry["directory"],
+                        cwd=self.root_path / entry["directory"],
                         shell=True,
                         stdout=log_file_pointer,
                         stderr=log_file_pointer,
@@ -258,7 +282,7 @@ def _cc_get_compiledb(
 
     # In a multi-threaded environment, multiple threads may try to create the compiledb at the same time
     # leading to compilation errors.
-    with lock.Lock(str(cache_path / "compiledb.lock"), lifetime=120):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
+    with locking.lock(cache_path):
         if renew_compiledb or not (compiled_db := _cc_find_compiledb(path=cache_path)):
             compiled_db = _cc_create_compiledb(
                 prototype_program_source=prototype_program_source,
@@ -321,14 +345,20 @@ def _cc_create_compiledb(
     assert compile_db
 
     for entry in compile_db:
-        entry["directory"] = entry["directory"].replace(str(path), "$SRC_PATH")
+        relative_path_from_build_dir = _relative_path_to_parent(
+            pathlib.Path(entry["directory"]), path
+        )
+
+        # directory relative to current root directory
+        entry["directory"] = entry["directory"].replace(str(path), ".")
         entry["command"] = (
             entry["command"]
+            # this is the relative location of the ".o" (etc.) files, we move them to the top level build dir
             .replace(f"CMakeFiles/{name}.dir", ".")
-            .replace(str(path), "$SRC_PATH")
+            # replace the absolute src path to a path relative to the current build folder
+            .replace(str(path), relative_path_from_build_dir)
             .replace(binding_src_name, "$BINDINGS_FILE")
             .replace(name, "$NAME")
-            .replace("-I$SRC_PATH/build/_deps", f"-I{path}/build/_deps")
         )
         entry["file"] = (
             entry["file"]

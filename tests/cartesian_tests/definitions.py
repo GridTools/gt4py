@@ -14,6 +14,7 @@ except (ImportError, RuntimeError):
     cp = None
 
 import datetime
+
 import numpy as np
 import pytest
 
@@ -47,8 +48,11 @@ CPU_BACKENDS = _get_backends_with_storage_info("cpu")
 GPU_BACKENDS = _get_backends_with_storage_info("gpu")
 ALL_BACKENDS = CPU_BACKENDS + GPU_BACKENDS
 
+
 PERFORMANCE_BACKENDS = [
-    _backend_name_as_param(name) for name in _ALL_BACKEND_NAMES if name not in ("numpy", "cuda")
+    _backend_name_as_param(name)
+    for name in _ALL_BACKEND_NAMES
+    if name not in ("numpy", "cuda", "debug")
 ]
 
 
@@ -60,7 +64,6 @@ def id_version():
 def get_array_library(backend: str):
     """Return device ready array maker library"""
     backend_cls = gt4pyc.backend.from_name(backend)
-    assert backend_cls is not None
     if backend_cls.storage_info["device"] == "gpu":
         assert cp is not None
         return cp

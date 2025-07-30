@@ -46,10 +46,10 @@ class ToolchainFactory(factory.Factory):
         model = ToolchainClass
 
     class Params:
-        high_level_parameters = ... # check factoryboy docs for possibilities
-        some_option = config.SOME_OPTION # default read from config module
+        high_level_parameters = ...  # check factoryboy docs for possibilities
+        some_option = config.SOME_OPTION  # default read from config module
 
-    attribute_defaults = ... # may use parameter values etc
+    attribute_defaults = ...  # may use parameter values etc
 ```
 
 ### Limit configuration options exposed to the end user
@@ -82,10 +82,12 @@ We are aware that this decision has significant drawbacks. The main justificatio
 ```python
 # gt4py.next.config
 MASTER_SWITCH = os.environ.get(f"{_PREFIX}_MASTER_SWITCH", "false")
-DEPENDENT_OPT = os.environ.get(f"{_PREFIX}_DEPENDENT_OPT", "one_default" if MASTER_SWITCH else "another_default")
+DEPENDENT_OPT = os.environ.get(
+    f"{_PREFIX}_DEPENDENT_OPT", "one_default" if MASTER_SWITCH else "another_default"
+)
 
 if MASTER_SWITCH:
-    ... # more complex config related side effects
+    ...  # more complex config related side effects
 ```
 
 ### Environment variables are the primary end user interface
@@ -120,10 +122,12 @@ Implementations of the two latter patterns can be designed to mitigate this but 
 ```python
 # gt4py.next.config
 MASTER_SWITCH = os.environ.get(f"{_PREFIX}_MASTER_SWITCH", "false")
-DEPENDENT_OPT = os.environ.get(f"{_PREFIX}_DEPENDENT_OPT", "one_default" if MASTER_SWITCH else "another_default")
+DEPENDENT_OPT = os.environ.get(
+    f"{_PREFIX}_DEPENDENT_OPT", "one_default" if MASTER_SWITCH else "another_default"
+)
 
 if MASTER_SWITCH:
-    ... # more complex config related side effects
+    ...  # more complex config related side effects
 
 # in client code
 from gt4py.next import config
@@ -231,24 +235,26 @@ Implementing tracking was briefly considered but looked like it would be too hea
 The first PoC used a function call to load user configuration just before using it. This would have increased testability at the cost of a less minimal implementation.
 
 ```python
-
 class Configuration:
     ...
+
     @property
-    def option_1(self):
-        ...
+    def option_1(self): ...
 
     @option_1.setter
     def option_1(self, value):
         self._option_1 = value
         self._dependent_option = ...
-        ... # more dependent behavior
+        ...  # more dependent behavior
+
 
 OPTION_1_DEFAULT
+
 
 def get_configuration():
     conf = Configuration()
     conf.option_1 = read_from_env() or read_from_other_source() or default
+
 
 current_configuration: Configuration = get_configuration()
 

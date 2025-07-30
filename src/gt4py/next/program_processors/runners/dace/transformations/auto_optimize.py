@@ -11,6 +11,8 @@
 from typing import Any, Optional, Sequence
 
 import dace
+from dace import data as dace_data
+from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -30,6 +32,7 @@ def gt_auto_optimize(
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
+    gpu_memory_pool: bool = False,
     constant_symbols: Optional[dict[str, Any]] = None,
     assume_pointwise: bool = True,
     validate: bool = True,
@@ -84,6 +87,7 @@ def gt_auto_optimize(
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             for _all_ GPU Maps.
+        gpu_memory_pool: Enable CUDA memory pool in gpu codegen.
         constant_symbols: Symbols listed in this `dict` will be replaced by the
             respective value inside the SDFG. This might increase performance.
         assume_pointwise: Assume that the SDFG has no risk for race condition in
@@ -115,24 +119,49 @@ def gt_auto_optimize(
             not if we have too much internal space (register pressure).
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
-    with dace.config.set_temporary("optimizer", "match_exception", value=True):
+
+    with dace.config.temporary_config():
+        # Do not store which transformations were applied inside the SDFG.
+        dace.Config.set("store_history", value=False)
+
+        # If there is an exception during `can_be_applied()` propagate it instead
+        #  of ignoring it.
+        dace.Config.set("optimizer", "match_exception", value=True)
+
+        # Do not assume that symbols are positive. The only reason for this is
+        #  that the origin can potentially be negative.
+        #  See also [issue#2095](https://github.com/spcl/dace/issues/2095)
+        dace.Config.set("optimizer", "symbolic_positive", value=False)
+
         # Initial Cleanup
+        # NOTE: The initial simplification stage must be synchronized with the one that
+        #   `gt_substitute_compiletime_symbols()` performs!
+        gtx_transformations.gt_simplify(
+            sdfg=sdfg,
+            validate=False,
+            skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
+            validate_all=validate_all,
+        )
+
         if constant_symbols:
             gtx_transformations.gt_substitute_compiletime_symbols(
                 sdfg=sdfg,
                 repl=constant_symbols,
-                simplify=False,
-                validate=validate,
+                simplify=True,  # Simplify again after.
+                skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
+                simplify_at_entry=False,
+                validate=False,
                 validate_all=validate_all,
             )
-        gtx_transformations.gt_simplify(sdfg)
-        gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+
+        gtx_transformations.gt_reduce_distributed_buffering(
+            sdfg, validate=False, validate_all=validate_all
+        )
 
         # Process top level Maps
         sdfg = _gt_auto_process_top_level_maps(
             sdfg=sdfg,
             assume_pointwise=assume_pointwise,
-            validate=validate,
             validate_all=validate_all,
         )
 
@@ -148,7 +177,6 @@ def gt_auto_optimize(
             blocking_dim=blocking_dim,
             blocking_size=blocking_size,
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
-            validate=validate,
             validate_all=validate_all,
         )
 
@@ -162,7 +190,6 @@ def gt_auto_optimize(
             gpu_block_size=gpu_block_size,
             gpu_launch_factor=gpu_launch_factor,
             gpu_launch_bounds=gpu_launch_bounds,
-            validate=validate,
             validate_all=validate_all,
         )
 
@@ -176,12 +203,15 @@ def gt_auto_optimize(
             #   scopes, which I do not like. Thus we should fix the transformation
             #   to avoid that.
             reuse_transients=reuse_transients,
-            validate=validate,
+            gpu_memory_pool=gpu_memory_pool,
             validate_all=validate_all,
         )
 
         # Set the implementation of the library nodes.
         dace_aoptimize.set_fast_implementations(sdfg, device)
+
+        if validate:
+            sdfg.validate()
 
         return sdfg
 
@@ -189,7 +219,6 @@ def gt_auto_optimize(
 def _gt_auto_process_top_level_maps(
     sdfg: dace.SDFG,
     assume_pointwise: bool,
-    validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimize the Maps at the top level of the SDFG inplace.
@@ -212,9 +241,9 @@ def _gt_auto_process_top_level_maps(
 
     # NOTE: Inside this function we have to disable the consolidation of edges.
     #   This is because it might block the application of `SpliAccessNode`. As
-    #   an example consider a that writes `tmp[:, 80]` and a second map that
-    #   writes `tmp[:, 0]`, if these two maps are now horizontally fussed and
-    #   edge consolidation is on, then the resulting map would "write", at least
+    #   an example consider a Map that writes `tmp[:, 80]` and a second Map that
+    #   writes `tmp[:, 0]`, if these two Maps are now horizontally fussed and
+    #   edge consolidation is on, then the resulting Map would "write", at least
     #   according to the subset, after Memlet propagation, into `tmp[:, 0:80]`.
     #   For that reason we block edge consolidation inside this function.
     #   However, we allow allow the consolidation, in MapFusion if this does
@@ -232,62 +261,83 @@ def _gt_auto_process_top_level_maps(
 
     while True:
         # First we do scan the entire SDFG to figure out which data is only
-        #  used once and can be deleted. MapFusion could do this on its own but
-        #  it is more efficient to do it once and then reuse it.
+        #  used once and can be deleted.
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
         # TODO(phimuell): Use a cost measurement to decide if fusion should be done.
 
-        serial_map_fusion = gtx_transformations.MapFusionSerial(
+        vertical_map_fusion = gtx_transformations.MapFusionVertical(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=True,
         )
         # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
         #   has been solved.
-        serial_map_fusion._single_use_data = single_use_data
+        vertical_map_fusion._single_use_data = single_use_data
 
-        parallel_map_fusion = gtx_transformations.MapFusionParallel(
+        horizontal_map_fusion = gtx_transformations.MapFusionHorizontal(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=True,
             # TODO(phimuell): Should we enable this flag?
             only_if_common_ancestor=False,
         )
-        parallel_map_fusion._single_use_data = single_use_data
 
-        # NOTE: Since parallel Map fusion matches _any_ two Maps running it on large
-        #  SDFGs is expensive. Thus we run serial Map fusion first to reduce the search
-        #  space. Then we run serial and parallel Map fusion together.
+        # NOTE: Since horizontal Map fusion matches _any_ two Maps, running it on large
+        #  SDFGs is expensive. Thus we run vertical Map fusion first to reduce the search
+        #  space.
         sdfg.apply_transformations_repeated(
-            serial_map_fusion,
-            validate=validate,
+            vertical_map_fusion,
+            validate=False,
             validate_all=validate_all,
         )
         sdfg.apply_transformations_repeated(
-            [serial_map_fusion, parallel_map_fusion],
-            validate=validate,
+            [horizontal_map_fusion, vertical_map_fusion],
+            validate=False,
             validate_all=validate_all,
         )
 
         # We have to call it here, such that some other transformations, most
         #  importantly the split transformations run.
+        #  We allow promotion of vertical (which is beneficial for Nabla4 type
+        #  stencils and if `LoopBlocking` is enabled. However, we also allow
+        #  horizontal promotion, this is an empirical choice. If the computation
+        #  on the horizontal are very complicated, it might degrade performance
+        #  but such cases should be rare.
         # TODO(phimuell): Add a criteria to decide if we should promote or not.
+        # TODO(phimuell): Think about relocating this before horizontal Map fusion.
         sdfg.apply_transformations_repeated(
-            gtx_transformations.SerialMapPromoter(
+            gtx_transformations.MapPromoter(
                 only_toplevel_maps=True,
                 promote_vertical=True,
-                promote_horizontal=False,
+                promote_horizontal=True,
                 promote_local=False,
+                promotion_callback=_check_if_horizontal_map_promotion_is_appropriate,
+                single_use_data=single_use_data,
             ),
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
         # Now do some cleanup task, that may enable further fusion opportunities.
         #  Note for performance reasons simplify is deferred.
-        gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+        gtx_transformations.gt_reduce_distributed_buffering(
+            sdfg, validate=False, validate_all=validate_all
+        )
+
+        # TODO(phimuell): Find out how to skip the propagation and integrating it
+        #   into the split transformation.
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.SplitConsumerMemlet(single_use_data=single_use_data),
+            validate=False,
+            validate_all=validate_all,
+        )
+        dace_propagation.propagate_memlets_sdfg(sdfg)
+
         sdfg.apply_transformations_repeated(
             [
+                # TODO(phimuell): The transformation is also active inside Maps.
+                #   Which is against the description of this function, but it should
+                #   not matter that much.
                 gtx_transformations.SplitAccessNode(
                     single_use_data=single_use_data,
                 ),
@@ -295,27 +345,29 @@ def _gt_auto_process_top_level_maps(
                     assume_pointwise=assume_pointwise,
                 ),
             ],
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
         # Call vertical and horizontal map fusion to fuse together maps on partially
         #  overlapping range. This is an iterative process that splits the maps to
         #  expose overlapping range and applies serial/parallel map fusion.
-        gtx_transformations.gt_vertical_map_fusion(
+        gtx_transformations.gt_vertical_map_split_fusion(
             sdfg=sdfg,
             run_simplify=False,
+            skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
             consolidate_edges_only_if_not_extending=True,
             single_use_data=single_use_data,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
-        gtx_transformations.gt_horizontal_map_fusion(
+        gtx_transformations.gt_horizontal_map_split_fusion(
             sdfg=sdfg,
             run_simplify=False,
+            skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
+            fuse_possible_maps=True,
             consolidate_edges_only_if_not_extending=True,
-            single_use_data=single_use_data,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
@@ -328,11 +380,9 @@ def _gt_auto_process_top_level_maps(
         #  modified. Call Simplify and try again to further optimize.
         gtx_transformations.gt_simplify(
             sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
-            skip=gtx_transformations.simplify.GT_SIMPLIFY_DEFAULT_SKIP_SET.union(
-                ["ConsolidateEdges"]
-            ),
+            skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
 
     return sdfg
@@ -343,7 +393,6 @@ def _gt_auto_process_dataflow_inside_maps(
     blocking_dim: Optional[gtx_common.Dimension],
     blocking_size: int,
     blocking_only_if_independent_nodes: Optional[bool],
-    validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
@@ -362,10 +411,15 @@ def _gt_auto_process_dataflow_inside_maps(
     #  arguments to a kernel but be present inside the body.
     sdfg.apply_transformations_once_everywhere(
         gtx_transformations.GT4PyMoveTaskletIntoMap,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
-    gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+    gtx_transformations.gt_simplify(
+        sdfg,
+        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
+        validate=False,
+        validate_all=validate_all,
+    )
 
     # Blocking is performed first, because this ensures that as much as possible
     #  is moved into the k independent part.
@@ -376,7 +430,7 @@ def _gt_auto_process_dataflow_inside_maps(
                 blocking_parameter=blocking_dim,
                 require_independent_nodes=blocking_only_if_independent_nodes,
             ),
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
 
@@ -390,7 +444,13 @@ def _gt_auto_process_dataflow_inside_maps(
         gtx_transformations.MoveDataflowIntoIfBody(
             ignore_upstream_blocks=False,
         ),
-        validate=validate,
+        validate=False,
+        validate_all=validate_all,
+    )
+    gtx_transformations.gt_simplify(
+        sdfg,
+        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -404,7 +464,6 @@ def _gt_auto_configure_maps_and_strides(
     gpu_block_size: Optional[Sequence[int | str] | str],
     gpu_launch_bounds: Optional[int | str],
     gpu_launch_factor: Optional[int],
-    validate: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Configure the Maps and the strides of the SDFG inplace.
@@ -430,7 +489,7 @@ def _gt_auto_configure_maps_and_strides(
     gtx_transformations.gt_set_iteration_order(
         sdfg=sdfg,
         unit_strides_kind=unit_strides_kind,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -454,7 +513,7 @@ def _gt_auto_configure_maps_and_strides(
             gpu_block_size=gpu_block_size,
             gpu_launch_bounds=gpu_launch_bounds,
             gpu_launch_factor=gpu_launch_factor,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
             try_removing_trivial_maps=True,
         )
@@ -467,7 +526,7 @@ def _gt_auto_post_processing(
     gpu: bool,
     make_persistent: bool,
     reuse_transients: bool,
-    validate: bool,
+    gpu_memory_pool: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Perform post processing on the SDFG.
@@ -486,6 +545,9 @@ def _gt_auto_post_processing(
     # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
     dace_aoptimize.move_small_arrays_to_stack(sdfg)
 
+    if make_persistent and gpu_memory_pool:
+        raise ValueError("Cannot set both 'make_persistent' and 'gpu_memory_pool'.")
+
     if make_persistent:
         device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
         gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)
@@ -502,4 +564,80 @@ def _gt_auto_post_processing(
                 for edge in state.edges():
                     edge.data.wcr_nonatomic = False
 
+    if gpu and gpu_memory_pool:
+        gtx_transformations.gpu_utils.gt_gpu_apply_mempool(sdfg)
+
+    if validate_all:
+        sdfg.validate()
+
     return sdfg
+
+
+def _check_if_horizontal_map_promotion_is_appropriate(
+    state: dace.SDFGState,
+    sdfg: dace.SDFG,
+    first_map_exit: dace_nodes.MapExit,
+    second_map_entry: dace_nodes.MapEntry,
+    missing_map_parameters: list[str],
+) -> bool:
+    """Helper function to check if horizontal Map promotion should be performed.
+
+    The function is used by `_gt_auto_process_top_level_maps()` to ensure that
+    only horizontal (the function will not check any other promotion) promotions
+    that are beneficial will be accepted.
+
+    The implementation checks if the complexity of the first map (the one that
+    lacks the horizontal dimension) is not too large, such that inlining is
+    beneficial. The rules, which are empirical, are summarized as follows:
+    - The number of nodes inside the Map scope is below a certain value (currently
+        20 nodes).
+    - The Map only contain Tasklets and AccessNodes refering to transient data.
+    - There are no WCR edges.
+
+    For arguments see the `MapPromotionCallBack`.
+    """
+
+    # We only apply the rule to horizontal promotion. Vertical promotion is known
+    #  to be beneficial, especially in conjunction with `LoopBloking`.
+    if not any(
+        missing_param.endswith("_gtx_horizontal") for missing_param in missing_map_parameters
+    ):
+        return True
+
+    # NOTE: Inclusion of the exit is important that we get the edges that
+    #   actually write the result.
+    first_map_entry = state.entry_node(first_map_exit)
+    first_map_scope = state.scope_subgraph(first_map_entry, include_entry=True, include_exit=True)
+
+    # If there are more than 20 nodes we assume that the promotion is not
+    #  beneficial. This is an arbitrary value.
+    if first_map_scope.number_of_nodes() > 22:
+        return False
+
+    for node in first_map_scope.nodes():
+        if node in (first_map_entry, first_map_exit):
+            continue
+
+        # All AccessNodes inside must be transient scalars. Because everything else
+        #  indicate (empirical consideration) a more complex computation.
+        if isinstance(node, dace_nodes.AccessNode):
+            desc = node.desc(sdfg)
+            if (not isinstance(desc, dace_data.Scalar)) and (not desc.transient):
+                return False
+            continue
+
+        # A tasklet is considered to be a cheap computation.
+        if isinstance(node, dace_nodes.Tasklet):
+            continue
+
+        # Everything else is considered to be a complex computation,
+        #  and thus the Map should not be promoted.
+        return False
+
+    for edge in first_map_scope.edges():
+        # If we have WCR then we have complex computations, most likely
+        #   reductions, thus we will refuse the fusing.
+        if edge.data.wcr is not None:
+            return False
+
+    return True

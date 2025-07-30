@@ -15,7 +15,7 @@ from typing import TypeVar, cast, overload
 
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.type_system import type_specifications as it_ts
@@ -149,11 +149,29 @@ def _(arg: ts.ScalarType) -> ts.ScalarType:
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
-@_register_builtin_type_synthesizer(
-    fun_names=builtins.BINARY_MATH_COMPARISON_BUILTINS | builtins.BINARY_LOGICAL_BUILTINS
-)
-def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType | ts.TupleType:
+def synthesize_binary_math_comparison_builtins(
+    lhs, rhs
+) -> ts.ScalarType | ts.TupleType | ts.DomainType:
+    if isinstance(lhs, ts.ScalarType) and isinstance(rhs, ts.DimensionType):
+        return ts.DomainType(dims=[rhs.dim])
+    if isinstance(lhs, ts.DimensionType) and isinstance(rhs, ts.ScalarType):
+        return ts.DomainType(dims=[lhs.dim])
+    assert all(isinstance(lhs, (ts.ScalarType, ts.DeferredType)) for arg in (lhs, rhs))
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
+
+
+@_register_builtin_type_synthesizer(fun_names=builtins.BINARY_MATH_COMPARISON_BUILTINS)
+def _(lhs, rhs) -> ts.ScalarType | ts.TupleType | ts.DomainType:
+    return synthesize_binary_math_comparison_builtins(lhs, rhs)
+
+
+@_register_builtin_type_synthesizer(fun_names=builtins.BINARY_LOGICAL_BUILTINS)
+def _(lhs, rhs) -> ts.ScalarType | ts.TupleType | ts.DomainType:
+    if isinstance(lhs, ts.DomainType) and isinstance(rhs, ts.DomainType):
+        assert lhs.dims != "unknown" and rhs.dims != "unknown"
+        return ts.DomainType(dims=common.promote_dims(lhs.dims, rhs.dims))
+    else:
+        return synthesize_binary_math_comparison_builtins(lhs, rhs)
 
 
 @_register_builtin_type_synthesizer
@@ -227,9 +245,9 @@ def named_range(
 
 
 @_register_builtin_type_synthesizer(fun_names=["cartesian_domain", "unstructured_domain"])
-def _(*args: it_ts.NamedRangeType) -> it_ts.DomainType:
+def _(*args: it_ts.NamedRangeType) -> ts.DomainType:
     assert all(isinstance(arg, it_ts.NamedRangeType) for arg in args)
-    return it_ts.DomainType(dims=[arg.dim for arg in args])
+    return ts.DomainType(dims=[arg.dim for arg in args])
 
 
 @_register_builtin_type_synthesizer
@@ -243,6 +261,39 @@ def index(arg: ts.DimensionType) -> ts.FieldType:
         dims=[arg.dim],
         dtype=ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())),
     )
+
+
+@_register_builtin_type_synthesizer
+def concat_where(
+    domain: ts.DomainType,
+    true_field: ts.FieldType | ts.TupleType | ts.DeferredType,
+    false_field: ts.FieldType | ts.TupleType | ts.DeferredType,
+) -> ts.FieldType | ts.TupleType | ts.DeferredType:
+    if isinstance(true_field, ts.DeferredType) or isinstance(false_field, ts.DeferredType):
+        return ts.DeferredType(constraint=None)
+
+    @utils.tree_map(
+        collection_type=ts.TupleType,
+        result_collection_constructor=lambda el: ts.TupleType(types=list(el)),
+    )
+    def deduce_return_type(tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType):
+        if any(isinstance(b, ts.DeferredType) for b in [tb, fb]):
+            return ts.DeferredType(constraint=ts.FieldType)
+
+        tb_dtype, fb_dtype = (type_info.extract_dtype(b) for b in [tb, fb])
+
+        assert tb_dtype == fb_dtype, (
+            f"Field arguments must be of same dtype, got '{tb_dtype}' != '{fb_dtype}'."
+        )
+        dtype = tb_dtype
+
+        return_dims = common.promote_dims(
+            domain.dims, type_info.extract_dims(type_info.promote(tb, fb))
+        )
+        return_type = ts.FieldType(dims=return_dims, dtype=dtype)
+        return return_type
+
+    return deduce_return_type(true_field, false_field)
 
 
 @_register_builtin_type_synthesizer
@@ -321,15 +372,11 @@ def _collect_and_check_dimensions(input_: ts.TypeSpec) -> list[common.Dimension]
         .filter(lambda dims: len(dims) > 0)
         .to_list()
     )
-    if all_input_dims:
-        assert all(cur_input_dims == all_input_dims[0] for cur_input_dims in all_input_dims)
-        return all_input_dims[0]
-
-    return []
+    return common.promote_dims(*all_input_dims)
 
 
 def _convert_as_fieldop_input_to_iterator(
-    domain: it_ts.DomainType, input_: ts.TypeSpec
+    domain: ts.DomainType, input_: ts.TypeSpec
 ) -> it_ts.IteratorType:
     """
     Convert a field operation input into an iterator type, preserving its dimensions and data type.
@@ -448,7 +495,11 @@ def _resolve_dimensions(
         ... )
         >>> offset_provider_type = {
         ...     "V2E": common.NeighborConnectivityType(
-        ...         domain=(Vertex, V2E), codomain=Edge, skip_value=None, dtype=None, max_neighbors=4
+        ...         domain=(Vertex, V2E),
+        ...         codomain=Edge,
+        ...         skip_value=None,
+        ...         dtype=None,
+        ...         max_neighbors=4,
         ...     ),
         ...     "KOff": K,
         ... }
@@ -473,7 +524,7 @@ def _resolve_dimensions(
 @_register_builtin_type_synthesizer
 def as_fieldop(
     stencil: TypeSynthesizer,
-    domain: Optional[it_ts.DomainType] = None,
+    domain: Optional[ts.DomainType] = None,
     *,
     offset_provider_type: common.OffsetProviderType,
 ) -> TypeSynthesizer:
@@ -512,7 +563,7 @@ def as_fieldop(
                             )
 
                         assert all(isinstance(dim, common.Dimension) for dim in output_dims)
-                        deduced_domain = it_ts.DomainType(dims=output_dims)
+                        deduced_domain = ts.DomainType(dims=output_dims)
 
             if deduced_domain:
                 domain = deduced_domain

@@ -20,7 +20,7 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.codegen.targets import cpp as dace_cpp
-from dace.sdfg import nodes as dace_nodes
+from dace.sdfg import memlet_utils as dace_mutils, nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -71,9 +71,9 @@ def gt_gpu_transformation(
         - Investigate if the order of iteration is not changed (it should not).
         - Investigate if the trivial GPU map remover is still needed.
     """
-    assert (
-        len(kwargs) == 0
-    ), f"gt_gpu_transformation(): found unknown arguments: {', '.join(arg for arg in kwargs.keys())}"
+    assert len(kwargs) == 0, (
+        f"gt_gpu_transformation(): found unknown arguments: {', '.join(arg for arg in kwargs.keys())}"
+    )
 
     # Turn all global arrays (which we identify as input) into GPU memory.
     #  This way the GPU transformation will not create this copying stuff.
@@ -84,7 +84,7 @@ def gt_gpu_transformation(
 
     # Now turn it into a GPU SDFG
     sdfg.apply_gpu_transformations(
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
         simplify=False,
     )
@@ -97,16 +97,16 @@ def gt_gpu_transformation(
         #   it can be removed, it should definitely be reworked.
         gt_remove_trivial_gpu_maps(
             sdfg=sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
-        gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+        gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     # TODO(phimuell): Fixing the stride problem in DaCe.
     sdfg = gt_gpu_transform_non_standard_memlet(
         sdfg=sdfg,
         map_postprocess=True,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -168,30 +168,38 @@ def gt_gpu_transform_non_standard_memlet(
 
     # This function allows to restrict any fusion operation to the maps
     #  that we have just created.
-    def restrict_fusion_to_newly_created_maps(
-        self: gtx_transformations.MapFusion,
+    def restrict_fusion_to_newly_created_maps_vertical(
+        self: gtx_transformations.MapFusionVertical,
+        map_exit_1: dace_nodes.MapExit,
+        map_entry_2: dace_nodes.MapEntry,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
+    ) -> bool:
+        return (map_entry_2 in new_maps) or (graph.entry_node(map_exit_1) in new_maps)
+
+    def restrict_fusion_to_newly_created_maps_horizontal(
+        self: gtx_transformations.MapFusionHorizontal,
         map_entry_1: dace_nodes.MapEntry,
         map_entry_2: dace_nodes.MapEntry,
         graph: Union[dace.SDFGState, dace.SDFG],
         sdfg: dace.SDFG,
-        permissive: bool,
     ) -> bool:
-        return any(new_entry in new_maps for new_entry in [map_entry_1, map_entry_2])
+        return (map_entry_1 in new_maps) or (map_entry_2 in new_maps)
 
     # Now try to fuse the maps together, but restrict them that at least one map
     #  needs to be new.
     sdfg.apply_transformations_repeated(
         [
-            gtx_transformations.MapFusionSerial(
+            gtx_transformations.MapFusionVertical(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_fusion_to_newly_created_maps,
+                check_fusion_callback=restrict_fusion_to_newly_created_maps_vertical,
             ),
-            gtx_transformations.MapFusionParallel(
+            gtx_transformations.MapFusionHorizontal(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_fusion_to_newly_created_maps,
+                check_fusion_callback=restrict_fusion_to_newly_created_maps_horizontal,
             ),
         ],
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -234,6 +242,9 @@ def gt_gpu_transform_non_standard_memlet(
             )
         )
 
+    if validate or validate_all:
+        sdfg.validate()
+
     return sdfg
 
 
@@ -262,7 +273,7 @@ def _gt_expand_non_standard_memlets_sdfg(
     new_maps: set[dace_nodes.MapEntry] = set()
     # The implementation is based on DaCe's code generator, see `dace/codegen/targets/cuda.py`
     #  in the function `preprocess()`
-    # NOTE: This implementation needs a DaCe version that includes https://github.com/spcl/dace/pull/1976
+    # NOTE: This implementation needs a DaCe version that includes https://github.com/spcl/dace/pull/2033
     for state in sdfg.states():
         for e in state.edges():
             # We are only interested in edges that connects two access nodes of GPU memory.
@@ -289,6 +300,20 @@ def _gt_expand_non_standard_memlets_sdfg(
                 is_c_order = src_strides[-1] == 1 and dst_strides[-1] == 1
                 if is_c_order or is_fortran_order:
                     continue
+
+                # NOTE: Special case of continuous copy
+                # Example: dcol[0:I, 0:J, k] -> datacol[0:I, 0:J]
+                # with copy shape [I, J] and strides [J*K, K], [J, 1]
+                if src_strides[-1] != 1 or dst_strides[-1] != 1:
+                    try:
+                        is_src_cont = src_strides[0] / src_strides[1] == copy_shape[1]
+                        is_dst_cont = dst_strides[0] / dst_strides[1] == copy_shape[1]
+                    except (TypeError, ValueError):
+                        is_src_cont = False
+                        is_dst_cont = False
+                    if is_src_cont and is_dst_cont:
+                        continue
+
             elif dims > 2:
                 if not (src_strides[-1] != 1 or dst_strides[-1] != 1):
                     continue
@@ -298,27 +323,27 @@ def _gt_expand_non_standard_memlets_sdfg(
                 edge.dst for edge in state.out_edges(a)
             ]
 
-            # Turn unsupported copy to a map
-            try:
-                dace_transformation.dataflow.CopyToMap.apply_to(
-                    sdfg,
-                    save=False,
-                    annotate=False,
-                    a=a,
-                    b=b,
-                    options={
-                        "ignore_strides": True
-                    },  # apply 'CopyToMap' even if src/dst strides are different
-                )
-            except ValueError:  # If transformation doesn't match, continue normally
-                continue
+            if not dace_mutils.can_memlet_be_turned_into_a_map(
+                edge=e, state=state, sdfg=sdfg, ignore_strides=True
+            ):
+                # NOTE: In DaCe, they simply ignore that case and continue to the
+                #   code generator. In GT4Py we generate an error.
+                raise RuntimeError(f"Unable to turn the not supported edge '{e}' into a copy Map.")
+
+            # Turn the not supported Memlet into a copy Map. We have to do it here,
+            #  such that we can then set their iteration order correctly.
+            dace_mutils.memlet_to_map(
+                edge=e,
+                state=state,
+                sdfg=sdfg,
+                ignore_strides=True,
+            )
 
             # We find the new map by comparing the new neighborhood of `a` with the old one.
             new_nodes: set[dace_nodes.MapEntry] = {
                 edge.dst for edge in state.out_edges(a) if edge.dst not in old_neighbors_of_a
             }
             assert any(isinstance(new_node, dace_nodes.MapEntry) for new_node in new_nodes)
-            assert len(new_nodes) == 1
             new_maps.update(new_nodes)
     return new_maps
 
@@ -643,20 +668,24 @@ def gt_remove_trivial_gpu_maps(
             only_gpu_maps=True,
         ),
         validate=False,
-        validate_all=False,
+        validate_all=validate_all,
     )
-    gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+    gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     # Now we try to fuse them together, however, we restrict the fusion to trivial
     #  GPU map.
     def restrict_to_trivial_gpu_maps(
-        self: gtx_transformations.MapFusion,
-        map_entry_1: dace_nodes.MapEntry,
+        self: Union[gtx_transformations.MapFusionVertical, gtx_transformations.MapFusionHorizontal],
+        map_node_1: Union[dace_nodes.MapEntry, dace_nodes.MapExit],
         map_entry_2: dace_nodes.MapEntry,
         graph: Union[dace.SDFGState, dace.SDFG],
         sdfg: dace.SDFG,
-        permissive: bool,
     ) -> bool:
+        map_entry_1 = (
+            map_node_1
+            if isinstance(map_node_1, dace_nodes.MapEntry)
+            else graph.entry_node(map_node_1)
+        )
         for map_entry in [map_entry_1, map_entry_2]:
             _map = map_entry.map
             if len(_map.params) != 1:
@@ -672,18 +701,21 @@ def gt_remove_trivial_gpu_maps(
 
     sdfg.apply_transformations_repeated(
         [
-            gtx_transformations.MapFusionSerial(
+            gtx_transformations.MapFusionVertical(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_to_trivial_gpu_maps,
+                check_fusion_callback=restrict_to_trivial_gpu_maps,
             ),
-            gtx_transformations.MapFusionParallel(
+            gtx_transformations.MapFusionHorizontal(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_to_trivial_gpu_maps,
+                check_fusion_callback=restrict_to_trivial_gpu_maps,
             ),
         ],
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
+
+    if validate:
+        sdfg.validate()
 
     return sdfg
 
@@ -805,8 +837,14 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         org_trivial_map_range = copy.deepcopy(trivial_map.range)
         try:
             self._promote_map(graph, replace_trivail_map_parameter=False)
-            if not gtx_transformations.MapFusionSerial.can_be_applied_to(
+            if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
+                # `assume_always_shared` does not influences if Maps can be fused or not,
+                #  it only influences what happens to the intermediate storage. If we set
+                #  it we do not need to scan the entire SDFG.
+                options={
+                    "assume_always_shared": True,
+                },
                 first_map_exit=trivial_map_exit,
                 array=self.access_node,
                 second_map_entry=self.second_map_entry,
@@ -833,7 +871,9 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
 
         # Perform the fusing if requested.
         if not self.do_not_fuse:
-            gtx_transformations.MapFusionSerial.apply_to(
+            # We can not specify `assume_always_shared` here, because we have to handle the
+            #  intermediate properly.
+            gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
                 first_map_exit=trivial_map_exit,
                 array=access_node,
@@ -872,3 +912,22 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         # Now copy parameter and the ranges from the second to the trivial map.
         trivial_map.params = copy.deepcopy(second_map.params)
         trivial_map.range = copy.deepcopy(second_map.range)
+
+
+def gt_gpu_apply_mempool(sdfg: dace.SDFG) -> None:
+    """Enables the stream ordered memory allocator in CUDA code generation.
+
+    It sets the `pool` flag on all transients allocated in GPU global memory.
+    The dace code genarator will handle this flag by calling `cudaMallocAsync`
+    and `cudaFreeAsync` in the CUDA code for allocation/release of the buffers.
+
+    Args:
+        sdfg: The SDFG that should be processed.
+    """
+    for _, _, desc in sdfg.arrays_recursive():
+        if (
+            isinstance(desc, dace.data.Array)
+            and desc.storage == dace.StorageType.GPU_Global
+            and desc.transient
+        ):
+            desc.pool = True

@@ -212,7 +212,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 connector=conn_name,
             )
 
-        self._update_symbol_mapping(if_block)
+        self._update_symbol_mapping(if_block, sdfg)
 
         self._remove_outside_dataflow(
             sdfg=sdfg,
@@ -226,13 +226,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         sdfg.reset_cfg_list()
 
         # Readjust the Subsets.
-        # TODO(phimuell): Technically only needed if we patched some data from
-        #   beyond the Map inside the SDFG.
-        dace_propagation.propagate_memlets_nested_sdfg(
-            parent_sdfg=sdfg,
-            parent_state=graph,
-            nsdfg_node=if_block,
-        )
+        #  As a side effect this call will also properly propagate the nested SDFG `if_block`.
+        dace_propagation.propagate_memlets_map_scope(sdfg, graph, enclosing_map)
 
     def _replicate_dataflow_into_branch(
         self,
@@ -392,7 +387,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     )
                     assert outer_data.data in inner_sdfg.arrays
                     assert not inner_sdfg.arrays[outer_data.data].transient
-                    new_nodes[outer_data] = branch_state.add_access(outer_data.data)
+                    new_nodes[outer_data] = branch_state.add_access(
+                        outer_data.data, copy.copy(outer_data.debuginfo)
+                    )
 
                 # Now create the edge in the inner state.
                 branch_state.add_edge(
@@ -440,6 +437,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     def _update_symbol_mapping(
         self,
         if_block: dace_nodes.NestedSDFG,
+        parent: dace.SDFG,
     ) -> None:
         """Updates the symbol mapping of the nested SDFG.
 
@@ -453,12 +451,25 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # Add new global symbols to nested SDFG.
         #  The code is based on `SDFGState.add_nested_sdfg()`.
-        symbols = if_block.sdfg.symbols
-        for sym, symval in if_block.symbol_mapping.items():
-            if sym not in symbols:
+        if_block_symbols = if_block.sdfg.symbols
+        parent_symbols = parent.symbols
+        for new_sym in missing_symbols:
+            if new_sym in if_block_symbols:
+                # The symbol is already known, so we check that it is the same type as in the
+                #  parent SDFG.
+                assert if_block_symbols[new_sym] == parent_symbols[new_sym]
+
+            elif new_sym in parent_symbols:
+                # The symbol is known to the parent SDFG, so take the type from there.
+                if_block.sdfg.add_symbol(new_sym, parent_symbols[new_sym])
+
+            else:
+                # Figuring out the type of the symbol based on the computation we do.
+                # TODO(phimuell): Maybe switch to `symbols_defined_at()` as it is indicated
+                #   in the `SDFGState.add_nested_sdfg()` function.
                 if_block.sdfg.add_symbol(
-                    sym,
-                    dace.codegen.tools.type_inference.infer_expr_type(symval, if_block.sdfg.symbols)
+                    new_sym,
+                    dace.codegen.tools.type_inference.infer_expr_type(new_sym, parent_symbols)
                     or dace_dtypes.typeclass(int),
                 )
 

@@ -9,9 +9,11 @@
 import uuid
 from typing import Literal, Union, overload, Any
 
+import numpy as np
 import dace
 import copy
 from dace.sdfg import nodes as dace_nodes
+from dace import data as dace_data
 
 
 @overload
@@ -87,3 +89,39 @@ def compile_and_run_sdfg(
         csdfg(*args, **kwargs)
 
     return csdfg
+
+
+def make_sdfg_args(
+    sdfg: dace.SDFG,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Generates the arguments to call the SDFG.
+
+    The function returns data for the reference and the result call.
+    You can compare the two using `compar_sdfg_res()`.
+    """
+    ref: dict[str, Any] = {}
+    for arg_name in sdfg.signature_arglist(False):
+        if arg_name in sdfg.arrays:
+            desc = sdfg.arrays[arg_name]
+            assert not desc.transient
+            ref[arg_name] = (
+                np.array(np.random.rand(*desc.shape), copy=True, dtype=desc.dtype.as_numpy_dtype())
+                if isinstance(desc, dace_data.Array)
+                else np.array(np.random.rand(1), copy=True, dtype=desc.dtype.as_numpy_dtype())[0]
+            )
+        elif arg_name in sdfg.symbols:
+            ref[arg_name] = np.array(
+                np.random.rand(1), copy=True, dtype=sdfg.symbols[arg_name].as_numpy_dtype()
+            )[0]
+        else:
+            raise ValueError(f"Could not find argument: {arg_name}")
+    res = copy.deepcopy(ref)
+    return ref, res
+
+
+def compare_sdfg_res(
+    ref: dict[str, Any],
+    res: dict[str, Any],
+) -> bool:
+    """Compares if `res` and  `ref` are the same."""
+    return all(np.allclose(ref[name], res[name]) for name in ref.keys())

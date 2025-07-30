@@ -16,6 +16,10 @@ import dace
 from dace import subsets as dace_subsets
 from dace.sdfg import nodes as dace_nodes
 
+from gt4py.next.program_processors.runners.dace.transformations import (
+    splitting_tools as gtx_dace_split,
+)
+
 
 def copy_map_graph(
     sdfg: dace.SDFG,
@@ -68,16 +72,16 @@ def copy_map_graph(
                 )
             else:
                 raise ValueError(f"Unsupported data type: {type(data_desc)}")
-            node_ = graph.add_access(new_data_name)
+            node_ = graph.add_access(new_data_name, copy.copy(node.debuginfo))
             new_data_names[data_name] = new_data_name
             new_data_descriptors[data_name] = new_data_desc
         elif isinstance(node, dace_nodes.NestedSDFG):
             node_ = graph.add_nested_sdfg(
-                copy.deepcopy(node.sdfg),
-                sdfg,
-                node.in_connectors,
-                node.out_connectors,
-                node.symbol_mapping,
+                sdfg=copy.deepcopy(node.sdfg),
+                inputs=set(node.in_connectors.keys()),
+                outputs=set(node.out_connectors.keys()),
+                symbol_mapping=node.symbol_mapping.copy(),
+                debuginfo=copy.copy(node.debuginfo),
             )
             # ensure the correct reference to parent
             node_.sdfg.parent_nsdfg_node = node_
@@ -213,15 +217,8 @@ def split_overlapping_map_range(
         [second_map_dict[param] for param in sorted(second_map_params)]
     )
 
-    try:
-        if first_map_sorted_range.intersects(second_map_sorted_range) == False:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
-            # in case of disjoint ranges, we cannot find an overlapping range
-            return None
-    except TypeError:
-        # cannot determine truth value of Relational
-        # in case the ranges are defined with symbols we cannot determine the intersection
+    if gtx_dace_split.never_intersecting(first_map_sorted_range, second_map_sorted_range):
         return None
-
     if (first_map_sorted_range == second_map_sorted_range) == True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
         return None
 

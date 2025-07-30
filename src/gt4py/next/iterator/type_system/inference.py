@@ -35,9 +35,9 @@ def _is_representable_as_int(s: int | str) -> bool:
 
 def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
     if node.type:
-        assert type_info.is_compatible_type(
-            node.type, type_
-        ), f"Node {node!s} already has a type {node.type} which differs from {type_}."
+        assert type_info.is_compatible_type(node.type, type_), (
+            f"Node {node!s} already has a type {node.type} which differs from {type_}."
+        )
     # Also populate the type of the parameters of a lambda. That way the one can access the type
     # of a parameter by a lookup in the symbol table. As long as `_set_node_type` is used
     # exclusively, the information stays consistent with the types stored in the `FunctionType`
@@ -185,9 +185,9 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         offset_provider_type: common.OffsetProviderType,
         **kwargs,
     ) -> Union[ts.TypeSpec, ObservableTypeSynthesizer]:
-        assert all(
-            isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args
-        ), "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
+        assert all(isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args), (
+            "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
+        )
 
         return_type_or_synthesizer = self.type_synthesizer(
             *args, offset_provider_type=offset_provider_type, **kwargs
@@ -455,7 +455,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     def visit_Temporary(self, node: itir.Temporary, *, ctx) -> ts.FieldType | ts.TupleType:
         domain = self.visit(node.domain, ctx=ctx)
-        assert isinstance(domain, it_ts.DomainType)
+        assert isinstance(domain, ts.DomainType)
         assert domain.dims != "unknown"
         assert node.dtype
         return type_info.apply_to_primitive_constituents(
@@ -510,6 +510,12 @@ class ITIRTypeInference(eve.NodeTranslator):
     def visit_Literal(self, node: itir.Literal, **kwargs) -> ts.ScalarType:
         assert isinstance(node.type, ts.ScalarType)
         return node.type
+
+    def visit_InfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
+        return ts.ScalarType(kind=ts.ScalarKind.INT32)
+
+    def visit_NegInfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
+        return ts.ScalarType(kind=ts.ScalarKind.INT32)
 
     def visit_SymRef(
         self, node: itir.SymRef, *, ctx: dict[str, ts.TypeSpec]
@@ -588,7 +594,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         return result
 
     def visit_Node(self, node: itir.Node, **kwargs):
-        raise NotImplementedError(f"No type rule for nodes of type " f"'{type(node).__name__}'.")
+        raise NotImplementedError(f"No type rule for nodes of type '{type(node).__name__}'.")
 
 
 infer = ITIRTypeInference.apply

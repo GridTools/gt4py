@@ -325,7 +325,7 @@ class JITCachingStrategy(CachingStrategy):
         # typeignore because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore
             self.builder.options.qualified_name,
-            gt_utils.shashed_id(gt_utils.shashed_id(fingerprint), self.options_id),
+            gt_utils.shashed_id(fingerprint, self.options_id),
         )
 
     @property
@@ -346,7 +346,7 @@ class JITCachingStrategy(CachingStrategy):
 
 class NoCachingStrategy(CachingStrategy):
     """
-    Apply no caching, useful for CLI.
+    Apply no caching.
 
     Instead of calculating paths and names based on a stencil fingerprint, use
     user input or by default the current working dir to output source and build files.

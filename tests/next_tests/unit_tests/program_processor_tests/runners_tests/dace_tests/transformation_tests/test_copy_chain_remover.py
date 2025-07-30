@@ -58,9 +58,9 @@ def _make_simple_linear_chain_sdfg() -> dace.SDFG:
     return sdfg
 
 
-def _make_diff_sizes_linear_chain_sdfg() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.Tasklet]
-):
+def _make_diff_sizes_linear_chain_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.Tasklet
+]:
     """Creates a linear chain of copies.
 
     The main differences compared to the SDFG made by `_make_simple_linear_chain_sdfg()`
@@ -308,7 +308,6 @@ def _make_linear_chain_with_nested_sdfg_sdfg() -> tuple[dace.SDFG, dace.SDFG]:
 
     nsdfg = state.add_nested_sdfg(
         inner_sdfg,
-        parent=sdfg,
         inputs={"i0"},
         outputs={"o0"},
         symbol_mapping={},

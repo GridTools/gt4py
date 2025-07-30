@@ -8,10 +8,11 @@
 
 import dataclasses
 from collections import ChainMap
-from typing import Callable
+from typing import Callable, Iterable, TypeVar
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
@@ -216,3 +217,39 @@ def extract_projector(
         projector = projector if cur_projector is None else im.compose(cur_projector, projector)
         projector = inline_lambdas.InlineLambdas.apply(projector)
         return extract_projector(expr, projector, _depth + 1)
+
+
+def grid_type_from_domain(domain: itir.FunCall) -> common.GridType:
+    if cpm.is_call_to(domain, "cartesian_domain"):
+        return common.GridType.CARTESIAN
+    else:
+        assert cpm.is_call_to(domain, "unstructured_domain")
+        return common.GridType.UNSTRUCTURED
+
+
+def grid_type_from_program(program: itir.Program) -> common.GridType:
+    domains = program.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
+    grid_types = {grid_type_from_domain(d) for d in domains}
+    if len(grid_types) != 1:
+        raise ValueError(
+            f"Found 'set_at' with more than one 'GridType': '{grid_types}'. This is currently not supported."
+        )
+    return grid_types.pop()
+
+
+SymOrStr = TypeVar("SymOrStr", itir.Sym, str)
+
+
+def unique_symbol(sym: SymOrStr, reserved_names: Iterable[str]) -> SymOrStr:
+    """
+    Give a symbol and a list of reserved names return a unique symbol with similar or equal name.
+    """
+    if isinstance(sym, itir.Sym):
+        return im.sym(unique_symbol(sym.id, reserved_names), sym.type)  # type: ignore[return-value]  # mypy not smart enough
+
+    assert isinstance(sym, str)
+    name: str = sym
+    while name in reserved_names:
+        name = name + "_"
+
+    return name

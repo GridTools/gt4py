@@ -408,6 +408,11 @@ def bool(*args):  # noqa: A001 [builtin-variable-shadowing]
 
 
 @builtin_dispatch
+def concat_where(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def get_domain(*args):
     raise BackendNotSelectedError()
 
@@ -500,6 +505,7 @@ BUILTINS = {
     "scan",
     "tuple_get",
     "unstructured_domain",
+    "concat_where",
     *ARITHMETIC_BUILTINS,
     *TYPE_BUILTINS,
 }

@@ -11,7 +11,7 @@ import copy
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union, overload
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, TypedDict, Union
 
 import pybind11
 import setuptools
@@ -20,6 +20,12 @@ from setuptools.command.build_ext import build_ext
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
+
+
+class SetuptoolsArgs(TypedDict):
+    name: str
+    ext_modules: list[setuptools.Extension]
+    script_args: list[str]
 
 
 def get_dace_module_path() -> Optional[str]:
@@ -184,31 +190,6 @@ def setuptools_setup(*, build_ext_class: type[build_ext] | None, **kwargs) -> No
     setuptools.distutils.core.run_commands(dist)
 
 
-# The following tells mypy to accept unpacking kwargs
-@overload
-def build_pybind_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str
-) -> Tuple[str, str]: ...
-
-
-@overload
-def build_pybind_ext(
-    name: str,
-    sources: list,
-    build_path: str,
-    target_path: str,
-    *,
-    include_dirs: Optional[List[str]] = None,
-    library_dirs: Optional[List[str]] = None,
-    libraries: Optional[List[str]] = None,
-    extra_compile_args: Optional[Union[List[str], Dict[str, List[str]]]] = None,
-    extra_link_args: Optional[List[str]] = None,
-    build_ext_class: Optional[Type] = None,
-    verbose: bool = False,
-    clean: bool = False,
-) -> Tuple[str, str]: ...
-
-
 def build_pybind_ext(
     name: str,
     sources: list,
@@ -250,7 +231,7 @@ def build_pybind_ext(
         extra_link_args=extra_link_args,
     )
 
-    setuptools_args = dict(
+    setuptools_args = SetuptoolsArgs(
         name=name,
         ext_modules=[py_extension],
         script_args=[
@@ -288,14 +269,6 @@ def build_pybind_ext(
         distutils.sysconfig._config_vars[key] = value
 
     return module_name, dest_path
-
-
-# The following tells mypy to accept unpacking kwargs
-@overload
-def build_pybind_cuda_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str
-) -> Tuple[str, str]:
-    pass
 
 
 def build_pybind_cuda_ext(

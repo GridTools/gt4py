@@ -49,6 +49,9 @@ class VoidType(TypeSpec):
 class DimensionType(TypeSpec):
     dim: common.Dimension
 
+    def __str__(self) -> str:
+        return str(self.dim)
+
 
 class OffsetType(TypeSpec):
     # TODO(havogt): replace by ConnectivityType
@@ -138,3 +141,7 @@ class FunctionType(TypeSpec, CallableType):
         kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
+
+
+class DomainType(DataType):
+    dims: list[common.Dimension]
