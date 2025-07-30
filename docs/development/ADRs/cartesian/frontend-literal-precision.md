@@ -1,10 +1,16 @@
 # Literal precision
 
-In the context of porting a numerical weather prediction (NWP) model, porting mixed precision code, we realized there's a need to control the default literal precision to pass numerical validation tests against data serialized from original model runs.
+Most numerical weather prediction (NWP) models are built with the capability to run in either single or double precision.
+Normally this is controlled at compile-time.
+In order to duplicate this behavior, there is need for a way to control the default literal precision.
+This also simplifies validation as this is normally done against data serialized from original model runs.
 
 ## Context
 
-Scenario: You are porting an NWP model from FORTRAN to GT4Py stencils. To have setup end-to-end numerical regression tests with data serialized from the original FORTRAN code and want to validate your port by running with that serialized data, expecting equal/similar results. Your original FORTRAN code generally has a type definition for the default float type (such that the model can run with single- and double-precision floats). Certain parts of the original FORTRAN code have mixed precision calculations, i.e. places where authors opted for hard-coded single- or double-precision calculations by design.
+Scenario: You are porting an NWP model from FORTRAN to GT4Py stencils.
+To have setup end-to-end numerical regression tests with data serialized from the original FORTRAN code and want to validate your port by running with that serialized data, expecting equal/similar results.
+Your original FORTRAN code generally has a type definition for the default float type (such that the model can run with single- and double-precision floats).
+Certain parts of the original FORTRAN code have mixed precision calculations, i.e. places where authors opted for hard-coded single- or double-precision calculations by design.
 
 To truthfully re-create the numerics of the FORTRAN code in the example above, we need two things
 
