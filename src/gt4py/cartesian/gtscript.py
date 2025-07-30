@@ -913,15 +913,15 @@ def trunc(x):
 
 
 def round(x):  # noqa: A001 [builtin-variable-shadowing]e
-    """Return the rounded value into original type"""
+    """Computes the nearest integer value to `x`, rounding halfway cases away from zero."""
     pass
 
 
 def erf(x):
-    """Error function"""
+    """Computes the error function of `x`."""
     pass
 
 
 def erfc(x):
-    """Return the complementary error function, which is 1.0 - erf"""
+    """Computes the complementary error function of `x`, which is `1.0 - erf(x)`."""
     pass
