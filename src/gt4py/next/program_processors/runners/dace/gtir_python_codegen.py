@@ -133,7 +133,7 @@ class PythonCodegen(codegen.TemplatedGenerator):
 
     Literal = as_fmt("{value}")
 
-    def visit_AxisLiteral(self, node: gtir.AxisLiteral, **kwargs) -> str:
+    def visit_AxisLiteral(self, node: gtir.AxisLiteral, **kwargs: Any) -> str:
         return node.value
 
     def visit_FunCall(self, node: gtir.FunCall, args_map: dict[str, gtir.Node]) -> str:
@@ -155,7 +155,7 @@ class PythonCodegen(codegen.TemplatedGenerator):
             return format_builtin(builtin_name, *args)
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
 
-    def visit_InfinityLiteral(self, node: gtir.InfinityLiteral, **kwargs) -> str:
+    def visit_InfinityLiteral(self, node: gtir.InfinityLiteral, **kwargs: Any) -> str:
         return str(sympy.oo) if node == gtir.InfinityLiteral.POSITIVE else str(-sympy.oo)
 
     def visit_SymRef(self, node: gtir.SymRef, args_map: dict[str, gtir.Node]) -> str:
