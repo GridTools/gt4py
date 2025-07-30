@@ -1148,7 +1148,7 @@ def test_gtir_connectivity_shift():
     ce_domain = im.domain(
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
-            Vertex: (
+            Cell: (
                 im.tuple_get(0, im.call("get_domain")("ce_field", im.axis_literal(Cell))),
                 im.tuple_get(1, im.call("get_domain")("ce_field", im.axis_literal(Cell))),
             ),
@@ -1161,7 +1161,7 @@ def test_gtir_connectivity_shift():
     cv_domain = im.domain(
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
-            Vertex: (
+            Cell: (
                 im.tuple_get(0, im.call("get_domain")("ce_field", im.axis_literal(Cell))),
                 im.tuple_get(1, im.call("get_domain")("ce_field", im.axis_literal(Cell))),
             ),
@@ -1294,17 +1294,23 @@ def test_gtir_connectivity_shift():
             gt_conn_E2V=connectivity_E2V.ndarray,
             **FSYMBOLS,
             **make_mesh_symbols(SIMPLE_MESH),
-            __ce_field_0_range_1=SIMPLE_MESH.num_cells,
-            __ce_field_size_1=SIMPLE_MESH.num_edges,
+            __ce_field_Cell_range_0=0,
+            __ce_field_Cell_range_1=SIMPLE_MESH.num_cells,
+            __ce_field_Edge_range_0=0,
+            __ce_field_Edge_range_1=SIMPLE_MESH.num_edges,
             __ce_field_stride_0=SIMPLE_MESH.num_edges,
             __ce_field_stride_1=1,
-            __ev_field_0_range_1=SIMPLE_MESH.num_edges,
-            __ev_field_size_1=SIMPLE_MESH.num_vertices,
+            __ev_field_Edge_range_0=0,
+            __ev_field_Edge_range_1=SIMPLE_MESH.num_edges,
+            __ev_field_Vertex_range_0=0,
+            __ev_field_Vertex_range_1=SIMPLE_MESH.num_vertices,
             __ev_field_stride_0=SIMPLE_MESH.num_vertices,
             __ev_field_stride_1=1,
-            __c2e_offset_0_range_1=SIMPLE_MESH.num_cells,
+            __c2e_offset_Cell_range_0=0,
+            __c2e_offset_Cell_range_1=SIMPLE_MESH.num_cells,
             __c2e_offset_stride_0=1,
-            __e2v_offset_0_range_1=SIMPLE_MESH.num_edges,
+            __e2v_offset_Edge_range_0=0,
+            __e2v_offset_Edge_range_1=SIMPLE_MESH.num_edges,
             __e2v_offset_stride_0=1,
         )
         assert np.allclose(ce, ref)
@@ -1322,15 +1328,6 @@ def test_gtir_connectivity_shift_chain():
             )
         },
     )
-    vertex_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        ranges={
-            Vertex: (
-                im.tuple_get(0, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
-                im.tuple_get(1, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
-            )
-        },
-    )
     testee = gtir.Program(
         id="connectivity_shift_chain",
         function_definitions=[],
@@ -1342,12 +1339,12 @@ def test_gtir_connectivity_shift_chain():
         body=[
             gtir.SetAt(
                 expr=im.as_fieldop(
+                    # let domain inference infer the domain here
                     im.lambda_("it")(im.deref(im.shift("E2V", E2V_neighbor_idx)("it"))),
-                    edge_domain,
                 )(
                     im.as_fieldop(
+                        # let domain inference infer the domain here
                         im.lambda_("it")(im.deref(im.shift("V2E", V2E_neighbor_idx)("it"))),
-                        vertex_domain,
                     )("edges")
                 ),
                 domain=edge_domain,
@@ -1378,7 +1375,8 @@ def test_gtir_connectivity_shift_chain():
         gt_conn_V2E=connectivity_V2E.ndarray,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
-        __edges_out_0_range_1=SIMPLE_MESH.num_edges,
+        __edges_out_Edge_range_0=0,
+        __edges_out_Edge_range_1=SIMPLE_MESH.num_edges,
         __edges_out_stride_0=1,
     )
     assert np.allclose(e_out, ref)
@@ -2009,7 +2007,7 @@ def test_gtir_let_lambda_with_connectivity():
     cell_domain = im.domain(
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
-            Vertex: (
+            Cell: (
                 im.tuple_get(0, im.call("get_domain")("cells", im.axis_literal(Cell))),
                 im.tuple_get(1, im.call("get_domain")("cells", im.axis_literal(Cell))),
             )
