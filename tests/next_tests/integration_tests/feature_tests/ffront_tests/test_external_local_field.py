@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common, int32, neighbor_sum
+from gt4py.next import common, int32, neighbor_sum, astype, int64
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import V2E, Edge, V2EDim, Vertex, unstructured_case
@@ -55,6 +55,28 @@ def test_slice_external_local_field(request, unstructured_case):
     @gtx.field_operator
     def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:
         return inp[V2EDim(0)] + inp[V2EDim(1)] + inp[V2EDim(2)] + inp[V2EDim(3)]
+
+    inp = unstructured_case.as_field(
+        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].asnumpy()
+    )
+
+    cases.verify(
+        unstructured_case,
+        testee,
+        inp,
+        out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
+        ref=np.sum(inp.asnumpy(), axis=1),
+    )
+
+
+def test_slice_external_local_field_with_cast(request, unstructured_case):
+    if request.node.get_closest_marker(pytest.mark.uses_mesh_with_skip_values.name):
+        pytest.skip("This test only works with non-skip value meshes.")
+
+    @gtx.field_operator
+    def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int64]:
+        inp_64 = astype(inp, int64)
+        return inp_64[V2EDim(0)] + inp_64[V2EDim(1)] + inp_64[V2EDim(2)] + inp_64[V2EDim(3)]
 
     inp = unstructured_case.as_field(
         [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].asnumpy()
