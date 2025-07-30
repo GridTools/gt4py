@@ -292,11 +292,11 @@ def frontend_type_to_native_type(literal_precision: int) -> dict[str, DataType]:
         dict[str, DataType]: Mapping of the frontend types to our DataTypes.
     """
     return {
-        "i32": DataType.INT32,
-        "i64": DataType.INT64,
+        "int32": DataType.INT32,
+        "int64": DataType.INT64,
         "int": DataType.INT32 if literal_precision == 32 else DataType.INT64,
-        "f32": DataType.FLOAT32,
-        "f64": DataType.FLOAT64,
+        "float32": DataType.FLOAT32,
+        "float64": DataType.FLOAT64,
         "float": DataType.FLOAT32 if literal_precision == 32 else DataType.FLOAT64,
     }
 
