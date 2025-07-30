@@ -889,8 +889,7 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
             if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
                 options={
-                    "only_inner_maps": self.only_inner_maps,
-                    "only_toplevel_maps": self.only_toplevel_maps,
+                    "only_toplevel_maps": True,
                     "require_all_intermediates": True,
                     "require_exclusive_intermediates": True,
                 },
@@ -924,8 +923,7 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
             gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
                 options={
-                    "only_inner_maps": self.only_inner_maps,
-                    "only_toplevel_maps": self.only_toplevel_maps,
+                    "only_toplevel_maps": True,
                     "require_all_intermediates": True,
                     "require_exclusive_intermediates": True,
                 },
