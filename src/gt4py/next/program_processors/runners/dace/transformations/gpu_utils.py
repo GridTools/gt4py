@@ -416,7 +416,8 @@ def gt_set_gpu_blocksize(
                 if validate_all:
                     sdfg.validate()
                 configured_maps += 1
-    if validate:
+
+    if validate and (not validate_all):
         sdfg.validate()
 
     return configured_maps
@@ -718,7 +719,6 @@ def gt_remove_trivial_gpu_maps(
 
     # Now we try to fuse them together, however, we restrict the fusion to trivial
     #  GPU map.
-    # TODO(phimuell): Replace this with a more performant loop.
     def restrict_to_trivial_gpu_maps(
         self: Union[gtx_transformations.MapFusionVertical, gtx_transformations.MapFusionHorizontal],
         map_node_1: Union[dace_nodes.MapEntry, dace_nodes.MapExit],
@@ -744,6 +744,7 @@ def gt_remove_trivial_gpu_maps(
                 return False
         return True
 
+    # TODO(phimuell): Replace this with a more performant loop.
     sdfg.apply_transformations_repeated(
         [
             gtx_transformations.MapFusionVertical(
@@ -759,7 +760,7 @@ def gt_remove_trivial_gpu_maps(
         validate_all=validate_all,
     )
 
-    if validate:
+    if validate and (not validate_all):
         sdfg.validate()
 
     return sdfg
