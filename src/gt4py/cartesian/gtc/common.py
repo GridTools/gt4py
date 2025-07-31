@@ -178,6 +178,7 @@ class NativeFunction(eve.StrEnum):
     FLOOR = "floor"
     CEIL = "ceil"
     TRUNC = "trunc"
+    ROUND = "round"
 
     IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
@@ -218,6 +219,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.FLOOR: 1,
         NativeFunction.CEIL: 1,
         NativeFunction.TRUNC: 1,
+        NativeFunction.ROUND: 1,
     }.items()
 }
 
@@ -887,6 +889,7 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.FLOOR: "floor",
         NativeFunction.CEIL: "ceil",
         NativeFunction.TRUNC: "trunc",
+        NativeFunction.ROUND: "round",
     },
 }
 

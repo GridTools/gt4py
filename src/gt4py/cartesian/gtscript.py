@@ -59,6 +59,7 @@ MATH_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "round",
 }
 
 builtins = {
@@ -906,4 +907,9 @@ def ceil(x):
 
 def trunc(x):
     """Return the Real value x truncated to an Integral (usually an integer)"""
+    pass
+
+
+def round(x):  # noqa: A001 [builtin-variable-shadowing]e
+    """Computes the nearest integer value to `x`, rounding halfway cases away from zero."""
     pass

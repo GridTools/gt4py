@@ -759,7 +759,8 @@ class IRMaker(ast.NodeVisitor):
             "floor": nodes.NativeFunction.FLOOR,
             "ceil": nodes.NativeFunction.CEIL,
             "trunc": nodes.NativeFunction.TRUNC,
-        }
+            "round": nodes.NativeFunction.ROUND,
+        }  # Conversion table for functions to NativeFunctions
 
     def __call__(self, ast_root: ast.AST):
         assert (
