@@ -40,7 +40,8 @@ BinaryOperator enumeration (:class:`BinaryOperator`)
 NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
     [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
-    `SQRT`, `EXP`, `LOG`, `LOG10`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
+    `SQRT`, `EXP`, `LOG`, `LOG10`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`,
+    `I32`, `I64`, `F32`, `F64`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
@@ -281,6 +282,25 @@ class DataType(enum.Enum):
         return result
 
 
+def frontend_type_to_native_type(literal_precision: int) -> dict[str, DataType]:
+    """Return the mapping of frontend types to native types.
+
+    Args:
+        literal_precision (int): Literal precision used for mapping `int` and `float` to either 32 or 64 bit precision.
+
+    Returns:
+        dict[str, DataType]: Mapping of the frontend types to our DataTypes.
+    """
+    return {
+        "int32": DataType.INT32,
+        "int64": DataType.INT64,
+        "int": DataType.INT32 if literal_precision == 32 else DataType.INT64,
+        "float32": DataType.FLOAT32,
+        "float64": DataType.FLOAT64,
+        "float": DataType.FLOAT32 if literal_precision == 32 else DataType.FLOAT64,
+    }
+
+
 DataType.NATIVE_TYPE_TO_NUMPY = {
     DataType.DEFAULT: "float_",
     DataType.BOOL: "bool",
@@ -408,6 +428,12 @@ class NativeFunction(enum.Enum):
     CEIL = enum.auto()
     TRUNC = enum.auto()
 
+    # Cast operations - share a keyword with type hints
+    I32 = enum.auto()
+    I64 = enum.auto()
+    F32 = enum.auto()
+    F64 = enum.auto()
+
     @property
     def arity(self):
         return type(self).IR_OP_TO_NUM_ARGS[self]
@@ -442,6 +468,10 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.FLOOR: 1,
     NativeFunction.CEIL: 1,
     NativeFunction.TRUNC: 1,
+    NativeFunction.I32: 1,
+    NativeFunction.I64: 1,
+    NativeFunction.F32: 1,
+    NativeFunction.F64: 1,
 }
 
 
