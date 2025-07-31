@@ -307,8 +307,11 @@ def shift(offset, value=None):
     if value is not None:
         if isinstance(value, int):
             value = ensure_offset(value)
-        elif isinstance(value, str):
-            value = ref(value)
+        if isinstance(value, itir.Literal) and value.type.kind in (
+            ts.ScalarKind.INT32,
+            ts.ScalarKind.INT64,
+        ):
+            value = itir.OffsetLiteral(value=int(value.value))
         args.append(value)
     return call(call("shift")(*args))
 
@@ -378,7 +381,7 @@ def lifted_neighbors(offset, it) -> itir.Expr:
 
 
 def as_fieldop_neighbors(
-    offset: str | itir.OffsetLiteral, it: str | itir.Expr, domain: Optional[itir.FunCall] = None
+    offset: str | itir.OffsetLiteral, field: str | itir.Expr, domain: Optional[itir.FunCall] = None
 ) -> itir.Expr:
     """
     Create a fieldop for neighbors call.
@@ -388,7 +391,21 @@ def as_fieldop_neighbors(
     >>> str(as_fieldop_neighbors("off", "a"))
     '(⇑(λ(it) → neighbors(offₒ, it)))(a)'
     """
-    return as_fieldop(lambda_("it")(neighbors(offset, "it")), domain)(it)
+    return as_fieldop(lambda_("it")(neighbors(offset, "it")), domain)(field)
+
+
+def as_fieldop_deref_list_get(
+    list_idx: str | itir.Expr, local_field: str | itir.Expr, domain: Optional[itir.FunCall] = None
+) -> itir.Expr:
+    """
+    Create a fieldop for list_get call.
+
+    Examples
+    --------
+    >>> str(as_fieldop_deref_list_get("idx", "lst"))
+    '(⇑(λ(it) → list_get(idx, ·it)))(lst)'
+    """
+    return as_fieldop(lambda_("it")(list_get(list_idx, deref("it"))), domain)(local_field)
 
 
 def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:

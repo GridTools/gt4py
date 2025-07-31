@@ -82,7 +82,7 @@ class Constant(Expr):
 
 class Subscript(Expr):
     value: Expr
-    index: int
+    index: Expr
 
 
 class Attribute(Expr):
