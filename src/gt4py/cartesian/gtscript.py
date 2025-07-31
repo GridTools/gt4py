@@ -59,6 +59,8 @@ MATH_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "erf",
+    "erfc",
 }
 
 builtins = {
@@ -906,4 +908,14 @@ def ceil(x):
 
 def trunc(x):
     """Return the Real value x truncated to an Integral (usually an integer)"""
+    pass
+
+
+def erf(x):
+    """Computes the error function of `x`."""
+    pass
+
+
+def erfc(x):
+    """Computes the complementary error function of `x`, which is `1.0 - erf(x)`."""
     pass
