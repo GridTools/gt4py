@@ -59,7 +59,7 @@ One argument against this option is the maintenance overhead of supporting both 
 From a technical point of view, this option can be implemented with an optional second argument of round function that GT4Py exposes, i.e.
 
 ```py
-def round(x, rounding_mode = RoundingMode.Default):
+def round(x, rounding_mode = ROUND_MODE_DEFAULT):
     """Computes the integer value nearest to `x` (in floating-point format), rounding halfway cases based on rounding_mode.
 
     This function finds the nearest integer value (in floating point format) to the given number `x`, e.g. `round(2.3) returns `2.0` since
@@ -77,4 +77,28 @@ def round(x, rounding_mode = RoundingMode.Default):
     pass
 ```
 
-The default rounding mode will be centrally defined in `src/gt4py/cartesian/definitions.py` (value subject to discussions) and can be changed with the environment variable `GT4PY_ROUND_DEFAULT` (let me know if you find a better name). That way, users of GT4Py can adjust the rounding mode to their use-cases, both globally and on a case-by-case basis.
+The default rounding mode will be centrally defined in `src/gt4py/cartesian/definitions.py` (value subject to discussions) and can be changed with the environment variable `GT4PY_ROUND_MODE_DEFAULT` (let me know if you find a better name).
+
+```py
+@enum.unique
+class RoundingMode(enum.Enum):
+    ROUND_AWAY_FROM_ZERO = enum.auto()
+    ROUND_TO_EVEN = enum.auto()
+
+def _get_default_rounding_mode() -> RoundingMode:
+    # TODO: fill in the default once the discussion settles
+    default = os.environ.get("GT4PY_ROUND_MODE_DEFAULT", default="SUBJECT_TO_DISCUSSION")
+
+    if default == "ROUND_AWAY_FROM_ZERO":
+        return RoundingMode.ROUND_AWAY_FROM_ZERO
+
+    if default == "ROUND_TO_EVEN":
+        return RoundingMode.ROUND_TO_EVEN
+
+    known = ["ROUND_AWAY_FROM_ZERO", "ROUND_TO_EVEN"]
+    raise ValueError(f"Unexpected rounding mode default '{default}'. Expected one of {", ".join(known)}.")
+
+ROUND_MODE_DEFAULT: RoundingMode = _get_default_rounding_mode()
+```
+
+That way, users of GT4Py can adjust the rounding mode to their use-cases, both globally and on a case-by-case basis.
