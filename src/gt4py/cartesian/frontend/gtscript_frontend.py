@@ -760,8 +760,6 @@ class IRMaker(ast.NodeVisitor):
             "ceil": nodes.NativeFunction.CEIL,
             "trunc": nodes.NativeFunction.TRUNC,
             "round": nodes.NativeFunction.ROUND,
-            "erf": nodes.NativeFunction.ERF,
-            "erfc": nodes.NativeFunction.ERFC,
         }  # Conversion table for functions to NativeFunctions
 
     def __call__(self, ast_root: ast.AST):

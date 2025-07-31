@@ -221,8 +221,6 @@ class OIRToTasklet(eve.NodeVisitor):
             common.NativeFunction.FLOOR: "dace.math.ifloor",
             common.NativeFunction.CEIL: "ceil",
             common.NativeFunction.TRUNC: "trunc",
-            common.NativeFunction.ERF: "erf",
-            common.NativeFunction.ERFC: "erfc",
             common.NativeFunction.ROUND: "round",
         }
         if node not in native_functions:

@@ -341,8 +341,6 @@ class DefIRToGTIR(IRNodeVisitor):
         NativeFunction.CEIL: common.NativeFunction.CEIL,
         NativeFunction.TRUNC: common.NativeFunction.TRUNC,
         NativeFunction.ROUND: common.NativeFunction.ROUND,
-        NativeFunction.ERF: common.NativeFunction.ERF,
-        NativeFunction.ERFC: common.NativeFunction.ERFC,
     }
 
     GT4PY_BUILTIN_TO_GTIR: Final[dict[Builtin, common.BuiltInLiteral]] = {

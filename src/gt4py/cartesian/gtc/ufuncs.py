@@ -10,7 +10,7 @@ import numpy as np
 
 
 try:
-    from scipy.special import erf as erf_, erfc as erfc_, gamma as gamma_
+    from scipy.special import gamma as gamma_
 
 except ImportError:
     import math
@@ -18,10 +18,6 @@ except ImportError:
     # If scipy is not available, emulate gamma function using math.gamma
     gamma_ = np.vectorize(math.gamma)
     gamma_.types = ["f->f", "d->d", "F->F", "D->D"]
-    erf_ = np.vectorize(math.erf)
-    erf_.types = ["f->f", "d->d", "F->F", "D->D"]
-    erfc_ = np.vectorize(math.erfc)
-    erfc_.types = ["f->f", "d->d", "F->F", "D->D"]
 
 
 def _round_away_from_zero(num):
@@ -91,5 +87,3 @@ floor: np.ufunc = np.floor
 ceil: np.ufunc = np.ceil
 trunc: np.ufunc = np.trunc
 round: np.ufunc = round_  # type: ignore[assignment] # noqa: A001
-erf: np.ufunc = erf_
-erfc: np.ufunc = erfc_
