@@ -27,8 +27,6 @@ from gt4py.cartesian.gtscript import (
     computation,
     cos,
     cosh,
-    erf,
-    erfc,
     exp,
     floor,
     gamma,
