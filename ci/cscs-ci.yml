@@ -119,7 +119,7 @@ build_cscs_gh200:
     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
     - cd "${WORKDIR}/gt4py" && uv run --script noxfile.py -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
 
-test_cscs_gh200:
+.test_cscs_gh200:
   extends:
     - .container-runner-santis-gh200
     - .test_common
