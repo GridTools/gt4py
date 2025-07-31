@@ -454,6 +454,15 @@ def _gt_auto_process_dataflow_inside_maps(
         validate_all=validate_all,
     )
 
+    # After some transformation we see in the SDFG that there are pointwise views
+    # generated after reduction nodes. These views are unecessary and might produce
+    # sub optimal GPU code thus we remove them.
+    sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.RemovePointwiseViews,
+        validate=False,
+        validate_all=validate_all,
+    )
+
     return sdfg
 
 
