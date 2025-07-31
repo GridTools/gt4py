@@ -100,7 +100,6 @@ def test_vertical_map_fusion():
     assert st.scope_dict()[transient_node] is map_entry
 
 
-@pytest.mark.skip("randomly fails, under investigation")
 def test_vertical_map_fusion_with_neighbor_access():
     N = 80
     sdfg = dace.SDFG(util.unique_name("simple"))
@@ -323,9 +322,7 @@ def test_vertical_map_fusion_with_neighbor_access():
     )
 
     util.compile_and_run_sdfg(sdfg, **res)
-    # TODO(iomaganaris): Enable assertion for the result. Currently, the assertion fails on MacOS
-    # with random neighbor indexes in E2C.
-    # assert util.compare_sdfg_res(ref=ref, res=res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
 
     # `VerticalSplitMapRange` cannot be applied on the map that has neighbor access
     # to the temporary field.
