@@ -7,15 +7,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py import eve
-from gt4py.next.errors import DSLError, excepthook
-
+from gt4py.next.errors import exceptions, excepthook
 
 def test_format_uncaught_error():
     try:
         loc = eve.SourceLocation("/src/file.py", 1, 1)
         msg = "compile error msg"
-        raise DSLError(loc, msg) from ValueError("value error msg")
-    except DSLError as err:
+        raise exceptions.DSLError(loc, msg) from ValueError("value error msg")
+    except exceptions.DSLError as err:
         str_devmode = "".join(excepthook._format_uncaught_error(err, True))
         assert str_devmode.find("Source location") >= 0
         assert str_devmode.find("Traceback") >= 0
