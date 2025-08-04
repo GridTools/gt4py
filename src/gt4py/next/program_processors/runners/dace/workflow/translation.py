@@ -106,6 +106,8 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     #  SDFGState that contains a Tasklet with the sync call.
     sync_state = sdfg.add_state("sync_state")
     for sink_state in sdfg.sink_nodes():
+        if sink_state is sync_state:
+            continue
         sdfg.add_edge(sink_state, sync_state, dace.InterstateEdge())
 
     dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
