@@ -41,7 +41,7 @@ NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
     [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
     `SQRT`, `EXP`, `LOG`, `LOG10`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`,
-    `TRUNC`, `ERF`, `ERFC`, `I32`, `I64`, `F32`, `F64`]
+    `TRUNC`, `ERF`, `ERFC`, `INT32`, `INT64`, `FLOAT32`, `FLOAT64`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
@@ -431,10 +431,10 @@ class NativeFunction(enum.Enum):
     ERFC = enum.auto()
 
     # Cast operations - share a keyword with type hints
-    I32 = enum.auto()
-    I64 = enum.auto()
-    F32 = enum.auto()
-    F64 = enum.auto()
+    INT32 = enum.auto()
+    INT64 = enum.auto()
+    FLOAT32 = enum.auto()
+    FLOAT64 = enum.auto()
 
     @property
     def arity(self):
@@ -470,10 +470,10 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.FLOOR: 1,
     NativeFunction.CEIL: 1,
     NativeFunction.TRUNC: 1,
-    NativeFunction.I32: 1,
-    NativeFunction.I64: 1,
-    NativeFunction.F32: 1,
-    NativeFunction.F64: 1,
+    NativeFunction.INT32: 1,
+    NativeFunction.INT64: 1,
+    NativeFunction.FLOAT32: 1,
+    NativeFunction.FLOAT64: 1,
     NativeFunction.ERF: 1,
     NativeFunction.ERFC: 1,
 }

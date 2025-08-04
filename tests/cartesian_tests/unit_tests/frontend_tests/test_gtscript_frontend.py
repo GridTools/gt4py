@@ -1855,7 +1855,7 @@ class TestLiteralCasts:
             literal_precision=64,
         )
         cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
-        assert cast_call.func == nodes.NativeFunction.I64
+        assert cast_call.func == nodes.NativeFunction.INT64
 
     def test_explicit_32_int_cast(self):
         def_ir = parse_definition(
@@ -1865,7 +1865,7 @@ class TestLiteralCasts:
             literal_precision=32,
         )
         cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
-        assert cast_call.func == nodes.NativeFunction.I32
+        assert cast_call.func == nodes.NativeFunction.INT32
 
     def test_explicit_32_float_cast(self):
         def_ir = parse_definition(
@@ -1875,7 +1875,7 @@ class TestLiteralCasts:
             literal_precision=32,
         )
         cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
-        assert cast_call.func == nodes.NativeFunction.F32
+        assert cast_call.func == nodes.NativeFunction.FLOAT32
 
     def test_explicit_64_float_cast(self):
         def_ir = parse_definition(
@@ -1885,7 +1885,7 @@ class TestLiteralCasts:
             literal_precision=64,
         )
         cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
-        assert cast_call.func == nodes.NativeFunction.F64
+        assert cast_call.func == nodes.NativeFunction.FLOAT64
 
 
 class TestTemporaryTypes:

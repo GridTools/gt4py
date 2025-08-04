@@ -773,19 +773,19 @@ class IRMaker(ast.NodeVisitor):
             "floor": nodes.NativeFunction.FLOOR,
             "ceil": nodes.NativeFunction.CEIL,
             "trunc": nodes.NativeFunction.TRUNC,
-            "int32": nodes.NativeFunction.I32,
-            "int64": nodes.NativeFunction.I64,
-            "float32": nodes.NativeFunction.F32,
-            "float64": nodes.NativeFunction.F64,
+            "int32": nodes.NativeFunction.INT32,
+            "int64": nodes.NativeFunction.INT64,
+            "float32": nodes.NativeFunction.FLOAT32,
+            "float64": nodes.NativeFunction.FLOAT64,
             "int": (
-                nodes.NativeFunction.I32
+                nodes.NativeFunction.INT32
                 if self.literal_precision == 32
-                else nodes.NativeFunction.I64
+                else nodes.NativeFunction.INT64
             ),
             "float": (
-                nodes.NativeFunction.F32
+                nodes.NativeFunction.FLOAT32
                 if self.literal_precision == 32
-                else nodes.NativeFunction.F64
+                else nodes.NativeFunction.FLOAT64
             ),
             "erf": nodes.NativeFunction.ERF,
             "erfc": nodes.NativeFunction.ERFC,
