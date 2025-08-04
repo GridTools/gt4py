@@ -178,7 +178,8 @@ def stencil(
     rebuild=False,
     cache_settings=None,
     raise_if_not_cached=False,
-    literal_precision=gt_definitions.LITERAL_PRECISION,
+    literal_int_precision=gt_definitions.LITERAL_INT_PRECISION,
+    literal_float_precision=gt_definitions.LITERAL_FLOAT_PRECISION,
     **kwargs,
 ):
     """Generate an implementation of the stencil definition with the specified backend.
@@ -232,8 +233,12 @@ def stencil(
             - `root_path`: (str)
             - `dir_name`: (str)
 
-        literal_precision: `int` optional
-            Value to define the precision of generic casts `int` and `float`.
+        literal_int_precision: `int` optional
+            Value to define the precision of generic `int` casts.
+            (System literal precision by default).
+
+        literal_float_precision: `int` optional
+            Value to define the precision of generic `float` casts.
             (System literal precision by default).
 
         **kwargs: `dict`, optional
@@ -274,8 +279,14 @@ def stencil(
         raise ValueError(f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')")
     if cache_settings is not None and not isinstance(cache_settings, dict):
         raise ValueError(f"Invalid 'cache_settings' dictionary ('{cache_settings}')")
-    if not isinstance(literal_precision, int) and literal_precision not in (32, 64):
-        raise ValueError(f"Invalid 'literal_precision' ('{literal_precision}')")
+    if not isinstance(literal_int_precision, int) and literal_int_precision not in (32, 64):
+        raise ValueError(
+            f"Invalid 'literal_int_precision'. Got '{literal_int_precision}', expected 32 or 64."
+        )
+    if not isinstance(literal_float_precision, int) and literal_float_precision not in (32, 64):
+        raise ValueError(
+            f"Invalid 'literal_float_precision'. Got '{literal_float_precision}', expected 32 or 64."
+        )
 
     module = None
     if name:
@@ -310,7 +321,8 @@ def stencil(
         backend_opts=kwargs,
         build_info=build_info,
         cache_settings=cache_settings or {},
-        literal_precision=literal_precision,
+        literal_int_precision=literal_int_precision,
+        literal_float_precision=literal_float_precision,
         impl_opts=_impl_opts,
     )
 

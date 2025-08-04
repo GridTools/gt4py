@@ -736,7 +736,8 @@ class IRMaker(ast.NodeVisitor):
         self.parameters = parameters
         self.local_symbols = local_symbols
         self.domain = domain or nodes.Domain.LatLonGrid()
-        self.literal_precision = options.literal_precision
+        self.literal_int_precision = options.literal_int_precision
+        self.literal_float_precision = options.literal_float_precision
         self.temp_decls = temp_decls or {}
         self.parsing_context = None
         self.iteration_order = None
@@ -779,12 +780,12 @@ class IRMaker(ast.NodeVisitor):
             "float64": nodes.NativeFunction.FLOAT64,
             "int": (
                 nodes.NativeFunction.INT32
-                if self.literal_precision == 32
+                if self.literal_int_precision == 32
                 else nodes.NativeFunction.INT64
             ),
             "float": (
                 nodes.NativeFunction.FLOAT32
-                if self.literal_precision == 32
+                if self.literal_float_precision == 32
                 else nodes.NativeFunction.FLOAT64
             ),
             "erf": nodes.NativeFunction.ERF,
@@ -796,9 +797,11 @@ class IRMaker(ast.NodeVisitor):
             "int64": nodes.DataType.INT64,
             "float32": nodes.DataType.FLOAT32,
             "float64": nodes.DataType.FLOAT64,
-            "int": nodes.DataType.INT32 if self.literal_precision == 32 else nodes.DataType.INT64,
+            "int": nodes.DataType.INT32
+            if self.literal_int_precision == 32
+            else nodes.DataType.INT64,
             "float": nodes.DataType.FLOAT32
-            if self.literal_precision == 32
+            if self.literal_float_precision == 32
             else nodes.DataType.FLOAT64,
         }  # Conversion table for types to DataTypes
 
@@ -1033,9 +1036,9 @@ class IRMaker(ast.NodeVisitor):
                 value_type = self.dtypes[type(value)]
             else:
                 if isinstance(value, int):
-                    value_type = np.dtype(f"i{int(self.literal_precision / 8)}")
+                    value_type = np.dtype(f"i{int(self.literal_int_precision / 8)}")
                 elif isinstance(value, float):
-                    value_type = np.dtype(f"f{int(self.literal_precision / 8)}")
+                    value_type = np.dtype(f"f{int(self.literal_float_precision / 8)}")
                 elif hasattr(value, "dtype") and isinstance(value.dtype, np.dtype):
                     value_type = value.dtype
                 else:
@@ -1828,7 +1831,12 @@ class GTScriptParser(ast.NodeVisitor):
         temp_init_values: Dict[str, numbers.Number] = {}
 
         frontend_types_to_native_types = nodes.frontend_type_to_native_type(
-            options.literal_precision if options is not None else gt_definitions.LITERAL_PRECISION
+            options.literal_int_precision
+            if options is not None
+            else gt_definitions.LITERAL_INT_PRECISION,
+            options.literal_float_precision
+            if options is not None
+            else gt_definitions.LITERAL_FLOAT_PRECISION,
         )
 
         ann_assign_context = {

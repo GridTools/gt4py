@@ -49,7 +49,8 @@ def parse_definition(
     module: str,
     externals: Optional[Dict[str, Any]] = None,
     dtypes: Dict[Type, Type] = None,
-    literal_precision: int | None = None,
+    literal_int_precision: int | None = None,
+    literal_float_precision: int | None = None,
     rebuild=False,
     **kwargs,
 ) -> nodes.StencilDefinition:
@@ -62,8 +63,10 @@ def parse_definition(
         "build_info": None,
         "backend_opts": kwargs,
     }
-    if literal_precision is not None:
-        build_args["literal_precision"] = literal_precision
+    if literal_int_precision is not None:
+        build_args["literal_int_precision"] = literal_int_precision
+    if literal_float_precision is not None:
+        build_args["literal_float_precision"] = literal_float_precision
 
     build_options = gt_definitions.BuildOptions(**build_args)
 
@@ -1852,7 +1855,7 @@ class TestLiteralCasts:
             self.int_cast,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            literal_precision=64,
+            literal_int_precision=64,
         )
         cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
         assert cast_call.func == nodes.NativeFunction.INT64
@@ -1862,7 +1865,7 @@ class TestLiteralCasts:
             self.int_cast,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            literal_precision=32,
+            literal_int_precision=32,
         )
         cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
         assert cast_call.func == nodes.NativeFunction.INT32
@@ -1872,7 +1875,7 @@ class TestLiteralCasts:
             self.float_cast,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            literal_precision=32,
+            literal_float_precision=32,
         )
         cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
         assert cast_call.func == nodes.NativeFunction.FLOAT32
@@ -1882,7 +1885,7 @@ class TestLiteralCasts:
             self.float_cast,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            literal_precision=64,
+            literal_float_precision=64,
         )
         cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
         assert cast_call.func == nodes.NativeFunction.FLOAT64
@@ -1908,7 +1911,7 @@ class TestTemporaryTypes:
             self.int_stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            literal_precision=64,
+            literal_int_precision=64,
         )
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
@@ -1919,7 +1922,7 @@ class TestTemporaryTypes:
             self.int_stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            literal_precision=32,
+            literal_int_precision=32,
         )
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
@@ -1930,7 +1933,7 @@ class TestTemporaryTypes:
             self.float_stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            literal_precision=64,
+            literal_float_precision=64,
         )
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
@@ -1941,7 +1944,7 @@ class TestTemporaryTypes:
             self.float_stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            literal_precision=32,
+            literal_float_precision=32,
         )
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
