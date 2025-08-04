@@ -493,7 +493,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         match new_value.type:
             case ts.TupleType(types=types):
-                index = foast_utils.expr_to_index(node.index)
+                try:
+                    index = foast_utils.expr_to_index(node.index)
+                except ValueError as ex:
+                    raise errors.DSLError(
+                        node.location,
+                        f"Tuples need to be indexed with literal integers, got '{node.index}'.",
+                    ) from ex
                 new_type = types[index]
             case ts.OffsetType(source=source, target=(target1, target2)):
                 if not target2.kind == DimensionKind.LOCAL:
@@ -512,7 +518,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     )
                 new_type = new_value.type
             case ts.FieldType(dims=dims, dtype=dtype):
-                # field[LocalDim(42)]  # noqa: ERA001
+                # e.g. `field[LocalDim(42)]`
                 new_type = ts.FieldType(
                     dims=[d for d in dims if d != new_index.type.dim],
                     dtype=dtype,
