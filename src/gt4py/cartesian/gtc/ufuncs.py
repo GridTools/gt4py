@@ -28,6 +28,22 @@ except ImportError:
     erfc_.types = ["f->f", "d->d", "F->F", "D->D"]
 
 
+def _round_away_from_zero(num):
+    """Computes the nearest integer value to num, rounding halfway cases away from zero.
+    Examples:
+        -0.5 -> -1.0, 0.5 -> 0.0, 1.5 -> 2.0, 2.5 -> 3.0
+    This is in alignment with C(++) and FORTRAN standard round functions that round away
+    from zero by default.
+    In contrast, python (since v3) and numpy use "Banker's rounding", and round to the nearest
+    even value, e.g. 1.5 and 2.5 round to 2.0, -0.5 and 0.5 round to 0.0.
+    """
+    return np.copysign(np.floor(np.abs(num) + 0.5), num)
+
+
+round_ = _round_away_from_zero
+round_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
+
+
 positive: np.ufunc = np.positive
 negative: np.ufunc = np.negative
 logical_not: np.ufunc = np.logical_not
@@ -78,3 +94,4 @@ ceil: np.ufunc = np.ceil
 trunc: np.ufunc = np.trunc
 erf: np.ufunc = erf_
 erfc: np.ufunc = erfc_
+round: np.ufunc = round_  # type: ignore[assignment] # noqa: A001

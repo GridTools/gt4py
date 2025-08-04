@@ -61,6 +61,7 @@ MATH_BUILTINS = {
     "trunc",
     "erf",
     "erfc",
+    "round",
 }
 
 TYPE_HINT_AND_CAST_BUILTINS = {
@@ -969,4 +970,9 @@ def erf(x):
 
 def erfc(x):
     """Computes the complementary error function of `x`, which is `1.0 - erf(x)`."""
+    pass
+
+
+def round(x):  # noqa: A001 [builtin-variable-shadowing]e
+    """Computes the nearest integer value to `x`, rounding halfway cases away from zero."""
     pass

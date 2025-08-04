@@ -810,6 +810,7 @@ class IRMaker(ast.NodeVisitor):
             ),
             "erf": nodes.NativeFunction.ERF,
             "erfc": nodes.NativeFunction.ERFC,
+            "round": nodes.NativeFunction.ROUND,
         }  # Conversion table for functions to NativeFunctions
 
         self.temporary_type_to_native_type = {
