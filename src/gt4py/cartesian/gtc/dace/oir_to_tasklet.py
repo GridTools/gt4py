@@ -98,20 +98,27 @@ class OIRToTasklet(eve.NodeVisitor):
         # Gather all parts of the variable name in this list
         name_parts = [tasklet_name]
 
-        # Variable K offset subscript
-        if isinstance(node.offset, oir.VariableKOffset):
-            symbol = tir.Axis.K.iteration_dace_symbol()
-            shift = ctx.tree.shift[node.name][tir.Axis.K]
-            offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
-            name_parts.append(f"[({symbol}) + ({shift}) + ({offset})]")
-
         # Data dimension subscript
         data_indices: list[str] = []
         for index in node.data_index:
             data_indices.append(self.visit(index, ctx=ctx, is_target=False))
 
-        if data_indices:
-            name_parts.append(f"[{', '.join(data_indices)}]")
+        # Variable K offset subscript
+        if isinstance(node.offset, oir.AbsoluteKIndex):
+            index = self.visit(node.offset.k, ctx=ctx, is_target=False)
+            if data_indices:
+                name_parts.append(f"[({index}, {', '.join(data_indices)})]")
+            else:
+                name_parts.append(f"[({index})]")
+        else:
+            if isinstance(node.offset, oir.VariableKOffset):
+                symbol = tir.Axis.K.iteration_dace_symbol()
+                shift = ctx.tree.shift[node.name][tir.Axis.K]
+                offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
+                name_parts.append(f"[({symbol}) + ({shift}) + ({offset})]")
+
+            if data_indices:
+                name_parts.append(f"[{', '.join(data_indices)}]")
 
         # In case this is the second access (inside the same tasklet), we can just return the
         # name and don't have to build a Memlet anymore.
@@ -256,6 +263,9 @@ class OIRToTasklet(eve.NodeVisitor):
     def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs: Any) -> None:
         raise RuntimeError("Variable K Offset should be dealt in Access IRs.")
 
+    def visit_AbsoluteKIndex(self, node: oir.AbsoluteKIndex, **kwargs: Any) -> None:
+        raise RuntimeError("Absolute K Offset should be dealt in Access IRs.")
+
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
         raise RuntimeError("visit_MaskStmt should not be called")
 
@@ -310,10 +320,18 @@ def _field_offset_postfix(node: oir.FieldAccess) -> str:
     if isinstance(node.offset, oir.VariableKOffset):
         return "var_k"
 
-    offset_indicators = [
-        f"{k}{'p' if v > 0 else 'm'}{abs(v)}" for k, v in node.offset.to_dict().items() if v != 0
-    ]
-    return "_".join(offset_indicators)
+    if isinstance(node.offset, oir.AbsoluteKIndex):
+        return "abs_k"
+
+    if isinstance(node.offset, common.CartesianOffset):
+        offset_indicators = [
+            f"{k}{'p' if v > 0 else 'm'}{abs(v)}"
+            for k, v in node.offset.to_dict().items()
+            if v != 0
+        ]
+        return "_".join(offset_indicators)
+
+    raise NotImplementedError(f"_field_offset_postfix(): unknown offset type {type(node.offset)}")
 
 
 def _memlet_subset(node: oir.FieldAccess, data_domains: list[int], ctx: Context) -> subsets.Subset:
@@ -322,6 +340,9 @@ def _memlet_subset(node: oir.FieldAccess, data_domains: list[int], ctx: Context)
 
     if isinstance(node.offset, oir.VariableKOffset):
         return _memlet_subset_variable_offset(node, data_domains, ctx)
+
+    if isinstance(node.offset, oir.AbsoluteKIndex):
+        return _memlet_subset_absolute_offset(node, data_domains, ctx)
 
     raise NotImplementedError(f"_memlet_subset(): unknown offset type {type(node.offset)}")
 
@@ -369,6 +390,30 @@ def _memlet_subset_variable_offset(
     i = f"({tir.Axis.I.iteration_symbol()}) + ({shift[tir.Axis.I]}) + ({offset_dict[tir.Axis.I.lower()]})"
     j = f"({tir.Axis.J.iteration_symbol()}) + ({shift[tir.Axis.J]}) + ({offset_dict[tir.Axis.J.lower()]})"
     K = f"({tir.Axis.K.domain_symbol()}) + ({shift[tir.Axis.K]}) - 1"  # ranges are inclusive
+    ranges: list[tuple[str | int, str | int, int]] = [(i, i, 1), (j, j, 1), (0, K, 1)]
+
+    # Append data dimensions
+    for domain_size in data_domains:
+        ranges.append((0, domain_size - 1, 1))  # ranges are inclusive
+
+    return subsets.Range(ranges)
+
+
+def _memlet_subset_absolute_offset(
+    node: oir.FieldAccess, data_domains: list[int], ctx: Context
+) -> subsets.Subset:
+    """
+    Generates the memlet subset for a field access with an absolute K offset.
+
+    While we know that we are reading at one specific i/j/k access, the K-access point is only
+    determined at runtime. We thus pass the K-axis as array into the Tasklet.
+    """
+    # Handle cartesian indices
+    shift = ctx.tree.shift[node.name]
+    offset_dict = node.offset.to_dict()
+    i = f"({tir.Axis.I.iteration_symbol()}) + ({shift[tir.Axis.I]}) + ({offset_dict[tir.Axis.I.lower()]})"
+    j = f"({tir.Axis.J.iteration_symbol()}) + ({shift[tir.Axis.J]}) + ({offset_dict[tir.Axis.J.lower()]})"
+    K = f"{shift[tir.Axis.K]}"
     ranges: list[tuple[str | int, str | int, int]] = [(i, i, 1), (j, j, 1), (0, K, 1)]
 
     # Append data dimensions
