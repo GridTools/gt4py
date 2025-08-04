@@ -10,10 +10,12 @@ import ast
 
 from gt4py.cartesian.frontend.gtscript_frontend import PYTHON_AST_VERSION, IRMaker
 from gt4py.cartesian.frontend.nodes import BinaryOperator, BinOpExpr
+from gt4py.cartesian.definitions import BuildOptions
 
 
 def test_AugAssign():
-    ir_maker = IRMaker(None, None, None, None, domain=None)
+    build_options = BuildOptions(name="test", module="test_module")
+    ir_maker = IRMaker(None, None, None, None, domain=None, options=build_options)
     aug_assign = ast.parse("a += 1", feature_version=PYTHON_AST_VERSION).body[0]
 
     _, result = ir_maker.visit_AugAssign(aug_assign)

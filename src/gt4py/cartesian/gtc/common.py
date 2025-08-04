@@ -181,6 +181,11 @@ class NativeFunction(eve.StrEnum):
     ERF = "erf"
     ERFC = "erfc"
 
+    INT32 = "int32"
+    INT64 = "int64"
+    FLOAT32 = "float32"
+    FLOAT64 = "float64"
+
     IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
     @property
@@ -220,6 +225,10 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.FLOOR: 1,
         NativeFunction.CEIL: 1,
         NativeFunction.TRUNC: 1,
+        NativeFunction.INT32: 1,
+        NativeFunction.INT64: 1,
+        NativeFunction.FLOAT32: 1,
+        NativeFunction.FLOAT64: 1,
         NativeFunction.ERF: 1,
         NativeFunction.ERFC: 1,
     }.items()
@@ -553,9 +562,27 @@ class NativeFuncCall(eve.GenericNode, Generic[ExprT]):
 
 
 def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.RootValidator:
+    def _precision_to_datatype(func: NativeFunction) -> DataType:
+        if func == NativeFunction.INT32:
+            return DataType.INT32
+        if func == NativeFunction.INT64:
+            return DataType.INT64
+        if func == NativeFunction.FLOAT32:
+            return DataType.FLOAT32
+        if func == NativeFunction.FLOAT64:
+            return DataType.FLOAT64
+        raise NotImplementedError(f"Found unknown precision specification {func}")
+
     def _impl(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
         if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
             instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
+        elif instance.func in (
+            NativeFunction.INT32,
+            NativeFunction.INT64,
+            NativeFunction.FLOAT32,
+            NativeFunction.FLOAT64,
+        ):
+            instance.dtype = _precision_to_datatype(instance.func)  # type: ignore[attr-defined]
         else:
             # assumes all NativeFunction args have a common dtype
             common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=strict)
@@ -891,6 +918,10 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.FLOOR: "floor",
         NativeFunction.CEIL: "ceil",
         NativeFunction.TRUNC: "trunc",
+        NativeFunction.INT32: "int32",
+        NativeFunction.INT64: "int64",
+        NativeFunction.FLOAT32: "float32",
+        NativeFunction.FLOAT64: "float64",
         NativeFunction.ERF: "erf",
         NativeFunction.ERFC: "erfc",
     },
