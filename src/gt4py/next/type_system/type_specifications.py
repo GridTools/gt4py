@@ -56,9 +56,6 @@ class DimensionType(TypeSpec):
 class IndexType(TypeSpec):
     """
     Represents the type of an index into a dimension.
-
-    Note: Once we refactor the `Dimension` to be a Python type, the need
-    to distinguish between `DimensionType` and `IndexType` will go away.
     """
 
     dim: common.Dimension
