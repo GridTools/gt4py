@@ -55,6 +55,18 @@ def compute_assign_indices(
 
 
 def expr_to_index(expr: foast.Expr) -> int:
+    """
+    Convert an expression that represent an (integral) index to an int index.
+
+    Args:
+        expr: The expression to convert. Supported are literals of the form `+/-<int>`.
+
+    Returns:
+        The integer value of the index.
+
+    Raises:
+        ValueError: If the expression is not a valid index expression.
+    """
     if isinstance(expr, foast.Constant):
         return expr.value
     if (

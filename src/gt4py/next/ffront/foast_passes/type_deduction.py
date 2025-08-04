@@ -488,32 +488,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
+        new_index = self.visit(node.index, **kwargs)
         new_type: Optional[ts.TypeSpec] = None
-
-        if isinstance(node.index, foast.Call):
-            # TODO cleanup
-            new_index = self.visit(node.index, **kwargs)
-            if not isinstance(new_value.type, ts.FieldType):
-                raise errors.DSLError(
-                    new_value.location,
-                    f"Cannot slice '{new_value.type}'. Must be a field type.",
-                )
-            ret_type = ts.FieldType(
-                dims=[d for d in new_value.type.dims if d != new_index.type.dim],
-                dtype=new_value.type.dtype,
-            )
-            res = foast.Subscript(
-                value=new_value,
-                index=new_index,
-                type=ret_type,
-                location=node.location,
-            )
-            return res
-
-        index = foast_utils.expr_to_index(node.index)
 
         match new_value.type:
             case ts.TupleType(types=types):
+                index = foast_utils.expr_to_index(node.index)
                 new_type = types[index]
             case ts.OffsetType(source=source, target=(target1, target2)):
                 if not target2.kind == DimensionKind.LOCAL:
@@ -531,13 +511,22 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         "Source and target must be equal for offsets with a single target.",
                     )
                 new_type = new_value.type
+            case ts.FieldType(dims=dims, dtype=dtype):
+                # field[LocalDim(42)]  # noqa: ERA001
+                new_type = ts.FieldType(
+                    dims=[d for d in dims if d != new_index.type.dim],
+                    dtype=dtype,
+                )
             case _:
                 raise errors.DSLError(
                     new_value.location, "Could not deduce type of subscript expression."
                 )
 
         return foast.Subscript(
-            value=new_value, index=self.visit(node.index), type=new_type, location=node.location
+            value=new_value,
+            index=new_index,
+            type=new_type,
+            location=node.location,
         )
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> foast.BinOp:
@@ -781,7 +770,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 args=new_args,
                 kwargs=new_kwargs,
                 location=node.location,
-                type=new_func.type,
+                type=ts.IndexType(dim=new_func.type.dim),
             )
         else:
             raise errors.DSLError(

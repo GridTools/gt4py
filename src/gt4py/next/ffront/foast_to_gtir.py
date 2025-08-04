@@ -243,7 +243,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
-        if isinstance(node.index.type, ts.DimensionType):
+        if isinstance(node.index.type, ts.IndexType):
             # `field[LocalDim(42)]`
             assert isinstance(node.index, foast.Call)
             assert isinstance(node.index.args[0], foast.Constant)
