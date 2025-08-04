@@ -28,6 +28,7 @@ from gt4py.next.ffront.foast_passes import utils as foast_utils
 from gt4py.next.ffront.stages import AOT_FOP, FOP
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms import constant_folding
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -291,10 +292,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             match arg:
                 # `field(Off[idx])`
                 case foast.Subscript(value=foast.Name(id=offset_name), index=index):
+                    index = constant_folding.ConstantFolding().visit(self.visit(index, **kwargs))
+                    assert isinstance(index, itir.Literal)
                     current_expr = im.as_fieldop(
-                        im.lambda_("__it")(
-                            im.deref(im.shift(offset_name, self.visit(index, **kwargs))("__it"))
-                        )
+                        im.lambda_("__it")(im.deref(im.shift(offset_name, index)("__it")))
                     )(current_expr)
                 # `field(Dim + idx)`
                 case foast.BinOp(
