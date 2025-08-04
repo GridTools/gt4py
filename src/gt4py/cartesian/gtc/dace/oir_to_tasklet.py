@@ -103,20 +103,27 @@ class OIRToTasklet(eve.NodeVisitor):
         for index in node.data_index:
             data_indices.append(self.visit(index, ctx=ctx, is_target=False))
 
-        # Variable K offset subscript
         if isinstance(node.offset, oir.AbsoluteKIndex):
-            index = self.visit(node.offset.k, ctx=ctx, is_target=False)
-            if data_indices:
-                name_parts.append(f"[({index}, {', '.join(data_indices)})]")
-            else:
-                name_parts.append(f"[({index})]")
-        else:
-            if isinstance(node.offset, oir.VariableKOffset):
-                symbol = tir.Axis.K.iteration_dace_symbol()
-                shift = ctx.tree.shift[node.name][tir.Axis.K]
-                offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
-                name_parts.append(f"[({symbol}) + ({shift}) + ({offset})]")
+            # Absolute K offset subscript
+            abs_index = self.visit(node.offset.k, ctx=ctx, is_target=False)
 
+            if data_indices:
+                name_parts.append(f"[{abs_index}, {', '.join(data_indices)}]")
+            else:
+                name_parts.append(f"[{abs_index}]")
+        elif isinstance(node.offset, oir.VariableKOffset):
+            # Variable K offset subscript
+            symbol = tir.Axis.K.iteration_dace_symbol()
+            shift = ctx.tree.shift[node.name][tir.Axis.K]
+            offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
+            var_index = f"{symbol} + {shift} + {offset}"
+
+            if data_indices:
+                name_parts.append(f"[{var_index}, {', '.join(data_indices)}]")
+            else:
+                name_parts.append(f"[{var_index}]")
+        else:
+            # Cartesian offset is assumed in this case
             if data_indices:
                 name_parts.append(f"[{', '.join(data_indices)}]")
 
@@ -338,11 +345,8 @@ def _memlet_subset(node: oir.FieldAccess, data_domains: list[int], ctx: Context)
     if isinstance(node.offset, common.CartesianOffset):
         return _memlet_subset_cartesian(node, data_domains, ctx)
 
-    if isinstance(node.offset, oir.VariableKOffset):
+    if isinstance(node.offset, (oir.AbsoluteKIndex, oir.VariableKOffset)):
         return _memlet_subset_variable_offset(node, data_domains, ctx)
-
-    if isinstance(node.offset, oir.AbsoluteKIndex):
-        return _memlet_subset_absolute_offset(node, data_domains, ctx)
 
     raise NotImplementedError(f"_memlet_subset(): unknown offset type {type(node.offset)}")
 
@@ -379,7 +383,7 @@ def _memlet_subset_variable_offset(
     node: oir.FieldAccess, data_domains: list[int], ctx: Context
 ) -> subsets.Subset:
     """
-    Generates the memlet subset for a field access with a variable K offset.
+    Generates the memlet subset for a field access with a variable/absolute K offset.
 
     While we know that we are reading at one specific i/j/k access, the K-access point is only
     determined at runtime. We thus pass the K-axis as array into the Tasklet.
@@ -390,30 +394,6 @@ def _memlet_subset_variable_offset(
     i = f"({tir.Axis.I.iteration_symbol()}) + ({shift[tir.Axis.I]}) + ({offset_dict[tir.Axis.I.lower()]})"
     j = f"({tir.Axis.J.iteration_symbol()}) + ({shift[tir.Axis.J]}) + ({offset_dict[tir.Axis.J.lower()]})"
     K = f"({tir.Axis.K.domain_symbol()}) + ({shift[tir.Axis.K]}) - 1"  # ranges are inclusive
-    ranges: list[tuple[str | int, str | int, int]] = [(i, i, 1), (j, j, 1), (0, K, 1)]
-
-    # Append data dimensions
-    for domain_size in data_domains:
-        ranges.append((0, domain_size - 1, 1))  # ranges are inclusive
-
-    return subsets.Range(ranges)
-
-
-def _memlet_subset_absolute_offset(
-    node: oir.FieldAccess, data_domains: list[int], ctx: Context
-) -> subsets.Subset:
-    """
-    Generates the memlet subset for a field access with an absolute K offset.
-
-    While we know that we are reading at one specific i/j/k access, the K-access point is only
-    determined at runtime. We thus pass the K-axis as array into the Tasklet.
-    """
-    # Handle cartesian indices
-    shift = ctx.tree.shift[node.name]
-    offset_dict = node.offset.to_dict()
-    i = f"({tir.Axis.I.iteration_symbol()}) + ({shift[tir.Axis.I]}) + ({offset_dict[tir.Axis.I.lower()]})"
-    j = f"({tir.Axis.J.iteration_symbol()}) + ({shift[tir.Axis.J]}) + ({offset_dict[tir.Axis.J.lower()]})"
-    K = f"{shift[tir.Axis.K]}"
     ranges: list[tuple[str | int, str | int, int]] = [(i, i, 1), (j, j, 1), (0, K, 1)]
 
     # Append data dimensions

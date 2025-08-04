@@ -9,7 +9,7 @@
 
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Mapping
+from typing import Any, Mapping
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common as gtc_common, definitions as gtc_definitions, oir
@@ -268,6 +268,11 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
                 return f"{field_access.name}[{data_index_access}]"
             return f"{field_access.name}[{offset_str},{data_index_access}]"
         return f"{field_access.name}[{offset_str}]"
+
+    def visit_AbsoluteKIndex(self, node: oir.AbsoluteKIndex, **kwargs: Any) -> None:
+        raise NotImplementedError(
+            "Absolute K indexation (e.g. `field.at(...)`) is not implemented for the `debug` backend."
+        )
 
     def visit_BinaryOp(self, binary: oir.BinaryOp, **kwargs) -> str:
         return f"( {self.visit(binary.left, **kwargs)} {binary.op} {self.visit(binary.right, **kwargs)} )"

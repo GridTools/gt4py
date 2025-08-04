@@ -1214,7 +1214,11 @@ def test_absolute_K_index_raise(backend):
 
 
 @pytest.mark.parametrize(
-    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
+    "backend",
+    [
+        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
+        pytest.param("dace:gpu", marks=[pytest.mark.requires_dace, pytest.mark.requires_gpu]),
+    ],
 )
 def test_absolute_K_index(backend):
     domain = (5, 5, 5)

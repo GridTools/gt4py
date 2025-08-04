@@ -1105,7 +1105,7 @@ class TestReducedDimensions:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Incorrect offset specification detected. Found .* but the field has dimensions .*",
+            match="Incorrect offset specification detected for .*. Found .* but .* has dimensions .*",
         ):
             parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
@@ -1576,7 +1576,7 @@ class TestAssignmentSyntax:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Incorrect offset specification detected. Found .* but the field has dimensions .* Did you mean .A",
+            match="Incorrect offset specification detected for .*. Found .* but .* has dimensions .* Did you mean absolute indexing via .A.*",
         ):
             parse_definition(
                 GlobalTable_access_as_IJK,
