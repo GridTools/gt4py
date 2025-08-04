@@ -221,6 +221,10 @@ class OIRToTasklet(eve.NodeVisitor):
             common.NativeFunction.FLOOR: "dace.math.ifloor",
             common.NativeFunction.CEIL: "ceil",
             common.NativeFunction.TRUNC: "trunc",
+            common.NativeFunction.INT32: "dace.int32",
+            common.NativeFunction.INT64: "dace.int64",
+            common.NativeFunction.FLOAT32: "dace.float32",
+            common.NativeFunction.FLOAT64: "dace.float64",
             common.NativeFunction.ERF: "erf",
             common.NativeFunction.ERFC: "erfc",
         }
