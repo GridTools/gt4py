@@ -1946,3 +1946,25 @@ class TestTemporaryTypes:
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.FLOAT32
+
+
+class TestNumpyTypedConstants:
+    def setup_method(self):
+        self.constant = np.float32(42.0)
+
+        def assign_constant(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                field[0, 0, 0] = self.constant
+
+        self.stencil = assign_constant
+
+    def test_assign_constant_numpy_typed(self):
+        def_ir = parse_definition(
+            self.stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        constant: nodes.ScalarLiteral = def_ir.computations[0].body.stmts[0].value
+        assert isinstance(constant, nodes.ScalarLiteral)
+        assert constant.data_type == nodes.DataType.FLOAT32
