@@ -178,6 +178,8 @@ class NativeFunction(eve.StrEnum):
     FLOOR = "floor"
     CEIL = "ceil"
     TRUNC = "trunc"
+    ERF = "erf"
+    ERFC = "erfc"
 
     I32 = "int32"
     I64 = "int64"
@@ -227,6 +229,8 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.I64: 1,
         NativeFunction.F32: 1,
         NativeFunction.F64: 1,
+        NativeFunction.ERF: 1,
+        NativeFunction.ERFC: 1,
     }.items()
 }
 
@@ -918,6 +922,8 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.I64: "int64",
         NativeFunction.F32: "float32",
         NativeFunction.F64: "float64",
+        NativeFunction.ERF: "erf",
+        NativeFunction.ERFC: "erfc",
     },
 }
 

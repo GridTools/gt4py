@@ -180,6 +180,8 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 NativeFunction.I64: "std::int64_t",
                 NativeFunction.F32: "float",
                 NativeFunction.F64: "double",
+                NativeFunction.ERF: "std::erf",
+                NativeFunction.ERFC: "std::erfc",
             }[func]
         except KeyError as error:
             raise NotImplementedError(

@@ -787,6 +787,8 @@ class IRMaker(ast.NodeVisitor):
                 if self.literal_precision == 32
                 else nodes.NativeFunction.F64
             ),
+            "erf": nodes.NativeFunction.ERF,
+            "erfc": nodes.NativeFunction.ERFC,
         }  # Conversion table for functions to NativeFunctions
 
         self.temporary_type_to_native_type = {

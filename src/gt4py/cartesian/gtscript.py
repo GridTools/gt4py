@@ -59,6 +59,8 @@ MATH_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "erf",
+    "erfc",
 }
 
 TYPE_HINT_AND_CAST_BUILTINS = {
@@ -938,4 +940,14 @@ def ceil(x) -> _gt_all_op_types:  # type: ignore[empty-body]
 
 def trunc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the Real value x truncated to an Integral (usually an integer)"""
+    pass
+
+
+def erf(x):
+    """Computes the error function of `x`."""
+    pass
+
+
+def erfc(x):
+    """Computes the complementary error function of `x`, which is `1.0 - erf(x)`."""
     pass

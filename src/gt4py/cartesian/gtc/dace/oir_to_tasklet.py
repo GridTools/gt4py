@@ -225,6 +225,8 @@ class OIRToTasklet(eve.NodeVisitor):
             common.NativeFunction.I64: "dace.int64",
             common.NativeFunction.F32: "dace.float32",
             common.NativeFunction.F64: "dace.float64",
+            common.NativeFunction.ERF: "erf",
+            common.NativeFunction.ERFC: "erfc",
         }
         if node not in native_functions:
             raise NotImplementedError(f"NativeFunction '{node}' not (yet) implemented.")
