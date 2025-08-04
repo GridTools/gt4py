@@ -93,11 +93,8 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     if not gpu:
         return
 
-    # If we not use the default stream, we only have to unset all `nosync`.
-    if dace.Config.get("compiler.cuda.max_concurrent_streams") != -1:
-        for state in sdfg.states():
-            state.nosync = False
-        return
+    dace_concur_streams = dace.Config.get("compiler.cuda.max_concurrent_streams")
+    assert dace_concur_streams == -1
 
     # If we are using the default stream, things are a bit simpler/harder. For some
     #  reasons when using the default stream, DaCe seems to skip _all_ synchronization,
