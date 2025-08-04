@@ -507,7 +507,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 def_state.add_edge(
                     def_an,
                     wb_edge.src_conn,
-                    def_state.add_access(final_dest_name),
+                    def_state.add_access(final_dest_name, copy.copy(wb_edge.dst.debuginfo)),
                     wb_edge.dst_conn,
                     copy.deepcopy(wb_memlet),
                 )
@@ -920,7 +920,9 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         )
         inner_desc: dace_data.Scalar = access_desc.clone()
         inner_data_name: str = sdfg.add_datadesc(access_node.data, inner_desc, find_new_name=True)
-        inner_an: dace_nodes.AccessNode = graph.add_access(inner_data_name)
+        inner_an: dace_nodes.AccessNode = graph.add_access(
+            inner_data_name, copy.copy(access_node.debuginfo)
+        )
 
         # Connect the tasklet with the map entry and the access node.
         graph.add_nedge(map_entry, inner_tasklet, dace.Memlet())
