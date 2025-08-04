@@ -60,79 +60,65 @@ def find_constant_symbols(
     return constant_symbols
 
 
-def make_sdfg_async(sdfg: dace.SDFG) -> None:
-    """Make an SDFG call immediatly return, without waiting for execution to complete.
-    This allows to run the SDFG asynchronously, thus letting GPU kernel execution
-    to overlap with host python code.
+def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
+    """Configure an SDFG to immediately return once all work has been scheduled.
 
-    The asynchronous call is implemented by the following changes to SDFG:
-
-    - Set all cuda streams to the default stream. This allows to serialize all
-      kernels on one GPU queue, avoiding synchronization between different cuda
-      streams. Besides, device-to-host copies are performed on the default cuda
-      stream, which allows to synchronize the last GPU kernel on the host side.
-
-    - Set `nosync=True` on the states of the top-level SDFG. This flag is used
-      by dace codegen to skip emission of `cudaStreamSynchronize()` at the end
-      of each state. An exception is made for state transitions where data descriptors
-      are accessed on an InterState edge. The typical example is a symbol set to
-      the scalar value produced by the previous state, or a condition accessing
-      some data descriptor. In this case, we have to wait for the previous state
-      to complete.
-
+    This means that `CompiledSDFG.fast_call()` will return only after all computations
+    have finished. This function only has an effect for work that runs on the GPU.
+    The function will disable synchronization and schedule the work on the default stream.
     """
 
-    has_gpu_code = any(getattr(node, "schedule", False) for node, _ in sdfg.all_nodes_recursive())
-
-    if not has_gpu_code:
-        # The async execution mode requires CUDA, therefore it is only available on GPU
+    # This is only a problem on GPU.
+    # TODO(phimuell): Figuring out what about OpenMP.
+    if not gpu:
         return
 
-    # Loop over all states in the top-level SDFG
-    for state in sdfg.states():
-        if state.parent_graph is not sdfg:
-            # We ignore states that are used inside 'ControlFlowRegion' nodes
-            continue
-        for oedge in sdfg.out_edges(state):
-            # We check whether the expressions on an InterState edge (symbols assignment
-            # and condition for state transition) do access any data descriptor.
-            # If so, we break the loop and leave the default `state.nosync=False`.
-            symbolic_rhs_values = (
-                sym
-                for v in oedge.data.assignments.values()
-                if hasattr(sym := dace.symbolic.pystr_to_symbolic(v), "free_symbols")
-            )
-            if any(
-                sym_id in sdfg.arrays for sym_id in oedge.data.condition.get_free_symbols()
-            ) or any(
-                str(sym) in sdfg.arrays
-                for rhs_value in symbolic_rhs_values
-                for sym in rhs_value.free_symbols
-            ):
-                break
-        else:
-            # No data descriptor is accessed on the InterState edge, we make the state async.
-            state.nosync = True
+    dace_concur_streams = dace.Config.get("compiler.cuda.max_concurrent_streams")
+    assert dace_concur_streams == -1
 
-    # Emit init code for the SDFG to use only the default cuda stream.
-    # This allows to serialize all kernels and memory operations on the same GPU queue.
-    # Note that the SDFG is configured to use the default cuda stream in two different
-    # places, for two different reasons:
-    #  - In current module ('translation.py'), the function `__dace_gpu_set_all_streams()``
-    #    is added to the init code, to set all cuda streams to default stream.
-    #    The reason here is to implement fully async kernel execution and memory
-    #    operations, with respect to the python driver code. This currently relies
-    #    on serializing all them on the default cuda stream. No matter how many
-    #    streams the SDFG uses, all are set to the default one.
-    #  - In 'common.py' dace is configured to only use the default cuda stream in
-    #    code generation, by setting `max_concurrent_streams=-1`. This applies always,
-    #    not only when we want to generate SDFG with asynchronous call. The reason
-    #    here is to work around the issue in code generation, that uses more streams
-    #    than what is set up. See the comments in 'common.py' for more details.
-    # Note that by using the default cuda stream the dace codegen will use different
-    # codepaths, because it will not need to emit synchronization among streams.
-    sdfg.append_init_code(
-        "__dace_gpu_set_all_streams(__state, cudaStreamDefault);", location="cuda"
+    # Since we are using the default stream, there is nothing to do as the call
+    #  is already asynchronous.
+    #  See [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
+
+
+def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
+    """Process the SDFG such that the call is synchronous.
+
+    This means that `CompiledSDFG.fast_call()` will return only after all computations
+    have finished and the results are available. This function only has an effect on GPU and
+    """
+
+    # This is only a problem on GPU.
+    # TODO(phimuell): Figuring out what about OpenMP.
+    if not gpu:
+        return
+
+    # If we not use the default stream, we only have to unset all `nosync`.
+    if dace.Config.get("compiler.cuda.max_concurrent_streams") != -1:
+        for state in sdfg.states():
+            state.nosync = False
+        return
+
+    # If we are using the default stream, things are a bit simpler/harder. For some
+    #  reasons when using the default stream, DaCe seems to skip _all_ synchronization,
+    #  for more see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120).
+    #  Thus the `CompiledSDFG.fast_call()` call is truly asynchronous, i.e. just
+    #  launches the kernels and then exist. Thus we have to add a synchronization
+    #  at the end. We can not use `SDFG.append_exit_code()` because that code is
+    #  only run at the `exit()` stage, not after a call. Thus we will generate an
+    #  SDFGState that contains a Tasklet with the sync call.
+    sync_state = sdfg.add_state("sync_state")
+    for sink_state in sdfg.sink_nodes():
+        sdfg.add_edge(sink_state, sync_state, dace.InterstateEdge())
+
+    dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
+    sync_state.add_tasklet(
+        "sync_tlet",
+        inputs=set(),
+        outputs=set(),
+        code=f"DACE_GPU_CHECK({dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault))",
+        language=dace.dtypes.Language.CPP,
+        side_effects=True,
     )
 
 
@@ -210,16 +196,20 @@ class DaCeTranslator(
                 gtx_transformations.gt_simplify(sdfg)
                 gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
+        async_sdfg_call = False
         if config.COLLECT_METRICS_LEVEL != metrics.DISABLED:
             # We measure the execution time of one program by instrumenting the
             #   top-level SDFG with a cpp timer (std::chrono). This timer measures
             #   only the computation time, it does not include the overhead of
             #   calling the SDFG from Python.
             sdfg.instrument = dace.dtypes.InstrumentationType.Timer
-        elif on_gpu and self.async_sdfg_call:
-            # Do not use async SDFG call when collecting metrics: we use SDFG instrumentatiom
-            #   and therefore the SDFG execution has to complete before we can retrieve the report.
-            make_sdfg_async(sdfg)
+        elif self.async_sdfg_call:
+            async_sdfg_call = True
+
+        if async_sdfg_call:
+            make_sdfg_call_async(sdfg, on_gpu)
+        else:
+            make_sdfg_call_sync(sdfg, on_gpu)
 
         return sdfg
 

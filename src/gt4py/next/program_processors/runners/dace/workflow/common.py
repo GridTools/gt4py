@@ -56,16 +56,19 @@ def set_dace_config(
     )
 
     # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
-    # up with the cuda streams, i.e. it allocates N streams but uses N+1. Therefore,
-    # setting up 1 cuda stream results in cuda code that uses 2 streams.
-    # As a workaround, we set 'max_concurrent_streams=-1' to configure dace to only
-    # use the default cuda stream.
-    # Note that by using the default cuda stream the dace codegen will use different
-    # codepaths, because it will not need to emit synchronization among streams.
+    #  up with the cuda streams, i.e. it allocates N streams but uses N+1. The first
+    #  idea was to use just one stream. However, even in that case the generator
+    #  generated wrong code. The current approach is to use the default stream, i.e.
+    #  setting `max_concurrent_streams` to `-1`. However, the draw back is, that
+    #  apparently then all synchronization is disabled, even the one at the very
+    #  end of the SDFG call. To correct for that we are using either
+    #  `make_sdfg_call_sync()` or `make_sdfg_call_async()`, see there or in
+    #  [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
     dace.Config.set("compiler.cuda.max_concurrent_streams", value=-1)
 
     if device_type == core_defs.DeviceType.ROCM:
         dace.Config.set("compiler.cuda.backend", value="hip")
 
     # Instrumentation of SDFG timers
+    # TODO(edopao, phimuell): Why is that set unconditionally?
     dace.Config.set("instrumentation", "report_each_invocation", value=True)
