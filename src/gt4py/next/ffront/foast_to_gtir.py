@@ -24,9 +24,11 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
     type_specifications as ts_ffront,
 )
+from gt4py.next.ffront.foast_passes import utils as foast_utils
 from gt4py.next.ffront.stages import AOT_FOP, FOP
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms import constant_folding
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -241,7 +243,14 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
-        return im.tuple_get(node.index, self.visit(node.value, **kwargs))
+        if isinstance(node.index.type, ts.IndexType):
+            # `field[LocalDim(42)]`
+            assert isinstance(node.index, foast.Call)
+            assert isinstance(node.index.args[0], foast.Constant)
+            return im.as_fieldop_deref_list_get(
+                node.index.args[0].value, self.visit(node.value, **kwargs)
+            )
+        return im.tuple_get(foast_utils.expr_to_index(node.index), self.visit(node.value, **kwargs))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs: Any) -> itir.Expr:
         return im.make_tuple(*[self.visit(el, **kwargs) for el in node.elts])
@@ -282,9 +291,13 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         for arg in node.args:
             match arg:
                 # `field(Off[idx])`
-                case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
+                case foast.Subscript(value=foast.Name(id=offset_name), index=index):
+                    # Constant folding to a `Literal` ensures that `index` becomes an `OffsetLiteral`,
+                    # which can be generated as compile-time value backend code.
+                    new_index = constant_folding.ConstantFolding.apply(self.visit(index, **kwargs))
+                    assert isinstance(new_index, itir.Literal)
                     current_expr = im.as_fieldop(
-                        im.lambda_("__it")(im.deref(im.shift(offset_name, offset_index)("__it")))
+                        im.lambda_("__it")(im.deref(im.shift(offset_name, new_index)("__it")))
                     )(current_expr)
                 # `field(Dim + idx)`
                 case foast.BinOp(
