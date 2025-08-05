@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Optional
+from typing import Any, Optional
 
 import dace
 import factory
@@ -25,6 +25,7 @@ from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
     utils as gtx_dace_utils,
 )
+from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfcommon
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -148,6 +149,16 @@ class DaCeTranslator(
 
     def generate_sdfg(
         self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> dace.SDFG:
+        with gtx_wfcommon.dace_context(
+            device_type=self.device_type,
+        ):
+            return self._generate_sdfg(*args, **kwargs)
+
+    def _generate_sdfg(
+        self,
         ir: itir.Program,
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
@@ -160,43 +171,41 @@ class DaCeTranslator(
         if self.use_memory_pool and not on_gpu:
             raise NotImplementedError("Memory pool only available for GPU device.")
 
-        # do not store transformation history in SDFG
-        with dace.config.set_temporary("store_history", value=False):
-            sdfg = gtir_to_sdfg.build_sdfg_from_gtir(
-                ir,
-                offset_provider_type,
-                column_axis,
-                disable_field_origin_on_program_arguments=self.disable_field_origin_on_program_arguments,
-            )
+        sdfg = gtir_to_sdfg.build_sdfg_from_gtir(
+            ir,
+            offset_provider_type,
+            column_axis,
+            disable_field_origin_on_program_arguments=self.disable_field_origin_on_program_arguments,
+        )
 
-            if self.auto_optimize:
-                unit_strides_kind = (
-                    common.DimensionKind.HORIZONTAL
-                    if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
-                    else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
-                )
-                constant_symbols = find_constant_symbols(ir, sdfg, offset_provider_type)
-                gtx_transformations.gt_auto_optimize(
-                    sdfg,
-                    gpu=on_gpu,
-                    gpu_block_size=self.gpu_block_size,
-                    unit_strides_kind=unit_strides_kind,
-                    constant_symbols=constant_symbols,
-                    assume_pointwise=True,
-                    make_persistent=self.make_persistent,
-                    gpu_memory_pool=self.use_memory_pool,
-                    blocking_dim=self.blocking_dim,
-                    blocking_size=self.blocking_size,
-                    validate=self.validate,
-                    validate_all=self.validate_all,
-                )
-            elif on_gpu:
-                # We run simplify to bring the SDFG into a canonical form that the GPU transformations
-                # can handle. This is a workaround for an issue with scalar expressions that are
-                # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
-                # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
-                gtx_transformations.gt_simplify(sdfg)
-                gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+        if self.auto_optimize:
+            unit_strides_kind = (
+                common.DimensionKind.HORIZONTAL
+                if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+                else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
+            )
+            constant_symbols = find_constant_symbols(ir, sdfg, offset_provider_type)
+            gtx_transformations.gt_auto_optimize(
+                sdfg,
+                gpu=on_gpu,
+                gpu_block_size=self.gpu_block_size,
+                unit_strides_kind=unit_strides_kind,
+                constant_symbols=constant_symbols,
+                assume_pointwise=True,
+                make_persistent=self.make_persistent,
+                gpu_memory_pool=self.use_memory_pool,
+                blocking_dim=self.blocking_dim,
+                blocking_size=self.blocking_size,
+                validate=self.validate,
+                validate_all=self.validate_all,
+            )
+        elif on_gpu:
+            # We run simplify to bring the SDFG into a canonical form that the GPU transformations
+            # can handle. This is a workaround for an issue with scalar expressions that are
+            # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
+            # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
+            gtx_transformations.gt_simplify(sdfg)
+            gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
         async_sdfg_call = False
         if config.COLLECT_METRICS_LEVEL != metrics.DISABLED:

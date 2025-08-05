@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Optional
+import contextlib
+from typing import Any, Generator, Optional
 
 import dace
 
@@ -18,7 +19,12 @@ def set_dace_config(
     device_type: core_defs.DeviceType,
     cmake_build_type: Optional[config.CMakeBuildType] = None,
 ) -> None:
-    """Set dace configuration, shared among all workflow stages.
+    """Set the DaCe configuration as required by GT4Py.
+
+    Note that this function acts on the current configuration and does not
+    revert the change once done. It is thus recommended to either create a
+    temporary configuration or to use the `dace_conext()` context manager,
+    that automatically does this.
 
     Args:
         device_type: Target device type, needed for compiler config.
@@ -68,7 +74,26 @@ def set_dace_config(
 
     if device_type == core_defs.DeviceType.ROCM:
         dace.Config.set("compiler.cuda.backend", value="hip")
+    elif device_type == core_defs.DeviceType.CUDA:
+        dace.Config.set("compiler.cuda.backend", value="cuda")
 
     # Instrumentation of SDFG timers
     # TODO(edopao, phimuell): Why is that set unconditionally?
     dace.Config.set("instrumentation", "report_each_invocation", value=True)
+
+    # we are not interested in storing the history of SDFG transformations.
+    dace.Config.set("store_history", value=False)
+
+
+@contextlib.contextmanager
+def dace_context(
+    *args: Any,
+    **kwargs: Any,
+) -> Generator[None, None, None]:
+    """Creates a new DaCe configuration context and applies the GT4Py specific configuration.
+
+    For more information see `set_dace_config()`.
+    """
+    with dace.config.temporary_config():
+        set_dace_config(*args, **kwargs)
+        yield
