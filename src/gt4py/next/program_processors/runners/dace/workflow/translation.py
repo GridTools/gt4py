@@ -74,12 +74,18 @@ def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
     if not gpu:
         return
 
-    dace_concur_streams = dace.Config.get("compiler.cuda.max_concurrent_streams")
-    assert dace_concur_streams == -1
+    assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1
 
-    # Since we are using the default stream, there is nothing to do as the call
-    #  is already asynchronous.
-    #  See [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
+    # We are using the default stream this means that _**currently**_ the launch is
+    #  already asynchronous, see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120)
+    #  for more. However, DaCe still [generates streams internally](https://github.com/spcl/dace/blob/54c935cfe74a52c5107dc91680e6201ddbf86821/dace/codegen/targets/cuda.py#L467).
+    #  Thus to be absolutely sure we will no set all streams, DaCe uses to the default
+    #  stream.
+    dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
+    sdfg.append_init_code(
+        f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
+        location="cuda",
+    )
 
 
 def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
@@ -94,8 +100,7 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     if not gpu:
         return
 
-    dace_concur_streams = dace.Config.get("compiler.cuda.max_concurrent_streams")
-    assert dace_concur_streams == -1
+    assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1
 
     # If we are using the default stream, things are a bit simpler/harder. For some
     #  reasons when using the default stream, DaCe seems to skip _all_ synchronization,
@@ -110,6 +115,11 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
         if sink_state is sync_state:
             continue
         sdfg.add_edge(sink_state, sync_state, dace.InterstateEdge())
+    assert sdfg.in_degree(sync_state) > 0
+
+    # NOTE: Since the synchronization is done through the Tasklet explicitly,
+    #   we can disable synchronization for the last state.
+    sync_state.nosync = True
 
     # NOTE: We should actually wrap the `StreamSynchronize` function inside a
     #   `DACE_GPU_CHECK()` macro. However, this only works in GPU context, but
@@ -122,6 +132,15 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
         code=f"{dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault);",
         language=dace.dtypes.Language.CPP,
         side_effects=True,
+    )
+
+    # DaCe [still generates a stream](https://github.com/spcl/dace/blob/54c935cfe74a52c5107dc91680e6201ddbf86821/dace/codegen/targets/cuda.py#L467)
+    #  despite not using it. Thus to be absolutely sure, we will not set that stream
+    #  to the default stream.
+    dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
+    sdfg.append_init_code(
+        f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
+        location="cuda",
     )
 
 

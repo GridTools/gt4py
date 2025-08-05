@@ -10,6 +10,8 @@
 
 import pytest
 
+import re
+
 dace = pytest.importorskip("dace")
 
 from gt4py._core import definitions as core_defs
@@ -27,6 +29,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Vertex,
     skip_value_mesh,
 )
+
+from dace import nodes as dace_nodes
 
 
 FloatType = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
@@ -120,9 +124,23 @@ def _check_sdfg_with_async_call(sdfg: dace.SDFG) -> None:
 
 
 def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
-    assert len(sdfg.states()) == 1
-    st = sdfg.states()[0]
-    assert st.nosync == False
+    states = sdfg.states()
+    sink_states = sdfg.sink_nodes()
+
+    # Test if the distinctive sink node is present.
+    assert len(sink_states) == 1
+    assert len(sink_states) < len(states)
+    sync_state = sink_states[0]
+    assert sync_state.label == "sync_state"
+    assert sync_state.nosync == True  # Because sync is done through the tasklet.
+    assert sync_state.number_of_nodes() == 1
+
+    sync_tlet = next(iter(sync_state.nodes()))
+    assert isinstance(sync_tlet, dace_nodes.Tasklet)
+    assert sync_tlet.side_effects
+    assert sync_tlet.label == "sync_tlet"
+
+    assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", sync_tlet.code.as_string)
 
     assert not _is_present_async_sdfg_init_code(sdfg)
 
