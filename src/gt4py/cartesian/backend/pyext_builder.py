@@ -23,7 +23,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
 
 
-_setuptools_lock = threading.Lock()
+_SETUPTOOLS_LOCK = threading.Lock()
 
 
 class SetuptoolsArgs(TypedDict):
@@ -183,7 +183,7 @@ def setuptools_setup(*, build_ext_class: type[build_ext] | None, **kwargs) -> No
     'cmdclass' will override (instead of extend) the 'cmdclass' dict passed
     as argument to 'setuptools.setup()'.
     """
-    with _setuptools_lock:
+    with _SETUPTOOLS_LOCK:
         old_setup_stop_after = setuptools.distutils.core._setup_stop_after
         setuptools.distutils.core._setup_stop_after = "commandline"
         dist = setuptools.setup(**kwargs)
