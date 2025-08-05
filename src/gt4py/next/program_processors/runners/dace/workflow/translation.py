@@ -118,7 +118,7 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
         "sync_tlet",
         inputs=set(),
         outputs=set(),
-        code=f"{dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault)",
+        code=f"{dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault);",
         language=dace.dtypes.Language.CPP,
         side_effects=True,
     )
