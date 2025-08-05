@@ -294,10 +294,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 case foast.Subscript(value=foast.Name(id=offset_name), index=index):
                     # Constant folding to a `Literal` ensures that `index` becomes an `OffsetLiteral`,
                     # which can be generated as compile-time value backend code.
-                    offset = constant_folding.ConstantFolding.apply(self.visit(index, **kwargs))
-                    assert isinstance(index, itir.Literal)
+                    new_index = constant_folding.ConstantFolding.apply(self.visit(index, **kwargs))
+                    assert isinstance(new_index, itir.Literal)
                     current_expr = im.as_fieldop(
-                        im.lambda_("__it")(im.deref(im.shift(offset_name, offset)("__it")))
+                        im.lambda_("__it")(im.deref(im.shift(offset_name, new_index)("__it")))
                     )(current_expr)
                 # `field(Dim + idx)`
                 case foast.BinOp(
