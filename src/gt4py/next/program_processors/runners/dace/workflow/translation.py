@@ -110,12 +110,15 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
             continue
         sdfg.add_edge(sink_state, sync_state, dace.InterstateEdge())
 
+    # NOTE: We should actually wrap the `StreamSynchronize` function inside a
+    #   `DACE_GPU_CHECK()` macro. However, this only works in GPU context, but
+    #   here we are in CPU context. Thus we can not do it.
     dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
     sync_state.add_tasklet(
         "sync_tlet",
         inputs=set(),
         outputs=set(),
-        code=f"DACE_GPU_CHECK({dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault))",
+        code=f"{dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault)",
         language=dace.dtypes.Language.CPP,
         side_effects=True,
     )
