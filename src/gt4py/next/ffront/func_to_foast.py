@@ -335,31 +335,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=self.get_location(node),
         )
 
-    @staticmethod
-    def _match_index(node: ast.expr) -> int:
-        if isinstance(node, ast.Constant):
-            return node.value
-        if (
-            isinstance(node, ast.UnaryOp)
-            and isinstance(node.op, ast.unaryop)
-            and isinstance(node.operand, ast.Constant)
-        ):
-            if isinstance(node.op, ast.USub):
-                return -node.operand.value
-            if isinstance(node.op, ast.UAdd):
-                return node.operand.value
-        raise ValueError(f"Not an index: '{node}'.")
-
     def visit_Subscript(self, node: ast.Subscript, **kwargs: Any) -> foast.Subscript:
-        try:
-            index = self._match_index(node.slice)
-        except ValueError:
-            raise errors.DSLError(
-                self.get_location(node.slice), "Expected an integral index."
-            ) from None
-
         return foast.Subscript(
-            value=self.visit(node.value), index=index, location=self.get_location(node)
+            value=self.visit(node.value),
+            index=self.visit(node.slice),
+            location=self.get_location(node),
         )
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:
