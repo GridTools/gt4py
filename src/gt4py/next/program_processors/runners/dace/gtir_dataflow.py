@@ -375,17 +375,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         src_subset: dace_subsets.Range,
         dst_node: dace.nodes.Node,
         dst_conn: Optional[str] = None,
-        src_offset: Optional[list[dace.symbolic.SymExpr]] = None,
     ) -> None:
-        input_subset = (
-            src_subset
-            if src_offset is None
-            else dace_subsets.Range(
-                (start - off, stop - off, step)
-                for (start, stop, step), off in zip(src_subset, src_offset, strict=True)
-            )
-        )
-        edge = MemletInputEdge(self.state, src, input_subset, dst_node, dst_conn)
+        edge = MemletInputEdge(self.state, src, src_subset, dst_node, dst_conn)
         self.input_edges.append(edge)
 
     def _add_edge(
@@ -582,10 +573,10 @@ class LambdaToDataflow(eve.NodeVisitor):
         # an index can be either a connector name (for dynamic/indirect indices)
         # or a symbol value (for literal values and scalar arguments).
         index_internals = ",".join(
-            str(index.value)
-            if isinstance(index, SymbolExpr)
-            else IndexConnectorFmt.format(dim=dim.value)
-            for dim, index in field_indices
+            str(index.value - offset)
+            if isinstance(index := arg_expr.indices[dim], SymbolExpr)
+            else f"{IndexConnectorFmt.format(dim=dim.value)} - {offset}"
+            for (dim, offset) in arg_expr.field_domain
         )
         deref_node = self._add_tasklet(
             "deref",
@@ -599,7 +590,6 @@ class LambdaToDataflow(eve.NodeVisitor):
             dace_subsets.Range.from_array(field_desc),
             deref_node,
             "__field",
-            src_offset=[offset for (_, offset) in arg_expr.field_domain],
         )
 
         for dim, index_expr in field_indices:
