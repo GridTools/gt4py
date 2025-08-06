@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
+import warnings
 from typing import Any, Optional
 
 import dace
@@ -253,6 +254,12 @@ class DaCeTranslator(
             make_sdfg_call_async(sdfg, on_gpu)
         else:
             make_sdfg_call_sync(sdfg, on_gpu)
+
+            if self.async_sdfg_call:
+                warnings.warn(
+                    f"Requested asynchronous execution for '{sdfg.name}' but it was disabled.",
+                    stacklevel=0,
+                )
 
         return sdfg
 
