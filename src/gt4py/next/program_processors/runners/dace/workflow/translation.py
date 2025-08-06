@@ -64,9 +64,12 @@ def find_constant_symbols(
 def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
     """Configure an SDFG to immediately return once all work has been scheduled.
 
-    This means that `CompiledSDFG.fast_call()` will return only after all computations
-    have finished. This function only has an effect for work that runs on the GPU.
-    The function will disable synchronization and schedule the work on the default stream.
+    This means that `CompiledSDFG.fast_call()` will return immediately after all
+    computations have been _scheduled_ on the device. This function only has an effect
+    for work that runs on the GPU. Furthermore, all work is scheduled on the
+    default stream.
+
+    Todo: Revisit this function once DaCe changes its behaviour in this regard.
     """
 
     # This is only a problem on GPU.
@@ -97,7 +100,10 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     """Process the SDFG such that the call is synchronous.
 
     This means that `CompiledSDFG.fast_call()` will return only after all computations
-    have finished and the results are available. This function only has an effect on GPU and
+    have _finished_ and the results are available. This function only has an effect for
+    work that runs on the GPU. Furthermore, all work is scheduled on the default stream.
+
+    Todo: Revisit this function once DaCe changes its behaviour in this regard.
     """
 
     # This is only a problem on GPU.
@@ -112,9 +118,9 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     #  for more see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120).
     #  Thus the `CompiledSDFG.fast_call()` call is truly asynchronous, i.e. just
     #  launches the kernels and then exist. Thus we have to add a synchronization
-    #  at the end. We can not use `SDFG.append_exit_code()` because that code is
-    #  only run at the `exit()` stage, not after a call. Thus we will generate an
-    #  SDFGState that contains a Tasklet with the sync call.
+    #  at the end to have a synchronous call. We can not use `SDFG.append_exit_code()`
+    #  because that code is only run at the `exit()` stage, not after a call. Thus we
+    #  will generate an SDFGState that contains a Tasklet with the sync call.
     sync_state = sdfg.add_state("sync_state")
     for sink_state in sdfg.sink_nodes():
         if sink_state is sync_state:
@@ -123,7 +129,7 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     assert sdfg.in_degree(sync_state) > 0
 
     # NOTE: Since the synchronization is done through the Tasklet explicitly,
-    #   we can disable synchronization for the last state.
+    #   we can disable synchronization for the last state. Might be useless.
     sync_state.nosync = True
 
     # NOTE: We should actually wrap the `StreamSynchronize` function inside a
