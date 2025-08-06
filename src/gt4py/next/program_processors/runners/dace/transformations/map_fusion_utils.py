@@ -72,16 +72,16 @@ def copy_map_graph(
                 )
             else:
                 raise ValueError(f"Unsupported data type: {type(data_desc)}")
-            node_ = graph.add_access(new_data_name)
+            node_ = graph.add_access(new_data_name, copy.copy(node.debuginfo))
             new_data_names[data_name] = new_data_name
             new_data_descriptors[data_name] = new_data_desc
         elif isinstance(node, dace_nodes.NestedSDFG):
             node_ = graph.add_nested_sdfg(
-                copy.deepcopy(node.sdfg),
-                sdfg,
-                node.in_connectors,
-                node.out_connectors,
-                node.symbol_mapping,
+                sdfg=copy.deepcopy(node.sdfg),
+                inputs=set(node.in_connectors.keys()),
+                outputs=set(node.out_connectors.keys()),
+                symbol_mapping=node.symbol_mapping.copy(),
+                debuginfo=copy.copy(node.debuginfo),
             )
             # ensure the correct reference to parent
             node_.sdfg.parent_nsdfg_node = node_
