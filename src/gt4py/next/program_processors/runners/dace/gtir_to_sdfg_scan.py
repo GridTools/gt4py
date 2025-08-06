@@ -655,7 +655,6 @@ def translate_scan(
     # where the map scope over the horizontal domain lives
     nsdfg_node = ctx.state.add_nested_sdfg(
         lambda_ctx.sdfg,
-        ctx.sdfg,
         inputs=set(lambda_arg_nodes.keys()),
         outputs=set(lambda_flat_outs.keys()),
         symbol_mapping=nsdfg_symbols_mapping,
