@@ -76,11 +76,16 @@ def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
 
     assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1
 
-    # We are using the default stream this means that _**currently**_ the launch is
-    #  already asynchronous, see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120)
-    #  for more. However, DaCe still [generates streams internally](https://github.com/spcl/dace/blob/54c935cfe74a52c5107dc91680e6201ddbf86821/dace/codegen/targets/cuda.py#L467).
-    #  Thus to be absolutely sure we will no set all streams, DaCe uses to the default
-    #  stream.
+    # NOTE: We are using the default stream this means that _**currently**_ the launch is
+    #   already asynchronous, see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120)
+    #   for more. However, DaCe still [generates streams internally](https://github.com/spcl/dace/blob/54c935cfe74a52c5107dc91680e6201ddbf86821/dace/codegen/targets/cuda.py#L467).
+    #   Thus to be absolutely sure we will no set all streams, DaCe uses to the default
+    #   stream.
+    # NOTE: Another important note here is, that it looks as if no synchronization
+    #   what soever between states is generated if the default stream is used. This
+    #   might lead to problems if a GPU kernel computes something that is needed for a
+    #   condition of an interstate edge. However, we should not have that case.
+    # TODO(phimuell, edopao): Make sure if this is really the case.
     dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
     sdfg.append_init_code(
         f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
