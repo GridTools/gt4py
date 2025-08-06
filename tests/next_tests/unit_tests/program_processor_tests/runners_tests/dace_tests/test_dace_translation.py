@@ -11,6 +11,7 @@
 import pytest
 
 import re
+import dace
 
 dace = pytest.importorskip("dace")
 
@@ -229,7 +230,7 @@ def _make_multi_state_sdfg_0(
     R = sdfg.add_symbol("R", dace.int32)
     X_size = sdfg.add_symbol("X_size", dace.int32)
     sdfg.add_scalar("T_GPU", dace.int32, storage=dace.StorageType.GPU_Global)
-    sdfg.add_scalar("T", dace.int32)
+    sdfg.add_scalar("T", dace.int32, transient=True)
 
     X, _ = sdfg.add_array("X", [X_size], dace.int32)
 
@@ -290,12 +291,35 @@ def _make_multi_state_sdfg_2(
     return sdfg, first_state, second_state
 
 
+def _make_multi_state_sdfg_3(
+    sdfg_name: str = "async_call_multi_state_3",
+) -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
+    """
+    Essentially like `async_call_multi_state_0`, but this time the CPU data is also
+    used inside the first state, thus a sync after the call is needed.
+    """
+    sdfg, first_state, second_state = _make_multi_state_sdfg_0(sdfg_name)
+    sdfg.add_array("U", shape=(1,), dtype=dace.int32, transient=False)
+
+    t_cpu_1 = next(iter(dnode for dnode in first_state.data_nodes() if dnode.data == "T"))
+    u_cpu_1 = first_state.add_access("U")
+    tlet1 = first_state.add_tasklet(
+        "cpu_computation", inputs={"__in"}, code="__out = __in + 1", outputs={"__out"}
+    )
+
+    first_state.add_edge(t_cpu_1, None, tlet1, "__in", dace.Memlet("T[0]"))
+    first_state.add_edge(tlet1, "__out", u_cpu_1, None, dace.Memlet("U[0]"))
+
+    return sdfg, first_state, second_state
+
+
 @pytest.mark.parametrize(
     "multi_state_config",
     [
         (True, _make_multi_state_sdfg_0),
         (False, _make_multi_state_sdfg_1),
         (False, _make_multi_state_sdfg_2),
+        (False, _make_multi_state_sdfg_3),
     ],
 )
 def test_generate_sdfg_async_call_multi_state(multi_state_config):
@@ -321,13 +345,15 @@ def test_generate_sdfg_async_call_multi_state(multi_state_config):
 
     cpu_code = sdfg.generate_code()[0].clean_code
     if expect_async_sdfg_call_on_first_state:
-        # NOTE: This test is plain wrong. Because there is a dependency between the first and the
+        # NOTE: This test is plain wrong! Because there is a dependency between the first and the
         #   second state. This is because the Map in the first state computes something that is
         #   used on the Interstate edge. Thus there should be a sync at the end of the first
         #   state. But as the test bellow shows, there is no sync in the enter CPU code (syncs
         #   are never inside the GPU code). This is plain wrong, but we should not be affected
         #   by this. See https://github.com/spcl/dace/issues/2120 for more.
-        assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", cpu_code) is None
+        #   In the case of `_make_multi_state_sdfg_3()` there would be a sync after the Map, before
+        #   the Tasklet, if the default stream was not used!
+        assert re.match(r"(cuda|hip)StreamSynchronize\b", cpu_code) is None
     else:
         # There is no dependency between the states, so no sync.
-        assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", cpu_code) is None
+        assert re.match(r"(cuda|hip)StreamSynchronize\b", cpu_code) is None
