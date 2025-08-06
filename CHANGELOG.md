@@ -2,6 +2,20 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.7] - 2025-08-06
+
+### Cartesian
+
+See commit history.
+
+### Development
+
+See commit history.
+
+### Next
+
+- Fixed a bug related to the launch behaviour of programs using the DaCe backend.
+
 ## [1.0.6] - 2025-07-30
 
 ### Cartesian
