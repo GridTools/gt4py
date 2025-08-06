@@ -20,6 +20,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.runners.dace.workflow import (
     translation as dace_translation_stage,
+    common as dace_wf_common,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -102,25 +103,32 @@ def test_find_constant_symbols(has_unit_stride):
         assert len(constant_symbols) == 0
 
 
-def _is_present_async_sdfg_init_code(sdfg: dace.SDFG) -> bool:
-    async_sdfg_init_code = "__dace_gpu_set_all_streams(__state, cudaStreamDefault);"
-
-    if "cuda" not in sdfg.init_code:
+def _are_streams_set_to_default_stream(sdfg: dace.SDFG) -> bool:
+    if "cuda" not in sdfg.init_code:  # Here 'cuda' equals 'GPU backend'.
         return False
 
-    n_match_lines = len(
-        [line for line in sdfg.init_code["cuda"].code.splitlines() if line == async_sdfg_init_code]
+    return (
+        re.match(
+            r"__dace_gpu_set_all_streams\(__state\s*,\s*(cuda|hip)StreamDefault\);",
+            sdfg.init_code["cuda"].as_string,
+        )
+        is not None
     )
-    assert n_match_lines <= 1
-    return n_match_lines == 1
 
 
 def _check_sdfg_with_async_call(sdfg: dace.SDFG) -> None:
-    assert len(sdfg.states()) == 1
-    st = sdfg.states()[0]
-    assert st.nosync == True
+    # Because we are using the default stream, the launch is asynchronous. Thus we
+    #  have to check if there is no synchronization state. However, we will do a
+    #  stronger test. Instead we will make sure that there are no synchronization
+    #  calls in the _entire_ generated code.
+    # NOTE: Even in asynchronous launch, there might be some need for synchronization,
+    #   for example if something is computed in a kernel and used on an interstate
+    #   edge. However, we do not have that case.
 
-    assert _is_present_async_sdfg_init_code(sdfg)
+    # The synchronization calls are in the CPU not the GPU code.
+    cpu_code = sdfg.generate_code()[0].clean_code
+    assert re.match(r"\b(cuda|hip)StreamSynchronize\b", cpu_code) is None
+    assert _are_streams_set_to_default_stream(sdfg)
 
 
 def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
@@ -141,8 +149,7 @@ def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
     assert sync_tlet.label == "sync_tlet"
 
     assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", sync_tlet.code.as_string)
-
-    assert not _is_present_async_sdfg_init_code(sdfg)
+    assert _are_streams_set_to_default_stream(sdfg)
 
 
 @pytest.mark.parametrize(
@@ -221,19 +228,29 @@ def _make_multi_state_sdfg_0(
     sdfg = dace.SDFG(sdfg_name)
     R = sdfg.add_symbol("R", dace.int32)
     X_size = sdfg.add_symbol("X_size", dace.int32)
-    T, _ = sdfg.add_scalar("T", dace.int32)
+    sdfg.add_scalar("T_GPU", dace.int32, storage=dace.StorageType.GPU_Global)
+    sdfg.add_scalar("T", dace.int32)
+
     X, _ = sdfg.add_array("X", [X_size], dace.int32)
 
     first_state = sdfg.add_state()
-    twrite = first_state.add_tasklet(
+    t_gpu_1 = first_state.add_access("T_GPU")
+    t_cpu_1 = first_state.add_access("T")
+
+    first_state.add_mapped_tasklet(
         "write",
-        code="val = 10",
+        map_ranges={"i": "0"},
         inputs={},
-        outputs={"val"},
+        code="val = 10",
+        outputs={"val": dace.Memlet("T_GPU[i]")},
+        output_nodes={t_gpu_1},
+        external_edges=True,
+        schedule=dace.ScheduleType.GPU_Device,
     )
-    first_state.add_edge(
-        twrite, "val", first_state.add_access(T), None, dace.Memlet(data=T, subset="0")
-    )
+    first_state.add_nedge(t_gpu_1, t_cpu_1, dace.Memlet("T_GPU[0] -> [0]"))
+
+    # The second map does not need to be on GPU, it just has to use the value that is
+    #  computed by the first GPU Map.
     second_state = sdfg.add_state_after(first_state)
     second_state.add_mapped_tasklet(
         "compute",
@@ -243,7 +260,7 @@ def _make_multi_state_sdfg_0(
         outputs={"val": dace.Memlet(data=X, subset="i")},
         external_edges=True,
     )
-    sdfg.out_edges(first_state)[0].data.assignments["R"] = 1
+    sdfg.out_edges(first_state)[0].data.assignments["R"] = "1"
     sdfg.out_edges(first_state)[0].data.assignments["S"] = "False"
     return sdfg, first_state, second_state
 
@@ -289,13 +306,28 @@ def test_generate_sdfg_async_call_multi_state(multi_state_config):
     expect_async_sdfg_call_on_first_state, make_multi_state_sdfg = multi_state_config
     sdfg, first_state, second_state = make_multi_state_sdfg()
 
-    dace_translation_stage.make_sdfg_async(sdfg)
+    with dace_wf_common.dace_context(device_type=core_defs.DeviceType.CUDA):
+        dace_translation_stage.make_sdfg_call_async(sdfg, True)
+        assert _are_streams_set_to_default_stream(sdfg)
 
-    assert _is_present_async_sdfg_init_code(sdfg)
+    # No synchronization state is added.
+    assert sdfg.number_of_nodes() == 2
+    assert sdfg.out_degree(first_state) == 1 and sdfg.in_degree(first_state) == 0
+    assert sdfg.out_degree(second_state) == 0 and sdfg.in_degree(second_state) == 1
 
+    # We do never a sync.
+    assert first_state.nosync == False
+    assert second_state.nosync == False
+
+    cpu_code = sdfg.generate_code()[0].clean_code
     if expect_async_sdfg_call_on_first_state:
-        assert first_state.nosync == True
-        assert second_state.nosync == True
+        # NOTE: This test is plain wrong. Because there is a dependency between the first and the
+        #   second state. This is because the Map in the first state computes something that is
+        #   used on the Interstate edge. Thus there should be a sync at the end of the first
+        #   state. But as the test bellow shows, there is no sync in the enter CPU code (syncs
+        #   are never inside the GPU code). This is plain wrong, but we should not be affected
+        #   by this. See https://github.com/spcl/dace/issues/2120 for more.
+        assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", cpu_code) is None
     else:
-        assert first_state.nosync == False
-        assert second_state.nosync == True
+        # There is no dependency between the states, so no sync.
+        assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", cpu_code) is None
