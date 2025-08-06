@@ -6,15 +6,17 @@ Notable changes to this project will be documented in this file. The format is b
 
 ### Cartesian
 
-See commit history.
+- Introduce switches for the default `int` and `float` precision.
+- Introduce `erf` and `erfc` functions.
+- Make CUDA compilation thread-safe.
 
 ### Development
 
-See commit history.
+- Add MacOS to daily CI.
 
 ### Next
 
-- Fixed a bug related to the launch behaviour of programs using the DaCe backend.
+See commit history.
 
 ## [1.0.6] - 2025-07-30
 
