@@ -15,6 +15,7 @@ translators in `gtir_to_sdfg_primitives` module.
 from __future__ import annotations
 
 import dace
+import sympy
 from dace import subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
@@ -74,7 +75,7 @@ def _make_concat_scalar_broadcast(
     ctx: gtir_to_sdfg.SubgraphContext,
     inp: gtir_to_sdfg_types.FieldopData,
     inp_desc: dace.data.Array,
-    domain: gtir_domain.FieldopDomain,
+    out_domain: gtir_domain.FieldopDomain,
     concat_dim_index: int,
 ) -> tuple[gtir_to_sdfg_types.FieldopData, dace.data.Array]:
     """
@@ -86,7 +87,7 @@ def _make_concat_scalar_broadcast(
     """
     assert isinstance(inp.gt_type, ts.FieldType)
     assert len(inp.gt_type.dims) == 1
-    out_dims, out_origin, out_shape = gtir_domain.get_field_layout(domain)
+    out_dims, out_origin, out_shape = gtir_domain.get_field_layout(out_domain, ctx.target_domain)
     out_type = ts.FieldType(dims=out_dims, dtype=inp.gt_type.dtype)
 
     out_name, out_desc = ctx.sdfg.add_temp_transient(out_shape, inp_desc.dtype)
@@ -180,7 +181,9 @@ def _translate_concat_where_impl(
 
     # we use the concat domain, stored in the annex, as the domain of output field
     output_domain = gtir_domain.extract_domain(node_domain)
-    output_dims, output_origin, output_shape = gtir_domain.get_field_layout(output_domain)
+    output_dims, output_origin, output_shape = gtir_domain.get_field_layout(
+        output_domain, ctx.target_domain
+    )
     concat_dim_index = output_dims.index(concat_domain.dim)
 
     """
@@ -254,8 +257,9 @@ def _translate_concat_where_impl(
             concat_dim_index,
             gtir_domain.FieldopDomainRange(
                 dim=concat_domain.dim,
-                start=dace.symbolic.pystr_to_symbolic(
-                    f"max({concat_dim_bound - 1}, {output_domain[concat_dim_index].start})"
+                start=gtir_domain.simplify_domain_expr(
+                    sympy.Max(concat_dim_bound - 1, output_domain[concat_dim_index].start),
+                    ctx.target_domain,
                 ),
                 stop=concat_dim_bound,
             ),
@@ -282,8 +286,9 @@ def _translate_concat_where_impl(
             gtir_domain.FieldopDomainRange(
                 dim=concat_domain.dim,
                 start=concat_dim_bound,
-                stop=dace.symbolic.pystr_to_symbolic(
-                    f"min({concat_dim_bound + 1}, {output_domain[concat_dim_index].stop})"
+                stop=gtir_domain.simplify_domain_expr(
+                    sympy.Min(concat_dim_bound + 1, output_domain[concat_dim_index].stop),
+                    ctx.target_domain,
                 ),
             ),
         )
@@ -311,7 +316,7 @@ def _translate_concat_where_impl(
             ctx=ctx,
             inp=lower,
             inp_desc=lower_desc,
-            domain=lower_domain,
+            out_domain=lower_domain,
             concat_dim_index=concat_dim_index,
         )
     elif isinstance(upper_desc, dace.data.Scalar) or (
@@ -328,7 +333,7 @@ def _translate_concat_where_impl(
             ctx=ctx,
             inp=upper,
             inp_desc=upper_desc,
-            domain=upper_domain,
+            out_domain=upper_domain,
             concat_dim_index=concat_dim_index,
         )
     else:
@@ -354,14 +359,16 @@ def _translate_concat_where_impl(
     assert all(ftype.dims == output_dims for ftype in (lower.gt_type, upper.gt_type))  # type: ignore[union-attr]
 
     lower_range_0 = output_domain[concat_dim_index].start
-    lower_range_1 = dace.symbolic.pystr_to_symbolic(
-        f"max({lower_range_0}, {lower_domain[concat_dim_index].stop})"
+    lower_range_1 = gtir_domain.simplify_domain_expr(
+        sympy.Max(lower_range_0, lower_domain[concat_dim_index].stop),
+        ctx.target_domain,
     )
     lower_range_size = lower_range_1 - lower_range_0
 
     upper_range_1 = output_domain[concat_dim_index].stop
-    upper_range_0 = dace.symbolic.pystr_to_symbolic(
-        f"min({upper_range_1}, {upper_domain[concat_dim_index].start})"
+    upper_range_0 = gtir_domain.simplify_domain_expr(
+        sympy.Min(upper_range_1, upper_domain[concat_dim_index].start),
+        ctx.target_domain,
     )
     upper_range_size = upper_range_1 - upper_range_0
 
@@ -419,7 +426,6 @@ def _translate_concat_where_impl(
             lower_output_subset.append((0, size - 1, 1))
             upper_output_subset.append((0, size - 1, 1))
 
-    # use dynamic memlets because the subset range could be empty, but this is known only at runtime
     ctx.state.add_nedge(
         lower.dc_node,
         output_node,
@@ -427,7 +433,6 @@ def _translate_concat_where_impl(
             data=lower.dc_node.data,
             subset=dace_subsets.Range(lower_subset),
             other_subset=dace_subsets.Range(lower_output_subset),
-            dynamic=True,
         ),
     )
     ctx.state.add_nedge(
@@ -437,7 +442,6 @@ def _translate_concat_where_impl(
             data=upper.dc_node.data,
             subset=dace_subsets.Range(upper_subset),
             other_subset=dace_subsets.Range(upper_output_subset),
-            dynamic=True,
         ),
     )
 

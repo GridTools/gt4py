@@ -226,13 +226,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         sdfg.reset_cfg_list()
 
         # Readjust the Subsets.
-        # TODO(phimuell): Technically only needed if we patched some data from
-        #   beyond the Map inside the SDFG.
-        dace_propagation.propagate_memlets_nested_sdfg(
-            parent_sdfg=sdfg,
-            parent_state=graph,
-            nsdfg_node=if_block,
-        )
+        #  As a side effect this call will also properly propagate the nested SDFG `if_block`.
+        dace_propagation.propagate_memlets_map_scope(sdfg, graph, enclosing_map)
 
     def _replicate_dataflow_into_branch(
         self,
@@ -392,7 +387,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     )
                     assert outer_data.data in inner_sdfg.arrays
                     assert not inner_sdfg.arrays[outer_data.data].transient
-                    new_nodes[outer_data] = branch_state.add_access(outer_data.data)
+                    new_nodes[outer_data] = branch_state.add_access(
+                        outer_data.data, copy.copy(outer_data.debuginfo)
+                    )
 
                 # Now create the edge in the inner state.
                 branch_state.add_edge(

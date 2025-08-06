@@ -97,7 +97,6 @@ def _make_strides_propagation_level2_sdfg() -> tuple[dace.SDFG, dace_nodes.Neste
 
     nsdfg = state.add_nested_sdfg(
         sdfg=sdfg_level3,
-        parent=sdfg,
         inputs={"a3"},
         outputs={"c3"},
         symbol_mapping={s3: s3 for s3 in sdfg_level3.free_symbols},
@@ -146,7 +145,6 @@ def _make_strides_propagation_level1_sdfg() -> tuple[
 
     nsdfg_level2: dace_nodes.NestedSDFG = state.add_nested_sdfg(
         sdfg=sdfg_level2,
-        parent=sdfg,
         inputs={"a2", "c2"},
         outputs={"a2_alias", "b2", "c2"},
         symbol_mapping={s: s for s in sdfg_level2.free_symbols},
@@ -357,7 +355,6 @@ def _make_strides_propagation_dependent_symbol_sdfg() -> tuple[dace.SDFG, dace_n
 
     nsdfg = state.add_nested_sdfg(
         sdfg=sdfg_level2,
-        parent=sdfg_level1,
         inputs={"a2"},
         outputs={"b2"},
         symbol_mapping={s: s for s in sdfg_level2.symbols},
@@ -468,7 +465,6 @@ def _make_strides_propagation_shared_symbols_sdfg() -> tuple[dace.SDFG, dace_nod
     sdfg_level2 = _make_strides_propagation_shared_symbols_nsdfg()
     nsdfg = state.add_nested_sdfg(
         sdfg=sdfg_level2,
-        parent=sdfg_level1,
         inputs={"a2"},
         outputs={"b2"},
         symbol_mapping={s: s for s in sdfg_level2.symbols},
@@ -591,7 +587,6 @@ def _make_strides_propagation_stride_1_sdfg() -> tuple[dace.SDFG, dace_nodes.Nes
     sdfg_level1 = _make_strides_propagation_stride_1_nsdfg()
 
     nsdfg = state.add_nested_sdfg(
-        parent=sdfg,
         sdfg=sdfg_level1,
         inputs={"a"},
         outputs={"b"},

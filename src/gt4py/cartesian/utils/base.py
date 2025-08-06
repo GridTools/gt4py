@@ -239,8 +239,7 @@ def make_dir(dir_name, *, mode=0o777, is_package=False, is_cache=False):
     if is_cache:
         with open(os.path.join(dir_name, "CACHEDIR.TAG"), "w") as f:
             f.write(
-                """Signature: 8
-a477f597d28d172789f06886806bc55
+                """Signature: 8a477f597d28d172789f06886806bc55
 # This file is a cache directory tag created by GT4Py.
 # For information about cache directory tags, see:
 #	http://www.brynosaurus.com/cachedir/

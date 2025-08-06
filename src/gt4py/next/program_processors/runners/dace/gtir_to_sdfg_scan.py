@@ -81,7 +81,7 @@ def _parse_scan_fieldop_arg(
 def _create_scan_field_operator_impl(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    domain: gtir_domain.FieldopDomain,
+    field_domain: gtir_domain.FieldopDomain,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
     map_exit: dace.nodes.MapExit,
@@ -105,7 +105,9 @@ def _create_scan_field_operator_impl(
     assert isinstance(dataflow_output_desc, dace.data.Array)
 
     # the memory layout of the output field follows the field operator compute domain
-    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(domain)
+    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(
+        field_domain, ctx.target_domain
+    )
     field_indices = gtir_domain.get_domain_indices(field_dims, field_origin)
     field_subset = dace_subsets.Range.from_indices(field_indices)
 
@@ -189,7 +191,7 @@ def _create_scan_field_operator(
     Refer to `gtir_to_sdfg_primitives._create_field_operator()` for the
     description of function arguments and return values.
     """
-    domain_dims, _, _ = gtir_domain.get_field_layout(domain)
+    domain_dims, _, _ = gtir_domain.get_field_layout(domain, ctx.target_domain)
 
     # create a map scope to execute the `LoopRegion` over the horizontal domain
     if len(domain_dims) == 1:
@@ -407,7 +409,9 @@ def _lower_lambda_to_nested_sdfg(
     # The 'update' state writes the value computed by the stencil into the scan carry variable,
     # in order to make it available to the next vertical level.
     compute_state = scan_loop.add_state("scan_compute")
-    compute_ctx = gtir_to_sdfg.SubgraphContext(lambda_ctx.sdfg, compute_state)
+    compute_ctx = gtir_to_sdfg.SubgraphContext(
+        lambda_ctx.sdfg, compute_state, lambda_ctx.target_domain
+    )
     update_state = scan_loop.add_state_after(compute_state, "scan_update")
 
     # inside the 'compute' state, visit the list of arguments to be passed to the stencil
@@ -448,6 +452,7 @@ def _lower_lambda_to_nested_sdfg(
             )
         scan_result_data = scan_result.dc_node.data
         scan_result_desc = scan_result.dc_node.desc(lambda_ctx.sdfg)
+        scan_result_subset = dace_subsets.Range.from_array(scan_result_desc)
 
         # `sym` represents the global output data, that is the nested-SDFG output connector
         scan_carry_data = str(scan_carry_sym.id)
@@ -458,7 +463,9 @@ def _lower_lambda_to_nested_sdfg(
         # in the 'compute' state, we write the current vertical level data to the output field
         # (the output field is mapped to an external array)
         compute_state.add_nedge(
-            scan_result.dc_node, output_node, dace.Memlet(data=output, subset=output_subset)
+            scan_result.dc_node,
+            output_node,
+            dace.Memlet(data=output, subset=output_subset, other_subset=scan_result_subset),
         )
 
         # in the 'update' state, the value of the current vertical level is written
@@ -466,7 +473,9 @@ def _lower_lambda_to_nested_sdfg(
         update_state.add_nedge(
             update_state.add_access(scan_result_data),
             update_state.add_access(scan_carry_data),
-            dace.Memlet.from_array(scan_result_data, scan_result_desc),
+            dace.Memlet(
+                data=scan_result_data, subset=scan_result_subset, other_subset=scan_result_subset
+            ),
         )
 
         output_type = ts.FieldType(dims=[scan_domain.dim], dtype=scan_result.gt_dtype)
@@ -646,7 +655,6 @@ def translate_scan(
     # where the map scope over the horizontal domain lives
     nsdfg_node = ctx.state.add_nested_sdfg(
         lambda_ctx.sdfg,
-        ctx.sdfg,
         inputs=set(lambda_arg_nodes.keys()),
         outputs=set(lambda_flat_outs.keys()),
         symbol_mapping=nsdfg_symbols_mapping,
