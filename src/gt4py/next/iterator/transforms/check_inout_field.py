@@ -23,6 +23,7 @@ class CheckInOutField(PreserveLocationVisitor, NodeTranslator):
     Example:
         >>> from gt4py.next.iterator.transforms import infer_domain
         >>> from gt4py.next.type_system import type_specifications as ts
+        >>> from gt4py.next.iterator.ir_utils import ir_makers as im
         >>> float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
         >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
         >>> i_field_type = ts.FieldType(dims=[IDim], dtype=float_type)
