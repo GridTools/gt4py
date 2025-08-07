@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import enum
 import functools
+import numbers
 import typing
 from typing import (
     Any,
@@ -180,6 +181,7 @@ class NativeFunction(eve.StrEnum):
     TRUNC = "trunc"
     ERF = "erf"
     ERFC = "erfc"
+    ROUND = "round"
 
     INT32 = "int32"
     INT64 = "int64"
@@ -231,6 +233,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.FLOAT64: 1,
         NativeFunction.ERF: 1,
         NativeFunction.ERFC: 1,
+        NativeFunction.ROUND: 1,
     }.items()
 }
 
@@ -345,6 +348,31 @@ class VariableKOffset(eve.GenericNode, Generic[ExprT]):
             raise ValueError("Variable vertical index must be an integer expression")
 
 
+class AbsoluteKIndex(eve.GenericNode, Generic[ExprT]):
+    """Access a field with absolute K
+
+    Restrictions:
+    - Centered I/J
+    - No data dimensions
+    - Read-only
+    """
+
+    k: Union[int, ExprT]
+
+    def to_dict(self) -> Dict[str, Optional[int]]:
+        return {"i": 0, "j": 0, "k": None}
+
+    @datamodels.validator("k")
+    def offset_expr_is_int(self, _attribute: datamodels.Attribute, value: Any) -> None:
+        if isinstance(value, numbers.Real):
+            if not isinstance(value, int):
+                raise ValueError("Absolute vertical index literal must be an integer")
+        else:
+            value = typing.cast(Expr, value)
+            if value.dtype is not DataType.AUTO and not value.dtype.isinteger():
+                raise ValueError("Absolute vertical index must be an integer expression")
+
+
 class ScalarAccess(LocNode):
     name: eve.Coerced[eve.SymbolRef]
     kind: ExprKind = ExprKind.SCALAR
@@ -352,7 +380,7 @@ class ScalarAccess(LocNode):
 
 class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
     name: eve.Coerced[eve.SymbolRef]
-    offset: Union[CartesianOffset, VariableKOffsetT]
+    offset: CartesianOffset | VariableKOffsetT | AbsoluteKIndex
     data_index: List[ExprT] = eve.field(default_factory=list)
     kind: ExprKind = ExprKind.FIELD
 
@@ -924,6 +952,7 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.FLOAT64: "float64",
         NativeFunction.ERF: "erf",
         NativeFunction.ERFC: "erfc",
+        NativeFunction.ROUND: "round",
     },
 }
 

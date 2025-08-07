@@ -41,7 +41,7 @@ NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
     [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
     `SQRT`, `EXP`, `LOG`, `LOG10`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`,
-    `TRUNC`, `ERF`, `ERFC`, `INT32`, `INT64`, `FLOAT32`, `FLOAT64`]
+    `TRUNC`, `ERF`, `ERFC`, `INT32`, `INT64`, `FLOAT32`, `FLOAT64`, `ROUND`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
@@ -356,9 +356,23 @@ class VarRef(Ref):
 
 
 @attribclass
+class AbsoluteKIndex(Expr):
+    """See gtc.common.AbsoluteKIndex"""
+
+    k = attribute(of=Any)
+
+
+@attribclass
+class IteratorAccess(Ref):
+    """Iterator query"""
+
+    name = attribute(of=str)
+
+
+@attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr, AbsoluteKIndex]])
     data_index = attribute(of=ListOf[Expr], factory=list)
     loc = attribute(of=Location, optional=True)
 
@@ -432,6 +446,7 @@ class NativeFunction(enum.Enum):
     TRUNC = enum.auto()
     ERF = enum.auto()
     ERFC = enum.auto()
+    ROUND = enum.auto()
 
     # Cast operations - share a keyword with type hints
     INT32 = enum.auto()
@@ -479,6 +494,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.FLOAT64: 1,
     NativeFunction.ERF: 1,
     NativeFunction.ERFC: 1,
+    NativeFunction.ROUND: 1,
 }
 
 

@@ -45,7 +45,7 @@ class KBoundaryVisitor(eve.NodeVisitor):
     ):
         boundary = field_boundaries[node.name]
         interval = vloop.interval
-        if not isinstance(node.offset, gtir.VariableKOffset):
+        if not isinstance(node.offset, (gtir.VariableKOffset, gtir.AbsoluteKIndex)):
             if interval.start.level == LevelMarker.START:
                 boundary = (
                     max(-interval.start.offset - node.offset.k, boundary[0]),
