@@ -66,10 +66,18 @@ class CheckInOutField(PreserveLocationVisitor, NodeTranslator):
         def extract_subexprs(expr):
             """Return a list of all subexpressions in expr.args, including expr itself."""
             subexprs = [expr]
-            if hasattr(expr, "args"):
+            if isinstance(expr, itir.FunCall):
                 for arg in expr.args:
                     subexprs.extend(extract_subexprs(arg))
             return subexprs
+
+        def visit_nested_make_tuple_tuple_get(expr):
+            """Recursively visit make_tuple and tuple_get expr and check all as_fieldop subexpressions."""
+            if cpm.is_applied_as_fieldop(expr):
+                check_expr(expr.fun, expr.args, offset_provider)
+            elif cpm.is_call_to(expr, ("make_tuple", "tuple_get")):
+                for arg in expr.args:
+                    visit_nested_make_tuple_tuple_get(arg)
 
         def check_expr(fun, args, offset_provider):
             shifts = trace_shifts.trace_stencil(fun, num_args=len(args))
@@ -77,7 +85,7 @@ class CheckInOutField(PreserveLocationVisitor, NodeTranslator):
                 arg_subexprs = extract_subexprs(arg)
                 target_subexprs = extract_subexprs(node.target)
                 for subexpr in arg_subexprs:
-                    if subexpr in target_subexprs:  # Account for im.make_tuple
+                    if subexpr in target_subexprs:
                         if shift not in (set(), {()}):
                             # This condition is just to filter out the trivial offsets in the horizontal and vertical.
                             if any(
@@ -97,10 +105,6 @@ class CheckInOutField(PreserveLocationVisitor, NodeTranslator):
 
         if cpm.is_applied_as_fieldop(node.expr):
             check_expr(node.expr.fun, node.expr.args, offset_provider)
-        else:  # Account for im.make_tuple
-            if hasattr(node.expr, "args"):
-                for expr in node.expr.args:
-                    if cpm.is_applied_as_fieldop(expr):
-                        check_expr(expr.fun, expr.args, offset_provider)
-
+        else:  # Account for nested im.make_tuple and im.tuple_get
+            visit_nested_make_tuple_tuple_get(node.expr)
         return node
