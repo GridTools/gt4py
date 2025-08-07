@@ -11,6 +11,7 @@
 import pytest
 
 import re
+from typing import Callable
 import dace
 
 dace = pytest.importorskip("dace")
@@ -126,6 +127,11 @@ def _check_sdfg_with_async_call(sdfg: dace.SDFG) -> None:
     #   for example if something is computed in a kernel and used on an interstate
     #   edge. However, we do not have that case.
 
+    assert not any(
+        state.label == "sync_state"
+        for state in sdfg.sink_nodes()
+        if isinstance(state, dace.SDFGState)
+    )
     # The synchronization calls are in the CPU not the GPU code.
     cpu_code = sdfg.generate_code()[0].clean_code
     assert re.match(r"\b(cuda|hip)StreamSynchronize\b", cpu_code) is None
@@ -140,6 +146,7 @@ def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
     assert len(sink_states) == 1
     assert len(sink_states) < len(states)
     sync_state = sink_states[0]
+    assert isinstance(sync_state, dace.SDFGState)
     assert sync_state.label == "sync_state"
     assert sync_state.nosync == True  # Because sync is done through the tasklet.
     assert sync_state.number_of_nodes() == 1
@@ -153,12 +160,26 @@ def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
     assert _are_streams_set_to_default_stream(sdfg)
 
 
+def _check_cpu_sdfg_call(sdfg: dace.SDFG) -> None:
+    # CPU is always synchron execution, thus we check that there is no sync state.
+    assert not any(
+        state.label == "sync_state"
+        for state in sdfg.sink_nodes()
+        if isinstance(state, dace.SDFGState)
+    )
+    cpu_code = sdfg.generate_code()[0].clean_code
+    assert re.match(r"\b(cuda|hip)StreamSynchronize\b", cpu_code) is None
+
+
 @pytest.mark.requires_gpu
+@pytest.mark.parametrize(
+    "device_type", [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM, core_defs.DeviceType.CPU]
+)
 @pytest.mark.parametrize(
     "make_async_sdfg_call",
     [False, True],
 )
-def test_generate_sdfg_async_call(make_async_sdfg_call):
+def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_defs.DeviceType):
     """Verify that the flag `async_sdfg_call` takes effect on the SDFG generation."""
     program_name = "field_ir_{}_async_call".format("with" if make_async_sdfg_call else "without")
 
@@ -181,19 +202,24 @@ def test_generate_sdfg_async_call(make_async_sdfg_call):
     )
 
     sdfg = dace_translation_stage.DaCeTranslator(
-        device_type=core_defs.CUPY_DEVICE_TYPE,
+        device_type=device_type,
         auto_optimize=False,
         async_sdfg_call=make_async_sdfg_call,
     ).generate_sdfg(program, offset_provider={}, column_axis=None)
 
-    if make_async_sdfg_call:
+    if device_type == core_defs.DeviceType.CPU:
+        _check_cpu_sdfg_call(sdfg)
+    elif make_async_sdfg_call:
         _check_sdfg_with_async_call(sdfg)
     else:
         _check_sdfg_without_async_call(sdfg)
 
 
 @pytest.mark.requires_gpu
-def test_generate_sdfg_async_call_no_map():
+@pytest.mark.parametrize(
+    "device_type", [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM, core_defs.DeviceType.CPU]
+)
+def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
     """Verify that the flag `async_sdfg_call=True` has no effect on an SDFG that does not contain any GPU map."""
     program_name = "scalar_ir_with_async_call"
 
@@ -216,12 +242,15 @@ def test_generate_sdfg_async_call_no_map():
     )
 
     sdfg = dace_translation_stage.DaCeTranslator(
-        device_type=core_defs.CUPY_DEVICE_TYPE,
+        device_type=device_type,
         auto_optimize=False,
         async_sdfg_call=True,
     ).generate_sdfg(program, offset_provider={}, column_axis=None)
 
-    _check_sdfg_without_async_call(sdfg)
+    if device_type == core_defs.DeviceType.CPU:
+        _check_cpu_sdfg_call(sdfg)
+    else:
+        _check_sdfg_with_async_call(sdfg)
 
 
 def _make_multi_state_sdfg_0(
@@ -325,7 +354,12 @@ def _make_multi_state_sdfg_3(
         (False, _make_multi_state_sdfg_3),
     ],
 )
-def test_generate_sdfg_async_call_multi_state(multi_state_config):
+@pytest.mark.parametrize(
+    "device_type", [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM, core_defs.DeviceType.CPU]
+)
+def test_generate_sdfg_async_call_multi_state(
+    multi_state_config: tuple[bool, Callable], device_type: core_defs.DeviceType
+):
     """
     Verify that states are not made async when a data descriptor is accessed
     on an outgoing InterState edge.
@@ -333,9 +367,10 @@ def test_generate_sdfg_async_call_multi_state(multi_state_config):
     expect_async_sdfg_call_on_first_state, make_multi_state_sdfg = multi_state_config
     sdfg, first_state, second_state = make_multi_state_sdfg()
 
-    with dace_wf_common.dace_context(device_type=core_defs.CUPY_DEVICE_TYPE):
-        dace_translation_stage.make_sdfg_call_async(sdfg, True)
-        assert _are_streams_set_to_default_stream(sdfg)
+    with dace_wf_common.dace_context(device_type=device_type):
+        dace_translation_stage.make_sdfg_call_async(sdfg, device_type != core_defs.DeviceType.CPU)
+        if device_type != core_defs.DeviceType.CPU:
+            assert _are_streams_set_to_default_stream(sdfg)
 
     # No synchronization state is added.
     assert sdfg.number_of_nodes() == 2
@@ -346,8 +381,9 @@ def test_generate_sdfg_async_call_multi_state(multi_state_config):
     assert first_state.nosync == False
     assert second_state.nosync == False
 
-    cpu_code = sdfg.generate_code()[0].clean_code
-    if expect_async_sdfg_call_on_first_state:
+    if device_type == core_defs.DeviceType.CPU:
+        _check_cpu_sdfg_call(sdfg)
+    elif expect_async_sdfg_call_on_first_state:
         # NOTE: This test is plain wrong! Because there is a dependency between the first and the
         #   second state. This is because the Map in the first state computes something that is
         #   used on the Interstate edge. Thus there should be a sync at the end of the first
@@ -356,7 +392,9 @@ def test_generate_sdfg_async_call_multi_state(multi_state_config):
         #   by this. See https://github.com/spcl/dace/issues/2120 for more.
         #   In the case of `_make_multi_state_sdfg_3()` there would be a sync after the Map, before
         #   the Tasklet, if the default stream was not used!
+        cpu_code = sdfg.generate_code()[0].clean_code
         assert re.match(r"(cuda|hip)StreamSynchronize\b", cpu_code) is None
     else:
         # There is no dependency between the states, so no sync.
+        cpu_code = sdfg.generate_code()[0].clean_code
         assert re.match(r"(cuda|hip)StreamSynchronize\b", cpu_code) is None
