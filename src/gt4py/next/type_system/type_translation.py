@@ -20,7 +20,7 @@ import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
-from gt4py.next import common
+from gt4py.next import common, containers
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -82,6 +82,16 @@ def from_type_hint(
 
     canonical_type = typing.get_origin(type_hint) or type_hint
     args = typing.get_args(type_hint)
+
+    try:
+        return containers.get_type(canonical_type)
+    except NotImplementedError:
+        ...
+
+    if hasattr(canonical_type, "__gt_type__"):
+        return canonical_type.__gt_type__(
+            canonical_type
+        )  # TODO this wouldn't work if `__gt_type__` needs runtime info, i.e. only works for static methods or class methods...
 
     match canonical_type:
         case type() as t if issubclass(t, (bool, int, float, np.generic, str)):

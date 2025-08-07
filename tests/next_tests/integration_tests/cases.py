@@ -17,6 +17,7 @@ import typing
 from typing import Any, Callable, Literal, Optional, Mapping, Protocol, TypeAlias
 
 import numpy as np
+import collections
 import pytest
 
 import gt4py.next as gtx
@@ -589,6 +590,15 @@ def _allocate_from_type(
             )
         case ts.ScalarType(kind=kind):
             return strategy.scalar(dtype=dtype or kind.name.lower())
+        case ts.NamedTupleType(types=types, keys=keys):
+            tmp = list(
+                _allocate_from_type(
+                    case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
+                )
+                for t in types
+            )
+            return collections.namedtuple(ts.NamedTupleType.__name__, keys)(*tmp)
+
         case ts.TupleType(types=types):
             return tuple(
                 (
