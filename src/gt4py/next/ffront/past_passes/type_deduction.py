@@ -54,31 +54,32 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
     if "out" not in new_kwargs:
         raise ValueError("Missing required keyword argument 'out'.")
     if "domain" in new_kwargs:
-        _ensure_no_sliced_field(new_kwargs["out"])
+        ...  # TODO
+        # _ensure_no_sliced_field(new_kwargs["out"])
 
-        domain_kwarg = new_kwargs["domain"]
-        if not isinstance(domain_kwarg, past.Dict):
-            raise ValueError(f"Only Dictionaries allowed in 'domain', got '{type(domain_kwarg)}'.")
+        # domain_kwarg = new_kwargs["domain"]
+        # if not isinstance(domain_kwarg, past.Dict):
+        #     raise ValueError(f"Only Dictionaries allowed in 'domain', got '{type(domain_kwarg)}'.")
 
-        if len(domain_kwarg.values_) == 0 and len(domain_kwarg.keys_) == 0:
-            raise ValueError("Empty domain not allowed.")
+        # if len(domain_kwarg.values_) == 0 and len(domain_kwarg.keys_) == 0:
+        #     raise ValueError("Empty domain not allowed.")
 
-        for dim in domain_kwarg.keys_:
-            if not isinstance(dim.type, ts.DimensionType):
-                raise ValueError(
-                    f"Only 'Dimension' allowed in domain dictionary keys, got '{dim}' which is of type '{dim.type}'."
-                )
-        for domain_values in domain_kwarg.values_:
-            if len(domain_values.elts) != 2:
-                raise ValueError(
-                    f"Only 2 values allowed in domain range, got {len(domain_values.elts)}."
-                )
-            if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
-                domain_values.elts[1]
-            ):
-                raise ValueError(
-                    f"Only integer values allowed in domain range, got '{domain_values.elts[0].type}' and '{domain_values.elts[1].type}'."
-                )
+        # for dim in domain_kwarg.keys_:
+        #     if not isinstance(dim.type, ts.DimensionType):
+        #         raise ValueError(
+        #             f"Only 'Dimension' allowed in domain dictionary keys, got '{dim}' which is of type '{dim.type}'."
+        #         )
+        # for domain_values in domain_kwarg.values_:
+        #     if len(domain_values.elts) != 2:
+        #         raise ValueError(
+        #             f"Only 2 values allowed in domain range, got {len(domain_values.elts)}."
+        #         )
+        #     if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
+        #         domain_values.elts[1]
+        #     ):
+        #         raise ValueError(
+        #             f"Only integer values allowed in domain range, got '{domain_values.elts[0].type}' and '{domain_values.elts[1].type}'."
+        #         )
 
 
 class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -133,9 +134,14 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def visit_TupleExpr(self, node: past.TupleExpr, **kwargs: Any) -> past.TupleExpr:
         elts = self.visit(node.elts, **kwargs)
-        return past.TupleExpr(
-            elts=elts, type=ts.TupleType(types=[el.type for el in elts]), location=node.location
-        )
+        ttype: ts.TupleType
+        if any(isinstance(elt, past.Dict) for elt in node.elts):
+            # TODO
+            assert all(isinstance(elt, past.Dict) for elt in node.elts)
+            ttype = None
+        else:
+            ttype = ts.TupleType(types=[elt.type for elt in elts])
+        return past.TupleExpr(elts=elts, type=ttype, location=node.location)
 
     def _deduce_binop_type(
         self, node: past.BinOp, *, left: past.Expr, right: past.Expr, **kwargs: Any

@@ -108,9 +108,10 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         domain = kwargs.pop("domain", None)
 
-        out_domain = common.domain(domain) if domain is not None else _get_out_domain(out)
+        out_domain = domain if domain is not None else _get_out_domain(out)
 
-        new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
+        # TODO:
+        # new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
 
         with embedded_context.update(**new_context_kwargs):
             res = op(*args, **kwargs)
@@ -137,17 +138,18 @@ def _get_vertical_range(domain: common.Domain) -> common.NamedRange | eve.Nothin
 def _tuple_assign_field(
     target: tuple[common.MutableField | tuple, ...] | common.MutableField,
     source: tuple[common.Field | tuple, ...] | common.Field,
-    domain: common.Domain,
+    domain: common.DomainLike | tuple[common.DomainLike | tuple, ...],
 ) -> None:
     @utils.tree_map
-    def impl(target: common.MutableField, source: common.Field) -> None:
+    def impl(target: common.MutableField, source: common.Field, domain: common.DomainLike) -> None:
+        domain = common.domain(domain)
         if isinstance(source, common.Field):
             target[domain] = source[domain]
         else:
             assert core_defs.is_scalar_type(source)
             target[domain] = source
 
-    impl(target, source)
+    impl(target, source, domain)
 
 
 def _intersect_scan_args(
