@@ -208,6 +208,7 @@ class DaCeTranslator(
         else:
             raise ValueError(
                 f"What the hell, expected GPU mode but got '{self.device_type}' as backup."
+                f" BACKEND is: '{dace.Config.get('compiler.cuda.backend')}'"
             )
 
         if self.use_memory_pool and not on_gpu:
