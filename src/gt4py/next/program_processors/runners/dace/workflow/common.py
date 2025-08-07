@@ -76,6 +76,10 @@ def set_dace_config(
         dace.Config.set("compiler.cuda.backend", value="hip")
     elif device_type == core_defs.DeviceType.CUDA:
         dace.Config.set("compiler.cuda.backend", value="cuda")
+    elif device_type == core_defs.DeviceType.CPU:
+        pass
+    else:
+        raise ValueError(f"Got unknown device type: {device_type}")
 
     # Instrumentation of SDFG timers
     # TODO(edopao, phimuell): Why is that set unconditionally?
