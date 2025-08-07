@@ -30,6 +30,8 @@ def set_dace_config(
         device_type: Target device type, needed for compiler config.
         cmake_build_type: CMake build type, needed for compiler config.
     """
+    # NOTE: The DaCe `Config` object is essentially a singleton that is shared
+    #   among all threads of the process.
 
     # We rely on dace cache to avoid recompiling the SDFG.
     #   Note that the workflow step with the persistent `FileCache` store
@@ -72,15 +74,11 @@ def set_dace_config(
     #  [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
     dace.Config.set("compiler.cuda.max_concurrent_streams", value=-1)
 
+    # NOTE: This only safe if a system only has/uses one kind of GPU.
     if device_type == core_defs.DeviceType.ROCM:
         dace.Config.set("compiler.cuda.backend", value="hip")
     elif device_type == core_defs.DeviceType.CUDA:
         dace.Config.set("compiler.cuda.backend", value="cuda")
-    elif device_type == core_defs.DeviceType.CPU:
-        assert device_type is not None
-        dace.Config.set("compiler.cuda.backend", value="CCPPUU")
-    else:
-        raise ValueError(f"Got unknown device type: {device_type}")
 
     # Instrumentation of SDFG timers
     # TODO(edopao, phimuell): Why is that set unconditionally?
