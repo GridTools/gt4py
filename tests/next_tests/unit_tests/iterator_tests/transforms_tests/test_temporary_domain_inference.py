@@ -123,6 +123,36 @@ def test_trivial_shift(unstructured_case):
     run_test_program(testee, expected, sizes, offset_provider)
 
 
+def test_trivial_shift_warning(unstructured_case):
+    with pytest.warns(UserWarning, match=r"For Vertex\[horizontal\] the accessed range \[3, 9\[ covers 6 values, "
+                                     r"but only 2 are actually present and 4 were added in between \[8 3\]\. "
+                                     r"Please consider reordering the mesh\."):
+        sizes = {"out": gtx.domain({Edge: (8, 10), Vertex: (0, 9)})}
+        unstructured_domain_get_E = im.domain(common.GridType.UNSTRUCTURED,
+                                              {Edge: (im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Edge))),
+                                                      im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Edge))))}
+                                              )
+
+        offset_provider = unstructured_case.offset_provider
+        testee = program_factory(
+            params=[im.sym("vertex_values", v_field_type), im.sym("out", e_field_type)],
+            body=[
+                itir.SetAt(
+                    target=im.ref("out"),
+                    expr=im.as_fieldop(im.lambda_("x")(im.deref(im.shift("E2V", 1)("x"))))(
+                        im.as_fieldop("deref")("vertex_values")
+                    ),
+                    domain=unstructured_domain_get_E,
+                )
+            ],
+        )
+        ir = inline_fundefs.InlineFundefs().visit(testee)
+        ir = inline_fundefs.prune_unreferenced_fundefs(ir)
+        ir = TransformGetDomain.apply(ir, sizes=sizes)
+
+        global_tmps.create_global_tmps(ir, offset_provider=offset_provider)
+
+
 def test_trivial_shift_switched(unstructured_case):
     sizes = {"out": gtx.domain({Edge: (2, 16), Vertex: (0, 9)})}
     unstructured_domain_get_E = im.domain(common.GridType.UNSTRUCTURED,

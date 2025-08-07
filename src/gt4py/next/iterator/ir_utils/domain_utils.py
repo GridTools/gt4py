@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import warnings
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional
 
 import numpy as np
@@ -171,6 +172,14 @@ class SymbolicDomain:
                     accessed = offset_provider[off.value].ndarray[start:stop, off_index]
                     min_ = np.min(accessed)
                     max_ = np.max(accessed) + 1
+
+                    if (covered := np.unique(accessed).size) < (
+                            max_ - min_) / 2:
+                        warnings.warn(
+                            f"For {new_dim} the accessed range [{min_}, {max_}[ covers {max_ - min_} values, "
+                            f"but only {covered} are actually present and {max_ - min_ - covered} were added "
+                            f"in between {accessed}. Please consider reordering the mesh.")
+
                     horizontal_sizes[new_dim.value] = (
                         im.literal(str(min_), builtins.INTEGER_INDEX_BUILTIN),
                         im.literal(str(max_), builtins.INTEGER_INDEX_BUILTIN),
