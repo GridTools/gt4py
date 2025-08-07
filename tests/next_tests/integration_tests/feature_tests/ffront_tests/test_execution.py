@@ -1259,3 +1259,24 @@ def test_constant_closure_vars(cartesian_case):
     cases.verify_with_default_data(
         cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
     )
+
+
+def test_local_index_premapped_field(request, unstructured_case):
+    if request.node.get_closest_marker(pytest.mark.uses_mesh_with_skip_values.name):
+        pytest.skip("This test only works with non-skip value meshes.")
+
+    @gtx.field_operator
+    def testee(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex], int32]:
+        shifted = inp(V2E)
+        return shifted[V2EDim(0)] + shifted[V2EDim(1)] + shifted[V2EDim(2)] + shifted[V2EDim(3)]
+
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    cases.verify(
+        unstructured_case,
+        testee,
+        inp,
+        out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
+        ref=np.sum(inp.asnumpy()[v2e_table], axis=1),
+    )

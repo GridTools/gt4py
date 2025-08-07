@@ -6,17 +6,27 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+
 import numpy as np
+
+from gt4py._core.definitions import float32, float64, int8, int16, int32, int64  # noqa: F401
 
 
 try:
-    from scipy.special import gamma as gamma_
+    from scipy.special import erf as erf_, erfc as erfc_, gamma as gamma_
+
 except ImportError:
     import math
 
     # If scipy is not available, emulate gamma function using math.gamma
     gamma_ = np.vectorize(math.gamma)
     gamma_.types = ["f->f", "d->d", "F->F", "D->D"]
+    # If scipy is not available, emulate erf function using math.erf
+    erf_ = np.vectorize(math.erf)
+    erf_.types = ["f->f", "d->d", "F->F", "D->D"]
+    # If scipy is not available, emulate erfc function using math.erfc
+    erfc_ = np.vectorize(math.erfc)
+    erfc_.types = ["f->f", "d->d", "F->F", "D->D"]
 
 
 positive: np.ufunc = np.positive
@@ -37,6 +47,9 @@ logical_or: np.ufunc = np.logical_or
 abs: np.ufunc = np.abs  # noqa: A001 [builtin-variable-shadowing]
 minimum: np.ufunc = np.minimum
 maximum: np.ufunc = np.maximum
+max: np.ufunc = np.maximum  # noqa: A001
+min: np.ufunc = np.minimum  # noqa: A001
+mod: np.ufunc = np.mod
 remainder: np.ufunc = np.remainder
 sin: np.ufunc = np.sin
 cos: np.ufunc = np.cos
@@ -52,6 +65,7 @@ arccosh: np.ufunc = np.arccosh
 arctanh: np.ufunc = np.arctanh
 sqrt: np.ufunc = np.sqrt
 power: np.ufunc = np.power
+pow: np.ufunc = np.power  # noqa: A001
 exp: np.ufunc = np.exp
 log: np.ufunc = np.log
 log10: np.ufunc = np.log10
@@ -63,3 +77,5 @@ isnan: np.ufunc = np.isnan
 floor: np.ufunc = np.floor
 ceil: np.ufunc = np.ceil
 trunc: np.ufunc = np.trunc
+erf: np.ufunc = erf_
+erfc: np.ufunc = erfc_

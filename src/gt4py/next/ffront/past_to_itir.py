@@ -144,15 +144,13 @@ def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]
         return None
 
     if len(scanops_per_axis.values()) != 1:
-        scanops_per_axis_strs = [
+        scanops_per_axis_str = "\n".join(
             f"- {dim.value}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
-        ]
+        )
 
         raise TypeError(
             "Only 'ScanOperator's defined on the same axis "
-            + "can be used in a 'Program', found:\n"
-            + "\n".join(scanops_per_axis_strs)
-            + "."
+            f"can be used in a 'Program', found:\n{scanops_per_axis_str}\n"
         )
 
     return iter(scanops_per_axis.keys()).__next__()

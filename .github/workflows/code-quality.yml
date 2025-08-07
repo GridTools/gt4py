@@ -30,7 +30,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ fromJson(needs.get-python-versions.outputs.python-versions) }}
+          python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6

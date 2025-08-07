@@ -73,13 +73,19 @@ def convert_args(
                 # We need to set the cache folder and key config in order to retrieve
                 # the SDFG report file.
                 dace_common.set_dace_config(device_type=device)
-                sdfg_events = fun.sdfg_program.sdfg.get_latest_report().events
-                assert len(sdfg_events) == 1
-                # The event name gets truncated in dace, so we only check that
-                # it corresponds to the beginning of SDFG label.
-                assert f"SDFG {fun.sdfg_program.sdfg.label}".startswith(sdfg_events[0].name)
+                prof_report = fun.sdfg_program.sdfg.get_latest_report()
+            if prof_report is None:
+                raise RuntimeError(
+                    "Config 'COLLECT_METRICS_LEVEL' is set but the SDFG profiling report was not found."
+                    " This might indicate that the backend is using a precompiled SDFG from persistent cache"
+                    " without instrumentation."
+                )
+            assert len(prof_report.events) == 1
+            # The event name gets truncated in dace, so we only check that
+            # it corresponds to the beginning of SDFG label.
+            assert f"SDFG {fun.sdfg_program.sdfg.label}".startswith(prof_report.events[0].name)
             duration_secs = (
-                sdfg_events[0].duration / 1e6
+                prof_report.events[0].duration / 1e6
             )  # dace timer returns the duration in microseconds
             metric_collection.add_sample(metrics.COMPUTE_METRIC, duration_secs)
 

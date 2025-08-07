@@ -11,6 +11,7 @@ import copy
 import io
 import os
 import shutil
+import threading
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, TypedDict, Union
 
 import pybind11
@@ -20,6 +21,9 @@ from setuptools.command.build_ext import build_ext
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
+
+
+_SETUPTOOLS_LOCK = threading.Lock()
 
 
 class SetuptoolsArgs(TypedDict):
@@ -178,15 +182,14 @@ def setuptools_setup(*, build_ext_class: type[build_ext] | None, **kwargs) -> No
     This is a workaround because any config file that sets an element of
     'cmdclass' will override (instead of extend) the 'cmdclass' dict passed
     as argument to 'setuptools.setup()'.
-
-    Note: This is NOT thread-safe.
     """
-    old_setup_stop_after = setuptools.distutils.core._setup_stop_after
-    setuptools.distutils.core._setup_stop_after = "commandline"
-    dist = setuptools.setup(**kwargs)
-    if build_ext_class is not None:
-        dist.cmdclass.update({"build_ext": build_ext_class})
-    setuptools.distutils.core._setup_stop_after = old_setup_stop_after
+    with _SETUPTOOLS_LOCK:
+        old_setup_stop_after = setuptools.distutils.core._setup_stop_after
+        setuptools.distutils.core._setup_stop_after = "commandline"
+        dist = setuptools.setup(**kwargs)
+        if build_ext_class is not None:
+            dist.cmdclass.update({"build_ext": build_ext_class})
+        setuptools.distutils.core._setup_stop_after = old_setup_stop_after
     setuptools.distutils.core.run_commands(dist)
 
 

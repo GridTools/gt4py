@@ -12,6 +12,7 @@ import dataclasses
 from typing import Optional, Sequence, TypeAlias
 
 import dace
+import sympy
 from dace import subsets as dace_subsets
 
 from gt4py.next import common as gtx_common
@@ -77,6 +78,29 @@ def extract_domain(node: gtir.Expr) -> FieldopDomain:
     return domain
 
 
+def simplify_domain_expr(expr: sympy.Basic, domain: FieldopDomain) -> dace.symbolic.SymbolicType:
+    """Simplifies a symbolic expression by applying constraints from domain range.
+
+    Dace uses sympy for symbolic expressions in the SDFG. By applying assumptions
+    on a sympy expression, we may obtain a simplified expression.
+    This is particularly important in the lowering of concat_where domain expressions,
+    because it usually results in cleaner memlet subsets and better map fusion.
+
+    Args:
+        expr: The symbolic expression to simplify.
+    Returns:
+        A new symbolic expression.
+    """
+    for dim_range in domain:
+        # We want to enforce the constraint `ub = lb + size`. The actual constraint
+        # is given by the assumption that the `size` variable is integer and non-negative.
+        size = sympy.var(f"__gtir_{dim_range.dim.value}_size", integer=True, negative=False)
+        expr = expr.subs(dim_range.start, dim_range.stop - size).subs(
+            size, dim_range.stop - dim_range.start
+        )
+    return dace.symbolic.simplify_ext(expr)
+
+
 def get_domain_indices(
     dims: Sequence[gtx_common.Dimension], origin: Optional[Sequence[dace.symbolic.SymExpr]]
 ) -> dace_subsets.Indices:
@@ -104,22 +128,23 @@ def get_domain_indices(
 
 
 def get_field_layout(
-    domain: FieldopDomain,
+    field_domain: FieldopDomain,
+    target_domain: FieldopDomain,
 ) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
     """
-    Parse the field operator domain and generates the shape of the result field.
+    Parse the field operator domain and generate the shape of the result field.
 
-    It should be enough to allocate an array with shape (upper_bound - lower_bound)
-    but this would require to use array offset for compensate for the start index.
-    Suppose that a field operator executes on domain [2,N-2], the dace array to store
-    the result only needs size (N-4), but this would require to compensate all array
-    accesses with offset -2 (which corresponds to -lower_bound). Instead, we choose
-    to allocate (N-2), leaving positions [0:2] unused. The reason is that array offset
-    is known to cause issues to SDFG inlining. Besides, map fusion will in any case
-    eliminate most of transient arrays.
+    Note that this function also ensures that the array shape computed from the
+    domain range is non-negative. A negative shape can occur in concat_where
+    expressions, where it can happen that 'stop' value is smaller than 'start'.
+    Also note that this _strange_ domain with 'start' > 'stop' is usually propagated
+    to the input arguments of a concat_where expression (the child nodes), thus
+    the lowering of regular field operators also needs to apply the sanity check
+    in order to avoid allocation of temporary fields with negative size.
 
     Args:
-        domain: The field operator domain.
+        field_domain: The field operator domain.
+        target_domain: Domain of the target field in the root `SetAt` expression.
 
     Returns:
         A tuple of three lists containing:
@@ -127,9 +152,12 @@ def get_field_layout(
             - the domain origin, that is the start indices in all dimensions
             - the domain size in each dimension
     """
-    if len(domain) == 0:
+    if len(field_domain) == 0:
         return [], [], []
-    domain_dims = [domain_range.dim for domain_range in domain]
-    domain_origin = [domain_range.start for domain_range in domain]
-    domain_shape = [(domain_range.stop - domain_range.start) for domain_range in domain]
+    domain_dims = [domain_range.dim for domain_range in field_domain]
+    domain_origin = [domain_range.start for domain_range in field_domain]
+    domain_shape = [
+        simplify_domain_expr(sympy.Max(0, (domain_range.stop - domain_range.start)), target_domain)
+        for domain_range in field_domain
+    ]
     return domain_dims, domain_origin, domain_shape
