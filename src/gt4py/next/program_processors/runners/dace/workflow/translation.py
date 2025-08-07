@@ -210,7 +210,7 @@ class DaCeTranslator(
                 raise ValueError(f"Unknown GPU backend '{dace_gpu_backend}' | '{self.device_type}'")
         else:
             assert self.device_type == core_defs.DeviceType.CPU
-            assert dace_gpu_backend == "CCUUPP", f"Expected cuda, but got '{dace_gpu_backend}'"
+            assert dace_gpu_backend == "CCPPUU", f"Expected cuda, but got '{dace_gpu_backend}'"
 
         if self.use_memory_pool and not on_gpu:
             raise NotImplementedError("Memory pool only available for GPU device.")
