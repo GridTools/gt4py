@@ -90,7 +90,7 @@ def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
     #   condition of an interstate edge. However, we should not have that case.
     # TODO(phimuell, edopao): Make sure if this is really the case.
     dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
-    assert dace_gpu_backend in ["cuda", "hip"]
+    assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
     sdfg.append_init_code(
         f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
         location="cuda",
@@ -137,7 +137,7 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     #   `DACE_GPU_CHECK()` macro. However, this only works in GPU context, but
     #   here we are in CPU context. Thus we can not do it.
     dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
-    assert dace_gpu_backend in ["cuda", "hip"]
+    assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
     sync_state.add_tasklet(
         "sync_tlet",
         inputs=set(),
@@ -150,7 +150,6 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     # DaCe [still generates a stream](https://github.com/spcl/dace/blob/54c935cfe74a52c5107dc91680e6201ddbf86821/dace/codegen/targets/cuda.py#L467)
     #  despite not using it. Thus to be absolutely sure, we will not set that stream
     #  to the default stream.
-    assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
     sdfg.append_init_code(
         f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
         location="cuda",
