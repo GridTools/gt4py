@@ -1204,7 +1204,7 @@ def test_read_after_write_stencil(backend):
                 raises=NotImplementedError, reason="Absolute K indexing not yet supported."
             ),
         )
-        for backend in ["gt:cpu_ifirst", "numpy", "debug"]
+        for backend in ["gt:cpu_ifirst", "numpy"]
     ],
 )
 def test_absolute_K_index_raise(backend):
@@ -1217,6 +1217,7 @@ def test_absolute_K_index_raise(backend):
 @pytest.mark.parametrize(
     "backend",
     [
+        pytest.param("debug"),
         pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
         pytest.param("dace:gpu", marks=[pytest.mark.requires_dace, pytest.mark.requires_gpu]),
     ],
@@ -1282,7 +1283,13 @@ def test_absolute_K_index(backend):
     assert (out_arr[:, :, :] == 42.42).all()
 
 
-@pytest.mark.parametrize("backend", [pytest.param("dace:cpu", marks=[pytest.mark.requires_dace])])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param("debug"),
+        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
+    ],
+)
 def test_iterator_access(backend):
     domain = (5, 5, 5)
 
