@@ -77,7 +77,7 @@ def set_dace_config(
     elif device_type == core_defs.DeviceType.CUDA:
         dace.Config.set("compiler.cuda.backend", value="cuda")
     elif device_type == core_defs.DeviceType.CPU:
-        pass
+        dace.Config.set("compiler.cuda.backend", value="CCPPUU")
     else:
         raise ValueError(f"Got unknown device type: {device_type}")
 

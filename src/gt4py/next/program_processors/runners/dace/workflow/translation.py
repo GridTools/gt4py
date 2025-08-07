@@ -150,7 +150,7 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     # DaCe [still generates a stream](https://github.com/spcl/dace/blob/54c935cfe74a52c5107dc91680e6201ddbf86821/dace/codegen/targets/cuda.py#L467)
     #  despite not using it. Thus to be absolutely sure, we will not set that stream
     #  to the default stream.
-    assert dace_gpu_backend in ["cuda", "hip"]
+    assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
     sdfg.append_init_code(
         f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
         location="cuda",
