@@ -199,6 +199,17 @@ class DaCeTranslator(
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
+        if not on_gpu:
+            pass
+        elif self.device_type == core_defs.DeviceType.ROCM:
+            pass
+        elif self.device_type == core_defs.DeviceType.CUDA:
+            pass
+        else:
+            raise ValueError(
+                f"What the hell, expected GPU mode but got '{self.device_type}' as backup."
+            )
+
         if self.use_memory_pool and not on_gpu:
             raise NotImplementedError("Memory pool only available for GPU device.")
 
