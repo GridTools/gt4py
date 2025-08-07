@@ -41,6 +41,13 @@ FieldType = ts.FieldType(dims=[IDim], dtype=FloatType)
 IntType = ts.ScalarType(kind=ts.ScalarKind.INT32)
 
 
+@pytest.fixture(
+    params=[core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM, core_defs.DeviceType.CPU]
+)
+def device_type(request) -> str:
+    return request.param
+
+
 @pytest.mark.parametrize("has_unit_stride", [False, True])
 def test_find_constant_symbols(has_unit_stride):
     config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE = has_unit_stride
@@ -173,9 +180,6 @@ def _check_cpu_sdfg_call(sdfg: dace.SDFG) -> None:
 
 @pytest.mark.requires_gpu
 @pytest.mark.parametrize(
-    "device_type", [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM, core_defs.DeviceType.CPU]
-)
-@pytest.mark.parametrize(
     "make_async_sdfg_call",
     [False, True],
 )
@@ -216,9 +220,6 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
 
 
 @pytest.mark.requires_gpu
-@pytest.mark.parametrize(
-    "device_type", [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM, core_defs.DeviceType.CPU]
-)
 def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
     """Verify that the flag `async_sdfg_call=True` has no effect on an SDFG that does not contain any GPU map."""
     program_name = "scalar_ir_with_async_call"
@@ -353,9 +354,6 @@ def _make_multi_state_sdfg_3(
         (False, _make_multi_state_sdfg_2),
         (False, _make_multi_state_sdfg_3),
     ],
-)
-@pytest.mark.parametrize(
-    "device_type", [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM, core_defs.DeviceType.CPU]
 )
 def test_generate_sdfg_async_call_multi_state(
     multi_state_config: tuple[bool, Callable], device_type: core_defs.DeviceType
