@@ -110,7 +110,7 @@ class DaCeCompiler(
 
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
-    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+    device_type: core_defs.DeviceType
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
 
     def __call__(
