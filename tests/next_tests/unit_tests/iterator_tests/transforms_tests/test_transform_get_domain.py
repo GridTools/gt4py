@@ -25,8 +25,8 @@ from gt4py.next.iterator.transforms.transform_get_domain import TransformGetDoma
 
 
 def program_factory(
-        params: list[str],
-        body: list[itir.SetAt],
+    params: list[str],
+    body: list[itir.SetAt],
 ) -> itir.Program:
     return itir.Program(
         id="testee",
@@ -38,8 +38,8 @@ def program_factory(
 
 
 def setat_factory(
-        domain: common.Domain,
-        target: str,
+    domain: common.Domain,
+    target: str,
 ) -> itir.SetAt:
     return itir.SetAt(
         expr=im.as_fieldop(im.ref("deref"))(im.ref("inp")),
@@ -49,11 +49,11 @@ def setat_factory(
 
 
 def run_test_program(
-        params: list[str],
-        sizes: Dict[str, common.Domain],
-        target: str,
-        domain: itir.Expr,
-        domain_get: itir.Expr,
+    params: list[str],
+    sizes: Dict[str, common.Domain],
+    target: str,
+    domain: itir.Expr,
+    domain_get: itir.Expr,
 ) -> None:
     testee = program_factory(
         params=params,
@@ -68,7 +68,7 @@ def run_test_program(
 
 
 def construct_domains(
-        domain_resolved: Domain, symbol_name: str, type: Union[common.GridType, str]
+    domain_resolved: Domain, symbol_name: str, type: Union[common.GridType, str]
 ) -> tuple[itir.FunCall, itir.FunCall]:
     ranges_get = {}
     ragnes_resolved = {}
