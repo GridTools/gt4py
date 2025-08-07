@@ -46,9 +46,9 @@ def mesh_descriptor(exec_alloc_descriptor):
 
 
 def program_factory(
-    params: list[itir.Sym],
-    body: list[itir.SetAt],
-    declarations: Optional[list[itir.Temporary]] = None,
+        params: list[itir.Sym],
+        body: list[itir.SetAt],
+        declarations: Optional[list[itir.Temporary]] = None,
 ) -> itir.Program:
     return itir.Program(
         id="testee",
@@ -60,9 +60,9 @@ def program_factory(
 
 
 def run_test_program(
-    testee: itir.Program, expected: itir.Program, sizes: Dict[str, common.Domain], offset_provider: common.OffsetProvider
+        testee: itir.Program, expected: itir.Program, sizes: Dict[str, common.Domain],
+        offset_provider: common.OffsetProvider
 ) -> None:
-
     ir = inline_fundefs.InlineFundefs().visit(testee)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = TransformGetDomain.apply(ir, sizes=sizes)
@@ -74,16 +74,16 @@ def run_test_program(
 def test_trivial_shift(unstructured_case):
     sizes = {"out": gtx.domain({Edge: (9, 13), Vertex: (0, 9)})}
     unstructured_domain_get_E = im.domain(common.GridType.UNSTRUCTURED,
-                                        {Edge: (im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Edge))),
-                                                im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Edge))))}
+                                          {Edge: (im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Edge))),
+                                                  im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Edge))))}
                                           )
 
     unstructured_domain_E = im.domain(common.GridType.UNSTRUCTURED,
-                                        {Edge: (im.tuple_get(0, im.make_tuple(9, 13)),
-                                                im.tuple_get(1, im.make_tuple(9, 13)))}
-                                        )
+                                      {Edge: (im.tuple_get(0, im.make_tuple(9, 13)),
+                                              im.tuple_get(1, im.make_tuple(9, 13)))}
+                                      )
 
-    unstructured_domain_V_37 = im.domain(common.GridType.UNSTRUCTURED,{Vertex: (3, 7)})
+    unstructured_domain_V_37 = im.domain(common.GridType.UNSTRUCTURED, {Vertex: (3, 7)})
 
     offset_provider = unstructured_case.offset_provider
     testee = program_factory(
@@ -126,13 +126,13 @@ def test_trivial_shift(unstructured_case):
 def test_trivial_shift_switched(unstructured_case):
     sizes = {"out": gtx.domain({Edge: (2, 16), Vertex: (0, 9)})}
     unstructured_domain_get_E = im.domain(common.GridType.UNSTRUCTURED,
-                                        {Edge: (im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Edge))),
-                                                im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Edge))))}
+                                          {Edge: (im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Edge))),
+                                                  im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Edge))))}
                                           )
 
     unstructured_domain_E = im.domain(common.GridType.UNSTRUCTURED,
-                                        {Edge: (im.tuple_get(0, im.make_tuple(2, 16)),
-                                                im.tuple_get(1, im.make_tuple(2, 16)))}
+                                      {Edge: (im.tuple_get(0, im.make_tuple(2, 16)),
+                                              im.tuple_get(1, im.make_tuple(2, 16)))}
                                       )
 
     offset_provider = unstructured_case.offset_provider
@@ -174,18 +174,18 @@ def test_trivial_shift_switched(unstructured_case):
 
 
 def test_two_shifts(unstructured_case):
-    sizes = {"out": gtx.domain({Edge: (0, 18), Vertex: (0, 9)})}
+    sizes = {"out": gtx.domain({Edge: (3, 8), Vertex: (0, 9)})}
     unstructured_domain_get_E = im.domain(common.GridType.UNSTRUCTURED,
-                                        {Edge: (im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Edge))),
-                                                im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Edge))))}
+                                          {Edge: (im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Edge))),
+                                                  im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Edge))))}
                                           )
 
     unstructured_domain_E = im.domain(common.GridType.UNSTRUCTURED,
-                                        {Edge: (im.tuple_get(0, im.make_tuple(0, 18)),
-                                                im.tuple_get(1, im.make_tuple(0, 18)))}
+                                      {Edge: (im.tuple_get(0, im.make_tuple(3, 8)),
+                                              im.tuple_get(1, im.make_tuple(3, 8)))}
                                       )
 
-    unstructured_domain_V = im.domain(common.GridType.UNSTRUCTURED,{Vertex: ( 0, 9)})
+    unstructured_domain_V_39 = im.domain(common.GridType.UNSTRUCTURED, {Vertex: (3, 9)})
 
     offset_provider = unstructured_case.offset_provider
     testee = program_factory(
@@ -207,12 +207,12 @@ def test_two_shifts(unstructured_case):
 
     expected = program_factory(
         params=[im.sym("vertex_values", v_field_type), im.sym("out", e_field_type)],
-        declarations=[itir.Temporary(id="__tmp_1", domain=unstructured_domain_V, dtype=float_type)],
+        declarations=[itir.Temporary(id="__tmp_1", domain=unstructured_domain_V_39, dtype=float_type)],
         body=[
             itir.SetAt(
                 target=im.ref("__tmp_1"),
-                expr=im.as_fieldop("deref", unstructured_domain_V)("vertex_values"),
-                domain=unstructured_domain_V,
+                expr=im.as_fieldop("deref", unstructured_domain_V_39)("vertex_values"),
+                domain=unstructured_domain_V_39,
             ),
             itir.SetAt(
                 target=im.ref("out"),
@@ -233,19 +233,20 @@ def test_two_shifts(unstructured_case):
 
 
 def test_nested_shift(unstructured_case):
-    sizes = {"out": gtx.domain({Edge: (0, 18), Vertex: (0, 9)})}
+    sizes = {"out": gtx.domain({Edge: (0, 18), Vertex: (3, 7)})}
     unstructured_domain_V = im.domain(common.GridType.UNSTRUCTURED,
-                                        {Vertex: (im.tuple_get(0, im.make_tuple(0, 9)),
-                                                  im.tuple_get(1, im.make_tuple(0, 9)))}
+                                      {Vertex: (im.tuple_get(0, im.make_tuple(3, 7)),
+                                                im.tuple_get(1, im.make_tuple(3, 7)))}
                                       )
     unstructured_domain_get_V = im.domain(common.GridType.UNSTRUCTURED,
-                                        {Vertex: (im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Vertex))),
-                                                  im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Vertex))))}
+                                          {Vertex: (
+                                          im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Vertex))),
+                                          im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Vertex))))}
                                           )
 
-    unstructured_domain_V_39 = im.domain(common.GridType.UNSTRUCTURED,{Vertex: ( 3, 9)})
+    unstructured_domain_V_69 = im.domain(common.GridType.UNSTRUCTURED, {Vertex: (6, 9)})
 
-    unstructured_domain_E_918 = im.domain(common.GridType.UNSTRUCTURED,{Edge: ( 9, 18)})
+    unstructured_domain_E_1216 = im.domain(common.GridType.UNSTRUCTURED, {Edge: (12, 16)})
 
     offset_provider = unstructured_case.offset_provider
 
@@ -254,7 +255,7 @@ def test_nested_shift(unstructured_case):
         body=[
             itir.SetAt(
                 target=im.ref("out"),
-                expr=im.as_fieldop(im.lambda_("x")(im.deref(im.shift("V2E", 1)("x"))))(
+                expr=im.as_fieldop(im.lambda_("x")(im.deref(im.shift("V2E", 3)("x"))))(
                     im.as_fieldop(im.lambda_("x")(im.deref(im.shift("E2V", 1)("x"))))(
                         im.as_fieldop("deref")("vertex_values")
                     )
@@ -267,27 +268,27 @@ def test_nested_shift(unstructured_case):
     expected = program_factory(
         params=[im.sym("vertex_values", v_field_type), im.sym("out", e_field_type)],
         declarations=[
-            itir.Temporary(id="__tmp_1", domain=unstructured_domain_E_918, dtype=float_type),
-            itir.Temporary(id="__tmp_2", domain=unstructured_domain_V_39, dtype=float_type),
+            itir.Temporary(id="__tmp_1", domain=unstructured_domain_E_1216, dtype=float_type),
+            itir.Temporary(id="__tmp_2", domain=unstructured_domain_V_69, dtype=float_type),
         ],
         body=[
             itir.SetAt(
                 target=im.ref("__tmp_2"),
-                expr=im.as_fieldop("deref", unstructured_domain_V_39)("vertex_values"),
-                domain=unstructured_domain_V_39,
+                expr=im.as_fieldop("deref", unstructured_domain_V_69)("vertex_values"),
+                domain=unstructured_domain_V_69,
             ),
             itir.SetAt(
                 target=im.ref("__tmp_1"),
                 expr=im.as_fieldop(
                     im.lambda_("x")(im.deref(im.shift("E2V", 1)("x"))),
-                    unstructured_domain_E_918,
+                    unstructured_domain_E_1216,
                 )("__tmp_2"),
-                domain=unstructured_domain_E_918,
+                domain=unstructured_domain_E_1216,
             ),
             itir.SetAt(
                 target=im.ref("out"),
                 expr=im.as_fieldop(
-                    im.lambda_("x")(im.deref(im.shift("V2E", 1)("x"))), unstructured_domain_V
+                    im.lambda_("x")(im.deref(im.shift("V2E", 3)("x"))), unstructured_domain_V
                 )("__tmp_1"),
                 domain=unstructured_domain_V,
             ),
@@ -303,17 +304,17 @@ def test_trivial_cartesian():
     sizes = {"out": gtx.domain({IDim: (2, 7)})}
 
     cartesian_domain = im.domain(common.GridType.CARTESIAN,
-                                        {IDim: (im.tuple_get(0, im.make_tuple(2, 7)),
-                                                im.tuple_get(1, im.make_tuple(2, 7)))}
+                                 {IDim: (im.tuple_get(0, im.make_tuple(2, 7)),
+                                         im.tuple_get(1, im.make_tuple(2, 7)))}
                                  )
     cartesian_domain_get = im.domain(common.GridType.CARTESIAN,
-                                        {IDim: (im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(IDim))),
-                                                im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(IDim))))}
+                                     {IDim: (im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(IDim))),
+                                             im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(IDim))))}
                                      )
 
     cartesian_domain_27_p1 = im.domain(common.GridType.CARTESIAN,
-                                        {IDim: (im.plus(im.tuple_get(0, im.make_tuple(2, 7)), 1),
-                                                im.plus(im.tuple_get(1, im.make_tuple(2, 7)), 1))}
+                                       {IDim: (im.plus(im.tuple_get(0, im.make_tuple(2, 7)), 1),
+                                               im.plus(im.tuple_get(1, im.make_tuple(2, 7)), 1))}
                                        )
     testee = program_factory(
         params=[im.sym("i_values", i_field_type), im.sym("out", i_field_type)],
@@ -355,11 +356,12 @@ def test_trivial_cartesian():
 def test_trivial_cartesian_forward():
     grid = simple_cartesian_grid()
     offset_provider = {"Ioff": grid.offset_provider["Ioff"]}
-    sizes = {"out": gtx.domain({IDim: (0, 8)})}
+    sizes = {"out": gtx.domain({IDim: (2, 7)})}
 
     cartesian_domain_get = im.domain(common.GridType.CARTESIAN,
-                                        {IDim: (im.minus(im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(IDim))), 4),
-                                                im.minus(im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(IDim))), 4))}
+                                     {IDim: (
+                                     im.minus(im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(IDim))), 4),
+                                     im.minus(im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(IDim))), 4))}
                                      )
     testee = program_factory(
         params=[im.sym("i_values", i_field_type), im.sym("out", i_field_type)],
@@ -379,13 +381,13 @@ def test_trivial_cartesian_forward():
     )
 
     cartesian_domain_m2 = im.domain(common.GridType.CARTESIAN,
-                                        {IDim: (im.minus(im.tuple_get(0, im.make_tuple(0, 8)), 2),
-                                                im.minus(im.tuple_get(1, im.make_tuple(0, 8)), 2))}
+                                    {IDim: (im.minus(im.tuple_get(0, im.make_tuple(2, 7)), 2),
+                                            im.minus(im.tuple_get(1, im.make_tuple(2, 7)), 2))}
                                     )
 
     cartesian_domain_m4 = im.domain(common.GridType.CARTESIAN,
-                                        {IDim: (im.minus(im.tuple_get(0, im.make_tuple(0, 8)), 4),
-                                                im.minus(im.tuple_get(1, im.make_tuple(0, 8)), 4))}
+                                    {IDim: (im.minus(im.tuple_get(0, im.make_tuple(2, 7)), 4),
+                                            im.minus(im.tuple_get(1, im.make_tuple(2, 7)), 4))}
                                     )
     expected = program_factory(
         params=[im.sym("i_values", i_field_type), im.sym("out", i_field_type)],
