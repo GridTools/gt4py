@@ -153,6 +153,7 @@ def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
     assert _are_streams_set_to_default_stream(sdfg)
 
 
+@pytest.mark.requires_gpu
 @pytest.mark.parametrize(
     "make_async_sdfg_call",
     [False, True],
@@ -191,6 +192,7 @@ def test_generate_sdfg_async_call(make_async_sdfg_call):
         _check_sdfg_without_async_call(sdfg)
 
 
+@pytest.mark.requires_gpu
 def test_generate_sdfg_async_call_no_map():
     """Verify that the flag `async_sdfg_call=True` has no effect on an SDFG that does not contain any GPU map."""
     program_name = "scalar_ir_with_async_call"
@@ -313,6 +315,7 @@ def _make_multi_state_sdfg_3(
     return sdfg, first_state, second_state
 
 
+@pytest.mark.requires_gpu
 @pytest.mark.parametrize(
     "multi_state_config",
     [
@@ -330,7 +333,7 @@ def test_generate_sdfg_async_call_multi_state(multi_state_config):
     expect_async_sdfg_call_on_first_state, make_multi_state_sdfg = multi_state_config
     sdfg, first_state, second_state = make_multi_state_sdfg()
 
-    with dace_wf_common.dace_context(device_type=core_defs.DeviceType.CUDA):
+    with dace_wf_common.dace_context(device_type=core_defs.CUPY_DEVICE_TYPE):
         dace_translation_stage.make_sdfg_call_async(sdfg, True)
         assert _are_streams_set_to_default_stream(sdfg)
 
