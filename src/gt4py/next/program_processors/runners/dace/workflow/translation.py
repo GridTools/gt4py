@@ -198,18 +198,19 @@ class DaCeTranslator(
             ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
+        assert self.device_type is not None
 
-        if not on_gpu:
-            pass
-        elif self.device_type == core_defs.DeviceType.ROCM:
-            pass
-        elif self.device_type == core_defs.DeviceType.CUDA:
-            pass
+        dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
+        if on_gpu:
+            if self.device_type == core_defs.DeviceType.ROCM:
+                assert dace_gpu_backend == "hip", f"Expected hip, but got '{dace_gpu_backend}'"
+            elif self.device_type == core_defs.DeviceType.CUDA:
+                assert dace_gpu_backend == "cuda", f"Expected cuda, but got '{dace_gpu_backend}'"
+            else:
+                raise ValueError(f"Unknown GPU backend '{dace_gpu_backend}' | '{self.device_type}'")
         else:
-            raise ValueError(
-                f"What the hell, expected GPU mode but got '{self.device_type}' as backup."
-                f" BACKEND is: '{dace.Config.get('compiler.cuda.backend')}'"
-            )
+            assert self.device_type == core_defs.DeviceType.CPU
+            assert dace_gpu_backend == "CCUUPP", f"Expected cuda, but got '{dace_gpu_backend}'"
 
         if self.use_memory_pool and not on_gpu:
             raise NotImplementedError("Memory pool only available for GPU device.")
