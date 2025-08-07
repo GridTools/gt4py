@@ -12,7 +12,6 @@ import pytest
 
 import re
 from typing import Callable
-import dace
 
 dace = pytest.importorskip("dace")
 
