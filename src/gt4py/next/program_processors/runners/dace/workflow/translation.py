@@ -77,7 +77,9 @@ def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
     if not gpu:
         return
 
-    assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1
+    assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1, (
+        f"Expected `max_concurrent_streams == -1` but it was `{dace.Config.get('compiler.cuda.max_concurrent_streams')}`."
+    )
 
     # NOTE: We are using the default stream this means that _**currently**_ the launch is
     #   already asynchronous, see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120)
@@ -112,7 +114,9 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     if not gpu:
         return
 
-    assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1
+    assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1, (
+        f"Expected `max_concurrent_streams == -1` but it was `{dace.Config.get('compiler.cuda.max_concurrent_streams')}`."
+    )
 
     # If we are using the default stream, things are a bit simpler/harder. For some
     #  reasons when using the default stream, DaCe seems to skip _all_ synchronization,
