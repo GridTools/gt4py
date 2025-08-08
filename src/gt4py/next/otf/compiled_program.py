@@ -126,6 +126,7 @@ class CompiledProgramsPool:
     definition_stage: ffront_stages.ProgramDefinition
     program_type: ts_ffront.ProgramType
     static_params: Sequence[str] | None = None  # not ordered
+    static_domain_sizes: bool = False
 
     _compiled_programs: eve_utils.CustomMapping = dataclasses.field(
         default_factory=lambda: eve_utils.CustomMapping(_hash_compiled_program_unsafe),
