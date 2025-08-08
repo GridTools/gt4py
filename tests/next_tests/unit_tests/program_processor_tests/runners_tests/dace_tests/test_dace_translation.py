@@ -364,10 +364,12 @@ def test_generate_sdfg_async_call_multi_state(
     expect_async_sdfg_call_on_first_state, make_multi_state_sdfg = multi_state_config
     sdfg, first_state, second_state = make_multi_state_sdfg()
 
-    with dace_wf_common.dace_context(device_type=device_type):
-        dace_translation_stage.make_sdfg_call_async(sdfg, device_type != core_defs.DeviceType.CPU)
-        if device_type != core_defs.DeviceType.CPU:
-            assert _are_streams_set_to_default_stream(sdfg)
+    # NOTE: Here we should use a configuration context. But because of
+    #   [DaCe issue#2125](https://github.com/spcl/dace/issues/2125) this is not possible.
+    dace_wf_common.set_dace_config(device_type=device_type)
+    dace_translation_stage.make_sdfg_call_async(sdfg, device_type != core_defs.DeviceType.CPU)
+    if device_type != core_defs.DeviceType.CPU:
+        assert _are_streams_set_to_default_stream(sdfg)
 
     # No synchronization state is added.
     assert sdfg.number_of_nodes() == 2
