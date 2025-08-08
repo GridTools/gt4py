@@ -238,9 +238,17 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> itir.AxisLiteral:
         if isinstance(node.type, ts.DimensionType):
             return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
-        raise AssertionError(
-            "Unexpected attribute access. At this point all accesses should have been removed by `ClosureVarFolding`."
-        )
+
+        if isinstance(named_tup_type := node.value.type, ts.NamedTupleType):
+            ind = named_tup_type.keys.index(node.attr)
+            return im.tuple_get(ind, self.visit(node.value, **kwargs))
+
+        # return im.call("getattr")(
+        #     self.visit(node.value, **kwargs),
+        #     im.literal(
+        #         node.attr, typename=ts.ScalarType(kind=ts.ScalarKind.STRING)
+        #     ),  # or maybe special itir.Key type instead of literal
+        # )
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         if isinstance(node.index.type, ts.IndexType):
@@ -370,6 +378,13 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 self.visit(node.kwargs, **kwargs),
                 use_signature_ordering=True,
             )
+
+            # TODO this is a big hack
+            if isinstance(node.type, ts.NamedTupleType):
+                # If the return type is a NamedTupleType, we need to construct a tuple
+                # with the correct types.
+                return im.make_tuple(*lowered_args, *lowered_kwargs.values())
+
             result = im.call(self.visit(node.func, **kwargs))(
                 *lowered_args, *lowered_kwargs.values()
             )

@@ -107,6 +107,16 @@ def _sanitize_static_args(
     }
 
 
+# TODO customize
+def flatten(args):
+    return tuple(
+        arg
+        if isinstance(arg, common.Field) or not dataclasses.is_dataclass(arg)
+        else tuple(getattr(arg, f.name) for f in dataclasses.fields(arg))
+        for arg in args
+    )
+
+
 @dataclasses.dataclass
 class CompiledProgramsPool:
     """
@@ -154,6 +164,7 @@ class CompiledProgramsPool:
         it is an error.
         """
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
+        args = flatten(args)
         static_args_values = tuple(args[i] for i in self._static_arg_indices)
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
         try:
