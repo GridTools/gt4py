@@ -84,7 +84,6 @@ def apply_common_transforms(
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir
     )  # domain inference does not support dynamic offsets yet
-    ir = check_inout_field.CheckInOutField.apply(ir, offset_provider=offset_provider)
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
 
@@ -94,6 +93,8 @@ def apply_common_transforms(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
+    ir = check_inout_field.CheckInOutField.apply(ir, offset_provider=offset_provider)
+
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
 
     ir = concat_where.transform_to_as_fieldop(ir)

@@ -80,7 +80,7 @@ class CheckInOutField(PreserveLocationVisitor, NodeTranslator):
                     visit_nested_make_tuple_tuple_get(arg)
 
         def check_expr(fun, args, offset_provider):
-            shifts = trace_shifts.trace_stencil(fun, num_args=len(args))
+            shifts = trace_shifts.trace_stencil(fun.args[0], num_args=len(args))
             target_subexprs = extract_subexprs(node.target)
             for arg, shift in zip(args, shifts):
                 arg_subexprs = extract_subexprs(arg)

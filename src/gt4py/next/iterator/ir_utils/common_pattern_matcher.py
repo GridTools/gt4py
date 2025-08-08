@@ -12,6 +12,7 @@ from typing import Any, Callable, Generic, List, TypeAlias, TypeGuard, TypeVar
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr as GTFNIRExpr
+from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import FunCall as GTFNIRFunCall, SymRef as GTFNIRSymRef
 
 
 _Fun = TypeVar("_Fun", bound=itir.Expr)
@@ -45,8 +46,8 @@ def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_FunCallToSymRe
     assert not isinstance(fun, itir.Node)  # to avoid accidentally passing the fun as first argument
     if isinstance(fun, str):
         return (
-            isinstance(node, itir.FunCall)
-            and isinstance(node.fun, itir.SymRef)
+            isinstance(node, itir.FunCall | GTFNIRFunCall)
+            and isinstance(node.fun, itir.SymRef | GTFNIRSymRef)
             and node.fun.id == fun
         )
     else:
