@@ -33,25 +33,25 @@ class Velocity:
     v: gtx.Field[[IDim, JDim], gtx.float32]
 
 
-# class Velocity:
-#     def __init__(self, u, v):
-#         self.u = u
-#         self.v = v
+class Velocity:
+    def __init__(self, u, v):
+        self.u = u
+        self.v = v
 
-#     def __gt_type__(self):
-#         return ts.NamedTupleType(
-#             types=[
-#                 ts.FieldType(
-#                     dims=[IDim, JDim],
-#                     dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
-#                 ),
-#                 ts.FieldType(
-#                     dims=[IDim, JDim],
-#                     dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
-#                 ),
-#             ],
-#             keys=["u", "v"],
-#         )
+    def __gt_type__(self):
+        return ts.NamedTupleType(
+            types=[
+                ts.FieldType(
+                    dims=[IDim, JDim],
+                    dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                ),
+                ts.FieldType(
+                    dims=[IDim, JDim],
+                    dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                ),
+            ],
+            keys=["u", "v"],
+        )
 
 
 @gtx.field_operator
@@ -69,8 +69,9 @@ def foo_program(
     foo(vel, out=out)
 
 
-def test_foo(cartesian_case):
+def test_named_tuple_like_constructed_outside(cartesian_case):
     vel = cases.allocate(cartesian_case, foo_program, "vel")()
+    vel = Velocity(u=vel[0], v=vel[1])  # TODO make cases construct this directly
     out = cases.allocate(cartesian_case, foo_program, "out")()
 
     cases.verify(
@@ -88,11 +89,11 @@ def bar(
     vel: Velocity,
 ) -> tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]]:
     # ) -> Velocity:
-    tmp = Velocity(vel.u + vel.v, vel.u - vel.v)
+    tmp = Velocity(v=vel.u - vel.v, u=vel.u + vel.v)  # order swapped to show kwargs work
     return tmp.u, tmp.v  # later return Velocity directly
 
 
-def test_bar(cartesian_case):
+def test_named_tuple_like_constructed_inside(cartesian_case):
     vel = cases.allocate(cartesian_case, bar, "vel")()
     out = cases.allocate(cartesian_case, bar, cases.RETURN)()
 
@@ -103,3 +104,45 @@ def test_bar(cartesian_case):
         out=out,
         ref=(vel.u + vel.v, vel.u - vel.v),
     )
+
+
+# - container with only index access and uniform type
+# - container with only index access and runtime known size
+# - implicit unroll of tuple_type with non-tuple type (could be implemented on standard tuples independently?)
+
+
+# - advanced tracers example
+# @dataclasses.dataclass
+# class Tracer:
+#     tracer: gtx.Field[[IDim, JDim], gtx.float32]
+#     kind: int
+
+
+# class TracerList:
+#     def __init__(self, tracers: list[Tracer]):
+#         self.tracers = tracers
+
+#     def __gt_type__(self):
+#         return ts.ListType(  # if reusing this makes sense
+#             element_type=ts.NamedTupleType(
+#                 types=[
+#                     ts.FieldType(
+#                         dims=[IDim, JDim],
+#                         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+#                     ),
+#                     ts.ScalarType(kind=ts.ScalarKind.INT32),
+#                 ],
+#                 keys=["tracer", "kind"],
+#             )
+#         )
+
+
+# @gtx.field_operator
+# def select_tracer(
+#     tracers: TracerList,
+#     kind: int,
+# ) -> gtx.Field[[IDim, JDim], gtx.float32]:
+#     return TracerList(tracer for tracer in tracers if tracer.kind == kind)
+
+
+# or can we avoid the loop-like construct (it's not a bad loop here, but adds a lot of syntax to the language)

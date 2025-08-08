@@ -378,6 +378,13 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 self.visit(node.kwargs, **kwargs),
                 use_signature_ordering=True,
             )
+
+            # TODO this is a big hack
+            if isinstance(node.type, ts.NamedTupleType):
+                # If the return type is a NamedTupleType, we need to construct a tuple
+                # with the correct types.
+                return im.make_tuple(*lowered_args, *lowered_kwargs.values())
+
             result = im.call(self.visit(node.func, **kwargs))(
                 *lowered_args, *lowered_kwargs.values()
             )
