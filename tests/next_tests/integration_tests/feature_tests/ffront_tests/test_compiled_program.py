@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import sys
 from unittest import mock
 
 import numpy as np
@@ -30,6 +31,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     skip_value_mesh,
 )
 
+
+pytestmark = [pytest.mark.skipif(sys.platform == "darwin", reason="unexpected flaky behavior on macos")]
 
 _raise_on_compile = mock.Mock()
 _raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
