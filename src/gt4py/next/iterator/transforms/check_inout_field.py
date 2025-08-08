@@ -81,13 +81,13 @@ class CheckInOutField(PreserveLocationVisitor, NodeTranslator):
 
         def check_expr(fun, args, offset_provider):
             shifts = trace_shifts.trace_stencil(fun, num_args=len(args))
+            target_subexprs = extract_subexprs(node.target)
             for arg, shift in zip(args, shifts):
                 arg_subexprs = extract_subexprs(arg)
-                target_subexprs = extract_subexprs(node.target)
                 for subexpr in arg_subexprs:
                     if subexpr in target_subexprs:
                         if shift not in (set(), {()}):
-                            # This condition is just to filter out the trivial offsets in the horizontal and vertical.
+                            # This condition is just to filter out the trivial offsets in the horizontal and vertical. #  TODO: remove and add preprocessing of IOff(0) instead
                             if any(
                                 offset_provider[off.value].kind
                                 not in {
@@ -100,8 +100,10 @@ class CheckInOutField(PreserveLocationVisitor, NodeTranslator):
                                 raise ValueError(
                                     f"The target {node.target} is also read with an offset."
                                 )
-                if cpm.is_applied_as_fieldop(arg):
-                    check_expr(arg.fun, arg.args, offset_provider)
+                    if not cpm.is_tuple_expr_of(lambda e: isinstance(e, itir.SymRef), arg):
+                        raise ValueError(
+                            f"Unexpected as_fieldop argument {arg}. Expected `make_tuple`, `tuple_get` or `SymRef`. Please run temporary extraction first."
+                        )
 
         if cpm.is_applied_as_fieldop(node.expr):
             check_expr(node.expr.fun, node.expr.args, offset_provider)

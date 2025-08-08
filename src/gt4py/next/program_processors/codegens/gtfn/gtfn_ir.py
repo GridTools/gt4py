@@ -8,12 +8,13 @@
 
 from __future__ import annotations
 
-from typing import Callable, ClassVar, Optional, Union
+from typing import ClassVar, Optional, Union
 
 from gt4py.eve import Coerced, SymbolName, datamodels
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.next import common
 from gt4py.next.iterator import builtins
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.codegens.gtfn.gtfn_im_ir import ImperativeFunctionDefinition
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
 
@@ -97,25 +98,6 @@ class Backend(Node):
     domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
-def _is_tuple_expr_of(pred: Callable[[Expr], bool], expr: Expr) -> bool:
-    if (
-        isinstance(expr, FunCall)
-        and isinstance(expr.fun, SymRef)
-        and expr.fun.id == "tuple_get"
-        and len(expr.args) == 2
-        and _is_tuple_expr_of(pred, expr.args[1])
-    ):
-        return True
-    if (
-        isinstance(expr, FunCall)
-        and isinstance(expr.fun, SymRef)
-        and expr.fun.id == "make_tuple"
-        and all(_is_tuple_expr_of(pred, arg) for arg in expr.args)
-    ):
-        return True
-    return pred(expr)
-
-
 class SidComposite(Expr):
     values: list[Expr]
 
@@ -125,7 +107,7 @@ class SidComposite(Expr):
     ) -> None:
         if not all(
             isinstance(el, (SidFromScalar, SidComposite))
-            or _is_tuple_expr_of(
+            or cpm.is_tuple_expr_of(
                 lambda expr: isinstance(expr, (SymRef, Literal))
                 or (isinstance(expr, FunCall) and expr.fun == SymRef(id="index")),
                 el,
@@ -139,9 +121,9 @@ class SidComposite(Expr):
 
 def _might_be_scalar_expr(expr: Expr) -> bool:
     if isinstance(expr, BinaryExpr):
-        return all(_is_tuple_expr_of(_might_be_scalar_expr, arg) for arg in (expr.lhs, expr.rhs))
+        return all(cpm.is_tuple_expr_of(_might_be_scalar_expr, arg) for arg in (expr.lhs, expr.rhs))
     if isinstance(expr, UnaryExpr):
-        return _is_tuple_expr_of(_might_be_scalar_expr, expr.expr)
+        return cpm.is_tuple_expr_of(_might_be_scalar_expr, expr.expr)
     if (
         isinstance(expr, FunCall)
         and isinstance(expr.fun, SymRef)
@@ -150,7 +132,7 @@ def _might_be_scalar_expr(expr: Expr) -> bool:
         return all(_might_be_scalar_expr(arg) for arg in expr.args)
     if isinstance(expr, CastExpr):
         return _might_be_scalar_expr(expr.obj_expr)
-    if _is_tuple_expr_of(lambda e: isinstance(e, (SymRef, Literal)), expr):
+    if cpm.is_tuple_expr_of(lambda e: isinstance(e, (SymRef, Literal)), expr):
         return True
     return False
 
@@ -183,7 +165,7 @@ class StencilExecution(Stmt):
         self: datamodels.DataModelTP, attribute: datamodels.Attribute, inputs: list[Expr]
     ) -> None:
         for inp in inputs:
-            if not _is_tuple_expr_of(
+            if not cpm.is_tuple_expr_of(
                 lambda expr: isinstance(expr, (SymRef, SidComposite, SidFromScalar))
                 or (
                     isinstance(expr, FunCall)

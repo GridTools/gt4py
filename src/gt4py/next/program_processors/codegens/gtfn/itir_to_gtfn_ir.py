@@ -72,7 +72,7 @@ def _is_tuple_of_ref_or_literal(expr: itir.Expr) -> bool:
         and all(_is_tuple_of_ref_or_literal(arg) for arg in expr.args)
     ):
         return True
-    if isinstance(expr, (itir.SymRef, itir.Literal)):
+    if isinstance(expr, (itir.SymRef, itir.Literal)):  # move to condition
         return True
     return False
 
@@ -587,7 +587,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_SetAt(
         self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
     ) -> Union[StencilExecution, ScanExecution]:
-        if _is_tuple_of_ref_or_literal(node.expr):
+        if cpm.is_tuple_expr_of(lambda e: isinstance(e, (SymRef, Literal)), node.expr):
             node.expr = im.as_fieldop("deref", node.domain)(node.expr)
 
         itir_projector, extracted_expr = ir_utils_misc.extract_projector(node.expr)

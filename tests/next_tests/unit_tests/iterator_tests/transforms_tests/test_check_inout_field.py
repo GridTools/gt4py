@@ -114,6 +114,7 @@ def test_check_inout_offset():
 
 
 def test_check_inout_shift_different_field():
+    # inout ← (⇑(λ(x, y) → ·⟪IOffₒ, 0ₒ⟫(x) + ·⟪IOffₒ, 1ₒ⟫(y)))(inout, in);
     ir = program_factory(
         params=[im.sym("inout", i_field_type), im.sym("in", i_field_type)],
         body=[
@@ -134,7 +135,7 @@ def test_check_inout_shift_different_field():
     assert ir == CheckInOutField.apply(ir, offset_provider=offset_provider)
 
 
-def test_check_inout_in_arg():
+def test_check_inout_in_as_fieldop_arg():
     # inout ← (⇑(λ(x) → ·⟪IOffₒ, 1ₒ⟫(x)))((⇑deref)(inout))
     ir = program_factory(
         params=[im.sym("inout", i_field_type), im.sym("in", i_field_type)],
@@ -149,7 +150,10 @@ def test_check_inout_in_arg():
         ],
     )
 
-    with pytest.raises(ValueError, match="The target inout is also read with an offset."):
+    with pytest.raises(
+        ValueError,
+        match=r"Unexpected as_fieldop argument \(⇑deref\)\(inout\). Expected `make_tuple`, `tuple_get` or `SymRef`. Please run temporary extraction first.",
+    ):
         CheckInOutField.apply(ir, offset_provider=offset_provider)
 
 
@@ -160,12 +164,12 @@ def test_check_inout_in_arg_two_fields():
         body=[
             itir.SetAt(
                 expr=im.as_fieldop(
-                    im.lambda_("x", "y")(
+                    im.lambda_("x")(
                         im.plus(
-                            im.deref(im.shift("IOff", 1)("x")), im.deref(im.shift("IOff", 0)("y"))
+                            im.deref(im.shift("IOff", 1)("x")), im.deref(im.shift("IOff", 0)("x"))
                         )
                     )
-                )(im.as_fieldop(im.ref("deref"))(im.ref("inout")), im.ref("in")),
+                )(im.make_tuple(im.ref("inout"), im.ref("in"))),
                 domain=cartesian_domain,
                 target=im.ref("inout"),
             ),
@@ -176,46 +180,19 @@ def test_check_inout_in_arg_two_fields():
         CheckInOutField.apply(ir, offset_provider=offset_provider)
 
 
-def test_check_inout_in_arg_shift_different_field():
-    # inout ← (⇑(λ(x, y) → ·⟪IOffₒ, 0ₒ⟫(x) + ·⟪IOffₒ, 1ₒ⟫(y)))((⇑deref)(inout), in)
+def test_check_inout_in_arg_tuple():
+    # inout ← (⇑(λ(x) → ·⟪IOffₒ, 1ₒ⟫(x) + ·⟪IOffₒ, 0ₒ⟫(x)))({inout, in})
     ir = program_factory(
         params=[im.sym("inout", i_field_type), im.sym("in", i_field_type)],
         body=[
             itir.SetAt(
                 expr=im.as_fieldop(
-                    im.lambda_("x", "y")(
+                    im.lambda_("x")(
                         im.plus(
-                            im.deref(im.shift("IOff", 0)("x")), im.deref(im.shift("IOff", 1)("y"))
+                            im.deref(im.shift("IOff", 1)("x")), im.deref(im.shift("IOff", 0)("x"))
                         )
                     )
-                )(im.as_fieldop(im.ref("deref"))(im.ref("inout")), im.ref("in")),
-                domain=cartesian_domain,
-                target=im.ref("inout"),
-            ),
-        ],
-    )
-
-    assert ir == CheckInOutField.apply(ir, offset_provider=offset_provider)
-
-
-def test_check_inout_in_arg_shifted():
-    # inout ← (⇑(λ(x, y) → ·⟪IOffₒ, 0ₒ⟫(x) + ·⟪IOffₒ, 0ₒ⟫(y)))((⇑(λ(x) → ·⟪IOffₒ, 1ₒ⟫(x)))(inout), in)
-    ir = program_factory(
-        params=[im.sym("inout", i_field_type), im.sym("in", i_field_type)],
-        body=[
-            itir.SetAt(
-                expr=im.as_fieldop(
-                    im.lambda_("x", "y")(
-                        im.plus(
-                            im.deref(im.shift("IOff", 0)("x")), im.deref(im.shift("IOff", 0)("y"))
-                        )
-                    )
-                )(
-                    im.as_fieldop(im.lambda_("x")(im.deref(im.shift("IOff", 1)("x"))))(
-                        im.ref("inout")
-                    ),
-                    im.ref("in"),
-                ),
+                )(im.make_tuple(im.ref("inout"), im.ref("in"))),
                 domain=cartesian_domain,
                 target=im.ref("inout"),
             ),
@@ -226,67 +203,30 @@ def test_check_inout_in_arg_shifted():
         CheckInOutField.apply(ir, offset_provider=offset_provider)
 
 
-def test_check_inout_in_arg_nested_shifted():
-    # inout ← (⇑(λ(x, y) → ·⟪IOffₒ, 0ₒ⟫(x) + ·⟪IOffₒ, 0ₒ⟫(y)))(
-    #             (⇑(λ(x) → ·⟪IOffₒ, 0ₒ⟫(x)))((⇑(λ(x) → ·⟪IOffₒ, 1ₒ⟫(x)))(inout)), in
-    #           )
+def test_check_inout_in_make_tuple_as_fieldop_in_arg():
+    # inout ← (⇑(λ(x) → ·⟪IOffₒ, 1ₒ⟫(x) + ·⟪IOffₒ, 0ₒ⟫(x)))({(⇑deref)(inout), in})
     ir = program_factory(
         params=[im.sym("inout", i_field_type), im.sym("in", i_field_type)],
         body=[
             itir.SetAt(
                 expr=im.as_fieldop(
-                    im.lambda_("x", "y")(
+                    im.lambda_("x")(
                         im.plus(
-                            im.deref(im.shift("IOff", 0)("x")), im.deref(im.shift("IOff", 0)("y"))
+                            im.deref(im.shift("IOff", 1)("x")), im.deref(im.shift("IOff", 0)("x"))
                         )
                     )
-                )(
-                    im.as_fieldop(im.lambda_("x")(im.deref(im.shift("IOff", 0)("x"))))(
-                        im.as_fieldop(im.lambda_("x")(im.deref(im.shift("IOff", 1)("x"))))(
-                            im.ref("inout")
-                        )
-                    ),
-                    im.ref("in"),
-                ),
+                )(im.make_tuple(im.as_fieldop(im.ref("deref"))(im.ref("inout")), im.ref("in"))),
                 domain=cartesian_domain,
                 target=im.ref("inout"),
             ),
         ],
     )
 
-    with pytest.raises(ValueError, match="The target inout is also read with an offset."):
+    with pytest.raises(
+        ValueError,
+        match=r"Unexpected as_fieldop argument \{\(⇑deref\)\(inout\), in\}. Expected `make_tuple`, `tuple_get` or `SymRef`. Please run temporary extraction first.",
+    ):
         CheckInOutField.apply(ir, offset_provider=offset_provider)
-
-
-def test_check_inout_in_arg_nested_shift_different_arg():
-    #  inout  ← (⇑(λ(x, y) → ·⟪IOffₒ, 0ₒ⟫(x) + ·⟪IOffₒ, 0ₒ⟫(y)))(
-    #               (⇑(λ(x) → ·⟪IOffₒ, 0ₒ⟫(x)))((⇑(λ(x) → ·⟪IOffₒ, 1ₒ⟫(x)))(in)), inout
-    #             )
-    ir = program_factory(
-        params=[im.sym("inout", i_field_type), im.sym("in", i_field_type)],
-        body=[
-            itir.SetAt(
-                expr=im.as_fieldop(
-                    im.lambda_("x", "y")(
-                        im.plus(
-                            im.deref(im.shift("IOff", 0)("x")), im.deref(im.shift("IOff", 0)("y"))
-                        )
-                    )
-                )(
-                    im.as_fieldop(im.lambda_("x")(im.deref(im.shift("IOff", 0)("x"))))(
-                        im.as_fieldop(im.lambda_("x")(im.deref(im.shift("IOff", 1)("x"))))(
-                            im.ref("in")
-                        )
-                    ),
-                    im.ref("inout"),
-                ),
-                domain=cartesian_domain,
-                target=im.ref("inout"),
-            ),
-        ],
-    )
-
-    assert ir == CheckInOutField.apply(ir, offset_provider=offset_provider)
 
 
 def test_check_inout_tuple():
