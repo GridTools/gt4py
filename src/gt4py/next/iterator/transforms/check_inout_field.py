@@ -97,7 +97,11 @@ class CheckInOutField(PreserveLocationVisitor, NodeTranslator):
                     offset_provider[off.value].kind  # type: ignore[index]  # mypy not smart enough
                     not in {common.DimensionKind.HORIZONTAL, common.DimensionKind.VERTICAL}
                     or val.value != 0
-                    for off, val in shift
+                    for off, val in (
+                        (pair for pair in shift if len(pair) == 2)  # set case: skip ()
+                        if isinstance(shift, set)
+                        else zip(shift[0::2], shift[1::2])  # tuple/list case
+                    )
                 )
             ]
             return filtered if filtered else []
