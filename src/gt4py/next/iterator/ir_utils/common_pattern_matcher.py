@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from collections.abc import Iterable
-from typing import Any, Callable, Generic, List, TypeAlias, TypeGuard, TypeVar, overload
+from typing import Any, Callable, Generic, List, TypeAlias, TypeGuard, TypeVar
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -136,12 +136,6 @@ def is_identity_as_fieldop(node: itir.Expr) -> TypeGuard[_FunCallToFunCallToRef]
     ):
         return True
     return False
-
-
-@overload
-def is_tuple_expr_of(pred: Callable[[itir.Expr], bool], expr: itir.Expr) -> bool: ...
-@overload
-def is_tuple_expr_of(pred: Callable[[GTFNIRExpr], bool], expr: GTFNIRExpr) -> bool: ...
 
 
 def is_tuple_expr_of(
