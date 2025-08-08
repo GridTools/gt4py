@@ -187,12 +187,14 @@ class DaCeTranslator(
         *args: Any,
         **kwargs: Any,
     ) -> dace.SDFG:
-        with gtx_wfcommon.dace_context(
-            device_type=self.device_type,
-        ):
-            return self._generate_sdfg(*args, **kwargs)
+        # NOTE: We should actually create a new configuration context here, such that
+        #   we do not influence anyone else. However, because [DaCe issue#2125](https://github.com/spcl/dace/issues/2125)
+        #   we can not do this. Instead we simply set the configuration and hope
+        #   for the best.
+        gtx_wfcommon.set_dace_config(device_type=self.device_type)
+        return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
 
-    def _generate_sdfg(
+    def _generate_sdfg_without_configuring_dace(
         self,
         ir: itir.Program,
         offset_provider: common.OffsetProvider,

@@ -117,15 +117,19 @@ class DaCeCompiler(
         self,
         inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
     ) -> CompiledDaceProgram:
-        with gtx_wfcommon.dace_context(
+        # NOTE: In an ideal world we should create a configuration context here. But,
+        #   because of [DaCe issue#2125](https://github.com/spcl/dace/issues/2125) this
+        #   is not possible and we have to set the configuration in full.
+        # NOTE: We hope here that the build type does not varies across programs.
+        gtx_wfcommon.set_dace_config(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
-        ):
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-            sdfg_build_folder = pathlib.Path(sdfg.build_folder)
-            sdfg_build_folder.mkdir(parents=True, exist_ok=True)
-            with locking.lock(sdfg_build_folder):
-                sdfg_program = sdfg.compile(validate=False)
+        )
+        sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+        sdfg_build_folder = pathlib.Path(sdfg.build_folder)
+        sdfg_build_folder.mkdir(parents=True, exist_ok=True)
+        with locking.lock(sdfg_build_folder):
+            sdfg_program = sdfg.compile(validate=False)
 
         assert inp.binding_source is not None
         return CompiledDaceProgram(

@@ -6,8 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import contextlib
-from typing import Any, Generator, Optional
+from typing import Optional
 
 import dace
 
@@ -21,17 +20,25 @@ def set_dace_config(
 ) -> None:
     """Set the DaCe configuration as required by GT4Py.
 
-    Note that this function acts on the current configuration and does not
-    revert the change once done. It is thus recommended to either create a
-    temporary configuration or to use the `dace_conext()` context manager,
-    that automatically does this.
+    This function acts on the current configuration and should not be used inside
+    a context, such as `dace.config.temporary_config()`, see note below for more.
 
     Args:
         device_type: Target device type, needed for compiler config.
         cmake_build_type: CMake build type, needed for compiler config.
+
+    Note:
+        Because of the reasons described in [DaCe issue#2125](https://github.com/spcl/dace/issues/2125)
+        it is not safe to use this function inside a `dace.config.temporary_config()`
+        context or use it to set options that are not static for the process.
     """
-    # NOTE: The DaCe `Config` object is essentially a singleton that is shared
-    #   among all threads of the process.
+    # NOTE: As explained in [DaCe issue#2125](https://github.com/spcl/dace/issues/2125)
+    #   it is not possible to use this function inside a configuration context,
+    #   or use it to set anything that is not specific to the process. As an example
+    #   we can configure which GPU backend is used, under the assumption that we will
+    #   only use one type of GPU. Furthermore, we have to set always every time, i.e.
+    #   we have to set all flags for the GPU backend even if we are using CPU, since
+    #   another thread might work with the GPU right now.
 
     # We rely on dace cache to avoid recompiling the SDFG.
     #   Note that the workflow step with the persistent `FileCache` store
@@ -74,29 +81,14 @@ def set_dace_config(
     #  [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
     dace.Config.set("compiler.cuda.max_concurrent_streams", value=-1)
 
-    # NOTE: This only safe if a system only has/uses one kind of GPU.
+    # This assumes that a process will only use one type of GPU.
     if device_type == core_defs.DeviceType.ROCM:
         dace.Config.set("compiler.cuda.backend", value="hip")
     elif device_type == core_defs.DeviceType.CUDA:
         dace.Config.set("compiler.cuda.backend", value="cuda")
 
     # Instrumentation of SDFG timers
-    # TODO(edopao, phimuell): Why is that set unconditionally?
     dace.Config.set("instrumentation", "report_each_invocation", value=True)
 
     # we are not interested in storing the history of SDFG transformations.
     dace.Config.set("store_history", value=False)
-
-
-@contextlib.contextmanager
-def dace_context(
-    *args: Any,
-    **kwargs: Any,
-) -> Generator[None, None, None]:
-    """Creates a new DaCe configuration context and applies the GT4Py specific configuration.
-
-    For more information see `set_dace_config()`.
-    """
-    with dace.config.temporary_config():
-        set_dace_config(*args, **kwargs)
-        yield
