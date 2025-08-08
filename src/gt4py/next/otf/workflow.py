@@ -12,10 +12,12 @@ import abc
 import dataclasses
 import functools
 import typing
-from collections.abc import MutableMapping
-from typing import Any, Callable, Generic, Protocol, TypeVar
+from collections.abc import Hashable, MutableMapping
+from typing import Any, Callable, Protocol, TypeVar
 
 from typing_extensions import Self
+
+from gt4py.eve import utils
 
 
 StartT = TypeVar("StartT")
@@ -60,6 +62,20 @@ class Workflow(Protocol[StartT_contra, EndT_co]):
     """
 
     def __call__(self, inp: StartT_contra) -> EndT_co: ...
+
+
+class StatefulWorkflow(Workflow[StartT_contra, EndT_co], Protocol):
+    """Protocol for stateful workflows whose state influence the outputs."""
+
+    @property
+    def workflow_state_id(self) -> Hashable:
+        """
+        Hashable representation of the workflow state.
+
+        This should be used to check if the workflow state has changed
+        to decide whether the output of the workflow should be recomputed.
+        """
+        ...
 
 
 class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):
@@ -155,6 +171,15 @@ class NamedStepSequence(
                 step_names.append(field.name)
         return step_names
 
+    @functools.cached_property
+    def workflow_state_id(self) -> Hashable:
+        return utils.content_hash(
+            *(
+                getattr(getattr(self, step_name), "workflow_state_id", None)
+                for step_name in self.step_order
+            )
+        )
+
 
 @dataclasses.dataclass(frozen=True)
 class MultiWorkflow(
@@ -221,12 +246,17 @@ class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
     def start(cls, first_step: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:
         return cls(cls.__Steps((first_step,)))
 
+    @functools.cached_property
+    def workflow_state_id(self) -> Hashable:
+        return utils.content_hash(
+            *(getattr(step, "workflow_state_id", None) for step in self.steps.inner)
+        )
+
 
 @dataclasses.dataclass(frozen=True)
 class CachedStep(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    Generic[StartT, EndT, HashT],
 ):
     """
     Cached workflow of single input callables.
@@ -253,17 +283,26 @@ class CachedStep(
     """
 
     step: Workflow[StartT, EndT]
-    hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
-    cache: MutableMapping[HashT, EndT] = dataclasses.field(repr=False, default_factory=dict)
+    hash_function: Callable[[StartT], Hashable] = dataclasses.field(default=hash)
+    cache: MutableMapping[Hashable, EndT] = dataclasses.field(repr=False, default_factory=dict)
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
-        hash_ = self.hash_function(inp)
+        hash_ = self.cache_key(inp)
         try:
             result = self.cache[hash_]
         except KeyError:
             result = self.cache[hash_] = self.step(inp)
         return result
+
+    def cache_key(self, inp: StartT) -> Hashable:
+        return utils.content_hash(
+            self.hash_function(inp), getattr(self.step, "workflow_state_id", None)
+        )
+
+    @functools.cached_property
+    def workflow_state_id(self) -> Hashable:
+        return getattr(self.step, "workflow_state_id", None)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -279,3 +318,7 @@ class SkippableStep(
 
     def skip_condition(self, inp: StartT) -> bool:
         raise NotImplementedError()
+
+    @functools.cached_property
+    def workflow_state_id(self) -> Hashable:
+        return getattr(self.step, "workflow_state_id", None)
