@@ -11,8 +11,11 @@ from typing import Any, Callable, Generic, List, TypeAlias, TypeGuard, TypeVar
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr as GTFNIRExpr
-from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import FunCall as GTFNIRFunCall, SymRef as GTFNIRSymRef
+from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import FunCall as GTFNIRFunCall
+from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import (
+    Expr as GTFNIRExpr,
+    SymRef as GTFNIRSymRef,
+)
 
 
 _Fun = TypeVar("_Fun", bound=itir.Expr)
