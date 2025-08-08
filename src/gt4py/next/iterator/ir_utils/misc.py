@@ -227,8 +227,16 @@ def grid_type_from_domain(domain: itir.FunCall) -> common.GridType:
         return common.GridType.UNSTRUCTURED
 
 
+def _flatten_tuple_expr(domain_expr: itir.Expr):
+    if cpm.is_call_to(domain_expr, "make_tuple"):
+        return sum((_flatten_tuple_expr(arg) for arg in domain_expr.args), start=())
+    else:
+        return (domain_expr,)
+
+
 def grid_type_from_program(program: itir.Program) -> common.GridType:
-    domains = program.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
+    domain_exprs = program.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
+    domains = sum((_flatten_tuple_expr(domain_expr) for domain_expr in domain_exprs), start=())
     grid_types = {grid_type_from_domain(d) for d in domains}
     if len(grid_types) != 1:
         raise ValueError(

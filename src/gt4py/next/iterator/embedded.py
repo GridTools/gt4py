@@ -1674,8 +1674,12 @@ def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProvider
 
 
 @runtime.set_at.register(EMBEDDED)
-def set_at(expr: common.Field, domain: common.DomainLike, target: common.MutableField) -> None:
-    operators._tuple_assign_field(target, expr, common.domain(domain))
+def set_at(
+    expr: common.Field,
+    domain: common.DomainLike | tuple[common.DomainLike | tuple, ...],
+    target: common.MutableField,
+) -> None:
+    operators._tuple_assign_field(target, expr, domain)
 
 
 @runtime.if_stmt.register(EMBEDDED)

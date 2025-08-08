@@ -47,6 +47,8 @@ def extract_domain(node: gtir.Expr) -> FieldopDomain:
     the corresponding lower and upper bounds. The returned lower bound is inclusive,
     the upper bound is exclusive: [lower_bound, upper_bound[
     """
+    if cpm.is_call_to(node, "make_tuple"):
+        return tuple(extract_domain(arg) for arg in node.args)
 
     domain = []
 
