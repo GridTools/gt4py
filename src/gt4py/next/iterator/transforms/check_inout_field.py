@@ -10,6 +10,7 @@ import dataclasses
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next import common
+from gt4py.next.common import OffsetProvider
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms import trace_shifts
@@ -79,27 +80,42 @@ class CheckInOutField(PreserveLocationVisitor, NodeTranslator):
                 for arg in expr.args:
                     visit_nested_make_tuple_tuple_get(arg)
 
-        def check_expr(fun, args, offset_provider):
+        def filter_shifted_args(
+            shifts: list[set[tuple[itir.OffsetLiteral, ...]]],
+            args: list[itir.Expr],
+            offset_provider: OffsetProvider,
+        ) -> list[itir.Expr]:
+            """
+            Filters out trivial shifts (empty or all horizontal/vertical with zero offset)
+            and returns filtered shifts and corresponding args.
+            """
+            filtered = [
+                arg
+                for shift, arg in zip(shifts, args)
+                if shift not in (set(), {()})
+                and any(
+                    offset_provider[off.value].kind  # type: ignore[index]  # mypy not smart enough
+                    not in {common.DimensionKind.HORIZONTAL, common.DimensionKind.VERTICAL}
+                    or val.value != 0
+                    for off, val in shift
+                )
+            ]
+            return filtered if filtered else []
+
+        def check_expr(
+            fun: itir.FunCall,
+            args: list[itir.Expr],
+            offset_provider: OffsetProvider,
+        ) -> None:
             shifts = trace_shifts.trace_stencil(fun.args[0], num_args=len(args))
+
+            shifted_args = filter_shifted_args(shifts, args, offset_provider)
             target_subexprs = extract_subexprs(node.target)
-            for arg, shift in zip(args, shifts):
+            for arg in shifted_args:
                 arg_subexprs = extract_subexprs(arg)
                 for subexpr in arg_subexprs:
                     if subexpr in target_subexprs:
-                        if shift not in (set(), {()}):
-                            # This condition is just to filter out the trivial offsets in the horizontal and vertical. #  TODO: remove and add preprocessing of IOff(0) instead
-                            if any(
-                                offset_provider[off.value].kind
-                                not in {
-                                    common.DimensionKind.HORIZONTAL,
-                                    common.DimensionKind.VERTICAL,
-                                }
-                                or val.value != 0
-                                for off, val in shift
-                            ):
-                                raise ValueError(
-                                    f"The target {node.target} is also read with an offset."
-                                )
+                        raise ValueError(f"The target {node.target} is also read with an offset.")
                     if not cpm.is_tuple_expr_of(lambda e: isinstance(e, itir.SymRef), arg):
                         raise ValueError(
                             f"Unexpected as_fieldop argument {arg}. Expected `make_tuple`, `tuple_get` or `SymRef`. Please run temporary extraction first."
