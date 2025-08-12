@@ -65,21 +65,44 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                 actual_type_name = self.closure_vars[var.id].__name__
                 # Avoid multiple definitions of a type in closure_vars
                 if actual_type_name not in existing_type_names:
-                    new_closure_vars.append(
-                        foast.Symbol(
-                            id=actual_type_name,
-                            type=ts.FunctionType(
-                                pos_or_kw_args={},
-                                kw_only_args={},
-                                pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                                returns=cast(
-                                    ts.DataType, from_type_hint(self.closure_vars[var.id])
+                    # TODO this is agressively pulling in many even unsupported symbols
+                    # I'll use this location to hack in construction of custom collections
+                    return_type = from_type_hint(self.closure_vars[var.id])
+                    if isinstance(return_type, ts.ScalarType):
+                        new_closure_vars.append(
+                            foast.Symbol(
+                                id=actual_type_name,
+                                type=ts.FunctionType(
+                                    pos_or_kw_args={},
+                                    kw_only_args={},
+                                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                                    returns=cast(
+                                        ts.DataType, from_type_hint(self.closure_vars[var.id])
+                                    ),
                                 ),
-                            ),
-                            namespace=dialect_ast_enums.Namespace.CLOSURE,
-                            location=location,
+                                namespace=dialect_ast_enums.Namespace.CLOSURE,
+                                location=location,
+                            )
                         )
-                    )
+                    else:
+                        # this assumes a collection is constructible like a dataclass i.e. with pos or kwargs
+                        assert isinstance(return_type, ts.NamedTupleType)
+                        print("constructing the constructo")
+                        new_closure_vars.append(
+                            foast.Symbol(
+                                id=actual_type_name,
+                                type=ts.FunctionType(
+                                    pos_or_kw_args=dict(
+                                        zip(return_type.keys, return_type.types, strict=True)
+                                    ),
+                                    kw_only_args={},
+                                    pos_only_args=[],
+                                    returns=cast(ts.DataType, return_type),
+                                ),
+                                namespace=dialect_ast_enums.Namespace.CLOSURE,
+                                location=location,
+                            )
+                        )
                     existing_type_names.add(actual_type_name)
             elif var.id not in existing_type_names:
                 new_closure_vars.append(var)
