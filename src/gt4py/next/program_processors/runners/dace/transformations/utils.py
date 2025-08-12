@@ -11,7 +11,7 @@
 from typing import Any, Container, Optional, Sequence, TypeVar, Union
 
 import dace
-from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
+from dace import data as dace_data, libraries as dace_lib, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
@@ -564,6 +564,21 @@ def reconfigure_dataflow_after_rerouting(
         # TODO(phimuell): Look into the implication that we not necessarily pass
         #  the full array, but essentially slice a bit.
         pass
+
+    elif isinstance(other_node, dace_lib.standard.Reduce):
+        # For now we only handle the case that the reduction node is writing into
+        #  `new_node`, before the data was written into `old_node`. In that case
+        #  there is nothing to do, we just do some checks.
+        # TODO(phimuell): This about how to handle the other case or how to extend
+        #   to other library nodes.
+
+        if not is_producer_edge:
+            raise ValueError("Reduction nodes are only supported as output.")
+        assert isinstance(new_node, dace_nodes.AccessNode)
+
+        # The subset at the reduction node needs to be `None`, which means undefined.
+        other_subset = new_edge.data.src_subset if is_producer_edge else new_edge.data.dst_subset
+        assert other_subset is None
 
     else:
         # As we encounter them we should handle them case by case.
