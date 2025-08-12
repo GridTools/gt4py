@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Optional
+import contextlib
+from typing import Any, Generator, Optional
 
 import dace
 
@@ -20,25 +21,24 @@ def set_dace_config(
 ) -> None:
     """Set the DaCe configuration as required by GT4Py.
 
-    This function acts on the current configuration and should not be used inside
-    a context, such as `dace.config.temporary_config()`, see note below for more.
+    This function should never be used directly, instead the context manager
+    `dace_context()` should be used!
+    Furthermore, all changes to `dace.Config` are applied by this function.
 
     Args:
         device_type: Target device type, needed for compiler config.
         cmake_build_type: CMake build type, needed for compiler config.
 
     Note:
-        Because of the reasons described in [DaCe issue#2125](https://github.com/spcl/dace/issues/2125)
-        it is not safe to use this function inside a `dace.config.temporary_config()`
-        context or use it to set options that are not static for the process.
+        For every thread DaCe will maintain a separate set of configuration. Thus,
+        the will not influence each other. It is also important that a thread will
+        not inherent the configuration of its parent, but it will be initialized
+        to the default. This means that this function should be always called.
+        When working on DaCe.
     """
-    # NOTE: As explained in [DaCe issue#2125](https://github.com/spcl/dace/issues/2125)
-    #   it is not possible to use this function inside a configuration context,
-    #   or use it to set anything that is not specific to the process. As an example
-    #   we can configure which GPU backend is used, under the assumption that we will
-    #   only use one type of GPU. Furthermore, we have to set always every time, i.e.
-    #   we have to set all flags for the GPU backend even if we are using CPU, since
-    #   another thread might work with the GPU right now.
+    # NOTE: Each thread maintains its own set of configuration, i.e. `dace.Config` is
+    #   a thread local variable. This means it is safe to set values that are different
+    #   for each thread.
 
     # We rely on dace cache to avoid recompiling the SDFG.
     #   Note that the workflow step with the persistent `FileCache` store
@@ -92,3 +92,14 @@ def set_dace_config(
 
     # we are not interested in storing the history of SDFG transformations.
     dace.Config.set("store_history", value=False)
+
+
+@contextlib.contextmanager
+def dace_context(**kwargs: Any) -> Generator[None, None, None]:
+    """Create a DaCe configuration context and calls `set_dace_config()`.
+
+    For more information see the description of `set_dace_config()`.
+    """
+    with dace.config.temporary_config():
+        set_dace_config(**kwargs)
+        yield

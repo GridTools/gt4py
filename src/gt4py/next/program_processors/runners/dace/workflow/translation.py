@@ -25,7 +25,7 @@ from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
     utils as gtx_dace_utils,
 )
-from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfcommon
+from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -187,12 +187,8 @@ class DaCeTranslator(
         *args: Any,
         **kwargs: Any,
     ) -> dace.SDFG:
-        # NOTE: We should actually create a new configuration context here, such that
-        #   we do not influence anyone else. However, because [DaCe issue#2125](https://github.com/spcl/dace/issues/2125)
-        #   we can not do this. Instead we simply set the configuration and hope
-        #   for the best.
-        gtx_wfcommon.set_dace_config(device_type=self.device_type)
-        return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
+        with gtx_wfdcommon.dace_context(device_type=self.device_type):
+            return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
 
     def _generate_sdfg_without_configuring_dace(
         self,
