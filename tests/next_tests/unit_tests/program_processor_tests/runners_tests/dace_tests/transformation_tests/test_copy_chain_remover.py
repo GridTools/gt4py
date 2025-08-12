@@ -374,9 +374,11 @@ def _make_copy_chain_with_reduction_node(
 
     if output_an_array:
         input_shape = (10, 3, 20)
-        acc_shape = (10, 20)
         output_shape = (10, 2, 20)
         reduce_axes = [1]
+        # Actually we should use `(10, 20)` as shape, but then the transformation
+        #  does not apply, this is a limitation in the transformation.
+        acc_shape = (10, 1, 20)
     else:
         input_shape = (3,)
         acc_shape = ()  # Is a scalar.
@@ -429,7 +431,7 @@ def _make_copy_chain_with_reduction_node(
             state.add_nedge(
                 reduce_node,
                 acc_ac,
-                dace.Memlet(f"{acc_ac.data}[0:{acc_shape[0]}, 0:{acc_shape[1]}]"),
+                dace.Memlet(f"{acc_ac.data}[0:{acc_shape[0]}, 0, 0:{acc_shape[-1]}]"),
             )
         else:
             state.add_nedge(reduce_node, acc_ac, dace.Memlet(f"{acc_ac.data}[0]"))
@@ -445,7 +447,7 @@ def _make_copy_chain_with_reduction_node(
                 acc,
                 output_ac,
                 dace.Memlet(
-                    f"{acc.data}[0:{output_shape[0]}, 0:{output_shape[-1]}] -> [0:{output_shape[0]}, {i}, 0:{output_shape[-1]}]"
+                    f"{acc.data}[0:{output_shape[0]}, 0, 0:{output_shape[-1]}] -> [0:{output_shape[0]}, {i}, 0:{output_shape[-1]}]"
                 ),
             )
         else:
@@ -729,7 +731,7 @@ def test_copy_chain_remover_with_reduction(output_an_array: bool):
     red0_oedge_mlet: dace.Memlet = red0_oedge.data
     assert red0_oedge_mlet.src_subset is None
     assert len(red0_oedge_mlet.dst_subset) == 1
-    # assert red0_oedge_mlet.dst_subset == dace.subsets.Range.from_string("0")
+    assert red0_oedge_mlet.dst_subset == dace.subsets.Range.from_string("0")
 
     assert state.out_degree(red1) == 1
     assert all(e.dst is acc1 for e in state.out_edges(red1))
@@ -754,4 +756,4 @@ def test_copy_chain_remover_with_reduction(output_an_array: bool):
     red1_oedge_mlet: dace.Memlet = red1_oedge.data
     assert red1_oedge_mlet.src_subset is None
     assert len(red1_oedge_mlet.dst_subset) == 1
-    # assert red1_oedge_mlet.dst_subset == dace.subsets.Range.from_string("1")
+    assert red1_oedge_mlet.dst_subset == dace.subsets.Range.from_string("1")
