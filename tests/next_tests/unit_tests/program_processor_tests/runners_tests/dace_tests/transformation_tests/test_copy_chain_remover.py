@@ -14,7 +14,6 @@ import numpy as np
 
 dace = pytest.importorskip("dace")
 
-import dace
 from dace import libraries as dace_libnode
 from dace.sdfg import nodes as dace_nodes
 
