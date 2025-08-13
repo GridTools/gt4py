@@ -140,9 +140,24 @@ def _create_field_operator_impl(
         assert isinstance(dataflow_output_desc, dace.data.Array)
         assert len(dataflow_output_desc.shape) == 1
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
+        assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in field_dims)
         assert output_edge.result.gt_dtype.offset_type is not None
-        field_shape = [*field_shape, dataflow_output_desc.shape[0]]
-        field_subset = field_subset + dace_subsets.Range.from_array(dataflow_output_desc)
+
+        pseudo_local_dimension = gtx_common.Dimension(
+            "NON_EXISTING_DIMENSION", gtx_common.DimensionKind.LOCAL
+        )
+        extended_local_dims = gtx_common.order_dimensions([pseudo_local_dimension, *field_dims])
+        local_idx = extended_local_dims.index(pseudo_local_dimension)
+
+        field_shape = (
+            field_shape[0:local_idx] + [dataflow_output_desc.shape[0]] + field_shape[local_idx:]
+        )
+        # Can only concatenate ranges and slicing in ranges returns lists and not ranges.
+        field_subset = dace_subsets.Range(
+            field_subset[0:local_idx]
+            + [dace_subsets.Range.from_array(dataflow_output_desc)[0]]
+            + field_subset[local_idx:]
+        )
 
     # allocate local temporary storage
     if len(field_shape) == 0:  # zero-dimensional field

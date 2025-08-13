@@ -131,7 +131,18 @@ class IteratorExpr:
         if isinstance(self.gt_dtype, ts.ListType):
             assert len(field_desc.shape) == len(self.field_domain) + 1
             assert self.gt_dtype.offset_type is not None
-            field_domain = [*self.field_domain, (self.gt_dtype.offset_type, 0)]
+
+            # Making the dimension.
+            sorted_dims = gtx_common.order_dimensions(
+                [dim for dim, _ in self.field_domain] + [self.gt_dtype.offset_type]
+            )
+            local_dim_position = sorted_dims.index(self.gt_dtype.offset_type)
+
+            field_domain = (
+                self.field_domain[:local_dim_position]
+                + [(self.gt_dtype.offset_type, 0)]
+                + self.field_domain[local_dim_position:]
+            )
         else:
             assert len(field_desc.shape) == len(self.field_domain)
             field_domain = self.field_domain
