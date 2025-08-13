@@ -730,8 +730,14 @@ def test_copy_chain_remover_with_reduction(output_an_array: bool):
     assert red0_oedge.dst is output
     red0_oedge_mlet: dace.Memlet = red0_oedge.data
     assert red0_oedge_mlet.src_subset is None
-    assert len(red0_oedge_mlet.dst_subset) == 1
-    assert red0_oedge_mlet.dst_subset == dace.subsets.Range.from_string("0")
+
+    if output_an_array:
+        assert len(red0_oedge_mlet.dst_subset) == 3
+        assert red0_oedge_mlet.dst_subset == dace.subsets.Range.from_string("0:10, 0, 0:20")
+
+    else:
+        assert len(red0_oedge_mlet.dst_subset) == 1
+        assert red0_oedge_mlet.dst_subset == dace.subsets.Range.from_string("0")
 
     assert state.out_degree(red1) == 1
     assert all(e.dst is acc1 for e in state.out_edges(red1))
@@ -755,5 +761,10 @@ def test_copy_chain_remover_with_reduction(output_an_array: bool):
     assert red1_oedge.dst is output
     red1_oedge_mlet: dace.Memlet = red1_oedge.data
     assert red1_oedge_mlet.src_subset is None
-    assert len(red1_oedge_mlet.dst_subset) == 1
-    assert red1_oedge_mlet.dst_subset == dace.subsets.Range.from_string("1")
+
+    if output_an_array:
+        assert len(red1_oedge_mlet.dst_subset) == 3
+        assert red1_oedge_mlet.dst_subset == dace.subsets.Range.from_string("0:10, 1, 0:20")
+    else:
+        assert len(red1_oedge_mlet.dst_subset) == 1
+        assert red1_oedge_mlet.dst_subset == dace.subsets.Range.from_string("1")
