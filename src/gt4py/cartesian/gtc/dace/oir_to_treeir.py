@@ -419,6 +419,19 @@ class OIRToTreeIR(eve.NodeVisitor):
             f"{tir.Axis.K.iteration_symbol()}{k_shift} + {self.visit(node.k, ctx=ctx, **kwargs)}"
         )
 
+    def visit_AbsoluteKIndex(
+        self, node: oir.AbsoluteKIndex, field: oir.FieldAccess, ctx: tir.Context, **kwargs: Any
+    ) -> str:
+        shift = ctx.root.shift[field.name]
+        i_shift = f" + {shift[tir.Axis.I]}" if shift[tir.Axis.I] != 0 else ""
+        j_shift = f" + {shift[tir.Axis.J]}" if shift[tir.Axis.J] != 0 else ""
+
+        return (
+            f"{tir.Axis.I.iteration_symbol()}{i_shift}, "
+            f"{tir.Axis.J.iteration_symbol()}{j_shift}, "
+            f"{self.visit(node.k, ctx=ctx, **kwargs)}"
+        )
+
     def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs: Any) -> str:
         return f"{node.name}"
 
@@ -469,6 +482,9 @@ class OIRToTreeIR(eve.NodeVisitor):
         else_code = self.visit(node.false_expr, **kwargs)
 
         return f"({if_code} if {condition} else {else_code})"
+
+    def visit_IteratorAccess(self, node: oir.IteratorAccess, **kwargs: Any) -> str:
+        return tir.Axis(node.name).iteration_symbol()
 
     # visitors that should _not_ be called
 
