@@ -1152,14 +1152,12 @@ class GridType(StrEnum):
 
 def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
     """Find the canonical ordering of the dimensions in `dims`."""
-    assert sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) <= 1
+    if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
+        raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
     return sorted(dims, key=lambda dim: (_DIM_KIND_ORDER[dim.kind], dim.value))
 
 
 def check_dims(dims: list[Dimension]) -> None:
-    if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
-        raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
-
     if dims != order_dimensions(dims):
         raise ValueError(
             f"Dimensions '{', '.join(map(str, dims))}' are not ordered correctly, expected '{', '.join(map(str, order_dimensions(dims)))}'."
