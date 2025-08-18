@@ -1678,8 +1678,8 @@ def set_at(expr: common.Field, domain: common.DomainLike, target: common.Mutable
     operators._tuple_assign_field(target, expr, common.domain(domain))
 
 
-@runtime.get_domain.register(EMBEDDED)
-def get_domain(field: common.Field, dim: common.Dimension) -> tuple[int, int]:
+@runtime.get_domain_range.register(EMBEDDED)
+def get_domain_range(field: common.Field, dim: common.Dimension) -> tuple[int, int]:
     return (field.domain[dim].unit_range.start, field.domain[dim].unit_range.stop)
 
 
