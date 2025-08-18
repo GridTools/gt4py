@@ -65,7 +65,6 @@ uv sync --compile-bytecode --frozen --no-install-project \
     --group dev \
     --extra standard \
     --extra jax \
-    --extra performance \
     --extra testing \
     ${EXTRA_UV_SYNC_ARGS}
 if [ ! -z "${EXTRA_UV_PIP_ARGS}" ]; then
