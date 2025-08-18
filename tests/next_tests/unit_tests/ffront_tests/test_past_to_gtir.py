@@ -8,6 +8,7 @@
 
 
 import re
+from typing import Literal
 
 import pytest
 
@@ -40,6 +41,25 @@ def gtir_identity_fundef():
     )
 
 
+def get_domain_range_pattern(field: str, dim: str, idx: Literal[0, 1]):
+    return P(
+        itir.FunCall,
+        fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
+        args=[
+            P(
+                itir.Literal,
+                value=str(idx),
+                type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+            ),
+            P(
+                itir.FunCall,
+                fun=P(itir.SymRef, id=eve.SymbolRef("get_domain_range")),
+                args=[P(itir.SymRef, id=eve.SymbolRef(field)), P(itir.AxisLiteral, value=dim)],
+            ),
+        ],
+    )
+
+
 def test_copy_lowering(copy_program_def, gtir_identity_fundef):
     past_node = ProgramParser.apply_to_function(copy_program_def)
     itir_node = ProgramLowering.apply(
@@ -58,30 +78,8 @@ def test_copy_lowering(copy_program_def, gtir_identity_fundef):
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(
-                            itir.FunCall,
-                            fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
-                            args=[
-                                P(
-                                    itir.Literal,
-                                    value="0",
-                                    type=ts.ScalarType(kind=ts.ScalarKind.INT32),
-                                ),
-                                P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
-                            ],
-                        ),
-                        P(
-                            itir.FunCall,
-                            fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
-                            args=[
-                                P(
-                                    itir.Literal,
-                                    value="1",
-                                    type=ts.ScalarType(kind=ts.ScalarKind.INT32),
-                                ),
-                                P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
-                            ],
-                        ),
+                        get_domain_range_pattern("out", "IDim", 0),
+                        get_domain_range_pattern("out", "IDim", 1),
                     ],
                 )
             ],
@@ -128,18 +126,7 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
                             itir.FunCall,
                             fun=P(itir.SymRef, id=eve.SymbolRef("plus")),
                             args=[
-                                P(
-                                    itir.FunCall,
-                                    fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
-                                    args=[
-                                        P(
-                                            itir.Literal,
-                                            value="0",
-                                            type=ts.ScalarType(kind=ts.ScalarKind.INT32),
-                                        ),
-                                        P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
-                                    ],
-                                ),
+                                get_domain_range_pattern("out", "IDim", 0),
                                 P(
                                     itir.Literal,
                                     value="1",
@@ -155,18 +142,7 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
                             itir.FunCall,
                             fun=P(itir.SymRef, id=eve.SymbolRef("plus")),
                             args=[
-                                P(
-                                    itir.FunCall,
-                                    fun=P(itir.SymRef, id=eve.SymbolRef("tuple_get")),
-                                    args=[
-                                        P(
-                                            itir.Literal,
-                                            value="0",
-                                            type=ts.ScalarType(kind=ts.ScalarKind.INT32),
-                                        ),
-                                        P(itir.SymRef, id=eve.SymbolRef("__out_0_range")),
-                                    ],
-                                ),
+                                get_domain_range_pattern("out", "IDim", 0),
                                 P(
                                     itir.Literal,
                                     value="2",
@@ -183,6 +159,7 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
             ],
         ),
     )
+
     program_pattern = P(
         itir.Program,
         id=eve.SymbolName("copy_restrict_program"),
