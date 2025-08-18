@@ -314,6 +314,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             return False
 
         # This avoids that we have to modify the subsets in a fancy way.
+        # TODO(phimuell): Lift this limitation.
         if len(a1_desc.shape) != len(a2_desc.shape):
             return False
 

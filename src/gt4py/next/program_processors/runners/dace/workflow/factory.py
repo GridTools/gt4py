@@ -73,6 +73,7 @@ class DaCeWorkflowFactory(factory.Factory):
         DaCeCompilationStepFactory,
         bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
+        device_type=factory.SelfAttribute("..device_type"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )
     decoration = factory.LazyAttribute(
