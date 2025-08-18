@@ -35,7 +35,7 @@ def get_device_arch() -> str | None:
         # TODO(egparedes): Implement this properly, either parsing the output of `$ rocminfo`
         # or using the HIP low level bindings.
         # Check: https://rocm.docs.amd.com/projects/hip-python/en/latest/user_guide/1_usage.html
-        return "gfx90a"
+        return "gfx942"  # MI300A
 
     return None
 
