@@ -15,7 +15,7 @@ import subprocess
 import warnings
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import config
+from gt4py.next import config, errors
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.compilation import build_data, cache, common, compiler
 from gt4py.next.otf.compilation.build_systems import cmake_lists
@@ -185,12 +185,17 @@ class CMakeProject(
 
     def _run_config(self) -> None:
         logfile = self.root_path / "log_config.txt"
-        with logfile.open(mode="w") as log_file_pointer:
-            subprocess.check_call(
-                self._config_command,
-                stdout=log_file_pointer,
-                stderr=log_file_pointer,
-            )
+        try:
+            with logfile.open(mode="w") as log_file_pointer:
+                subprocess.check_call(
+                    self._config_command,
+                    stdout=log_file_pointer,
+                    stderr=log_file_pointer,
+                )
+        except subprocess.CalledProcessError as e:
+            with logfile.open(mode="r") as log_file_pointer:
+                log = log_file_pointer.read()
+            raise errors.CompilationError(log) from e
 
         build_data.update_status(new_status=build_data.BuildStatus.CONFIGURED, path=self.root_path)
 
