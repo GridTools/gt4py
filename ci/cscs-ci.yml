@@ -139,6 +139,6 @@ test_cscs_amd_rocm:
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
     SLURM_PARTITION: mi300
-    CMAKE_PREFIX_PATH: /opt/rocm
+    CMAKE_PREFIX_PATH: /opt/rocm # for next
     CXX: /opt/rocm/bin/hipcc
-
+    CUDA_ROOT: /opt/rocm # for cartesian
