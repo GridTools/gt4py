@@ -25,7 +25,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.stages import AOT_PRG
-from gt4py.next.iterator import builtins, ir as itir
+from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import remap_symbols
 from gt4py.next.otf import arguments, stages, workflow

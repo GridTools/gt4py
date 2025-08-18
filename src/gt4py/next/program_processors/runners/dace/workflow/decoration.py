@@ -15,7 +15,7 @@ import dace
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
-from gt4py.next.otf import arguments, stages
+from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable, workflow as dace_worflow
 
 from . import common as dace_common

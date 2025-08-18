@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import dataclasses
 import typing
-from typing import Any, Generic, Iterable, Iterator, Optional
+from typing import Any, Generic, Optional
 
 from typing_extensions import Self
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.otf import toolchain, workflow
-from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 DATA_T = typing.TypeVar("DATA_T")

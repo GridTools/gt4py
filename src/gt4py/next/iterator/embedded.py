@@ -54,7 +54,6 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
-from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 

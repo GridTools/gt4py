@@ -134,14 +134,12 @@ So far we have gotten away with empty compile time arguments, now we need to sup
 
 ```python
 jit_args = gtx.otf.arguments.JITArgs.from_signature(
-  gtx.ones(domain={I: 10}, dtype=gtx.float64),
-  out=gtx.zeros(domain={I: 10}, dtype=gtx.float64),
-  offset_provider=OFFSET_PROVIDER,
+    gtx.ones(domain={I: 10}, dtype=gtx.float64),
+    out=gtx.zeros(domain={I: 10}, dtype=gtx.float64),
+    offset_provider=OFFSET_PROVIDER,
 )
 
-aot_args = gtx.otf.arguments.CompileTimeArgs.from_concrete(
-  *jit_args.args, **jit_args.kwargs
-)
+aot_args = gtx.otf.arguments.CompileTimeArgs.from_concrete(*jit_args.args, **jit_args.kwargs)
 ```
 
 ```python
