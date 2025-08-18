@@ -57,6 +57,7 @@ ARG EXTRA_UV_PIP_ARGS=""
 ARG EXTRA_UV_SYNC_ARGS=""
 RUN --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml <<EOF
+set -euo pipefail
 if [ ! -z "${EXTRA_UV_ENV_VARS}" ]; then
     eval "export ${EXTRA_UV_ENV_VARS}"
 fi
