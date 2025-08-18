@@ -48,7 +48,7 @@ stages:
     # To override the defaults, just define these variables in the actual job.
     DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
     PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}  # The $DOCKER_TAG tag is added in the before_script of .dynamic-image-name
-    WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
+    WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci-ext-config.yml uv.lock' # TODO add back the ci/cscs-ci.yml 
   parallel:
     matrix:
       - PY_VERSION: *test_python_versions
@@ -87,7 +87,7 @@ build_cscs_amd_rocm:
     CSCS_CUDA_MPS: 1
     SLURM_GPUS_PER_NODE: 4
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 5
+    SLURM_TIMELIMIT: 20
   parallel:
     matrix:
       - SUBPACKAGE: [cartesian]
