@@ -59,25 +59,25 @@ stages:
     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
     EXTRA_UV_SYNC_ARGS: "--extra cuda12"
 
-# TODO: rocm steps are in draft state for now to show how to add support in the future
-# .build_extra_rocm:
-#   variables:
-#     # jfrog.svc.cscs.ch/dockerhub/rocm is the cached version of docker.io/rocm
-#     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
-#     EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
-#     EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
+.build_extra_rocm:
+  variables:
+    # jfrog.svc.cscs.ch/dockerhub/rocm is the cached version of docker.io/rocm
+    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
+    EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
+    EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
 
-build_cscs_gh200:
-  extends:
-    - .container-builder-cscs-gh200
-    - .build_common
-    - .build_extra_cuda
-
-# .build_cscs_amd_rocm:
+# TODO re-enable
+# build_cscs_gh200:
 #   extends:
-#     - .container-builder-cscs-zen2
+#     - .container-builder-cscs-gh200
 #     - .build_common
-#     - .build_extra_rocm
+#     - .build_extra_cuda
+
+build_cscs_amd_rocm:
+  extends:
+    - .container-builder-cscs-zen2
+    - .build_common
+    - .build_extra_rocm
 
 # -- Test stage --
 .test_common:
@@ -92,17 +92,17 @@ build_cscs_gh200:
     matrix:
       - SUBPACKAGE: [cartesian]
         VARIANT: ["internal", "dace"]
-        SUBVARIANT: ["cuda12", "cpu"]
+        SUBVARIANT: ["rocm6_0", "cpu"] # TODO cuda
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: eve
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: next
         VARIANT: ["internal", "dace"]
-        SUBVARIANT: ["cuda12", "cpu"]
+        SUBVARIANT: ["rocm6_0", "cpu"]
         DETAIL: ["nomesh", "atlas"]
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: [storage]
-        VARIANT: ["cuda12", "cpu"]
+        VARIANT: ["rocm6_0", "cpu"]
         PY_VERSION: *test_python_versions
   rules:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
@@ -119,21 +119,21 @@ build_cscs_gh200:
     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
     - cd "${WORKDIR}/gt4py" && uv run --script noxfile.py -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
 
-test_cscs_gh200:
+# TODO add back
+# test_cscs_gh200:
+#   extends:
+#     - .container-runner-santis-gh200
+#     - .test_common
+#   variables:
+#     GT4PY_BUILD_JOBS: 8
+#     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
+#     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+
+test_cscs_amd_rocm:
   extends:
-    - .container-runner-santis-gh200
+    - .tds-container-runner-beverin-mi200
     - .test_common
   variables:
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
-
-# .test_cscs_amd_rocm:
-#   extends:
-#     - .tds-container-runner-beverin-mi200
-#     - .test_common
-#   variables:
-#   variables:
-#     GT4PY_BUILD_JOBS: 8
-#     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
-#     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
