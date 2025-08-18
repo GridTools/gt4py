@@ -201,11 +201,16 @@ class CMakeProject(
 
     def _run_build(self) -> None:
         logfile = self.root_path / "log_build.txt"
-        with logfile.open(mode="w") as log_file_pointer:
-            subprocess.check_call(
-                ["cmake", "--build", self.root_path / "build"],
-                stdout=log_file_pointer,
-                stderr=log_file_pointer,
-            )
+        try:
+            with logfile.open(mode="w") as log_file_pointer:
+                subprocess.check_call(
+                    ["cmake", "--build", self.root_path / "build"],
+                    stdout=log_file_pointer,
+                    stderr=log_file_pointer,
+                )
+        except subprocess.CalledProcessError as e:
+            with logfile.open(mode="r") as log_file_pointer:
+                log = log_file_pointer.read()
+            raise errors.CompilationError(log) from e
 
         build_data.update_status(new_status=build_data.BuildStatus.COMPILED, path=self.root_path)
