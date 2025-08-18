@@ -163,15 +163,15 @@ def apply_common_transforms(
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce.apply(ir, offset_provider_type=offset_provider_type)
+            unrolled = CollapseListGet().visit(unrolled)
+            unrolled = NormalizeShifts().visit(unrolled)
+            # this is required as nested neighbor reductions can contain lifts, e.g.,
+            # `neighbors(V2Eₒ, ↑f(...))`
+            unrolled = inline_lifts.InlineLifts().visit(unrolled)
+            unrolled = NormalizeShifts().visit(unrolled)
             if unrolled == ir:
                 break
             ir = unrolled  # type: ignore[assignment] # still a `itir.Program`
-            ir = CollapseListGet().visit(ir)
-            ir = NormalizeShifts().visit(ir)
-            # this is required as nested neighbor reductions can contain lifts, e.g.,
-            # `neighbors(V2Eₒ, ↑f(...))`
-            ir = inline_lifts.InlineLifts().visit(ir)
-            ir = NormalizeShifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed.")
 
