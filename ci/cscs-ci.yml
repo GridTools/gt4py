@@ -142,3 +142,4 @@ test_cscs_amd_rocm:
     CMAKE_PREFIX_PATH: /opt/rocm # for next
     CXX: /opt/rocm/bin/hipcc
     CUDA_ROOT: /opt/rocm # for cartesian
+    CUDA_ARCH: gfx942 # MI300A
