@@ -99,8 +99,6 @@ def test_copy_lowering(copy_program_def, gtir_identity_fundef):
         params=[
             P(itir.Sym, id=eve.SymbolName("in_field")),
             P(itir.Sym, id=eve.SymbolName("out")),
-            P(itir.Sym, id=eve.SymbolName("__in_field_0_range")),
-            P(itir.Sym, id=eve.SymbolName("__out_0_range")),
         ],
         body=[set_at_pattern],
     )
@@ -191,8 +189,6 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
         params=[
             P(itir.Sym, id=eve.SymbolName("in_field")),
             P(itir.Sym, id=eve.SymbolName("out")),
-            P(itir.Sym, id=eve.SymbolName("__in_field_0_range")),
-            P(itir.Sym, id=eve.SymbolName("__out_0_range")),
         ],
         body=[set_at_pattern],
     )
