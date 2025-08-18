@@ -63,7 +63,7 @@ fi
 uv pip install --compile-bytecode setuptools wheel pip
 uv sync --compile-bytecode --frozen --no-install-project \
     --group dev \
-    --extra formatting \
+    --extra standard \
     --extra jax \
     --extra performance \
     --extra testing \
