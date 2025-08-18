@@ -65,6 +65,7 @@ stages:
     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
     EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
     EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a ROCM_HOME=/opt/rocm"
+    UBUNTU_VERSION: '22.04'
 
 # TODO re-enable
 # build_cscs_gh200:
