@@ -55,7 +55,7 @@ class CompileTimeArgs:
         return common.offset_provider_to_type(self.offset_provider)
 
     @classmethod
-    def from_concrete_no_size(cls, *args: Any, **kwargs: Any) -> Self:
+    def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
         """Convert concrete GTX program arguments into their compile-time counterparts."""
         compile_args = tuple(type_translation.from_value(arg) for arg in args)
         kwargs_copy = kwargs.copy()
@@ -70,17 +70,6 @@ class CompileTimeArgs:
         )
 
     @classmethod
-    def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
-        """Convert concrete GTX program arguments to compile-time, adding (compile-time) dimension size arguments."""
-        no_size = cls.from_concrete_no_size(*args, **kwargs)
-        return cls(
-            args=(*no_size.args, *iter_size_compile_args(no_size.args)),
-            offset_provider=no_size.offset_provider,
-            column_axis=no_size.column_axis,
-            kwargs=no_size.kwargs,
-        )
-
-    @classmethod
     def empty(cls) -> Self:
         return cls(tuple(), {}, {}, None)
 
@@ -88,7 +77,7 @@ class CompileTimeArgs:
 def jit_to_aot_args(
     inp: JITArgs,
 ) -> CompileTimeArgs:
-    return CompileTimeArgs.from_concrete_no_size(*inp.args, **inp.kwargs)
+    return CompileTimeArgs.from_concrete(*inp.args, **inp.kwargs)
 
 
 def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
@@ -111,46 +100,3 @@ def find_first_field(tuple_arg: tuple[Any, ...]) -> Optional[common.Field]:
             case _:
                 pass
     return None
-
-
-def iter_size_args(args: tuple[Any, ...]) -> Iterator[tuple[int, int]]:
-    """
-    Yield the size of each field argument in each dimension.
-
-    This can be used to generate domain size arguments for FieldView Programs that use an implicit domain.
-    """
-    for arg in args:
-        match arg:
-            case tuple():
-                # we only need the first field, because all fields in a tuple must have the same dims and sizes
-                first_field = find_first_field(arg)
-                if first_field:
-                    yield from iter_size_args((first_field,))
-            case common.Field():
-                for range_ in arg.domain.ranges:
-                    assert isinstance(range_, common.UnitRange)
-                    yield (range_.start, range_.stop)
-            case _:
-                pass
-
-
-def iter_size_compile_args(
-    args: Iterable[ts.TypeSpec | StaticArg],
-) -> Iterator[ts.TypeSpec]:
-    """
-    Yield a compile-time size argument for every compile-time field argument in each dimension.
-
-    This can be used inside transformation workflows to generate compile-time domain size arguments for FieldView Programs that use an implicit domain.
-    """
-    for arg in args:
-        type_ = arg.type_ if isinstance(arg, StaticArg) else arg
-        field_constituents: list[ts.FieldType] = typing.cast(
-            list[ts.FieldType],
-            type_info.primitive_constituents(type_).if_isinstance(ts.FieldType).to_list(),
-        )
-        if field_constituents:
-            # we only need the first field, because all fields in a tuple must have the same dims and sizes
-            index_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
-            yield from [
-                ts.TupleType(types=[index_type, index_type]) for _ in field_constituents[0].dims
-            ]

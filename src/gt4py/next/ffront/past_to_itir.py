@@ -223,32 +223,6 @@ class ProgramLowering(
     ) -> itir.Program:
         return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
 
-    def _gen_size_params_from_program(self, node: past.Program) -> list[itir.Sym]:
-        """Generate symbols for each field param and dimension."""
-        size_params = []
-        for param in node.params:
-            fields_dims: list[list[common.Dimension]] = (
-                type_info.primitive_constituents(param.type)
-                .if_isinstance(ts.FieldType)
-                .getattr("dims")
-                .filter(lambda dims: len(dims) > 0)
-                .to_list()
-            )
-            if len(fields_dims) > 0:  # otherwise `param` has no constituent which is of `FieldType`
-                assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
-                index_type = ts.ScalarType(
-                    kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
-                )
-                for dim_idx in range(len(fields_dims[0])):
-                    size_params.append(
-                        itir.Sym(
-                            id=_range_arg_from_field(param.id, dim_idx),
-                            type=ts.TupleType(types=[index_type, index_type]),
-                        )
-                    )
-
-        return size_params
-
     def visit_Program(
         self,
         node: past.Program,
@@ -265,7 +239,6 @@ class ProgramLowering(
 
         implicit_domain = False
         if any("domain" not in body_entry.kwargs for body_entry in node.body):
-            params = params + self._gen_size_params_from_program(node)
             implicit_domain = True
 
         set_ats = [self._visit_field_operator_call(stmt, **kwargs) for stmt in node.body]

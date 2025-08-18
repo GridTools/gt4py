@@ -1862,11 +1862,6 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             common.UnitRange(0, 0),  # empty: indicates column operation, will update later
         )
 
-    import inspect
-
-    if len(args) < len(inspect.getfullargspec(fun).args):
-        args = (*args, *arguments.iter_size_args(args))
-
     with embedded_context.update(**context_vars):
         fun(*args)
 

@@ -74,7 +74,6 @@ def convert_args(
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
         inp(
             *converted_args,
-            *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
             *conn_args,
             **opt_kwargs,
         )

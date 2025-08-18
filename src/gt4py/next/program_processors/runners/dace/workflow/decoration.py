@@ -38,11 +38,7 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        if fun.implicit_domain:
-            # Generate implicit domain size arguments only if necessary
-            size_args = arguments.iter_size_args(args)
-            args = (*args, *size_args)
-
+        # TODO: this doesn't belong here and should by done in the dace backend
         if not fun.sdfg_program._lastargs:
             # First call, the SDFG is not intitalized, so forward the call to `CompiledSDFG`
             # to proper initilize it. Later calls to this SDFG will be handled through
