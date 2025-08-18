@@ -139,7 +139,7 @@ def install_session_venv(
 
 # -- Sessions --
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian"])
-@nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
+@nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12, DeviceNoxParam.rocm6_0])
 @nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace])
 def test_cartesian(
     session: nox.Session,
@@ -221,7 +221,7 @@ def test_examples(session: nox.Session) -> None:
         nox.param("atlas", id="atlas", tags=["atlas"]),
     ],
 )
-@nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
+@nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12, DeviceNoxParam.rocm6_0])
 @nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace])
 def test_next(
     session: nox.Session,
@@ -288,7 +288,7 @@ def test_package(session: nox.Session) -> None:
 
 
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian", "next"])
-@nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
+@nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12, DeviceNoxParam.rocm6_0])
 def test_storage(
     session: nox.Session,
     device: DeviceOption,
