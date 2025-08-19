@@ -1,6 +1,37 @@
 # GT4Py Changelog
 
-Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [1.0.7] - 2025-08-12
+
+### Cartesian
+
+- Introduce switches for the default `int` and `float` precision.
+- Introduce `erf` and `erfc` functions.
+- Make CUDA compilation thread-safe.
+
+### Development
+
+- Add MacOS to daily CI.
+
+### Next
+
+See commit history.
+
+## [1.0.6] - 2025-07-30
+
+### Cartesian
+
+- Introduced a debug backend, a plain python backend for debugging and rapid prototyping of features.
+- Refactoring of the lowering to SDFG using DaCe ScheduleTree: the current bridge OIR -> TreeIR -> SDFG is replaced with OIR -> TreeIR -> ScheduleTree, then it relies on DaCe to expand ScheduleTree to SDFG.
+
+### Development
+
+- GitHub Actions CI infrastructure updated with (optional) `test-components` exclusions loaded from a dynamically generated JSON file.
+
+### Next
+
+See commit history.
 
 ## [1.0.5] - 2025-07-21
 

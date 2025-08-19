@@ -173,13 +173,12 @@ class OIRToTasklet(eve.NodeVisitor):
         return f"{dtype}({expression})"
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> str:
-        if type(node.value) is str:
-            # Note: isinstance(node.value, str) also matches the string enum `BuiltInLiteral`
-            # which we don't want to match because it returns lower-case `true`, which isn't
-            # defined in (python) tasklet code.
-            return node.value
+        if isinstance(node.value, common.BuiltInLiteral):
+            return self.visit(node.value, **kwargs)
 
-        return self.visit(node.value, **kwargs)
+        # Resolve int and float literals to the correct precision
+        dtype = utils.data_type_to_dace_typeclass(node.dtype)
+        return f"{dtype}({node.value})"
 
     def visit_BuiltInLiteral(self, node: common.BuiltInLiteral, **_kwargs: Any) -> str:
         if node == common.BuiltInLiteral.TRUE:
@@ -221,6 +220,12 @@ class OIRToTasklet(eve.NodeVisitor):
             common.NativeFunction.FLOOR: "dace.math.ifloor",
             common.NativeFunction.CEIL: "ceil",
             common.NativeFunction.TRUNC: "trunc",
+            common.NativeFunction.INT32: "dace.int32",
+            common.NativeFunction.INT64: "dace.int64",
+            common.NativeFunction.FLOAT32: "dace.float32",
+            common.NativeFunction.FLOAT64: "dace.float64",
+            common.NativeFunction.ERF: "erf",
+            common.NativeFunction.ERFC: "erfc",
         }
         if node not in native_functions:
             raise NotImplementedError(f"NativeFunction '{node}' not (yet) implemented.")
