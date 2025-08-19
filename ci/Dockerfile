@@ -30,8 +30,6 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     ${EXTRA_APTGET} && \
     apt-get clean && \
     apt-get autoremove -y && \
-    # reinstall git dependencies
-    apt-get install -y --reinstall git libcurl4-gnutls-dev libnghttp2-14 && \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv
