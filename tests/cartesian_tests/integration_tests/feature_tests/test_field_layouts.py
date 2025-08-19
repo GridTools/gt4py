@@ -13,6 +13,7 @@ from gt4py.cartesian import gtscript
 
 from cartesian_tests.definitions import ALL_BACKENDS, PERFORMANCE_BACKENDS, get_array_library
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import copy_stencil
+from cartesian_tests import utils as test_utils
 
 
 try:
@@ -24,6 +25,11 @@ except ImportError:
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 @pytest.mark.parametrize("order", ["C", "F"])
 def test_numpy_allocators(backend, order):
+    if backend in ["gt:gpu", "dace:gpu"] and test_utils.is_rocm_cupy():
+        pytest.skip(
+            f"This test would need GT4Py's custom `__hip_array_interface__` on the cupy array. Using dlpack (via nanobind) would make this test work for ROCm."
+        )
+
     xp = get_array_library(backend)
     shape = (20, 10, 5)
     inp = xp.array(xp.random.randn(*shape), order=order, dtype=xp.float64)
@@ -37,6 +43,11 @@ def test_numpy_allocators(backend, order):
 
 @pytest.mark.parametrize("backend", PERFORMANCE_BACKENDS)
 def test_bad_layout_warns(backend):
+    if backend in ["gt:gpu", "dace:gpu"] and test_utils.is_rocm_cupy():
+        pytest.skip(
+            f"This test would need GT4Py's custom `__hip_array_interface__` on the cupy array. Using dlpack (via nanobind) would make this test work for ROCm."
+        )
+
     xp = get_array_library(backend)
     backend_cls = gt4pyc.backend.from_name(backend)
 
