@@ -130,6 +130,12 @@ class HorizontalLoop(TreeScope):
 
 
 class VerticalLoop(TreeScope):
+    iteration_variable: eve.SymbolRef
+    """
+    DaCe 1.x (without CFGs) maps sequential loops to a state machine with the iteration variable
+    on interstate edges. Having unique symbols makes DaCe 1.x happy and allows to rename symbols
+    via search & replace.
+    """
     loop_order: common.LoopOrder
     bounds_k: Bounds
 
@@ -150,3 +156,13 @@ class TreeRoot(TreeScope):
 
     symbols: SymbolDict
     """Mapping between type and symbol name."""
+
+
+def k_symbol(scope: TreeScope) -> eve.SymbolRef:
+    if scope.parent is None:
+        raise ValueError("No vertical loop found in (parents of) current scope.")
+
+    if isinstance(scope, VerticalLoop):
+        return scope.iteration_variable
+
+    return k_symbol(scope.parent)
