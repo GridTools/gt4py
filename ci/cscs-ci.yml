@@ -87,7 +87,7 @@ build_cscs_amd_rocm:
     CSCS_CUDA_MPS: 1
     SLURM_GPUS_PER_NODE: 4
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 20
+    SLURM_TIMELIMIT: 5`
   parallel:
     matrix:
       - SUBPACKAGE: [cartesian]
