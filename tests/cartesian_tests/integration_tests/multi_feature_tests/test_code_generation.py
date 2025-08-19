@@ -867,7 +867,7 @@ def test_k_only_access_stencil(backend):
     field_out = gt_storage.zeros(
         dtype=np.float64, backend=backend, shape=(4, 4, 4), aligned_index=(0, 0, 0)
     )
-    field_in[:] = [2, 3, 4, 5]
+    field_in[:] = np.array([2, 3, 4, 5])
 
     @gtscript.stencil(backend=backend)
     def test_stencil(
@@ -892,7 +892,7 @@ def test_table_access_stencil(backend):
     field_out = gt_storage.zeros(
         dtype=np.float64, backend=backend, shape=(4, 4, 4), aligned_index=(0, 0, 0)
     )
-    table_view[:] = [2, 3, 4, 5]
+    table_view[:] = np.array([2, 3, 4, 5])
 
     @gtscript.stencil(backend=backend)
     def test_stencil(
