@@ -10,6 +10,7 @@ import pytest
 
 from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
+from gt4py._core import definitions as core_defs
 
 from cartesian_tests.definitions import ALL_BACKENDS, PERFORMANCE_BACKENDS, get_array_library
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import copy_stencil
@@ -20,6 +21,10 @@ try:
     import cupy as cp
 except ImportError:
     cp = None
+
+
+def is_rocm_cupy():
+    return core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM and core_defs.cp is not None
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)

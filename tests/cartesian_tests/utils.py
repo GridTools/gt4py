@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py._core import definitions as core_defs
 
 try:
     import dace
@@ -45,7 +44,3 @@ class OriginWrapper(ArrayWrapper):
         res = super().__descriptor__()
         res.__gt_origin__ = self.__gt_origin__
         return res
-
-
-def is_rocm_cupy():
-    return core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM and core_defs.cp is not None
