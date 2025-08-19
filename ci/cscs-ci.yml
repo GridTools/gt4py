@@ -67,7 +67,7 @@ stages:
     EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx942 ROCM_HOME=/opt/rocm"
     UBUNTU_VERSION: '22.04'
 
-# TODO(havogt): re-enable one santis is back
+# TODO(havogt): re-enable once santis is back
 # build_cscs_gh200:
 #   extends:
 #     - .container-builder-cscs-gh200
@@ -120,7 +120,7 @@ build_cscs_amd_rocm:
     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
     - cd "${WORKDIR}/gt4py" && uv run --script noxfile.py -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
 
-# TODO(havogt): re-enable one santis is back
+# TODO(havogt): re-enable once santis is back
 # test_cscs_gh200:
 #   extends:
 #     - .container-runner-santis-gh200
