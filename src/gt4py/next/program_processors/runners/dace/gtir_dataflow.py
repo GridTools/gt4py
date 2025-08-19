@@ -1304,7 +1304,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             origin_map_index = gtir_to_sdfg_utils.get_map_variable(offset_provider_type.source_dim)
 
             connectivity_slice = self._construct_local_view(
-                MemletExpr(
+                MemletExpr(  # type: ignore[call-arg]  # FIXME
                     dc_node=self.state.add_access(connectivity),
                     gt_dtype=ts.ListType(
                         element_type=node.type.element_type, offset_type=offset_type
