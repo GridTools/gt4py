@@ -141,5 +141,5 @@ test_cscs_amd_rocm:
     SLURM_PARTITION: mi300
     CMAKE_PREFIX_PATH: /opt/rocm # for next
     CXX: /opt/rocm/bin/hipcc
-    CUDA_ROOT: /opt/rocm # for cartesian
+    CUDA_HOME: /opt/rocm # for cartesian
     # CUDA_ARCH: gfx942 # MI300A
