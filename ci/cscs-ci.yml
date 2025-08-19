@@ -146,4 +146,10 @@ test_cscs_amd_rocm:
   rules:
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
       when: never
+    - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'internal' && $SUBVARIANT == 'cpu'
+      variables:
+        CXX: g++
     - when: on_success
+      variables:
+        CXX: /opt/rocm/bin/hipcc
+
