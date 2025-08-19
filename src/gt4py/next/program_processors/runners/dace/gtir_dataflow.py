@@ -91,10 +91,19 @@ class MemletExpr:
     dc_node: dace.nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
     subset: dace_subsets.Range
-    field_layout: list[gtx_common.Dimension]
+    field_layout: Optional[list[gtx_common.Dimension]]
 
     def __post_init__(self) -> None:
+        # NOTE: `None` means "I need it to make mypy happy and I have not yet though enough
+        #   to find out what to use, but I need to commit.
+        assert isinstance(self.field_layout, list)
+
+        # We expect that the field layout is in the correct order.
         assert gtx_common.order_dimensions(self.field_layout) == self.field_layout
+        assert len(self.subset) == len(self.field_layout)
+
+        # This essentially maintaining the invariant we have that local dimensions are handled
+        #  specially.
         if isinstance(self.gt_dtype, ts.ScalarType):
             assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in self.field_layout)
         else:
@@ -1039,7 +1048,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         connectivity_desc = self.sdfg.arrays[connectivity]
         connectivity_desc.transient = False
 
-        # assert False, "POSSIBILITY FOR LOCAL DIMENSIOS."
+        # TODO(phimuell, edopao): I (phimuell) am pretty sure that two creation of `MemletExpr`
+        #   are wrong. In both cases they are constructed with `node.type` as `gt_dtype`. However,
+        #   This is the type for the output, but bellow they are used for inputs.
 
         # The visitor is constructing a list of input connections that will be handled
         # by `translate_as_fieldop` (the primitive translator), that is responsible
@@ -1052,10 +1063,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         field_slice = self._construct_local_view(
             MemletExpr(
                 dc_node=it.field,
-                gt_dtype=node.type,
+                gt_dtype=it.gt_dtype,
                 subset=dace_subsets.Range.from_string(
                     ",".join(
                         str(it.indices[dim].value - offset)  # type: ignore[union-attr]
+                        # TODO(phimuell, edopao): What does this codomain check do?
+                        # TODO(phimuell, edopao): The order here is not correct?
                         if dim != offset_provider.codomain
                         else f"0:{size}"
                         for (dim, offset), size in zip(
@@ -1066,14 +1079,18 @@ class LambdaToDataflow(eve.NodeVisitor):
                 field_layout=it.get_full_field_domain(),
             )
         )
-        assert False, "FIX INITALIZATION OF `field_layout`"  # noqa: B011 [assert-false] # Reminder
+
         connectivity_slice = self._construct_local_view(
             MemletExpr(
                 dc_node=self.state.add_access(connectivity),
+                # TODO: Get the correct type? Is that thing correct, what about `field_layout`.
                 gt_dtype=node.type,
                 subset=dace_subsets.Range.from_string(
+                    # TODO: This only work for horizontal data, if we have an offset table for
+                    #   vertical data it will not work, because then the order of the index changes.
                     f"{origin_index.value}, 0:{offset_provider.max_neighbors}"
                 ),
+                field_layout=list(offset_provider.domain),
             )
         )
 
@@ -1085,16 +1102,14 @@ class LambdaToDataflow(eve.NodeVisitor):
         neighbor_idx = gtir_to_sdfg_utils.get_map_variable(offset_type)
 
         index_connector = "__index"
+        field_connector = "__field"
         output_connector = "__val"
         tasklet_expression = f"{output_connector} = __field[{index_connector}]"
         input_memlets = {
-            "__field": self.sdfg.make_array_memlet(field_slice.dc_node.data),
+            field_connector: self.sdfg.make_array_memlet(field_slice.dc_node.data),
             index_connector: dace.Memlet(data=connectivity_slice.dc_node.data, subset=neighbor_idx),
         }
-        input_nodes = {
-            field_slice.dc_node.data: field_slice.dc_node,
-            connectivity_slice.dc_node.data: connectivity_slice.dc_node,
-        }
+        input_nodes = {field_slice.dc_node, connectivity_slice.dc_node}
 
         if offset_provider.has_skip_values:
             # in case of skip value we can write any dummy value
@@ -1116,7 +1131,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             outputs={
                 output_connector: dace.Memlet(data=neighbors_temp, subset=neighbor_idx),
             },
-            output_nodes={neighbors_temp: neighbors_node},
+            output_nodes={neighbors_node},
             external_edges=True,
         )
 
@@ -1304,7 +1319,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             origin_map_index = gtir_to_sdfg_utils.get_map_variable(offset_provider_type.source_dim)
 
             connectivity_slice = self._construct_local_view(
-                MemletExpr(  # type: ignore[call-arg]  # FIXME
+                MemletExpr(
                     dc_node=self.state.add_access(connectivity),
                     gt_dtype=ts.ListType(
                         element_type=node.type.element_type, offset_type=offset_type
@@ -1312,6 +1327,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     subset=dace_subsets.Range.from_string(
                         f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
                     ),
+                    field_layout=None,
                 )
             )
             assert False, "CONSTRUCTION ABOVE IS STILL NOT OKAY"  # noqa: B011 [assert-false] # Reminder
