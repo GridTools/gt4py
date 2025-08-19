@@ -72,12 +72,14 @@ build_cscs_gh200:
     - .container-builder-cscs-gh200
     - .build_common
     - .build_extra_cuda
+  needs: []
 
 build_cscs_amd_rocm:
   extends:
     - .container-builder-cscs-zen2
     - .build_common
     - .build_extra_rocm
+  needs: []
 
 # -- Test stage --
 .test_common:
