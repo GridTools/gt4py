@@ -92,17 +92,17 @@ build_cscs_amd_rocm:
     matrix:
       - SUBPACKAGE: [cartesian]
         VARIANT: ["internal", "dace"]
-        SUBVARIANT: ["rocm6_0", "cpu"] # TODO cuda
+        SUBVARIANT: ["cuda12", "rocm6_0", "cpu"]
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: eve
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: next
         VARIANT: ["internal", "dace"]
-        SUBVARIANT: ["rocm6_0", "cpu"]
+        SUBVARIANT: ["cuda12", "rocm6_0", "cpu"]
         DETAIL: ["nomesh", "atlas"]
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: [storage]
-        VARIANT: ["rocm6_0", "cpu"]
+        VARIANT: ["cuda12", "rocm6_0", "cpu"]
         PY_VERSION: *test_python_versions
   rules:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
@@ -127,6 +127,9 @@ test_cscs_gh200:
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+  rules:
+    - if: $SUBVARIANT == 'rocm6_0'
+      when: never
 
 test_cscs_amd_rocm:
   extends:
@@ -142,6 +145,8 @@ test_cscs_amd_rocm:
     CUDA_HOME: /opt/rocm # for cartesian
     CUDA_ARCH: gfx942 # MI300A
   rules:
+    - if: $SUBVARIANT == 'cuda12'
+      when: never
     - if: $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
       when: never
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'internal' && $SUBVARIANT == 'cpu'
