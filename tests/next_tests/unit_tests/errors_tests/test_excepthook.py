@@ -9,6 +9,7 @@
 from gt4py import eve
 from gt4py.next.errors import exceptions, excepthook
 
+
 def test_format_uncaught_error():
     try:
         loc = eve.SourceLocation("/src/file.py", 1, 1)

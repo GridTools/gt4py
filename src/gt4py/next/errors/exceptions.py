@@ -23,7 +23,6 @@ import textwrap
 from typing import Any, Optional
 
 from gt4py.eve import SourceLocation
-
 from gt4py.next.errors import formatting
 
 
