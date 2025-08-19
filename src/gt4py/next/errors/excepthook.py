@@ -20,7 +20,6 @@ from collections.abc import Callable
 from typing import Optional
 
 from gt4py.next import config
-
 from gt4py.next.errors import exceptions, formatting
 
 
@@ -43,8 +42,7 @@ def compilation_error_hook(
     verbose exceptions are enabled, the stack trace and cause of the error is
     also printed.
     """
-    from gt4py.next.errors import exceptions # For some reason this import is necessary otherwise exceptions.DSLError is NoneType
-    if isinstance(value, exceptions.DSLError):
+    if getattr(exceptions, "DSLError", None) is not None and isinstance(value, exceptions.DSLError):
         exc_strs = _format_uncaught_error(value, config.VERBOSE_EXCEPTIONS)
         print("".join(exc_strs), file=sys.stderr)
     else:
