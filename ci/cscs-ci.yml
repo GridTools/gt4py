@@ -144,7 +144,7 @@ test_cscs_amd_rocm:
     CUDA_HOME: /opt/rocm # for cartesian
     CUDA_ARCH: gfx942 # MI300A
   rules:
-    - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
+    - if: $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
       when: never
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'internal' && $SUBVARIANT == 'cpu'
       variables:
