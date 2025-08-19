@@ -123,6 +123,8 @@ test_cscs_gh200:
   extends:
     - .container-runner-santis-gh200
     - .test_common
+  needs:
+    - build_cscs_gh200
   variables:
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
@@ -135,6 +137,8 @@ test_cscs_amd_rocm:
   extends:
     - .tds-container-runner-beverin-mi200
     - .test_common
+  needs:
+    - build_cscs_amd_rocm
   variables:
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
