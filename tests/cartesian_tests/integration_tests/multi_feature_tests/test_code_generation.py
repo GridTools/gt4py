@@ -863,11 +863,12 @@ def test_k_offset_field_stencil(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_k_only_access_stencil(backend):
-    field_in = gt_storage.ones(dtype=np.float64, backend=backend, shape=(4,), aligned_index=(0,))
+    field_in = gt_storage.from_array(
+        [2, 3, 4, 5], dtype=np.float64, backend=backend, shape=(4,), aligned_index=(0,)
+    )
     field_out = gt_storage.zeros(
         dtype=np.float64, backend=backend, shape=(4, 4, 4), aligned_index=(0, 0, 0)
     )
-    field_in[:] = np.array([2, 3, 4, 5])
 
     @gtscript.stencil(backend=backend)
     def test_stencil(
@@ -888,11 +889,12 @@ def test_k_only_access_stencil(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_table_access_stencil(backend):
-    table_view = gt_storage.ones(dtype=np.float64, backend=backend, shape=(4,), aligned_index=(0,))
+    table_view = gt_storage.from_array(
+        [2, 3, 4, 5], dtype=np.float64, backend=backend, shape=(4,), aligned_index=(0,)
+    )
     field_out = gt_storage.zeros(
         dtype=np.float64, backend=backend, shape=(4, 4, 4), aligned_index=(0, 0, 0)
     )
-    table_view[:] = np.array([2, 3, 4, 5])
 
     @gtscript.stencil(backend=backend)
     def test_stencil(
