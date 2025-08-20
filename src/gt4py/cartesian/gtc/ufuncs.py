@@ -6,17 +6,27 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+
 import numpy as np
+
+from gt4py._core.definitions import float32, float64, int8, int16, int32, int64  # noqa: F401
 
 
 try:
-    from scipy.special import gamma as gamma_
+    from scipy.special import erf as erf_, erfc as erfc_, gamma as gamma_
+
 except ImportError:
     import math
 
     # If scipy is not available, emulate gamma function using math.gamma
     gamma_ = np.vectorize(math.gamma)
     gamma_.types = ["f->f", "d->d", "F->F", "D->D"]
+    # If scipy is not available, emulate erf function using math.erf
+    erf_ = np.vectorize(math.erf)
+    erf_.types = ["f->f", "d->d", "F->F", "D->D"]
+    # If scipy is not available, emulate erfc function using math.erfc
+    erfc_ = np.vectorize(math.erfc)
+    erfc_.types = ["f->f", "d->d", "F->F", "D->D"]
 
 
 positive: np.ufunc = np.positive
@@ -67,3 +77,5 @@ isnan: np.ufunc = np.isnan
 floor: np.ufunc = np.floor
 ceil: np.ufunc = np.ceil
 trunc: np.ufunc = np.trunc
+erf: np.ufunc = erf_
+erfc: np.ufunc = erfc_

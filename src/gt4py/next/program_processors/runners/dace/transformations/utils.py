@@ -11,7 +11,7 @@
 from typing import Any, Container, Optional, Sequence, TypeVar, Union
 
 import dace
-from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
+from dace import data as dace_data, libraries as dace_lib, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
@@ -405,9 +405,9 @@ def reroute_edge(
     """
     current_memlet: dace.Memlet = current_edge.data
     if is_producer_edge:
-        # NOTE: See the note in `_reconfigure_dataflow()` why it is not save to
-        #  use the `get_{dst, src}_subset()` function, although it would be more
-        #  appropriate.
+        # NOTE: See the note in `reconfigure_dataflow_after_rerouting()` why it is not
+        #  safe to use the `get_{dst, src}_subset()` function, although it would be
+        #  more appropriate.
         assert current_edge.dst is old_node
         current_subset: dace_sbs.Range = current_memlet.dst_subset
         new_src = current_edge.src
@@ -503,6 +503,10 @@ def reconfigure_dataflow_after_rerouting(
         old_node: The old that was involved in the old, rerouted, edge.
         new_node: The new node that should be used instead of `old_node`.
     """
+
+    # NOTE: The base assumption of this function is that the subset on the side of
+    #   `new_node` is already correct and we have to adjust the subset on the side
+    #   of `other_node`.
     other_node = new_edge.src if is_producer_edge else new_edge.dst
 
     if isinstance(other_node, dace_nodes.AccessNode):
@@ -564,6 +568,21 @@ def reconfigure_dataflow_after_rerouting(
         # TODO(phimuell): Look into the implication that we not necessarily pass
         #  the full array, but essentially slice a bit.
         pass
+
+    elif isinstance(other_node, dace_lib.standard.Reduce):
+        # For now we only handle the case that the reduction node is writing into
+        #  `new_node`, before the data was written into `old_node`. In that case
+        #  there is nothing to do, we just do some checks.
+        # TODO(phimuell): This about how to handle the other case or how to extend
+        #   to other library nodes.
+
+        if not is_producer_edge:
+            raise ValueError("Reduction nodes are only supported as output.")
+        assert isinstance(new_node, dace_nodes.AccessNode)
+
+        # The subset at the reduction node needs to be `None`, which means undefined.
+        other_subset = new_edge.data.src_subset if is_producer_edge else new_edge.data.dst_subset
+        assert other_subset is None
 
     else:
         # As we encounter them we should handle them case by case.

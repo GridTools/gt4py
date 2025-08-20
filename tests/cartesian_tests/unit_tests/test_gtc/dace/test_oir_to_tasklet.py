@@ -51,3 +51,20 @@ def test__tasklet_name(
     node: oir.FieldAccess | oir.ScalarAccess, is_target: bool, postfix: str, expected: str
 ) -> None:
     assert oir_to_tasklet._tasklet_name(node, is_target, postfix) == expected
+
+
+@pytest.mark.parametrize(
+    "literal,expected",
+    [
+        (oir.Literal(value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL), "True"),
+        (oir.Literal(value=common.BuiltInLiteral.FALSE, dtype=common.DataType.BOOL), "False"),
+        (oir.Literal(value="42.0", dtype=common.DataType.FLOAT32), "float(42.0)"),
+        (oir.Literal(value="42.0", dtype=common.DataType.FLOAT64), "double(42.0)"),
+        (oir.Literal(value="42", dtype=common.DataType.INT32), "int(42)"),
+        (oir.Literal(value="42", dtype=common.DataType.INT64), "int64_t(42)"),
+    ],
+)
+def test_visit_literal(literal: oir.Literal, expected: str):
+    visitor = oir_to_tasklet.OIRToTasklet()
+
+    assert visitor.visit_Literal(literal) == expected
