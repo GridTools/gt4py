@@ -59,12 +59,15 @@ class ValueExpr:
     This is different from `gtir_to_sdfg_types.FieldopData` which represents
     the result of a field operator, basically the data storage outside a global map.
 
+    For more information refer to the `MemletExpr`.
+
     Todo:
-        This also needs a field layout I would say.
+        What is the difference between `MemletExpr`?
 
     Args:
         dc_node: Access node to the data container, can be either a scalar or a local list.
         gt_dtype: GT4Py data type, which includes the `offset_type` local dimension for lists.
+        field_layout: What is the layout of the data.
     """
 
     dc_node: dace.nodes.AccessNode
@@ -72,17 +75,13 @@ class ValueExpr:
     field_layout: Optional[list[gtx_common.Dimension]]
 
     def __post_init__(self) -> None:
-        # NOTE: `None` means "I need it to make mypy happy and I have not yet though enough
-        #   to find out what to use, but I need to commit.
+        # NOTE: This function is designed to match `MemletExpr::__post_init__()`, please see there.
         assert isinstance(self.field_layout, list)
+        assert all(isinstance(dim, gtx_common.Dimension) for dim in self.field_layout)
         assert isinstance(self.gt_dtype, (ts.ListType, ts.ScalarType))
 
         assert gtx_common.order_dimensions(self.field_layout) == self.field_layout
-        if isinstance(self.gt_dtype, ts.ScalarType):
-            assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in self.field_layout)
-        else:
-            # `order_dimensions()` has made sure that there is only one local dimension,
-            #  thus we have to make sure that it is the right one.
+        if isinstance(self.gt_dtype, ts.ListType):
             assert self.gt_dtype.offset_type in self.field_layout
 
 
@@ -99,6 +98,25 @@ class MemletExpr:
             not sure what it really means. I would say it is the "entirety of the
             field that is accessed". It is quite clear when it is read or written, but
             less clear in an AccessNode to AccessNode connection.
+        - There is an interesting case presented in `test_gtir_to_sdfg.py::test_gtir_connectivity_shift_chain`.
+            Part of that test is essentially computing `tmp_vertex_data = edge_data[V2E[:, 1]]`,
+            where `V2E[:, 1]` gets translated into a `MemletExpr`. Its subset is,
+            `[i_Vertex_gtx_horizontal, 1]`, where `i_Vertex_gtx_horizontal` is the index of
+            the surrounding Map. The subset can not be changed, so what should be the
+            `field_layout`? The first idea would be to use `[dims.VDim]`, since the thing
+            essentially runs over the vertex dimension, the downside is, that the second dimension
+            which, although fix, is missing and the two have the same length. If we are using
+            `[dims.VDim, dims.V2EDim]` then it would have the same length as `subset`. But it
+            includes a dimension that is not needed and we would have local dimensions in
+            `field_layout`.
+        - Slowly I start thinking that the `IteratorExpr` and `MemletExpr` are the same thing,
+            but on different angles. `IteratorExpr` is essentially GT4Py's view on the data,
+            while `MemletExpr` is DaCe's view. The main reason for this is because it also has
+            the `subset`.
+        - Considering that I think that we should go/aim for the second opportunity as the field
+            layout tells me how I have to interpret the different dimensions of the `subset`.
+            This is probably also the meaning of `field_layout`. Note that this decision might
+            make some fixes of mine wrong, maybe?
 
     Args:
         dc_node: Access node to the data container, can be either a scalar or a local list.
@@ -118,25 +136,34 @@ class MemletExpr:
         # NOTE: `None` means "I need it to make mypy happy and I have not yet though enough
         #   to find out what to use, but I need to commit.
         assert isinstance(self.field_layout, list)
+        assert all(isinstance(dim, gtx_common.Dimension) for dim in self.field_layout)
         assert isinstance(self.gt_dtype, (ts.ListType, ts.ScalarType))
+        assert isinstance(self.subset, dace_subsets.Range)
 
         # We expect that the field layout is in the correct order.
         assert gtx_common.order_dimensions(self.field_layout) == self.field_layout
 
+        # As discussed above, a MemletExpr should be reflected to the data it maps.
+        #  Thus we require that the subset size has the same length as the `field_layout`
+        #  with the special exception of scalars.
         if len(self.field_layout) == 0:
-            # Special case for scalars outside fieldops.
+            assert isinstance(self.gt_dtype, ts.ScalarType)
             assert self.subset == dace_subsets.Range.from_string("0")
         else:
             assert len(self.subset) == len(self.field_layout)
 
-        # This essentially maintaining the invariant we have that local dimensions are handled
-        #  specially.
-        if isinstance(self.gt_dtype, ts.ScalarType):
-            assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in self.field_layout)
-        else:
+        # In the beginning we were requiring, beside the condition below, that for non-list
+        #  data, i.e. scalar, no dimension was local. However, I now think that this invariant
+        #  is wrong or over constraint. For example consider the accessing of offset tables.
+        #  But I am not sure if we should reinstall it?
+        if isinstance(self.gt_dtype, ts.ListType):
             # `order_dimensions()` has made sure that there is only one local dimension,
             #  thus we have to make sure that it is the right one.
             assert self.gt_dtype.offset_type in self.field_layout
+        else:
+            # TODO(phimuell, edopao): Maybe reinstall this rule.
+            # assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in self.field_layout)  # noqa: ERA001 [commented-out-code]  # Hint for Edoardo
+            pass
 
 
 @dataclasses.dataclass(frozen=True)
@@ -172,6 +199,14 @@ class IteratorExpr:
     gt_dtype: ts.ListType | ts.ScalarType
     field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymbolicType]]
     indices: dict[gtx_common.Dimension, DataExpr]
+
+    # TODO(phimuell, edopao): Does the exclusion of the LOCAL dimensions mean that,
+    #   _implicitly_, all dimensions listed in `field_domain` are iterated over?
+    #   However I wonder if this is correct, because we could have an `[dims.EdgeDim, dims.KDim]`
+    #   field and only iterate over one dimension, let's say `dims.EdgeDim`, because
+    #   we only process one vertical level. I think I have made that example somewhere
+    #   else, but I think this ambiguity should be solved by explicitly passing the
+    #   dimensions the outer map iterates over around.
 
     def __post_init__(self) -> None:
         if isinstance(self.gt_dtype, ts.ListType):
@@ -265,7 +300,7 @@ class MemletInputEdge(DataflowInputEdge):
     dest_conn: Optional[str]
 
     def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None:
-        # TODO(phimuell): There is `other_subset` missing.
+        # TODO(phimuell, edopao): There is `other_subset` missing.
         memlet = dace.Memlet(data=self.source.data, subset=self.subset)
         if map_entry is None:
             self.state.add_edge(self.source, None, self.dest, self.dest_conn, memlet)
@@ -665,7 +700,12 @@ class LambdaToDataflow(eve.NodeVisitor):
             # deref a zero-dimensional field
             assert len(arg_expr.field_domain) == 0
             assert isinstance(node.type, ts.ScalarType)
-            return MemletExpr(arg_expr.field, arg_expr.gt_dtype, subset="0", field_layout=[])
+            return MemletExpr(
+                arg_expr.field,
+                arg_expr.gt_dtype,
+                subset=dace_subsets.Range.from_string("0"),
+                field_layout=[],
+            )
 
         # handle default case below: deref a field with one or more dimensions
 
@@ -1767,12 +1807,24 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         shifted_indices = {dim: idx for dim, idx in it.indices.items() if dim != origin_dim}
         if isinstance(offset_expr, SymbolExpr):
-            # use memlet to retrieve the neighbor index
+            field_layout = list(connectivity.domain)
+            assert len(field_layout) == 2
+
+            if field_layout[0].kind == gtx_common.DimensionKind.LOCAL:
+                subset = dace_subsets.Range.from_string(
+                    f"{offset_expr.value}, {origin_index.value}"
+                )
+            else:
+                assert field_layout[1].kind == gtx_common.DimensionKind.LOCAL
+                subset = dace_subsets.Range.from_string(
+                    f"{origin_index.value}, {offset_expr.value}"
+                )
+
             shifted_indices[neighbor_dim] = MemletExpr(
                 dc_node=offset_table_node,
                 gt_dtype=it.gt_dtype,
-                subset=dace_subsets.Range.from_string(f"{origin_index.value}, {offset_expr.value}"),
-                field_layout=it.get_full_field_domain(),
+                subset=subset,
+                field_layout=field_layout,
             )
         else:
             # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
