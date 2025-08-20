@@ -89,7 +89,7 @@ build_cscs_amd_rocm:
     CSCS_CUDA_MPS: 1
     SLURM_GPUS_PER_NODE: 4
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 5`
+    SLURM_TIMELIMIT: 5
   parallel:
     matrix:
       - SUBPACKAGE: [cartesian]
@@ -149,7 +149,7 @@ test_cscs_amd_rocm:
     CMAKE_PREFIX_PATH: /opt/rocm # for next
     CXX: /opt/rocm/bin/hipcc
     CUDA_HOME: /opt/rocm # for cartesian
-    CUDA_ARCH: gfx942 # MI300A
+    SLURM_TIMELIMIT: 15 # relaxed relative to santis as there is no pressure on the queue
   rules:
     - if: $SUBVARIANT == 'cuda12'
       when: never
