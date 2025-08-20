@@ -14,7 +14,6 @@ from gt4py._core import definitions as core_defs
 
 from cartesian_tests.definitions import ALL_BACKENDS, PERFORMANCE_BACKENDS, get_array_library
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import copy_stencil
-from cartesian_tests import utils as test_utils
 
 
 try:

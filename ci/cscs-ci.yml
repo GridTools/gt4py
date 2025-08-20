@@ -151,7 +151,7 @@ test_cscs_amd_rocm:
     CUDA_HOME: /opt/rocm # for cartesian
     SLURM_TIMELIMIT: 15 # relaxed relative to santis as there is no pressure on the queue
   rules:
-    - if: $SUBVARIANT == 'cuda12'
+    - if: $SUBVARIANT == 'cuda12' || $VARIANT=='cuda12'
       when: never
     - if: $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
       when: never
