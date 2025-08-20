@@ -109,7 +109,7 @@ build_cscs_amd_rocm:
   rules: &exclude_variants_rules
     # - if: '(($SUBVARIANT == "cpu" || ($SUBVARIANT == "" && $VARIANT == "cpu")) && " $TEST_VARIANTS " !~ " cpu "'
     #   when: never
-    - if: '($SUBVARIANT == "cuda12") || ($SUBPACKAGE == "storage" && $VARIANT == "cuda12") && (" $TEST_VARIANTS " !~ " cuda12 ")'
+    - if: '($SUBVARIANT == "cuda12" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda12")) && (" $TEST_VARIANTS " !~ " cuda12 ")'
       when: never
     # - if: '(($SUBVARIANT == "rocm_6" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm_6")) && " $TEST_VARIANTS " !~ " rocm_6 "'
     #   when: never
