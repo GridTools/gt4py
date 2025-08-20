@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import typing
-from typing import TYPE_CHECKING, ClassVar, List, Optional, Union
+from typing import TYPE_CHECKING, ClassVar, Optional
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef
@@ -82,7 +82,7 @@ InfinityLiteral.POSITIVE = InfinityLiteral(name="POSITIVE")
 
 
 class OffsetLiteral(Expr):
-    value: Union[int, str]
+    value: int | str
 
 
 class AxisLiteral(Expr):
@@ -97,18 +97,18 @@ class SymRef(Expr):
 
 
 class Lambda(Expr, SymbolTableTrait):
-    params: List[Sym]
+    params: list[Sym]
     expr: Expr
 
 
 class FunCall(Expr):
     fun: Expr  # VType[Callable]
-    args: List[Expr]
+    args: list[Expr]
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
     id: Coerced[SymbolName]
-    params: List[Sym]
+    params: list[Sym]
     expr: Expr
 
 
@@ -135,13 +135,13 @@ class Temporary(Node):
 
 class Program(Node, ValidatedSymbolTableTrait):
     id: Coerced[SymbolName]
-    function_definitions: List[FunctionDefinition]
-    params: List[Sym]
-    declarations: List[Temporary]
-    body: List[Stmt]
+    function_definitions: list[FunctionDefinition]
+    params: list[Sym]
+    declarations: list[Temporary]
+    body: list[Stmt]
     implicit_domain: bool = False
 
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [
+    _NODE_SYMBOLS_: ClassVar[list[Sym]] = [
         Sym(id=name) for name in sorted(BUILTINS)
     ]  # sorted for serialization stability
 

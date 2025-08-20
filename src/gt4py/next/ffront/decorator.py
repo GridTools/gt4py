@@ -319,7 +319,7 @@ class Program:
                 start = time.time()
 
             if __debug__:
-                # TODO: remove or make dependency on self.past_stage optional
+                # TODO(): remove or make dependency on self.past_stage optional
                 past_process_args._validate_args(
                     self.past_stage.past_node,
                     arg_types=[type_translation.from_value(arg) for arg in args],

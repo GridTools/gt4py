@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Dict
+from typing import Any
 
 from gt4py import eve
 from gt4py.cartesian.gtc import gtir
@@ -27,7 +27,7 @@ class _GTIRResolveAuto(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         """Updates FieldDecls with resolved types."""
 
         def visit_FieldDecl(
-            self, node: gtir.FieldDecl, new_symbols: Dict[str, Any], **kwargs: Any
+            self, node: gtir.FieldDecl, new_symbols: dict[str, Any], **kwargs: Any
         ) -> gtir.FieldDecl:
             if node.dtype == DataType.AUTO:
                 dtype = new_symbols[node.name].dtype
@@ -38,7 +38,7 @@ class _GTIRResolveAuto(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 return node
 
     def visit_FieldAccess(
-        self, node: gtir.FieldAccess, *, symtable: Dict[str, Any], **kwargs: Any
+        self, node: gtir.FieldAccess, *, symtable: dict[str, Any], **kwargs: Any
     ) -> gtir.FieldAccess:
         if symtable[node.name].dtype == DataType.AUTO:
             assert "new_dtype" in kwargs
@@ -89,7 +89,7 @@ class _GTIRPropagateDtypeToAccess(eve.NodeTranslator, eve.VisitorWithSymbolTable
         )
 
     def visit_ScalarAccess(
-        self, node: gtir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any
+        self, node: gtir.ScalarAccess, *, symtable: dict[str, Any], **kwargs: Any
     ) -> gtir.ScalarAccess:
         return gtir.ScalarAccess(name=node.name, dtype=symtable[node.name].dtype, loc=node.loc)
 

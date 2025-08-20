@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from collections.abc import Iterable
-from typing import Any, Generic, List, TypeAlias, TypeGuard, TypeVar
+from typing import Any, Generic, TypeAlias, TypeGuard, TypeVar
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -18,7 +18,7 @@ _Fun = TypeVar("_Fun", bound=itir.Expr)
 
 class _FunCallTo(itir.FunCall, Generic[_Fun]):
     fun: _Fun
-    args: List[itir.Expr]
+    args: list[itir.Expr]
 
 
 _FunCallToSymRef: TypeAlias = _FunCallTo[itir.SymRef]
@@ -49,7 +49,7 @@ def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_FunCallToSymRe
             and node.fun.id == fun
         )
     else:
-        return any((is_call_to(node, f) for f in fun))
+        return any(is_call_to(node, f) for f in fun)
 
 
 _FunCallToFunCallToRef: TypeAlias = _FunCallTo[_FunCallToSymRef]

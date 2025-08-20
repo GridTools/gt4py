@@ -15,7 +15,7 @@ import functools
 
 from gt4py import eve
 from gt4py.eve import concepts
-from gt4py.eve.extended_typing import Any, Callable, Optional, TypeVar, Union
+from gt4py.eve.extended_typing import Any, Callable, Optional, TypeVar
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_as_fieldop, is_call_to
@@ -62,7 +62,7 @@ def copy_type(from_: itir.Node, to: itir.Node, allow_untyped: bool = False) -> N
     _set_node_type(to, from_.type)
 
 
-def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, ObservableTypeSynthesizer]) -> None:
+def on_inferred(callback: Callable, *args: ts.TypeSpec | ObservableTypeSynthesizer) -> None:
     """
     Execute `callback` as soon as all `args` have a type.
     """
@@ -184,7 +184,7 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         *args: type_synthesizer.TypeOrTypeSynthesizer,
         offset_provider_type: common.OffsetProviderType,
         **kwargs,
-    ) -> Union[ts.TypeSpec, ObservableTypeSynthesizer]:
+    ) -> ts.TypeSpec | ObservableTypeSynthesizer:
         assert all(isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args), (
             "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
         )
@@ -494,7 +494,7 @@ class ITIRTypeInference(eve.NodeTranslator):
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs) -> ts.DimensionType:
         return ts.DimensionType(dim=common.Dimension(value=node.value, kind=node.kind))
 
-    # TODO: revisit what we want to do with OffsetLiterals as we already have an Offset type in
+    # TODO(): revisit what we want to do with OffsetLiterals as we already have an Offset type in
     #  the frontend.
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs) -> it_ts.OffsetLiteralType:
         if _is_representable_as_int(node.value):

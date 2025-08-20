@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import gt4py.eve as eve
 from gt4py.eve.codegen import JinjaTemplate as as_jinja

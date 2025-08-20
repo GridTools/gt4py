@@ -9,7 +9,8 @@
 import dataclasses
 import inspect
 import typing
-from typing import Callable, ClassVar, List
+from collections.abc import Callable
+from typing import ClassVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import Node, utils as eve_utils
@@ -202,9 +203,9 @@ iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
 
 
 class TracerContext:
-    fundefs: ClassVar[List[FunctionDefinition]] = []
-    body: ClassVar[List[itir.Stmt]] = []
-    declarations: ClassVar[List[itir.Temporary]] = []
+    fundefs: ClassVar[list[FunctionDefinition]] = []
+    body: ClassVar[list[itir.Stmt]] = []
+    declarations: ClassVar[list[itir.Temporary]] = []
 
     @classmethod
     def add_fundef(cls, fun):
@@ -238,8 +239,8 @@ def set_at(expr: itir.Expr, domain: itir.Expr, target: itir.Expr) -> None:
 def if_stmt(
     cond: itir.Expr, true_branch_f: typing.Callable, false_branch_f: typing.Callable
 ) -> None:
-    true_branch: List[itir.Stmt] = []
-    false_branch: List[itir.Stmt] = []
+    true_branch: list[itir.Stmt] = []
+    false_branch: list[itir.Stmt] = []
 
     old_body = TracerContext.body
     TracerContext.body = true_branch

@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Iterator, Sequence, TypeAlias
+from collections.abc import Iterator, Sequence
+from typing import Any, TypeAlias
 
 from gt4py.next import common, errors
 from gt4py.next.ffront import (
@@ -122,7 +123,7 @@ def _field_constituents_range_and_dims(
                 yield from _field_constituents_range_and_dims(el, el_type)
         case ts.FieldType():
             dims = type_info.extract_dims(arg_type)
-            if isinstance(arg, ts.TypeSpec):  # TODO
+            if isinstance(arg, ts.TypeSpec):  # TODO(): fix
                 yield (tuple(), dims)
             elif dims:
                 assert (

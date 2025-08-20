@@ -6,19 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Final,
-    Literal,
-    Optional,
-    Sequence,
-    Tuple,
-    TypedDict,
-    Union,
-)
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Final, Literal, Optional, TypedDict, Union
 
 import numpy as np
 
@@ -33,11 +22,11 @@ if TYPE_CHECKING:
 class LayoutInfo(TypedDict):
     alignment: int  # measured in bytes
     device: Literal["cpu", "gpu"]
-    layout_map: Callable[[Tuple[str, ...]], Tuple[int, ...]]
-    is_optimal_layout: Callable[[Any, Tuple[str, ...]], bool]
+    layout_map: Callable[[tuple[str, ...]], tuple[int, ...]]
+    is_optimal_layout: Callable[[Any, tuple[str, ...]], bool]
 
 
-REGISTRY: Dict[str, LayoutInfo] = {}
+REGISTRY: dict[str, LayoutInfo] = {}
 
 
 def from_name(name: str) -> Optional[LayoutInfo]:
@@ -66,9 +55,9 @@ def check_layout(layout_map, strides):
 
 
 def layout_maker_factory(
-    base_layout: Tuple[int, ...],
-) -> Callable[[Tuple[str, ...]], Tuple[int, ...]]:
-    def layout_maker(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
+    base_layout: tuple[int, ...],
+) -> Callable[[tuple[str, ...]], tuple[int, ...]]:
+    def layout_maker(dimensions: tuple[str, ...]) -> tuple[int, ...]:
         mask = [dim in dimensions for dim in "IJK"]
         mask += [True] * (len(dimensions) - sum(mask))
         ranks = []
@@ -90,7 +79,7 @@ def layout_maker_factory(
 
 
 def layout_checker_factory(layout_maker):
-    def layout_checker(field: Union[np.ndarray, "cp.ndarray"], dimensions: Tuple[str, ...]) -> bool:
+    def layout_checker(field: Union[np.ndarray, "cp.ndarray"], dimensions: tuple[str, ...]) -> bool:
         layout_map = layout_maker(dimensions)
         return check_layout(layout_map, field.strides)
 
@@ -98,8 +87,8 @@ def layout_checker_factory(layout_maker):
 
 
 def _permute_layout_to_dimensions(
-    layout: Sequence[int], dimensions: Tuple[str, ...]
-) -> Tuple[int, ...]:
+    layout: Sequence[int], dimensions: tuple[str, ...]
+) -> tuple[int, ...]:
     data_dims = [int(d) for d in dimensions if d.isdigit()]
     canonical_dimensions = [d for d in "IJK" if d in dimensions] + [
         str(d) for d in sorted(data_dims)
@@ -110,14 +99,14 @@ def _permute_layout_to_dimensions(
     return tuple(res_layout)
 
 
-def make_gtcpu_kfirst_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
+def make_gtcpu_kfirst_layout_map(dimensions: tuple[str, ...]) -> tuple[int, ...]:
     layout = [i for i in range(len(dimensions))]
     naxes = sum(dim in dimensions for dim in "IJK")
     layout = [*layout[-naxes:], *layout[:-naxes]]
     return _permute_layout_to_dimensions([lt for lt in layout if lt is not None], dimensions)
 
 
-def make_gtcpu_ifirst_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
+def make_gtcpu_ifirst_layout_map(dimensions: tuple[str, ...]) -> tuple[int, ...]:
     ctr = reversed(range(len(dimensions)))
     layout = [next(ctr) for dim in "IJK" if dim in dimensions] + list(ctr)
     if "K" in dimensions and "J" in dimensions:
@@ -128,7 +117,7 @@ def make_gtcpu_ifirst_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]
     return _permute_layout_to_dimensions(layout, dimensions)
 
 
-def make_cuda_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
+def make_cuda_layout_map(dimensions: tuple[str, ...]) -> tuple[int, ...]:
     layout = tuple(reversed(range(len(dimensions))))
     return _permute_layout_to_dimensions(layout, dimensions)
 

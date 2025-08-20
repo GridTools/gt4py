@@ -11,8 +11,9 @@ from __future__ import annotations
 import dataclasses
 import functools
 import types
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import TYPE_CHECKING, Optional
 
 import devtools
 
@@ -33,7 +34,7 @@ __all__ = ["fendef", "fundef", "if_stmt", "offset", "set_at"]
 
 @dataclass(frozen=True)
 class Offset:
-    value: Union[int, str]
+    value: int | str
 
 
 def offset(value):

@@ -152,7 +152,8 @@ def _for_scope_header(node: tir.VerticalLoop) -> dcf.ForScope:
 
     Only setup the required data, default or mock the rest.
 
-    TODO: In DaCe 2.x this will be replaced by an SDFG concept which should
+    Todo:
+        In DaCe 2.x this will be replaced by an SDFG concept which should
     be closer and required less mockup.
     """
     if not dace_version.startswith("1."):
@@ -201,7 +202,8 @@ def _while_scope_header(node: tir.While) -> dcf.WhileScope:
 
     Only setup the required data, default or mock the rest.
 
-    TODO: In DaCe 2.x this will be replaced by an SDFG concept which should
+    Todo:
+        In DaCe 2.x this will be replaced by an SDFG concept which should
     be closer and required less mockup.
     """
     if not dace_version.startswith("1."):

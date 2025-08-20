@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, List, TypeAlias
+from typing import Any, TypeAlias
 
 from dace import data, dtypes, symbolic
 
@@ -82,8 +82,8 @@ class OIRToTreeIR(eve.NodeVisitor):
         This function only groups statements. The job of visiting the groups statements is
         left to the caller.
         """
-        statements: List[ControlFlow | oir.CodeBlock | common.Stmt] = []
-        groups: List[ControlFlow | oir.CodeBlock] = []
+        statements: list[ControlFlow | oir.CodeBlock | common.Stmt] = []
+        groups: list[ControlFlow | oir.CodeBlock] = []
 
         for statement in node.body:
             if isinstance(statement, ControlFlow):
@@ -347,7 +347,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                 tir.Axis.J: -field_extent[1][0],
                 tir.Axis.K: max(k_bound[0], 0),
             }
-            # TODO / Dev Note: Persistent memory is an overkill here - we should scope
+            # TODO(): / Dev Note: Persistent memory is an overkill here - we should scope
             # the temporary as close to the tasklets as we can, but any lifetime lower
             # than persistent will yield issues with memory leaks.
             containers[field.name] = data.Array(

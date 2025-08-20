@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Generic, Literal, Optional, TypeVar, Union
+from typing import Any, Generic, Literal, Optional, TypeVar
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
@@ -24,7 +24,7 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 
 class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]
-    type: Union[SymbolT, ts.DeferredType]  # A003
+    type: SymbolT | ts.DeferredType  # A003
     namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
         dialect_ast_enums.Namespace.LOCAL
     )
@@ -82,7 +82,7 @@ class Constant(Expr):
 
 
 class Dict(Expr):
-    keys_: list[Union[Name | Attribute]]
+    keys_: list[Name | Attribute]
     values_: list[TupleExpr]
 
 
@@ -97,7 +97,7 @@ class Stmt(LocatedNode): ...
 
 class Program(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]
-    type: Union[ts_ffront.ProgramType, ts.DeferredType]  # A003
+    type: ts_ffront.ProgramType | ts.DeferredType  # A003
     params: list[DataSymbol]
     body: list[Call]
     closure_vars: list[Symbol]

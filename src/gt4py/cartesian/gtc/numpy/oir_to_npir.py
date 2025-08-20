@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional
 
 from gt4py import eve
 from gt4py.cartesian import utils
@@ -22,7 +22,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     # --- Decls ---
     def visit_FieldDecl(
-        self, node: oir.FieldDecl, *, field_extents: Dict[str, Extent], **kwargs: Any
+        self, node: oir.FieldDecl, *, field_extents: dict[str, Extent], **kwargs: Any
     ) -> npir.FieldDecl:
         extent = field_extents.get(node.name, Extent.zeros(ndims=2))
         return npir.FieldDecl(
@@ -40,7 +40,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return npir.LocalScalarDecl(name=node.name, dtype=node.dtype)
 
     def visit_Temporary(
-        self, node: oir.Temporary, *, field_extents: Dict[str, Extent], **kwargs: Any
+        self, node: oir.Temporary, *, field_extents: dict[str, Extent], **kwargs: Any
     ) -> npir.TemporaryDecl:
         temp_extent = field_extents[node.name]
         offset = tuple(-ext[0] for ext in temp_extent)
@@ -60,8 +60,8 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return npir.ScalarLiteral(value=node.value, dtype=node.dtype, kind=node.kind)
 
     def visit_ScalarAccess(
-        self, node: oir.ScalarAccess, *, symtable: Dict[str, oir.Decl], **kwargs: Any
-    ) -> Union[npir.ParamAccess, npir.LocalScalarAccess]:
+        self, node: oir.ScalarAccess, *, symtable: dict[str, oir.Decl], **kwargs: Any
+    ) -> npir.ParamAccess | npir.LocalScalarAccess:
         assert node.kind == common.ExprKind.SCALAR
         if isinstance(symtable[node.name], oir.LocalScalar):
             return npir.LocalScalarAccess(name=node.name, dtype=symtable[node.name].dtype)
@@ -70,12 +70,12 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_CartesianOffset(
         self, node: common.CartesianOffset, **kwargs: Any
-    ) -> Tuple[int, int, int]:
+    ) -> tuple[int, int, int]:
         return node.i, node.j, node.k
 
     def visit_VariableKOffset(
         self, node: oir.VariableKOffset, **kwargs: Any
-    ) -> Tuple[int, int, eve.Node]:
+    ) -> tuple[int, int, eve.Node]:
         return 0, 0, npir.VarKOffset(k=self.visit(node.k, **kwargs))
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> npir.FieldSlice:
@@ -95,7 +95,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_BinaryOp(
         self, node: oir.BinaryOp, **kwargs: Any
-    ) -> Union[npir.VectorArithmetic, npir.VectorLogic]:
+    ) -> npir.VectorArithmetic | npir.VectorLogic:
         args = dict(
             op=node.op, left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
         )
@@ -111,7 +111,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             false_expr=self.visit(node.false_expr, **kwargs),
         )
 
-    def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> Union[npir.VectorCast, npir.ScalarCast]:
+    def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> npir.VectorCast | npir.ScalarCast:
         expr = self.visit(node.expr, **kwargs)
         args = {"dtype": node.dtype, "expr": expr}
         return (
@@ -128,7 +128,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     # --- Statements ---
     def visit_MaskStmt(
         self, node: oir.MaskStmt, *, mask: Optional[npir.Expr] = None, **kwargs: Any
-    ) -> List[npir.Stmt]:
+    ) -> list[npir.Stmt]:
         mask_expr = self.visit(node.mask, **kwargs)
         if mask:
             mask_expr = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=mask_expr)
@@ -181,7 +181,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self,
         node: oir.HorizontalExecution,
         *,
-        block_extents: Optional[Dict[int, Extent]] = None,
+        block_extents: Optional[dict[int, Extent]] = None,
         **kwargs: Any,
     ) -> npir.HorizontalBlock:
         if block_extents:
@@ -204,7 +204,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             direction=loop_order,
         )
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> List[npir.VerticalPass]:
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> list[npir.VerticalPass]:
         return self.visit(node.sections, loop_order=node.loop_order, **kwargs)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:

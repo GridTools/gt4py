@@ -660,7 +660,7 @@ class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, P
 
     @property
     def __gt_domain__(self) -> Domain:
-        # TODO probably should be changed to `DomainLike` (with a new concept `DimensionLike`)
+        # TODO(): probably should be changed to `DomainLike` (with a new concept `DimensionLike`)
         # to allow implementations without having to import gtx.Domain.
         ...
 

@@ -7,7 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Any, Dict, Iterable, Iterator, List, Optional, TypeGuard, Union
+from collections.abc import Iterable, Iterator
+from typing import Any, Optional, TypeGuard
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, concepts
@@ -24,7 +25,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_im_ir import (
 )
 
 
-# TODO: start of code clone from unroll_reduce.py. This is necessary since whilet the IR nodes are compatible between itir and gtfn_ir,
+# TODO(): start of code clone from unroll_reduce.py. This is necessary since whilet the IR nodes are compatible between itir and gtfn_ir,
 #       the structure of the ir is slightly different, hence functions like _is_shifted and _get_partial_offset_tag are slightly changed
 #       in this version of the code clone. To be removed asap
 def _is_shifted(arg: gtfn_ir_common.Expr) -> TypeGuard[gtfn_ir.FunCall]:
@@ -83,7 +84,7 @@ def _is_reduce(node: gtfn_ir.FunCall) -> TypeGuard[gtfn_ir.FunCall]:
     )
 
 
-# TODO: end of code clone
+# TODO(): end of code clone
 
 
 class PlugInCurrentIdx(NodeTranslator):
@@ -127,7 +128,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def _expand_lambda(
         self,
         node: gtfn_ir.FunCall,
-        new_args: List[gtfn_ir.FunCall],
+        new_args: list[gtfn_ir.FunCall],
         red_idx: str,
         max_neighbors: int,
         **kwargs: Any,
@@ -157,7 +158,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def _expand_symref(
         self,
         node: gtfn_ir.FunCall,
-        new_args: List[gtfn_ir.FunCall],
+        new_args: list[gtfn_ir.FunCall],
         red_idx: str,
         max_neighbors: int,
         **kwargs: Any,
@@ -244,8 +245,8 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FunctionDefinition(
         self, node: gtfn_ir.FunctionDefinition, **kwargs: Any
     ) -> ImperativeFunctionDefinition:
-        self.imp_list_ir: List[Union[Stmt, Conditional]] = []
-        self.sym_table: Dict[gtfn_ir_common.Sym, gtfn_ir_common.SymRef] = node.annex.symtable
+        self.imp_list_ir: list[Stmt | Conditional] = []
+        self.sym_table: dict[gtfn_ir_common.Sym, gtfn_ir_common.SymRef] = node.annex.symtable
         ret = self.visit(node.expr, localized_symbols={}, **kwargs)
 
         return ImperativeFunctionDefinition(

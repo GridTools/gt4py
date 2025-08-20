@@ -10,20 +10,8 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import (
-    Any,
-    Dict,
-    Final,
-    Iterable,
-    List,
-    Optional,
-    Protocol,
-    Sequence,
-    Set,
-    Tuple,
-    TypeAlias,
-    Union,
-)
+from collections.abc import Iterable, Sequence
+from typing import Any, Final, Optional, Protocol, TypeAlias
 
 import dace
 from dace import subsets as dace_subsets
@@ -397,12 +385,9 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_map(
         self,
         name: str,
-        ndrange: Union[
-            Dict[str, Union[str, dace.subsets.Subset]],
-            List[Tuple[str, Union[str, dace.subsets.Subset]]],
-        ],
+        ndrange: dict[str, str | dace.subsets.Subset] | list[tuple[str, str | dace.subsets.Subset]],
         **kwargs: Any,
-    ) -> Tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
+    ) -> tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
         """
         Helper method to add a map in current state.
 
@@ -414,8 +399,8 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_tasklet(
         self,
         name: str,
-        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
-        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        inputs: set[str] | dict[str, dace.dtypes.typeclass],
+        outputs: set[str] | dict[str, dace.dtypes.typeclass],
         code: str,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
@@ -439,11 +424,11 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_mapped_tasklet(
         self,
         name: str,
-        map_ranges: Dict[str, str | dace.subsets.Subset]
-        | List[Tuple[str, str | dace.subsets.Subset]],
-        inputs: Dict[str, dace.Memlet],
+        map_ranges: dict[str, str | dace.subsets.Subset]
+        | list[tuple[str, str | dace.subsets.Subset]],
+        inputs: dict[str, dace.Memlet],
         code: str,
-        outputs: Dict[str, dace.Memlet],
+        outputs: dict[str, dace.Memlet],
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
         """
@@ -918,8 +903,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 if nstate.degree(data_node) == 0:
                     assert not data_node.desc(nsdfg).transient
                     nsdfg.remove_node(data_node)
-        else:
-            result = outer_value
+        result = outer_value
 
         outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 
@@ -1675,7 +1659,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             builtin_name,
             set(node_connections.keys()),
             {out_connector},
-            "{} = {}".format(out_connector, code),
+            f"{out_connector} = {code}",
         )
 
         for connector, arg_expr in node_connections.items():

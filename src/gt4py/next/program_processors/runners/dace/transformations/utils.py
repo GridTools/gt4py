@@ -8,7 +8,8 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-from typing import Any, Container, Optional, Sequence, TypeVar, Union
+from collections.abc import Container, Sequence
+from typing import Any, Optional, TypeVar
 
 import dace
 from dace import data as dace_data, libraries as dace_lib, subsets as dace_sbs, symbolic as dace_sym
@@ -237,8 +238,8 @@ def is_accessed_downstream(
 
 
 def is_reachable(
-    start: Union[dace_nodes.Node, Sequence[dace_nodes.Node]],
-    target: Union[dace_nodes.Node, Sequence[dace_nodes.Node]],
+    start: dace_nodes.Node | Sequence[dace_nodes.Node],
+    target: dace_nodes.Node | Sequence[dace_nodes.Node],
     state: dace.SDFGState,
 ) -> bool:
     """Explores the graph from `start` and checks if `target` is reachable.
@@ -268,7 +269,7 @@ def is_reachable(
 
 def is_source_node_of(
     sink: dace_nodes.Node,
-    possible_sources: Union[dace_nodes.Node, Sequence[dace_nodes.Node]],
+    possible_sources: dace_nodes.Node | Sequence[dace_nodes.Node],
     state: dace.SDFGState,
 ) -> bool:
     """Explores the graph and checks if `possible_sources` produce data for `sink`.
@@ -303,7 +304,7 @@ def is_source_node_of(
 
 
 def is_view(
-    node: Union[dace_nodes.AccessNode, dace_data.Data],
+    node: dace_nodes.AccessNode | dace_data.Data,
     sdfg: Optional[dace.SDFG] = None,
 ) -> bool:
     """Tests if `node` points to a view or not."""
@@ -643,7 +644,7 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
     """
 
     def _impl(
-        state: Union[dace.SDFGState, dace.sdfg.state.AbstractControlFlowRegion],
+        state: dace.SDFGState | dace.sdfg.state.AbstractControlFlowRegion,
         graph: dace.sdfg.state.AbstractControlFlowRegion,
     ) -> list[dace.sdfg.state.AbstractControlFlowRegion]:
         assert state is not graph

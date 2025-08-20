@@ -59,7 +59,7 @@ stages:
     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
     EXTRA_UV_SYNC_ARGS: "--extra cuda12"
 
-# TODO: rocm steps are in draft state for now to show how to add support in the future
+# TODO(): rocm steps are in draft state for now to show how to add support in the future
 # .build_extra_rocm:
 #   variables:
 #     # jfrog.svc.cscs.ch/dockerhub/rocm is the cached version of docker.io/rocm
@@ -107,7 +107,7 @@ build_cscs_gh200:
   rules:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
-        # TODO: investigate why the dace tests seem to hang with multiple jobs
+        # TODO(): investigate why the dace tests seem to hang with multiple jobs
         GT4PY_BUILD_JOBS: 1
         SLURM_TIMELIMIT: "00:15:00"
     - when: on_success

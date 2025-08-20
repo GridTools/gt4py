@@ -138,7 +138,8 @@ from __future__ import annotations
 import enum
 import operator
 import sys
-from typing import List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Optional
 
 import numpy as np
 
@@ -364,7 +365,7 @@ class FieldRef(Ref):
 
     @classmethod
     def at_center(
-        cls, name: str, axes: Sequence[str], data_index: Optional[List[int]] = None, loc=None
+        cls, name: str, axes: Sequence[str], data_index: Optional[list[int]] = None, loc=None
     ):
         return cls(
             name=name, offset={axis: 0 for axis in axes}, data_index=data_index or [], loc=loc
@@ -755,7 +756,7 @@ class AxisInterval(Node):
         )
 
 
-# TODO Find a better place for this in the file.
+# TODO(): Find a better place for this in the file.
 @attribclass
 class HorizontalIf(Statement):
     intervals = attribute(of=DictOf[str, AxisInterval])

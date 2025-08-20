@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Tuple
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
@@ -21,10 +20,10 @@ def as_offset(offset_: FieldOffset, field: common.Field, /) -> common.Connectivi
 @WhereBuiltinFunction
 def concat_where(
     cond: common.Domain,
-    true_field: common.Field | core_defs.ScalarT | Tuple,
-    false_field: common.Field | core_defs.ScalarT | Tuple,
+    true_field: common.Field | core_defs.ScalarT | tuple,
+    false_field: common.Field | core_defs.ScalarT | tuple,
     /,
-) -> common.Field | Tuple:
+) -> common.Field | tuple:
     """
     Concatenates two field fields based on a 1D mask.
 

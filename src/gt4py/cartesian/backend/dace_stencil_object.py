@@ -11,8 +11,9 @@ from __future__ import annotations
 import copy
 import inspect
 import os
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Optional, Sequence, Set, Tuple
+from typing import Any, Optional
 
 import dace
 import dace.data
@@ -26,7 +27,7 @@ from gt4py.cartesian.stencil_object import ArgsInfo, FrozenStencil, StencilObjec
 from gt4py.cartesian.utils import shash
 
 
-def _extract_array_infos(field_args, device) -> Dict[str, Optional[ArgsInfo]]:
+def _extract_array_infos(field_args, device) -> dict[str, Optional[ArgsInfo]]:
     return {
         name: ArgsInfo(
             array=arg,
@@ -40,8 +41,8 @@ def _extract_array_infos(field_args, device) -> Dict[str, Optional[ArgsInfo]]:
 
 def add_optional_fields(
     sdfg: dace.SDFG,
-    field_info: Dict[str, Any],
-    parameter_info: Dict[str, Any],
+    field_info: dict[str, Any],
+    parameter_info: dict[str, Any],
     **kwargs: Any,
 ) -> dace.SDFG:
     sdfg = copy.deepcopy(sdfg)
@@ -65,8 +66,8 @@ def add_optional_fields(
 @dataclass(frozen=True)
 class DaCeFrozenStencil(FrozenStencil, SDFGConvertible):
     stencil_object: DaCeStencilObject
-    origin: Dict[str, Tuple[int, ...]]
-    domain: Tuple[int, ...]
+    origin: dict[str, tuple[int, ...]]
+    domain: tuple[int, ...]
     sdfg: dace.SDFG
 
     def __sdfg__(self, **kwargs):
@@ -106,8 +107,8 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
     def freeze(
         self: DaCeStencilObject,
         *,
-        origin: Dict[str, Tuple[int, ...]],
-        domain: Tuple[int, ...],
+        origin: dict[str, tuple[int, ...]],
+        domain: tuple[int, ...],
     ) -> DaCeFrozenStencil:
         key = DaCeStencilObject._get_domain_origin_key(domain, origin)
 
@@ -142,8 +143,8 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
 
     def closure_resolver(
         self,
-        constant_args: Dict[str, Any],
-        given_args: Set[str],
+        constant_args: dict[str, Any],
+        given_args: set[str],
         parent_closure: Optional[dace.frontend.python.common.SDFGClosure] = None,
     ) -> dace.frontend.python.common.SDFGClosure:
         return dace.frontend.python.common.SDFGClosure()
@@ -161,10 +162,10 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         frozen_stencil = self.freeze(origin=norm_kwargs["origin"], domain=norm_kwargs["domain"])
         return frozen_stencil.__sdfg__(**norm_kwargs)
 
-    def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    def __sdfg_closure__(self, reevaluate: Optional[dict[str, str]] = None) -> dict[str, Any]:
         return {}
 
-    def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
+    def __sdfg_signature__(self) -> tuple[Sequence[str], Sequence[str]]:
         special_args = {"self", "domain", "origin", "validate_args", "exec_info"}
         args = []
         for arg in (
@@ -182,9 +183,9 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         backend: str,
         arg_names: Iterable[str],
         domain_info: DomainInfo,
-        field_info: Dict[str, FieldInfo],
-        domain: Optional[Tuple[int, ...]] = None,
-        origin: Optional[Dict[str, Tuple[int, ...]]] = None,
+        field_info: dict[str, FieldInfo],
+        domain: Optional[tuple[int, ...]] = None,
+        origin: Optional[dict[str, tuple[int, ...]]] = None,
         **kwargs,
     ):
         """Normalize Fields in argument list to the proper domain/origin"""

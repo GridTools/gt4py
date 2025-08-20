@@ -9,7 +9,6 @@
 """An optimization to convert npir.LocalScalarDecl to npir.TemporaryDecl."""
 
 from dataclasses import dataclass
-from typing import Dict
 
 from gt4py import eve
 from gt4py.cartesian import utils
@@ -30,7 +29,7 @@ def _all_local_scalars_are_unique_type(stencil: npir.Computation) -> bool:
         stencil.walk_values().if_isinstance(npir.HorizontalBlock).getattr("declarations").to_list()
     )
 
-    name_to_dtype: Dict[str, common.DataType] = {}
+    name_to_dtype: dict[str, common.DataType] = {}
     for decl in all_declarations:
         if decl.name in name_to_dtype:
             if decl.dtype != name_to_dtype[decl.name]:
@@ -43,7 +42,7 @@ def _all_local_scalars_are_unique_type(stencil: npir.Computation) -> bool:
 
 class ScalarsToTemporaries(eve.NodeTranslator):
     def visit_LocalScalarAccess(
-        self, node: npir.LocalScalarAccess, *, temps_from_scalars: Dict[str, Temporary]
+        self, node: npir.LocalScalarAccess, *, temps_from_scalars: dict[str, Temporary]
     ) -> npir.FieldSlice:
         return npir.FieldSlice(
             name=node.name,
@@ -54,7 +53,7 @@ class ScalarsToTemporaries(eve.NodeTranslator):
         )
 
     def visit_HorizontalBlock(
-        self, node: npir.HorizontalBlock, *, temps_from_scalars: Dict[str, Temporary]
+        self, node: npir.HorizontalBlock, *, temps_from_scalars: dict[str, Temporary]
     ) -> npir.HorizontalBlock:
         for decl in node.declarations:
             if decl.name not in temps_from_scalars:
@@ -76,7 +75,7 @@ class ScalarsToTemporaries(eve.NodeTranslator):
                 "The numpy backend currently assumes this is not the case."
             )
 
-        temps_from_scalars: Dict[str, Temporary] = {}
+        temps_from_scalars: dict[str, Temporary] = {}
 
         vertical_passes = self.visit(node.vertical_passes, temps_from_scalars=temps_from_scalars)
 

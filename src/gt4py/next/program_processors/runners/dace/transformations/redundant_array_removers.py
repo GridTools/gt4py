@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import dace
 from dace import (
@@ -361,7 +362,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         #   do not have to adjust maps.
         # NOTE: In previous versions there was an ad hoc rule, to bypass the "full
         #   read rule". However, it caused problems, so it was removed.
-        # TODO: We have to improve this test, because sometimes the expressions are
+        # TODO(): We have to improve this test, because sometimes the expressions are
         #   so complex that without information about relations, such as
         #   `vertical_start <= vertical_end` it is not possible to prove this check.
         a1_range = dace_sbs.Range.from_array(a1_desc)

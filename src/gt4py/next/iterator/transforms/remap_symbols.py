@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Dict, Optional, Set
+from typing import Any, Optional
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor, SymbolTableTrait
 from gt4py.next.iterator import ir
@@ -17,10 +17,10 @@ class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
     # This pass preserves, but doesn't use the `type`, `recorded_shifts`, `domain` annex.
     PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "domain")
 
-    def visit_SymRef(self, node: ir.SymRef, *, symbol_map: Dict[str, ir.Node]):
+    def visit_SymRef(self, node: ir.SymRef, *, symbol_map: dict[str, ir.Node]):
         return symbol_map.get(str(node.id), node)
 
-    def visit_Lambda(self, node: ir.Lambda, *, symbol_map: Dict[str, ir.Node]):
+    def visit_Lambda(self, node: ir.Lambda, *, symbol_map: dict[str, ir.Node]):
         params = {str(p.id) for p in node.params}
         new_symbol_map = {k: v for k, v in symbol_map.items() if k not in params}
         return ir.Lambda(params=node.params, expr=self.visit(node.expr, symbol_map=new_symbol_map))
@@ -37,14 +37,14 @@ class RenameSymbols(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "domain")
 
     def visit_Sym(
-        self, node: ir.Sym, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
+        self, node: ir.Sym, *, name_map: dict[str, str], active: Optional[set[str]] = None
     ):
         if active and node.id in active:
             return ir.Sym(id=name_map.get(node.id, node.id))
         return node
 
     def visit_SymRef(
-        self, node: ir.SymRef, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
+        self, node: ir.SymRef, *, name_map: dict[str, str], active: Optional[set[str]] = None
     ):
         if active and node.id in active:
             new_ref = ir.SymRef(id=name_map.get(node.id, node.id))
@@ -53,7 +53,7 @@ class RenameSymbols(PreserveLocationVisitor, NodeTranslator):
         return node
 
     def generic_visit(  # type: ignore[override]
-        self, node: ir.Node, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
+        self, node: ir.Node, *, name_map: dict[str, str], active: Optional[set[str]] = None
     ):
         if isinstance(node, SymbolTableTrait):
             if active is None:

@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal, Mapping, Optional, Union
+from collections.abc import Mapping
+from typing import Final, Literal, Optional
 
 import dace
 
@@ -131,9 +132,7 @@ def filter_connectivity_types(
 
 def safe_replace_symbolic(
     val: dace.symbolic.SymbolicType,
-    symbol_mapping: Mapping[
-        Union[dace.symbolic.SymbolicType, str], Union[dace.symbolic.SymbolicType, str]
-    ],
+    symbol_mapping: Mapping[dace.symbolic.SymbolicType | str, dace.symbolic.SymbolicType | str],
 ) -> dace.symbolic.SymbolicType:
     """
     Replace free symbols in a dace symbolic expression, using `safe_replace()`

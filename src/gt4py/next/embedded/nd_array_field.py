@@ -117,7 +117,7 @@ class NdArrayField(
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
 
-    array_ns: ClassVar[ModuleType]  # TODO(havogt) introduce a NDArrayNamespace protocol
+    array_ns: ClassVar[ModuleType]  # TODO(havogt): introduce a NDArrayNamespace protocol
 
     @property
     def domain(self) -> common.Domain:
@@ -163,7 +163,7 @@ class NdArrayField(
         cls,
         data: (
             npt.ArrayLike | core_defs.NDArrayObject
-        ),  # TODO: NDArrayObject should be part of ArrayLike
+        ),  # TODO(): NDArrayObject should be part of ArrayLike
         /,
         *,
         domain: common.DomainLike,
@@ -784,7 +784,7 @@ NdArrayField.register_builtin_func(
     fbuiltins.power,  # type: ignore[attr-defined]
     NdArrayField.__pow__,
 )
-# TODO gamma
+# TODO(): gamma
 
 for name in (
     fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
@@ -814,7 +814,7 @@ def _compute_mask_slices(
     mask: core_defs.NDArrayObject,
 ) -> list[tuple[bool, slice]]:
     """Take a 1-dimensional mask and return a sequence of mappings from boolean values to slices."""
-    # TODO: does it make sense to upgrade this naive algorithm to numpy?
+    # TODO(): does it make sense to upgrade this naive algorithm to numpy?
     assert mask.ndim == 1
     cur = bool(mask[0].item())
     ind = 0
@@ -1080,7 +1080,7 @@ if jnp:
             index: common.AnyIndexSpec,
             value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
         ) -> None:
-            # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
+            # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index):.set(value):`
             raise NotImplementedError("'__setitem__' for JaxArrayField not yet implemented.")
 
     common._field.register(jnp.ndarray, JaxArrayField.from_array)

@@ -48,17 +48,14 @@ SessionDefinition = TypedDict(
     {"name": str, "paths": NotRequired[list[str]], "ignore-paths": NotRequired[list[str]]},
 )
 
-NoxSessionDefinition = TypedDict(
-    "NoxSessionDefinition",
-    {
-        "session": str,
-        "name": str,
-        "description": str,
-        "python": str,
-        "tags": list[str],
-        "call_spec": dict[str, str],
-    },
-)
+
+class NoxSessionDefinition(TypedDict):
+    session: str
+    name: str
+    description: str
+    python: str
+    tags: list[str]
+    call_spec: dict[str, str]
 
 
 cli = typer.Typer(no_args_is_help=True, name="nox-sessions", help=__doc__)

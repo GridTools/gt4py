@@ -208,9 +208,7 @@ class SuiteMeta(type):
             if test["suite"] == cls_name:
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
-                name += "".join(
-                    "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
-                )
+                name += "".join(f"_{key}_{value.name}" for key, value in test["dtypes"].items())
 
                 marks = test["marks"].copy()
                 if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
@@ -242,9 +240,7 @@ class SuiteMeta(type):
             if test["suite"] == cls_name:
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
-                name += "".join(
-                    "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
-                )
+                name += "".join(f"_{key}_{value.name}" for key, value in test["dtypes"].items())
 
                 marks = test["marks"].copy()
                 if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
@@ -273,9 +269,7 @@ class SuiteMeta(type):
         missing_members = cls.required_members - cls_dict.keys()
         if len(missing_members) > 0:
             raise TypeError(
-                "Missing {missing} required members in '{name}' definition".format(
-                    missing=missing_members, name=cls_name
-                )
+                f"Missing {missing_members} required members in '{cls_name}' definition"
             )
         # Check class dict
         domain_range = cls_dict["domain_range"]
@@ -309,7 +303,7 @@ class SuiteMeta(type):
         backends = [pytest.param(b) if isinstance(b, str) else b for b in backends]
         for b in backends:
             if b.values[0] not in gt_backend.REGISTRY.names:
-                raise ValueError("backend '{backend}' not supported".format(backend=b))
+                raise ValueError(f"backend '{b}' not supported")
 
         # Check definition and validation functions
         if not isinstance(cls_dict["definition"], types.FunctionType):
@@ -602,7 +596,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                     rtol=RTOL,
                     atol=ATOL,
                     equal_nan=EQUAL_NAN,
-                    err_msg="Wrong data in output field '{name}'".format(name=name),
+                    err_msg=f"Wrong data in output field '{name}'",
                 )
 
     @classmethod

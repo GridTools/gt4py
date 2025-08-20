@@ -86,4 +86,4 @@ def test_fo_type_deduction_error():
     assert exc_info.value.location.end_column == 33
 
 
-# TODO: test program type deduction?
+# TODO(): test program type deduction?

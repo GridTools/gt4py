@@ -7,12 +7,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import copy
 
-# TODO: test failure when something is not typed after inference is run
-# TODO: test lift with no args
-# TODO: lambda function that is not called
-# TODO: partially applied function in a let
-# TODO: function calling itself should fail
-# TODO: lambda function called with different argument types
+# TODO(): test failure when something is not typed after inference is run
+# TODO(): test lift with no args
+# TODO(): lambda function that is not called
+# TODO(): partially applied function in a let
+# TODO(): function calling itself should fail
+# TODO(): lambda function called with different argument types
 
 import pytest
 
@@ -132,8 +132,8 @@ def expression_test_cases():
         ),
         # cast
         (im.cast_(1, int_type), int_type),
-        # TODO: lift
-        # TODO: scan
+        # TODO(): lift
+        # TODO(): scan
         # map
         (
             im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.ref("b", int_list_type)),

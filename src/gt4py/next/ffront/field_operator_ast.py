@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar, Union
+from typing import Any, Generic, TypeVar
 
 from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait
@@ -46,7 +46,7 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 #
 class Symbol(LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]
-    type: Union[SymbolT, ts.DeferredType]  # A003
+    type: SymbolT | ts.DeferredType  # A003
     namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
         dialect_ast_enums.Namespace.LOCAL
     )
@@ -77,7 +77,7 @@ class Name(Expr):
 
 
 class Constant(Expr):
-    value: Any  # TODO: be more specific
+    value: Any  # TODO(): be more specific
 
 
 class Subscript(Expr):
@@ -151,11 +151,11 @@ class Stmt(LocatedNode): ...
 
 
 class Starred(Expr):
-    id: Union[FieldSymbol, TupleSymbol, ScalarSymbol]
+    id: FieldSymbol | TupleSymbol | ScalarSymbol
 
 
 class Assign(Stmt):
-    target: Union[FieldSymbol, TupleSymbol, ScalarSymbol]
+    target: FieldSymbol | TupleSymbol | ScalarSymbol
     value: Expr
 
 
@@ -196,13 +196,13 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
     params: list[DataSymbol]
     body: BlockStmt
     closure_vars: list[Symbol]
-    type: Union[ts.FunctionType, ts.DeferredType] = ts.DeferredType(constraint=ts.FunctionType)
+    type: ts.FunctionType | ts.DeferredType = ts.DeferredType(constraint=ts.FunctionType)
 
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]
     definition: FunctionDefinition
-    type: Union[ts_ffront.FieldOperatorType, ts.DeferredType] = ts.DeferredType(
+    type: ts_ffront.FieldOperatorType | ts.DeferredType = ts.DeferredType(
         constraint=ts_ffront.FieldOperatorType
     )
 
@@ -213,6 +213,6 @@ class ScanOperator(LocatedNode, SymbolTableTrait):
     forward: Constant
     init: Constant
     definition: FunctionDefinition  # scan pass
-    type: Union[ts_ffront.ScanOperatorType, ts.DeferredType] = ts.DeferredType(
+    type: ts_ffront.ScanOperatorType | ts.DeferredType = ts.DeferredType(
         constraint=ts_ffront.ScanOperatorType
     )

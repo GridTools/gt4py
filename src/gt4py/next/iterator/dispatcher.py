@@ -7,10 +7,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
-from typing import Any, Callable, Dict, List
+from collections.abc import Callable
+from typing import Any
 
 
-# TODO test
+# TODO(): test
 
 
 class _fun_dispatcher:
@@ -38,8 +39,8 @@ class _fun_dispatcher:
 
 class Dispatcher:
     def __init__(self) -> None:
-        self._funs: Dict[str, Dict[str, Callable]] = {}
-        self.key_stack: List[str] = []
+        self._funs: dict[str, dict[str, Callable]] = {}
+        self.key_stack: list[str] = []
 
     @property
     def key(self):

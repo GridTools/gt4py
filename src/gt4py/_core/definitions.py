@@ -71,7 +71,7 @@ uint64 = np.uint64
 float32 = np.float32
 float64 = np.float64
 
-BoolScalar: TypeAlias = Union[bool_, bool]
+BoolScalar: TypeAlias = bool_ | bool
 BoolT = TypeVar("BoolT", bound=BoolScalar)
 BOOL_TYPES: Final[Tuple[type, ...]] = cast(
     Tuple[type, ...],
@@ -79,7 +79,7 @@ BOOL_TYPES: Final[Tuple[type, ...]] = cast(
 )
 
 
-IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
+IntScalar: TypeAlias = int8 | int16 | int32 | int64 | int
 IntT = TypeVar("IntT", bound=IntScalar)
 INT_TYPES: Final[Tuple[type, ...]] = cast(
     Tuple[type, ...],
@@ -87,7 +87,7 @@ INT_TYPES: Final[Tuple[type, ...]] = cast(
 )
 
 
-UnsignedIntScalar: TypeAlias = Union[uint8, uint16, uint32, uint64]
+UnsignedIntScalar: TypeAlias = uint8 | uint16 | uint32 | uint64
 UnsignedIntT = TypeVar("UnsignedIntT", bound=UnsignedIntScalar)
 UINT_TYPES: Final[Tuple[type, ...]] = cast(
     Tuple[type, ...],
@@ -95,12 +95,12 @@ UINT_TYPES: Final[Tuple[type, ...]] = cast(
 )
 
 
-IntegralScalar: TypeAlias = Union[IntScalar, UnsignedIntScalar]
+IntegralScalar: TypeAlias = IntScalar | UnsignedIntScalar
 IntegralT = TypeVar("IntegralT", bound=IntegralScalar)
 INTEGRAL_TYPES: Final[Tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
 
 
-FloatingScalar: TypeAlias = Union[float32, float64, float]
+FloatingScalar: TypeAlias = float32 | float64 | float
 FloatingT = TypeVar("FloatingT", bound=FloatingScalar)
 FLOAT_TYPES: Final[Tuple[type, ...]] = cast(
     Tuple[type, ...],
@@ -109,7 +109,7 @@ FLOAT_TYPES: Final[Tuple[type, ...]] = cast(
 
 
 #: Type alias for all scalar types supported by GT4Py
-Scalar: TypeAlias = Union[BoolScalar, IntegralScalar, FloatingScalar]
+Scalar: TypeAlias = BoolScalar | IntegralScalar | FloatingScalar
 ScalarT = TypeVar("ScalarT", bound=Scalar)
 SCALAR_TYPES: Final[tuple[type, ...]] = (*BOOL_TYPES, *INTEGRAL_TYPES, *FLOAT_TYPES)
 
@@ -140,7 +140,7 @@ def is_positive_integral_type(integral_type: type) -> TypeGuard[Type[PositiveInt
 
 TensorShape: TypeAlias = Sequence[
     int
-]  # TODO(egparedes) figure out if PositiveIntegral can be made to work
+]  # TODO(egparedes): figure out if PositiveIntegral can be made to work
 
 
 def is_valid_tensor_shape(value: Sequence[IntegralScalar]) -> TypeGuard[TensorShape]:

@@ -28,7 +28,7 @@ class _TypeDescriptor:
             elif isinstance(a, _TypeDescriptor):
                 arg_names.append(repr(a))
         args = "[{}]".format(", ".join(arg_names)) if len(arg_names) > 0 else ""
-        return "{}{}".format(self.name, args)
+        return f"{self.name}{args}"
 
     @property
     def validator(self):
@@ -92,9 +92,7 @@ def _make_sequence_validator(type_list, container_types=(list, tuple)):
             assert isinstance([item_validator(instance, attribute, v) for v in value], list)
         except Exception as ex:
             raise ValueError(
-                "Expr ({value}) does not match the '{name}' specification".format(
-                    value=value, name=attribute.name
-                )
+                f"Expr ({value}) does not match the '{attribute.name}' specification"
             ) from ex
 
     return _is_sequence_of_validator
@@ -121,9 +119,7 @@ def _make_dict_validator(type_list):
             )
         except Exception as ex:
             raise ValueError(
-                "Expr ({value}) does not match the '{name}' specification".format(
-                    value=value, name=attribute.name
-                )
+                f"Expr ({value}) does not match the '{attribute.name}' specification"
             ) from ex
 
     return _is_dict_of_validator
@@ -146,9 +142,7 @@ def _make_tuple_validator(type_list):
             )
         except Exception as ex:
             raise ValueError(
-                "Expr ({value}) does not match the '{name}' specification".format(
-                    value=value, name=attribute.name
-                )
+                f"Expr ({value}) does not match the '{attribute.name}' specification"
             ) from ex
 
     return _is_tuple_of_validator
@@ -171,11 +165,7 @@ def _make_union_validator(type_list):
             passed = False
 
         if not passed:
-            raise ValueError(
-                "Expr ({value}) does not match the '{name}' specification".format(
-                    value=value, name=attribute.name
-                )
-            )
+            raise ValueError(f"Expr ({value}) does not match the '{attribute.name}' specification")
 
     return _is_union_of_validator
 
@@ -197,10 +187,10 @@ def _make_nothing_validator(type_list):
 Any = _TypeDescriptor("Any", None, _make_any_validator, typing.Any)
 
 Sequence = _GenericTypeDescriptor("Sequence", 1, _make_sequence_validator, typing.Sequence)
-List = _GenericTypeDescriptor("List", 1, _make_list_validator, typing.List)
-Dict = _GenericTypeDescriptor("Dict", 2, _make_dict_validator, typing.Dict)
-Set = _GenericTypeDescriptor("Set", 1, _make_set_validator, typing.Set)
-Tuple = _GenericTypeDescriptor("Tuple", (1, None), _make_tuple_validator, typing.Tuple)
+List = _GenericTypeDescriptor("List", 1, _make_list_validator, list)
+Dict = _GenericTypeDescriptor("Dict", 2, _make_dict_validator, dict)
+Set = _GenericTypeDescriptor("Set", 1, _make_set_validator, set)
+Tuple = _GenericTypeDescriptor("Tuple", (1, None), _make_tuple_validator, tuple)
 Union = _GenericTypeDescriptor("Union", (2, None), _make_union_validator, typing.Union)
 
 Optional = _GenericTypeDescriptor(
@@ -222,7 +212,7 @@ def attribute(of, optional=False, **kwargs):
         attr_type_hint = of
 
     else:
-        raise ValueError("Invalid attribute type '{}'".format(of))
+        raise ValueError(f"Invalid attribute type '{of}'")
 
     if optional:
         attr_validator = attr.validators.optional(attr_validator)
@@ -263,9 +253,7 @@ def attribclass(cls_or_none=None, **kwargs):
         for name, member in extra_members.items():
             if name in cls.__dict__.keys():
                 raise ValueError(
-                    "Name clashing with a existing '{name}' member of the decorated class ".format(
-                        name=name
-                    )
+                    f"Name clashing with a existing '{name}' member of the decorated class "
                 )
             setattr(cls, name, member)
 

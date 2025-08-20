@@ -9,8 +9,8 @@
 import ast
 import textwrap
 import typing
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.extended_typing import Any, Generic, TypeVar

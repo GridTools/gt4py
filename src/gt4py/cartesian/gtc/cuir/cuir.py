@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
@@ -57,7 +57,7 @@ class IJCacheAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
             raise ValueError("No k-offset allowed")
 
     @datamodels.validator("data_index")
-    def no_additional_dimensions(self, attribute: datamodels.Attribute, value: List[int]) -> None:
+    def no_additional_dimensions(self, attribute: datamodels.Attribute, value: list[int]) -> None:
         if len(value) > 0:
             raise ValueError("IJ-cached higher-dimensional fields are not supported")
 
@@ -67,7 +67,7 @@ class KCacheAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
 
     @datamodels.validator("offset")
     def has_no_ij_offset(
-        self, attribute: datamodels.Attribute, value: Union[CartesianOffset, VariableKOffset]
+        self, attribute: datamodels.Attribute, value: CartesianOffset | VariableKOffset
     ) -> None:
         offsets = value.to_dict()
         if not offsets["i"] == offsets["j"] == 0:
@@ -75,13 +75,13 @@ class KCacheAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
 
     @datamodels.validator("offset")
     def not_variable_offset(
-        self, attribute: datamodels.Attribute, value: Union[CartesianOffset, VariableKOffset]
+        self, attribute: datamodels.Attribute, value: CartesianOffset | VariableKOffset
     ) -> None:
         if isinstance(value, VariableKOffset):
             raise ValueError("Cannot k-cache a variable k offset")
 
     @datamodels.validator("data_index")
-    def no_additional_dimensions(self, attribute: datamodels.Attribute, value: List[int]) -> None:
+    def no_additional_dimensions(self, attribute: datamodels.Attribute, value: list[int]) -> None:
         if len(value) > 0:
             raise ValueError("K-cached higher-dimensional fields are not supported")
 
@@ -94,7 +94,7 @@ class AssignStmt(
 
 class MaskStmt(Stmt):
     mask: Expr
-    body: List[Stmt]
+    body: list[Stmt]
 
 
 class While(common.While[Stmt, Expr], Stmt):
@@ -132,8 +132,8 @@ class Decl(LocNode):
 
 
 class FieldDecl(Decl):
-    dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    dimensions: tuple[bool, bool, bool]
+    data_dims: tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):
@@ -145,7 +145,7 @@ class LocalScalar(Decl):
 
 
 class Temporary(Decl):
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    data_dims: tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class Positional(Decl):
@@ -154,15 +154,15 @@ class Positional(Decl):
 
 
 class IJExtent(LocNode):
-    i: Tuple[int, int]
-    j: Tuple[int, int]
+    i: tuple[int, int]
+    j: tuple[int, int]
 
     @classmethod
     def zero(cls) -> IJExtent:
         return cls(i=(0, 0), j=(0, 0))
 
     @classmethod
-    def from_offset(cls, offset: Union[CartesianOffset, VariableKOffset]) -> IJExtent:
+    def from_offset(cls, offset: CartesianOffset | VariableKOffset) -> IJExtent:
         if isinstance(offset, VariableKOffset):
             return cls(i=(0, 0), j=(0, 0))
         return cls(i=(offset.i, offset.i), j=(offset.j, offset.j))
@@ -181,14 +181,14 @@ class IJExtent(LocNode):
 
 
 class KExtent(LocNode):
-    k: Tuple[int, int]
+    k: tuple[int, int]
 
     @classmethod
     def zero(cls) -> KExtent:
         return cls(k=(0, 0))
 
     @classmethod
-    def from_offset(cls, offset: Union[CartesianOffset, VariableKOffset]) -> KExtent:
+    def from_offset(cls, offset: CartesianOffset | VariableKOffset) -> KExtent:
         MAX_OFFSET = 1000
         if isinstance(offset, VariableKOffset):
             return cls(k=(-MAX_OFFSET, MAX_OFFSET))
@@ -207,29 +207,29 @@ class KCacheDecl(Decl):
 
 
 class HorizontalExecution(LocNode, eve.SymbolTableTrait):
-    body: List[Stmt]
-    declarations: List[LocalScalar]
+    body: list[Stmt]
+    declarations: list[LocalScalar]
     extent: Optional[IJExtent] = None
 
 
 class VerticalLoopSection(LocNode):
     start: AxisBound
     end: AxisBound
-    horizontal_executions: List[HorizontalExecution]
+    horizontal_executions: list[HorizontalExecution]
 
 
 class VerticalLoop(LocNode):
     loop_order: LoopOrder
-    sections: List[VerticalLoopSection]
-    ij_caches: List[IJCacheDecl]
-    k_caches: List[KCacheDecl]
+    sections: list[VerticalLoopSection]
+    ij_caches: list[IJCacheDecl]
+    k_caches: list[KCacheDecl]
 
 
 class Kernel(LocNode):
-    vertical_loops: List[VerticalLoop]
+    vertical_loops: list[VerticalLoop]
 
     @datamodels.validator("vertical_loops")
-    def check_loops(self, attribute: datamodels.Attribute, value: List[VerticalLoop]) -> None:
+    def check_loops(self, attribute: datamodels.Attribute, value: list[VerticalLoop]) -> None:
         if len(value) < 1:
             raise ValueError("At least one loop required")
         parallel = [loop.loop_order == LoopOrder.PARALLEL for loop in value]
@@ -237,7 +237,7 @@ class Kernel(LocNode):
             raise ValueError("Mixed k-parallelism in kernel")
 
 
-def axis_size_decls() -> List[ScalarDecl]:
+def axis_size_decls() -> list[ScalarDecl]:
     return [
         ScalarDecl(name="i_size", dtype=common.DataType.INT32),
         ScalarDecl(name="j_size", dtype=common.DataType.INT32),
@@ -247,8 +247,8 @@ def axis_size_decls() -> List[ScalarDecl]:
 
 class Program(LocNode, eve.ValidatedSymbolTableTrait):
     name: str
-    params: List[Decl]
-    positionals: List[Positional]
-    temporaries: List[Temporary]
-    kernels: List[Kernel]
-    axis_sizes: List[ScalarDecl] = eve.field(default_factory=axis_size_decls)
+    params: list[Decl]
+    positionals: list[Positional]
+    temporaries: list[Temporary]
+    kernels: list[Kernel]
+    axis_sizes: list[ScalarDecl] = eve.field(default_factory=axis_size_decls)

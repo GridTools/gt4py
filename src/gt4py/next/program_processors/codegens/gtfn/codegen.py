@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Collection, Final, Union
+from collections.abc import Collection
+from typing import Any, Final
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
@@ -160,7 +161,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
-    )  # TODO capture
+    )  # TODO(): capture
 
     Backend = as_fmt("make_backend(backend, {domain})")
 
@@ -250,7 +251,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "auto {id} = gridtools::sid::shift_sid_origin(gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {tmp_sizes}), {shifts});"
     )
 
-    def visit_Program(self, node: gtfn_ir.Program, **kwargs: Any) -> Union[str, Collection[str]]:
+    def visit_Program(self, node: gtfn_ir.Program, **kwargs: Any) -> str | Collection[str]:
         self.is_cartesian = node.grid_type == common.GridType.CARTESIAN
         self.user_defined_function_ids = list(
             str(fundef.id) for fundef in node.function_definitions

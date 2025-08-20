@@ -11,20 +11,8 @@ from __future__ import annotations
 import enum
 import functools
 import typing
-from typing import (
-    Any,
-    ClassVar,
-    Dict,
-    Final,
-    Generic,
-    List,
-    Mapping,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from collections.abc import Mapping
+from typing import Any, ClassVar, Final, Generic, Optional, TypeVar
 
 import numpy as np
 
@@ -186,7 +174,7 @@ class NativeFunction(eve.StrEnum):
     FLOAT32 = "float32"
     FLOAT64 = "float64"
 
-    IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
+    IR_OP_TO_NUM_ARGS: ClassVar[dict[NativeFunction, int]]
 
     @property
     def arity(self) -> int:
@@ -273,15 +261,15 @@ class Stmt(LocNode):
 
 def verify_condition_is_boolean(parent_node_cls: datamodels.DataModel, cond: Expr) -> None:
     if cond.dtype and cond.dtype is not DataType.BOOL:
-        raise ValueError("Condition in `{}` must be boolean.".format(type(parent_node_cls)))
+        raise ValueError(f"Condition in `{type(parent_node_cls)}` must be boolean.")
 
 
 def verify_and_get_common_dtype(
-    node_cls: Type[datamodels.DataModel], exprs: List[Expr], *, strict: bool = True
+    node_cls: type[datamodels.DataModel], exprs: list[Expr], *, strict: bool = True
 ) -> Optional[DataType]:
     assert len(exprs) > 0
     if all(e.dtype is not DataType.AUTO for e in exprs):
-        dtypes: List[DataType] = [e.dtype for e in exprs]  # guaranteed to be not None
+        dtypes: list[DataType] = [e.dtype for e in exprs]  # guaranteed to be not None
         dtype = dtypes[0]
         if strict:
             if all(dt == dtype for dt in dtypes):
@@ -306,9 +294,9 @@ def compute_kind(*values: Expr) -> ExprKind:
 
 
 class Literal(eve.Node):
-    # TODO(havogt) reconsider if `str` is a good representation for value,
+    # TODO(havogt): reconsider if `str` is a good representation for value,
     # maybe it should be Union[float,int,str] etc?
-    value: Union[BuiltInLiteral, str]
+    value: BuiltInLiteral | str
     dtype: DataType
     kind: ExprKind = ExprKind.SCALAR
 
@@ -328,14 +316,14 @@ class CartesianOffset(eve.Node):
     def zero(cls) -> CartesianOffset:
         return cls(i=0, j=0, k=0)
 
-    def to_dict(self) -> Dict[str, int]:
+    def to_dict(self) -> dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
 class VariableKOffset(eve.GenericNode, Generic[ExprT]):
     k: ExprT
 
-    def to_dict(self) -> Dict[str, Optional[int]]:
+    def to_dict(self) -> dict[str, Optional[int]]:
         return {"i": 0, "j": 0, "k": None}
 
     @datamodels.validator("k")
@@ -352,8 +340,8 @@ class ScalarAccess(LocNode):
 
 class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
     name: eve.Coerced[eve.SymbolRef]
-    offset: Union[CartesianOffset, VariableKOffsetT]
-    data_index: List[ExprT] = eve.field(default_factory=list)
+    offset: CartesianOffset | VariableKOffsetT
+    data_index: list[ExprT] = eve.field(default_factory=list)
     kind: ExprKind = ExprKind.FIELD
 
     @classmethod
@@ -362,7 +350,7 @@ class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
 
     @datamodels.validator("data_index")
     def data_index_exprs_are_int(self, attribute: datamodels.Attribute, value: Any) -> None:
-        value = typing.cast(List[Expr], value)
+        value = typing.cast(list[Expr], value)
         if value and any(
             index.dtype is not DataType.AUTO and not index.dtype.isinteger() for index in value
         ):
@@ -370,7 +358,7 @@ class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
 
 
 class BlockStmt(eve.GenericNode, eve.SymbolTableTrait, Generic[StmtT]):
-    body: List[StmtT]
+    body: list[StmtT]
 
 
 class IfStmt(eve.GenericNode, Generic[StmtT, ExprT]):
@@ -397,7 +385,7 @@ class While(eve.GenericNode, Generic[StmtT, ExprT]):
     """
 
     cond: ExprT
-    body: List[StmtT]
+    body: list[StmtT]
 
     @datamodels.validator("cond")
     def condition_is_boolean(self, attribute: datamodels.Attribute, value: Expr) -> None:
@@ -414,7 +402,7 @@ def _make_root_validator(impl: datamodels.RootValidator) -> datamodels.RootValid
 
 
 def assign_stmt_dtype_validation(*, strict: bool) -> datamodels.RootValidator:
-    def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
+    def _impl(cls: type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         assert isinstance(instance, AssignStmt)
         verify_and_get_common_dtype(cls, [instance.left, instance.right], strict=strict)
 
@@ -433,17 +421,17 @@ class UnaryOp(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     @classmethod
-    def dtype_propagation(cls: Type[UnaryOp], instance: UnaryOp) -> None:
+    def dtype_propagation(cls: type[UnaryOp], instance: UnaryOp) -> None:
         instance.dtype = instance.expr.dtype  # type: ignore[attr-defined]
 
     @datamodels.root_validator
     @classmethod
-    def kind_propagation(cls: Type[UnaryOp], instance: UnaryOp) -> None:
+    def kind_propagation(cls: type[UnaryOp], instance: UnaryOp) -> None:
         instance.kind = instance.expr.kind  # type: ignore[attr-defined]
 
     @datamodels.root_validator
     @classmethod
-    def op_to_dtype_check(cls: Type[UnaryOp], instance: UnaryOp) -> None:
+    def op_to_dtype_check(cls: type[UnaryOp], instance: UnaryOp) -> None:
         if instance.expr.dtype:
             if instance.op == UnaryOperator.NOT:
                 if not instance.expr.dtype == DataType.BOOL:
@@ -464,18 +452,18 @@ class BinaryOp(eve.GenericNode, Generic[ExprT]):
     """
 
     # consider parametrizing on op
-    op: Union[ArithmeticOperator, ComparisonOperator, LogicalOperator]
+    op: ArithmeticOperator | ComparisonOperator | LogicalOperator
     left: ExprT
     right: ExprT
 
     @datamodels.root_validator
     @classmethod
-    def kind_propagation(cls: Type[BinaryOp], instance: BinaryOp) -> None:
+    def kind_propagation(cls: type[BinaryOp], instance: BinaryOp) -> None:
         instance.kind = compute_kind(instance.left, instance.right)  # type: ignore[attr-defined]
 
 
 def binary_op_dtype_propagation(*, strict: bool) -> datamodels.RootValidator:
-    def _impl(cls: Type[BinaryOp], instance: BinaryOp) -> None:
+    def _impl(cls: type[BinaryOp], instance: BinaryOp) -> None:
         common_dtype = verify_and_get_common_dtype(
             cls, [instance.left, instance.right], strict=strict
         )
@@ -518,12 +506,12 @@ class TernaryOp(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     @classmethod
-    def kind_propagation(cls: Type[TernaryOp], instance: TernaryOp) -> None:
+    def kind_propagation(cls: type[TernaryOp], instance: TernaryOp) -> None:
         instance.kind = compute_kind(instance.true_expr, instance.false_expr)  # type: ignore[attr-defined]
 
 
 def ternary_op_dtype_propagation(*, strict: bool) -> datamodels.RootValidator:
-    def _impl(cls: Type[TernaryOp], instance: TernaryOp) -> None:
+    def _impl(cls: type[TernaryOp], instance: TernaryOp) -> None:
         common_dtype = verify_and_get_common_dtype(
             cls, [instance.true_expr, instance.false_expr], strict=strict
         )
@@ -539,17 +527,17 @@ class Cast(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     @classmethod
-    def kind_propagation(cls: Type[Cast], instance: Cast) -> None:
+    def kind_propagation(cls: type[Cast], instance: Cast) -> None:
         instance.kind = compute_kind(instance.expr)  # type: ignore[attr-defined]
 
 
 class NativeFuncCall(eve.GenericNode, Generic[ExprT]):
     func: NativeFunction
-    args: List[ExprT]
+    args: list[ExprT]
 
     @datamodels.root_validator
     @classmethod
-    def arity_check(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
+    def arity_check(cls: type[NativeFuncCall], instance: NativeFuncCall) -> None:
         if instance.func.arity != len(instance.args):
             raise ValueError(
                 f"{instance.func} accepts {instance.func.arity} arguments, {len(instance.args)} where passed."
@@ -557,7 +545,7 @@ class NativeFuncCall(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     @classmethod
-    def kind_propagation(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
+    def kind_propagation(cls: type[NativeFuncCall], instance: NativeFuncCall) -> None:
         instance.kind = compute_kind(*instance.args)  # type: ignore[attr-defined]
 
 
@@ -573,7 +561,7 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
             return DataType.FLOAT64
         raise NotImplementedError(f"Found unknown precision specification {func}")
 
-    def _impl(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
+    def _impl(cls: type[NativeFuncCall], instance: NativeFuncCall) -> None:
         if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
             instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
         elif instance.func in (
@@ -593,8 +581,8 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
 
 
 def validate_dtype_is_set() -> datamodels.RootValidator:
-    def _impl(cls: Type[ExprT], instance: ExprT) -> None:
-        dtype_nodes: List[ExprT] = []
+    def _impl(cls: type[ExprT], instance: ExprT) -> None:
+        dtype_nodes: list[ExprT] = []
         for v in utils.flatten(datamodels.astuple(instance)):
             if isinstance(v, eve.Node):
                 dtype_nodes.extend(v.walk_values().if_hasattr("dtype"))
@@ -605,18 +593,18 @@ def validate_dtype_is_set() -> datamodels.RootValidator:
                 nodes_without_dtype.append(node)
 
         if len(nodes_without_dtype) > 0:
-            raise ValueError("Nodes without dtype detected {}".format(nodes_without_dtype))
+            raise ValueError(f"Nodes without dtype detected {nodes_without_dtype}")
 
     return _make_root_validator(_impl)
 
 
 class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
-    def __init__(self, vertical_loop_type: Type[eve.Node], decl_type: Type[eve.Node]) -> None:
+    def __init__(self, vertical_loop_type: type[eve.Node], decl_type: type[eve.Node]) -> None:
         if vertical_loop_type.__annotations__.get("loop_order") is not LoopOrder:
             raise ValueError(
                 f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
             )
-        if not decl_type.__annotations__.get("dimensions") == Tuple[bool, bool, bool]:
+        if not decl_type.__annotations__.get("dimensions") == tuple[bool, bool, bool]:
             raise ValueError(
                 f"Field decl type {decl_type} must have a `dimensions` "
                 "attribute of type `Tuple[bool, bool, bool]`."
@@ -632,11 +620,11 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
         self.generic_visit(node, loop_order=loop_order, **kwargs)
 
     def visit_AssignStmt(
-        self, node: AssignStmt, *, loop_order: LoopOrder, symtable: Dict[str, Any], **kwargs: Any
+        self, node: AssignStmt, *, loop_order: LoopOrder, symtable: dict[str, Any], **kwargs: Any
     ) -> None:
         decl = symtable.get(node.left.name, None)
         if decl is None:
-            raise ValueError("Symbol {} not found.".format(node.left.name))
+            raise ValueError(f"Symbol {node.left.name} not found.")
         if not isinstance(decl, self.decl_type):
             return None
 
@@ -649,17 +637,17 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
             )
         return None
 
-    def _allowed_flags(self, loop_order: LoopOrder) -> List[Tuple[bool, bool, bool]]:
+    def _allowed_flags(self, loop_order: LoopOrder) -> list[tuple[bool, bool, bool]]:
         allowed_flags = [(True, True, True)]  # ijk always allowed
         if loop_order is not LoopOrder.PARALLEL:
             allowed_flags.append((True, True, False))  # ij only allowed in FORWARD and BACKWARD
         return allowed_flags
 
 
-# TODO(ricoh) consider making gtir.Decl & oir.Decl common and / or adding a VerticalLoop baseclass
-# TODO(ricoh) in common instead of passing type arguments
+# TODO(ricoh): consider making gtir.Decl & oir.Decl common and / or adding a VerticalLoop baseclass
+# TODO(ricoh): in common instead of passing type arguments
 def validate_lvalue_dims(
-    vertical_loop_type: Type[eve.Node], decl_type: Type[eve.Node]
+    vertical_loop_type: type[eve.Node], decl_type: type[eve.Node]
 ) -> datamodels.RootValidator:
     """
     Validate lvalue dimensions using the root node symbol table.
@@ -687,7 +675,7 @@ def validate_lvalue_dims(
         `Tuple[bool, bool, bool]` in an attribute named `dimensions`.
     """
 
-    def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
+    def _impl(cls: type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         _LvalueDimsValidator(vertical_loop_type, decl_type).visit(instance)
 
     return _make_root_validator(_impl)
@@ -772,7 +760,7 @@ class HorizontalInterval(eve.Node):
 
     @datamodels.root_validator
     @classmethod
-    def check_start_before_end(cls: Type[HorizontalInterval], instance: HorizontalInterval) -> None:
+    def check_start_before_end(cls: type[HorizontalInterval], instance: HorizontalInterval) -> None:
         if instance.start and instance.end and not (instance.start <= instance.end):
             raise ValueError(
                 f"End ({instance.end}) is not after or equal to start ({instance.start})"
@@ -816,7 +804,7 @@ class HorizontalMask(LocNode):
     j: HorizontalInterval
 
     @property
-    def intervals(self) -> Tuple[HorizontalInterval, HorizontalInterval]:
+    def intervals(self) -> tuple[HorizontalInterval, HorizontalInterval]:
         return (self.i, self.j)
 
 
@@ -824,7 +812,7 @@ class HorizontalRestriction(eve.GenericNode, Generic[StmtT]):
     """A specialization of the horizontal space."""
 
     mask: HorizontalMask
-    body: List[StmtT]
+    body: list[StmtT]
 
 
 def data_type_to_typestr(dtype: DataType) -> str:
@@ -849,21 +837,17 @@ def data_type_to_typestr(dtype: DataType) -> str:
 # different operators use the same key: UnaryOperator.POS == BinaryOperator.ADD
 OP_TO_UFUNC_NAME: Final[
     Mapping[
-        Union[
-            Type[UnaryOperator],
-            Type[ArithmeticOperator],
-            Type[ComparisonOperator],
-            Type[LogicalOperator],
-            Type[NativeFunction],
-        ],
+        type[UnaryOperator]
+        | type[ArithmeticOperator]
+        | type[ComparisonOperator]
+        | type[LogicalOperator]
+        | type[NativeFunction],
         Mapping[
-            Union[
-                UnaryOperator,
-                ArithmeticOperator,
-                ComparisonOperator,
-                LogicalOperator,
-                NativeFunction,
-            ],
+            UnaryOperator
+            | ArithmeticOperator
+            | ComparisonOperator
+            | LogicalOperator
+            | NativeFunction,
             str,
         ],
     ]
@@ -929,9 +913,7 @@ OP_TO_UFUNC_NAME: Final[
 
 
 def op_to_ufunc(
-    op: Union[
-        UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
-    ],
+    op: UnaryOperator | ArithmeticOperator | ComparisonOperator | LogicalOperator | NativeFunction,
 ) -> np.ufunc:
     if not isinstance(
         op, (UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction)
@@ -942,7 +924,7 @@ def op_to_ufunc(
     return getattr(ufuncs, OP_TO_UFUNC_NAME[type(op)][op])
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def typestr_to_data_type(typestr: str) -> DataType:
     if not isinstance(typestr, str) or len(typestr) < 3 or not typestr[2:].isnumeric():
         return DataType.INVALID

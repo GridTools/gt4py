@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import collections
-from typing import Any, Dict
+from typing import Any
 
 from gt4py import eve
 from gt4py.cartesian.definitions import AccessKind
@@ -19,7 +19,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizonta
 
 class AccessKindComputer(eve.NodeVisitor):
     def _visit_Access(
-        self, name, *, access: Dict[str, AccessKind], kind: AccessKind, **kwargs: Any
+        self, name, *, access: dict[str, AccessKind], kind: AccessKind, **kwargs: Any
     ) -> None:
         if kind == AccessKind.WRITE and access.get(name, None) == AccessKind.READ:
             access[name] = AccessKind.READ_WRITE
@@ -56,12 +56,12 @@ class AccessKindComputer(eve.NodeVisitor):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, **kwargs: Any) -> None:
         self.generic_visit(node, horizontal_extent=kwargs["block_extents"][id(node)], **kwargs)
 
-    def visit_Stencil(self, node: oir.Stencil) -> Dict[str, AccessKind]:
-        access: Dict[str, AccessKind] = collections.defaultdict(lambda: AccessKind.NONE)
+    def visit_Stencil(self, node: oir.Stencil) -> dict[str, AccessKind]:
+        access: dict[str, AccessKind] = collections.defaultdict(lambda: AccessKind.NONE)
         block_extents = compute_horizontal_block_extents(node)
         self.generic_visit(node, access=access, block_extents=block_extents)
         return access
 
 
-def compute_access_kinds(stencil: oir.Stencil) -> Dict[str, AccessKind]:
+def compute_access_kinds(stencil: oir.Stencil) -> dict[str, AccessKind]:
     return AccessKindComputer().visit(stencil)

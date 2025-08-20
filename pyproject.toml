@@ -202,7 +202,7 @@ module = 'gt4py.*'
 
 [[tool.mypy.overrides]]
 # The following ignore_errors are only temporary.
-# TODO: Fix errors and enable these settings.
+# TODO(): Fix errors and enable these settings.
 disallow_incomplete_defs = false
 disallow_untyped_defs = false
 follow_imports = 'silent'
@@ -233,7 +233,7 @@ module = 'gt4py.eve.extended_typing'
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-# TODO: Make this false and fix errors
+# TODO(): Make this false and fix errors
 disallow_untyped_defs = false
 follow_imports = 'silent'
 module = 'gt4py.storage.*'
@@ -315,44 +315,51 @@ target-version = 'py310'
 docstring-code-format = true
 
 [tool.ruff.lint]
-# -- Rules set to be considered --
-# A: flake8-builtins
-# B: flake8-bugbear
-# C4: flake8-comprehensions
-# CPY: flake8-copyright
-# D: pydocstyle
-# DOC: pydoclint
-# E: pycodestyle
-# ERA: eradicate
-# F: Pyflakes
-# FA100: future-rewritable-type-annotation
-# FBT: flake8-boolean-trap
-# FLY: flynt
-# I: isort
-# ICN: flake8-import-conventions
-# ISC: flake8-implicit-str-concat
-# N: pep8-naming
-# NPY: NumPy-specific rules
-# PERF: Perflint
-# PGH: pygrep-hooks
-# PTH: flake8-use-pathlib
-# Q: flake8-quotes
-# RUF: Ruff-specific rules
-# SIM: flake8-simplify
-# T10: flake8-debugger
-# TD: flake8-todos
-# UP: pyupgrade
-# YTT: flake8-2020
 exclude = ['docs/**', "examples/**", "tests/**"]
 explicit-preview-rules = true
-extend-select = ["F822"]  # TODO(egparedes): remove when not longer in preview
 ignore = [
+  'PLR0913',
   'E501',  # [line-too-long]
   'B905',  # [zip-without-explicit-strict]  # TODO(egparedes): remove when possible
-  'TD003'  # [missing-todo-link]
+  'ISC001',  # [single-line-implicit-string-concatenation]
+  'TD003',  # [missing-todo-link]
+  'UP038'  # [non-pep604-isinstance]
 ]
 preview = true  # use only with explicit-preview-rules=true
-select = ['A', 'B', 'CPY', 'E', 'ERA', 'F', 'FA100', 'I', 'ISC', 'NPY', 'Q', 'RUF', 'T10', 'YTT']
+select = [
+  'A',  # flake8-builtins
+  'B',  # flake8-bugbear
+  # 'C4', #  flake8-comprehensions
+  'CPY',  # flake8-copyright
+  # 'D', #  pydocstyle
+  'DOC',  # pydoclint
+  'E',  # pycodestyle
+  'ERA',  # eradicate
+  'F',  # Pyflakes
+  'F822',  # [undefined-export] (preview)  # TODO(egparedes): remove when not longer in preview
+  'FA100',  # future-rewritable-type-annotation
+  # 'FBT',  # flake8-boolean-trap
+  'FLY',  # flynt
+  'I',  # isort
+  # 'ICN',  # flake8-import-conventions
+  'ISC',  # flake8-implicit-str-concat
+  # 'N',  # pep8-naming
+  'NPY',  # NumPy-specific rules
+  'PERF',  # Perflint
+  # 'PGH',  # pygrep-hooks
+  # 'PLC',  # Pylint-Convention
+  'PLE',  # Pylint-Error
+  # 'PLR',  # Pylint-Refactor
+  'PLW',  # Pylint-Warning
+  'PTH',  # flake8-use-pathlib
+  'Q',  # flake8-quotes
+  'RUF',  # Ruff-specific rules
+  # 'SIM',  # flake8-simplify
+  'T10',  # flake8-debugger
+  'TD',  # flake8-todos
+  'UP',  # pyupgrade
+  'YTT'  # flake8-2020
+]
 typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 

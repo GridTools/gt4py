@@ -34,7 +34,6 @@ from gt4py.eve.extended_typing import (
     Type,
     TypeAlias,
     TypeGuard,
-    Union,
 )
 
 
@@ -44,10 +43,7 @@ except ImportError:
     cp = None
 
 
-_NDBuffer: TypeAlias = Union[
-    # TODO: add `xtyping.Buffer` once we update typing_extensions
-    xtyping.ArrayInterface, xtyping.CUDAArrayInterface, xtyping.DLPackBuffer
-]
+_NDBuffer: TypeAlias = xtyping.ArrayInterface | xtyping.CUDAArrayInterface | xtyping.DLPackBuffer
 
 #: Tuple of positive integers encoding a permutation of the dimensions, such that
 #: layout_map[i] = j means that the i-th dimension of the tensor corresponds

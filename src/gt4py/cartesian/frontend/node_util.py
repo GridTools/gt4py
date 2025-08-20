@@ -8,7 +8,8 @@
 
 import collections
 import operator
-from typing import Generator, Optional, Type
+from collections.abc import Generator
+from typing import Optional
 
 import boltons.typeutils
 
@@ -111,7 +112,7 @@ class IRNodeMapper:
         return node
 
 
-def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None, None]:
+def iter_nodes_of_type(root_node: Node, node_type: type) -> Generator[Node, None, None]:
     """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
 
     def recurse(node: Node) -> Generator[Node, None, None]:

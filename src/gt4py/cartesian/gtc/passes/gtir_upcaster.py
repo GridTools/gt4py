@@ -7,7 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
-from typing import Any, Callable, Dict, Iterator, List, TypeVar
+from collections.abc import Callable, Iterator
+from typing import Any, TypeVar
 
 import numpy as np
 
@@ -24,7 +25,7 @@ def _upcast_node(target_dtype: DataType, node: Expr) -> Expr:
 
 def _upcast_nodes(*exprs: Expr, upcasting_rule: Callable) -> Iterator[Expr]:
     assert all(e.dtype for e in exprs)
-    dtypes: List[DataType] = [e.dtype for e in exprs]  # guaranteed to be not None
+    dtypes: list[DataType] = [e.dtype for e in exprs]  # guaranteed to be not None
     target_dtypes = upcasting_rule(*dtypes)
     return iter(_upcast_node(target_dtype, arg) for target_dtype, arg in zip(target_dtypes, exprs))
 
@@ -32,7 +33,7 @@ def _upcast_nodes(*exprs: Expr, upcasting_rule: Callable) -> Iterator[Expr]:
 _T = TypeVar("_T", bound=eve.Node)
 
 
-def _update_node(node: _T, updated_children: Dict[str, eve.RootNode]) -> _T:
+def _update_node(node: _T, updated_children: dict[str, eve.RootNode]) -> _T:
     # create new node only if children changed
     old_children = datamodels.asdict(node)
     if any([old_children[k] != updated_children[k] for k in updated_children.keys()]):

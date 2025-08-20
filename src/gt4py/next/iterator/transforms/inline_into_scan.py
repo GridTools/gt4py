@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 # FIXME[#1582](tehrengruber): This transformation is not used anymore. Decide on its fate.
-from typing import Sequence, TypeGuard
+from collections.abc import Sequence
+from typing import TypeGuard
 
 from gt4py import eve
 from gt4py.eve import NodeTranslator, traits

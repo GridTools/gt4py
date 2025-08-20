@@ -8,19 +8,8 @@
 
 import functools
 import types
-from collections.abc import Callable, Iterator
-from typing import (
-    Any,
-    Generic,
-    Literal,
-    Protocol,
-    Sequence,
-    Type,
-    TypeGuard,
-    TypeVar,
-    cast,
-    overload,
-)
+from collections.abc import Callable, Iterator, Sequence
+from typing import Any, Generic, Literal, Protocol, TypeGuard, TypeVar, cast, overload
 
 import numpy as np
 
@@ -64,7 +53,7 @@ def is_concrete(symbol_type: ts.TypeSpec) -> TypeGuard[ts.TypeSpec]:
     return False
 
 
-def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
+def type_class(symbol_type: ts.TypeSpec) -> type[ts.TypeSpec]:
     """
     Determine which class should be used to create a compatible concrete type.
 
@@ -639,7 +628,7 @@ def return_type_field(
     source_dim = with_args[0].source
     target_dims = with_args[0].target
     new_dims = []
-    # TODO: This code does not handle ellipses for dimensions. Fix it.
+    # TODO(): This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     for d in field_type.dims:
         if d != source_dim:

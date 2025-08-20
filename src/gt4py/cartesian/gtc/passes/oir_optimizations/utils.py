@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import dataclasses
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, cast
+from typing import Any, Generic, Optional, TypeVar, cast
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
@@ -21,7 +22,7 @@ from gt4py.cartesian.gtc.passes.horizontal_masks import mask_overlap_with_extent
 
 OffsetT = TypeVar("OffsetT")
 
-GeneralOffsetTuple = Tuple[int, int, Optional[int]]
+GeneralOffsetTuple = tuple[int, int, Optional[int]]
 
 _digits_at_end_pattern = re.compile(r"[0-9]+$")
 _generated_name_pattern = re.compile(r".+_gen_[0-9]+")
@@ -32,7 +33,7 @@ class GenericAccess(Generic[OffsetT]):
     field: str
     offset: OffsetT
     is_write: bool
-    data_index: List[oir.Expr] = dataclasses.field(default_factory=list)
+    data_index: list[oir.Expr] = dataclasses.field(default_factory=list)
     horizontal_mask: Optional[common.HorizontalMask] = None
 
     @property
@@ -53,10 +54,10 @@ class GenericAccess(Generic[OffsetT]):
         """
         if centered:
             offset_as_extent = CenteredExtent.from_offset(
-                cast(Tuple[int, int, int], self.offset)[:2]
+                cast(tuple[int, int, int], self.offset)[:2]
             )
         else:
-            offset_as_extent = Extent.from_offset(cast(Tuple[int, int, int], self.offset)[:2])
+            offset_as_extent = Extent.from_offset(cast(tuple[int, int, int], self.offset)[:2])
         zeros = Extent.zeros(ndims=2)
         if self.horizontal_mask and not ignore_horizontal_mask:
             if dist_from_edge := mask_overlap_with_extent(self.horizontal_mask, horizontal_extent):
@@ -66,7 +67,7 @@ class GenericAccess(Generic[OffsetT]):
         return horizontal_extent + offset_as_extent
 
 
-class CartesianAccess(GenericAccess[Tuple[int, int, int]]):
+class CartesianAccess(GenericAccess[tuple[int, int, int]]):
     pass
 
 
@@ -84,7 +85,7 @@ class AccessCollector(eve.NodeVisitor):
         self,
         node: oir.FieldAccess,
         *,
-        accesses: List[GeneralAccess],
+        accesses: list[GeneralAccess],
         is_write: bool,
         horizontal_mask: Optional[common.HorizontalMask] = None,
         **kwargs: Any,
@@ -118,55 +119,55 @@ class AccessCollector(eve.NodeVisitor):
 
     @dataclass
     class GenericAccessCollection(Generic[AccessT, OffsetT]):
-        _ordered_accesses: List[AccessT]
+        _ordered_accesses: list[AccessT]
 
         @staticmethod
-        def _offset_dict(accesses: eve.utils.XIterable) -> Dict[str, Set[OffsetT]]:
+        def _offset_dict(accesses: eve.utils.XIterable) -> dict[str, set[OffsetT]]:
             return accesses.reduceby(
                 lambda acc, x: acc | {x.offset}, "field", init=set(), as_dict=True
             )
 
-        def offsets(self) -> Dict[str, Set[OffsetT]]:
+        def offsets(self) -> dict[str, set[OffsetT]]:
             """Get a dictionary, mapping all accessed fields' names to sets of offset tuples."""
             return self._offset_dict(eve.utils.XIterable(self._ordered_accesses))
 
-        def read_offsets(self) -> Dict[str, Set[OffsetT]]:
+        def read_offsets(self) -> dict[str, set[OffsetT]]:
             """Get a dictionary, mapping read fields' names to sets of offset tuples."""
             return self._offset_dict(
                 eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read)
             )
 
-        def read_accesses(self) -> List[AccessT]:
+        def read_accesses(self) -> list[AccessT]:
             """Get the sub-list of read accesses."""
             return list(eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read))
 
-        def write_offsets(self) -> Dict[str, Set[OffsetT]]:
+        def write_offsets(self) -> dict[str, set[OffsetT]]:
             """Get a dictionary, mapping written fields' names to sets of offset tuples."""
             return self._offset_dict(
                 eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write)
             )
 
-        def write_accesses(self) -> List[AccessT]:
+        def write_accesses(self) -> list[AccessT]:
             """Get the sub-list of write accesses."""
             return list(eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write))
 
-        def fields(self) -> Set[str]:
+        def fields(self) -> set[str]:
             """Get a set of all accessed fields' names."""
             return {acc.field for acc in self._ordered_accesses}
 
-        def read_fields(self) -> Set[str]:
+        def read_fields(self) -> set[str]:
             """Get a set of all read fields' names."""
             return {acc.field for acc in self._ordered_accesses if acc.is_read}
 
-        def write_fields(self) -> Set[str]:
+        def write_fields(self) -> set[str]:
             """Get a set of all written fields' names."""
             return {acc.field for acc in self._ordered_accesses if acc.is_write}
 
-        def ordered_accesses(self) -> List[AccessT]:
+        def ordered_accesses(self) -> list[AccessT]:
             """Get a list of ordered accesses."""
             return self._ordered_accesses
 
-    class CartesianAccessCollection(GenericAccessCollection[CartesianAccess, Tuple[int, int, int]]):
+    class CartesianAccessCollection(GenericAccessCollection[CartesianAccess, tuple[int, int, int]]):
         pass
 
     class GeneralAccessCollection(GenericAccessCollection[GeneralAccess, GeneralOffsetTuple]):
@@ -175,7 +176,7 @@ class AccessCollector(eve.NodeVisitor):
                 [
                     CartesianAccess(
                         field=acc.field,
-                        offset=cast(Tuple[int, int, int], acc.offset),
+                        offset=cast(tuple[int, int, int], acc.offset),
                         data_index=acc.data_index,
                         is_write=acc.is_write,
                     )
@@ -194,7 +195,7 @@ class AccessCollector(eve.NodeVisitor):
         return result
 
 
-def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
+def symbol_name_creator(used_names: set[str]) -> Callable[[str], str]:
     """Create a function that generates symbol names that are not already in use.
 
     Args:
@@ -219,7 +220,7 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
     return new_symbol_name
 
 
-def collect_symbol_names(node: eve.RootNode) -> Set[str]:
+def collect_symbol_names(node: eve.RootNode) -> set[str]:
     return (
         eve.walk_values(node)
         .if_isinstance(eve.SymbolTableTrait)
@@ -241,8 +242,8 @@ class StencilExtentComputer(eve.NodeVisitor):
 
     @dataclass
     class Context:
-        fields: Dict[str, Extent] = dataclasses.field(default_factory=dict)
-        blocks: Dict[int, Extent] = dataclasses.field(default_factory=dict)
+        fields: dict[str, Extent] = dataclasses.field(default_factory=dict)
+        blocks: dict[int, Extent] = dataclasses.field(default_factory=dict)
 
     def __init__(
         self,
@@ -295,18 +296,18 @@ class StencilExtentComputer(eve.NodeVisitor):
                 ctx.fields[access.field] = extent
 
 
-def compute_horizontal_block_extents(node: oir.Stencil, **kwargs: Any) -> Dict[int, Extent]:
+def compute_horizontal_block_extents(node: oir.Stencil, **kwargs: Any) -> dict[int, Extent]:
     ctx = StencilExtentComputer(**kwargs).visit(node)
     return ctx.blocks
 
 
-def compute_fields_extents(node: oir.Stencil, **kwargs: Any) -> Dict[str, Extent]:
+def compute_fields_extents(node: oir.Stencil, **kwargs: Any) -> dict[str, Extent]:
     ctx = StencilExtentComputer(**kwargs).visit(node)
     return ctx.fields
 
 
 def compute_extents(
     node: oir.Stencil, **kwargs: Any
-) -> Tuple[Dict[str, Extent], Dict[int, Extent]]:
+) -> tuple[dict[str, Extent], dict[int, Extent]]:
     ctx = StencilExtentComputer(**kwargs).visit(node)
     return ctx.fields, ctx.blocks

@@ -12,7 +12,8 @@ import ast
 import builtins
 import textwrap
 import typing
-from typing import Any, Callable, Iterable, Mapping, Type
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any
 
 import gt4py.eve as eve
 from gt4py.next import errors
@@ -295,7 +296,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if not isinstance(target, ast.Name):
             raise errors.DSLError(self.get_location(node), "Can only assign to names.")
         new_value = self.visit(node.value)
-        constraint_type: Type[ts.DataType] = ts.DataType
+        constraint_type: type[ts.DataType] = ts.DataType
         if isinstance(new_value, foast.TupleExpr):
             constraint_type = ts.TupleType
         elif (

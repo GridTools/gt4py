@@ -8,7 +8,8 @@
 
 from __future__ import annotations
 
-from typing import Callable, ClassVar, Optional, Union
+from collections.abc import Callable
+from typing import ClassVar, Optional
 
 from gt4py.eve import Coerced, SymbolName, datamodels
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
@@ -50,7 +51,7 @@ class IntegralConstant(Expr):
 
 
 class OffsetLiteral(Expr):
-    value: Union[int, str]
+    value: int | str
 
 
 class Lambda(Expr, SymbolTableTrait):
@@ -94,7 +95,7 @@ class UnstructuredDomain(Node):
 
 
 class Backend(Node):
-    domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
+    domain: SymRef | CartesianDomain | UnstructuredDomain
 
 
 def _is_tuple_expr_of(pred: Callable[[Expr], bool], expr: Expr) -> bool:
@@ -175,8 +176,8 @@ class Stmt(Node):
 class StencilExecution(Stmt):
     backend: Backend
     stencil: SymRef
-    output: Union[SymRef, SidComposite]
-    inputs: list[Union[SymRef, SidComposite, SidFromScalar, FunCall]]
+    output: SymRef | SidComposite
+    inputs: list[SymRef | SidComposite | SidFromScalar | FunCall]
 
     @datamodels.validator("inputs")
     def _arg_validator(
@@ -220,7 +221,7 @@ class IfStmt(Stmt):
 class TemporaryAllocation(Node):
     id: SymbolName
     dtype: str
-    domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
+    domain: SymRef | CartesianDomain | UnstructuredDomain
 
 
 GTFN_BUILTINS = [
@@ -243,14 +244,14 @@ BUILTINS = {*GTFN_BUILTINS, *ARITHMETIC_BUILTINS, *TYPEBUILTINS}
 
 class TagDefinition(Node):
     name: Sym
-    alias: Optional[Union[str, SymRef]] = None
+    alias: Optional[str | SymRef] = None
 
 
 class Program(Node, ValidatedSymbolTableTrait):
     id: SymbolName
     params: list[Sym]
     function_definitions: list[
-        Union[FunctionDefinition, ScanPassDefinition, ImperativeFunctionDefinition]
+        FunctionDefinition | ScanPassDefinition | ImperativeFunctionDefinition
     ]
     executions: list[Stmt]
     offset_definitions: list[TagDefinition]

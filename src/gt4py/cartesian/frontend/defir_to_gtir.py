@@ -10,7 +10,7 @@ import copy
 import functools
 import itertools
 import numbers
-from typing import Any, Dict, Final, List, Optional, Tuple, Union, cast
+from typing import Any, Final, Optional, cast
 
 import numpy as np
 
@@ -59,7 +59,7 @@ from gt4py.cartesian.gtc.common import ExprKind
 def _convert_dtype(data_type) -> common.DataType:
     dtype = common.DataType(int(data_type))
     if dtype == common.DataType.DEFAULT:
-        # TODO: this will be a frontend choice later
+        # TODO(): this will be a frontend choice later
         # in non-GTC parts, this is set in the backend
         dtype = cast(
             common.DataType, common.DataType.FLOAT64
@@ -68,7 +68,7 @@ def _convert_dtype(data_type) -> common.DataType:
 
 
 def _make_literal(v: numbers.Number) -> gtir.Literal:
-    value: Union[BuiltinLiteral, str]
+    value: BuiltinLiteral | str
     if isinstance(v, (bool, np.bool_)):
         dtype = common.DataType.BOOL
         value = common.BuiltInLiteral.TRUE if v else common.BuiltInLiteral.FALSE
@@ -101,7 +101,7 @@ class UnrollVectorAssignments(IRNodeMapper):
     def apply(cls, root, **kwargs):
         return cls().visit(root, **kwargs)
 
-    def _is_vector_assignment(self, stmt: Node, fields_decls: Dict[str, FieldDecl]) -> bool:
+    def _is_vector_assignment(self, stmt: Node, fields_decls: dict[str, FieldDecl]) -> bool:
         if not isinstance(stmt, Assign):
             return False
 
@@ -109,7 +109,7 @@ class UnrollVectorAssignments(IRNodeMapper):
         return fields_decls[stmt.target.name].data_dims and not stmt.target.data_index
 
     def visit_StencilDefinition(
-        self, node: StencilDefinition, *, fields_decls: Dict[str, FieldDecl], **kwargs
+        self, node: StencilDefinition, *, fields_decls: dict[str, FieldDecl], **kwargs
     ) -> StencilDefinition:
         node = copy.deepcopy(node)
 
@@ -128,14 +128,14 @@ class UnrollVectorAssignments(IRNodeMapper):
         return node
 
     # computes dimensions of nested lists
-    def _nested_list_dim(self, a: List) -> List[int]:
+    def _nested_list_dim(self, a: list) -> list[int]:
         if not isinstance(a, list):
             return []
         return [len(a), *self._nested_list_dim(a[0])]
 
     def visit_Assign(
-        self, node: Assign, *, fields_decls: Dict[str, FieldDecl], **kwargs
-    ) -> Union[gtir.ParAssignStmt, List[gtir.ParAssignStmt]]:
+        self, node: Assign, *, fields_decls: dict[str, FieldDecl], **kwargs
+    ) -> gtir.ParAssignStmt | list[gtir.ParAssignStmt]:
         if self._is_vector_assignment(node, fields_decls):
             assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
             target_dims = fields_decls[node.target.name].data_dims
@@ -170,7 +170,7 @@ class UnrollVectorAssignments(IRNodeMapper):
 
 class UnrollVectorExpressions(IRNodeMapper):
     @classmethod
-    def apply(cls, root, *, expected_dim: Tuple[int, ...], fields_decls: Dict[str, FieldDecl]):
+    def apply(cls, root, *, expected_dim: tuple[int, ...], fields_decls: dict[str, FieldDecl]):
         result = cls().visit(root, fields_decls=fields_decls)
         # if the expression is just a scalar broadcast to the expected dimensions
         if not isinstance(result, list):
@@ -179,10 +179,10 @@ class UnrollVectorExpressions(IRNodeMapper):
             )
         return result
 
-    def visit_FieldRef(self, node: FieldRef, *, fields_decls: Dict[str, FieldDecl], **kwargs):
+    def visit_FieldRef(self, node: FieldRef, *, fields_decls: dict[str, FieldDecl], **kwargs):
         name = node.name
         if fields_decls[name].data_dims:
-            field_list: List[Union[FieldRef, List[FieldRef]]] = []
+            field_list: list[FieldRef | list[FieldRef]] = []
             # vector
             if len(fields_decls[name].data_dims) == 1:
                 dims = fields_decls[name].data_dims[0]
@@ -197,7 +197,7 @@ class UnrollVectorExpressions(IRNodeMapper):
             elif len(fields_decls[name].data_dims) == 2:
                 rows, cols = fields_decls[name].data_dims
                 for row in range(rows):
-                    row_list: List[FieldRef] = []
+                    row_list: list[FieldRef] = []
                     for col in range(cols):
                         data_type = DataType.INT32
                         data_index = [
@@ -221,7 +221,7 @@ class UnrollVectorExpressions(IRNodeMapper):
 
         return node
 
-    def visit_UnaryOpExpr(self, node: UnaryOpExpr, *, fields_decls: Dict[str, FieldDecl], **kwargs):
+    def visit_UnaryOpExpr(self, node: UnaryOpExpr, *, fields_decls: dict[str, FieldDecl], **kwargs):
         if node.op == UnaryOperator.TRANSPOSED:
             node = self.visit(node.arg, fields_decls=fields_decls, **kwargs)
             assert isinstance(node, list) and all(
@@ -233,10 +233,10 @@ class UnrollVectorExpressions(IRNodeMapper):
 
         return self.generic_visit(node, **kwargs)
 
-    def visit_BinOpExpr(self, node: BinOpExpr, *, fields_decls: Dict[str, FieldDecl], **kwargs):
+    def visit_BinOpExpr(self, node: BinOpExpr, *, fields_decls: dict[str, FieldDecl], **kwargs):
         lhs = self.visit(node.lhs, fields_decls=fields_decls, **kwargs)
         rhs = self.visit(node.rhs, fields_decls=fields_decls, **kwargs)
-        result: Union[List[BinOpExpr], BinOpExpr] = []
+        result: list[BinOpExpr] | BinOpExpr = []
 
         if node.op == BinaryOperator.MATMULT:
             for j in range(len(lhs)):
@@ -388,7 +388,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_ArgumentInfo(self, node: ArgumentInfo, all_params: Dict[str, gtir.Decl]) -> gtir.Decl:
+    def visit_ArgumentInfo(self, node: ArgumentInfo, all_params: dict[str, gtir.Decl]) -> gtir.Decl:
         return all_params[node.name]
 
     def visit_ComputationBlock(self, node: ComputationBlock) -> gtir.VerticalLoop:
@@ -412,7 +412,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
+    def visit_BlockStmt(self, node: BlockStmt) -> list[gtir.Stmt]:
         return [self.visit(s) for s in node.stmts]
 
     def visit_Assign(self, node: Assign) -> gtir.ParAssignStmt:
@@ -433,7 +433,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_BinOpExpr(self, node: BinOpExpr) -> Union[gtir.BinaryOp, gtir.NativeFuncCall]:
+    def visit_BinOpExpr(self, node: BinOpExpr) -> gtir.BinaryOp | gtir.NativeFuncCall:
         if node.op in (BinaryOperator.POW, BinaryOperator.MOD):
             return gtir.NativeFuncCall(
                 func=common.NativeFunction[node.op.name],
@@ -485,7 +485,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_If(self, node: If) -> Union[gtir.FieldIfStmt, gtir.ScalarIfStmt]:
+    def visit_If(self, node: If) -> gtir.FieldIfStmt | gtir.ScalarIfStmt:
         cond = self.visit(node.condition)
         if cond.kind == ExprKind.FIELD:
             return gtir.FieldIfStmt(
@@ -540,11 +540,11 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_VarRef(self, node: VarRef, **kwargs) -> gtir.ScalarAccess:
         return gtir.ScalarAccess(name=node.name, loc=location_to_source_location(node.loc))
 
-    def visit_AxisInterval(self, node: AxisInterval) -> Tuple[gtir.AxisBound, gtir.AxisBound]:
+    def visit_AxisInterval(self, node: AxisInterval) -> tuple[gtir.AxisBound, gtir.AxisBound]:
         return self.visit(node.start), self.visit(node.end)
 
     def visit_AxisBound(self, node: AxisBound) -> gtir.AxisBound:
-        # TODO(havogt) add support VarRef
+        # TODO(havogt): add support VarRef
         return gtir.AxisBound(
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
         )
@@ -570,8 +570,8 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def transform_offset(
-        self, offset: Dict[str, Union[int, Expr]], **kwargs: Any
-    ) -> Union[common.CartesianOffset, gtir.VariableKOffset]:
+        self, offset: dict[str, int | Expr], **kwargs: Any
+    ) -> common.CartesianOffset | gtir.VariableKOffset:
         k_val = offset.get("K", 0)
         if isinstance(k_val, numbers.Integral):
             return common.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)

@@ -7,7 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import typing
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import Any, Optional
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
@@ -15,7 +16,7 @@ from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-def sym(sym_or_name: Union[str, itir.Sym], type_: str | ts.TypeSpec | None = None) -> itir.Sym:
+def sym(sym_or_name: str | itir.Sym, type_: str | ts.TypeSpec | None = None) -> itir.Sym:
     """
     Convert to Sym if necessary.
 
@@ -38,7 +39,7 @@ def sym(sym_or_name: Union[str, itir.Sym], type_: str | ts.TypeSpec | None = Non
 
 
 def ref(
-    ref_or_name: Union[str, itir.SymRef],
+    ref_or_name: str | itir.SymRef,
     type_: str | ts.TypeSpec | None = None,
     annex: dict[str, Any] | None = None,
 ) -> itir.SymRef:
@@ -68,7 +69,7 @@ def ref(
     return ref
 
 
-def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> itir.Expr:
+def ensure_expr(literal_or_expr: str | core_defs.Scalar | itir.Expr) -> itir.Expr:
     """
     Convert literals into a SymRef or Literal and let expressions pass unchanged.
 
@@ -93,7 +94,7 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
     return literal_or_expr
 
 
-def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.OffsetLiteral:
+def ensure_offset(str_or_offset: str | int | itir.OffsetLiteral) -> itir.OffsetLiteral:
     """
     Convert Python literals into an OffsetLiteral and let OffsetLiterals pass unchanged.
 
@@ -440,14 +441,14 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
     def _impl(*its: itir.Expr) -> itir.FunCall:
         args = [
             f"__arg{i}" for i in range(len(its))
-        ]  # TODO: `op` must not contain `SymRef(id="__argX")`
+        ]  # TODO(): `op` must not contain `SymRef(id="__argX")`
         return lift(lambda_(*args)(op(*[deref(arg) for arg in args])))(*its)
 
     return _impl
 
 
 def domain(
-    grid_type: Union[common.GridType, str],
+    grid_type: common.GridType | str,
     ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]],
 ) -> itir.FunCall:
     """
@@ -533,7 +534,7 @@ def op_as_fieldop(
     def _impl(*its: itir.Expr) -> itir.FunCall:
         args = [
             f"__arg{i}" for i in range(len(its))
-        ]  # TODO: `op` must not contain `SymRef(id="__argX")`
+        ]  # TODO(): `op` must not contain `SymRef(id="__argX")`
         return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
 
     return _impl

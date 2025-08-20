@@ -12,7 +12,8 @@ import inspect
 import math
 import operator
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
-from typing import Any, Callable, Final, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
+from collections.abc import Callable
+from typing import Any, Final, Generic, ParamSpec, TypeAlias, TypeVar, Union, cast
 
 import numpy as np
 from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, uint32, uint64
@@ -72,7 +73,7 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return (
             ts.FunctionType
         )  # our type of type is currently represented by the type constructor function
-    elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
+    elif t is tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
         return ts.TupleType
     elif hasattr(t, "__origin__") and t.__origin__ is Union:
         types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
@@ -105,13 +106,12 @@ class BuiltInFunction(Generic[_R, _P]):
         arg_types = tuple(type(arg) for arg in args)
         for atype in arg_types:
             # current strategy is to select the implementation of the first arg that supports the operation
-            # TODO: define a strategy that converts or prevents conversion
+            # TODO(): define a strategy that converts or prevents conversion
             if (dispatcher := getattr(atype, "__gt_builtin_func__", None)) is not None and (
                 op_func := dispatcher(self)
             ) is not NotImplemented:
                 return op_func
-        else:
-            return self.function
+        return self.function
 
     def __gt_type__(self) -> ts.FunctionType:
         signature = inspect.signature(self.function)
@@ -137,8 +137,8 @@ class BuiltInFunction(Generic[_R, _P]):
         )
 
 
-CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
-FieldT = TypeVar("FieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
+CondT = TypeVar("CondT", bound=common.Field | common.Domain)
+FieldT = TypeVar("FieldT", bound=common.Field | core_defs.Scalar | tuple)
 
 
 class WhereBuiltinFunction(
@@ -148,13 +148,13 @@ class WhereBuiltinFunction(
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
-                    # TODO(havogt) find a strategy to unify parsing and embedded error messages
+                    # TODO(havogt): find a strategy to unify parsing and embedded error messages
                     f"Either both or none can be tuple in '{true_field=}' and '{false_field=}'."
                 )
             if len(true_field) != len(false_field):
                 raise ValueError(
                     "Tuple of different size not allowed."
-                )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
+                )  # TODO(havogt): find a strategy to unify parsing and embedded error messages
             return tuple(self(cond, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
         return super().__call__(cond, true_field, false_field)
 
@@ -181,24 +181,24 @@ def broadcast(
     assert core_defs.is_scalar_type(
         field
     )  # default implementation for scalars, Fields are handled via dispatch
-    # TODO(havogt) implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
+    # TODO(havogt): implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
     return field  # type: ignore[return-value] # see comment above
 
 
 @WhereBuiltinFunction
 def where(
     mask: common.Field,
-    true_field: common.Field | core_defs.ScalarT | Tuple,
-    false_field: common.Field | core_defs.ScalarT | Tuple,
+    true_field: common.Field | core_defs.ScalarT | tuple,
+    false_field: common.Field | core_defs.ScalarT | tuple,
     /,
-) -> common.Field | Tuple:
+) -> common.Field | tuple:
     raise NotImplementedError()
 
 
 @BuiltInFunction
 def astype(
-    value: common.Field | core_defs.ScalarT | Tuple, type_: type, /
-) -> common.Field | core_defs.ScalarT | Tuple:
+    value: common.Field | core_defs.ScalarT | tuple, type_: type, /
+) -> common.Field | core_defs.ScalarT | tuple:
     if isinstance(value, tuple):
         return tuple(astype(v, type_) for v in value)
     # default implementation for scalars, Fields are handled via dispatch

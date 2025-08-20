@@ -36,9 +36,10 @@ import importlib.abc
 import pathlib
 import sys
 import tempfile
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from types import ModuleType
-from typing import Any, Generator, Iterator, List, Optional, Union
+from typing import Any, Optional
 
 
 GTS_EXTENSIONS = [".gt.py"]
@@ -76,8 +77,8 @@ class GtsFinder(importlib.abc.MetaPathFinder):
 
     def __init__(
         self,
-        search_path: Optional[List[Union[str, pathlib.Path]]] = None,
-        generate_path: Optional[Union[str, pathlib.Path]] = None,
+        search_path: Optional[list[str | pathlib.Path]] = None,
+        generate_path: Optional[str | pathlib.Path] = None,
         in_source: bool = False,
     ):
         if in_source:
@@ -94,7 +95,7 @@ class GtsFinder(importlib.abc.MetaPathFinder):
         return self.generate_path or src_file_path.parent
 
     def iter_search_candidates(
-        self, fullname: str, path: Optional[List[pathlib.Path]]
+        self, fullname: str, path: Optional[list[pathlib.Path]]
     ) -> Generator[pathlib.Path, None, None]:
         """Iterate possible source file paths."""
         search_paths = [p for p in self.search_path or sys.path]
@@ -196,8 +197,8 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
 
 def enable(
     *,
-    search_path: Optional[List[Union[str, pathlib.Path]]] = None,
-    generate_path: Optional[Union[str, pathlib.Path]] = None,
+    search_path: Optional[list[str | pathlib.Path]] = None,
+    generate_path: Optional[str | pathlib.Path] = None,
     in_source: bool = False,
 ) -> GtsFinder:
     """

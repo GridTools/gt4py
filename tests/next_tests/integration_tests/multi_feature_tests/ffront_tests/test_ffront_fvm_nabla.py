@@ -109,7 +109,7 @@ def test_ffront_nabla(exec_alloc_descriptor):
         },
     )
 
-    # TODO this check is not sensitive enough, need to implement a proper numpy reference!
+    # TODO(): this check is not sensitive enough, need to implement a proper numpy reference!
     assert_close(-3.5455427772566003e-003, np.min(pnabla_MXX.asnumpy()))
     assert_close(3.5455427772565435e-003, np.max(pnabla_MXX.asnumpy()))
     assert_close(-3.3540113705465301e-003, np.min(pnabla_MYY.asnumpy()))

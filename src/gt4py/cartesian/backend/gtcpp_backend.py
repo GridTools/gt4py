@@ -101,9 +101,9 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
         if "external_arg" in kwargs:
             if kwargs["external_arg"]:
-                return "{dtype} {name}".format(name=node.name, dtype=self.visit(node.dtype))
+                return f"{self.visit(node.dtype)} {node.name}"
             else:
-                return "gridtools::stencil::global_parameter({name})".format(name=node.name)
+                return f"gridtools::stencil::global_parameter({node.name})"
 
     def visit_Program(self, node: gtcpp.Program, **kwargs):
         assert "module_name" in kwargs
@@ -132,7 +132,7 @@ class GTBaseBackend(BaseGTBackend):
     def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)
 
-        # TODO(havogt) add bypass if computation has no effect
+        # TODO(havogt): add bypass if computation has no effect
         self.generate_extension()
 
         # Generate and return the Python wrapper class

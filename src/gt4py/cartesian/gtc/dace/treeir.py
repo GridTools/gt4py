@@ -8,9 +8,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Generator, TypeAlias
+from typing import TypeAlias
 
 from dace import Memlet, data, dtypes, nodes
 

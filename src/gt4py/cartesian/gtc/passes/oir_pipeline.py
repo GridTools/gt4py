@@ -7,7 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from abc import abstractmethod
-from typing import Callable, Optional, Protocol, Sequence, Type, Union
+from collections.abc import Callable, Sequence
+from typing import Optional, Protocol, Union
 
 from gt4py import eve
 from gt4py.cartesian.gtc import oir
@@ -34,7 +35,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.temporaries import (
 from gt4py.cartesian.gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 
 
-PassT = Union[Callable[[oir.Stencil], oir.Stencil], Type[eve.NodeVisitor]]
+PassT = Union[Callable[[oir.Stencil], oir.Stencil], type[eve.NodeVisitor]]
 
 
 class OirPipeline(Protocol):

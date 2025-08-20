@@ -31,7 +31,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
 
-# TODO: reduce duplication with `test_math_unary_builtins`
+# TODO(): reduce duplication with `test_math_unary_builtins`
 
 # TODO(tehrengruber): add tests for scalar arguments to builtin. To avoid code
 #  bloat this is postponed until programatically creating field operators
@@ -119,7 +119,7 @@ def make_builtin_field_operator(builtin_name: str, backend: Optional[next_backen
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inputs):
     if cartesian_case.backend is None:
-        # TODO(havogt) find a way that works for embedded
+        # TODO(havogt): find a way that works for embedded
         pytest.xfail("Test does not have a field view program.")
     if builtin_name == "gamma":
         # numpy has no gamma function

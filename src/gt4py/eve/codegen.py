@@ -125,7 +125,10 @@ def _get_clang_format() -> Optional[str]:
     executable = os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format")
     try:
         assert isinstance(executable, str)
-        if subprocess.run([executable, "--version"], capture_output=True).returncode != 0:
+        if (
+            subprocess.run([executable, "--version"], capture_output=True, check=False).returncode
+            != 0
+        ):
             return None
     except Exception:
         return None
@@ -327,7 +330,7 @@ class TextBlock:
         """Indentation string for new lines (in the current state)."""
         return self.indent_char * (self.indent_level * self.indent_size)
 
-    def __iadd__(self, source_line: Union[str, AnyTextSequence]) -> TextBlock:
+    def __iadd__(self, source_line: str | AnyTextSequence) -> TextBlock:
         if isinstance(source_line, str):
             return self.append(source_line)
         else:
@@ -453,7 +456,7 @@ class StringTemplate(BaseTemplate):
 
     definition: string.Template
 
-    def __init__(self, definition: Union[str, string.Template], **kwargs: Any) -> None:
+    def __init__(self, definition: str | string.Template, **kwargs: Any) -> None:
         super().__init__()
         if isinstance(definition, str):
             definition = string.Template(definition)
@@ -485,7 +488,7 @@ class JinjaTemplate(BaseTemplate):
 
     __jinja_env__ = jinja2.Environment(undefined=jinja2.StrictUndefined)
 
-    def __init__(self, definition: Union[str, jinja2.Template], **kwargs: Any) -> None:
+    def __init__(self, definition: str | jinja2.Template, **kwargs: Any) -> None:
         super().__init__()
         try:
             if isinstance(definition, str):
@@ -649,7 +652,7 @@ class TemplatedGenerator(NodeVisitor):
     @classmethod
     def apply(  # redefinition of symbol
         cls, root: RootNode, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    ) -> str | Collection[str]:
         """Public method to build a class instance and visit an IR node.
 
         Args:
@@ -678,18 +681,16 @@ class TemplatedGenerator(NodeVisitor):
     @overload
     def generic_visit(
         self,
-        node: Union[
-            list,
-            tuple,
-            collections.abc.Set,
-            collections.abc.Sequence,
-            dict,
-            collections.abc.Mapping,
-        ],
+        node: list
+        | tuple
+        | collections.abc.Set
+        | collections.abc.Sequence
+        | dict
+        | collections.abc.Mapping,
         **kwargs: Any,
     ) -> Collection[str]: ...
 
-    def generic_visit(self, node: RootNode, **kwargs: Any) -> Union[str, Collection[str]]:
+    def generic_visit(self, node: RootNode, **kwargs: Any) -> str | Collection[str]:
         if isinstance(node, Node):
             template, key = self.get_template(node)
             if template:

@@ -8,7 +8,8 @@
 
 import dataclasses
 import functools
-from typing import Any, Callable, ClassVar, Iterable, Optional, Type, TypeGuard, Union
+from collections.abc import Callable, Iterable
+from typing import Any, ClassVar, Optional, TypeGuard
 
 import gt4py.eve as eve
 from gt4py.eve import utils as eve_utils
@@ -360,7 +361,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         force_function_extraction: bool = False,
         extracted_functions: Optional[list] = None,
         **kwargs: Any,
-    ) -> Union[SymRef, Lambda]:
+    ) -> SymRef | Lambda:
         if force_function_extraction:
             assert extracted_functions is not None
             fun_id = self.uids.sequential_id(prefix="_fun")
@@ -405,7 +406,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     @staticmethod
     def _collect_offset_or_axis_node(
-        node_type: Type, tree: eve.Node | Iterable[eve.Node]
+        node_type: type, tree: eve.Node | Iterable[eve.Node]
     ) -> set[str]:
         if not isinstance(tree, Iterable):
             tree = [tree]
@@ -531,8 +532,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     @staticmethod
     def _merge_scans(
-        executions: list[Union[StencilExecution, ScanExecution]],
-    ) -> list[Union[StencilExecution, ScanExecution]]:
+        executions: list[StencilExecution | ScanExecution],
+    ) -> list[StencilExecution | ScanExecution]:
         def merge(a: ScanExecution, b: ScanExecution) -> ScanExecution:
             assert a.backend == b.backend
             assert a.axis == b.axis
@@ -586,7 +587,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_SetAt(
         self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
-    ) -> Union[StencilExecution, ScanExecution]:
+    ) -> StencilExecution | ScanExecution:
         if _is_tuple_of_ref_or_literal(node.expr):
             node.expr = im.as_fieldop("deref", node.domain)(node.expr)
 
@@ -661,7 +662,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_Program(self, node: itir.Program, **kwargs: Any) -> Program:
-        extracted_functions: list[Union[FunctionDefinition, ScanPassDefinition]] = []
+        extracted_functions: list[FunctionDefinition | ScanPassDefinition] = []
         executions = self.visit(node.body, extracted_functions=extracted_functions)
         executions = self._merge_scans(executions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions

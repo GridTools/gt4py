@@ -12,10 +12,11 @@ import abc
 import collections.abc
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from numbers import Number
 from pickle import dumps
-from typing import Any, Callable, ClassVar, Literal, Union, cast
+from typing import Any, ClassVar, Literal, Union, cast
 
 import numpy as np
 
@@ -293,7 +294,7 @@ class StencilObject(abc.ABC):
         except Exception:
             pass
 
-        raise ValueError("Invalid 'origin' value ({})".format(origin))
+        raise ValueError(f"Invalid 'origin' value ({origin})")
 
     @staticmethod
     def _get_max_domain(
@@ -370,7 +371,7 @@ class StencilObject(abc.ABC):
         try:
             domain = Shape(domain)
         except Exception as ex:
-            raise ValueError("Invalid 'domain' value ({})".format(domain)) from ex
+            raise ValueError(f"Invalid 'domain' value ({domain})") from ex
 
         if not domain > Shape.zeros(domain_ndim):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")

@@ -230,7 +230,7 @@ def test_tuple_field_input(program_processor):
         [IDim, JDim, KDim],
         rng.normal(
             size=(shape[0], shape[1], shape[2] + 1)
-        ),  # TODO(havogt) currently we allow different sizes, needed for icon4py compatibility
+        ),  # TODO(havogt): currently we allow different sizes, needed for icon4py compatibility
     )
 
     out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))

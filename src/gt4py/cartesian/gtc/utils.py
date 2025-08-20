@@ -6,16 +6,17 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 
-def dimension_flags_to_names(mask: Tuple[bool, bool, bool]) -> str:
+def dimension_flags_to_names(mask: tuple[bool, bool, bool]) -> str:
     labels = ["i", "j", "k"]
     selection = [i for i, flag in enumerate(mask) if flag]
     return "".join(labels[i] for i in selection)
 
 
-def interpolate_mask(seq: Sequence[Any], mask: Sequence[bool], default) -> Tuple[Any, ...]:
+def interpolate_mask(seq: Sequence[Any], mask: Sequence[bool], default) -> tuple[Any, ...]:
     """
     Replace True values by those from the seq in the mask, else default.
 
@@ -30,7 +31,7 @@ def interpolate_mask(seq: Sequence[Any], mask: Sequence[bool], default) -> Tuple
     return tuple(next(it) if m else default for m in mask)
 
 
-def filter_mask(seq: Sequence[Any], mask: Sequence[bool]) -> Tuple[Any, ...]:
+def filter_mask(seq: Sequence[Any], mask: Sequence[bool]) -> tuple[Any, ...]:
     """
     Return a reduced-size tuple, with indices where mask[i]=False removed.
 

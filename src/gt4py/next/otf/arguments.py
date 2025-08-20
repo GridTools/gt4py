@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import dataclasses
 import typing
-from typing import Any, Generic, Iterable, Iterator, Optional
+from collections.abc import Iterable, Iterator
+from typing import Any, Generic, Optional
 
 from typing_extensions import Self
 

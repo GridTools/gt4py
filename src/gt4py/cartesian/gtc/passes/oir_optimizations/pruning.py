@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Dict
+from typing import Any
 
 from gt4py import eve
 from gt4py.cartesian.gtc import oir
@@ -67,7 +67,7 @@ class UnreachableStmtPruning(eve.NodeTranslator):
         return self.generic_visit(node, block_extents=block_extents)
 
     def visit_HorizontalExecution(
-        self, node: oir.HorizontalExecution, *, block_extents: Dict[int, Extent]
+        self, node: oir.HorizontalExecution, *, block_extents: dict[int, Extent]
     ) -> oir.HorizontalExecution:
         return self.generic_visit(node, block_extent=block_extents[id(node)])
 

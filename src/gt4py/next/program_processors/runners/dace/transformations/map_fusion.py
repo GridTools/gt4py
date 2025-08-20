@@ -9,7 +9,8 @@
 
 # Copyright 2019-2021 ETH Zurich and the DaCe authors. All rights reserved.
 
-from typing import Any, Callable, Optional, TypeAlias, Union
+from collections.abc import Callable
+from typing import Any, Optional, TypeAlias
 
 import dace
 from dace import nodes as dace_nodes, properties as dace_properties
@@ -88,7 +89,7 @@ class MapFusionVertical(dace_dftrans.MapFusionVertical):
 
     def can_be_applied(
         self,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -127,7 +128,7 @@ class MapFusionHorizontal(dace_dftrans.MapFusionHorizontal):
 
     def can_be_applied(
         self,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,

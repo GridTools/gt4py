@@ -6,8 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Optional
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
@@ -34,7 +35,7 @@ class HorizontalExecutionMerging(eve.NodeTranslator):
         self,
         node: oir.VerticalLoopSection,
         *,
-        block_extents: Dict[int, Extent],
+        block_extents: dict[int, Extent],
         new_symbol_name: Callable[[str], str],
         **kwargs: Any,
     ) -> oir.VerticalLoopSection:
@@ -42,8 +43,8 @@ class HorizontalExecutionMerging(eve.NodeTranslator):
         class UncheckedHorizontalExecution:
             # local replacement without type checking for type-checked oir node
             # required to reach reasonable run times for large node counts
-            body: List[oir.Stmt]
-            declarations: List[oir.LocalScalar]
+            body: list[oir.Stmt]
+            declarations: list[oir.LocalScalar]
             loc: Optional[eve.SourceLocation]
 
             assert set(oir.HorizontalExecution.__datamodel_fields__.keys()) == {
@@ -122,7 +123,7 @@ class HorizontalExecutionMerging(eve.NodeTranslator):
         )
 
     def visit_ScalarAccess(
-        self, node: oir.ScalarAccess, *, scalar_map: Dict[str, str], **kwargs: Any
+        self, node: oir.ScalarAccess, *, scalar_map: dict[str, str], **kwargs: Any
     ) -> oir.ScalarAccess:
         return oir.ScalarAccess(
             name=scalar_map[node.name] if node.name in scalar_map else node.name,
@@ -147,7 +148,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self,
         node: common.CartesianOffset,
         *,
-        shift: Optional[Tuple[int, int, int]] = None,
+        shift: Optional[tuple[int, int, int]] = None,
         **kwargs: Any,
     ) -> common.CartesianOffset:
         if shift:
@@ -159,9 +160,9 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self,
         node: oir.FieldAccess,
         *,
-        offset_symbol_map: Optional[Dict[Tuple[str, Tuple[int, int, int]], str]] = None,
+        offset_symbol_map: Optional[dict[tuple[str, tuple[int, int, int]], str]] = None,
         **kwargs: Any,
-    ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
+    ) -> oir.FieldAccess | oir.ScalarAccess:
         if offset_symbol_map:
             offset = self.visit(node.offset, **kwargs)
             key = node.name, (offset.i, offset.j, offset.k)
@@ -170,7 +171,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return self.generic_visit(node, **kwargs)
 
     def visit_ScalarAccess(
-        self, node: oir.ScalarAccess, *, scalar_map: Dict[str, str], **kwargs: Any
+        self, node: oir.ScalarAccess, *, scalar_map: dict[str, str], **kwargs: Any
     ) -> oir.ScalarAccess:
         return oir.ScalarAccess(
             name=scalar_map[node.name] if node.name in scalar_map else node.name,
@@ -180,11 +181,11 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def _merge(
         self,
-        horizontal_executions: List[oir.HorizontalExecution],
-        symtable: Dict[str, Any],
+        horizontal_executions: list[oir.HorizontalExecution],
+        symtable: dict[str, Any],
         new_symbol_name: Callable[[str], str],
-        protected_fields: Set[str],
-    ) -> List[oir.HorizontalExecution]:
+        protected_fields: set[str],
+    ) -> list[oir.HorizontalExecution]:
         """Recursively merge horizontal executions.
 
         Uses the following algorithm:
@@ -255,7 +256,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         writes = first_accesses.write_fields()
         others_otf = []
         for horizontal_execution in others:
-            read_offsets: Set[Tuple[int, int, int]] = set()
+            read_offsets: set[tuple[int, int, int]] = set()
             read_offsets = read_offsets.union(
                 *(
                     offsets

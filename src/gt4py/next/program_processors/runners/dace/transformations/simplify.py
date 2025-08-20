@@ -11,7 +11,8 @@
 import collections
 import copy
 import uuid
-from typing import Any, Iterable, Optional, TypeAlias
+from collections.abc import Iterable
+from typing import Any, Optional, TypeAlias
 
 import dace
 from dace import (
@@ -775,7 +776,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             if dnode.data != global_data_name:
                 continue
             dnode_degree = sum(
-                (1 for oedge in state_to_inspect.out_edges(dnode) if not oedge.data.is_empty())
+                1 for oedge in state_to_inspect.out_edges(dnode) if not oedge.data.is_empty()
             )
             if dnode_degree > 1:
                 return True

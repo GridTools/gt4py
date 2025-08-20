@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-# TODO(havogt) move public definitions and make this module private
+# TODO(havogt): move public definitions and make this module private
 
 from __future__ import annotations
 
@@ -41,7 +41,6 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeGuard,
     TypeVar,
-    Union,
     cast,
     overload,
     runtime_checkable,
@@ -83,7 +82,7 @@ FieldIndexOrIndices: TypeAlias = FieldIndex | FieldIndices
 
 FieldAxis: TypeAlias = common.Dimension
 TupleAxis: TypeAlias = type[None]
-Axis: TypeAlias = Union[FieldAxis, TupleAxis]
+Axis: TypeAlias = FieldAxis | TupleAxis
 Scalar: TypeAlias = (
     SupportsInt
     | SupportsFloat
@@ -227,7 +226,7 @@ IncompletePositionEntry: TypeAlias = IncompleteSparsePositionEntry | common.IntI
 ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
 IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
 
-Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
+Position: TypeAlias = ConcretePosition | IncompletePosition
 #: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
 MaybePosition: TypeAlias = Optional[Position]
 
@@ -433,7 +432,7 @@ def lift(stencil):
                 self.offsets = offsets or []
                 self.elem = elem
 
-            # TODO needs to be supported by all iterators that represent tuples
+            # TODO(): needs to be supported by all iterators that represent tuples
             def __getitem__(self, index):
                 return _WrappedIterator(self.stencil, self.args, offsets=self.offsets, elem=index)
 
@@ -487,7 +486,7 @@ Domain: TypeAlias = (
 
 @builtins.named_range.register(EMBEDDED)
 def named_range(tag: Tag | common.Dimension, start: int, end: int) -> NamedRange:
-    # TODO revisit this pattern after the discussion of 0d-field vs scalar
+    # TODO(): revisit this pattern after the discussion of 0d-field vs scalar
     if isinstance(start, ConstantField):
         start = start.value
     if isinstance(end, ConstantField):
@@ -1136,7 +1135,8 @@ class IndexField(common.Field):
     """
     Minimal index field implementation.
 
-    TODO: Improve implementation (e.g. support slicing) and move out of this module.
+    Todo:
+        Improve implementation (e.g. support slicing) and move out of this module.
     """
 
     _dimension: common.Dimension
@@ -1189,7 +1189,7 @@ class IndexField(common.Field):
         index_field: common.Connectivity | fbuiltins.FieldOffset,
         *args: common.Connectivity | fbuiltins.FieldOffset,
     ) -> common.Field:
-        # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
+        # TODO(): can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
     def restrict(self, item: common.AnyIndexSpec) -> Self:
@@ -1201,7 +1201,7 @@ class IndexField(common.Field):
             assert isinstance(r, core_defs.INTEGRAL_TYPES)
             # TODO(tehrengruber): Use a regular zero dimensional field instead.
             return self.__class__(self._dimension, r)
-        # TODO: set a domain...
+        # TODO(): set a domain...
         raise NotImplementedError()
 
     __call__ = premap
@@ -1274,7 +1274,8 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     """
     Minimal constant field implementation.
 
-    TODO: Improve implementation (e.g. support slicing) and move out of this module.
+    Todo:
+        Improve implementation (e.g. support slicing) and move out of this module.
     """
 
     _value: core_defs.ScalarT
@@ -1315,11 +1316,11 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         index_field: common.Connectivity | fbuiltins.FieldOffset,
         *args: common.Connectivity | fbuiltins.FieldOffset,
     ) -> common.Field:
-        # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
+        # TODO(): can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
     def restrict(self, item: common.AnyIndexSpec) -> Self:
-        # TODO set a domain...
+        # TODO(): set a domain...
         return self
 
     def as_scalar(self) -> core_defs.ScalarT:
@@ -1395,7 +1396,7 @@ def constant_field(value: Any, dtype_like: Optional[core_defs.DTypeLike] = None)
 
 
 @builtins.shift.register(EMBEDDED)
-def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIterator]:
+def shift(*offsets: runtime.Offset | int) -> Callable[[ItIterator], ItIterator]:
     def impl(it: ItIterator) -> ItIterator:
         return it.shift(*list(o.value if isinstance(o, runtime.Offset) else o for o in offsets))
 
@@ -1466,7 +1467,7 @@ def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
 
 
 def _get_offset(*lists: _List | _ConstList) -> Optional[runtime.Offset]:
-    offsets = set((lst.offset for lst in lists if hasattr(lst, "offset")))
+    offsets = set(lst.offset for lst in lists if hasattr(lst, "offset"))
     if len(offsets) == 0:
         return None
     if len(offsets) == 1:
@@ -1494,7 +1495,7 @@ def make_const_list(value):
 @builtins.reduce.register(EMBEDDED)
 def reduce(fun, init):
     def sten(*lists):
-        # TODO: assert check_that_all_lists_are_compatible(*lists)
+        # TODO(): assert check_that_all_lists_are_compatible(*lists)
         lst = None
         for cur in lists:
             if isinstance(cur, _List):

@@ -13,7 +13,8 @@ import copy
 import inspect
 import operator
 import textwrap
-from typing import Callable, Dict, Final, List, Tuple, Type
+from collections.abc import Callable
+from typing import Final
 
 from gt4py.cartesian.utils.base import shashed_id
 
@@ -52,7 +53,7 @@ def get_source(func):
     return source
 
 
-def get_ast(func_or_source_or_ast, *, feature_version: Tuple[int, int]):
+def get_ast(func_or_source_or_ast, *, feature_version: tuple[int, int]):
     if callable(func_or_source_or_ast):
         func_or_source_or_ast = get_source(func_or_source_or_ast)
     if isinstance(func_or_source_or_ast, str):
@@ -62,7 +63,7 @@ def get_ast(func_or_source_or_ast, *, feature_version: Tuple[int, int]):
     if isinstance(func_or_source_or_ast, (ast.AST, list)):
         ast_root = func_or_source_or_ast
     else:
-        raise ValueError("Invalid function definition ({})".format(func_or_source_or_ast))
+        raise ValueError(f"Invalid function definition ({func_or_source_or_ast})")
     return ast_root
 
 
@@ -71,7 +72,7 @@ def ast_dump(
     *,
     skip_annotations: bool = True,
     skip_decorators: bool = True,
-    feature_version: Tuple[int, int],
+    feature_version: tuple[int, int],
 ) -> str:
     def _dump(node: ast.AST, excluded_names):
         if isinstance(node, ast.AST):
@@ -91,7 +92,7 @@ def ast_dump(
                 [
                     node.__class__.__name__,
                     "({content})".format(
-                        content=", ".join("{}={}".format(name, value) for name, value in fields)
+                        content=", ".join(f"{name}={value}" for name, value in fields)
                     ),
                 ]
             )
@@ -243,7 +244,7 @@ class ASTTransformPass(ASTPass):
 
 
 class ASTEvaluator(ASTPass):
-    AST_OP_TO_OP: Final[Dict[Type, Callable]] = {
+    AST_OP_TO_OP: Final[dict[type, Callable]] = {
         # Arithmetic operations
         ast.UAdd: operator.pos,
         ast.USub: operator.neg,
@@ -328,7 +329,7 @@ class ASTEvaluator(ASTPass):
         return all(comparisons)
 
     def generic_visit(self, node):
-        raise ValueError("Invalid AST node for evaluation: {}".format(repr(node)))
+        raise ValueError(f"Invalid AST node for evaluation: {node!r}")
 
 
 ast_eval = ASTEvaluator.apply
@@ -414,7 +415,7 @@ class QualifiedNameCollector(ASTPass):
             self.name_nodes[node.id].append(node)
 
     def _get_name_components(self, node: ast.AST):
-        components: List
+        components: list
         if isinstance(node, ast.Name):
             components = [node.id]
             valid = self.prefixes is None or node.id in self.prefixes
@@ -466,7 +467,7 @@ class ImportsCollector(ASTPass):
             module = node.module
 
         for alias in node.names:
-            name = ".".join([module, alias.name])
+            name = f"{module}.{alias.name}"
             as_name = alias.asname if alias.asname else name
             imports_dict[name] = as_name
 

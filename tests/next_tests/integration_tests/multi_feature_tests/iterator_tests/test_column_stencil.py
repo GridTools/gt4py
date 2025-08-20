@@ -478,4 +478,4 @@ def test_different_vertical_sizes_with_origin(program_processor):
         assert np.allclose(ref, out.asnumpy())
 
 
-# TODO(havogt) test tuple_get builtin on a Column
+# TODO(havogt): test tuple_get builtin on a Column

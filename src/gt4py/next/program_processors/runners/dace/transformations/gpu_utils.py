@@ -11,7 +11,8 @@
 from __future__ import annotations
 
 import copy
-from typing import Any, Callable, Final, Optional, Sequence, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Final, Optional
 
 import dace
 from dace import (
@@ -174,7 +175,7 @@ def gt_gpu_transform_non_standard_memlet(
         self: gtx_transformations.MapFusionVertical,
         map_exit_1: dace_nodes.MapExit,
         map_entry_2: dace_nodes.MapEntry,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         sdfg: dace.SDFG,
     ) -> bool:
         return (map_entry_2 in new_maps) or (graph.entry_node(map_exit_1) in new_maps)
@@ -183,7 +184,7 @@ def gt_gpu_transform_non_standard_memlet(
         self: gtx_transformations.MapFusionHorizontal,
         map_entry_1: dace_nodes.MapEntry,
         map_entry_2: dace_nodes.MapEntry,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         sdfg: dace.SDFG,
     ) -> bool:
         return (map_entry_1 in new_maps) or (map_entry_2 in new_maps)
@@ -392,7 +393,7 @@ def gt_set_gpu_blocksize(
 
     configured_maps = 0
     for state in sdfg.states():
-        scope_dict: Union[None, dict[Any, Any]] = None
+        scope_dict: None | dict[Any, Any] = None
         cfg_id = state.parent_graph.cfg_id
         state_id = state.block_id
         for node in state.nodes():
@@ -425,7 +426,7 @@ def gt_set_gpu_blocksize(
 
 def _make_gpu_block_parser_for(
     dim: int,
-) -> Callable[["GPUSetBlockSize", Any], None]:
+) -> Callable[[GPUSetBlockSize, Any], None]:
     """Generates a parser for GPU blocks for dimension `dim`.
 
     The returned function can be used as parser for the `GPUSetBlockSize.block_size_*d`
@@ -473,11 +474,11 @@ def _make_gpu_block_parser_for(
 
 def _make_gpu_block_getter_for(
     dim: int,
-) -> Callable[["GPUSetBlockSize"], tuple[int, int, int]]:
+) -> Callable[[GPUSetBlockSize], tuple[int, int, int]]:
     """Makes the getter for the block size of dimension `dim`."""
 
     def _gpu_block_getter(
-        self: "GPUSetBlockSize",
+        self: GPUSetBlockSize,
     ) -> tuple[int, int, int]:
         """Used as getter in the `GPUSetBlockSize.block_size` property."""
         return getattr(self, f"_block_size_{dim}d")
@@ -619,7 +620,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
 
     def can_be_applied(
         self,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -642,7 +643,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
 
     def apply(
         self,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         sdfg: dace.SDFG,
     ) -> None:
         """Modify the map as requested."""
@@ -703,7 +704,8 @@ def gt_remove_trivial_gpu_maps(
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
 
-    Todo: Improve this function.
+    Todo:
+        Improve this function.
     """
 
     # First we try to promote and fuse them with other non-trivial maps.
@@ -720,10 +722,10 @@ def gt_remove_trivial_gpu_maps(
     # Now we try to fuse them together, however, we restrict the fusion to trivial
     #  GPU map.
     def restrict_to_trivial_gpu_maps(
-        self: Union[gtx_transformations.MapFusionVertical, gtx_transformations.MapFusionHorizontal],
-        map_node_1: Union[dace_nodes.MapEntry, dace_nodes.MapExit],
+        self: gtx_transformations.MapFusionVertical | gtx_transformations.MapFusionHorizontal,
+        map_node_1: dace_nodes.MapEntry | dace_nodes.MapExit,
         map_entry_2: dace_nodes.MapEntry,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         sdfg: dace.SDFG,
     ) -> bool:
         map_entry_1 = (
@@ -785,7 +787,8 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
             is run within the context of `gt_gpu_transformation()`.
         - This transformation must be run after the GPU Transformation.
 
-    Todo: Figuring out if this transformation is still needed.
+    Todo:
+        Figuring out if this transformation is still needed.
     """
 
     only_gpu_maps = dace_properties.Property(
@@ -827,7 +830,7 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
 
     def can_be_applied(
         self,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -905,7 +908,7 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
 
         return True
 
-    def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
+    def apply(self, graph: dace.SDFGState | dace.SDFG, sdfg: dace.SDFG) -> None:
         """Performs the Map Promoting.
 
         The function will first perform the promotion of the trivial map and then

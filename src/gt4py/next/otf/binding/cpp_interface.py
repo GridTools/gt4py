@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Final, Sequence
+from collections.abc import Sequence
+from typing import Final
 
 from gt4py.next.otf import cpp_utils, languages
 from gt4py.next.otf.binding import interface

@@ -23,7 +23,8 @@ This is likely to change in the future, to enable GTIR optimizations for scan.
 from __future__ import annotations
 
 import itertools
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import dace
 from dace import subsets as dace_subsets

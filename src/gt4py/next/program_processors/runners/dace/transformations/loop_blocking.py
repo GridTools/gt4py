@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 import dace
 from dace import (
@@ -79,7 +79,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     def __init__(
         self,
         blocking_size: Optional[int] = None,
-        blocking_parameter: Optional[Union[gtx_common.Dimension, str]] = None,
+        blocking_parameter: Optional[gtx_common.Dimension | str] = None,
         require_independent_nodes: Optional[bool] = None,
     ) -> None:
         super().__init__()
@@ -100,7 +100,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
     def can_be_applied(
         self,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -150,7 +150,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
     def apply(
         self,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         sdfg: dace.SDFG,
     ) -> None:
         """Creates a blocking map.
@@ -426,7 +426,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             # A Tasklet must write to an AccessNode, because otherwise there would
             #  be nothing that could be used to cache anything. Furthermore, this
             #  AccessNode must be outside of the inner loop, i.e. be independent.
-            # TODO: Make this check stronger to ensure that there is always an
+            # TODO(): Make this check stronger to ensure that there is always an
             #   AccessNode that is independent.
             if not all(
                 isinstance(out_edge.dst, dace_nodes.AccessNode)

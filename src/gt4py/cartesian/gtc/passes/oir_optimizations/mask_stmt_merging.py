@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import List
 
 from gt4py import eve
 from gt4py.cartesian.gtc import oir
@@ -14,7 +13,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.utils import AccessCollector
 
 
 class MaskStmtMerging(eve.NodeTranslator):
-    def _merge(self, stmts: List[oir.Stmt]) -> List[oir.Stmt]:
+    def _merge(self, stmts: list[oir.Stmt]) -> list[oir.Stmt]:
         merged = [self.visit(stmts[0])]
         for stmt in stmts[1:]:
             stmt = self.visit(stmt)

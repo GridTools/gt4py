@@ -8,7 +8,7 @@
 
 import math
 import typing
-from typing import Any, Dict, Tuple, Union
+from typing import Any
 
 from gt4py import eve
 from gt4py.cartesian.gtc import gtir
@@ -16,7 +16,7 @@ from gt4py.cartesian.gtc.common import LevelMarker
 
 
 def _iter_field_names(
-    node: Union[gtir.Stencil, gtir.ParAssignStmt],
+    node: gtir.Stencil | gtir.ParAssignStmt,
 ) -> eve.utils.XIterable[gtir.FieldAccess]:
     return node.walk_values().if_isinstance(gtir.FieldDecl).getattr("name").unique()
 
@@ -24,7 +24,7 @@ def _iter_field_names(
 class KBoundaryVisitor(eve.NodeVisitor):
     """For every field compute the boundary in k, e.g. (2, -1) if [k_origin-2, k_origin+k_domain-1] is accessed."""
 
-    def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> Dict[str, Tuple[int, int]]:
+    def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> dict[str, tuple[int, int]]:
         field_boundaries = {name: (-math.inf, -math.inf) for name in _iter_field_names(node)}
         for vloop in node.vertical_loops:
             self.generic_visit(vloop.body, vloop=vloop, field_boundaries=field_boundaries, **kwargs)
@@ -34,13 +34,13 @@ class KBoundaryVisitor(eve.NodeVisitor):
                 b[0] if b[0] != -math.inf else 0,
                 b[1] if b[1] != -math.inf else 0,
             )
-        return typing.cast(Dict[str, Tuple[int, int]], field_boundaries)
+        return typing.cast(dict[str, tuple[int, int]], field_boundaries)
 
     def visit_FieldAccess(
         self,
         node: gtir.FieldAccess,
         vloop: gtir.VerticalLoop,
-        field_boundaries: Dict[str, Tuple[Union[float, int], Union[float, int]]],
+        field_boundaries: dict[str, tuple[float | int, float | int]],
         **_: Any,
     ):
         boundary = field_boundaries[node.name]
@@ -64,7 +64,7 @@ class KBoundaryVisitor(eve.NodeVisitor):
         field_boundaries[node.name] = boundary
 
 
-def compute_k_boundary(node: gtir.Stencil) -> Dict[str, Tuple[int, int]]:
+def compute_k_boundary(node: gtir.Stencil) -> dict[str, tuple[int, int]]:
     # loop from START to END is not considered as it might be empty. additional check possible in the future
     return KBoundaryVisitor().visit(node)
 

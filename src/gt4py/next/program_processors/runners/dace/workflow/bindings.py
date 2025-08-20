@@ -253,13 +253,7 @@ def {_cb_get_stride}(ndarray, dim_index):
 """)
     code.empty_line()
     code.append(
-        "def {funname}({arg0}, {arg1}, {arg2}, {arg3}):".format(
-            funname=bind_func_name,
-            arg0=_cb_device,
-            arg1=_cb_sdfg_argtypes,
-            arg2=_cb_args,
-            arg3=_cb_last_call_args,
-        )
+        f"def {bind_func_name}({_cb_device}, {_cb_sdfg_argtypes}, {_cb_args}, {_cb_last_call_args}):"
     )
     code.indent()
     for i, param in enumerate(program_source.entry_point.parameters):

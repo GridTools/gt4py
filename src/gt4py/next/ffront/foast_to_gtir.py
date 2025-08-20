@@ -8,7 +8,8 @@
 
 
 import dataclasses
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils

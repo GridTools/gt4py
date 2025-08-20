@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-from typing import List, Union
-
 from gt4py.eve import Coerced, Node, SymbolName
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Sym, SymRef
@@ -20,7 +18,7 @@ class Stmt(Node): ...
 
 class AssignStmt(Stmt):
     op: str = "="
-    lhs: Union[Sym, SymRef]
+    lhs: Sym | SymRef
     rhs: Expr
 
 
@@ -45,5 +43,5 @@ class ReturnStmt(Stmt):
 
 class ImperativeFunctionDefinition(Node, SymbolTableTrait):
     id: Coerced[SymbolName]
-    params: List[Sym]
-    fun: List[Stmt]
+    params: list[Sym]
+    fun: list[Stmt]

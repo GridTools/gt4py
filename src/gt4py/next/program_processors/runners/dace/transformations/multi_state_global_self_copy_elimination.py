@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, TypeAlias, Union
+from typing import Any, Optional, TypeAlias
 
 import dace
 from dace import (
@@ -623,7 +623,7 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
         transient_data: str,
         write_locations: list[AccessLocation],
         read_locations: list[AccessLocation],
-    ) -> Union[None, str]:
+    ) -> None | str:
         """Test if the transient can be eliminated.
 
         The function tests if transient data can be eliminated and be replaced by a
@@ -657,7 +657,7 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
         # TODO(phimuell): To better handle `concat_where` also allow multiple producers.
         # TODO(phimuell): In `concat_where` we are using `dynamic` Memlets, they should
         #   also be checked.
-        global_data: Union[None, str] = None
+        global_data: None | str = None
         for state, transient_access_node in write_locations:
             for iedge in state.in_edges(transient_access_node):
                 src_node = iedge.src
@@ -700,7 +700,7 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
         self,
         sdfg: dace.SDFG,
         data_name: str,
-    ) -> Union[None, tuple[list[AccessLocation], list[AccessLocation]]]:
+    ) -> None | tuple[list[AccessLocation], list[AccessLocation]]:
         """The function finds all locations were `data_name` is written and read.
 
         The function will scan the SDFG and returns all places where `data_name` is
