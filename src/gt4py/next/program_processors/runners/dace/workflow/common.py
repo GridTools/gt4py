@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Optional
+import contextlib
+from typing import Any, Generator, Optional
 
 import dace
 
@@ -18,12 +19,26 @@ def set_dace_config(
     device_type: core_defs.DeviceType,
     cmake_build_type: Optional[config.CMakeBuildType] = None,
 ) -> None:
-    """Set dace configuration, shared among all workflow stages.
+    """Set the DaCe configuration as required by GT4Py.
+
+    This function should never be used directly, instead the context manager
+    `dace_context()` should be used!
+    Furthermore, all changes to `dace.Config` are applied by this function.
 
     Args:
         device_type: Target device type, needed for compiler config.
         cmake_build_type: CMake build type, needed for compiler config.
+
+    Note:
+        For every thread DaCe will maintain a separate set of configuration. Thus,
+        the will not influence each other. It is also important that a thread will
+        not inherent the configuration of its parent, but it will be initialized
+        to the default. This means that this function should be always called.
+        When working on DaCe.
     """
+    # NOTE: Each thread maintains its own set of configuration, i.e. `dace.Config` is
+    #   a thread local variable. This means it is safe to set values that are different
+    #   for each thread.
 
     # We rely on dace cache to avoid recompiling the SDFG.
     #   Note that the workflow step with the persistent `FileCache` store
@@ -56,16 +71,35 @@ def set_dace_config(
     )
 
     # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
-    # up with the cuda streams, i.e. it allocates N streams but uses N+1. Therefore,
-    # setting up 1 cuda stream results in cuda code that uses 2 streams.
-    # As a workaround, we set 'max_concurrent_streams=-1' to configure dace to only
-    # use the default cuda stream.
-    # Note that by using the default cuda stream the dace codegen will use different
-    # codepaths, because it will not need to emit synchronization among streams.
+    #  up with the cuda streams, i.e. it allocates N streams but uses N+1. The first
+    #  idea was to use just one stream. However, even in that case the generator
+    #  generated wrong code. The current approach is to use the default stream, i.e.
+    #  setting `max_concurrent_streams` to `-1`. However, the draw back is, that
+    #  apparently then all synchronization is disabled, even the one at the very
+    #  end of the SDFG call. To correct for that we are using either
+    #  `make_sdfg_call_sync()` or `make_sdfg_call_async()`, see there or in
+    #  [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
     dace.Config.set("compiler.cuda.max_concurrent_streams", value=-1)
 
+    # This assumes that a process will only use one type of GPU.
     if device_type == core_defs.DeviceType.ROCM:
         dace.Config.set("compiler.cuda.backend", value="hip")
+    elif device_type == core_defs.DeviceType.CUDA:
+        dace.Config.set("compiler.cuda.backend", value="cuda")
 
     # Instrumentation of SDFG timers
     dace.Config.set("instrumentation", "report_each_invocation", value=True)
+
+    # we are not interested in storing the history of SDFG transformations.
+    dace.Config.set("store_history", value=False)
+
+
+@contextlib.contextmanager
+def dace_context(**kwargs: Any) -> Generator[None, None, None]:
+    """Create a DaCe configuration context and calls `set_dace_config()`.
+
+    For more information see the description of `set_dace_config()`.
+    """
+    with dace.config.temporary_config():
+        set_dace_config(**kwargs)
+        yield

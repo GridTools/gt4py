@@ -321,7 +321,6 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         # Now promote the second map such that it maps the first map.
         self._promote_first_map(first_map_exit, second_map_entry)
 
-        # Now fuse the maps together.
         if self.fuse_after_promotion:
             # Unlike in the `can_be_applied()` function we do specify here the right
             #  parameter, i.e. ensure that the intermediate can be removed. Because

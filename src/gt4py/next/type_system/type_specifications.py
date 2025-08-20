@@ -53,6 +53,17 @@ class DimensionType(TypeSpec):
         return str(self.dim)
 
 
+class IndexType(TypeSpec):
+    """
+    Represents the type of an index into a dimension.
+    """
+
+    dim: common.Dimension
+
+    def __str__(self) -> str:
+        return f"Index[{self.dim}]"
+
+
 class OffsetType(TypeSpec):
     # TODO(havogt): replace by ConnectivityType
     source: common.Dimension
