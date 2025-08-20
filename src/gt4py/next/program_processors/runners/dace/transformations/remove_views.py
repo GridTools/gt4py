@@ -105,7 +105,7 @@ class RemovePointwiseViews(dace_transformation.SingleStateTransformation):
             edge_to_redirect,
             new_dst=dst_in_edge.dst,
             new_dst_conn=dst_in_edge.dst_conn,
-            new_memlet=dace.Memlet(dst_node.data),
+            new_memlet=dace.Memlet(data=dst_node.data, subset=dst_in_edge.data.subset),
         )
 
         graph.remove_edge(dst_in_edge)
