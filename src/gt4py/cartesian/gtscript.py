@@ -62,6 +62,7 @@ MATH_BUILTINS = {
     "erf",
     "erfc",
     "round",
+    "round_away_from_zero",
 }
 
 TYPE_HINT_AND_CAST_BUILTINS = {
@@ -967,5 +968,10 @@ def erfc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
 
 
 def round(x) -> _gt_all_op_types:  # type: ignore[empty-body] # noqa: A001 [builtin-variable-shadowing]
+    """Computes the nearest integer value to `x`, rounding halfway cases to even numbers."""
+    pass
+
+
+def round_away_from_zero(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Computes the nearest integer value to `x`, rounding halfway cases away from zero."""
     pass

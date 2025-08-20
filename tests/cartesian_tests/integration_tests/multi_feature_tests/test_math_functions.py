@@ -19,6 +19,7 @@ from gt4py.cartesian.gtscript import (
     erfc,
     interval,
     round,
+    round_away_from_zero,
     stencil,
     Field,
 )
@@ -80,6 +81,28 @@ def test_round(backend):
     def stencil_round(field_a: Field[np.float32], field_b: Field[np.float32]):
         with computation(PARALLEL), interval(...):
             field_b = round(field_a)
+
+    initial_values = xp.array([-1.5, -0.5, 0.3, 0.5, 0.8, 1.2, 1.5], dtype=xp.float32)
+    array_shape = (1, 1, len(initial_values))
+    A = storage.zeros(array_shape, np.float32, backend=backend)
+    A[:, :, :] = initial_values
+    B = storage.full(array_shape, -1.0, np.float32, backend=backend)
+
+    stencil_round(A, B)
+
+    expected = xp.array([-2.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0], dtype=xp.float32)
+    assert (A[0, 0, :] == initial_values).all()
+    assert (B[0, 0, :] == expected).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_round_away_form_zero(backend):
+    xp = get_array_library(backend)  # numpy or cupy depending on backend
+
+    @stencil(backend=backend)
+    def stencil_round(field_a: Field[np.float32], field_b: Field[np.float32]):
+        with computation(PARALLEL), interval(...):
+            field_b = round_away_from_zero(field_a)
 
     initial_values = xp.array([-1.5, -0.5, 0.3, 0.5, 0.8, 1.2, 1.5], dtype=xp.float32)
     array_shape = (1, 1, len(initial_values))

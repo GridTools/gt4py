@@ -43,8 +43,11 @@ def _round_away_from_zero(num):
     return np.copysign(np.floor(np.abs(num) + 0.5), num)
 
 
-round_ = _round_away_from_zero
+round_ = np.round
 round_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
+
+round_away_from_zero_ = _round_away_from_zero
+round_away_from_zero_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
 
 positive: np.ufunc = np.positive
 negative: np.ufunc = np.negative
@@ -96,4 +99,5 @@ ceil: np.ufunc = np.ceil
 trunc: np.ufunc = np.trunc
 erf: np.ufunc = erf_
 erfc: np.ufunc = erfc_
-round: np.ufunc = round_  # type: ignore[assignment] # noqa: A001
+round: np.ufunc = round_  # type: ignore # noqa: A001
+round_away_from_zero: np.ufunc = round_away_from_zero_  # type: ignore
