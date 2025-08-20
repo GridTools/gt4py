@@ -627,8 +627,9 @@ class LambdaToDataflow(eve.NodeVisitor):
                 if use_array
                 else data_type
             ),
-            # TODO(phimuell, edopao): Find out what to do here.
-            field_layout=None,
+            # TODO(phimuell, edopao): I am actually not sure what we should use here, but this
+            #   might be the right choice.
+            field_layout=([_CONST_DIM] if use_array else []),
         )
 
     def _visit_deref(self, node: gtir.FunCall) -> DataExpr:
