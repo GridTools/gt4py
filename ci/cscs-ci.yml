@@ -149,7 +149,7 @@ test_cscs_amd_rocm:
     CMAKE_PREFIX_PATH: /opt/rocm # for next
     CXX: /opt/rocm/bin/hipcc
     CUDA_HOME: /opt/rocm # for cartesian
-    SLURM_TIMELIMIT: 15 # relaxed relative to santis as there is no pressure on the queue
+    SLURM_TIMELIMIT: 20 # relaxed relative to santis as there is no pressure on the queue
   rules:
     - if: $SUBVARIANT == 'cuda12' || $VARIANT=='cuda12'
       when: never
