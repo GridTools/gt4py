@@ -107,11 +107,11 @@ build_cscs_amd_rocm:
         VARIANT: ['cuda12', 'rocm6_0', 'cpu']
         PY_VERSION: *test_python_versions
   rules: &exclude_variants_rules
-    - if: '($SUBVARIANT == "cpu" || ($SUBPACKAGE == "storage" && $VARIANT == "cpu")) && (" $TEST_VARIANTS " !~ " cpu ")'
+    - if: '($SUBVARIANT == "cpu" || ($SUBPACKAGE == "storage" && $VARIANT == "cpu")) && ($TEST_VARIANTS !~ /(^|\s)cpu(\s|$)/)'
       when: never
-    - if: '($SUBVARIANT == "cuda12" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda12")) && (" $TEST_VARIANTS " !~ " cuda12 ")'
+    - if: '($SUBVARIANT == "cuda12" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda12")) && ($TEST_VARIANTS !~ /(^|\s)cuda12(\s|$)/)'
       when: never
-    - if: '($SUBVARIANT == "rocm_6" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm_6")) && (" $TEST_VARIANTS " !~ " rocm_6 ")'
+    - if: '($SUBVARIANT == "rocm_6" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm_6")) && ($TEST_VARIANTS !~ /(^|\s)rocm_6(\s|$)/)'
       when: never
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
