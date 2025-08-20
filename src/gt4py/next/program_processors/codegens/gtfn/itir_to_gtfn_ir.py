@@ -471,11 +471,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             tagged_sizes=sizes, tagged_offsets=domain_offsets, connectivities=connectivities
         )
 
-    def _visit_get_domain(self, node: itir.FunCall, **kwargs: Any) -> Node:
+    def _visit_get_domain_range(self, node: itir.FunCall, **kwargs: Any) -> Node:
         field, dim = node.args
 
         return FunCall(
-            fun=SymRef(id="get_domain"),
+            fun=SymRef(id="get_domain_range"),
             args=[self.visit(field, **kwargs), self.visit(dim, **kwargs)],
         )
 

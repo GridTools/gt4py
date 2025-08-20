@@ -413,7 +413,7 @@ def concat_where(*args):
 
 
 @builtin_dispatch
-def get_domain(*args):
+def get_domain_range(*args):
     raise BackendNotSelectedError()
 
 
@@ -490,7 +490,7 @@ BUILTINS = {
     "cartesian_domain",
     "cast_",
     "deref",
-    "get_domain",
+    "get_domain_range",
     "if_",
     "index",  # `index(dim)` creates a dim-field that has the current index at each point
     "shift",
