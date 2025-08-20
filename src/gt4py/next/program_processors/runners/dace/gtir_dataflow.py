@@ -1397,10 +1397,9 @@ class LambdaToDataflow(eve.NodeVisitor):
                     subset=dace_subsets.Range.from_string(
                         f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
                     ),
-                    field_layout=None,
+                    field_layout=list(offset_provider_type.domain),
                 )
             )
-            assert False, "CONSTRUCTION ABOVE IS STILL NOT OKAY"  # noqa: B011 [assert-false] # Reminder
 
             input_memlets["__neighbor_idx"] = dace.Memlet(
                 data=connectivity_slice.dc_node.data, subset=map_index
