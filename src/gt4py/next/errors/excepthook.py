@@ -42,7 +42,8 @@ def compilation_error_hook(
     verbose exceptions are enabled, the stack trace and cause of the error is
     also printed.
     """
-    if getattr(exceptions, "DSLError", None) is not None and isinstance(value, exceptions.DSLError):
+    # in hard crashes of the interpreter, the `exceptions` module might be partially unloaded
+    if exceptions.DSLError is not None and isinstance(value, exceptions.DSLError):
         exc_strs = _format_uncaught_error(value, config.VERBOSE_EXCEPTIONS)
         print("".join(exc_strs), file=sys.stderr)
     else:
