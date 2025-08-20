@@ -105,7 +105,6 @@ def test_remove_point_view():
 
     res, ref = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
-    sdfg.view()
 
     sdfg.apply_transformations_once_everywhere(
         gtx_transformations.RemovePointwiseViews,
@@ -114,7 +113,6 @@ def test_remove_point_view():
     )
 
     util.compile_and_run_sdfg(sdfg, **res)
-    sdfg.view()
 
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
     assert util.count_nodes(sdfg, dace_nodes.MapExit) == 1
