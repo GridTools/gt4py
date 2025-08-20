@@ -21,7 +21,7 @@ from gt4py import next as gtx
 from gt4py.next import Domain, common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.transform_get_domain import TransformGetDomain
+from gt4py.next.iterator.transforms.transform_get_domain import TransformGetDomainRange
 
 
 def program_factory(
@@ -63,7 +63,7 @@ def run_test_program(
         params=params,
         body=[setat_factory(domain=domain, target=im.ref(target))],
     )
-    actual = TransformGetDomain.apply(testee, sizes=sizes)
+    actual = TransformGetDomainRange.apply(testee, sizes=sizes)
     assert actual == expected
 
 
@@ -74,7 +74,7 @@ def construct_domains(
     ragnes_resolved = {}
 
     for dim, r in zip(domain_resolved.dims, domain_resolved.ranges):
-        get_call = im.call("get_domain")(symbol_name, im.axis_literal(dim))
+        get_call = im.call("get_domain_range")(symbol_name, im.axis_literal(dim))
         ranges_get[dim] = (im.tuple_get(0, get_call), im.tuple_get(1, get_call))
         bounds = im.make_tuple(r.start, r.stop)
         ragnes_resolved[dim] = (im.tuple_get(0, bounds), im.tuple_get(1, bounds))
@@ -119,7 +119,7 @@ def test_get_domain_inside_as_fieldop():
         ],
     )
 
-    actual = TransformGetDomain.apply(testee, sizes=sizes)
+    actual = TransformGetDomainRange.apply(testee, sizes=sizes)
     assert actual == expected
 
 
@@ -131,10 +131,10 @@ def test_get_domain_tuples():
         {
             Vertex: (
                 im.tuple_get(
-                    0, im.call("get_domain")(im.tuple_get(0, "out"), im.axis_literal(Vertex))
+                    0, im.call("get_domain_range")(im.tuple_get(0, "out"), im.axis_literal(Vertex))
                 ),
                 im.tuple_get(
-                    1, im.call("get_domain")(im.tuple_get(0, "out"), im.axis_literal(Vertex))
+                    1, im.call("get_domain_range")(im.tuple_get(0, "out"), im.axis_literal(Vertex))
                 ),
             )
         },
@@ -158,8 +158,12 @@ def test_get_domain_nested_tuples():
         common.GridType.UNSTRUCTURED,
         {
             KDim: (
-                im.tuple_get(0, im.call("get_domain")(im.tuple_get(0, tup), im.axis_literal(KDim))),
-                im.tuple_get(1, im.call("get_domain")(im.tuple_get(0, tup), im.axis_literal(KDim))),
+                im.tuple_get(
+                    0, im.call("get_domain_range")(im.tuple_get(0, tup), im.axis_literal(KDim))
+                ),
+                im.tuple_get(
+                    1, im.call("get_domain_range")(im.tuple_get(0, tup), im.axis_literal(KDim))
+                ),
             )
         },
     )
