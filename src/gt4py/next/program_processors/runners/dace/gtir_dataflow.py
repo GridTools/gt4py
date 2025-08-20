@@ -74,8 +74,8 @@ class ValueExpr:
     def __post_init__(self) -> None:
         # NOTE: `None` means "I need it to make mypy happy and I have not yet though enough
         #   to find out what to use, but I need to commit.
-        assert isinstance(self.gt_dtype, ts.ListType | ts.ScalarType)
         assert isinstance(self.field_layout, list)
+        assert isinstance(self.gt_dtype, (ts.ListType, ts.ScalarType))
 
         assert gtx_common.order_dimensions(self.field_layout) == self.field_layout
         if isinstance(self.gt_dtype, ts.ScalarType):
@@ -118,11 +118,16 @@ class MemletExpr:
         # NOTE: `None` means "I need it to make mypy happy and I have not yet though enough
         #   to find out what to use, but I need to commit.
         assert isinstance(self.field_layout, list)
-        assert isinstance(self.gt_dtype, ts.ListType | ts.ScalarType)
+        assert isinstance(self.gt_dtype, (ts.ListType, ts.ScalarType))
 
         # We expect that the field layout is in the correct order.
         assert gtx_common.order_dimensions(self.field_layout) == self.field_layout
-        assert len(self.subset) == len(self.field_layout)
+
+        if len(self.field_layout) == 0:
+            # Special case for scalars outside fieldops.
+            assert self.subset == dace_subsets.Range.from_string("0")
+        else:
+            assert len(self.subset) == len(self.field_layout)
 
         # This essentially maintaining the invariant we have that local dimensions are handled
         #  specially.
@@ -555,16 +560,26 @@ class LambdaToDataflow(eve.NodeVisitor):
             #   Consider an offset provider for `K` in a pure `K` field and you will see why it
             #   fails.
             source_field_layout = field.field_layout
+            assert source_field_layout is not None
             local_dim_indices = [i for i, size in enumerate(field.subset.size()) if size != 1]
             if len(local_dim_indices) == 0:
                 # we are accessing a single-element array with shape (1,)
                 view_shape = (1,)
                 view_strides = (1,)
                 view_field_layout = []
+                view_gt_dtype = (
+                    field.gt_dtype.element_type
+                    if isinstance(field.gt_dtype, ts.ListType)
+                    else field.gt_dtype
+                )
+
             else:
                 view_shape = tuple(desc.shape[i] for i in local_dim_indices)
                 view_strides = tuple(desc.strides[i] for i in local_dim_indices)
                 view_field_layout = [source_field_layout[i] for i in local_dim_indices]
+                # I have not the slightest clue if this is correct.
+                view_gt_dtype = field.gt_dtype
+
             view, _ = self.sdfg.add_view(
                 f"view_{field.dc_node.data}",
                 view_shape,
@@ -575,7 +590,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             local_view_node = self.state.add_access(view)
             self._add_input_data_edge(field.dc_node, field.subset, local_view_node)
 
-            return ValueExpr(local_view_node, field.gt_dtype, field_layout=view_field_layout)
+            return ValueExpr(local_view_node, view_gt_dtype, field_layout=view_field_layout)  # type: ignore[arg-type]  # No idea what is going on.
 
         else:
             assert isinstance(field, ValueExpr)
@@ -612,6 +627,8 @@ class LambdaToDataflow(eve.NodeVisitor):
                 if use_array
                 else data_type
             ),
+            # TODO(phimuell, edopao): Find out what to do here.
+            field_layout=None,
         )
 
     def _visit_deref(self, node: gtir.FunCall) -> DataExpr:
@@ -794,7 +811,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         if isinstance(arg, IteratorExpr) and use_full_shape:
             return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, arg.indices)
         else:
-            return ValueExpr(inner_node, arg.gt_dtype)
+            return ValueExpr(inner_node, arg.gt_dtype, field_layout=None)
 
     def _visit_if_branch(
         self,
@@ -901,7 +918,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             output_node,
             dace.Memlet.from_array(output_data, output_desc),
         )
-        return ValueExpr(output_node, edge.result.gt_dtype)
+        return ValueExpr(output_node, edge.result.gt_dtype, field_layout=None)
 
     def _visit_if(self, node: gtir.FunCall) -> ValueExpr | tuple[ValueExpr | tuple[Any, ...], ...]:
         """
@@ -924,7 +941,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 None,
                 dace.Memlet.from_array(output, output_desc),
             )
-            return ValueExpr(output_node, inner_value.gt_dtype)
+            return ValueExpr(output_node, inner_value.gt_dtype, field_layout=None)
 
         assert len(node.args) == 3
 
@@ -1262,7 +1279,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             raise TypeError(f"Unexpected value {index_arg} as index argument.")
 
-        return ValueExpr(dc_node=dst_node, gt_dtype=src_arg.gt_dtype.element_type)
+        return ValueExpr(
+            dc_node=dst_node, gt_dtype=src_arg.gt_dtype.element_type, field_layout=None
+        )
 
     def _visit_map(self, node: gtir.FunCall) -> ValueExpr:
         """
@@ -1304,6 +1323,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             assert input_arg.gt_dtype.offset_type is not None
             offset_type = input_arg.gt_dtype.offset_type
             if offset_type == _CONST_DIM:
+                # TODO(phimuell, edoapo): We should have a better name to identify them.
                 # this input argument is the result of `make_const_list`
                 continue
             offset_provider_t = self.subgraph_builder.get_offset_provider_type(offset_type.value)
@@ -1409,11 +1429,15 @@ class LambdaToDataflow(eve.NodeVisitor):
             external_edges=True,
         )
 
-        # TODO(phimuell, edopao): This is hacky and probably wrong
+        # TODO(phimuell, edopao): Under the assumption that the operation only happens
+        #   inside big Maps, i.e. that a scalar array is generated, this should work.
+        result_gt_dtype = ts.ListType(node.type.element_type, offset_type)
+        result_field_layout = [offset_type]
 
         return ValueExpr(
             dc_node=result_node,
-            gt_dtype=ts.ListType(node.type.element_type, offset_type),
+            gt_dtype=result_gt_dtype,
+            field_layout=result_field_layout,
         )
 
     def _make_reduce_with_skip_values(
@@ -1581,7 +1605,10 @@ class LambdaToDataflow(eve.NodeVisitor):
                 )
             self.state.add_nedge(reduce_node, result_node, dace.Memlet(data=result, subset="0"))
 
-        return ValueExpr(result_node, node.type)
+        # TODO(phimuell, edopao): I am actually not sure what the `field_layout` should be here.
+        #   In `_visit_map()` we could always say that we can use the LOCAL dimension. But here?
+        #   I think the most natural solution, since the result is a scalar, is to use `[]`.
+        return ValueExpr(result_node, node.type, field_layout=[])
 
     def _split_shift_args(
         self, args: list[gtir.Expr]

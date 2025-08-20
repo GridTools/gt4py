@@ -543,7 +543,7 @@ def _connect_nested_sdfg_output_to_temporaries(
         None,
         dace.Memlet.from_array(outer_dataname, outer_desc),
     )
-    output_expr = gtir_dataflow.ValueExpr(outer_node, inner_data.gt_type.dtype)
+    output_expr = gtir_dataflow.ValueExpr(outer_node, inner_data.gt_type.dtype, field_layout=None)
     return gtir_dataflow.DataflowOutputEdge(outer_ctx.state, output_expr)
 
 

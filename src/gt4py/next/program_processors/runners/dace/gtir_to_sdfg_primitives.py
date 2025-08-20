@@ -518,6 +518,7 @@ def translate_index(
     index_value = gtir_dataflow.ValueExpr(
         dc_node=index_node,
         gt_dtype=gtx_dace_utils.as_itir_type(gtir_to_sdfg_types.INDEX_DTYPE),
+        field_layout=None,
     )
     index_write_tasklet = sdfg_builder.add_tasklet(
         "index",
