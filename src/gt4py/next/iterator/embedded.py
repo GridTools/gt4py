@@ -1136,7 +1136,8 @@ class IndexField(common.Field):
     """
     Minimal index field implementation.
 
-    TODO: Improve implementation (e.g. support slicing) and move out of this module.
+    Todo:
+        Improve implementation (e.g. support slicing) and move out of this module.
     """
 
     _dimension: common.Dimension
@@ -1201,7 +1202,7 @@ class IndexField(common.Field):
             assert isinstance(r, core_defs.INTEGRAL_TYPES)
             # TODO(tehrengruber): Use a regular zero dimensional field instead.
             return self.__class__(self._dimension, r)
-        # TODO: set a domain...
+        # TODO(): set a domain...
         raise NotImplementedError()
 
     __call__ = premap
@@ -1274,7 +1275,8 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     """
     Minimal constant field implementation.
 
-    TODO: Improve implementation (e.g. support slicing) and move out of this module.
+    Todo:
+        Improve implementation (e.g. support slicing) and move out of this module.
     """
 
     _value: core_defs.ScalarT
@@ -1494,7 +1496,7 @@ def make_const_list(value):
 @builtins.reduce.register(EMBEDDED)
 def reduce(fun, init):
     def sten(*lists):
-        # TODO: assert check_that_all_lists_are_compatible(*lists)
+        # TODO(): assert check_that_all_lists_are_compatible(*lists)
         lst = None
         for cur in lists:
             if isinstance(cur, _List):

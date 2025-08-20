@@ -189,7 +189,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
             # The structure of the scan passes argument and the requested
             # argument type differ. As such we can not extract the dimensions
             # and just return a generic field shown in the error later on.
-            # TODO: we want some generic field type here, but our type system does not support it yet.
+            # TODO(): we want some generic field type here, but our type system does not support it yet.
             return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
     res = type_info.apply_to_primitive_constituents(_as_field, param, with_path_arg=True)

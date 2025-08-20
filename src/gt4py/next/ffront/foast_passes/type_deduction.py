@@ -450,7 +450,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"Inconsistent types between two branches for variable '{sym}': "
                     f"got types '{true_type}' and '{false_type}.",
                 )
-            # TODO: properly patch symtable (new node?)
+            # TODO(): properly patch symtable (new node?)
             symtable[sym].type = new_node.annex.propagated_symbols[sym].type = (
                 new_true_branch.annex.symtable[sym].type
             )
@@ -889,7 +889,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_reduction(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         field_type = cast(ts.FieldType, node.args[0].type)
         reduction_dim = cast(ts.DimensionType, node.kwargs["axis"].type).dim
-        # TODO: This code does not handle ellipses for dimensions. Fix it.
+        # TODO(): This code does not handle ellipses for dimensions. Fix it.
         assert field_type.dims is not ...
         if reduction_dim not in field_type.dims:
             field_dims_str = ", ".join(str(dim) for dim in field_type.dims)

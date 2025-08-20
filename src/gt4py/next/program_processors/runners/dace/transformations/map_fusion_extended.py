@@ -88,7 +88,7 @@ def gt_vertical_map_split_fusion(
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
-    # TODO: Restrict MapFusion such that it only applies to the Maps that have
+    # TODO(): Restrict MapFusion such that it only applies to the Maps that have
     #   been split and not some other random Maps.
     transformations = [
         VerticalSplitMapRange(
@@ -477,7 +477,7 @@ class VerticalSplitMapRange(SplitMapRange):
                 ):
                     return False
 
-        # TODO: Ensure that the fusion can be performed.
+        # TODO(): Ensure that the fusion can be performed.
 
         return True
 

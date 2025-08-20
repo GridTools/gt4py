@@ -639,7 +639,7 @@ def return_type_field(
     source_dim = with_args[0].source
     target_dims = with_args[0].target
     new_dims = []
-    # TODO: This code does not handle ellipses for dimensions. Fix it.
+    # TODO(): This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     for d in field_type.dims:
         if d != source_dim:

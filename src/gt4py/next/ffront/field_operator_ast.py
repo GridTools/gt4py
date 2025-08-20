@@ -77,7 +77,7 @@ class Name(Expr):
 
 
 class Constant(Expr):
-    value: Any  # TODO: be more specific
+    value: Any  # TODO(): be more specific
 
 
 class Subscript(Expr):

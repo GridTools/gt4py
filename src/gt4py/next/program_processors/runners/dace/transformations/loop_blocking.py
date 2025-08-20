@@ -426,7 +426,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             # A Tasklet must write to an AccessNode, because otherwise there would
             #  be nothing that could be used to cache anything. Furthermore, this
             #  AccessNode must be outside of the inner loop, i.e. be independent.
-            # TODO: Make this check stronger to ensure that there is always an
+            # TODO(): Make this check stronger to ensure that there is always an
             #   AccessNode that is independent.
             if not all(
                 isinstance(out_edge.dst, dace_nodes.AccessNode)

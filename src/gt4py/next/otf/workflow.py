@@ -198,7 +198,7 @@ class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
     class __Steps:
         inner: tuple[Workflow[Any, Any], ...]
 
-    # todo(ricoh): replace with normal tuple with TypeVarTuple hints
+    # TODO(ricoh): replace with normal tuple with TypeVarTuple hints
     #   to enable automatic deduction StartT and EndT fom constructor
     #   calls. TypeVarTuple is available in typing_extensions in
     #   Python <= 3.11. Revise after mypy constraint is > 1.0.1,

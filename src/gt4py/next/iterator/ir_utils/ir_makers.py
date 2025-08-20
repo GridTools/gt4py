@@ -440,7 +440,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
     def _impl(*its: itir.Expr) -> itir.FunCall:
         args = [
             f"__arg{i}" for i in range(len(its))
-        ]  # TODO: `op` must not contain `SymRef(id="__argX")`
+        ]  # TODO(): `op` must not contain `SymRef(id="__argX")`
         return lift(lambda_(*args)(op(*[deref(arg) for arg in args])))(*its)
 
     return _impl
@@ -533,7 +533,7 @@ def op_as_fieldop(
     def _impl(*its: itir.Expr) -> itir.FunCall:
         args = [
             f"__arg{i}" for i in range(len(its))
-        ]  # TODO: `op` must not contain `SymRef(id="__argX")`
+        ]  # TODO(): `op` must not contain `SymRef(id="__argX")`
         return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
 
     return _impl

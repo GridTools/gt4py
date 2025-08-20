@@ -703,7 +703,8 @@ def gt_remove_trivial_gpu_maps(
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
 
-    Todo: Improve this function.
+    Todo:
+        Improve this function.
     """
 
     # First we try to promote and fuse them with other non-trivial maps.
@@ -785,7 +786,8 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
             is run within the context of `gt_gpu_transformation()`.
         - This transformation must be run after the GPU Transformation.
 
-    Todo: Figuring out if this transformation is still needed.
+    Todo:
+        Figuring out if this transformation is still needed.
     """
 
     only_gpu_maps = dace_properties.Property(

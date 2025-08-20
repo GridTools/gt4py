@@ -163,7 +163,7 @@ class NdArrayField(
         cls,
         data: (
             npt.ArrayLike | core_defs.NDArrayObject
-        ),  # TODO: NDArrayObject should be part of ArrayLike
+        ),  # TODO(): NDArrayObject should be part of ArrayLike
         /,
         *,
         domain: common.DomainLike,
@@ -814,7 +814,7 @@ def _compute_mask_slices(
     mask: core_defs.NDArrayObject,
 ) -> list[tuple[bool, slice]]:
     """Take a 1-dimensional mask and return a sequence of mappings from boolean values to slices."""
-    # TODO: does it make sense to upgrade this naive algorithm to numpy?
+    # TODO(): does it make sense to upgrade this naive algorithm to numpy?
     assert mask.ndim == 1
     cur = bool(mask[0].item())
     ind = 0

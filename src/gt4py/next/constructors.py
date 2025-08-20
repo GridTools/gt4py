@@ -189,7 +189,7 @@ def as_field(
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
-    # TODO: copy=False
+    # TODO(): copy=False
 ) -> nd_array_field.NdArrayField:
     """Create a Field from an array-like object using the given (or device-default) allocator.
 
@@ -293,7 +293,7 @@ def as_connectivity(
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
     skip_value: core_defs.IntegralScalar | eve.NothingType | None = eve.NOTHING,
-    # TODO: copy=False
+    # TODO(): copy=False
 ) -> common.Connectivity:
     """
     Construct a `Connectivity` from the given domain, codomain, and data.

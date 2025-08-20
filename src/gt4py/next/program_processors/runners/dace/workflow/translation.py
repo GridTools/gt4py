@@ -69,7 +69,8 @@ def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
     for work that runs on the GPU. Furthermore, all work is scheduled on the
     default stream.
 
-    Todo: Revisit this function once DaCe changes its behaviour in this regard.
+    Todo:
+        Revisit this function once DaCe changes its behaviour in this regard.
     """
 
     # This is only a problem on GPU.
@@ -106,7 +107,8 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     have _finished_ and the results are available. This function only has an effect for
     work that runs on the GPU. Furthermore, all work is scheduled on the default stream.
 
-    Todo: Revisit this function once DaCe changes its behaviour in this regard.
+    Todo:
+        Revisit this function once DaCe changes its behaviour in this regard.
     """
 
     # This is only a problem on GPU.

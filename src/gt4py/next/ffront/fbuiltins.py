@@ -105,13 +105,12 @@ class BuiltInFunction(Generic[_R, _P]):
         arg_types = tuple(type(arg) for arg in args)
         for atype in arg_types:
             # current strategy is to select the implementation of the first arg that supports the operation
-            # TODO: define a strategy that converts or prevents conversion
+            # TODO(): define a strategy that converts or prevents conversion
             if (dispatcher := getattr(atype, "__gt_builtin_func__", None)) is not None and (
                 op_func := dispatcher(self)
             ) is not NotImplemented:
                 return op_func
-        else:
-            return self.function
+        return self.function
 
     def __gt_type__(self) -> ts.FunctionType:
         signature = inspect.signature(self.function)

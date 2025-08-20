@@ -59,7 +59,7 @@ from gt4py.cartesian.gtc.common import ExprKind
 def _convert_dtype(data_type) -> common.DataType:
     dtype = common.DataType(int(data_type))
     if dtype == common.DataType.DEFAULT:
-        # TODO: this will be a frontend choice later
+        # TODO(): this will be a frontend choice later
         # in non-GTC parts, this is set in the backend
         dtype = cast(
             common.DataType, common.DataType.FLOAT64

@@ -844,7 +844,7 @@ def _perform_node_split_with_bypass_impl(
 ) -> list[dace_graph.MultiConnectorEdge]:
     """Performs the splitting but the edge might go directly to the consumer.
 
-    # TODO: Remove the producer edge, run reconfiguration, split operation.
+    # TODO(): Remove the producer edge, run reconfiguration, split operation.
     # TODO ADDING PRODUCER TO THE SET OF PROCESSED NODES
 
     """

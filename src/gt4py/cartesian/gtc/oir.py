@@ -296,7 +296,7 @@ class VerticalLoop(LocNode):
 
 class Stencil(LocNode, eve.ValidatedSymbolTableTrait):
     name: str
-    # TODO: fix to be List[Union[ScalarDecl, FieldDecl]]
+    # TODO(): fix to be List[Union[ScalarDecl, FieldDecl]]
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
     declarations: List[Temporary]

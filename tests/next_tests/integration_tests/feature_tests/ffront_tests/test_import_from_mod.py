@@ -54,7 +54,7 @@ def test_import_dims_module(cartesian_case):
     cases.verify(cartesian_case, mod_prog, f, out=out, ref=expected)
 
 
-# TODO: these set of features should be allowed as module imports in a later PR
+# TODO(): these set of features should be allowed as module imports in a later PR
 def test_import_module_errors_future_allowed(cartesian_case):
     with pytest.raises(gtx.errors.DSLError):
 

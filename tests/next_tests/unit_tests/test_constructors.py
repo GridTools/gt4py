@@ -21,7 +21,7 @@ K = gtx.Dimension("K")
 sizes = {I: 10, J: 10, K: 10}
 
 
-# TODO: parametrize with gpu backend and compare with cupy array
+# TODO(): parametrize with gpu backend and compare with cupy array
 @pytest.mark.parametrize(
     "allocator, device",
     [
@@ -40,7 +40,7 @@ def test_empty(allocator, device):
     assert a.shape == ref.shape
 
 
-# TODO: parametrize with gpu backend and compare with cupy array
+# TODO(): parametrize with gpu backend and compare with cupy array
 @pytest.mark.parametrize(
     "allocator, device",
     [
@@ -62,7 +62,7 @@ def test_zeros(allocator, device):
     assert np.array_equal(a.ndarray, ref)
 
 
-# TODO: parametrize with gpu backend and compare with cupy array
+# TODO(): parametrize with gpu backend and compare with cupy array
 @pytest.mark.parametrize(
     "allocator, device",
     [
@@ -82,7 +82,7 @@ def test_ones(allocator, device):
     assert np.array_equal(a.ndarray, ref)
 
 
-# TODO: parametrize with gpu backend and compare with cupy array
+# TODO(): parametrize with gpu backend and compare with cupy array
 @pytest.mark.parametrize(
     "allocator, device",
     [

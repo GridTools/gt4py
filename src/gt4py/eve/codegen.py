@@ -125,7 +125,7 @@ def _get_clang_format() -> Optional[str]:
     executable = os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format")
     try:
         assert isinstance(executable, str)
-        if subprocess.run([executable, "--version"], capture_output=True).returncode != 0:
+        if subprocess.run([executable, "--version"], capture_output=True, check=False).returncode != 0:
             return None
     except Exception:
         return None

@@ -918,8 +918,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 if nstate.degree(data_node) == 0:
                     assert not data_node.desc(nsdfg).transient
                     nsdfg.remove_node(data_node)
-        else:
-            result = outer_value
+        result = outer_value
 
         outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 

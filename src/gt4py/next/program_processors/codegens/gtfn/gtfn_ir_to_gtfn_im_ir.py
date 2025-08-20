@@ -24,7 +24,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_im_ir import (
 )
 
 
-# TODO: start of code clone from unroll_reduce.py. This is necessary since whilet the IR nodes are compatible between itir and gtfn_ir,
+# TODO(): start of code clone from unroll_reduce.py. This is necessary since whilet the IR nodes are compatible between itir and gtfn_ir,
 #       the structure of the ir is slightly different, hence functions like _is_shifted and _get_partial_offset_tag are slightly changed
 #       in this version of the code clone. To be removed asap
 def _is_shifted(arg: gtfn_ir_common.Expr) -> TypeGuard[gtfn_ir.FunCall]:
@@ -83,7 +83,7 @@ def _is_reduce(node: gtfn_ir.FunCall) -> TypeGuard[gtfn_ir.FunCall]:
     )
 
 
-# TODO: end of code clone
+# TODO(): end of code clone
 
 
 class PlugInCurrentIdx(NodeTranslator):

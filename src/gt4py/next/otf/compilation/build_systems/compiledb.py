@@ -168,7 +168,7 @@ class CompiledbProject(
         build_data.write_data(
             data=build_data.BuildData(
                 status=build_data.BuildStatus.INITIALIZED,
-                module=pathlib.Path(""),
+                module=pathlib.Path(),
                 entry_point_name=self.program_name,
             ),
             path=self.root_path,

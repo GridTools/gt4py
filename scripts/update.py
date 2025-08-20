@@ -42,7 +42,7 @@ def dependencies() -> None:
 def precommit() -> None:
     """Update versions of pre-commit hooks."""
     subprocess.run(
-        f"uv run --quiet --locked --project {common.REPO_ROOT} pre-commit autoupdate", shell=True
+        f"uv run --quiet --locked --project {common.REPO_ROOT} pre-commit autoupdate", shell=True, check=False
     )
 
     try:

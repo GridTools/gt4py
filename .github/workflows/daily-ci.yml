@@ -34,7 +34,7 @@ jobs:
         # [arg: --resolution, env: UV_RESOLUTION=]
         dependencies-strategy: ["lowest-direct", "highest"]
         gt4py-module: ["cartesian", "eve", "next", "storage"]
-        # TODO: switch to macos-latest once macos-15 is default, see https://github.com/actions/runner-images/issues/12520
+        # TODO(): switch to macos-latest once macos-15 is default, see https://github.com/actions/runner-images/issues/12520
         #   On macos-14 we see the error: call to 'isfinite' is ambiguous.
         os: ["ubuntu-latest", "macos-15"]
         python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
