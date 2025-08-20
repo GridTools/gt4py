@@ -7,7 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Any, Dict, Iterable, Iterator, List, Optional, TypeGuard, Union
+from collections.abc import Iterable, Iterator
+from typing import Any, Optional, TypeGuard
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, concepts
@@ -127,7 +128,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def _expand_lambda(
         self,
         node: gtfn_ir.FunCall,
-        new_args: List[gtfn_ir.FunCall],
+        new_args: list[gtfn_ir.FunCall],
         red_idx: str,
         max_neighbors: int,
         **kwargs: Any,
@@ -157,7 +158,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def _expand_symref(
         self,
         node: gtfn_ir.FunCall,
-        new_args: List[gtfn_ir.FunCall],
+        new_args: list[gtfn_ir.FunCall],
         red_idx: str,
         max_neighbors: int,
         **kwargs: Any,
@@ -244,8 +245,8 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FunctionDefinition(
         self, node: gtfn_ir.FunctionDefinition, **kwargs: Any
     ) -> ImperativeFunctionDefinition:
-        self.imp_list_ir: List[Union[Stmt, Conditional]] = []
-        self.sym_table: Dict[gtfn_ir_common.Sym, gtfn_ir_common.SymRef] = node.annex.symtable
+        self.imp_list_ir: list[Stmt | Conditional] = []
+        self.sym_table: dict[gtfn_ir_common.Sym, gtfn_ir_common.SymRef] = node.annex.symtable
         ret = self.visit(node.expr, localized_symbols={}, **kwargs)
 
         return ImperativeFunctionDefinition(

@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Union
 
 from lark import lark, lexer as lark_lexer, tree as lark_tree, visitors as lark_visitors
 
@@ -101,7 +100,7 @@ class ToIrTransformer(lark_visitors.Transformer):
     def SYM(self, value: lark_lexer.Token) -> ir.Sym:
         return ir.Sym(id=value.value)
 
-    def SYM_REF(self, value: lark_lexer.Token) -> Union[ir.SymRef, ir.Literal]:
+    def SYM_REF(self, value: lark_lexer.Token) -> ir.SymRef | ir.Literal:
         if value.value in ("True", "False"):
             return im.literal(value.value, "bool")
         return ir.SymRef(id=value.value)
@@ -118,7 +117,7 @@ class ToIrTransformer(lark_visitors.Transformer):
         raise NotImplementedError(f"Type {value} not supported.")
 
     def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
-        v: Union[int, str] = value.value[:-1]
+        v: int | str = value.value[:-1]
         try:
             v = int(v)
         except ValueError:

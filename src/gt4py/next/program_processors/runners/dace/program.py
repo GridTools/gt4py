@@ -10,7 +10,8 @@ import collections
 import dataclasses
 import itertools
 import typing
-from typing import Any, ClassVar, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, ClassVar, Optional
 
 import dace
 import numpy as np

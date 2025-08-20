@@ -6,8 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from collections.abc import Iterable
-from typing import Any, Callable, Optional, TypeVar
+from collections.abc import Callable, Iterable
+from typing import Any, Optional, TypeVar
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next.ffront import type_info as ti_ffront

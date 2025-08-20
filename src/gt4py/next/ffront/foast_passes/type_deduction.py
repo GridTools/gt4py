@@ -709,7 +709,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 raise errors.DSLError(
                     node.location,
                     f"{err_msg} Operator "
-                    f"must be one of {', '.join((str(op) for op in logical_ops))}.",
+                    f"must be one of {', '.join(str(op) for op in logical_ops)}.",
                 )
             return ts.DomainType(dims=promote_dims(left.type.dims, right.type.dims))
         else:
@@ -1075,7 +1075,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         broadcast_dims = [cast(ts.DimensionType, elt.type).dim for elt in broadcast_dims_expr]
 
-        if not set((arg_dims := type_info.extract_dims(arg_type))).issubset(set(broadcast_dims)):
+        if not set(arg_dims := type_info.extract_dims(arg_type)).issubset(set(broadcast_dims)):
             raise errors.DSLError(
                 node.location,
                 f"Incompatible broadcast dimensions in '{node.func!s}': expected "

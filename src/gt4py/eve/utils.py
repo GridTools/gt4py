@@ -80,7 +80,7 @@ except ModuleNotFoundError:
 T = TypeVar("T")
 
 
-def first(iterable: Iterable[T], *, default: Union[T, NothingType] = NOTHING) -> T:
+def first(iterable: Iterable[T], *, default: T | NothingType = NOTHING) -> T:
     try:
         return next(iter(iterable))
     except StopIteration as error:
@@ -89,7 +89,7 @@ def first(iterable: Iterable[T], *, default: Union[T, NothingType] = NOTHING) ->
         raise error
 
 
-def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
+def isinstancechecker(type_info: Type | Iterable[Type]) -> Callable[[Any], bool]:
     """Return a callable object that checks if operand is an instance of `type_info`.
 
     Examples:
@@ -413,7 +413,7 @@ def optional_lru_cache(
 
 def optional_lru_cache(
     func: Optional[Callable[_P, _T]] = None, *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
+) -> Callable[_P, _T] | Callable[[Callable[_P, _T]], Callable[_P, _T]]:
     """Wrap :func:`functools.lru_cache` to fall back to the original function if arguments are not hashable.
 
     Examples:
@@ -465,7 +465,7 @@ def lru_cache(
     key: Optional[Callable[_P, int]] = None,
     maxsize: Optional[int] = 128,
     typed: bool = False,
-) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
+) -> Callable[_P, _T] | Callable[[Callable[_P, _T]], Callable[_P, _T]]:
     """
     Wrap :func:`functools.lru_cache` but allow customizing the cache key.
 
@@ -531,7 +531,7 @@ def with_fluid_partial(func: Callable[_P, _T], *args: Any, **kwargs: Any) -> Cal
 
 def with_fluid_partial(
     func: Optional[Callable[..., Any]] = None, *args: Any, **kwargs: Any
-) -> Union[Callable[..., Any], Callable[[Callable[..., Any]], Callable[..., Any]]]:
+) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Add a `partial` attribute to the decorated function.
 
     The `partial` attribute is a function that behaves like `functools.partial`,
@@ -687,7 +687,7 @@ class CaseStyleConverter:
         KEBAB = "kebab"
 
     @classmethod
-    def split(cls, name: str, case_style: Union[CASE_STYLE, str]) -> List[str]:
+    def split(cls, name: str, case_style: CASE_STYLE | str) -> List[str]:
         if isinstance(case_style, str):
             case_style = cls.CASE_STYLE(case_style)
         assert isinstance(case_style, cls.CASE_STYLE)
@@ -698,7 +698,7 @@ class CaseStyleConverter:
         return splitter(name)
 
     @classmethod
-    def join(cls, words: AnyWordsIterable, case_style: Union[CASE_STYLE, str]) -> str:
+    def join(cls, words: AnyWordsIterable, case_style: CASE_STYLE | str) -> str:
         if isinstance(case_style, str):
             case_style = cls.CASE_STYLE(case_style)
         assert isinstance(case_style, cls.CASE_STYLE)
@@ -712,7 +712,7 @@ class CaseStyleConverter:
 
     @classmethod
     def convert(
-        cls, name: str, source_style: Union[CASE_STYLE, str], target_style: Union[CASE_STYLE, str]
+        cls, name: str, source_style: CASE_STYLE | str, target_style: CASE_STYLE | str
     ) -> str:
         return cls.join(cls.split(name, source_style), target_style)
 
@@ -940,7 +940,7 @@ class XIterable(Iterable[T]):
 
     iterator: Iterator[T]
 
-    def __init__(self, it: Union[Iterable[T], Iterator[T]]) -> None:
+    def __init__(self, it: Iterable[T] | Iterator[T]) -> None:
         object.__setattr__(self, "iterator", iter(it))
 
     def __getattr__(self, name: str) -> Any:
@@ -1184,7 +1184,7 @@ class XIterable(Iterable[T]):
         """
         return XIterable(map(attrgetter_(*names, default=default), self.iterator))
 
-    def getitem(self, *indices: Union[int, str], default: Any = NOTHING) -> XIterable[Any]:
+    def getitem(self, *indices: int | str, default: Any = NOTHING) -> XIterable[Any]:
         """Get provided indices data from each item in a sequence.
 
         Equivalent to ``toolz.itertoolz.pluck(indices, self)``.
@@ -1221,7 +1221,7 @@ class XIterable(Iterable[T]):
         else:
             return XIterable(toolz.itertoolz.pluck(ind, self.iterator, default))
 
-    def chain(self, *others: Iterable) -> XIterable[Union[T, S]]:
+    def chain(self, *others: Iterable) -> XIterable[T | S]:
         """Chain iterators.
 
         Equivalent to ``itertools.chain(self, *others)``.
@@ -1242,7 +1242,7 @@ class XIterable(Iterable[T]):
         return XIterable(itertools.chain(self.iterator, *iterators))
 
     def diff(
-        self, *others: Iterable, default: Any = NOTHING, key: Union[NOTHING, Callable] = NOTHING
+        self, *others: Iterable, default: Any = NOTHING, key: NOTHING | Callable = NOTHING
     ) -> XIterable[Tuple[T, S]]:
         """Diff iterators.
 
@@ -1285,9 +1285,7 @@ class XIterable(Iterable[T]):
         iterators = [it.iterator if isinstance(it, XIterable) else it for it in others]
         return XIterable(toolz.itertoolz.diff(self.iterator, *iterators, **kwargs))
 
-    def product(
-        self, other: Union[Iterable[S], int]
-    ) -> Union[XIterable[Tuple[T, S]], XIterable[Tuple[T, T]]]:
+    def product(self, other: Iterable[S] | int) -> XIterable[Tuple[T, S]] | XIterable[Tuple[T, T]]:
         """Product of iterators.
 
         Equivalent to ``itertools.product(it_a, it_b)``.
@@ -1435,7 +1433,7 @@ class XIterable(Iterable[T]):
     def islice(
         self,
         __start_or_stop: int,
-        __stop_or_nothing: Union[int, NothingType] = NOTHING,
+        __stop_or_nothing: int | NothingType = NOTHING,
         step: int = 1,
     ) -> XIterable[T]:
         """Select elements from an iterable.
@@ -1484,7 +1482,7 @@ class XIterable(Iterable[T]):
             raise TypeError(f"Non-iterable 'selectors' value: '{selectors}'.")
         return XIterable(itertools.compress(self.iterator, selectors))
 
-    def unique(self, *, key: Union[NOTHING, Callable] = NOTHING) -> XIterable[T]:
+    def unique(self, *, key: NOTHING | Callable = NOTHING) -> XIterable[T]:
         """Return only unique elements of a sequence.
 
         Equivalent to ``toolz.itertoolz.unique(self)``.
@@ -1525,8 +1523,8 @@ class XIterable(Iterable[T]):
     ) -> XIterable[Tuple[Any, List[T]]]: ...
 
     def groupby(
-        self, key: Union[str, List[Any], Callable[[T], Any]], *attr_keys: str, as_dict: bool = False
-    ) -> Union[XIterable[Tuple[Any, List[T]]], Dict]:
+        self, key: str | List[Any] | Callable[[T], Any], *attr_keys: str, as_dict: bool = False
+    ) -> XIterable[Tuple[Any, List[T]]] | Dict:
         """Group a sequence by a given key.
 
         More or less equivalent to ``toolz.itertoolz.groupby(key, self)`` with some caveats.
@@ -1650,7 +1648,7 @@ class XIterable(Iterable[T]):
         key: str,
         *,
         as_dict: Literal[False],
-        init: Union[S, NothingType],
+        init: S | NothingType,
     ) -> XIterable[Tuple[str, S]]: ...
 
     @typing.overload
@@ -1661,7 +1659,7 @@ class XIterable(Iterable[T]):
         __attr_keys1: str,
         *attr_keys: str,
         as_dict: Literal[False],
-        init: Union[S, NothingType],
+        init: S | NothingType,
     ) -> XIterable[Tuple[Tuple[str, ...], S]]: ...
 
     @typing.overload
@@ -1671,7 +1669,7 @@ class XIterable(Iterable[T]):
         key: str,
         *,
         as_dict: Literal[True],
-        init: Union[S, NothingType],
+        init: S | NothingType,
     ) -> Dict[str, S]: ...
 
     @typing.overload
@@ -1682,7 +1680,7 @@ class XIterable(Iterable[T]):
         __attr_keys1: str,
         *attr_keys: str,
         as_dict: Literal[True],
-        init: Union[S, NothingType],
+        init: S | NothingType,
     ) -> Dict[Tuple[str, ...], S]: ...
 
     @typing.overload
@@ -1692,7 +1690,7 @@ class XIterable(Iterable[T]):
         key: List[K],
         *,
         as_dict: Literal[False],
-        init: Union[S, NothingType],
+        init: S | NothingType,
     ) -> XIterable[Tuple[K, S]]: ...
 
     @typing.overload
@@ -1702,7 +1700,7 @@ class XIterable(Iterable[T]):
         key: List[K],
         *,
         as_dict: Literal[True],
-        init: Union[S, NothingType],
+        init: S | NothingType,
     ) -> Dict[K, S]: ...
 
     @typing.overload
@@ -1712,7 +1710,7 @@ class XIterable(Iterable[T]):
         key: Callable[[T], K],
         *,
         as_dict: Literal[False],
-        init: Union[S, NothingType],
+        init: S | NothingType,
     ) -> XIterable[Tuple[K, S]]: ...
 
     @typing.overload
@@ -1722,24 +1720,24 @@ class XIterable(Iterable[T]):
         key: Callable[[T], K],
         *,
         as_dict: Literal[True],
-        init: Union[S, NothingType],
+        init: S | NothingType,
     ) -> Dict[K, S]: ...
 
     def reduceby(
         self,
         bin_op_func: Callable[[S, T], S],
-        key: Union[str, List[K], Callable[[T], K]],
+        key: str | List[K] | Callable[[T], K],
         *attr_keys: str,
         as_dict: bool = False,
-        init: Union[S, NothingType] = NOTHING,
-    ) -> Union[
-        XIterable[Tuple[str, S]],
-        Dict[str, S],
-        XIterable[Tuple[Tuple[str, ...], S]],
-        Dict[Tuple[str, ...], S],
-        XIterable[Tuple[K, S]],
-        Dict[K, S],
-    ]:
+        init: S | NothingType = NOTHING,
+    ) -> (
+        XIterable[Tuple[str, S]]
+        | Dict[str, S]
+        | XIterable[Tuple[Tuple[str, ...], S]]
+        | Dict[Tuple[str, ...], S]
+        | XIterable[Tuple[K, S]]
+        | Dict[K, S]
+    ):
         """Group a sequence by a given key and simultaneously perform a reduction inside the groups.
 
         More or less equivalent to ``toolz.itertoolz.reduceby(key, bin_op_func, self, init)``

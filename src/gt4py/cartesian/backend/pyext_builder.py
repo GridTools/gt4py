@@ -12,7 +12,7 @@ import io
 import os
 import shutil
 import threading
-from typing import Any, Dict, List, Literal, Optional, Tuple, Type, TypedDict, Union
+from typing import Any, Literal, Optional, TypedDict
 
 import pybind11
 import setuptools
@@ -58,7 +58,7 @@ def get_gt_pyext_build_opts(
     add_profile_info: bool = False,
     uses_openmp: bool = True,
     uses_cuda: bool = False,
-) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
+) -> dict[str, str | list[str] | dict[str, Any]]:
     include_dirs: list[str] = []
     extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
     is_rocm_gpu = core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
@@ -88,7 +88,7 @@ def get_gt_pyext_build_opts(
             # A compiler is allowed to choose if `char` is signed or unsigned. We force the signed behavior
             # because `char` is used to represent the `int8` type in GT4Py programs.
             "-fsigned-char",
-            "-isystem{}".format(gt_include_path),
+            f"-isystem{gt_include_path}",
             *extra_compile_args_from_config["cxx"],
         ]
     )
@@ -99,14 +99,14 @@ def get_gt_pyext_build_opts(
     ]
     if is_rocm_gpu:
         extra_compile_args["cuda"] += [
-            "-isystem{}".format(gt_include_path),
+            f"-isystem{gt_include_path}",
             "-fvisibility=hidden",
             "-fPIC",
         ]
     else:
         extra_compile_args["cuda"] += [
-            "-isystem={}".format(gt_include_path),
-            "-arch=sm_{}".format(cuda_arch),
+            f"-isystem={gt_include_path}",
+            f"-arch=sm_{cuda_arch}",
             "--expt-relaxed-constexpr",
             "--compiler-options",
             "-fvisibility=hidden",
@@ -199,15 +199,15 @@ def build_pybind_ext(
     build_path: str,
     target_path: str,
     *,
-    include_dirs: Optional[List[str]] = None,
-    library_dirs: Optional[List[str]] = None,
-    libraries: Optional[List[str]] = None,
-    extra_compile_args: Optional[Union[List[str], Dict[str, List[str]]]] = None,
-    extra_link_args: Optional[List[str]] = None,
-    build_ext_class: Optional[Type] = None,
+    include_dirs: Optional[list[str]] = None,
+    library_dirs: Optional[list[str]] = None,
+    libraries: Optional[list[str]] = None,
+    extra_compile_args: Optional[list[str] | dict[str, list[str]]] = None,
+    extra_link_args: Optional[list[str]] = None,
+    build_ext_class: Optional[type] = None,
     verbose: bool = False,
     clean: bool = False,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     # Hack to remove warning about "-Wstrict-prototypes" not having effect in C++
     replaced_flags_backup = copy.deepcopy(distutils.sysconfig._config_vars)
     _clean_build_flags(distutils.sysconfig._config_vars)
@@ -239,8 +239,8 @@ def build_pybind_ext(
         ext_modules=[py_extension],
         script_args=[
             "build_ext",
-            "--build-temp={}".format(build_path),
-            "--build-lib={}".format(build_path),
+            f"--build-temp={build_path}",
+            f"--build-lib={build_path}",
             "--force",
         ],
     )
@@ -280,14 +280,14 @@ def build_pybind_cuda_ext(
     build_path: str,
     target_path: str,
     *,
-    include_dirs: Optional[List[str]] = None,
-    library_dirs: Optional[List[str]] = None,
-    libraries: Optional[List[str]] = None,
-    extra_compile_args: Optional[Union[List[str], Dict[str, List[str]]]] = None,
-    extra_link_args: Optional[List[str]] = None,
+    include_dirs: Optional[list[str]] = None,
+    library_dirs: Optional[list[str]] = None,
+    libraries: Optional[list[str]] = None,
+    extra_compile_args: Optional[list[str] | dict[str, list[str]]] = None,
+    extra_link_args: Optional[list[str]] = None,
     verbose: bool = False,
     clean: bool = False,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     include_dirs = include_dirs or []
     include_dirs = [*include_dirs, gt_config.build_settings["cuda_include_path"]]
     library_dirs = library_dirs or []
@@ -315,7 +315,7 @@ def build_pybind_cuda_ext(
     )
 
 
-def _clean_build_flags(config_vars: Dict[str, str]) -> None:
+def _clean_build_flags(config_vars: dict[str, str]) -> None:
     for key, value in config_vars.items():
         if isinstance(value, str):
             value = " " + value + " "
@@ -329,7 +329,7 @@ def _clean_build_flags(config_vars: Dict[str, str]) -> None:
             config_vars[key] = " ".join(value.split())
 
 
-class CUDABuildExtension(build_ext, object):
+class CUDABuildExtension(build_ext):
     # Refs:
     #   - https://github.com/pytorch/pytorch/torch/utils/cpp_extension.py
     #   - https://github.com/rmcgibbo/npcuda-example/blob/master/cython/setup.py

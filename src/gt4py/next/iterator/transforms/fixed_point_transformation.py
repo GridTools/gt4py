@@ -8,7 +8,7 @@
 
 import dataclasses
 import enum
-from typing import ClassVar, Optional, Type
+from typing import ClassVar, Optional
 
 from gt4py import eve
 from gt4py.next.iterator import ir
@@ -65,7 +65,7 @@ class CombinedFixedPointTransform(FixedPointTransformation):
 
     #: Enum of all transformation (names). The transformations need to be defined as methods
     #: named `transform_<NAME>`.
-    Transformation: ClassVar[Type[enum.Flag]]
+    Transformation: ClassVar[type[enum.Flag]]
 
     #: All transformations enabled in this instance, e.g. `Transformation.T1 & Transformation.T2`.
     #: Usually the default value is chosen to be all transformations.

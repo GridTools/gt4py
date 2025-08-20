@@ -7,7 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import collections
-from typing import Any, Callable, Dict, Set, Union
+from collections.abc import Callable
+from typing import Any
 
 from gt4py import eve
 from gt4py.cartesian.gtc import oir
@@ -20,8 +21,8 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
 
 class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FieldAccess(
-        self, node: oir.FieldAccess, *, tmps_name_map: Dict[str, str], **kwargs: Any
-    ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
+        self, node: oir.FieldAccess, *, tmps_name_map: dict[str, str], **kwargs: Any
+    ) -> oir.FieldAccess | oir.ScalarAccess:
         offsets = node.offset.to_dict()
         if node.name in tmps_name_map:
             assert offsets["i"] == offsets["j"] == offsets["k"] == 0, (
@@ -33,8 +34,8 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
-        tmps_to_replace: Set[str],
-        symtable: Dict[str, Any],
+        tmps_to_replace: set[str],
+        symtable: dict[str, Any],
         new_symbol_name: Callable[[str], str],
         **kwargs: Any,
     ) -> oir.HorizontalExecution:
@@ -60,7 +61,7 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
         )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, tmps_to_replace: Set[str], **kwargs: Any
+        self, node: oir.VerticalLoop, tmps_to_replace: set[str], **kwargs: Any
     ) -> oir.VerticalLoop:
         return oir.VerticalLoop(
             loop_order=node.loop_order,

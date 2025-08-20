@@ -10,8 +10,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
-from typing import Any, Optional, Sequence, TypeVar, Union
+from collections.abc import Collection, Sequence
+from typing import Any, Optional, TypeVar
 
 import gt4py.eve as eve
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
@@ -40,7 +40,7 @@ class BufferSID(Expr):
 
 
 class Tuple(Expr):
-    elems: list[Union[Expr, str]]
+    elems: list[Expr | str]
 
 
 class FunctionCall(Expr):
@@ -64,7 +64,7 @@ class FunctionParameter(eve.Node):
 class WrapperFunction(eve.Node):
     name: str
     parameters: Sequence[FunctionParameter]
-    body: Union[ExprStmt, ReturnStmt]
+    body: ExprStmt | ReturnStmt
     on_device: bool = False
 
 
@@ -121,9 +121,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         """
     )
 
-    def visit_WrapperFunction(
-        self, node: WrapperFunction, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    def visit_WrapperFunction(self, node: WrapperFunction, **kwargs: Any) -> str | Collection[str]:
         return_stmt = "return _gt4py_return;" if isinstance(node.body, ReturnStmt) else ""
         return self.generic_visit(node, return_stmt=return_stmt)
 

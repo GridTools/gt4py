@@ -58,7 +58,7 @@ def gtscript_loader(
     dtypes: dict[type, type],
 ) -> StencilObject:
     if not isinstance(definition_func, types.FunctionType):
-        raise ValueError("Invalid stencil definition object ({obj})".format(obj=definition_func))
+        raise ValueError(f"Invalid stencil definition object ({definition_func})")
 
     if not build_options.name:
         build_options.name = f"{definition_func.__name__}"

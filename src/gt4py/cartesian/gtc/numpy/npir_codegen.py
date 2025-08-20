@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import numbers
 import textwrap
+from collections.abc import Collection
 from dataclasses import dataclass, field
-from typing import Any, Collection, List, Optional, Set, Tuple, Union, cast
+from typing import Any, Optional, cast
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
@@ -32,7 +33,7 @@ def _offset_to_str(offset: int) -> str:
         return ""
 
 
-def _slice_string(ch: str, offset: int, interval: Tuple[common.AxisBound, common.AxisBound]) -> str:
+def _slice_string(ch: str, offset: int, interval: tuple[common.AxisBound, common.AxisBound]) -> str:
     start_ch = ch if interval[0].level == common.LevelMarker.START else ch.upper()
     end_ch = ch if interval[1].level == common.LevelMarker.START else ch.upper()
 
@@ -44,11 +45,11 @@ def _slice_string(ch: str, offset: int, interval: Tuple[common.AxisBound, common
 
 
 def _make_slice_access(
-    offset: Tuple[Optional[int], Optional[int], Union[str, Optional[int]]],
+    offset: tuple[Optional[int], Optional[int], str | Optional[int]],
     is_serial: bool,
     interval: Optional[npir.HorizontalMask] = None,
-) -> List[str]:
-    axes: List[str] = []
+) -> list[str]:
+    axes: list[str] = []
 
     if interval is None:
         interval = npir.HorizontalMask(
@@ -78,16 +79,14 @@ def _make_slice_access(
 class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     @dataclass
     class BlockContext:
-        locals_declared: Set[str] = field(default_factory=set)
+        locals_declared: set[str] = field(default_factory=set)
 
         def add_declared(self, *args):
             self.locals_declared |= set(args)
 
     FieldDecl = as_fmt("{name} = Field({name}, _origin_['{name}'], ({', '.join(dimensions)}))")
 
-    def visit_TemporaryDecl(
-        self, node: npir.TemporaryDecl, **kwargs
-    ) -> Union[str, Collection[str]]:
+    def visit_TemporaryDecl(self, node: npir.TemporaryDecl, **kwargs) -> str | Collection[str]:
         shape = [f"_dI_ + {node.padding[0]}", f"_dJ_ + {node.padding[1]}", "_dK_"] + [
             str(dim) for dim in node.data_dims
         ]
@@ -101,13 +100,13 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     VarKOffset = as_fmt("lk + {k}")
 
-    def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
+    def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> str | Collection[str]:
         k_offset = (
             self.visit(node.k_offset, **kwargs)
             if isinstance(node.k_offset, npir.VarKOffset)
             else node.k_offset
         )
-        offsets: Tuple[Optional[int], Optional[int], Union[str, int, None]] = (
+        offsets: tuple[Optional[int], Optional[int], str | int | None] = (
             node.i_offset,
             node.j_offset,
             k_offset,
@@ -118,7 +117,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             decl = kwargs["symtable"][node.name]
             dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
             offsets = cast(
-                Tuple[Optional[int], Optional[int], Union[str, int, None]],
+                tuple[Optional[int], Optional[int], str | int | None],
                 tuple(off if has_dim else None for has_dim, off in zip(dimensions, offsets)),
             )
 
@@ -136,7 +135,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         is_serial: bool,
         horizontal_mask: Optional[npir.HorizontalMask] = None,
         **kwargs: Any,
-    ) -> Union[str, Collection[str]]:
+    ) -> str | Collection[str]:
         args = _make_slice_access((0, 0, 0), is_serial, horizontal_mask)
         if is_serial:
             args[2] = ":"
@@ -144,16 +143,14 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     ParamAccess = as_fmt("{name}")
 
-    def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
+    def visit_DataType(self, node: common.DataType, **kwargs: Any) -> str | Collection[str]:
         # `np.bool` is a deprecated alias for the builtin `bool` or `np.bool_`.
         if node not in {common.DataType.BOOL}:
             return f"np.{node.name.lower()}"
         else:
             return node.name.lower()
 
-    def visit_BuiltInLiteral(
-        self, node: common.BuiltInLiteral, **kwargs
-    ) -> Union[str, Collection[str]]:
+    def visit_BuiltInLiteral(self, node: common.BuiltInLiteral, **kwargs) -> str | Collection[str]:
         if node is common.BuiltInLiteral.TRUE:
             return "True"
         elif node is common.BuiltInLiteral.FALSE:
@@ -163,7 +160,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_ScalarLiteral(
         self, node: npir.ScalarLiteral, *, inside_slice: bool = False, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    ) -> str | Collection[str]:
         # This could be trivial, but it's convenient for reading if the dtype is omitted in slices.
         dtype = self.visit(node.dtype, inside_slice=inside_slice, **kwargs)
         value = self.visit(node.value, inside_slice=inside_slice, **kwargs)
@@ -175,7 +172,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_NativeFunction(
         self, node: common.NativeFunction, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    ) -> str | Collection[str]:
         return f"ufuncs.{common.OP_TO_UFUNC_NAME[common.NativeFunction][node]}"
 
     def visit_NativeFuncCall(
@@ -188,7 +185,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_VectorAssign(
         self, node: npir.VectorAssign, *, ctx: BlockContext, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    ) -> str | Collection[str]:
         left = self.visit(node.left, horizontal_mask=node.horizontal_mask, **kwargs)
         right = self.visit(node.right, horizontal_mask=node.horizontal_mask, **kwargs)
         return f"{left} = {right}"
@@ -199,7 +196,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_UnaryOperator(
         self, node: common.UnaryOperator, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    ) -> str | Collection[str]:
         if node is common.UnaryOperator.NOT:
             return "np.bitwise_not"
         return self.generic_visit(node, **kwargs)
@@ -208,12 +205,10 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     VectorTernaryOp = as_fmt("np.where({cond}, {true_expr}, {false_expr})")
 
-    def visit_LevelMarker(
-        self, node: common.LevelMarker, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    def visit_LevelMarker(self, node: common.LevelMarker, **kwargs: Any) -> str | Collection[str]:
         return "K" if node == common.LevelMarker.END else "k"
 
-    def visit_AxisBound(self, node: common.AxisBound, **kwargs: Any) -> Union[str, Collection[str]]:
+    def visit_AxisBound(self, node: common.AxisBound, **kwargs: Any) -> str | Collection[str]:
         if node.offset > 0:
             voffset = f" + {node.offset}"
         elif node.offset == 0:
@@ -224,7 +219,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     AxisBound = as_fmt("_d{level}_{voffset}")
 
-    def visit_LoopOrder(self, node: common.LoopOrder, **kwargs) -> Union[str, Collection[str]]:
+    def visit_LoopOrder(self, node: common.LoopOrder, **kwargs) -> str | Collection[str]:
         if node is common.LoopOrder.FORWARD:
             return "for k_ in range(k, K):"
         elif node is common.LoopOrder.BACKWARD:
@@ -281,7 +276,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_HorizontalBlock(
         self, node: npir.HorizontalBlock, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    ) -> str | Collection[str]:
         lower = (-node.extent[0][0], -node.extent[1][0])
         upper = (node.extent[0][1], node.extent[1][1])
         return self.generic_visit(node, lower=lower, upper=upper, ctx=self.BlockContext(), **kwargs)
@@ -303,7 +298,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_Computation(
         self, node: npir.Computation, *, ignore_np_errstate: bool = True, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    ) -> str | Collection[str]:
         signature = ["*", *node.arguments, "_domain_", "_origin_"]
         return self.generic_visit(
             node,

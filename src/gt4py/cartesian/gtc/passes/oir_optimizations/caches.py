@@ -7,8 +7,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import collections
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
+from typing import Any
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
@@ -43,7 +44,7 @@ statements.
 
 class IJCacheDetection(eve.NodeTranslator):
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, local_tmps: Set[str], **kwargs: Any
+        self, node: oir.VerticalLoop, *, local_tmps: set[str], **kwargs: Any
     ) -> oir.VerticalLoop:
         if node.loop_order != common.LoopOrder.PARALLEL or not local_tmps:
             return node
@@ -51,7 +52,7 @@ class IJCacheDetection(eve.NodeTranslator):
         def already_cached(field: str) -> bool:
             return any(c.name == field for c in node.caches)
 
-        def has_vertical_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
+        def has_vertical_offset(offsets: set[tuple[int, int, int]]) -> bool:
             return any(offset[2] != 0 for offset in offsets)
 
         accesses = AccessCollector.apply(node).cartesian_accesses().offsets()
@@ -108,17 +109,17 @@ class KCacheDetection(eve.NodeTranslator):
             if any(off[2] is None for off in offsets)
         }
 
-        def accessed_more_than_once(offsets: Set[Any]) -> bool:
+        def accessed_more_than_once(offsets: set[Any]) -> bool:
             return len(offsets) > 1
 
         def already_cached(field: str) -> bool:
             return field in {c.name for c in node.caches}
 
         # TODO(fthaler): k-caches with non-zero ij offsets?
-        def has_horizontal_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
+        def has_horizontal_offset(offsets: set[tuple[int, int, int]]) -> bool:
             return any(offset[:2] != (0, 0) for offset in offsets)
 
-        def offsets_within_limits(offsets: Set[Tuple[int, int, int]]) -> bool:
+        def offsets_within_limits(offsets: set[tuple[int, int, int]]) -> bool:
             return all(abs(offset[2]) <= self.max_cacheable_offset for offset in offsets)
 
         def has_variable_offset_reads(field: str) -> bool:
@@ -151,7 +152,7 @@ class PruneKCacheFills(eve.NodeTranslator):
     If none of the conditions holds for any loop section, the fill is considered as unneeded.
     """
 
-    def visit_KCache(self, node: oir.KCache, *, pruneable: Set[str], **kwargs: Any) -> oir.KCache:
+    def visit_KCache(self, node: oir.KCache, *, pruneable: set[str], **kwargs: Any) -> oir.KCache:
         if node.name in pruneable:
             return oir.KCache(name=node.name, fill=False, flush=node.flush)
         return self.generic_visit(node, **kwargs)
@@ -162,7 +163,7 @@ class PruneKCacheFills(eve.NodeTranslator):
             return self.generic_visit(node, **kwargs)
         assert node.loop_order != common.LoopOrder.PARALLEL
 
-        def pruneable_fields(section: oir.VerticalLoopSection) -> Set[str]:
+        def pruneable_fields(section: oir.VerticalLoopSection) -> set[str]:
             accesses = AccessCollector.apply(section).cartesian_accesses()
             offsets = accesses.offsets()
             center_accesses = [a for a in accesses.ordered_accesses() if a.offset == (0, 0, 0)]
@@ -222,7 +223,7 @@ class PruneKCacheFlushes(eve.NodeTranslator):
     * There are no read accesses to the field in a following loop.
     """
 
-    def visit_KCache(self, node: oir.KCache, *, pruneable: Set[str], **kwargs: Any) -> oir.KCache:
+    def visit_KCache(self, node: oir.KCache, *, pruneable: set[str], **kwargs: Any) -> oir.KCache:
         if node.name in pruneable:
             return oir.KCache(name=node.name, fill=node.fill, flush=False, loc=node.loc)
         return self.generic_visit(node, **kwargs)
@@ -237,7 +238,7 @@ class PruneKCacheFlushes(eve.NodeTranslator):
             read_only_fields = flushing_fields & (
                 accesses[i].read_fields() - accesses[i].write_fields()
             )
-            future_reads: Set[str] = set()
+            future_reads: set[str] = set()
             future_reads = future_reads.union(*(acc.read_fields() for acc in accesses[i + 1 :]))
             tmps_without_reuse = (
                 flushing_fields & {str(d.name) for d in node.declarations}
@@ -265,7 +266,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
     """
 
     def visit_FieldAccess(
-        self, node: oir.FieldAccess, *, name_map: Dict[str, str], **kwargs: Any
+        self, node: oir.FieldAccess, *, name_map: dict[str, str], **kwargs: Any
     ) -> oir.FieldAccess:
         if node.name in name_map:
             return oir.FieldAccess(
@@ -288,9 +289,9 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
         self,
         node: oir.HorizontalExecution,
         *,
-        name_map: Dict[str, str],
-        fills: List[oir.Stmt],
-        flushes: List[oir.Stmt],
+        name_map: dict[str, str],
+        fills: list[oir.Stmt],
+        flushes: list[oir.Stmt],
         **kwargs: Any,
     ) -> oir.HorizontalExecution:
         return oir.HorizontalExecution(
@@ -302,7 +303,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
     @staticmethod
     def _fill_limits(
         loop_order: common.LoopOrder, section: oir.VerticalLoopSection
-    ) -> Dict[str, Tuple[int, int]]:
+    ) -> dict[str, tuple[int, int]]:
         """Direction-normalized min and max read accesses for each accessed field.
 
         Args:
@@ -313,7 +314,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
             A dict, mapping field names to min and max read offsets relative to loop order (i.e., positive means in the direction of the loop order).
         """
 
-        def directional_k_offset(offset: Tuple[int, int, int]) -> int:
+        def directional_k_offset(offset: tuple[int, int, int]) -> int:
             """Positive k-offset for forward loops, negative for backward."""
             return offset[2] if loop_order == common.LoopOrder.FORWARD else -offset[2]
 
@@ -338,7 +339,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
         loop_order: common.LoopOrder,
         section: oir.VerticalLoopSection,
         new_symbol_name: Callable[[str], str],
-    ) -> Tuple[oir.VerticalLoopSection, oir.VerticalLoopSection]:
+    ) -> tuple[oir.VerticalLoopSection, oir.VerticalLoopSection]:
         """Split the entry level of a loop section.
 
         Args:
@@ -392,9 +393,9 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
         loop_order: common.LoopOrder,
         section: oir.VerticalLoopSection,
         filling_fields: Iterable[str],
-        first_unfilled: Dict[str, int],
+        first_unfilled: dict[str, int],
         new_symbol_name: Callable[[str], str],
-    ) -> Tuple[Tuple[oir.VerticalLoopSection, ...], Dict[str, int]]:
+    ) -> tuple[tuple[oir.VerticalLoopSection, ...], dict[str, int]]:
         """Split loop sections that require multiple fills.
 
         Args:
@@ -422,10 +423,10 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
         cls,
         loop_order: common.LoopOrder,
         section: oir.VerticalLoopSection,
-        filling_fields: Dict[str, str],
-        first_unfilled: Dict[str, int],
-        symtable: Dict[str, Any],
-    ) -> Tuple[List[oir.AssignStmt], Dict[str, int]]:
+        filling_fields: dict[str, str],
+        first_unfilled: dict[str, int],
+        symtable: dict[str, Any],
+    ) -> tuple[list[oir.AssignStmt], dict[str, int]]:
         """Generate fill statements for the given loop section.
 
         Args:
@@ -464,9 +465,9 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
         cls,
         loop_order: common.LoopOrder,
         section: oir.VerticalLoopSection,
-        flushing_fields: Dict[str, str],
-        symtable: Dict[str, Any],
-    ) -> List[oir.AssignStmt]:
+        flushing_fields: dict[str, str],
+        symtable: dict[str, Any],
+    ) -> list[oir.AssignStmt]:
         """Generate flush statements for the given loop section.
 
         Args:
@@ -501,17 +502,17 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
         self,
         node: oir.VerticalLoop,
         *,
-        new_tmps: List[oir.Temporary],
-        symtable: Dict[str, Any],
+        new_tmps: list[oir.Temporary],
+        symtable: dict[str, Any],
         new_symbol_name: Callable[[str], str],
         **kwargs: Any,
     ) -> oir.VerticalLoop:
-        filling_fields: Dict[str, str] = {
+        filling_fields: dict[str, str] = {
             c.name: new_symbol_name(c.name)
             for c in node.caches
             if isinstance(c, oir.KCache) and c.fill
         }
-        flushing_fields: Dict[str, str] = {
+        flushing_fields: dict[str, str] = {
             c.name: filling_fields[c.name] if c.name in filling_fields else new_symbol_name(c.name)
             for c in node.caches
             if isinstance(c, oir.KCache) and c.flush
@@ -534,8 +535,8 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
 
         if filling_fields:
             # split sections where more than one fill operations are required at the entry level
-            first_unfilled: Dict[str, int] = dict()
-            split_sections: List[oir.VerticalLoopSection] = []
+            first_unfilled: dict[str, int] = dict()
+            split_sections: list[oir.VerticalLoopSection] = []
             for section in node.sections:
                 split_section, _previous_fills = self._split_section_with_multiple_fills(
                     node.loop_order, section, filling_fields, first_unfilled, new_symbol_name
@@ -573,7 +574,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        new_tmps: List[oir.Temporary] = []
+        new_tmps: list[oir.Temporary] = []
         return oir.Stencil(
             name=node.name,
             params=node.params,

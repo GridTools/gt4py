@@ -12,7 +12,8 @@ import collections.abc
 import functools
 import math
 import numbers
-from typing import Literal, Optional, Sequence, Tuple, Union, cast
+from collections.abc import Sequence
+from typing import Literal, Optional, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -75,7 +76,7 @@ def _strides_from_padded_shape(padded_size, order_idx, itemsize):
     return list(strides)
 
 
-def dimensions_to_mask(dimensions: Tuple[str, ...]) -> Tuple[bool, ...]:
+def dimensions_to_mask(dimensions: tuple[str, ...]) -> tuple[bool, ...]:
     ndata_dims = sum(d.isdigit() for d in dimensions)
     mask = [(d in dimensions) for d in "IJK"] + [True for _ in range(ndata_dims)]
     return tuple(mask)
@@ -86,7 +87,7 @@ def normalize_storage_spec(
     shape: Sequence[int],
     dtype: DTypeLike,
     dimensions: Optional[Sequence[str]],
-) -> Tuple[Sequence[int], Sequence[int], np.dtype, Tuple[str, ...]]:
+) -> tuple[Sequence[int], Sequence[int], np.dtype, tuple[str, ...]]:
     """Normalize the fields of the storage spec in a homogeneous representation.
 
     Returns
@@ -149,14 +150,14 @@ def normalize_storage_spec(
         aligned_index = tuple(aligned_index)
 
         if any(i < 0 for i in aligned_index):
-            raise ValueError("aligned_index ({}) contains negative value.".format(aligned_index))
+            raise ValueError(f"aligned_index ({aligned_index}) contains negative value.")
     else:
         raise TypeError("aligned_index must be an iterable of ints.")
 
     dtype = np.dtype(dtype)
     if dtype.shape:
         # Subarray dtype
-        sub_dtype, sub_shape = cast(Tuple[np.dtype, Tuple[int, ...]], dtype.subdtype)
+        sub_dtype, sub_shape = cast(tuple[np.dtype, tuple[int, ...]], dtype.subdtype)
         aligned_index = (*aligned_index, *((0,) * dtype.ndim))
         shape = (*shape, *sub_shape)
         dimensions = (*dimensions, *(str(d) for d in range(dtype.ndim)))
@@ -165,7 +166,7 @@ def normalize_storage_spec(
     return aligned_index, shape, dtype, dimensions
 
 
-def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]) -> np.ndarray:
+def cpu_copy(array: np.ndarray | cp.ndarray) -> np.ndarray:
     if cp is not None:
         # it's not clear from the documentation if cp.asnumpy guarantees a copy.
         # worst case, this copies twice.
@@ -216,14 +217,14 @@ def asarray(
     raise TypeError(f"Cannot convert {type(array)} to ndarray")
 
 
-def get_dims(obj: Union[core_defs.GTDimsInterface, npt.NDArray]) -> Optional[Tuple[str, ...]]:
+def get_dims(obj: core_defs.GTDimsInterface | npt.NDArray) -> Optional[tuple[str, ...]]:
     dims = getattr(obj, "__gt_dims__", None)
     if dims is None:
         return dims
     return tuple(str(d) for d in dims)
 
 
-def get_origin(obj: Union[core_defs.GTDimsInterface, npt.NDArray]) -> Optional[Tuple[int, ...]]:
+def get_origin(obj: core_defs.GTDimsInterface | npt.NDArray) -> Optional[tuple[int, ...]]:
     origin = getattr(obj, "__gt_origin__", None)
     if origin is None:
         return origin
@@ -236,7 +237,7 @@ def allocate_cpu(
     dtype: DTypeLike,
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
-) -> Tuple[allocators._NDBuffer, np.ndarray]:
+) -> tuple[allocators._NDBuffer, np.ndarray]:
     device = core_defs.Device(core_defs.DeviceType.CPU, 0)
     buffer = _CPUBufferAllocator.allocate(
         shape,
@@ -255,7 +256,7 @@ def _allocate_gpu(
     dtype: DTypeLike,
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
-) -> Tuple["cp.ndarray", "cp.ndarray"]:
+) -> tuple[cp.ndarray, cp.ndarray]:
     assert cp is not None
     assert _GPUBufferAllocator is not None, "GPU allocation library or device not found"
     if core_defs.CUPY_DEVICE_TYPE is None:
@@ -282,7 +283,7 @@ allocate_gpu = _allocate_gpu
 if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
 
     class CUDAArrayInterfaceNDArray(cp.ndarray):
-        def __new__(cls, input_array: "cp.ndarray") -> CUDAArrayInterfaceNDArray:
+        def __new__(cls, input_array: cp.ndarray) -> CUDAArrayInterfaceNDArray:
             return (
                 input_array
                 if isinstance(input_array, CUDAArrayInterfaceNDArray)
@@ -310,7 +311,7 @@ if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
         dtype: DTypeLike,
         alignment_bytes: int,
         aligned_index: Optional[Sequence[int]],
-    ) -> Tuple["cp.ndarray", "cp.ndarray"]:
+    ) -> tuple[cp.ndarray, cp.ndarray]:
         buffer, ndarray = _allocate_gpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
         return buffer, CUDAArrayInterfaceNDArray(ndarray)
 

@@ -93,10 +93,10 @@ class SourceLocationGroup:
     """A group of merged source code locations (with optional info)."""
 
     locations: Tuple[SourceLocation, ...] = datamodels.field(validator=_validators.non_empty())
-    context: Optional[Union[str, Tuple[str, ...]]]
+    context: Optional[str | Tuple[str, ...]]
 
     def __init__(
-        self, *locations: SourceLocation, context: Optional[Union[str, Tuple[str, ...]]] = None
+        self, *locations: SourceLocation, context: Optional[str | Tuple[str, ...]] = None
     ) -> None:
         self.__auto_init__(locations=locations, context=context)  # type: ignore[attr-defined]  # __auto_init__ added dynamically
 

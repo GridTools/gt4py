@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Collection, Dict, Final, Optional, Union
+from collections.abc import Collection
+from typing import Any, Final, Optional
 
 import numpy as np
 
@@ -77,8 +78,8 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         self,
         accessor_ref: gtcpp.AccessorRef,
         *,
-        symtable: Dict[str, gtcpp.GTAccessor],
-        temp_decls: Optional[Dict[str, gtcpp.Temporary]] = None,
+        symtable: dict[str, gtcpp.GTAccessor],
+        temp_decls: Optional[dict[str, gtcpp.Temporary]] = None,
         **kwargs: Any,
     ):
         temp_decls = temp_decls or {}
@@ -258,7 +259,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_GTComputationCall(
         self, node: gtcpp.GTComputationCall, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    ) -> str | Collection[str]:
         computation_name = type(node).__name__ + str(id(node))
         return self.generic_visit(node, computation_name=computation_name, **kwargs)
 
@@ -282,7 +283,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         """
     )
 
-    def visit_Program(self, node: gtcpp.Program, **kwargs: Any) -> Union[str, Collection[str]]:
+    def visit_Program(self, node: gtcpp.Program, **kwargs: Any) -> str | Collection[str]:
         temp_decls = {temp.name: temp for temp in node.gt_computation.temporaries}
         return self.generic_visit(node, temp_decls=temp_decls, **kwargs)
 

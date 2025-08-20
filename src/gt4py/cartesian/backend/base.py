@@ -15,7 +15,8 @@ import os
 import pathlib
 import time
 import warnings
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Protocol
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
 from typing_extensions import deprecated
 

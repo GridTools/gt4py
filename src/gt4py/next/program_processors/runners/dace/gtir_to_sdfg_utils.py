@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, TypeVar
+from typing import Optional, TypeVar
 
 import dace
 
@@ -129,14 +129,14 @@ def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
 
         T = TypeVar("T", gtir.Sym, gtir.SymRef)
 
-        def _replace_sym(self, node: T, symtable: Dict[str, str]) -> T:
+        def _replace_sym(self, node: T, symtable: dict[str, str]) -> T:
             sym = str(node.id)
             return type(node)(id=symtable.get(sym, sym), type=node.type)
 
-        def visit_Sym(self, node: gtir.Sym, *, symtable: Dict[str, str]) -> gtir.Sym:
+        def visit_Sym(self, node: gtir.Sym, *, symtable: dict[str, str]) -> gtir.Sym:
             return self._replace_sym(node, symtable)
 
-        def visit_SymRef(self, node: gtir.SymRef, *, symtable: Dict[str, str]) -> gtir.SymRef:
+        def visit_SymRef(self, node: gtir.SymRef, *, symtable: dict[str, str]) -> gtir.SymRef:
             return self._replace_sym(node, symtable)
 
     # program arguments are checked separetely, because they cannot be replaced

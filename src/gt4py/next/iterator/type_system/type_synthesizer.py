@@ -87,7 +87,7 @@ def type_synthesizer(*, cache: bool = False) -> Callable[[F], TypeSynthesizer]: 
 
 def type_synthesizer(
     fun: Optional[F] = None, cache: bool = False
-) -> Union[TypeSynthesizer, Callable[[F], TypeSynthesizer]]:
+) -> TypeSynthesizer | Callable[[F], TypeSynthesizer]:
     if fun is None:
         return functools.partial(TypeSynthesizer, cache=cache)
     return TypeSynthesizer(fun, cache=cache)

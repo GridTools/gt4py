@@ -346,22 +346,20 @@ select = [
   # 'N',  # pep8-naming
   'NPY',  # NumPy-specific rules
   'PERF',  # Perflint
-  #'PGH',  # pygrep-hooks
-  'PLC',  # Pylint-Convention
+  # 'PGH',  # pygrep-hooks
+  # 'PLC',  # Pylint-Convention
   'PLE',  # Pylint-Error
-  #'PLR',  # Pylint-Refactor
+  # 'PLR',  # Pylint-Refactor
   'PLW',  # Pylint-Warning
   'PTH',  # flake8-use-pathlib
   'Q',  # flake8-quotes
   'RUF',  # Ruff-specific rules
-  #'SIM',  # flake8-simplify
+  # 'SIM',  # flake8-simplify
   'T10',  # flake8-debugger
   'TD',  # flake8-todos
-  #'UP',  # pyupgrade
+  'UP',  # pyupgrade
   'YTT'  # flake8-2020
 ]
-
-
 typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 

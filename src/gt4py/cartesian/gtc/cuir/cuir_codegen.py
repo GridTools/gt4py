@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Collection, Dict, Final, List, Set, Union
+from collections.abc import Collection
+from typing import Any, Final
 
 import numpy as np
 
@@ -55,7 +56,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         if isinstance(node, cuir.KCacheAccess):
             return self.generic_visit(node, **kwargs)
 
-        symtable: Dict[str, cuir.Decl] = kwargs["symtable"]
+        symtable: dict[str, cuir.Decl] = kwargs["symtable"]
 
         def maybe_const(s):
             try:
@@ -79,7 +80,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             return f"{name}({offset}{data_index_str})"
 
     def visit_IJCacheAccess(
-        self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
+        self, node: cuir.IJCacheAccess, symtable: dict[str, Any], **kwargs: Any
     ) -> str:
         decl = symtable[node.name]
         assert isinstance(decl, cuir.IJCacheDecl)
@@ -291,7 +292,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return name + (f"p{offset}" if offset >= 0 else f"m{-offset}")
 
     @classmethod
-    def k_cache_vars(cls, k_cache: cuir.KCacheDecl) -> List[str]:
+    def k_cache_vars(cls, k_cache: cuir.KCacheDecl) -> list[str]:
         assert k_cache.extent
         return [
             cls.k_cache_var(k_cache.name, offset)
@@ -299,8 +300,8 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         ]
 
     def visit_VerticalLoop(
-        self, node: cuir.VerticalLoop, *, symtable: Dict[str, Any], **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+        self, node: cuir.VerticalLoop, *, symtable: dict[str, Any], **kwargs: Any
+    ) -> str | Collection[str]:
         fields = {
             name: data_dims
             for name, data_dims in node.walk_values()
@@ -420,7 +421,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         """
     )
 
-    def visit_Program(self, node: cuir.Program, **kwargs: Any) -> Union[str, Collection[str]]:
+    def visit_Program(self, node: cuir.Program, **kwargs: Any) -> str | Collection[str]:
         def loop_start(vertical_loop: cuir.VerticalLoop) -> str:
             if vertical_loop.loop_order == cuir.LoopOrder.FORWARD:
                 return self.visit(vertical_loop.sections[0].start, **kwargs)
@@ -428,7 +429,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 return self.visit(vertical_loop.sections[0].end, **kwargs) + " - 1"
             return "0"
 
-        def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
+        def loop_fields(vertical_loop: cuir.VerticalLoop) -> set[str]:
             return (
                 vertical_loop.walk_values().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
             )

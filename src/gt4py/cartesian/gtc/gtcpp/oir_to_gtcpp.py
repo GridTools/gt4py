@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import functools
 import itertools
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Set, Union, cast
+from typing import Any, cast
 
 from devtools import debug  # noqa: F401 [unused-import]
 from typing_extensions import Protocol
@@ -30,7 +31,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
 # - Each VerticalLoop is MultiStage
 
 
-def _extract_accessors(node: eve.Node, temp_names: Set[str]) -> List[gtcpp.GTAccessor]:
+def _extract_accessors(node: eve.Node, temp_names: set[str]) -> list[gtcpp.GTAccessor]:
     extents = (
         node.walk_values()
         .if_isinstance(gtcpp.AccessorRef)
@@ -42,7 +43,7 @@ def _extract_accessors(node: eve.Node, temp_names: Set[str]) -> List[gtcpp.GTAcc
         )
     )
 
-    inout_fields: Set[str] = (
+    inout_fields: set[str] = (
         node.walk_values()
         .if_isinstance(gtcpp.AssignStmt)
         .getattr("left")
@@ -96,31 +97,31 @@ class SymbolNameCreator(Protocol):
 class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @dataclass
     class ProgramContext:
-        functors: List[gtcpp.GTFunctor] = field(default_factory=list)
+        functors: list[gtcpp.GTFunctor] = field(default_factory=list)
 
-        def add_functor(self, functor: gtcpp.GTFunctor) -> "OIRToGTCpp.ProgramContext":
+        def add_functor(self, functor: gtcpp.GTFunctor) -> OIRToGTCpp.ProgramContext:
             self.functors.append(functor)
             return self
 
     @dataclass
     class GTComputationContext:
         create_symbol_name: SymbolNameCreator
-        temporaries: List[gtcpp.Temporary] = field(default_factory=list)
-        positionals: Dict[int, gtcpp.Positional] = field(default_factory=dict)
-        axis_lengths: Dict[int, gtcpp.AxisLength] = field(default_factory=dict)
-        _arguments: Set[str] = field(default_factory=set)
+        temporaries: list[gtcpp.Temporary] = field(default_factory=list)
+        positionals: dict[int, gtcpp.Positional] = field(default_factory=dict)
+        axis_lengths: dict[int, gtcpp.AxisLength] = field(default_factory=dict)
+        _arguments: set[str] = field(default_factory=set)
 
         def add_temporaries(
-            self, temporaries: List[gtcpp.Temporary]
+            self, temporaries: list[gtcpp.Temporary]
         ) -> OIRToGTCpp.GTComputationContext:
             self.temporaries.extend(temporaries)
             return self
 
         @property
-        def arguments(self) -> List[gtcpp.Arg]:
+        def arguments(self) -> list[gtcpp.Arg]:
             return [gtcpp.Arg(name=name) for name in self._arguments]
 
-        def add_arguments(self, arguments: Set[str]) -> OIRToGTCpp.GTComputationContext:
+        def add_arguments(self, arguments: set[str]) -> OIRToGTCpp.GTComputationContext:
             self._arguments.update(arguments)
             return self
 
@@ -147,7 +148,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return self._make_scalar_accessor(length.name)
 
         @property
-        def extra_decls(self) -> List[gtcpp.ComputationDecl]:
+        def extra_decls(self) -> list[gtcpp.ComputationDecl]:
             return list(self.positionals.values()) + list(self.axis_lengths.values())
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> gtcpp.Literal:
@@ -192,7 +193,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, **kwargs: Any
-    ) -> Union[gtcpp.AccessorRef, gtcpp.LocalAccess]:
+    ) -> gtcpp.AccessorRef | gtcpp.LocalAccess:
         assert "symtable" in kwargs
         if node.name in kwargs["symtable"]:
             symbol = kwargs["symtable"][node.name]
@@ -225,7 +226,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def _mask_to_expr(
         self, mask: common.HorizontalMask, comp_ctx: GTComputationContext
     ) -> gtcpp.Expr:
-        mask_expr: List[gtcpp.Expr] = []
+        mask_expr: list[gtcpp.Expr] = []
         for axis_index, interval in enumerate(mask.intervals):
             if interval.is_single_index():
                 assert interval.start is not None

@@ -7,7 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Mapping, Optional, TypeVar
+from collections.abc import Mapping
+from typing import Optional, TypeVar
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir

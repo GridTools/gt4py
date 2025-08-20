@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import List, Optional, Tuple, Union
+from typing import Optional
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
@@ -25,8 +25,8 @@ class AxisName(eve.StrEnum):
 # - They are expressed relative to the iteration domain of the statement
 # - Each axis is a tuple of two common.AxisBound instead of common.HorizontalInterval
 class HorizontalMask(eve.Node):
-    i: Tuple[common.AxisBound, common.AxisBound]
-    j: Tuple[common.AxisBound, common.AxisBound]
+    i: tuple[common.AxisBound, common.AxisBound]
+    j: tuple[common.AxisBound, common.AxisBound]
 
 
 # --- Decls ---
@@ -57,8 +57,8 @@ class LocalScalarDecl(Decl):
 class FieldDecl(Decl):
     """General field shared across HorizontalBlocks."""
 
-    dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    dimensions: tuple[bool, bool, bool]
+    data_dims: tuple[int, ...] = eve.field(default_factory=tuple)
     extent: Extent
 
 
@@ -72,9 +72,9 @@ class TemporaryDecl(Decl):
     padding: Buffer added to compute domain as field size.
     """
 
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
-    offset: Tuple[int, int]
-    padding: Tuple[int, int]
+    data_dims: tuple[int, ...] = eve.field(default_factory=tuple)
+    offset: tuple[int, int]
+    padding: tuple[int, int]
 
 
 # --- Expressions ---
@@ -119,13 +119,13 @@ class FieldSlice(VectorLValue):
     name: eve.Coerced[eve.SymbolRef]
     i_offset: int
     j_offset: int
-    k_offset: Union[int, VarKOffset]
-    data_index: List[Expr] = eve.field(default_factory=list)
+    k_offset: int | VarKOffset
+    data_index: list[Expr] = eve.field(default_factory=list)
     kind: common.ExprKind = common.ExprKind.FIELD
 
     @datamodels.validator("data_index")
     def data_indices_are_scalar(
-        self, attribute: datamodels.Attribute, data_index: List[Expr]
+        self, attribute: datamodels.Attribute, data_index: list[Expr]
     ) -> None:
         for index in data_index:
             if index.kind != common.ExprKind.SCALAR:
@@ -143,7 +143,7 @@ class LocalScalarAccess(VectorLValue):
 
 
 class VectorArithmetic(common.BinaryOp[Expr], Expr):
-    op: Union[common.ArithmeticOperator, common.ComparisonOperator]
+    op: common.ArithmeticOperator | common.ComparisonOperator
 
     _dtype_propagation = common.binary_op_dtype_propagation(strict=True)
 
@@ -188,21 +188,21 @@ class While(common.While[Stmt, Expr], Stmt):
 
 # --- Control Flow ---
 class HorizontalBlock(common.LocNode, eve.SymbolTableTrait):
-    body: List[Stmt]
+    body: list[Stmt]
     extent: Extent
-    declarations: List[LocalScalarDecl]
+    declarations: list[LocalScalarDecl]
 
 
 class VerticalPass(common.LocNode):
-    body: List[HorizontalBlock]
+    body: list[HorizontalBlock]
     lower: common.AxisBound
     upper: common.AxisBound
     direction: common.LoopOrder
 
 
 class Computation(common.LocNode, eve.SymbolTableTrait):
-    arguments: List[str]
-    api_field_decls: List[FieldDecl]
-    param_decls: List[ScalarDecl]
-    temp_decls: List[TemporaryDecl]
-    vertical_passes: List[VerticalPass]
+    arguments: list[str]
+    api_field_decls: list[FieldDecl]
+    param_decls: list[ScalarDecl]
+    temp_decls: list[TemporaryDecl]
+    vertical_passes: list[VerticalPass]

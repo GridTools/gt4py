@@ -9,8 +9,8 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Sequence
-from typing import Callable, Literal, Optional, cast
+from collections.abc import Callable, Sequence
+from typing import Literal, Optional, cast
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common, utils as next_utils

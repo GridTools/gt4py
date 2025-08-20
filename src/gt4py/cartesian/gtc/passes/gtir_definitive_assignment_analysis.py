@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import warnings
-from typing import List, Set
 
 from gt4py import eve
 from gt4py.cartesian.gtc import gtir
@@ -25,7 +24,7 @@ class DefinitiveAssignmentAnalysis(eve.NodeVisitor):
     result of the condition.
     """
 
-    def visit_IfStmt(self, node: gtir.FieldIfStmt, *, alive_vars: Set[str], **kwargs) -> None:
+    def visit_IfStmt(self, node: gtir.FieldIfStmt, *, alive_vars: set[str], **kwargs) -> None:
         true_branch_vars = {*alive_vars}
         false_branch_vars = {*alive_vars}
         self.visit(node.true_branch, alive_vars=true_branch_vars, **kwargs)
@@ -33,7 +32,7 @@ class DefinitiveAssignmentAnalysis(eve.NodeVisitor):
         alive_vars.update(true_branch_vars & false_branch_vars)
 
     def visit_ParAssignStmt(
-        self, node: gtir.ParAssignStmt, *, alive_vars: Set[str], **kwargs
+        self, node: gtir.ParAssignStmt, *, alive_vars: set[str], **kwargs
     ) -> None:
         self.visit(node.right, alive_vars=alive_vars, **kwargs)
         alive_vars.add(node.left.name)
@@ -42,17 +41,17 @@ class DefinitiveAssignmentAnalysis(eve.NodeVisitor):
         self,
         node: gtir.FieldAccess,
         *,
-        alive_vars: Set[str],
-        invalid_accesses: List[gtir.FieldAccess],
+        alive_vars: set[str],
+        invalid_accesses: list[gtir.FieldAccess],
         **kwargs,
     ) -> None:
         if node.name not in alive_vars:
             invalid_accesses.append(node)
 
     @classmethod
-    def apply(cls, gtir_stencil_expr: gtir.Stencil) -> List[gtir.FieldAccess]:
+    def apply(cls, gtir_stencil_expr: gtir.Stencil) -> list[gtir.FieldAccess]:
         """Execute analysis and return all accesses to undefined symbols."""
-        invalid_accesses: List[gtir.FieldAccess] = []
+        invalid_accesses: list[gtir.FieldAccess] = []
         DefinitiveAssignmentAnalysis().visit(
             gtir_stencil_expr,
             alive_vars=set(gtir_stencil_expr.param_names),

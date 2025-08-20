@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import gt4py.next.iterator.ir as itir
 

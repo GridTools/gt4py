@@ -11,7 +11,8 @@ import dataclasses
 import enum
 import itertools
 import numbers
-from typing import Any, Callable, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import hypothesis.strategies as hyp_st
 import numpy as np
@@ -31,17 +32,17 @@ class SymbolKind(enum.Enum):
 @dataclasses.dataclass(frozen=True)
 class _SymbolStrategy:
     kind: SymbolKind
-    boundary: Optional[Sequence[Tuple[int, int]]]
+    boundary: Optional[Sequence[tuple[int, int]]]
     axes: Optional[str]
-    data_dims: Optional[Tuple[int, ...]]
+    data_dims: Optional[tuple[int, ...]]
     value_st_factory: Callable[..., hyp_st.SearchStrategy]
 
 
 @dataclasses.dataclass(frozen=True)
 class _SymbolValueTuple:
     kind: str
-    boundary: Sequence[Tuple[int, int]]
-    values: Tuple[Any]
+    boundary: Sequence[tuple[int, int]]
+    values: tuple[Any]
 
 
 def global_name(*, singleton=None, symbol=None, one_of=None, in_range=None):

@@ -7,7 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import warnings
-from typing import Any, Iterable, Optional
+from collections.abc import Iterable
+from typing import Any, Optional
 
 import dace
 from dace import properties as dace_properties, transformation as dace_transformation
@@ -251,7 +252,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
             #  AccessNode has to be kept alive.
             warnings.warn(
                 "'SplitAccessNode': found producers "
-                + ", ".join((str(p) for p in unused_producers))
+                + ", ".join(str(p) for p in unused_producers)
                 + " that generates data but that is never read.",
                 stacklevel=0,
             )

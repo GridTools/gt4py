@@ -21,7 +21,7 @@ Analysis is required to generate valid code (complying with the parallel model)
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Set, Tuple, Type
+from typing import Any
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
@@ -79,7 +79,7 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
     @datamodels.root_validator
     @classmethod
     def no_write_and_read_with_offset_of_same_field(
-        cls: Type[ParAssignStmt], instance: ParAssignStmt
+        cls: type[ParAssignStmt], instance: ParAssignStmt
     ) -> None:
         if isinstance(instance.left, FieldAccess):
             offset_reads = (
@@ -144,7 +144,7 @@ class While(common.While[Stmt, Expr], Stmt):
 
     @datamodels.validator("body")
     def _no_write_and_read_with_horizontal_offset_all(
-        self, attribute: datamodels.Attribute, value: List[Stmt]
+        self, attribute: datamodels.Attribute, value: list[Stmt]
     ) -> None:
         """In a while loop all variables must not be written and read with a horizontal offset."""
         if names := _written_and_read_with_offset(value):
@@ -182,8 +182,8 @@ class Decl(LocNode):  # TODO(): probably Stmt
 
 
 class FieldDecl(Decl):
-    dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    dimensions: tuple[bool, bool, bool]
+    data_dims: tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):
@@ -199,13 +199,13 @@ class Interval(LocNode):
 class VerticalLoop(LocNode):
     interval: Interval
     loop_order: common.LoopOrder
-    temporaries: List[FieldDecl]
-    body: List[Stmt]
+    temporaries: list[FieldDecl]
+    body: list[Stmt]
 
     @datamodels.root_validator
     @classmethod
     def _no_write_and_read_with_horizontal_offset(
-        cls: Type[VerticalLoop], instance: VerticalLoop
+        cls: type[VerticalLoop], instance: VerticalLoop
     ) -> None:
         """
         In the same VerticalLoop a field must not be written and read with a horizontal offset.
@@ -231,15 +231,15 @@ class Argument(eve.Node):
 
 class Stencil(LocNode, eve.ValidatedSymbolTableTrait):
     name: str
-    api_signature: List[Argument]
-    params: List[Decl]
-    vertical_loops: List[VerticalLoop]
-    externals: Dict[str, Literal]
-    sources: Dict[str, str]
+    api_signature: list[Argument]
+    params: list[Decl]
+    vertical_loops: list[VerticalLoop]
+    externals: dict[str, Literal]
+    sources: dict[str, str]
     docstring: str
 
     @property
-    def param_names(self) -> List[str]:
+    def param_names(self) -> list[str]:
         return [p.name for p in self.params]
 
     _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)
@@ -254,16 +254,16 @@ def _variablek_fieldaccess(node) -> bool:
 
 
 # TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode
-def _written_and_read_with_offset(stmts: List[Stmt]) -> Set[str]:
+def _written_and_read_with_offset(stmts: list[Stmt]) -> set[str]:
     """Return a list of names that are written to and read with offset."""
 
-    def _writes(stmts: List[Stmt]) -> Set[str]:
+    def _writes(stmts: list[Stmt]) -> set[str]:
         result = set()
         for left in eve.walk_values(stmts).if_isinstance(ParAssignStmt).getattr("left"):
             result |= eve.walk_values(left).if_isinstance(FieldAccess).getattr("name").to_set()
         return result
 
-    def _reads_with_offset(stmts: List[Stmt]) -> Set[str]:
+    def _reads_with_offset(stmts: list[Stmt]) -> set[str]:
         return (
             eve.walk_values(stmts)
             .filter(_cartesian_fieldaccess)

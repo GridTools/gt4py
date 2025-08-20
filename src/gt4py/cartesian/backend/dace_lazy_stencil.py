@@ -8,7 +8,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Set, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import dace
 from dace.frontend.python.common import SDFGConvertible
@@ -30,7 +31,7 @@ class DaCeLazyStencil(LazyStencil, SDFGConvertible):
         super().__init__(builder=builder)
 
     @property
-    def field_info(self) -> Dict[str, Any]:
+    def field_info(self) -> dict[str, Any]:
         """
         Return same value as compiled stencil object's `field_info` attribute.
 
@@ -40,10 +41,10 @@ class DaCeLazyStencil(LazyStencil, SDFGConvertible):
 
     def closure_resolver(
         self,
-        constant_args: Dict[str, Any],
-        given_args: Set[str],
-        parent_closure: Optional["dace.frontend.python.common.SDFGClosure"] = None,
-    ) -> "dace.frontend.python.common.SDFGClosure":
+        constant_args: dict[str, Any],
+        given_args: set[str],
+        parent_closure: Optional[dace.frontend.python.common.SDFGClosure] = None,
+    ) -> dace.frontend.python.common.SDFGClosure:
         return dace.frontend.python.common.SDFGClosure()
 
     def __sdfg__(self, *args, **kwargs) -> dace.SDFG:
@@ -67,9 +68,9 @@ class DaCeLazyStencil(LazyStencil, SDFGConvertible):
             **norm_kwargs,
         )
 
-    def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    def __sdfg_closure__(self, reevaluate: Optional[dict[str, str]] = None) -> dict[str, Any]:
         return {}
 
-    def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
+    def __sdfg_signature__(self) -> tuple[Sequence[str], Sequence[str]]:
         args = [arg.name for arg in self.builder.gtir.api_signature]
         return (args, [])

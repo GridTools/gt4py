@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, List, TypeAlias
+from typing import Any, TypeAlias
 
 from dace import data, dtypes, symbolic
 
@@ -82,8 +82,8 @@ class OIRToTreeIR(eve.NodeVisitor):
         This function only groups statements. The job of visiting the groups statements is
         left to the caller.
         """
-        statements: List[ControlFlow | oir.CodeBlock | common.Stmt] = []
-        groups: List[ControlFlow | oir.CodeBlock] = []
+        statements: list[ControlFlow | oir.CodeBlock | common.Stmt] = []
+        groups: list[ControlFlow | oir.CodeBlock] = []
 
         for statement in node.body:
             if isinstance(statement, ControlFlow):

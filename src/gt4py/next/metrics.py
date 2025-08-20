@@ -131,9 +131,7 @@ class MetricCollectionStore(utils.CustomDefaultDictBase[_KeyT, MetricCollection]
         """Returns a list of all metric names across all collections in the store."""
 
         return list(
-            dict.fromkeys(
-                (name for collection in self.values() for name in collection.keys())
-            ).keys()
+            dict.fromkeys(name for collection in self.values() for name in collection.keys()).keys()
         )
 
 

@@ -82,8 +82,8 @@ class CudaBindingsCodegen(codegen.TemplatedGenerator):
             data_ndim = len(node.data_dims)
             sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::object {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
-                    name=node.name, sid_ndim=sid_ndim
+                return (
+                    f"py::object {node.name}, std::array<gt::int_t,{sid_ndim}> {node.name}_origin"
                 )
             else:
                 return pybuffer_to_sid(
@@ -98,9 +98,9 @@ class CudaBindingsCodegen(codegen.TemplatedGenerator):
     def visit_ScalarDecl(self, node: cuir.ScalarDecl, **kwargs):
         if "external_arg" in kwargs:
             if kwargs["external_arg"]:
-                return "{dtype} {name}".format(name=node.name, dtype=self.visit(node.dtype))
+                return f"{self.visit(node.dtype)} {node.name}"
             else:
-                return "gridtools::stencil::global_parameter({name})".format(name=node.name)
+                return f"gridtools::stencil::global_parameter({node.name})"
 
     def visit_Program(self, node: cuir.Program, **kwargs):
         assert "module_name" in kwargs

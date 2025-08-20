@@ -17,19 +17,8 @@ from __future__ import annotations
 import abc
 import dataclasses
 import itertools
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Protocol,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, Optional, Protocol
 
 import dace
 
@@ -90,12 +79,9 @@ class DataflowBuilder(Protocol):
         self,
         name: str,
         state: dace.SDFGState,
-        ndrange: Union[
-            Dict[str, Union[str, dace.subsets.Subset]],
-            List[Tuple[str, Union[str, dace.subsets.Subset]]],
-        ],
+        ndrange: dict[str, str | dace.subsets.Subset] | list[tuple[str, str | dace.subsets.Subset]],
         **kwargs: Any,
-    ) -> Tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
+    ) -> tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
         """Wrapper of `dace.SDFGState.add_map` that assigns unique name."""
         unique_name = self.unique_map_name(name)
         return state.add_map(unique_name, ndrange, **kwargs)
@@ -104,8 +90,8 @@ class DataflowBuilder(Protocol):
         self,
         name: str,
         state: dace.SDFGState,
-        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
-        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        inputs: set[str] | dict[str, dace.dtypes.typeclass],
+        outputs: set[str] | dict[str, dace.dtypes.typeclass],
         code: str,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
@@ -117,11 +103,11 @@ class DataflowBuilder(Protocol):
         self,
         name: str,
         state: dace.SDFGState,
-        map_ranges: Dict[str, str | dace.subsets.Subset]
-        | List[Tuple[str, str | dace.subsets.Subset]],
-        inputs: Dict[str, dace.Memlet],
+        map_ranges: dict[str, str | dace.subsets.Subset]
+        | list[tuple[str, str | dace.subsets.Subset]],
+        inputs: dict[str, dace.Memlet],
         code: str,
-        outputs: Dict[str, dace.Memlet],
+        outputs: dict[str, dace.Memlet],
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
         """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name."""
@@ -417,10 +403,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # expression of domain range 'stop - start'
                 shape.append(
                     dace.symbolic.pystr_to_symbolic(
-                        "{} - {}".format(
-                            gtx_dace_utils.range_stop_symbol(name, i),
-                            gtx_dace_utils.range_start_symbol(name, i),
-                        )
+                        f"{gtx_dace_utils.range_stop_symbol(name, i)} - {gtx_dace_utils.range_start_symbol(name, i)}"
                     )
                 )
         strides = [

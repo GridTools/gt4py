@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import re
-from functools import lru_cache
+from functools import cache
 
 import numpy as np
 from dace import data, dtypes, symbolic
@@ -65,7 +65,7 @@ def data_type_to_dace_typeclass(data_type: common.DataType) -> dtypes.typeclass:
     return dtypes.typeclass(dtype.type)
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_dace_symbol(
     name: eve.SymbolRef, dtype: common.DataType = common.DataType.INT32
 ) -> symbolic.symbol:

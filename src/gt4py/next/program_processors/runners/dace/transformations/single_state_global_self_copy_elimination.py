@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Final, Literal, Optional, Sequence, Union, overload
+from collections.abc import Sequence
+from typing import Any, Final, Literal, Optional, overload
 
 import dace
 from dace import (
@@ -562,7 +563,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
         check_only: Literal[True],
-    ) -> Union[None, dict[dace_sbs.Subset, dace_sbs.Subset]]: ...
+    ) -> None | dict[dace_sbs.Subset, dace_sbs.Subset]: ...
 
     @overload
     def _compute_tmp_to_g_mapping(
@@ -581,7 +582,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
         check_only: bool,
-    ) -> Union[None, dict[dace_sbs.Subset, dace_sbs.Subset]]:
+    ) -> None | dict[dace_sbs.Subset, dace_sbs.Subset]:
         """Computes a mapping that describes how `tmp` maps into `g`.
 
         The function returns a `dict`, that maps subsets of the `tmp_node`
@@ -737,7 +738,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
-    ) -> Union[None, int]:
+    ) -> None | int:
         """Tests which merging strategy should be used.
 
         By default the transformation tries to merge the three nodes together,
@@ -804,7 +805,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         tdesc: gtx_dace_split.EdgeConnectionSpec,
         tmp_to_g_mapping: dict[dace_sbs.Subset, dace_sbs.Subset],
         check_only: bool,
-    ) -> Union[list[dace_sym.SymbolicType], bool]:
+    ) -> list[dace_sym.SymbolicType] | bool:
         """Computes the offset to turn a subset described in terms of `tmp` into a `g`.
 
         `tdesc` describes an edge that interacts with `tmp`, the function returns

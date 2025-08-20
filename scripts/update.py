@@ -42,7 +42,9 @@ def dependencies() -> None:
 def precommit() -> None:
     """Update versions of pre-commit hooks."""
     subprocess.run(
-        f"uv run --quiet --locked --project {common.REPO_ROOT} pre-commit autoupdate", shell=True, check=False
+        f"uv run --quiet --locked --project {common.REPO_ROOT} pre-commit autoupdate",
+        shell=True,
+        check=False,
     )
 
     try:
@@ -57,7 +59,7 @@ def precommit() -> None:
 
     try:
         pre_commit_path = common.REPO_ROOT / ".pre-commit-config.yaml"
-        with open(pre_commit_path, "r", encoding="utf-8") as f:
+        with open(pre_commit_path, encoding="utf-8") as f:
             content = f.read()
 
         new_content = re.sub(

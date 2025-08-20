@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import enum
 import textwrap
-from typing import Any, Final, TypeAlias, Union
+from typing import Any, Final, TypeAlias
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako, TemplatedGenerator
@@ -18,7 +18,7 @@ from gt4py.next.ffront import dialect_ast_enums
 from gt4py.next.type_system import type_specifications as ts
 
 
-PropertyIdentifier: TypeAlias = Union[type[foast.LocatedNode], tuple[type[foast.LocatedNode], str]]
+PropertyIdentifier: TypeAlias = type[foast.LocatedNode] | tuple[type[foast.LocatedNode], str]
 
 INDENTATION_PREFIX: Final[str] = "  "
 

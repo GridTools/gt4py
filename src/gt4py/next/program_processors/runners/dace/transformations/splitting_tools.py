@@ -8,7 +8,8 @@
 
 import copy
 import dataclasses
-from typing import Any, Iterable, Optional, Sequence, Union
+from collections.abc import Iterable, Sequence
+from typing import Any, Optional
 
 import dace
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
@@ -307,7 +308,7 @@ def split_edge(
     sdfg: dace.SDFG,
     edge_to_split: dace_graph.MultiConnectorEdge,
     split_description: Sequence[dace_sbs.Subset],
-) -> dict[Union[dace_sbs.Range, None], set[dace_graph.MultiConnectorEdge]]:
+) -> dict[dace_sbs.Range | None, set[dace_graph.MultiConnectorEdge]]:
     """Tries to split `edge_to_split` into multiple edges.
 
     How the edge is split is described by `split_description`, which is a
@@ -366,7 +367,7 @@ def split_edge(
                 new_fully_splitted_subsets.append(consumer)
         fully_splitted_subsets = new_fully_splitted_subsets
 
-    new_edges: dict[Union[dace_sbs.Range, None], dace_graph.MultiConnectorEdge] = {
+    new_edges: dict[dace_sbs.Range | None, dace_graph.MultiConnectorEdge] = {
         split: set() for split in split_description
     }
     new_edges[None] = set()
@@ -413,7 +414,7 @@ def split_edge(
 def decompose_subset(
     producer: dace_sbs.Subset,
     consumer: dace_sbs.Subset,
-) -> Union[list[dace_sbs.Subset], None]:
+) -> list[dace_sbs.Subset] | None:
     """
     Decompose `consumer` into pieces either covered by `producer` or have no intersection.
 
@@ -544,7 +545,7 @@ def decompose_subset(
 
 
 def subset_merger(
-    subsets: Union[Sequence[EdgeConnectionSpec], Sequence[dace_sbs.Subset]],
+    subsets: Sequence[EdgeConnectionSpec] | Sequence[dace_sbs.Subset],
 ) -> list[dace_sbs.Subset]:
     """Merges subsets together.
 
@@ -615,7 +616,7 @@ def _subset_merger_impl(
 def _try_to_merge_subsets(
     subset1: dace_sbs.Subset,
     subset2: dace_sbs.Subset,
-) -> Union[None, dace_sbs.Subset]:
+) -> None | dace_sbs.Subset:
     """Tries to merge the subsets together, it it is impossible return `None`.
 
     Two subset can only be merged if they have the same bounds in all but one

@@ -245,7 +245,7 @@ class ArrayInterfaceTypedDict(TypedDict):
     descr: NotRequired[List[Tuple]]
     data: NotRequired[Tuple[int, bool]]
     strides: NotRequired[Optional[Tuple[int, ...]]]
-    mask: NotRequired[Optional["StrictArrayInterface"]]
+    mask: NotRequired[Optional[StrictArrayInterface]]
     offset: NotRequired[int]
     version: int
 
@@ -271,7 +271,7 @@ class CUDAArrayInterfaceTypedDict(TypedDict):
     version: int
     strides: NotRequired[Optional[Tuple[int, ...]]]
     descr: NotRequired[List[Tuple]]
-    mask: NotRequired[Optional["StrictCUDAArrayInterface"]]
+    mask: NotRequired[Optional[StrictCUDAArrayInterface]]
     stream: NotRequired[Optional[int]]
 
 

@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from collections import defaultdict
-from typing import Any, Dict
+from typing import Any
 
 from gt4py import eve
 from gt4py.cartesian.gtc.cuir import cuir
@@ -15,17 +15,17 @@ from gt4py.cartesian.gtc.cuir import cuir
 
 class CacheExtents(eve.NodeTranslator):
     def visit_IJCacheDecl(
-        self, node: cuir.IJCacheDecl, *, ij_extents: Dict[str, cuir.KExtent], **kwargs: Any
+        self, node: cuir.IJCacheDecl, *, ij_extents: dict[str, cuir.KExtent], **kwargs: Any
     ) -> cuir.IJCacheDecl:
         return cuir.IJCacheDecl(name=node.name, dtype=node.dtype, extent=ij_extents[node.name])
 
     def visit_KCacheDecl(
-        self, node: cuir.KCacheDecl, *, k_extents: Dict[str, cuir.KExtent], **kwargs: Any
+        self, node: cuir.KCacheDecl, *, k_extents: dict[str, cuir.KExtent], **kwargs: Any
     ) -> cuir.KCacheDecl:
         return cuir.KCacheDecl(name=node.name, dtype=node.dtype, extent=k_extents[node.name])
 
     def visit_VerticalLoop(self, node: cuir.VerticalLoop) -> cuir.VerticalLoop:
-        ij_extents: Dict[str, cuir.IJExtent] = defaultdict(cuir.IJExtent.zero)
+        ij_extents: dict[str, cuir.IJExtent] = defaultdict(cuir.IJExtent.zero)
         for horizontal_execution in node.walk_values().if_isinstance(cuir.HorizontalExecution):
             ij_access_extents = (
                 horizontal_execution.walk_values()

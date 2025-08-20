@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import functools
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Set, Union, cast
+from typing import Any, cast
 
 from typing_extensions import Protocol
 
@@ -46,8 +46,8 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @dataclass
     class Context:
         new_symbol_name: SymbolNameCreator
-        accessed_fields: Set[str] = field(default_factory=set)
-        positionals: Dict[int, cuir.Positional] = field(default_factory=dict)
+        accessed_fields: set[str] = field(default_factory=set)
+        positionals: dict[int, cuir.Positional] = field(default_factory=dict)
 
         def make_positional(self, axis: int) -> cuir.FieldAccess:
             axis_name = ["i", "j", "k"][axis]
@@ -96,7 +96,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return cuir.VariableKOffset(k=self.visit(node.k, **kwargs))
 
     def _mask_to_expr(self, mask: common.HorizontalMask, ctx: Context) -> cuir.Expr:
-        mask_expr: List[cuir.Expr] = []
+        mask_expr: list[cuir.Expr] = []
         for axis_index, interval in enumerate(mask.intervals):
             if interval.is_single_index():
                 assert interval.start is not None
@@ -140,11 +140,11 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self,
         node: oir.FieldAccess,
         *,
-        ij_caches: Dict[str, cuir.IJCacheDecl],
-        k_caches: Dict[str, cuir.KCacheDecl],
+        ij_caches: dict[str, cuir.IJCacheDecl],
+        k_caches: dict[str, cuir.KCacheDecl],
         ctx: Context,
         **kwargs: Any,
-    ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
+    ) -> cuir.FieldAccess | cuir.IJCacheAccess | cuir.KCacheAccess:
         data_index = self.visit(
             node.data_index, ij_caches=ij_caches, k_caches=k_caches, ctx=ctx, **kwargs
         )
@@ -169,8 +169,8 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_ScalarAccess(
-        self, node: oir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any
-    ) -> Union[cuir.ScalarAccess, cuir.FieldAccess]:
+        self, node: oir.ScalarAccess, *, symtable: dict[str, Any], **kwargs: Any
+    ) -> cuir.ScalarAccess | cuir.FieldAccess:
         if isinstance(symtable.get(node.name, None), oir.ScalarDecl):
             return cuir.FieldAccess(
                 name=node.name, offset=common.CartesianOffset.zero(), dtype=node.dtype
@@ -228,7 +228,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, symtable: Dict[str, Any], ctx: Context, **kwargs: Any
+        self, node: oir.VerticalLoop, *, symtable: dict[str, Any], ctx: Context, **kwargs: Any
     ) -> cuir.Kernel:
         assert not any(c.fill or c.flush for c in node.caches if isinstance(c, oir.KCache))
         ij_caches = {

@@ -7,7 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVar
+from collections.abc import Callable, Sequence
+from typing import Any, Generic, Optional, ParamSpec, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs

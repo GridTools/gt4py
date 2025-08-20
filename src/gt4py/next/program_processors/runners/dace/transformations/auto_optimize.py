@@ -8,7 +8,8 @@
 
 """Fast access to the auto optimization on DaCe."""
 
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import dace
 from dace import data as dace_data

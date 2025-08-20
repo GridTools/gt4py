@@ -7,9 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
-from typing import Mapping
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common as gtc_common, definitions as gtc_definitions, oir

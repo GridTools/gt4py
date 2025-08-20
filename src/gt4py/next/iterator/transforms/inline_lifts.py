@@ -8,7 +8,8 @@
 
 import dataclasses
 import enum
-from typing import Callable, ClassVar, Optional
+from collections.abc import Callable
+from typing import ClassVar, Optional
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits

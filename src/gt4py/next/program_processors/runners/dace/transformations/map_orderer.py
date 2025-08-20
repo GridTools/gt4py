@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 import dace
 from dace import properties as dace_properties, transformation as dace_transformation
@@ -19,7 +19,7 @@ from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_utils
 def gt_set_iteration_order(
     sdfg: dace.SDFG,
     unit_strides_dim: Optional[
-        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
+        str | gtx_common.Dimension | list[str | gtx_common.Dimension]
     ] = None,
     unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
     validate: bool = True,
@@ -115,7 +115,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
     def __init__(
         self,
         unit_strides_dims: Optional[
-            Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
+            str | gtx_common.Dimension | list[str | gtx_common.Dimension]
         ] = None,
         unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
         *args: Any,
@@ -144,7 +144,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
 
     def can_be_applied(
         self,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -160,7 +160,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
 
     def apply(
         self,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         sdfg: dace.SDFG,
     ) -> None:
         """Performs the actual parameter reordering.

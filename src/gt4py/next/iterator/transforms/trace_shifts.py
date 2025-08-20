@@ -8,8 +8,8 @@
 
 import dataclasses
 import sys
-from collections.abc import Callable
-from typing import Any, Final, Iterable, Literal, Optional
+from collections.abc import Callable, Iterable
+from typing import Any, Final, Literal, Optional
 
 from gt4py import eve
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor

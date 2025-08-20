@@ -102,9 +102,7 @@ class SymbolRefsValidatorTrait:
             validator.visit(child_node, symtable=symtable)
 
         if validator.missing_symbols:
-            raise exceptions.EveValueError(
-                "Symbols {} not found.".format(validator.missing_symbols)
-            )
+            raise exceptions.EveValueError(f"Symbols {validator.missing_symbols} not found.")
 
     class SymbolRefsValidator(visitors.NodeVisitor):
         def __init__(self) -> None:

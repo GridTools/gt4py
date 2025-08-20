@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import dace
 from dace import (

@@ -51,7 +51,6 @@ from ..extended_typing import (
     TypeAlias,
     TypeAnnotation,
     TypeVar,
-    Union,
     cast,
     overload,
 )
@@ -104,13 +103,13 @@ DataModelT = TypeVar("DataModelT", bound=DataModelTP)
 
 
 class GenericDataModelTP(DataModelTP, Protocol):
-    __args__: ClassVar[Tuple[Union[Type, TypeVar], ...]] = ()
+    __args__: ClassVar[Tuple[Type | TypeVar, ...]] = ()
     __parameters__: ClassVar[Tuple[TypeVar, ...]] = ()
 
     @classmethod
     def __class_getitem__(
-        cls: Type[GenericDataModelTP], args: Union[Type, Tuple[Type, ...]]
-    ) -> Union[DataModelTP, GenericDataModelTP]: ...
+        cls: Type[GenericDataModelTP], args: Type | Tuple[Type, ...]
+    ) -> DataModelTP | GenericDataModelTP: ...
 
 
 _DM = TypeVar("_DM", bound="DataModel")
@@ -165,7 +164,7 @@ class ForwardRefValidator:
     factory: type_val.TypeValidatorFactory
     """Type factory used to create the actual field validator."""
 
-    validator: Union[type_val.FixedTypeValidator, None, NothingType] = NOTHING
+    validator: type_val.FixedTypeValidator | None | NothingType = NOTHING
     """Actual type validator created after resolving the forward references."""
 
     def __call__(self, instance: DataModel, attribute: Attribute, value: Any) -> None:
@@ -302,7 +301,7 @@ def datamodel(  # redefinition of unused symbol
     coerce: bool = _COERCE_DEFAULT,
     generic: bool = _GENERIC_DEFAULT,
     type_validation_factory: Optional[FieldTypeValidatorFactory] = DefaultFieldTypeValidatorFactory,
-) -> Union[Type[_T], Callable[[Type[_T]], Type[_T]]]:
+) -> Type[_T] | Callable[[Type[_T]], Type[_T]]:
     """Add generated special methods to classes according to the specified attributes (class decorator).
 
     It converts the class to an `attrs <https://www.attrs.org/>`_ with some extra features.
@@ -392,7 +391,7 @@ class _DataModelDecoratorTP(Protocol[_T]):
         type_validation_factory: Optional[
             FieldTypeValidatorFactory
         ] = DefaultFieldTypeValidatorFactory,
-    ) -> Union[Type[_T], Callable[[Type[_T]], Type[_T]]]: ...
+    ) -> Type[_T] | Callable[[Type[_T]], Type[_T]]: ...
 
 
 frozenmodel: _DataModelDecoratorTP = functools.partial(datamodel, frozen=True)
@@ -624,7 +623,7 @@ def is_generic_datamodel_class(cls: Type) -> bool:
     return is_datamodel(cls) and xtyping.has_type_parameters(cls)
 
 
-def get_fields(model: Union[DataModel, Type[DataModel]]) -> utils.FrozenNamespace:
+def get_fields(model: DataModel | Type[DataModel]) -> utils.FrozenNamespace:
     """Return the field meta-information of a Data Model.
 
     Arguments:
@@ -852,8 +851,8 @@ def _get_attribute_from_bases(
 
 
 def _substitute_typevars(
-    type_hint: Type, type_params_map: Mapping[TypeVar, Union[Type, TypeVar]]
-) -> Tuple[Union[Type, TypeVar], bool]:
+    type_hint: Type, type_params_map: Mapping[TypeVar, Type | TypeVar]
+) -> Tuple[Type | TypeVar, bool]:
     if isinstance(type_hint, typing.TypeVar):
         assert type_hint in type_params_map
         return type_params_map[type_hint], True
@@ -938,7 +937,7 @@ def _make_devtools_pretty() -> Callable[
 
 def _make_data_model_class_getitem() -> classmethod:
     def __class_getitem__(
-        cls: Type[GenericDataModelT], args: Union[Type, Tuple[Type]]
+        cls: Type[GenericDataModelT], args: Type | Tuple[Type]
     ) -> Type[DataModelT] | Type[GenericDataModelT]:
         """Return an instance compatible with aliases created by :class:`typing.Generic` classes.
 
@@ -1349,8 +1348,8 @@ if xtyping.TYPE_CHECKING:
     class GenericDataModel(GenericDataModelTP):
         @classmethod
         def __class_getitem__(
-            cls: Type[GenericDataModelTP], args: Union[Type, Tuple[Type, ...]]
-        ) -> Union[DataModelTP, GenericDataModelTP]: ...
+            cls: Type[GenericDataModelTP], args: Type | Tuple[Type, ...]
+        ) -> DataModelTP | GenericDataModelTP: ...
 
 else:
 

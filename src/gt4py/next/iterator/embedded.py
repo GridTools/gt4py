@@ -41,7 +41,6 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeGuard,
     TypeVar,
-    Union,
     cast,
     overload,
     runtime_checkable,
@@ -83,7 +82,7 @@ FieldIndexOrIndices: TypeAlias = FieldIndex | FieldIndices
 
 FieldAxis: TypeAlias = common.Dimension
 TupleAxis: TypeAlias = type[None]
-Axis: TypeAlias = Union[FieldAxis, TupleAxis]
+Axis: TypeAlias = FieldAxis | TupleAxis
 Scalar: TypeAlias = (
     SupportsInt
     | SupportsFloat
@@ -227,7 +226,7 @@ IncompletePositionEntry: TypeAlias = IncompleteSparsePositionEntry | common.IntI
 ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
 IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
 
-Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
+Position: TypeAlias = ConcretePosition | IncompletePosition
 #: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
 MaybePosition: TypeAlias = Optional[Position]
 
@@ -1397,7 +1396,7 @@ def constant_field(value: Any, dtype_like: Optional[core_defs.DTypeLike] = None)
 
 
 @builtins.shift.register(EMBEDDED)
-def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIterator]:
+def shift(*offsets: runtime.Offset | int) -> Callable[[ItIterator], ItIterator]:
     def impl(it: ItIterator) -> ItIterator:
         return it.shift(*list(o.value if isinstance(o, runtime.Offset) else o for o in offsets))
 
@@ -1468,7 +1467,7 @@ def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
 
 
 def _get_offset(*lists: _List | _ConstList) -> Optional[runtime.Offset]:
-    offsets = set((lst.offset for lst in lists if hasattr(lst, "offset")))
+    offsets = set(lst.offset for lst in lists if hasattr(lst, "offset"))
     if len(offsets) == 0:
         return None
     if len(offsets) == 1:

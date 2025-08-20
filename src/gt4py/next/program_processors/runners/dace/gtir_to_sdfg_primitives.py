@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any, Iterable, Optional, Protocol
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, Optional, Protocol
 
 import dace
 from dace import subsets as dace_subsets

@@ -11,7 +11,7 @@ import functools
 import os
 import platform
 from dataclasses import dataclass
-from typing import Literal, Tuple, Union
+from typing import Literal
 
 import numpy
 
@@ -55,7 +55,7 @@ class AccessKind(enum.IntFlag):
 
 @dataclass(frozen=True)
 class DomainInfo:
-    parallel_axes: Tuple[str, ...]
+    parallel_axes: tuple[str, ...]
     sequential_axis: str
     min_sequential_axis_size: int
     ndim: int
@@ -65,18 +65,12 @@ class DomainInfo:
 class FieldInfo:
     access: AccessKind
     boundary: Boundary
-    axes: Tuple[str, ...]
-    data_dims: Tuple[int, ...]
+    axes: tuple[str, ...]
+    data_dims: tuple[int, ...]
     dtype: numpy.dtype
 
     def __repr__(self):
-        return "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, data_dims={data_dims}, dtype={dtype})".format(
-            access=self.access.name,
-            boundary=repr(self.boundary),
-            axes=repr(self.axes),
-            data_dims=repr(self.data_dims),
-            dtype=repr(self.dtype),
-        )
+        return f"FieldInfo(access=AccessKind.{self.access.name}, boundary={self.boundary!r}, axes={self.axes!r}, data_dims={self.data_dims!r}, dtype={self.dtype!r})"
 
     @functools.cached_property
     def domain_mask(self):
@@ -97,13 +91,11 @@ class FieldInfo:
 
 @dataclass(frozen=True)
 class ParameterInfo:
-    access: Union[Literal[AccessKind.NONE], Literal[AccessKind.READ]]
+    access: Literal[AccessKind.NONE] | Literal[AccessKind.READ]
     dtype: numpy.dtype
 
     def __repr__(self):
-        return "ParameterInfo(access=AccessKind.{access}, dtype={dtype})".format(
-            access=self.access.name, dtype=repr(self.dtype)
-        )
+        return f"ParameterInfo(access=AccessKind.{self.access.name}, dtype={self.dtype!r})"
 
 
 @attribkwclass
@@ -126,7 +118,7 @@ class BuildOptions(AttributeClassLike):
 
     @property
     def qualified_name(self):
-        return ".".join([self.module, self.name])
+        return f"{self.module}.{self.name}"
 
     @property
     def shashed_id(self):

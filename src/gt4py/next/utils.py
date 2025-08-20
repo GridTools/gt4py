@@ -8,7 +8,8 @@
 
 import functools
 import itertools
-from typing import Any, Callable, ClassVar, Optional, ParamSpec, TypeGuard, TypeVar, cast, overload
+from collections.abc import Callable
+from typing import Any, ClassVar, Optional, ParamSpec, TypeGuard, TypeVar, cast, overload
 
 
 class RecursionGuard:

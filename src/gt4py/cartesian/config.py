@@ -8,7 +8,7 @@
 
 import multiprocessing
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import gridtools_cpp
 
@@ -32,13 +32,13 @@ GT4PY_EXTRA_COMPILE_OPT_FLAGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_OPT_FLA
 
 # Settings dict
 GT4PY_EXTRA_COMPILE_ARGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_ARGS", "")
-extra_compile_args: List[str] = (
+extra_compile_args: list[str] = (
     list(GT4PY_EXTRA_COMPILE_ARGS.split(" ")) if GT4PY_EXTRA_COMPILE_ARGS else []
 )
 GT4PY_EXTRA_LINK_ARGS: str = os.environ.get("GT4PY_EXTRA_LINK_ARGS", "")
-extra_link_args: List[str] = list(GT4PY_EXTRA_LINK_ARGS.split(" ")) if GT4PY_EXTRA_LINK_ARGS else []
+extra_link_args: list[str] = list(GT4PY_EXTRA_LINK_ARGS.split(" ")) if GT4PY_EXTRA_LINK_ARGS else []
 
-build_settings: Dict[str, Any] = {
+build_settings: dict[str, Any] = {
     "cuda_bin_path": os.path.join(CUDA_ROOT, "bin"),
     "cuda_include_path": os.path.join(CUDA_ROOT, "include"),
     "cuda_arch": os.environ.get("CUDA_ARCH", None),
@@ -58,14 +58,14 @@ else:
 if CUDA_HOST_CXX is not None:
     build_settings["extra_compile_args"]["cuda"].append(f"-ccbin={CUDA_HOST_CXX}")
 
-cache_settings: Dict[str, Any] = {
+cache_settings: dict[str, Any] = {
     "dir_name": os.environ.get("GT_CACHE_DIR_NAME", ".gt_cache"),
     "root_path": os.environ.get("GT_CACHE_ROOT", os.path.abspath(".")),
     "load_retries": int(os.environ.get("GT_CACHE_LOAD_RETRIES", 3)),
     "load_retry_delay": int(os.environ.get("GT_CACHE_LOAD_RETRY_DELAY", 100)),  # unit milliseconds
 }
 
-code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}
+code_settings: dict[str, Any] = {"root_package_name": "_GT_"}
 
 os.environ.setdefault("DACE_CONFIG", os.path.join(os.path.abspath("."), ".dace.conf"))
 

@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Any, List, Tuple, Union
+from typing import Any, Union
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
@@ -54,7 +54,7 @@ class BlockStmt(common.BlockStmt[Stmt], Stmt):
 class AssignStmt(common.AssignStmt[Union[LocalAccess, AccessorRef], Expr], Stmt):
     @datamodels.validator("left")
     def no_horizontal_offset_in_assignment(
-        self, attribute: datamodels.Attribute, value: Union[LocalAccess, AccessorRef]
+        self, attribute: datamodels.Attribute, value: LocalAccess | AccessorRef
     ) -> None:
         if isinstance(value, AccessorRef):
             offsets = value.offset.to_dict()
@@ -95,7 +95,7 @@ class Cast(common.Cast[Expr], Expr):
 class Temporary(LocNode):
     name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    data_dims: tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class GTLevel(LocNode):
@@ -120,8 +120,8 @@ class LocalVarDecl(LocNode):
 
 class GTApplyMethod(LocNode):
     interval: GTInterval
-    body: List[Stmt]
-    local_variables: List[LocalVarDecl]
+    body: list[Stmt]
+    local_variables: list[LocalVarDecl]
 
 
 @enum.unique
@@ -131,15 +131,15 @@ class Intent(eve.StrEnum):
 
 
 class GTExtent(LocNode):
-    i: Tuple[int, int]
-    j: Tuple[int, int]
-    k: Tuple[int, int]
+    i: tuple[int, int]
+    j: tuple[int, int]
+    k: tuple[int, int]
 
     @classmethod
     def zero(cls) -> GTExtent:
         return cls(i=(0, 0), j=(0, 0), k=(0, 0))
 
-    def __add__(self, offset: Union[common.CartesianOffset, VariableKOffset]) -> GTExtent:
+    def __add__(self, offset: common.CartesianOffset | VariableKOffset) -> GTExtent:
         if isinstance(offset, common.CartesianOffset):
             return GTExtent(
                 i=(min(self.i[0], offset.i), max(self.i[1], offset.i)),
@@ -162,12 +162,12 @@ class GTAccessor(LocNode):
 
 
 class GTParamList(LocNode):
-    accessors: List[GTAccessor]
+    accessors: list[GTAccessor]
 
 
 class GTFunctor(LocNode, eve.SymbolTableTrait):
     name: eve.Coerced[eve.SymbolName]
-    applies: List[GTApplyMethod]
+    applies: list[GTApplyMethod]
     param_list: GTParamList
 
 
@@ -194,8 +194,8 @@ class ApiParamDecl(LocNode):
 
 
 class FieldDecl(ApiParamDecl):
-    dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    dimensions: tuple[bool, bool, bool]
+    data_dims: tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class GlobalParamDecl(ApiParamDecl):
@@ -220,10 +220,10 @@ class GTStage(LocNode):
     functor: eve.Coerced[eve.SymbolRef]
     # `args` are SymbolRefs to GTComputation `arguments` (interpreted as parameters)
     # or `temporaries`
-    args: List[Arg]
+    args: list[Arg]
 
     @datamodels.validator("args")
-    def has_args(self, attribute: datamodels.Attribute, value: List[Arg]) -> None:
+    def has_args(self, attribute: datamodels.Attribute, value: list[Arg]) -> None:
         if not value:
             raise ValueError("At least one argument required")
 
@@ -243,8 +243,8 @@ class KCache(Cache):
 
 class GTMultiStage(LocNode):
     loop_order: common.LoopOrder
-    stages: List[GTStage]
-    caches: List[Cache]
+    stages: list[GTStage]
+    caches: list[Cache]
 
 
 class GTComputationCall(LocNode, eve.SymbolTableTrait):
@@ -252,18 +252,18 @@ class GTComputationCall(LocNode, eve.SymbolTableTrait):
     # and the parameters of the function object.
     # We could represent this closer to the C++ code by splitting call and definition of the
     # function object.
-    arguments: List[Arg]
-    extra_decls: List[ComputationDecl]
-    temporaries: List[Temporary]
-    multi_stages: List[GTMultiStage]
+    arguments: list[Arg]
+    extra_decls: list[ComputationDecl]
+    temporaries: list[Temporary]
+    multi_stages: list[GTMultiStage]
 
 
 class Program(LocNode, eve.ValidatedSymbolTableTrait):
     name: str
-    parameters: List[
+    parameters: list[
         ApiParamDecl
     ]  # in the current implementation these symbols can be accessed by the functor body
-    functors: List[GTFunctor]
+    functors: list[GTFunctor]
     gt_computation: GTComputationCall  # here could be the CtrlFlow region
 
     _validate_dtype_is_set = common.validate_dtype_is_set()

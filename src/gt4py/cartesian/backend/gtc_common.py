@@ -41,13 +41,9 @@ def pybuffer_to_sid(
 
     as_sid = "as_cuda_sid" if backend.storage_info["device"] == "gpu" else "as_sid"
 
-    sid_def = """gt::{as_sid}<{ctype}, {sid_ndim},
-        gt::integral_constant<int, {unique_index}>>({name})""".format(
-        name=name, ctype=ctype, unique_index=stride_kind_index, sid_ndim=sid_ndim, as_sid=as_sid
-    )
-    sid_def = "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-        sid_def=sid_def, name=name
-    )
+    sid_def = f"""gt::{as_sid}<{ctype}, {sid_ndim},
+        gt::integral_constant<int, {stride_kind_index}>>({name})"""
+    sid_def = f"gt::sid::shift_sid_origin({sid_def}, {name}_origin)"
     if domain_ndim != 3:
         gt_dims = [
             f"gt::stencil::dim::{dim}"
@@ -149,7 +145,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         for decl in ir.params:
             args.append(decl.name)
             if isinstance(decl, gtir.FieldDecl):
-                args.append("list(_origin_['{}'])".format(decl.name))
+                args.append(f"list(_origin_['{decl.name}'])")
 
         # only generate implementation if any multi_stages are present. e.g. if no statement in the
         # stencil has any effect on the API fields, this may not be the case since they could be

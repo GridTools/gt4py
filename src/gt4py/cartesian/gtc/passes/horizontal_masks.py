@@ -6,15 +6,15 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Optional, Tuple
+from typing import Optional
 
 from gt4py.cartesian.gtc import common
 from gt4py.cartesian.gtc.definitions import Extent
 
 
 def _overlap_along_axis(
-    extent: Tuple[int, int], interval: common.HorizontalInterval
-) -> Optional[Tuple[int, int]]:
+    extent: tuple[int, int], interval: common.HorizontalInterval
+) -> Optional[tuple[int, int]]:
     """Return a tuple of the distances to the edge of the compute domain, if overlapping."""
     start_diff: Optional[int]
     end_diff: Optional[int]
@@ -59,10 +59,10 @@ def mask_overlap_with_extent(
 
 
 def _compute_relative_interval(
-    extent: Tuple[int, int], interval: common.HorizontalInterval
-) -> Optional[Tuple[common.AxisBound, common.AxisBound]]:
+    extent: tuple[int, int], interval: common.HorizontalInterval
+) -> Optional[tuple[common.AxisBound, common.AxisBound]]:
     def _offset(
-        extent: Tuple[int, int], bound: Optional[common.AxisBound], start: bool = True
+        extent: tuple[int, int], bound: Optional[common.AxisBound], start: bool = True
     ) -> int:
         if bound:
             if start:
@@ -98,7 +98,7 @@ def _compute_relative_interval(
 def compute_relative_mask(
     extent: Extent, mask: common.HorizontalMask
 ) -> Optional[
-    Tuple[Tuple[common.AxisBound, common.AxisBound], Tuple[common.AxisBound, common.AxisBound]]
+    tuple[tuple[common.AxisBound, common.AxisBound], tuple[common.AxisBound, common.AxisBound]]
 ]:
     """
     Output a HorizontalMask that is relative to and always inside the extent instead of the compute domain.

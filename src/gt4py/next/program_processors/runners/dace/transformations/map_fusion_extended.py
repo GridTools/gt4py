@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional
 
 import dace
 from dace import (
@@ -161,7 +161,7 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
 
     def split_maps(
         self,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         sdfg: dace.SDFG,
         first_map_entry: dace_nodes.MapEntry,
         first_map_exit: dace_nodes.MapExit,
@@ -295,7 +295,7 @@ class HorizontalSplitMapRange(SplitMapRange):
             return False
 
         # Test if the map is in the right scope.
-        map_scope: Union[dace_nodes.Node, None] = scope_dict[self.first_map_entry]
+        map_scope: dace_nodes.Node | None = scope_dict[self.first_map_entry]
         if self.only_toplevel_maps and (map_scope is not None):
             return False
 
@@ -370,7 +370,7 @@ class HorizontalSplitMapRange(SplitMapRange):
         #  would need to obtain the scope dict after every iteration again, which would require
         #  a rescan. But since the operations do not alter the scopes, at least not in a way that
         #  would affect us, we can be more efficient and get the thing at the beginning.
-        scope_dict: Dict = graph.scope_dict()
+        scope_dict: dict = graph.scope_dict()
 
         for first_map_fragment_entry, second_map_fragment_entry in matched_map_fragments:
             first_map_fragment_exit = graph.exit_node(first_map_fragment_entry)
@@ -446,7 +446,7 @@ class VerticalSplitMapRange(SplitMapRange):
         second_map = self.second_map_entry.map
 
         # Test if the map is in the right scope.
-        map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[first_map_entry]
+        map_scope: dace_nodes.Node | None = graph.scope_dict()[first_map_entry]
         if self.only_toplevel_maps and (map_scope is not None):
             return False
 
@@ -481,7 +481,7 @@ class VerticalSplitMapRange(SplitMapRange):
 
         return True
 
-    def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
+    def apply(self, graph: dace.SDFGState | dace.SDFG, sdfg: dace.SDFG) -> None:
         """Split the map range in order to obtain an overlapping range between the first and second map."""
 
         first_map_entry: dace_nodes.MapEntry = graph.entry_node(self.first_map_exit)

@@ -8,7 +8,8 @@
 
 import copy
 import warnings
-from typing import Any, Callable, Mapping, Optional, TypeAlias, Union
+from collections.abc import Callable, Mapping
+from typing import Any, Optional, TypeAlias
 
 import dace
 from dace import (
@@ -218,7 +219,7 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
 
     def can_be_applied(
         self,
-        graph: Union[dace.SDFGState, dace.SDFG],
+        graph: dace.SDFGState | dace.SDFG,
         expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
@@ -227,7 +228,7 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         second_map_entry: dace_nodes.MapEntry = self.entry_second_map
 
         if self.only_inner_maps or self.only_toplevel_maps:
-            scope_dict: Mapping[dace_nodes.Node, Union[dace_nodes.Node, None]] = graph.scope_dict()
+            scope_dict: Mapping[dace_nodes.Node, dace_nodes.Node | None] = graph.scope_dict()
             if self.only_inner_maps and (scope_dict[second_map_entry] is None):
                 return False
             if self.only_toplevel_maps and (scope_dict[second_map_entry] is not None):
@@ -278,10 +279,8 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
             # According to [issue#2095](https://github.com/spcl/dace/issues/2095) DaCe is quite
             #  liberal concerning the positivity assumption, but in GT4Py this is not possible.
             second_map_iterations = second_map_iterations.subs(
-                (
-                    (sym, dace.symbol(sym.name, nonnegative=False))
-                    for sym in list(second_map_iterations.free_symbols)
-                )
+                (sym, dace.symbol(sym.name, nonnegative=False))
+                for sym in list(second_map_iterations.free_symbols)
             )
             if (second_map_iterations > 0) != True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
                 return False
@@ -313,7 +312,7 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         first_map_exit.map.params = copy.deepcopy(second_map_entry.map.params)
         first_map_exit.map.range = copy.deepcopy(second_map_entry.map.range)
 
-    def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
+    def apply(self, graph: dace.SDFGState | dace.SDFG, sdfg: dace.SDFG) -> None:
         first_map_exit: dace_nodes.MapExit = self.exit_first_map
         access_node: dace_nodes.AccessNode = self.access_node
         second_map_entry: dace_nodes.MapEntry = self.entry_second_map

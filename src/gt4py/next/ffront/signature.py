@@ -18,7 +18,8 @@ from __future__ import annotations
 import functools
 import inspect
 import types
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from gt4py.next.ffront import (
     field_operator_ast as foast,

@@ -12,8 +12,8 @@ import abc
 import dataclasses
 import functools
 import typing
-from collections.abc import MutableMapping
-from typing import Any, Callable, Generic, Protocol, TypeVar
+from collections.abc import Callable, MutableMapping
+from typing import Any, Generic, Protocol, TypeVar
 
 from typing_extensions import Self
 

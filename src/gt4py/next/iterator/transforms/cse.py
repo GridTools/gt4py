@@ -11,7 +11,8 @@ from __future__ import annotations
 import collections
 import dataclasses
 import math
-from typing import Callable, Iterable, TypeVar, Union, cast
+from collections.abc import Callable, Iterable
+from typing import TypeVar, cast
 
 import gt4py.next.iterator.ir_utils.ir_makers as im
 from gt4py.eve import (
@@ -268,7 +269,7 @@ def extract_subexpression(
     uid_generator: UIDGenerator,
     once_only: bool = False,
     deepest_expr_first: bool = False,
-) -> tuple[itir.Expr, Union[dict[itir.Sym, itir.Expr], None], bool]:
+) -> tuple[itir.Expr, dict[itir.Sym, itir.Expr] | None, bool]:
     """
     Given an expression extract all subexprs and return a new expr with the subexprs replaced.
 

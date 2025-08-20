@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import dataclass, field
-from typing import Any, List, Set, Union
+from typing import Any
 
 from gt4py import eve
 from gt4py.cartesian import utils
@@ -25,7 +25,7 @@ def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:
     indirect read-with-offset through temporaries.
     """
 
-    def _writes(node: oir.Stencil) -> Set[str]:
+    def _writes(node: oir.Stencil) -> set[str]:
         result = set()
         for left in node.walk_values().if_isinstance(oir.AssignStmt).getattr("left"):
             result |= left.walk_values().if_isinstance(oir.FieldAccess).getattr("name").to_set()
@@ -36,7 +36,7 @@ def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:
 
     field_extents = compute_fields_extents(node)
 
-    names: Set[str] = set()
+    names: set[str] = set()
     for name in write_fields:
         if not field_extents[name].is_zero:
             names.add(name)
@@ -50,8 +50,8 @@ def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:
 class GTIRToOIR(eve.NodeTranslator):
     @dataclass
     class Context:
-        local_scalars: List[oir.ScalarDecl] = field(default_factory=list)
-        temp_fields: List[oir.FieldDecl] = field(default_factory=list)
+        local_scalars: list[oir.ScalarDecl] = field(default_factory=list)
+        temp_fields: list[oir.FieldDecl] = field(default_factory=list)
 
         def reset_local_scalars(self):
             self.local_scalars = []
@@ -132,7 +132,7 @@ class GTIRToOIR(eve.NodeTranslator):
         return oir.HorizontalRestriction(mask=node.mask, body=body)
 
     def visit_While(self, node: gtir.While, **kwargs: Any) -> oir.While:
-        body: List[oir.Stmt] = []
+        body: list[oir.Stmt] = []
         for statement in node.body:
             oir_statement = self.visit(statement, **kwargs)
             body.extend(utils.flatten(utils.listify(oir_statement)))
@@ -146,12 +146,12 @@ class GTIRToOIR(eve.NodeTranslator):
         *,
         ctx: Context,
         **kwargs: Any,
-    ) -> List[Union[oir.AssignStmt, oir.MaskStmt]]:
+    ) -> list[oir.AssignStmt | oir.MaskStmt]:
         mask_field_decl = oir.Temporary(
             name=f"mask_{id(node)}", dtype=DataType.BOOL, dimensions=(True, True, True)
         )
         ctx.temp_fields.append(mask_field_decl)
-        statements: List[Union[oir.AssignStmt, oir.MaskStmt]] = [
+        statements: list[oir.AssignStmt | oir.MaskStmt] = [
             oir.AssignStmt(
                 left=oir.FieldAccess(
                     name=mask_field_decl.name,
@@ -192,7 +192,7 @@ class GTIRToOIR(eve.NodeTranslator):
         *,
         ctx: Context,
         **kwargs: Any,
-    ) -> List[oir.MaskStmt]:
+    ) -> list[oir.MaskStmt]:
         condition = self.visit(node.cond)
         body = utils.flatten(
             [self.visit(statement, ctx=ctx, **kwargs) for statement in node.true_branch.body]
@@ -214,7 +214,7 @@ class GTIRToOIR(eve.NodeTranslator):
 
     # --- Control flow ---
     def visit_VerticalLoop(self, node: gtir.VerticalLoop, *, ctx: Context) -> oir.VerticalLoop:
-        horizontal_executions: List[oir.HorizontalExecution] = []
+        horizontal_executions: list[oir.HorizontalExecution] = []
         for statement in node.body:
             ctx.reset_local_scalars()
             body = utils.flatten(utils.listify(self.visit(statement, ctx=ctx)))

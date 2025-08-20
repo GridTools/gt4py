@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 import numbers
-from typing import Optional, Sequence, Union
+from collections.abc import Sequence
+from typing import Optional
 
 import numpy as np
 
@@ -44,7 +45,7 @@ def empty(
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
-) -> Union[np.ndarray, "cp.ndarray"]:
+) -> np.ndarray | cp.ndarray:
     """Allocate an array of uninitialized (undefined) values with performance-optimal strides and alignment.
 
     Parameters
@@ -109,7 +110,7 @@ def ones(
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
-) -> Union[np.ndarray, "cp.ndarray"]:
+) -> np.ndarray | cp.ndarray:
     """Allocate an array with values initialized to 1.0 with performance-optimal strides and alignment.
 
     Parameters
@@ -162,7 +163,7 @@ def full(
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
-) -> Union[np.ndarray, "cp.ndarray"]:
+) -> np.ndarray | cp.ndarray:
     """Allocate an array with values initialized to `fill_value` with performance-optimal strides and alignment.
 
     Parameters
@@ -216,7 +217,7 @@ def zeros(
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
-) -> Union[np.ndarray, "cp.ndarray"]:
+) -> np.ndarray | cp.ndarray:
     """Allocate an array with values initialized to 0.0 with performance-optimal strides and alignment.
 
     Parameters
@@ -268,7 +269,7 @@ def from_array(
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
-) -> Union[np.ndarray, "cp.ndarray"]:
+) -> np.ndarray | cp.ndarray:
     """Allocate an array with values initialized to those of `data` with performance-optimal strides and alignment.
 
     This copies the values from `data` to the resulting buffer.

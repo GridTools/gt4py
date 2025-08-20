@@ -6,8 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from collections.abc import Iterator, Sequence
 from functools import reduce
-from typing import Iterator, Sequence, cast
+from typing import cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts

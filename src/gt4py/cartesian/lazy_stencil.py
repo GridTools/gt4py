@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 from cached_property import cached_property
 
@@ -55,7 +55,7 @@ class LazyStencil:
         return self.builder.backend
 
     @property
-    def field_info(self) -> Dict[str, Any]:
+    def field_info(self) -> dict[str, Any]:
         """
         Access the compiled stencil object's `field_info` attribute.
 

@@ -12,7 +12,8 @@ import inspect
 import math
 import operator
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
-from typing import Any, Callable, Final, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
+from collections.abc import Callable
+from typing import Any, Final, Generic, ParamSpec, TypeAlias, TypeVar, Union, cast
 
 import numpy as np
 from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, uint32, uint64
@@ -72,7 +73,7 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return (
             ts.FunctionType
         )  # our type of type is currently represented by the type constructor function
-    elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
+    elif t is tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
         return ts.TupleType
     elif hasattr(t, "__origin__") and t.__origin__ is Union:
         types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
@@ -136,8 +137,8 @@ class BuiltInFunction(Generic[_R, _P]):
         )
 
 
-CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
-FieldT = TypeVar("FieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
+CondT = TypeVar("CondT", bound=common.Field | common.Domain)
+FieldT = TypeVar("FieldT", bound=common.Field | core_defs.Scalar | tuple)
 
 
 class WhereBuiltinFunction(
@@ -187,17 +188,17 @@ def broadcast(
 @WhereBuiltinFunction
 def where(
     mask: common.Field,
-    true_field: common.Field | core_defs.ScalarT | Tuple,
-    false_field: common.Field | core_defs.ScalarT | Tuple,
+    true_field: common.Field | core_defs.ScalarT | tuple,
+    false_field: common.Field | core_defs.ScalarT | tuple,
     /,
-) -> common.Field | Tuple:
+) -> common.Field | tuple:
     raise NotImplementedError()
 
 
 @BuiltInFunction
 def astype(
-    value: common.Field | core_defs.ScalarT | Tuple, type_: type, /
-) -> common.Field | core_defs.ScalarT | Tuple:
+    value: common.Field | core_defs.ScalarT | tuple, type_: type, /
+) -> common.Field | core_defs.ScalarT | tuple:
     if isinstance(value, tuple):
         return tuple(astype(v, type_) for v in value)
     # default implementation for scalars, Fields are handled via dispatch

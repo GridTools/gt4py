@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Optional, Sequence, TypeAlias
+from collections.abc import Sequence
+from typing import Optional, TypeAlias
 
 import dace
 import sympy

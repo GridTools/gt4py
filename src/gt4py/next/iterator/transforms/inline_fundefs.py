@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Dict
+from typing import Any
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir as itir
@@ -14,7 +14,7 @@ from gt4py.next.iterator.transforms import symbol_ref_utils
 
 
 class InlineFundefs(PreserveLocationVisitor, NodeTranslator):
-    def visit_SymRef(self, node: itir.SymRef, *, symtable: Dict[str, Any]):
+    def visit_SymRef(self, node: itir.SymRef, *, symtable: dict[str, Any]):
         if node.id in symtable and isinstance(
             (symbol := symtable[node.id]), itir.FunctionDefinition
         ):

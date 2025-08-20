@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import Any, Callable, Iterable, Literal, Mapping, Optional
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any, Literal, Optional
 
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
