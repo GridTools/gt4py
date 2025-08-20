@@ -86,7 +86,7 @@ build_cscs_amd_rocm:
   stage: test
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
-    TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6) to test 
+    TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6_0) to test 
     CSCS_CUDA_MPS: 1
     SLURM_GPUS_PER_NODE: 4
     SLURM_JOB_NUM_NODES: 1
