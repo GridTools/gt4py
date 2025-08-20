@@ -119,7 +119,7 @@ class FieldIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
         if value.kind != common.ExprKind.FIELD:
             raise ValueError("Condition is not a field expression")
 
-    # TODO(havogt) add validator for the restriction (it's a pass over the subtrees...)
+    # TODO(havogt): add validator for the restriction (it's a pass over the subtrees...)
 
 
 class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
@@ -171,7 +171,7 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=False)
 
 
-class Decl(LocNode):  # TODO probably Stmt
+class Decl(LocNode):  # TODO(): probably Stmt
     name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
 
@@ -195,7 +195,7 @@ class Interval(LocNode):
     end: AxisBound
 
 
-# TODO(havogt) should vertical loop open a scope?
+# TODO(havogt): should vertical loop open a scope?
 class VerticalLoop(LocNode):
     interval: Interval
     loop_order: common.LoopOrder

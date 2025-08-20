@@ -160,7 +160,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
-    )  # TODO capture
+    )  # TODO(): capture
 
     Backend = as_fmt("make_backend(backend, {domain})")
 

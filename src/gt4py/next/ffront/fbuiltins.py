@@ -147,13 +147,13 @@ class WhereBuiltinFunction(
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
-                    # TODO(havogt) find a strategy to unify parsing and embedded error messages
+                    # TODO(havogt): find a strategy to unify parsing and embedded error messages
                     f"Either both or none can be tuple in '{true_field=}' and '{false_field=}'."
                 )
             if len(true_field) != len(false_field):
                 raise ValueError(
                     "Tuple of different size not allowed."
-                )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
+                )  # TODO(havogt): find a strategy to unify parsing and embedded error messages
             return tuple(self(cond, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
         return super().__call__(cond, true_field, false_field)
 
@@ -180,7 +180,7 @@ def broadcast(
     assert core_defs.is_scalar_type(
         field
     )  # default implementation for scalars, Fields are handled via dispatch
-    # TODO(havogt) implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
+    # TODO(havogt): implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
     return field  # type: ignore[return-value] # see comment above
 
 

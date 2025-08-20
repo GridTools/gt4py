@@ -347,7 +347,7 @@ class OIRToTreeIR(eve.NodeVisitor):
                 tir.Axis.J: -field_extent[1][0],
                 tir.Axis.K: max(k_bound[0], 0),
             }
-            # TODO / Dev Note: Persistent memory is an overkill here - we should scope
+            # TODO(): / Dev Note: Persistent memory is an overkill here - we should scope
             # the temporary as close to the tasklets as we can, but any lifetime lower
             # than persistent will yield issues with memory leaks.
             containers[field.name] = data.Array(

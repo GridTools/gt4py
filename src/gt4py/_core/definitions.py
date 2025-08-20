@@ -140,7 +140,7 @@ def is_positive_integral_type(integral_type: type) -> TypeGuard[Type[PositiveInt
 
 TensorShape: TypeAlias = Sequence[
     int
-]  # TODO(egparedes) figure out if PositiveIntegral can be made to work
+]  # TODO(egparedes): figure out if PositiveIntegral can be made to work
 
 
 def is_valid_tensor_shape(value: Sequence[IntegralScalar]) -> TypeGuard[TensorShape]:

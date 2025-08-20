@@ -270,7 +270,7 @@ def compute_pnabla_sign(pp, S_M, vol, node_index, is_pole_edge):
 
 @fendef
 def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_pole_edge):
-    # TODO replace by single stencil which returns tuple
+    # TODO(): replace by single stencil which returns tuple
     domain = unstructured_domain(named_range(Vertex, 0, n_nodes))
     set_at(
         as_fieldop(compute_pnabla_sign, domain)(pp, S_MXX, vol, node_index, is_pole_edge),

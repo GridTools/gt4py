@@ -122,8 +122,7 @@ def _field_constituents_range_and_dims(
                 yield from _field_constituents_range_and_dims(el, el_type)
         case ts.FieldType():
             dims = type_info.extract_dims(arg_type)
-            if isinstance(arg, ts.TypeSpec):  # TODO
-                yield (tuple(), dims)
+            if isinstance(arg, ts.TypeSpec):  # TODO(): fix                yield (tuple(), dims)
             elif dims:
                 assert (
                     hasattr(arg, "domain")

@@ -131,7 +131,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         )
         sdfg.gt4py_program_output_fields = dict(single_horizontal_dim_per_field(output_fields))
 
-        # TODO (ricoh): bring back sdfg.offset_providers_per_input_field.
+        # TODO(ricoh): bring back sdfg.offset_providers_per_input_field.
         #               A starting point would be to use the "trace_shifts" pass on GTIR
         #               and associate the extracted shifts with each input field.
         #               Analogous to the version in `runners.dace_iterator.__init__`, which

@@ -49,11 +49,11 @@ from next_tests.toy_connectivity import (
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-def edge_index_field():  # TODO replace by gtx.index_field once supported in bindings
+def edge_index_field():  # TODO(): replace by gtx.index_field once supported in bindings
     return gtx.as_field([Edge], np.arange(e2v_arr.shape[0], dtype=np.int32))
 
 
-def vertex_index_field():  # TODO replace by gtx.index_field once supported in bindings
+def vertex_index_field():  # TODO(): replace by gtx.index_field once supported in bindings
     return gtx.as_field([Vertex], np.arange(v2e_arr.shape[0], dtype=np.int32))
 
 

@@ -306,7 +306,7 @@ def compute_kind(*values: Expr) -> ExprKind:
 
 
 class Literal(eve.Node):
-    # TODO(havogt) reconsider if `str` is a good representation for value,
+    # TODO(havogt): reconsider if `str` is a good representation for value,
     # maybe it should be Union[float,int,str] etc?
     value: Union[BuiltInLiteral, str]
     dtype: DataType
@@ -656,8 +656,8 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
         return allowed_flags
 
 
-# TODO(ricoh) consider making gtir.Decl & oir.Decl common and / or adding a VerticalLoop baseclass
-# TODO(ricoh) in common instead of passing type arguments
+# TODO(ricoh): consider making gtir.Decl & oir.Decl common and / or adding a VerticalLoop baseclass
+# TODO(ricoh): in common instead of passing type arguments
 def validate_lvalue_dims(
     vertical_loop_type: Type[eve.Node], decl_type: Type[eve.Node]
 ) -> datamodels.RootValidator:

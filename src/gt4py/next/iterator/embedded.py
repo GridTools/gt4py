@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-# TODO(havogt) move public definitions and make this module private
+# TODO(havogt): move public definitions and make this module private
 
 from __future__ import annotations
 
@@ -433,7 +433,7 @@ def lift(stencil):
                 self.offsets = offsets or []
                 self.elem = elem
 
-            # TODO needs to be supported by all iterators that represent tuples
+            # TODO(): needs to be supported by all iterators that represent tuples
             def __getitem__(self, index):
                 return _WrappedIterator(self.stencil, self.args, offsets=self.offsets, elem=index)
 
@@ -487,7 +487,7 @@ Domain: TypeAlias = (
 
 @builtins.named_range.register(EMBEDDED)
 def named_range(tag: Tag | common.Dimension, start: int, end: int) -> NamedRange:
-    # TODO revisit this pattern after the discussion of 0d-field vs scalar
+    # TODO(): revisit this pattern after the discussion of 0d-field vs scalar
     if isinstance(start, ConstantField):
         start = start.value
     if isinstance(end, ConstantField):
@@ -1190,7 +1190,7 @@ class IndexField(common.Field):
         index_field: common.Connectivity | fbuiltins.FieldOffset,
         *args: common.Connectivity | fbuiltins.FieldOffset,
     ) -> common.Field:
-        # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
+        # TODO(): can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
     def restrict(self, item: common.AnyIndexSpec) -> Self:
@@ -1317,11 +1317,11 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         index_field: common.Connectivity | fbuiltins.FieldOffset,
         *args: common.Connectivity | fbuiltins.FieldOffset,
     ) -> common.Field:
-        # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
+        # TODO(): can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
     def restrict(self, item: common.AnyIndexSpec) -> Self:
-        # TODO set a domain...
+        # TODO(): set a domain...
         return self
 
     def as_scalar(self) -> core_defs.ScalarT:

@@ -132,7 +132,7 @@ class GTBaseBackend(BaseGTBackend):
     def generate(self) -> type[StencilObject]:
         self.check_options(self.builder.options)
 
-        # TODO(havogt) add bypass if computation has no effect
+        # TODO(havogt): add bypass if computation has no effect
         self.generate_extension()
 
         # Generate and return the Python wrapper class

@@ -117,7 +117,7 @@ class NdArrayField(
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
 
-    array_ns: ClassVar[ModuleType]  # TODO(havogt) introduce a NDArrayNamespace protocol
+    array_ns: ClassVar[ModuleType]  # TODO(havogt): introduce a NDArrayNamespace protocol
 
     @property
     def domain(self) -> common.Domain:
@@ -784,7 +784,7 @@ NdArrayField.register_builtin_func(
     fbuiltins.power,  # type: ignore[attr-defined]
     NdArrayField.__pow__,
 )
-# TODO gamma
+# TODO(): gamma
 
 for name in (
     fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
@@ -1080,7 +1080,7 @@ if jnp:
             index: common.AnyIndexSpec,
             value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
         ) -> None:
-            # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
+            # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index):.set(value):`
             raise NotImplementedError("'__setitem__' for JaxArrayField not yet implemented.")
 
     common._field.register(jnp.ndarray, JaxArrayField.from_array)

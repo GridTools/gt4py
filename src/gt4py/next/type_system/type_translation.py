@@ -151,8 +151,7 @@ def from_type_hint(
             return ts.FunctionType(
                 pos_only_args=new_args,
                 pos_or_kw_args=kwargs,
-                kw_only_args={},  # TODO
-                returns=returns,
+                kw_only_args={},  # TODO(): fix                returns=returns,
             )
     raise ValueError(f"'{type_hint}' type is not supported.")
 

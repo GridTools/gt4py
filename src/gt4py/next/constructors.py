@@ -265,8 +265,7 @@ def as_field(
     if dtype is None:
         dtype = storage_utils.asarray(data).dtype
     dtype = core_defs.dtype(dtype)
-    assert dtype.tensor_shape == ()  # TODO
-
+    assert dtype.tensor_shape == ()  # TODO(): fix
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
 
@@ -347,8 +346,7 @@ def as_connectivity(
     if dtype is None:
         dtype = storage_utils.asarray(data).dtype
     dtype = core_defs.dtype(dtype)
-    assert dtype.tensor_shape == ()  # TODO
-
+    assert dtype.tensor_shape == ()  # TODO(): fix
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
     buffer = next_allocators.allocate(actual_domain, dtype, allocator=allocator, device=device)

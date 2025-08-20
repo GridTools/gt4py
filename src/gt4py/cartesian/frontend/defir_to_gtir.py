@@ -544,7 +544,7 @@ class DefIRToGTIR(IRNodeVisitor):
         return self.visit(node.start), self.visit(node.end)
 
     def visit_AxisBound(self, node: AxisBound) -> gtir.AxisBound:
-        # TODO(havogt) add support VarRef
+        # TODO(havogt): add support VarRef
         return gtir.AxisBound(
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
         )

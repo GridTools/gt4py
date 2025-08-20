@@ -48,7 +48,7 @@ class GTFNTranslationStep(
     ],
 ):
     language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
-    # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
+    # TODO(): replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU

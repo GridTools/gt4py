@@ -755,7 +755,7 @@ class AxisInterval(Node):
         )
 
 
-# TODO Find a better place for this in the file.
+# TODO(): Find a better place for this in the file.
 @attribclass
 class HorizontalIf(Statement):
     intervals = attribute(of=DictOf[str, AxisInterval])
