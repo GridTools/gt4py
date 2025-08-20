@@ -132,8 +132,8 @@ test_cscs_gh200:
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   rules:
-    - if: $SUBVARIANT == 'rocm6_0'
-      when: never
+    - if: $SUBVARIANT == 'cuda12'
+    - when: on_success
 
 test_cscs_amd_rocm:
   extends:
@@ -147,7 +147,6 @@ test_cscs_amd_rocm:
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
     SLURM_PARTITION: mi300
     CMAKE_PREFIX_PATH: /opt/rocm # for next
-    CXX: /opt/rocm/bin/hipcc
     CUDA_HOME: /opt/rocm # for cartesian
     SLURM_TIMELIMIT: 20 # relaxed relative to santis as there is no pressure on the queue
   rules:
