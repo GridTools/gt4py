@@ -85,7 +85,7 @@ class RemovePointwiseViews(dace_transformation.SingleStateTransformation):
             return False
         if isinstance(src_desc, dace_data.ArrayView) and src_desc.total_size != 1:
             return False
-        if isinstance(dst_desc, dace_data.Array) and dst_desc.total_size != 1:
+        if graph.out_degree(dst_node) != 1:
             return False
 
         return True
@@ -99,13 +99,14 @@ class RemovePointwiseViews(dace_transformation.SingleStateTransformation):
         dst_node: dace_nodes.AccessNode = self.destination_node
 
         dst_in_edge = graph.in_edges(dst_node)[0]
+        dst_out_edge = graph.out_edges(dst_node)[0]
         edge_to_redirect = graph.in_edges(src_node)[0]
         helpers.redirect_edge(
             graph,
             edge_to_redirect,
             new_dst=dst_in_edge.dst,
             new_dst_conn=dst_in_edge.dst_conn,
-            new_memlet=dace.Memlet(data=dst_node.data, subset=dst_in_edge.data.subset),
+            new_memlet=dace.Memlet(data=dst_node.data, subset=dst_out_edge.data.subset),
         )
 
         graph.remove_edge(dst_in_edge)
