@@ -69,6 +69,21 @@ class ValueExpr:
 
     dc_node: dace.nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
+    field_layout: Optional[list[gtx_common.Dimension]]
+
+    def __post_init__(self) -> None:
+        # NOTE: `None` means "I need it to make mypy happy and I have not yet though enough
+        #   to find out what to use, but I need to commit.
+        assert isinstance(self.gt_dtype, ts.ListType | ts.ScalarType)
+        assert isinstance(self.field_layout, list)
+
+        assert gtx_common.order_dimensions(self.field_layout) == self.field_layout
+        if isinstance(self.gt_dtype, ts.ScalarType):
+            assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in self.field_layout)
+        else:
+            # `order_dimensions()` has made sure that there is only one local dimension,
+            #  thus we have to make sure that it is the right one.
+            assert self.gt_dtype.offset_type in self.field_layout
 
 
 @dataclasses.dataclass(frozen=True)
@@ -77,13 +92,19 @@ class MemletExpr:
     Scalar or array data access through a memlet.
 
     Note:
-        I think the description is a bit wrong, a "scalar MemletExpr" is that one
-        element from the array is read. When the datatype is 'List' it means that
-        multiple values are read, these are then local dimensions.
+        - I think the description is a bit wrong, a "scalar MemletExpr" is that one
+            element from the array is read. When the datatype is 'List' it means that
+            multiple values are read, these are then local dimensions.
+        - Although I (phimuell) have introduced the `field_layout` filed, I myself am
+            not sure what it really means. I would say it is the "entirety of the
+            field that is accessed". It is quite clear when it is read or written, but
+            less clear in an AccessNode to AccessNode connection.
+
     Args:
         dc_node: Access node to the data container, can be either a scalar or a local list.
         gt_dtype: GT4Py data type, which includes the `offset_type` local dimension for lists.
         subset: Represents the subset to use in memlet to access the above data.
+        field_layout: The full layout of what is accessed by the Memlet.
     """
 
     # NOTE: As it can be seen in `_vist_list_get()` `subset` does not include the whole subset.
@@ -97,6 +118,7 @@ class MemletExpr:
         # NOTE: `None` means "I need it to make mypy happy and I have not yet though enough
         #   to find out what to use, but I need to commit.
         assert isinstance(self.field_layout, list)
+        assert isinstance(self.gt_dtype, ts.ListType | ts.ScalarType)
 
         # We expect that the field layout is in the correct order.
         assert gtx_common.order_dimensions(self.field_layout) == self.field_layout
@@ -521,16 +543,28 @@ class LambdaToDataflow(eve.NodeVisitor):
         return self.subgraph_builder.unique_nsdfg_name(self.sdfg, prefix)
 
     def _construct_local_view(self, field: MemletExpr | ValueExpr) -> ValueExpr:
+        # TODO(phimuell, edopao): I do not think that this name is good, as someone (me) could
+        #   confuse "local" with a `DImensionKind.LOCAL` dimension. I would say that something
+        #   like "deref-size" is better. Essentially I would say it contains every dimension
+        #   that is not iterated over by the surrounding Map.
         if isinstance(field, MemletExpr):
             desc = field.dc_node.desc(self.sdfg)
+            # TODO(phimuell, edopao): This is a very fragile way to identify "local" dimensions,
+            #   whose name are probably wrong, see above. To identify them in a robust way, one
+            #   should pass the dimensions the surrounding Map iterates over to this function.
+            #   Consider an offset provider for `K` in a pure `K` field and you will see why it
+            #   fails.
+            source_field_layout = field.field_layout
             local_dim_indices = [i for i, size in enumerate(field.subset.size()) if size != 1]
             if len(local_dim_indices) == 0:
                 # we are accessing a single-element array with shape (1,)
                 view_shape = (1,)
                 view_strides = (1,)
+                view_field_layout = []
             else:
                 view_shape = tuple(desc.shape[i] for i in local_dim_indices)
                 view_strides = tuple(desc.strides[i] for i in local_dim_indices)
+                view_field_layout = [source_field_layout[i] for i in local_dim_indices]
             view, _ = self.sdfg.add_view(
                 f"view_{field.dc_node.data}",
                 view_shape,
@@ -541,9 +575,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             local_view_node = self.state.add_access(view)
             self._add_input_data_edge(field.dc_node, field.subset, local_view_node)
 
-            return ValueExpr(local_view_node, desc.dtype)
+            return ValueExpr(local_view_node, field.gt_dtype, field_layout=view_field_layout)
 
         else:
+            assert isinstance(field, ValueExpr)
             return field
 
     def _construct_tasklet_result(
@@ -1135,8 +1170,22 @@ class LambdaToDataflow(eve.NodeVisitor):
             external_edges=True,
         )
 
+        # TODO(phimuell, edopao): This is very dirty and probably wrong. It should actually
+        #   be the domain dimensions of the surrounding Map with the `offset_type`. As an
+        #   example consider the following case. The data is stored inside `A` which is of
+        #   dimensions `(dims.KDim, dims.EdgeDim)` and we use the offset provider `E2V`.
+        #   Thus the following code will generate an output with the dimensions
+        #   (`dims.KDim, dims.EdgeDim, dims.E2VDim)`. However, if we only want to process
+        #   one vertical level, the dimension should be `(dims.EdgeDim, dims.E2VDim)`.
+        #   This is why we need to know the surrounding Map's iteration space.
+        result_field_layout = gtx_common.order_dimensions(
+            [dim for dim, _ in it.field_domain] + [offset_type]
+        )
+
         return ValueExpr(
-            dc_node=neighbors_node, gt_dtype=ts.ListType(node.type.element_type, offset_type)
+            dc_node=neighbors_node,
+            gt_dtype=ts.ListType(node.type.element_type, offset_type),
+            field_layout=result_field_layout,
         )
 
     def _visit_list_get(self, node: gtir.FunCall) -> ValueExpr:
@@ -1359,6 +1408,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             output_nodes={result: result_node},
             external_edges=True,
         )
+
+        # TODO(phimuell, edopao): This is hacky and probably wrong
 
         return ValueExpr(
             dc_node=result_node,

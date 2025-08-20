@@ -719,6 +719,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
           The SDFG head state, eventually updated if the target write requires a new state.
         """
 
+        # TODO(edopao, phimuell): I think that every sub elements needs to know over what
+        #   we iterate, i.e. what are the dimensions the surrounding Map is iterating
+        #   over. I already mentioned that in my comments about the `_construct_local_view()`,
+        #   which I think is a wrong name. It would make it simpler to identify.
+
         # visit the domain expression
         domain = gtir_domain.extract_domain(stmt.domain)
         source_fields = self._visit_expression(stmt.expr, domain, sdfg, state)
