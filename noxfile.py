@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import pathlib
-import types
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
 
@@ -69,10 +68,10 @@ PYTHON_VERSIONS: Final[list[str]] = [
 
 # -- Parameter sets --
 DeviceOption: TypeAlias = Literal["cpu", "cuda12", "rocm6_0"]
-DeviceNoxParam: Final = types.SimpleNamespace(
-    **{device: nox.param(device, id=device, tags=[device]) for device in DeviceOption.__args__}
-)
-DeviceTestSettings: Final[dict[str, dict[str, list[str]]]] = {
+DeviceNoxParam: Final[dict[DeviceOption, nox.param]] = {
+    device: nox.param(device, id=device, tags=[device]) for device in DeviceOption.__args__
+}
+DeviceTestSettings: Final[dict[DeviceOption, dict[str, list[str]]]] = {
     "cpu": {"extras": [], "markers": ["not requires_gpu"]},
     **{
         device: {"extras": [device], "markers": ["requires_gpu"]}
@@ -82,12 +81,9 @@ DeviceTestSettings: Final[dict[str, dict[str, list[str]]]] = {
 }
 
 CodeGenOption: TypeAlias = Literal["internal", "dace"]
-CodeGenNoxParam: Final = types.SimpleNamespace(
-    **{
-        codegen: nox.param(codegen, id=codegen, tags=[codegen])
-        for codegen in CodeGenOption.__args__
-    }
-)
+CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
+    codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
+}
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
     "internal": {"extras": [], "markers": ["not requires_dace"]}
 }
@@ -139,8 +135,8 @@ def install_session_venv(
 
 # -- Sessions --
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian"])
-@nox.parametrize("device", list(DeviceNoxParam.__dict__.values()))
-@nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace])
+@nox.parametrize("device", [*DeviceNoxParam.values()])
+@nox.parametrize("codegen", [*CodeGenNoxParam.values()])
 def test_cartesian(
     session: nox.Session,
     codegen: CodeGenOption,
@@ -221,8 +217,8 @@ def test_examples(session: nox.Session) -> None:
         nox.param("atlas", id="atlas", tags=["atlas"]),
     ],
 )
-@nox.parametrize("device", list(DeviceNoxParam.__dict__.values()))
-@nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace])
+@nox.parametrize("device", [*DeviceNoxParam.values()])
+@nox.parametrize("codegen", [*CodeGenNoxParam.values()])
 def test_next(
     session: nox.Session,
     codegen: CodeGenOption,
@@ -288,7 +284,7 @@ def test_package(session: nox.Session) -> None:
 
 
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian", "next"])
-@nox.parametrize("device", list(DeviceNoxParam.__dict__.values()))
+@nox.parametrize("device", [*DeviceNoxParam.values()])
 def test_storage(
     session: nox.Session,
     device: DeviceOption,

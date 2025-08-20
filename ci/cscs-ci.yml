@@ -106,15 +106,24 @@ build_cscs_amd_rocm:
       - SUBPACKAGE: [storage]
         VARIANT: ["cuda12", "rocm6_0", "cpu"]
         PY_VERSION: *test_python_versions
-  rules:
+  rules: &exclude_variants_rules
+    - if: '(($SUBVARIANT == "cpu" || ($SUBVARIANT == "" && $VARIANT == "cpu")) && " $TEST_VARIANTS " !~ " cpu "'
+      when: never
+    - if: '(($SUBVARIANT == "cuda12" || ($SUBVARIANT == "" && $VARIANT == "cuda12")) && " $TEST_VARIANTS " !~ " cuda12 "'
+      when: never
+    - if: '(($SUBVARIANT == "rocm_6" || ($SUBVARIANT == "" && $VARIANT == "rocm_6")) && " $TEST_VARIANTS " !~ " rocm_6 "'
+      when: never
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
         # TODO: investigate why the dace tests seem to hang with multiple jobs
         GT4PY_BUILD_JOBS: 1
         SLURM_TIMELIMIT: "00:15:00"
-    - when: on_success
+    # An extra `- when: on_success` rule should be added after this anchor in the extended jobs 
+
   script:
-    # Since the image does not contain the repo, we need to clone it before running the tests
+    # Since the image does not contain the repo, we need to clone it before running the tests.
+    # The output folder is inside the docker image (${WORKDIR}/gt4py), so it won't take up
+    # space on $SCRATCH but in a ephemeral tmpfs mount in the running node.
     # for git>=2.49: mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --revision "${CI_COMMIT_SHA}" "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
@@ -128,11 +137,12 @@ test_cscs_gh200:
   needs:
     - build_cscs_gh200
   variables:
+    TEST_VARIANTS: 'cpu cuda12'
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   rules:
-    - if: $SUBVARIANT == 'cuda12'
+    - *exclude_variants_rules
     - when: on_success
 
 test_cscs_amd_rocm:
@@ -142,6 +152,7 @@ test_cscs_amd_rocm:
   needs:
     - build_cscs_amd_rocm
   variables:
+    TEST_VARIANTS: 'cpu rocm6_0'
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
@@ -150,10 +161,7 @@ test_cscs_amd_rocm:
     CUDA_HOME: /opt/rocm # for cartesian
     SLURM_TIMELIMIT: 20 # relaxed relative to santis as there is no pressure on the queue
   rules:
-    - if: $SUBVARIANT == 'cuda12' || $VARIANT=='cuda12'
-      when: never
-    - if: $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
-      when: never
+    - *exclude_variants_rules
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'internal' && $SUBVARIANT == 'cpu'
       variables:
         CXX: g++
