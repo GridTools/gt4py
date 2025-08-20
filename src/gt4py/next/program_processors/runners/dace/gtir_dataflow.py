@@ -852,7 +852,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         if isinstance(arg, IteratorExpr) and use_full_shape:
             return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, arg.indices)
         else:
-            return ValueExpr(inner_node, arg.gt_dtype, field_layout=None)
+            assert isinstance(inner_desc, dace.data.Scalar)
+            return ValueExpr(inner_node, arg.gt_dtype, field_layout=[])
 
     def _visit_if_branch(
         self,
@@ -959,7 +960,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             output_node,
             dace.Memlet.from_array(output_data, output_desc),
         )
-        return ValueExpr(output_node, edge.result.gt_dtype, field_layout=None)
+        # TODO(phimuell, edopao): In case of an array we have to think more.
+        assert isinstance(output_desc, dace.data.Scalar)
+        return ValueExpr(output_node, edge.result.gt_dtype, field_layout=[])
 
     def _visit_if(self, node: gtir.FunCall) -> ValueExpr | tuple[ValueExpr | tuple[Any, ...], ...]:
         """
@@ -982,7 +985,11 @@ class LambdaToDataflow(eve.NodeVisitor):
                 None,
                 dace.Memlet.from_array(output, output_desc),
             )
-            return ValueExpr(output_node, inner_value.gt_dtype, field_layout=None)
+            # TODO(phimuell, edopao): Since we map the output from the inside to the
+            #   outside it should be safe to use the same layout here as well.
+            return ValueExpr(
+                output_node, inner_value.gt_dtype, field_layout=inner_value.field_layout
+            )
 
         assert len(node.args) == 3
 
