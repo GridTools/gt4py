@@ -69,7 +69,7 @@ def _parse_scan_fieldop_arg(
             dc_node=arg_expr.field,
             gt_dtype=arg_expr.gt_dtype,
             subset=arg_expr.get_memlet_subset(ctx.sdfg),
-            field_layout=None,
+            field_layout=arg_expr.get_full_field_domain(),
         )
 
     arg = sdfg_builder.visit(node, ctx=ctx)
@@ -543,7 +543,15 @@ def _connect_nested_sdfg_output_to_temporaries(
         None,
         dace.Memlet.from_array(outer_dataname, outer_desc),
     )
-    output_expr = gtir_dataflow.ValueExpr(outer_node, inner_data.gt_type.dtype, field_layout=None)
+
+    # TODO(phimuell, edopao): This works because we essentially clone the descriptor.
+    if isinstance(inner_data.gt_type, ts.FieldType):
+        field_layout = list(inner_data.gt_type.dims)
+    else:
+        field_layout = []
+    output_expr = gtir_dataflow.ValueExpr(
+        outer_node, inner_data.gt_type.dtype, field_layout=field_layout
+    )
     return gtir_dataflow.DataflowOutputEdge(outer_ctx.state, output_expr)
 
 
