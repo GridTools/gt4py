@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import re
-from typing import Optional, Pattern
+import dataclasses
 
 import pytest
 
@@ -19,7 +19,6 @@ from gt4py.next import (
     FieldOffset,
     astype,
     broadcast,
-    common,
     errors,
     float32,
     float64,
@@ -32,7 +31,7 @@ from gt4py.next.ffront.experimental import concat_where
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts
 
 # Meaningless dimensions, used for tests.
 TDim = Dimension("TDim")
@@ -473,10 +472,13 @@ def test_astype_dtype():
     )
 
 
+@dataclasses.dataclass
+class WrongConstructorType: ...
+
+
 def test_astype_wrong_dtype():
     def simple_astype(a: Field[[TDim], float64]):
-        # we just use broadcast here, but anything with type function is fine
-        return astype(a, broadcast)
+        return astype(a, WrongConstructorType)
 
     with pytest.raises(
         errors.DSLError,
