@@ -162,9 +162,9 @@ test_cscs_amd_rocm:
     CUDA_HOME: /opt/rocm # for cartesian
     SLURM_TIMELIMIT: 20 # relaxed relative to santis as there is no pressure on the queue
   rules:
-    - *exclude_variants_rules
     - if: $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
       when: never
+    - *exclude_variants_rules
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'internal' && $SUBVARIANT == 'cpu'
       variables:
         CXX: g++
