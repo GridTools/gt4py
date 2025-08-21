@@ -22,6 +22,7 @@ from . import util
 
 def _make_sdfg_with_map_with_view(
     N: str | int,
+    use_array_as_temp: bool = False,
 ) -> dace.SDFG:
     shape = (N, N)
     sdfg = dace.SDFG(util.unique_name("simple_map_with_view"))
@@ -36,8 +37,6 @@ def _make_sdfg_with_map_with_view(
         )
 
     a, out = (state.add_access(name) for name in ["a", "out"])
-    sdfg.add_symbol("horizontal_start", dace.int32)
-    sdfg.add_symbol("horizontal_end", dace.int32)
 
     # First independent Tasklet
     task1 = state.add_tasklet(
@@ -54,31 +53,36 @@ def _make_sdfg_with_map_with_view(
     # Now create the map using the above tasklets
     mentry, mexit = state.add_map(
         "simple_map",
-        ndrange={"i": f"0:{N}", "j": "horizontal_start:horizontal_end"},
+        ndrange={"i": f"0:{N}", "j": f"0:{N}"},
     )
 
-    tmp_access_node = state.add_access("tmp")
-    tmp_access_node.transient = True
+    tmp_access_node = state.add_access("tmp_view")
 
     sdfg.add_view(
-        "tmp",
+        "tmp_view",
         shape=(1,),
         dtype=dace.float64,
     )
 
-    tmp_access_node2 = state.add_transient("tmp2", shape=(1,), dtype=dace.float64)
+    tmp_view_access_node = state.add_transient(
+        "tmp", shape=(1,) if not use_array_as_temp else shape, dtype=dace.float64
+    )
 
-    state.add_edge(a, None, mentry, "IN_a", dace.Memlet("a[i, j]"))
+    state.add_edge(a, None, mentry, "IN_a", dace.Memlet(f"a[0:{N}, 0:{N}]"))
     state.add_edge(mentry, "OUT_a", task1, "__in0", dace.Memlet("a[i, j]"))
-    state.add_edge(task1, "__out0", tmp_access_node, None, dace.Memlet("tmp[0]"))
-    state.add_edge(tmp_access_node, None, tmp_access_node2, None, dace.Memlet("tmp[0]"))
-    state.add_edge(tmp_access_node2, None, mexit, "IN_out", dace.Memlet("tmp2[0]"))
+    state.add_edge(task1, "__out0", tmp_access_node, None, dace.Memlet("tmp_view[0]"))
+    if use_array_as_temp:
+        state.add_edge(tmp_access_node, None, tmp_view_access_node, None, dace.Memlet("tmp[i, j]"))
+        state.add_edge(tmp_view_access_node, None, mexit, "IN_out", dace.Memlet("out[i, j]"))
+    else:
+        state.add_edge(tmp_access_node, None, tmp_view_access_node, None, dace.Memlet("tmp[0]"))
+        state.add_edge(tmp_view_access_node, None, mexit, "IN_out", dace.Memlet("out[i, j]"))
 
     mentry.add_scope_connectors("a")
     mentry.add_in_connector("IN_a")
     mexit.add_in_connector("IN_out")
     mexit.add_out_connector("OUT_out")
-    state.add_edge(mexit, "OUT_out", out, None, dace.Memlet("out[i, j]"))
+    state.add_edge(mexit, "OUT_out", out, None, dace.Memlet(f"out[0:{N}, 0:{N}]"))
 
     dace_propagation.propagate_states(sdfg)
     sdfg.validate()
@@ -131,75 +135,9 @@ def test_remove_point_view():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
-def _make_sdfg_with_map_with_view_array(
-    N: str | int,
-) -> dace.SDFG:
-    shape = (N, N)
-    sdfg = dace.SDFG(util.unique_name("simple_map_with_view"))
-    state = sdfg.add_state(is_start_block=True)
-
-    for name in ["a", "out"]:
-        sdfg.add_array(
-            name=name,
-            shape=shape,
-            dtype=dace.float64,
-            transient=False,
-        )
-
-    a, out = (state.add_access(name) for name in ["a", "out"])
-    sdfg.add_symbol("horizontal_start", dace.int32)
-    sdfg.add_symbol("horizontal_end", dace.int32)
-
-    # First independent Tasklet
-    task1 = state.add_tasklet(
-        "task1",
-        inputs={
-            "__in0",  # <- `b[i, j]`
-        },
-        outputs={
-            "__out0",  # <- `tmp1`
-        },
-        code="__out0 = __in0 + 3.0",
-    )
-
-    # Now create the map using the above tasklets
-    mentry, mexit = state.add_map(
-        "simple_map",
-        ndrange={"i": f"0:{N}", "j": "horizontal_start:horizontal_end"},
-    )
-
-    tmp_access_node = state.add_access("tmp")
-    tmp_access_node.transient = True
-
-    sdfg.add_view(
-        "tmp",
-        shape=(1,),
-        dtype=dace.float64,
-    )
-
-    tmp_access_node2 = state.add_transient("tmp2", shape=shape, dtype=dace.float64)
-
-    state.add_edge(a, None, mentry, "IN_a", dace.Memlet("a[i, j]"))
-    state.add_edge(mentry, "OUT_a", task1, "__in0", dace.Memlet("a[i, j]"))
-    state.add_edge(task1, "__out0", tmp_access_node, None, dace.Memlet("tmp[0]"))
-    state.add_edge(tmp_access_node, None, tmp_access_node2, None, dace.Memlet("tmp[0]"))
-    state.add_edge(tmp_access_node2, None, mexit, "IN_out", dace.Memlet("tmp2[i, j]"))
-
-    mentry.add_scope_connectors("a")
-    mentry.add_in_connector("IN_a")
-    mexit.add_in_connector("IN_out")
-    mexit.add_out_connector("OUT_out")
-    state.add_edge(mexit, "OUT_out", out, None, dace.Memlet("out[i, j]"))
-
-    dace_propagation.propagate_states(sdfg)
-    sdfg.validate()
-
-    return sdfg
-
-
 def test_remove_point_view_array():
     N = 20
-    sdfg = _make_sdfg_with_map_with_view_array(N)
+    sdfg = _make_sdfg_with_map_with_view(N, use_array_as_temp=True)
 
     assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 4
     assert (
