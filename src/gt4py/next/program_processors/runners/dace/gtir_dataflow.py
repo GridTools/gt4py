@@ -72,7 +72,7 @@ class ValueExpr:
 
     dc_node: dace.nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
-    field_layout: Optional[list[gtx_common.Dimension]]
+    field_layout: list[gtx_common.Dimension]
 
     def __post_init__(self) -> None:
         # NOTE: This function is designed to match `MemletExpr::__post_init__()`, please see there.
@@ -130,7 +130,7 @@ class MemletExpr:
     dc_node: dace.nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
     subset: dace_subsets.Range
-    field_layout: Optional[list[gtx_common.Dimension]]
+    field_layout: list[gtx_common.Dimension]
 
     def __post_init__(self) -> None:
         # NOTE: `None` means "I need it to make mypy happy and I have not yet though enough
