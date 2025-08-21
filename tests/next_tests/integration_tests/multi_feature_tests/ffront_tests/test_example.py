@@ -78,7 +78,7 @@ def test_named_tuple_like_constructed_inside(cartesian_case):
         bar,
         vel,
         out=out,
-        ref=(vel.u + vel.v, vel.u - vel.v),
+        ref=Velocity(u=vel.u + vel.v, v=vel.u - vel.v),
     )
 
 
