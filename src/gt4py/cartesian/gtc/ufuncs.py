@@ -29,17 +29,7 @@ except ImportError:
 
 
 def _round_away_from_zero(num):
-    """Computes the nearest integer value to num, rounding halfway cases away from zero.
-
-    Examples:
-        -0.5 -> -1.0, 0.5 -> 0.0, 1.5 -> 2.0, 2.5 -> 3.0
-
-    This is in alignment with C(++) and FORTRAN standard round functions that round away
-    from zero by default.
-
-    In contrast, python (since v3) and numpy use "Banker's rounding", and round to the nearest
-    even value, e.g. 1.5 and 2.5 round to 2.0, -0.5 and 0.5 round to 0.0.
-    """
+    """Computes the nearest integer value to num, rounding halfway cases away from zero."""
     return np.copysign(np.floor(np.abs(num) + 0.5), num)
 
 

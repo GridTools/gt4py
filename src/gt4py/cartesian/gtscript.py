@@ -968,10 +968,31 @@ def erfc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
 
 
 def round(x) -> _gt_all_op_types:  # type: ignore[empty-body] # noqa: A001 [builtin-variable-shadowing]
-    """Computes the nearest integer value to `x`, rounding halfway cases to even numbers."""
+    """
+    Computes the nearest integer value to `x`, rounding halfway cases to even numbers.
+
+        Examples:
+        -0.5 -> -0.0, 0.5 -> 0.0, 1.5 -> 2.0, 2.5 -> 2.0
+
+    This is in alignment with the IEEE754 standard python's built-in round() function.
+
+    In contrast, `round_away_from_zero()` splits ties away from zero e.g. 2.5 will
+    round to 3.0 and -0.5 will round to -1.0.
+    """
     pass
 
 
 def round_away_from_zero(x) -> _gt_all_op_types:  # type: ignore[empty-body]
-    """Computes the nearest integer value to `x`, rounding halfway cases away from zero."""
+    """
+    Computes the nearest integer value to `x`, rounding halfway cases away from zero.
+
+        Examples:
+        -0.5 -> -1.0, 0.5 -> 0.0, 1.5 -> 2.0, 2.5 -> 3.0
+
+    This is in alignment with C(++) and FORTRAN standard round functions that round away
+    from zero by default.
+
+    In contrast, `round()` implements "Banker's rounding" and splits ties to the nearest
+    even integer, e.g. 1.5 and 2.5 both round to 2.0.
+    """
     pass
