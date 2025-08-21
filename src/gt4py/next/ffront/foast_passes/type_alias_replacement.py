@@ -9,17 +9,18 @@
 from dataclasses import dataclass
 from typing import Any, cast
 
-import gt4py.next.ffront.field_operator_ast as foast
-from gt4py.eve import NodeTranslator, traits
-from gt4py.eve.concepts import SourceLocation, SymbolName, SymbolRef
-from gt4py.next.ffront import dialect_ast_enums
-from gt4py.next.ffront.fbuiltins import TYPE_BUILTIN_NAMES
-from gt4py.next.type_system import type_specifications as ts
-from gt4py.next.type_system.type_translation import from_type_hint
+from gt4py import eve
+from gt4py.next.ffront import (
+    dialect_ast_enums,
+    fbuiltins,
+    field_operator_ast as foast,
+    type_specifications as ts_ffront,
+)
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 @dataclass
-class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
+class TypeAliasReplacement(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     """
     Replace Type Aliases with their actual type.
 
@@ -36,16 +37,16 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         foast_node = cls(closure_vars=closure_vars).visit(node)
         new_closure_vars = closure_vars.copy()
         for key, value in closure_vars.items():
-            if isinstance(value, type) and key not in TYPE_BUILTIN_NAMES:
+            if isinstance(value, type) and key not in fbuiltins.TYPE_BUILTIN_NAMES:
                 new_closure_vars[value.__name__] = closure_vars[key]
         return foast_node, new_closure_vars
 
-    def is_type_alias(self, node_id: SymbolName | SymbolRef) -> bool:
+    def is_type_alias(self, node_id: eve.SymbolName | eve.SymbolRef) -> bool:
         # TODO: make this more strict (e.g. check that we are aliasing actually one of the supported types)
         return (
             node_id in self.closure_vars
             and isinstance(self.closure_vars[node_id], type)
-            and node_id not in TYPE_BUILTIN_NAMES
+            and node_id not in fbuiltins.TYPE_BUILTIN_NAMES
         )
 
     def visit_Name(self, node: foast.Name, **kwargs: Any) -> foast.Name:
@@ -56,7 +57,7 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         return node
 
     def _update_closure_var_symbols(
-        self, closure_vars: list[foast.Symbol], location: SourceLocation
+        self, closure_vars: list[foast.Symbol], location: eve.SourceLocation
     ) -> list[foast.Symbol]:
         new_closure_vars: list[foast.Symbol] = []
         existing_type_names: set[str] = set()
@@ -66,20 +67,23 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                 actual_type_name = self.closure_vars[var.id].__name__
                 # Avoid multiple definitions of a type in closure_vars
                 if actual_type_name not in existing_type_names:
-                    # TODO this is agressively pulling in many even unsupported symbols
-                    # I'll use this location to hack in construction of custom collections
-                    return_type = from_type_hint(self.closure_vars[var.id])
+                    return_type = type_translation.from_type_hint(self.closure_vars[var.id])
                     if isinstance(return_type, ts.ScalarType):
                         new_closure_vars.append(
                             foast.Symbol(
                                 id=actual_type_name,
-                                type=ts.FunctionType(
-                                    pos_or_kw_args={},
-                                    kw_only_args={},
-                                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                                    returns=cast(
-                                        ts.DataType, from_type_hint(self.closure_vars[var.id])
-                                    ),
+                                type=ts_ffront.ConstructorType(
+                                    definition=ts.FunctionType(
+                                        pos_or_kw_args={},
+                                        kw_only_args={},
+                                        pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                                        returns=cast(
+                                            ts.DataType,
+                                            type_translation.from_type_hint(
+                                                self.closure_vars[var.id]
+                                            ),
+                                        ),
+                                    )
                                 ),
                                 namespace=dialect_ast_enums.Namespace.CLOSURE,
                                 location=location,
