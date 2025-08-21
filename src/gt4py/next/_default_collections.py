@@ -32,4 +32,17 @@ def _type_of_dataclass(cls: type) -> ts_ffront.NamedTupleType:
     )
 
 
-containers.register(lambda cls: dataclasses.is_dataclass(cls), _type_of_dataclass)
+def _is_dataclass_container(cls):
+    # just a bad placeholder for the correct mechanism
+    if dataclasses.is_dataclass(cls):
+        try:
+            _ = tuple(
+                type_translation.from_type_hint(field.type) for field in dataclasses.fields(cls)
+            )
+            return True
+        except:
+            ...
+    return False
+
+
+containers.register(_is_dataclass_container, _type_of_dataclass)

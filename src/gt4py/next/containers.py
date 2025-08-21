@@ -32,6 +32,4 @@ def get_constructor_type(cls: type) -> ts.TupleType:
             if callable(func_or_type):
                 return func_or_type(cls)
             return func_or_type
-    raise KeyError(
-        f"get_constructor_type not implemented for {cls.__name__} of type {type(cls).__name__}."
-    )
+    raise KeyError(f"get_constructor_type not implemented for {cls}.")

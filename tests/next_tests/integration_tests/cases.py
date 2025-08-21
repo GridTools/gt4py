@@ -612,7 +612,7 @@ def _allocate_from_type(
             return tuple(
                 (
                     _allocate_from_type(
-                        case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
+                        case=case, arg_type=(None, t), domain=domain, dtype=dtype, strategy=strategy
                     )
                     for t in types
                 )

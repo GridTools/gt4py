@@ -22,6 +22,7 @@ from gt4py.next.ffront import (
     field_operator_ast as foast,
     source_utils,
     stages as ffront_stages,
+    type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.ast_passes import (
     SingleAssignTargetPass,
@@ -199,13 +200,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             result.append(
                 foast.Symbol(
                     id=name,
-                    type=ts.FunctionType(
-                        pos_only_args=[
-                            ts.DeferredType(constraint=ts.ScalarType)
-                        ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
-                        pos_or_kw_args={},
-                        kw_only_args={},
-                        returns=typing.cast(ts.DataType, type_translation.from_type_hint(value)),
+                    type=ts_ffront.ConstructorType(
+                        definition=ts.FunctionType(
+                            pos_only_args=[
+                                ts.DeferredType(constraint=ts.ScalarType)
+                            ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
+                            pos_or_kw_args={},
+                            kw_only_args={},
+                            returns=typing.cast(
+                                ts.DataType, type_translation.from_type_hint(value)
+                            ),
+                        )
                     ),
                     namespace=dialect_ast_enums.Namespace.CLOSURE,
                     location=location,
@@ -227,7 +232,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 type_ = containers.get_constructor_type(self.closure_vars[name])
             except KeyError:
                 type_ = ts.DeferredType(constraint=None)
-                continue
 
             closure_var_symbols.append(
                 foast.Symbol(
