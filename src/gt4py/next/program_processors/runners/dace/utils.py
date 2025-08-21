@@ -9,9 +9,10 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal, Mapping, Optional, Union
+from typing import Final, Literal, Mapping, Optional, Sequence, Union
 
 import dace
+from dace import subsets as dace_subsets
 
 from gt4py.next import common as gtx_common
 from gt4py.next.type_system import type_specifications as ts
@@ -153,3 +154,47 @@ def safe_replace_symbolic(
     x = [val]
     dace.symbolic.safe_replace(symbol_mapping, lambda m, xx=x: xx.append(xx[-1].subs(m)))
     return x[-1]
+
+
+def compose_subset(
+    layout: Sequence[gtx_common.Dimension],
+    subset_map: Mapping[gtx_common.Dimension, str],
+) -> dace_subsets.Range:
+    """Create a subset in a layout compatible way.
+
+    Args:
+        layout: The layout/order the subset should adhere to.
+        subset_map: A map that mapps a dimension to the subset for that dimensions.
+    """
+    assert gtx_common.order_dimensions(layout) == layout
+    assert len(subset_map) == len(layout)
+    return dace_subsets.Range.from_string(", ".join(subset_map[dim] for dim in layout))
+
+
+def decompose_subset(
+    layout: Sequence[gtx_common.Dimension],
+    subset: dace_subsets.Range,
+) -> dict[gtx_common.Dimension, str]:
+    assert isinstance(subset, dace_subsets.Range)
+    assert len(layout) == len(subset)
+    return {dim: f"{start}:(({end}) + 1):{step}" for dim, (start, end, step) in zip(layout, subset)}
+
+
+def find_local_dim(dimensions: Sequence[gtx_common.Dimension]) -> gtx_common.Dimension:
+    """Find the `DimensionKind.LOCAL` dimension inside `dimensions` or raise `ValueError`."""
+    if len(dimensions) == 0:
+        raise ValueError("No dimensions where given.")
+    for dim in dimensions:
+        if dim.kind == gtx_common.DimensionKind.LOCAL:
+            return dim
+    raise ValueError("No `DimensionKind.LOCAL` dimension found.")
+
+
+def find_local_dim_idx(dimensions: Sequence[gtx_common.Dimension]) -> int:
+    """Find the index of the `DimensionKind.LOCAL` dimension inside `dimensions` or raise `ValueError`."""
+    if len(dimensions) == 0:
+        raise ValueError("No dimensions where given.")
+    for i, dim in enumerate(dimensions):
+        if dim.kind == gtx_common.DimensionKind.LOCAL:
+            return i
+    raise ValueError("No `DimensionKind.LOCAL` dimension found.")
