@@ -56,13 +56,12 @@ def _make_sdfg_with_map_with_view(
         ndrange={"i": f"0:{N}", "j": f"0:{N}"},
     )
 
-    tmp_access_node = state.add_access("tmp_view")
-
-    sdfg.add_view(
+    tmp_view_name, _ = sdfg.add_view(
         "tmp_view",
         shape=(1,),
         dtype=dace.float64,
     )
+    tmp_access_node = state.add_access(tmp_view_name)
 
     tmp_view_access_node = state.add_transient(
         "tmp", shape=(1,) if not use_array_as_temp else shape, dtype=dace.float64
@@ -70,7 +69,7 @@ def _make_sdfg_with_map_with_view(
 
     state.add_edge(a, None, mentry, "IN_a", dace.Memlet(f"a[0:{N}, 0:{N}]"))
     state.add_edge(mentry, "OUT_a", task1, "__in0", dace.Memlet("a[i, j]"))
-    state.add_edge(task1, "__out0", tmp_access_node, None, dace.Memlet("tmp_view[0]"))
+    state.add_edge(task1, "__out0", tmp_access_node, None, dace.Memlet(f"{tmp_view_name}[0]"))
     if use_array_as_temp:
         state.add_edge(tmp_access_node, None, tmp_view_access_node, None, dace.Memlet("tmp[i, j]"))
         state.add_edge(tmp_view_access_node, None, mexit, "IN_out", dace.Memlet("out[i, j]"))
