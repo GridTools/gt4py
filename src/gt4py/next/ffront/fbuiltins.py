@@ -20,6 +20,7 @@ from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, ui
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
+from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -70,7 +71,7 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.DomainType
     elif t is type:
         return (
-            ts.FunctionType
+            ts_ffront.ConstructorType
         )  # our type of type is currently represented by the type constructor function
     elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
         return ts.TupleType
