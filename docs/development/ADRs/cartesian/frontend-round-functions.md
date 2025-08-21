@@ -1,36 +1,37 @@
-# Behavior of the `round()` function in GT4Py
+# Round functions in gtscript
 
-TODO: To be written after we came to a conclusion in the discussions.
+In the context of adding support for a `round()` function in `gtscript`, facing divergent implementations in backend languages, we decided to implement `round()` with tie-breaking to even and `round_away_from_zero()` with tie-breaking away from zero to achieve consistent results while leaving the choice of behavior up to users. We considered multiple alternatives (see below), which all have their advantages and disadvantages.
+
+Why-statement: In the context of [use case/user story], facing [concern], we decided to [do thing X] to achieve [system qualities/desired consequences]. We considered [thing Y] and accept [downsides / undesired consequences].
 
 ## Context
 
-The default behavior of the `round()` function in python is to split ties by rounding to the nearest even value, e.g.
+There are basically two predominant ways to round ties (e.g. when rounding 1.5 to an integer it's as close to 1.0 as it is to 2.0). The default in python, Kotlin, Julia, and C# is to split ties by rounding to the nearest even value, e.g.
 
 - `round(-0.5) == 0.0`
 - `round(0.5) == 0.0`
 - `round(1.5) == 2.0`
 - `round(2.5) == 2.0`
 
-This is in contrast to C++ and Fortran where the default is to split ties by rounding away from zero, e.g.
+This is also what the IEEE754 floating point standard defines. In contrast, programming languages like Go, Rust, Ruby, C++, and Fortran default to round away from zero, e.g.
 
 - `round(-0.5) == -1.0`
 - `round(0.5) == 0.0`
 - `round(1.5) == 2.0`
 - `round(2.5) == 3.0`
 
-From a DSL point of view, it is paramount to implement a consistent rounding behavior in all backends, especially in the context of chaotic systems such as NWPs.
+From a DSL point of view, it is paramount to implement the same behavior in all backends, regardless of the programming language of the backend.
 
 ## Decision
 
-TODO: To be written after we came to a conclusion in the discussions.
+We choose to implement `round()` with the tie breaking as suggested by the standard. In addition, we implement the function `round_away_from_zero()` which breaks ties by rounding away from zero. This allows, for example, to truthfully port FORTRAN-based code.
 
 ## Consequences
 
 As a consequence
 
 - all backends use the same rounding behavior
-
-TODO: The above is a given (we all agree that all backends should show the same behavior). Other consequences depend on the decision we take.
+- users can choose which rounding behavior suits their needs
 
 ## Alternatives considered
 
@@ -50,7 +51,7 @@ One argument against this option is that is doesn't align with the behavior fo t
 
 From a technical point of view, this option can be implemented with standard library calls in the `gt:*` and `dace:*` backends. The `numpy` and `debug` backends will need a custom implementation of the `round()` function.
 
-### Allow users to configure the behavior of the `round()` function
+### Allow users to configure the behavior of the `round()` function with an argument
 
 One argument in favor of this option is that users can choose: Given that there are good reasons for python and C++ behavior of the `round()` function, we let our users choose what works best for their use-case. By choosing a default, GT4Py can still nudge its users towards one option or another.
 
@@ -102,3 +103,5 @@ ROUND_MODE_DEFAULT: RoundingMode = _get_default_rounding_mode()
 ```
 
 That way, users of GT4Py can adjust the rounding mode to their use-cases, both globally and on a case-by-case basis.
+
+One technical argument against this alternative is the relatively high maintenance overhead compared to having two separate functions.
