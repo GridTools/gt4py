@@ -1235,22 +1235,13 @@ class LambdaToDataflow(eve.NodeVisitor):
             external_edges=True,
         )
 
-        # TODO(phimuell, edopao): This is very dirty and probably wrong. It should actually
-        #   be the domain dimensions of the surrounding Map with the `offset_type`. As an
-        #   example consider the following case. The data is stored inside `A` which is of
-        #   dimensions `(dims.KDim, dims.EdgeDim)` and we use the offset provider `E2V`.
-        #   Thus the following code will generate an output with the dimensions
-        #   (`dims.KDim, dims.EdgeDim, dims.E2VDim)`. However, if we only want to process
-        #   one vertical level, the dimension should be `(dims.EdgeDim, dims.E2VDim)`.
-        #   This is why we need to know the surrounding Map's iteration space.
-        result_field_layout = gtx_common.order_dimensions(
-            [dim for dim, _ in it.field_domain] + [offset_type]
-        )
-
+        # TODO(phimuell, edopao): Since by definition (at least the current one at the
+        #   time of writing), the result is the gathered result, the `field_layout`
+        #   must be the `offset_type`.
         return ValueExpr(
             dc_node=neighbors_node,
             gt_dtype=ts.ListType(node.type.element_type, offset_type),
-            field_layout=result_field_layout,
+            field_layout=[offset_type],
         )
 
     def _visit_list_get(self, node: gtir.FunCall) -> ValueExpr:
@@ -1445,6 +1436,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     gt_dtype=ts.ListType(
                         element_type=node.type.element_type, offset_type=offset_type
                     ),
+                    # TODO(phimuell, edopao): Check if the order here is correct.
                     subset=dace_subsets.Range.from_string(
                         f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
                     ),
@@ -1602,6 +1594,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
         self._add_input_data_edge(
             connectivity_node,
+            # TODO(phimuell, edopao): Check if the order is correct here. We need a unit test for that case.
             dace_subsets.Range.from_string(
                 f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
             ),
@@ -1821,6 +1814,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             field_layout = list(connectivity.domain)
             assert len(field_layout) == 2
 
+            # TODO(phimuell, edopao): This should be correct.
             if field_layout[0].kind == gtx_common.DimensionKind.LOCAL:
                 subset = dace_subsets.Range.from_string(
                     f"{offset_expr.value}, {origin_index.value}"
