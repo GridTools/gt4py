@@ -108,14 +108,14 @@ build_cscs_amd_rocm:
         VARIANT: ['cuda12', 'rocm6_0', 'cpu']
         PY_VERSION: *test_python_versions
   rules: &exclude_variants_rules
-    # Extended jobs should reference this list anchor at the proper position of their `rules` section
+    # Extended jobs should reference this list anchor at the proper position of their
+    # `rules` section, and also add an extra `- when: on_success` rule at the end.
     - if: '($SUBVARIANT == "cpu" || ($SUBPACKAGE == "storage" && $VARIANT == "cpu")) && ($TEST_VARIANTS !~ /(^|\s)cpu(\s|$)/)'
       when: never
     - if: '($SUBVARIANT == "cuda12" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda12")) && ($TEST_VARIANTS !~ /(^|\s)cuda12(\s|$)/)'
       when: never
     - if: '($SUBVARIANT == "rocm6_0" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm6_0")) && ($TEST_VARIANTS !~ /(^|\s)rocm6_0(\s|$)/)'
       when: never
-    # An extra `- when: on_success` rule should be added after this anchor in the extended jobs 
 
   script:
     # Since the image does not contain the repo, we need to clone it before running the tests.
