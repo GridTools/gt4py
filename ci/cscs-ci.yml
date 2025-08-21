@@ -114,11 +114,6 @@ build_cscs_amd_rocm:
       when: never
     - if: '($SUBVARIANT == "rocm6_0" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm6_0")) && ($TEST_VARIANTS !~ /(^|\s)rocm6_0(\s|$)/)'
       when: never
-    - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
-      variables:
-        # TODO: investigate why the dace tests seem to hang with multiple jobs
-        GT4PY_BUILD_JOBS: 1
-        SLURM_TIMELIMIT: "00:15:00"
     # An extra `- when: on_success` rule should be added after this anchor in the extended jobs 
 
   script:
@@ -144,6 +139,11 @@ test_cscs_gh200:
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   rules:
     - *exclude_variants_rules
+    - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
+      variables:
+        # TODO: investigate why the dace tests seem to hang with multiple jobs
+        GT4PY_BUILD_JOBS: 1
+        SLURM_TIMELIMIT: "00:15:00"
     - when: on_success
 
 test_cscs_amd_rocm:
