@@ -75,43 +75,35 @@ def test_erfc(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_round(backend):
-    xp = get_array_library(backend)  # numpy or cupy depending on backend
-
     @stencil(backend=backend)
     def stencil_round(field_a: Field[np.float32], field_b: Field[np.float32]):
         with computation(PARALLEL), interval(...):
             field_b = round(field_a)
 
-    initial_values = xp.array([-1.5, -0.5, 0.3, 0.5, 0.8, 1.2, 1.5], dtype=xp.float32)
-    array_shape = (1, 1, len(initial_values))
-    A = storage.zeros(array_shape, np.float32, backend=backend)
-    A[:, :, :] = initial_values
-    B = storage.full(array_shape, -1.0, np.float32, backend=backend)
+    initial_values = np.array([[[-1.5, -0.5, 0.3, 0.5, 0.8, 1.2, 1.5]]], dtype=np.float32)
+    A = storage.from_array(initial_values, np.float32, backend=backend)
+    B = storage.full(initial_values.shape, -1.0, np.float32, backend=backend)
 
     stencil_round(A, B)
 
-    expected = xp.array([-2.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0], dtype=xp.float32)
+    expected = np.array([-2.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0], dtype=np.float32)
     assert (A[0, 0, :] == initial_values).all()
     assert (B[0, 0, :] == expected).all()
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
-def test_round_away_form_zero(backend):
-    xp = get_array_library(backend)  # numpy or cupy depending on backend
-
+def test_round_away_from_zero(backend):
     @stencil(backend=backend)
     def stencil_round(field_a: Field[np.float32], field_b: Field[np.float32]):
         with computation(PARALLEL), interval(...):
             field_b = round_away_from_zero(field_a)
 
-    initial_values = xp.array([-1.5, -0.5, 0.3, 0.5, 0.8, 1.2, 1.5], dtype=xp.float32)
-    array_shape = (1, 1, len(initial_values))
-    A = storage.zeros(array_shape, np.float32, backend=backend)
-    A[:, :, :] = initial_values
-    B = storage.full(array_shape, -1.0, np.float32, backend=backend)
+    initial_values = np.array([[[-1.5, -0.5, 0.3, 0.5, 0.8, 1.2, 1.5]]], dtype=np.float32)
+    A = storage.from_array(initial_values, np.float32, backend=backend)
+    B = storage.full(initial_values.shape, -1.0, np.float32, backend=backend)
 
     stencil_round(A, B)
 
-    expected = xp.array([-2.0, -1.0, 0.0, 1.0, 1.0, 1.0, 2.0], dtype=xp.float32)
+    expected = np.array([-2.0, -1.0, 0.0, 1.0, 1.0, 1.0, 2.0], dtype=np.float32)
     assert (A[0, 0, :] == initial_values).all()
     assert (B[0, 0, :] == expected).all()
