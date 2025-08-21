@@ -108,6 +108,7 @@ build_cscs_amd_rocm:
         VARIANT: ['cuda12', 'rocm6_0', 'cpu']
         PY_VERSION: *test_python_versions
   rules: &exclude_variants_rules
+    # Extended jobs should reference this list anchor at the proper position of their `rules` section
     - if: '($SUBVARIANT == "cpu" || ($SUBPACKAGE == "storage" && $VARIANT == "cpu")) && ($TEST_VARIANTS !~ /(^|\s)cpu(\s|$)/)'
       when: never
     - if: '($SUBVARIANT == "cuda12" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda12")) && ($TEST_VARIANTS !~ /(^|\s)cuda12(\s|$)/)'
