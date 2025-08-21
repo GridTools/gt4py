@@ -1327,8 +1327,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             raise TypeError(f"Unexpected value {index_arg} as index argument.")
 
+        # TODO(phimuell, edopao): Since `dst_node` seems to be always a scalar, we can do the following.
+        assert isinstance(self.sdfg.arrays[dst_node.data], dace.data.Scalar)
         return ValueExpr(
-            dc_node=dst_node, gt_dtype=src_arg.gt_dtype.element_type, field_layout=None
+            dc_node=dst_node,
+            gt_dtype=src_arg.gt_dtype.element_type,
+            field_layout=[],
         )
 
     def _visit_map(self, node: gtir.FunCall) -> ValueExpr:
