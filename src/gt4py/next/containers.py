@@ -8,7 +8,10 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING, Callable
+
+from gt4py.next import common
 
 
 if TYPE_CHECKING:
@@ -33,3 +36,12 @@ def get_constructor_type(cls: type) -> ts.TupleType:
                 return func_or_type(cls)
             return func_or_type
     raise KeyError(f"get_constructor_type not implemented for {cls}.")
+
+
+# TODO customize
+def flatten(arg):
+    return (
+        arg
+        if isinstance(arg, common.Field) or not dataclasses.is_dataclass(arg)
+        else tuple(getattr(arg, f.name) for f in dataclasses.fields(arg))
+    )
