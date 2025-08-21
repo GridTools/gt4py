@@ -117,7 +117,7 @@ def _create_scan_field_operator_impl(
     field_subset = dace_subsets.Range.from_indices(field_indices)
     assert sdfg_builder.column_axis in field_dims  # type: ignore[attr-defined]  # `column_axis` is defined.
 
-    # the vertical dimension used as scan column is computed by the `LoopRegion`
+    # the "vertical" dimension used as scan column is computed by the `LoopRegion`
     # inside the map scope, therefore it is excluded from the map range
     scan_dim_index = [sdfg_builder.is_column_axis(dim) for dim in field_dims].index(True)
 
@@ -125,6 +125,7 @@ def _create_scan_field_operator_impl(
     # TODO(phimuell, edopao): Why do we use `dataflow_output_desc.shape[0]` and not
     #   something other? What happens in if have multiple dimensions (does this makes
     #   sense)?
+    # TODO(phimuell, edopao): change this using the new utilities.
     assert len(dataflow_output_desc.shape) == 1
     field_subset = (
         dace_subsets.Range(field_subset[:scan_dim_index])

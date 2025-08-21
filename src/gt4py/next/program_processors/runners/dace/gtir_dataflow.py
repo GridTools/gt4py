@@ -247,13 +247,16 @@ class IteratorExpr:
             assert len(field_desc.shape) == len(self.field_domain)
             field_domain = self.field_domain
 
-        return dace_subsets.Range.from_string(
-            ",".join(
-                str(self.indices[dim].value - offset)  # type: ignore[union-attr]
-                if dim in self.indices
-                else f"0:{size}"
+        return gtx_dace_utils.compose_subset(
+            [dim for dim, _ in field_domain],
+            {
+                dim: (
+                    str(self.indices[dim].value - offset)  # type: ignore[union-attr]
+                    if dim in self.indices
+                    else f"0:{size}"
+                )
                 for (dim, offset), size in zip(field_domain, field_desc.shape, strict=True)
-            )
+            },
         )
 
     def get_full_field_domain(self) -> list[gtx_common.Dimension]:
@@ -1160,37 +1163,50 @@ class LambdaToDataflow(eve.NodeVisitor):
         # node). For the specific case of `neighbors` we need to nest the neighbors map
         # inside the field map and the memlets will traverse the external map and write
         # to the view nodes. The simplify pass will remove the redundant access nodes.
+
+        # TODO(phimuell, edopao): I am pretty sure that we need this call here. Technically
+        #   it might be enough to use `it.field_domain` but this would be risky if `it` has
+        #   a `ListType`.
+        field_slice_layout = it.get_full_field_domain()
+        assert len(field_slice_layout) == len(it.field_domain)
+
+        field_slice_subset_components = {
+            dim: (
+                str(it.indices[dim].value - offset)  # type: ignore[union-attr]
+                # TODO(phimuell, edopao): What does this codomain check do?
+                if dim != offset_provider.codomain
+                else f"0:{size}"
+            )
+            for (dim, offset), size in zip(it.field_domain, field_desc.shape, strict=True)
+        }
+        field_slice_subset = gtx_dace_utils.compose_subset(
+            field_slice_layout, field_slice_subset_components
+        )
         field_slice = self._construct_local_view(
             MemletExpr(
                 dc_node=it.field,
                 gt_dtype=it.gt_dtype,
-                subset=dace_subsets.Range.from_string(
-                    ",".join(
-                        str(it.indices[dim].value - offset)  # type: ignore[union-attr]
-                        # TODO(phimuell, edopao): What does this codomain check do?
-                        # TODO(phimuell, edopao): The order here is not correct?
-                        if dim != offset_provider.codomain
-                        else f"0:{size}"
-                        for (dim, offset), size in zip(
-                            it.field_domain, field_desc.shape, strict=True
-                        )
-                    )
-                ),
-                field_layout=it.get_full_field_domain(),
+                subset=field_slice_subset,
+                field_layout=field_slice_layout,
             )
         )
 
+        # TODO(phimuell, edopao): This should be correct.
+        connectivity_slice_layout = list(offset_provider.domain)
+        connectivity_slice_subset = gtx_dace_utils.compose_subset(
+            connectivity_slice_layout,
+            {
+                offset_provider.source_dim: str(origin_index.value),
+                offset_provider.neighbor_dim: f"0:{offset_provider.max_neighbors}",
+            },
+        )
         connectivity_slice = self._construct_local_view(
             MemletExpr(
                 dc_node=self.state.add_access(connectivity),
-                # TODO: Get the correct type? Is that thing correct, what about `field_layout`.
+                # TODO: Get the correct type? Is that thing correct?
                 gt_dtype=node.type,
-                subset=dace_subsets.Range.from_string(
-                    # TODO: This only work for horizontal data, if we have an offset table for
-                    #   vertical data it will not work, because then the order of the index changes.
-                    f"{origin_index.value}, 0:{offset_provider.max_neighbors}"
-                ),
-                field_layout=list(offset_provider.domain),
+                subset=connectivity_slice_subset,
+                field_layout=connectivity_slice_layout,
             )
         )
 
@@ -1267,24 +1283,14 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if isinstance(index_arg, SymbolExpr):
             assert index_arg.dc_dtype in dace.dtypes.INTEGER_TYPES
-            field_layout = src_arg.field_layout
-            assert len(field_layout) == len(src_subset)
+            src_field_layout = src_arg.field_layout
+            assert len(src_field_layout) == len(src_subset)
 
-            local_dim = next(
-                iter(
-                    i
-                    for i, dim in enumerate(field_layout)
-                    if dim.kind == gtx_common.DimensionKind.LOCAL
-                )
-            )
-
-            # Access a local dimension.
-            src_subset = (
-                dace_subsets.Range(src_subset[:local_dim])
-                + dace_subsets.Range.from_string(index_arg.value)
-                + dace_subsets.Range(src_subset[(local_dim + 1) :])
-            )
-            assert len(field_layout) == len(src_subset)
+            # Replace the local dimension with a meaningful value.
+            src_subset_map = gtx_dace_utils.decompose_subset(src_field_layout, src_subset)
+            src_local_dim = gtx_dace_utils.find_local_dim(src_field_layout)
+            src_subset_map[src_local_dim] = index_arg.value
+            src_subset = gtx_dace_utils.compose_subset(src_field_layout, src_subset_map)
 
             if isinstance(src_arg, MemletExpr):
                 self._add_input_data_edge(src_arg.dc_node, src_subset, dst_node)
@@ -1430,17 +1436,23 @@ class LambdaToDataflow(eve.NodeVisitor):
 
             origin_map_index = gtir_to_sdfg_utils.get_map_variable(offset_provider_type.source_dim)
 
+            connectivity_slice_layout = (list(offset_provider_type.domain),)
+            assert len(connectivity_slice_layout) == 2
+            connectivity_slice_subset = gtx_dace_utils.compose_subset(
+                connectivity_slice_layout,
+                {
+                    offset_provider_type.source_dim: origin_map_index,
+                    offset_provider_type.neighbor_dim: f"0:{offset_provider_type.max_neighbors}",
+                },
+            )
             connectivity_slice = self._construct_local_view(
                 MemletExpr(
                     dc_node=self.state.add_access(connectivity),
                     gt_dtype=ts.ListType(
                         element_type=node.type.element_type, offset_type=offset_type
                     ),
-                    # TODO(phimuell, edopao): Check if the order here is correct.
-                    subset=dace_subsets.Range.from_string(
-                        f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
-                    ),
-                    field_layout=list(offset_provider_type.domain),
+                    subset=connectivity_slice_subset,
+                    field_layout=connectivity_slice_layout,
                 )
             )
 
@@ -1510,6 +1522,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             isinstance(input_expr.gt_dtype, ts.ListType)
             and input_expr.gt_dtype.offset_type is not None
         )
+        assert input_expr.gt_dtype.offset_type in input_expr.field_layout
+
         offset_type = input_expr.gt_dtype.offset_type
         connectivity = gtx_dace_utils.connectivity_identifier(offset_type.value)
         connectivity_node = self.state.add_access(connectivity)
@@ -1582,19 +1596,33 @@ class LambdaToDataflow(eve.NodeVisitor):
             nsdfg, inputs={"values", "neighbor_indices"}, outputs={"acc"}
         )
 
+        field_layout = input_expr.field_layout
         if isinstance(input_expr, MemletExpr):
             self._add_input_data_edge(input_expr.dc_node, input_expr.subset, nsdfg_node, "values")
+            field_subset = input_expr.subset
         else:
-            self.state.add_edge(
+            edge = self.state.add_edge(
                 input_expr.dc_node,
                 None,
                 nsdfg_node,
                 "values",
                 self.sdfg.make_array_memlet(input_expr.dc_node.data),
             )
+            field_subset = edge.data.subset
+
+        assert len(field_layout) == len(field_subset)
+        # Original code hat this restriction, maybe remove.
+        assert len(field_layout) == 2
+
+        # TODO(phimuell, edopao): Check if the order is correct here. I think it is.
+        subset_map = gtx_dace_utils.decompose_subset(field_layout, field_subset)
+        subset_map[input_expr.gt_dtype.offset_type] = f"0:{offset_provider_type.max_neighbors}"
+        field_subset = gtx_dace_utils.compose_subset(field_layout, subset_map)
+
         self._add_input_data_edge(
             connectivity_node,
             # TODO(phimuell, edopao): Check if the order is correct here. We need a unit test for that case.
+            # FIXME
             dace_subsets.Range.from_string(
                 f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
             ),
@@ -1812,18 +1840,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         shifted_indices = {dim: idx for dim, idx in it.indices.items() if dim != origin_dim}
         if isinstance(offset_expr, SymbolExpr):
             field_layout = list(connectivity.domain)
-            assert len(field_layout) == 2
-
-            # TODO(phimuell, edopao): This should be correct.
-            if field_layout[0].kind == gtx_common.DimensionKind.LOCAL:
-                subset = dace_subsets.Range.from_string(
-                    f"{offset_expr.value}, {origin_index.value}"
-                )
-            else:
-                assert field_layout[1].kind == gtx_common.DimensionKind.LOCAL
-                subset = dace_subsets.Range.from_string(
-                    f"{origin_index.value}, {offset_expr.value}"
-                )
+            assert len(field_layout)
+            # TODO(phimuell, edopao): Check this.
+            subset_map = {
+                connectivity.source_dim: f"{origin_index.value}",
+                connectivity.neighbor_dim: f"{offset_expr.value}",
+            }
+            subset = gtx_dace_utils.compose_subset(layout=field_layout, subset_map=subset_map)
 
             shifted_indices[neighbor_dim] = MemletExpr(
                 dc_node=offset_table_node,
