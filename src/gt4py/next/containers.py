@@ -26,12 +26,12 @@ def register(
 
 
 # only internally
-def get_type(cls: type) -> ts.TupleType:
+def get_constructor_type(cls: type) -> ts.TupleType:
     for predicate, func_or_type in _registry:
         if predicate(cls):
             if callable(func_or_type):
                 return func_or_type(cls)
             return func_or_type
-    raise NotImplementedError(
-        f"_get_type not implemented for {cls.__name__} of type {type(cls).__name__}."
+    raise KeyError(
+        f"get_constructor_type not implemented for {cls.__name__} of type {type(cls).__name__}."
     )

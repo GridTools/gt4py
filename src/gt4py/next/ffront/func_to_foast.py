@@ -15,7 +15,7 @@ import typing
 from typing import Any, Callable, Iterable, Mapping, Type
 
 import gt4py.eve as eve
-from gt4py.next import errors
+from gt4py.next import containers, errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -222,10 +222,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         for name in self.closure_vars.keys():
             if name in skip_names:
                 continue
+            try:
+                # TODO think about this mechanism
+                type_ = containers.get_constructor_type(self.closure_vars[name])
+            except KeyError:
+                type_ = ts.DeferredType(constraint=None)
+                continue
+
             closure_var_symbols.append(
                 foast.Symbol(
                     id=name,
-                    type=ts.DeferredType(constraint=None),
+                    type=type_,
                     namespace=dialect_ast_enums.Namespace.CLOSURE,
                     location=self.get_location(node),
                 )

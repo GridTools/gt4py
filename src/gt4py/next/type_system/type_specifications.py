@@ -141,16 +141,6 @@ class TupleType(DataType):
         return len(self.types)
 
 
-class NamedTupleType(TupleType):
-    keys: list[str]
-
-    def __getattr__(self, name):
-        keys = object.__getattribute__(self, "keys")
-        if name in keys:
-            return self.types[keys.index(name)]
-        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
-
-
 class FunctionType(TypeSpec, CallableType):
     pos_only_args: Sequence[TypeSpec]
     pos_or_kw_args: dict[str, TypeSpec]

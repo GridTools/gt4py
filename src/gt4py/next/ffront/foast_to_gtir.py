@@ -239,16 +239,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         if isinstance(node.type, ts.DimensionType):
             return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
 
-        if isinstance(named_tup_type := node.value.type, ts.NamedTupleType):
+        if isinstance(named_tup_type := node.value.type, ts_ffront.NamedTupleType):
             ind = named_tup_type.keys.index(node.attr)
             return im.tuple_get(ind, self.visit(node.value, **kwargs))
-
-        # return im.call("getattr")(
-        #     self.visit(node.value, **kwargs),
-        #     im.literal(
-        #         node.attr, typename=ts.ScalarType(kind=ts.ScalarKind.STRING)
-        #     ),  # or maybe special itir.Key type instead of literal
-        # )
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         if isinstance(node.index.type, ts.IndexType):
@@ -368,7 +361,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return self._visit_type_constr(node, **kwargs)
         elif isinstance(
             node.func.type,
-            (ts.FunctionType, ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
+            (
+                ts.FunctionType,
+                ts_ffront.FieldOperatorType,
+                ts_ffront.ScanOperatorType,
+                ts_ffront.ConstructorType,
+            ),
         ):
             # ITIR has no support for keyword arguments. Instead, we concatenate both positional
             # and keyword arguments and use the unique order as given in the function signature.
@@ -379,11 +377,11 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 use_signature_ordering=True,
             )
 
-            # TODO this is a big hack
-            if isinstance(node.type, ts.NamedTupleType):
-                # If the return type is a NamedTupleType, we need to construct a tuple
-                # with the correct types.
-                return im.make_tuple(*lowered_args, *lowered_kwargs.values())
+            if isinstance(node.func.type, ts_ffront.ConstructorType):
+                if isinstance(node.func.type.definition.returns, ts_ffront.NamedTupleType):
+                    # construct a plain tuple from the custom container constructor
+                    return im.make_tuple(*lowered_args, *lowered_kwargs.values())
+                raise AssertionError("Unexpected constructor encounterd.")
 
             result = im.call(self.visit(node.func, **kwargs))(
                 *lowered_args, *lowered_kwargs.values()

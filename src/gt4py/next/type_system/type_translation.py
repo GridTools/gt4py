@@ -83,15 +83,11 @@ def from_type_hint(
     canonical_type = typing.get_origin(type_hint) or type_hint
     args = typing.get_args(type_hint)
 
+    # TODO handle constructor type later?
     try:
-        return containers.get_type(canonical_type)
-    except NotImplementedError:
+        return containers.get_constructor_type(canonical_type).definition.returns
+    except KeyError:
         ...
-
-    if hasattr(canonical_type, "__gt_type__"):
-        return canonical_type.__gt_type__(
-            canonical_type
-        )  # TODO this wouldn't work if `__gt_type__` needs runtime info, i.e. only works for static methods or class methods...
 
     match canonical_type:
         case type() as t if issubclass(t, (bool, int, float, np.generic, str)):

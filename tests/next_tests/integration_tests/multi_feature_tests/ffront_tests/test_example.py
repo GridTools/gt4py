@@ -33,27 +33,6 @@ class Velocity:
     v: gtx.Field[[IDim, JDim], gtx.float32]
 
 
-class Velocity:
-    def __init__(self, u, v):
-        self.u = u
-        self.v = v
-
-    def __gt_type__(self):
-        return ts.NamedTupleType(
-            types=[
-                ts.FieldType(
-                    dims=[IDim, JDim],
-                    dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
-                ),
-                ts.FieldType(
-                    dims=[IDim, JDim],
-                    dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
-                ),
-            ],
-            keys=["u", "v"],
-        )
-
-
 @gtx.field_operator
 def foo(
     vel: Velocity,
@@ -71,7 +50,6 @@ def foo_program(
 
 def test_named_tuple_like_constructed_outside(cartesian_case):
     vel = cases.allocate(cartesian_case, foo_program, "vel")()
-    vel = Velocity(u=vel[0], v=vel[1])  # TODO make cases construct this directly
     out = cases.allocate(cartesian_case, foo_program, "out")()
 
     cases.verify(
@@ -87,10 +65,8 @@ def test_named_tuple_like_constructed_outside(cartesian_case):
 @gtx.field_operator
 def bar(
     vel: Velocity,
-) -> tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]]:
-    # ) -> Velocity:
-    tmp = Velocity(v=vel.u - vel.v, u=vel.u + vel.v)  # order swapped to show kwargs work
-    return tmp.u, tmp.v  # later return Velocity directly
+) -> Velocity:
+    return Velocity(v=vel.u - vel.v, u=vel.u + vel.v)  # order swapped to show kwargs work
 
 
 def test_named_tuple_like_constructed_inside(cartesian_case):

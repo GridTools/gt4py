@@ -13,7 +13,7 @@ import typing
 from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators
+from gt4py.next import allocators as next_allocators, common
 from gt4py.next.ffront import (
     foast_to_gtir,
     foast_to_past,
@@ -135,6 +135,15 @@ class Transforms(workflow.MultiWorkflow[INPUT_PAIR, stages.CompilableProgram]):
 DEFAULT_TRANSFORMS: Transforms = Transforms()
 
 
+# TODO customize
+def flatten(arg):
+    return (
+        arg
+        if isinstance(arg, common.Field) or not dataclasses.is_dataclass(arg)
+        else tuple(getattr(arg, f.name) for f in dataclasses.fields(arg))
+    )
+
+
 # TODO(tehrengruber): Rename class and `executor` & `transforms` attribute. Maybe:
 #  `Backend` -> `Toolchain`
 #  `transforms` -> `frontend_transforms`
@@ -154,6 +163,8 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     ) -> None:
         if not isinstance(program, IT_PRG):
             args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
+        args = [flatten(a) for a in args]
+        kwargs = {k: flatten(v) for k, v in kwargs.items()}
         self.jit(program, *args, **kwargs)(*args, **kwargs)
 
     def jit(self, program: INPUT_DATA, *args: Any, **kwargs: Any) -> stages.CompiledProgram:

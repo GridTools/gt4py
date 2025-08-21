@@ -41,6 +41,7 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         return foast_node, new_closure_vars
 
     def is_type_alias(self, node_id: SymbolName | SymbolRef) -> bool:
+        # TODO: make this more strict (e.g. check that we are aliasing actually one of the supported types)
         return (
             node_id in self.closure_vars
             and isinstance(self.closure_vars[node_id], type)
@@ -84,27 +85,9 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                                 location=location,
                             )
                         )
-                    else:
-                        # this assumes a collection is constructible like a dataclass i.e. with pos or kwargs
-                        assert isinstance(return_type, ts.NamedTupleType)
-                        print("constructing the constructo")
-                        new_closure_vars.append(
-                            foast.Symbol(
-                                id=actual_type_name,
-                                type=ts.FunctionType(
-                                    pos_or_kw_args=dict(
-                                        zip(return_type.keys, return_type.types, strict=True)
-                                    ),
-                                    kw_only_args={},
-                                    pos_only_args=[],
-                                    returns=cast(ts.DataType, return_type),
-                                ),
-                                namespace=dialect_ast_enums.Namespace.CLOSURE,
-                                location=location,
-                            )
-                        )
-                    existing_type_names.add(actual_type_name)
-            elif var.id not in existing_type_names:
+                        existing_type_names.add(actual_type_name)
+                        continue
+            if var.id not in existing_type_names:
                 new_closure_vars.append(var)
                 existing_type_names.add(var.id)
 
