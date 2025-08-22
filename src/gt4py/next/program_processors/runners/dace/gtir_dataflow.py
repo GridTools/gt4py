@@ -1436,7 +1436,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
             origin_map_index = gtir_to_sdfg_utils.get_map_variable(offset_provider_type.source_dim)
 
-            connectivity_slice_layout = (list(offset_provider_type.domain),)
+            connectivity_slice_layout = list(offset_provider_type.domain)
             assert len(connectivity_slice_layout) == 2
             connectivity_slice_subset = gtx_dace_utils.compose_subset(
                 connectivity_slice_layout,
