@@ -22,6 +22,7 @@ from gt4py.next.ffront import (
     field_operator_ast as foast,
     source_utils,
     stages as ffront_stages,
+    type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.ast_passes import (
     SingleAssignTargetPass,
@@ -173,9 +174,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                 raise errors.DSLError(
                     foast_node.location,
-                    "Annotated return type does not match deduced return type: expected "
-                    f"'{foast_node.type.returns}'"  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
-                    f", got '{annotated_return_type}'.",
+                    "Annotated return type does not match deduced return type: annotation is "
+                    f"'{annotated_return_type}'"  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
+                    f", got '{foast_node.type.returns}'.",
                 )
         return foast_node
 
@@ -199,13 +200,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             result.append(
                 foast.Symbol(
                     id=name,
-                    type=ts.FunctionType(
-                        pos_only_args=[
-                            ts.DeferredType(constraint=ts.ScalarType)
-                        ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
-                        pos_or_kw_args={},
-                        kw_only_args={},
-                        returns=typing.cast(ts.DataType, type_translation.from_type_hint(value)),
+                    type=ts_ffront.ConstructorType(
+                        definition=ts.FunctionType(
+                            pos_only_args=[
+                                ts.DeferredType(constraint=ts.ScalarType)
+                            ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
+                            pos_or_kw_args={},
+                            kw_only_args={},
+                            returns=typing.cast(
+                                ts.DataType, type_translation.from_type_hint(value)
+                            ),
+                        )
                     ),
                     namespace=dialect_ast_enums.Namespace.CLOSURE,
                     location=location,

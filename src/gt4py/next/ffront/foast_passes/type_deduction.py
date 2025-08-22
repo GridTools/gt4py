@@ -758,7 +758,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         if isinstance(
             new_func.type,
-            (ts.FunctionType, ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
+            (
+                ts.FunctionType,
+                ts_ffront.FieldOperatorType,
+                ts_ffront.ScanOperatorType,
+                ts_ffront.ConstructorType,
+            ),
         ):
             # Since we use the `id` attribute in the latter part of the toolchain ensure we
             # have the proper format here.
