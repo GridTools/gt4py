@@ -296,6 +296,8 @@ class ValueInliner(ast.NodeTransformer):
                 value, (bool, numbers.Number, gtscript.AxisIndex, gtscript.Axis)
             ):
                 new_node = ast.Constant(value=value)
+            elif isinstance(value, np.bool_):
+                new_node = ast.Constant(value=bool(value))
             elif hasattr(value, "_gtscript_"):
                 pass
             else:
