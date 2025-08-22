@@ -1596,39 +1596,36 @@ class LambdaToDataflow(eve.NodeVisitor):
             nsdfg, inputs={"values", "neighbor_indices"}, outputs={"acc"}
         )
 
-        field_layout = input_expr.field_layout
         if isinstance(input_expr, MemletExpr):
             self._add_input_data_edge(input_expr.dc_node, input_expr.subset, nsdfg_node, "values")
-            field_subset = input_expr.subset
-        else:
-            edge = self.state.add_edge(
+        elif isinstance(input_expr, ValueExpr):
+            assert len(input_expr.field_layout) == len(input_expr.dc_node.desc(self.sdfg).shape)
+            self.state.add_edge(
                 input_expr.dc_node,
                 None,
                 nsdfg_node,
                 "values",
                 self.sdfg.make_array_memlet(input_expr.dc_node.data),
             )
-            field_subset = edge.data.subset
+        else:
+            raise ValueError(f"Got unexpected input: '{type(input_expr).__name__}'")
 
-        assert len(field_layout) == len(field_subset)
-        # Original code hat this restriction, maybe remove.
-        assert len(field_layout) == 2
-
-        # TODO(phimuell, edopao): Check if the order is correct here. I think it is.
-        subset_map = gtx_dace_utils.decompose_subset(field_layout, field_subset)
-        subset_map[input_expr.gt_dtype.offset_type] = f"0:{offset_provider_type.max_neighbors}"
-        field_subset = gtx_dace_utils.compose_subset(field_layout, subset_map)
-
+        # Now pass the connectivity table into the reduction SDFG.
+        connectivity_slice_subset = gtx_dace_utils.compose_subset(
+            layout=offset_provider_type.domain,
+            subset_map={
+                offset_provider_type.source_dim: f"{origin_map_index}",
+                offset_provider_type.neighbor_dim: f"0:{offset_provider_type.max_neighbors}",
+            },
+        )
         self._add_input_data_edge(
             connectivity_node,
-            # TODO(phimuell, edopao): Check if the order is correct here. We need a unit test for that case.
-            # FIXME
-            dace_subsets.Range.from_string(
-                f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
-            ),
+            connectivity_slice_subset,
             nsdfg_node,
             "neighbor_indices",
         )
+
+        # Now connect the output.
         self.state.add_edge(
             nsdfg_node,
             "acc",
