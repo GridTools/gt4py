@@ -25,10 +25,6 @@ class ScanOperatorType(ts.TypeSpec, ts.CallableType):
     definition: ts.FunctionType
 
 
-class ConstructorType(ts.TypeSpec, ts.CallableType):
-    definition: ts.FunctionType
-
-
 class NamedTupleType(TupleType):
     keys: list[str]
 

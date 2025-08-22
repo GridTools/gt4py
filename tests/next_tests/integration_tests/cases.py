@@ -598,7 +598,7 @@ def _allocate_from_type(
             )
         case ts.ScalarType(kind=kind):
             return strategy.scalar(dtype=dtype or kind.name.lower())
-        case ts_ffront.ConstructorType(definition=definition):
+        case ts.ConstructorType(definition=definition):
             tmp = list(
                 _allocate_from_type(
                     case=case, arg_type=(None, t), domain=domain, dtype=dtype, strategy=strategy
@@ -651,7 +651,7 @@ def get_param_types(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
 ) -> dict[str, ts.TypeSpec]:
     return {
-        k: v[1].definition.returns if isinstance(v[1], ts_ffront.ConstructorType) else v[1]
+        k: v[1].definition.returns if isinstance(v[1], ts.ConstructorType) else v[1]
         for k, v in get_rich_param_types(fieldview_prog).items()
     }
 

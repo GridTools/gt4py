@@ -214,16 +214,21 @@ def from_value(value: Any) -> ts.TypeSpec:
         return ts.TupleType(types=elems)
     elif isinstance(value, types.ModuleType):
         return UnknownPythonObject(value)
-    elif isinstance(value, type) and isinstance(ctor_type := from_type_hint(value), ts.ScalarType):
-        # construct type of type aka ConstructorType
-        symbol_type = ts.ConstructorType(
-            definition=ts.FunctionType(
-                pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                pos_or_kw_args={},
-                kw_only_args={},
-                returns=ctor_type,
+    elif isinstance(value, type):
+        if isinstance((ctor_type := from_type_hint(value)), ts.ScalarType):
+            symbol_type = ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                    pos_or_kw_args={},
+                    kw_only_args={},
+                    returns=ctor_type,
+                )
             )
-        )
+        else:
+            try:
+                return containers.get_constructor_type(value)
+            except KeyError:
+                symbol_type = None
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)

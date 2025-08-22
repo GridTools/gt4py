@@ -357,15 +357,13 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         ):
             visitor = getattr(self, f"_visit_{node.func.id}")
             return visitor(node, **kwargs)
-        elif isinstance(node.func, foast.Name) and isinstance(node.func.type, ts.ConstructorType):
-            return self._visit_type_constr(node, **kwargs)
         elif isinstance(
             node.func.type,
             (
                 ts.FunctionType,
                 ts_ffront.FieldOperatorType,
                 ts_ffront.ScanOperatorType,
-                ts_ffront.ConstructorType,
+                ts.ConstructorType,
             ),
         ):
             # ITIR has no support for keyword arguments. Instead, we concatenate both positional
@@ -376,12 +374,14 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 self.visit(node.kwargs, **kwargs),
                 use_signature_ordering=True,
             )
-
-            if isinstance(node.func.type, ts_ffront.ConstructorType):
+            if isinstance(node.func, foast.Name) and isinstance(node.func.type, ts.ConstructorType):
                 if isinstance(node.func.type.definition.returns, ts_ffront.NamedTupleType):
                     # construct a plain tuple from the custom container constructor
                     return im.make_tuple(*lowered_args, *lowered_kwargs.values())
-                raise AssertionError("Unexpected constructor encounterd.")
+                elif isinstance(node.func.type.definition.returns, ts.ScalarType):
+                    return self._visit_type_constr(node, **kwargs)
+                else:
+                    raise AssertionError("Unexpected constructor encounterd.")
 
             result = im.call(self.visit(node.func, **kwargs))(
                 *lowered_args, *lowered_kwargs.values()

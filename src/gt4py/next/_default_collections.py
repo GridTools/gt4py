@@ -13,7 +13,7 @@ from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-def _type_of_dataclass(cls: type) -> ts_ffront.ConstructorType:
+def _type_of_dataclass(cls: type) -> ts.ConstructorType:
     assert dataclasses.is_dataclass(cls)
     fields = dataclasses.fields(cls)
 
@@ -22,7 +22,7 @@ def _type_of_dataclass(cls: type) -> ts_ffront.ConstructorType:
     keys = [f.name for f in fields]
     return_type = ts_ffront.NamedTupleType(types=types, keys=keys)
 
-    return ts_ffront.ConstructorType(
+    return ts.ConstructorType(
         definition=ts.FunctionType(
             pos_or_kw_args=dict(zip(keys, types, strict=True)),
             kw_only_args={},
