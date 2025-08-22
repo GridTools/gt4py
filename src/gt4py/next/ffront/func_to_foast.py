@@ -174,9 +174,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                 raise errors.DSLError(
                     foast_node.location,
-                    "Annotated return type does not match deduced return type: expected "
-                    f"'{foast_node.type.returns}'"  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
-                    f", got '{annotated_return_type}'.",
+                    "Annotated return type does not match deduced return type: annotation is "
+                    f"'{annotated_return_type}'"  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
+                    f", got '{foast_node.type.returns}'.",
                 )
         return foast_node
 

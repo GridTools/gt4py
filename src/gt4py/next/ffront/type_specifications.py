@@ -37,3 +37,6 @@ class NamedTupleType(TupleType):
         if name in keys:
             return self.types[keys.index(name)]
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+    def __str__(self) -> str:
+        return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
