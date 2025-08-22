@@ -2,7 +2,6 @@
 
 In the context of adding support for a `round()` function in `gtscript`, facing divergent implementations in backend languages, we decided to implement `round()` with tie-breaking to even and `round_away_from_zero()` with tie-breaking away from zero to achieve consistent results while leaving the choice of behavior up to users. We considered multiple alternatives (see below), which all have their advantages and disadvantages.
 
-Why-statement: In the context of [use case/user story], facing [concern], we decided to [do thing X] to achieve [system qualities/desired consequences]. We considered [thing Y] and accept [downsides / undesired consequences].
 
 ## Context
 
