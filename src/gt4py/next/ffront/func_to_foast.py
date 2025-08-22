@@ -9,10 +9,9 @@
 from __future__ import annotations
 
 import ast
-import builtins
 import textwrap
 import typing
-from typing import Any, Callable, Iterable, Mapping, Type
+from typing import Any, Type
 
 import gt4py.eve as eve
 from gt4py.next import errors
@@ -177,53 +176,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 )
         return foast_node
 
-    def _builtin_type_constructor_symbols(
-        self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
-    ) -> tuple[list[foast.Symbol], Iterable[str]]:
-        result: list[foast.Symbol] = []
-        skipped_types = {"tuple"}
-        python_type_builtins: dict[str, Callable[[Any], Any]] = {
-            name: getattr(builtins, name)
-            for name in set(fbuiltins.TYPE_BUILTIN_NAMES) - skipped_types
-            if hasattr(builtins, name)
-        }
-        captured_type_builtins = {
-            name: value
-            for name, value in captured_vars.items()
-            if name in fbuiltins.TYPE_BUILTIN_NAMES and value is getattr(fbuiltins, name)
-        }
-        to_be_inserted = python_type_builtins | captured_type_builtins
-        for name, value in to_be_inserted.items():
-            result.append(
-                foast.Symbol(
-                    id=name,
-                    type=ts.ConstructorType(
-                        definition=ts.FunctionType(
-                            pos_only_args=[
-                                ts.DeferredType(constraint=ts.ScalarType)
-                            ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
-                            pos_or_kw_args={},
-                            kw_only_args={},
-                            returns=typing.cast(
-                                ts.DataType, type_translation.from_type_hint(value)
-                            ),
-                        )
-                    ),
-                    namespace=dialect_ast_enums.Namespace.CLOSURE,
-                    location=location,
-                )
-            )
-
-        return result, to_be_inserted.keys()
-
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs: Any) -> foast.FunctionDefinition:
         loc = self.get_location(node)
-        closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
-            self.closure_vars, self.get_location(node)
-        )
+        closure_var_symbols: list[foast.Symbol] = []
         for name in self.closure_vars.keys():
-            if name in skip_names:
-                continue
             try:
                 type_ = type_translation.from_value(self.closure_vars[name])
             except ValueError as _:
