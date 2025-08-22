@@ -148,10 +148,7 @@ def _create_scan_field_operator_impl(
         #   be more than one index.
         raise NotImplementedError("The case for List output in scans is not supported.")
 
-    # We will now create the final data storage. Note that until now the nested SDFG
-    #  used some dummy output AccessNode, however it was only big enough to store one
-    #  column. We will now replace it with one that can hold the entire result.
-    # NOTE: The removal is done by `output_edge.connect()`.
+    # Create the final data storage, that is outside of the surrounding Map.
     # TODO(phimuell, edopao): In a previous version the stride was adapted. However,
     #   this was done in a very strange way. First of all the stride of the "dummy
     #   output" was modified, which does not make sense as it is removed. The strides
@@ -162,34 +159,69 @@ def _create_scan_field_operator_impl(
     )
     field_node = ctx.state.add_access(field_name)
 
-    # Now we create the AccessNode that serves as final destination.
-    output_edge.connect(map_exit, field_node, field_subset)
-
-    # Now we must adapt the strides, because the stride used in the nested SDFG might
-    #  be different form the one that is used outside, by `field_desc`.
+    # Now connect the final output node with the output of the nested SDFG. Note that
+    #  Up to now the nested SDFG is writing into a data container that has the size
+    #  to hold one column. The function bellow, that does the connection, will might
+    #  remove that in certain cases.
+    inner_map_output_temporary_removed = output_edge.connect(map_exit, field_node, field_subset)
     assert ctx.state.in_degree(field_node) == 1
+
     field_node_path = ctx.state.memlet_path(next(iter(ctx.state.in_edges(field_node))))
     assert field_node_path[-1].dst is field_node
-    nsdfg_scan = field_node_path[0].src
-    assert isinstance(nsdfg_scan, dace.nodes.NestedSDFG)
-    inner_output_name = field_node_path[0].src_conn
-    inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
-    assert len(inner_output_desc.shape) == 1
 
-    # Map the strides of the outer output into the nested SDFG and use it for the
-    #  slice there. We create an extra symbol for that to avoid any and all conflicts.
-    # TODO(phimuell, edopao): Selection of the type of the symbol is wrong.
-    outside_output_stride = field_desc.strides[scan_dim_index]
-    inner_output_stride_symbol_name = nsdfg_scan.sdfg.add_symbol(
-        name=f"_gt4py_scan_stride_replacement_{field_name}_{scan_dim_index}__{inner_output_name}",
-        stype=dace.int32,
-        find_new_name=True,
-    )
-    nsdfg_scan.symbol_mapping[inner_output_stride_symbol_name] = outside_output_stride
-    inner_output_desc.set_shape(
-        new_shape=inner_output_desc.shape,
-        strides=(dace.symbolic.pystr_to_symbolic(inner_output_stride_symbol_name),),
-    )
+    if inner_map_output_temporary_removed:
+        # The original output of the nested SDFG, the one that would be inside the Map,
+        #  has been deleted and the nested SDFG writes directly into the output. In
+        #  that case we have to adapt the stride of the data container on the inside.
+        nsdfg_scan = field_node_path[0].src
+        assert isinstance(nsdfg_scan, dace.nodes.NestedSDFG)
+        inner_output_name = field_node_path[0].src_conn
+        inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
+        assert len(inner_output_desc.shape) == 1
+
+        outside_output_stride = field_desc.strides[scan_dim_index]
+        if str(outside_output_stride).isdigit():
+            # It is a constant so we can just set it
+            inner_output_stride_symbol_name = outside_output_stride
+        else:
+            # The stride on the outside is a symbolic expression. We must map it into
+            #  the nested SDFG. To avoid confusion, we create a new symbol.
+            # TODO(phimuell, edopao): Selection of the type of the symbol is wrong.
+            # TODO(phimuell, edopao): Think if the helper functions in `transfromations/strides.py`
+            #   should be used.
+            inner_output_stride_symbol_name = nsdfg_scan.sdfg.add_symbol(
+                name=f"_gt4py_scan_stride_replacement_{field_name}_{scan_dim_index}__{inner_output_name}",
+                stype=dace.int32,
+                find_new_name=True,
+            )
+            nsdfg_scan.symbol_mapping[inner_output_stride_symbol_name] = outside_output_stride
+
+        # Update the stride on the inside.
+        inner_output_desc.set_shape(
+            new_shape=inner_output_desc.shape,
+            strides=(dace.symbolic.pystr_to_symbolic(inner_output_stride_symbol_name),),
+        )
+    else:
+        # The AccessNode on the inside of the Map was not removed but remains there.
+        #  Thus we do not have to update the strides, we do however, make some checks.
+        # TODO(phimuell, edopao): We need a unit test for that.
+        in_map_temporary_output_field = field_node_path[0].src
+        assert isinstance(in_map_temporary_output_field, dace.nodes.AccessNode)
+        in_map_temporary_output_field_desc = in_map_temporary_output_field.desc(ctx.sdfg)
+
+        assert ctx.state.in_degree(in_map_temporary_output_field) == 1
+        assert ctx.state.out_degree(in_map_temporary_output_field) == 1
+        inner_edge = next(iter(ctx.state.in_edges(in_map_temporary_output_field)))
+        nsdfg_scan = inner_edge.src
+        assert isinstance(nsdfg_scan, dace.nodes.NestedSDFG)
+
+        inner_output_name = inner_edge.src_conn
+        inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
+
+        assert len(inner_output_desc.shape) == 1
+        assert inner_output_desc.shape == in_map_temporary_output_field_desc.shape
+        assert inner_output_desc.strides == in_map_temporary_output_field_desc.strides
+        assert all(str(s).isdigit() for s in inner_output_desc.strides)
 
     return gtir_to_sdfg_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
