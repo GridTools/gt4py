@@ -596,21 +596,36 @@ _EXPECTED_NESTED_NAMED_TUPLE_TYPE = ts_ffront.NamedTupleType(
 
 
 @pytest.mark.parametrize(
-    "container, expected",
+    "container",
     [
-        (DataclassContainer, _EXPECTED_NAMED_TUPLE_TYPE),
-        # (NamedTupleContainer, _EXPECTED_NAMED_TUPLE_TYPE),
-        (NestedDataclassContainer, _EXPECTED_NESTED_NAMED_TUPLE_TYPE),
-        # (NestedNamedTupleDataclassContainer, _EXPECTED_NESTED_NAMED_TUPLE_TYPE),
-        # (NestedDataclassNamedTupleContainer, _EXPECTED_NESTED_NAMED_TUPLE_TYPE),
-        # (NestedMixedTupleContainer, _EXPECTED_NESTED_NAMED_TUPLE_TYPE),
+        DataclassContainer,
+        # NamedTupleContainer,
     ],
 )
-def test_containers(container, expected):
+def test_containers(container):
     def containers(a: container) -> container:
-        return a
+        return container(x=a.x, y=a.y)
 
     parsed = FieldOperatorParser.apply_to_function(containers)
 
-    assert parsed.params[0].type == expected
-    assert parsed.body.stmts[-1].value.type == expected
+    assert parsed.params[0].type == _EXPECTED_NAMED_TUPLE_TYPE
+    assert parsed.body.stmts[-1].value.type == _EXPECTED_NAMED_TUPLE_TYPE
+
+
+@pytest.mark.parametrize(
+    "container",
+    [
+        NestedDataclassContainer,
+        # NestedNamedTupleDataclassContainer,
+        # NestedDataclassNamedTupleContainer,
+        # NestedMixedTupleContainer,
+    ],
+)
+def test_nested_containers(container):
+    def containers(a: container) -> container:
+        return container(a=a.a, b=a.b, c=a.c)
+
+    parsed = FieldOperatorParser.apply_to_function(containers)
+
+    assert parsed.params[0].type == _EXPECTED_NESTED_NAMED_TUPLE_TYPE
+    assert parsed.body.stmts[-1].value.type == _EXPECTED_NESTED_NAMED_TUPLE_TYPE

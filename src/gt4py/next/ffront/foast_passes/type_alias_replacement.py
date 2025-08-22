@@ -46,6 +46,9 @@ class TypeAliasReplacement(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return (
             node_id in self.closure_vars
             and isinstance(self.closure_vars[node_id], type)
+            and isinstance(
+                type_translation.from_type_hint(self.closure_vars[node_id]), ts.ScalarType
+            )
             and node_id not in fbuiltins.TYPE_BUILTIN_NAMES
         )
 
@@ -67,30 +70,26 @@ class TypeAliasReplacement(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 actual_type_name = self.closure_vars[var.id].__name__
                 # Avoid multiple definitions of a type in closure_vars
                 if actual_type_name not in existing_type_names:
-                    return_type = type_translation.from_type_hint(self.closure_vars[var.id])
-                    if isinstance(return_type, ts.ScalarType):
-                        new_closure_vars.append(
-                            foast.Symbol(
-                                id=actual_type_name,
-                                type=ts_ffront.ConstructorType(
-                                    definition=ts.FunctionType(
-                                        pos_or_kw_args={},
-                                        kw_only_args={},
-                                        pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                                        returns=cast(
-                                            ts.DataType,
-                                            type_translation.from_type_hint(
-                                                self.closure_vars[var.id]
-                                            ),
-                                        ),
-                                    )
-                                ),
-                                namespace=dialect_ast_enums.Namespace.CLOSURE,
-                                location=location,
-                            )
+                    new_closure_vars.append(
+                        foast.Symbol(
+                            id=actual_type_name,
+                            type=ts_ffront.ConstructorType(
+                                definition=ts.FunctionType(
+                                    pos_or_kw_args={},
+                                    kw_only_args={},
+                                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                                    returns=cast(
+                                        ts.DataType,
+                                        type_translation.from_type_hint(self.closure_vars[var.id]),
+                                    ),
+                                )
+                            ),
+                            namespace=dialect_ast_enums.Namespace.CLOSURE,
+                            location=location,
                         )
-                        existing_type_names.add(actual_type_name)
-                        continue
+                    )
+                    existing_type_names.add(actual_type_name)
+                    continue
             if var.id not in existing_type_names:
                 new_closure_vars.append(var)
                 existing_type_names.add(var.id)
