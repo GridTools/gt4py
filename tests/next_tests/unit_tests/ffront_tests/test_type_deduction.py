@@ -8,6 +8,7 @@
 
 import re
 import dataclasses
+from typing import NamedTuple
 
 import pytest
 
@@ -31,6 +32,7 @@ from gt4py.next.ffront.experimental import concat_where
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
+from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.type_system import type_specifications as ts
 
 # Meaningless dimensions, used for tests.
@@ -539,3 +541,76 @@ def test_as_offset_dtype():
 
     with pytest.raises(errors.DSLError, match=f"expected integer for offset field dtype"):
         _ = FieldOperatorParser.apply_to_function(as_offset_dtype)
+
+
+class NamedTupleContainer(NamedTuple):
+    x: Field[[TDim], float32]
+    y: Field[[TDim], float32]
+
+
+@dataclasses.dataclass
+class DataclassContainer:
+    x: Field[[TDim], float32]
+    y: Field[[TDim], float32]
+
+
+@dataclasses.dataclass
+class NestedDataclassContainer:
+    a: DataclassContainer
+    b: DataclassContainer
+    c: DataclassContainer
+
+
+class NestedNamedTupleDataclassContainer(NamedTuple):
+    a: DataclassContainer
+    b: DataclassContainer
+    c: DataclassContainer
+
+
+@dataclasses.dataclass
+class NestedDataclassNamedTupleContainer:
+    a: NamedTupleContainer
+    b: NamedTupleContainer
+    c: NamedTupleContainer
+
+
+@dataclasses.dataclass
+class NestedMixedTupleContainer:
+    a: NamedTupleContainer
+    b: DataclassContainer
+    c: NamedTupleContainer
+
+
+_EXPECTED_NAMED_TUPLE_TYPE = ts_ffront.NamedTupleType(
+    types=[
+        ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+        ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+    ],
+    keys=["x", "y"],
+)
+
+_EXPECTED_NESTED_NAMED_TUPLE_TYPE = ts_ffront.NamedTupleType(
+    types=[_EXPECTED_NAMED_TUPLE_TYPE, _EXPECTED_NAMED_TUPLE_TYPE, _EXPECTED_NAMED_TUPLE_TYPE],
+    keys=["a", "b", "c"],
+)
+
+
+@pytest.mark.parametrize(
+    "container, expected",
+    [
+        (DataclassContainer, _EXPECTED_NAMED_TUPLE_TYPE),
+        # (NamedTupleContainer, _EXPECTED_NAMED_TUPLE_TYPE),
+        (NestedDataclassContainer, _EXPECTED_NESTED_NAMED_TUPLE_TYPE),
+        # (NestedNamedTupleDataclassContainer, _EXPECTED_NESTED_NAMED_TUPLE_TYPE),
+        # (NestedDataclassNamedTupleContainer, _EXPECTED_NESTED_NAMED_TUPLE_TYPE),
+        # (NestedMixedTupleContainer, _EXPECTED_NESTED_NAMED_TUPLE_TYPE),
+    ],
+)
+def test_containers(container, expected):
+    def containers(a: container) -> container:
+        return a
+
+    parsed = FieldOperatorParser.apply_to_function(containers)
+
+    assert parsed.params[0].type == expected
+    assert parsed.body.stmts[-1].value.type == expected
