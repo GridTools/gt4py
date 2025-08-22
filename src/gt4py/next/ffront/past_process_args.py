@@ -95,20 +95,24 @@ def _process_args(
             # for `(scalar, (field1, field2))` the two fields need to have the same shape and
             # dimension
             if ranges_and_dims:
-                # range_, dims = ranges_and_dims[0] # TODO
-                # if not all(
-                #     el_range == range_ and el_dims == dims
-                #     for (el_range, el_dims) in ranges_and_dims
-                # ):
-                #     raise ValueError(
-                #         "Constituents of composite arguments (e.g. the elements of a"
-                #         " tuple) need to have the same shape and dimensions."
-                #     )
-                index_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
-                for range_, dims in ranges_and_dims:
-                    size_args.extend(
-                        range_ if range_ else [ts.TupleType(types=[index_type, index_type])] * len(dims)  # type: ignore[arg-type]  # shape is always empty
+                range_, dims = ranges_and_dims[0]
+                if not all(
+                    el_range == range_ and el_dims == dims
+                    for (el_range, el_dims) in ranges_and_dims
+                ):
+                    raise ValueError(
+                        "Constituents of composite arguments (e.g. the elements of a"
+                        " tuple) need to have the same shape and dimensions."
                     )
+                index_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
+                size_args.extend(
+                    range_ if range_ else [ts.TupleType(types=[index_type, index_type])] * len(dims)
+                    # type: ignore[arg-type]  # shape is always empty
+                )
+                # for range_, dims in ranges_and_dims:
+                #     size_args.extend(
+                #         range_ if range_ else [ts.TupleType(types=[index_type, index_type])] * len(dims)  # type: ignore[arg-type]  # shape is always empty
+                #     )
     return tuple(rewritten_args), tuple(size_args), kwargs
 
 

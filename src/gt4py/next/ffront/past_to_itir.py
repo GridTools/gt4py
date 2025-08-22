@@ -236,7 +236,7 @@ class ProgramLowering(
                 .to_list()
             )
             if len(fields_dims) > 0:  # otherwise `param` has no constituent which is of `FieldType`
-                #assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
+                assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
                 index_type = ts.ScalarType(
                     kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
                 )
@@ -247,14 +247,14 @@ class ProgramLowering(
                             type=ts.TupleType(types=[index_type, index_type]),
                         )
                     )
-                for field_dims in fields_dims:
-                    for dim_idx in range(len(field_dims)):
-                        size_params.append(
-                            itir.Sym(
-                                id=_range_arg_from_field(param.id, dim_idx),
-                                type=ts.TupleType(types=[index_type, index_type]),
-                            )
-                        )
+                # for field_dims in fields_dims:
+                #     for dim_idx in range(len(field_dims)):
+                #         size_params.append(
+                #             itir.Sym(
+                #                 id=_range_arg_from_field(param.id, dim_idx),
+                #                 type=ts.TupleType(types=[index_type, index_type]),
+                #             )
+                #         )
 
         return size_params
 
@@ -363,15 +363,15 @@ class ProgramLowering(
         assert isinstance(out_field.type, ts.TypeSpec)
         out_field_types = type_info.primitive_constituents(out_field.type).to_list()
         out_dims = cast(ts.FieldType, out_field_types[0]).dims
-        # if any(
-        #     not isinstance(out_field_type, ts.FieldType) or out_field_type.dims != out_dims
-        #     for out_field_type in out_field_types
-        # ): # TODO
-        #     raise AssertionError(
-        #         f"Expected constituents of '{out_field.id}' argument to be"
-        #         " fields defined on the same dimensions. This error should be "
-        #         " caught in type deduction already."
-        #     )
+        if any(
+            not isinstance(out_field_type, ts.FieldType) or out_field_type.dims != out_dims
+            for out_field_type in out_field_types
+        ): # TODO
+            raise AssertionError(
+                f"Expected constituents of '{out_field.id}' argument to be"
+                " fields defined on the same dimensions. This error should be "
+                " caught in type deduction already."
+            )
 
         domain_args = []
         domain_args_kind = []

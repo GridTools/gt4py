@@ -108,16 +108,7 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         domain = kwargs.pop("domain", None)
 
-        if domain is not None:
-            if isinstance(out, tuple) and not isinstance(domain, tuple):
-                out_domain = tuple([domain] * len(out))
-            else:
-                out_domain = domain
-        else:
-            if isinstance(out, tuple):
-                out_domain = tuple(_get_out_domain(o) for o in out)
-            else:
-                out_domain = _get_out_domain(out)
+        out_domain = domain if domain is not None else _get_out_domain(out)
 
         # TODO?
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
@@ -163,7 +154,10 @@ def _tuple_assign_field(
             assert core_defs.is_scalar_type(source)
             target[domain] = source
 
+    if not isinstance(domain, tuple): # TODO: use a generic condition that also works for nested domains and targets
+        domain = utils.tree_map(lambda _: domain)(target)
     impl(target, source, domain)
+
 
 
 def _intersect_scan_args(

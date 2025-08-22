@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import numpy as np
 import pytest
 
 import gt4py.next as gtx
@@ -107,23 +106,30 @@ def test_direct_fo_orig(cartesian_case):
         domain={IDim: (0, cartesian_case.default_sizes[IDim])}
     )
 
+# TODO:
+#  - test without domain
+#  - test with nested tuples
+#  - test with different vertical domains KDim and KHalfDim
+#  - test from  https://hackmd.io/m__8sBBATiqFWOPNMEPsfg
+#  - unstructured test with Local dimensions e.g. Vertex, E2V and Edge
 
-def test_direct_fo(cartesian_case):
-    a = cases.allocate(cartesian_case, testee, "a")()
-    b = cases.allocate(cartesian_case, testee, "b")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
-    cases.verify(
-        cartesian_case,
-        testee,
-        a,
-        b,
-        out=out,
-        ref=(b, a),
-        domain=(
-            {JDim: (0, cartesian_case.default_sizes[JDim])},
-            {IDim: (0, cartesian_case.default_sizes[IDim])},
-        ),
-    )
+#
+# def test_direct_fo(cartesian_case):
+#     a = cases.allocate(cartesian_case, testee, "a")()
+#     b = cases.allocate(cartesian_case, testee, "b")()
+#     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+#
+#     cases.verify(
+#         cartesian_case,
+#         testee,
+#         a,
+#         b,
+#         out=out,
+#         ref=(b, a),
+#         domain=(
+#             {JDim: (0, cartesian_case.default_sizes[JDim])},
+#             {IDim: (0, cartesian_case.default_sizes[IDim])},
+#         ),
+#     )
 
 

@@ -625,16 +625,16 @@ def program(
 
 OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
 
-def _slice_outs(
-    outs: common.Field | tuple[common.Field | tuple, ...],
-    domains: common.Domain | tuple[common.Domain | tuple, ...],
-) -> common.Field | tuple[common.Field | tuple, ...]:
-    if isinstance(outs, tuple):
-        if not isinstance(domains, tuple):
-            domains = tuple([domains] * len(outs))
-        return tuple(_slice_outs(out, domain) for out, domain in zip(outs, domains, strict=True))
-    else:
-        return outs[common.domain(domains)]
+# def _slice_outs(
+#     outs: common.Field | tuple[common.Field | tuple, ...],
+#     domains: common.Domain | tuple[common.Domain | tuple, ...],
+# ) -> common.Field | tuple[common.Field | tuple, ...]:
+#     if isinstance(outs, tuple):
+#         if not isinstance(domains, tuple):
+#             domains = tuple([domains] * len(outs))
+#         return tuple(_slice_outs(out, domain) for out, domain in zip(outs, domains, strict=True))
+#     else:
+#         return outs[common.domain(domains)]
 
 @dataclasses.dataclass(frozen=True)
 class FieldOperator(GTCallable, Generic[OperatorNodeT]):
@@ -777,9 +777,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
             if "domain" in kwargs:
-                out = _slice_outs(out, kwargs.pop("domain"))
-                #domain = common.domain(kwargs.pop("domain"))
-                #out = utils.tree_map(lambda f: f[domain])(out)
+                # out = _slice_outs(out, kwargs.pop("domain"))
+                domain = common.domain(kwargs.pop("domain"))
+                out = utils.tree_map(lambda f: f[domain])(out)
 
             args, kwargs = type_info.canonicalize_arguments(
                 self.foast_stage.foast_node.type, args, kwargs
