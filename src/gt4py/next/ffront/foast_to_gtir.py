@@ -473,9 +473,17 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         assert isinstance(target_type, ts.ScalarType)
 
         if isinstance(value, foast.Constant):
-            val = tt.unsafe_cast_to(value.value, source_type)
+            val = (
+                value.value
+                if source_type.kind == ts.ScalarKind.STRING
+                else tt.unsafe_cast_to(value.value, source_type)
+            )
         elif isinstance(value, foast.UnaryOp) and isinstance(value.operand, foast.Constant):
-            operand = tt.unsafe_cast_to(value.operand.value, source_type)
+            operand = (
+                value.operand.value
+                if source_type.kind == ts.ScalarKind.STRING
+                else tt.unsafe_cast_to(value.operand.value, source_type)
+            )
             val = eval(f"lambda arg: {value.op}arg")(operand)
         else:
             raise FieldOperatorLoweringError(
