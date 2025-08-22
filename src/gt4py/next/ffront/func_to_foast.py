@@ -9,20 +9,18 @@
 from __future__ import annotations
 
 import ast
-import builtins
 import textwrap
 import typing
-from typing import Any, Callable, Iterable, Mapping, Type
+from typing import Any, Type
 
 import gt4py.eve as eve
-from gt4py.next import containers, errors
+from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
     source_utils,
     stages as ffront_stages,
-    type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.ast_passes import (
     SingleAssignTargetPass,
@@ -36,7 +34,6 @@ from gt4py.next.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
-from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.ffront.stages import AOT_DSL_FOP, AOT_FOP, DSL_FOP, FOP
 from gt4py.next.otf import toolchain, workflow
@@ -159,7 +156,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         closure_vars: dict[str, Any],
         annotations: dict[str, Any],
     ) -> foast.FunctionDefinition:
-        foast_node, closure_vars = TypeAliasReplacement.apply(foast_node, closure_vars)
         foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
         foast_node = DeadClosureVarElimination.apply(foast_node)
         foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
@@ -180,57 +176,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 )
         return foast_node
 
-    def _builtin_type_constructor_symbols(
-        self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
-    ) -> tuple[list[foast.Symbol], Iterable[str]]:
-        result: list[foast.Symbol] = []
-        skipped_types = {"tuple"}
-        python_type_builtins: dict[str, Callable[[Any], Any]] = {
-            name: getattr(builtins, name)
-            for name in set(fbuiltins.TYPE_BUILTIN_NAMES) - skipped_types
-            if hasattr(builtins, name)
-        }
-        captured_type_builtins = {
-            name: value
-            for name, value in captured_vars.items()
-            if name in fbuiltins.TYPE_BUILTIN_NAMES and value is getattr(fbuiltins, name)
-        }
-        to_be_inserted = python_type_builtins | captured_type_builtins
-        for name, value in to_be_inserted.items():
-            result.append(
-                foast.Symbol(
-                    id=name,
-                    type=ts_ffront.ConstructorType(
-                        definition=ts.FunctionType(
-                            pos_only_args=[
-                                ts.DeferredType(constraint=ts.ScalarType)
-                            ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
-                            pos_or_kw_args={},
-                            kw_only_args={},
-                            returns=typing.cast(
-                                ts.DataType, type_translation.from_type_hint(value)
-                            ),
-                        )
-                    ),
-                    namespace=dialect_ast_enums.Namespace.CLOSURE,
-                    location=location,
-                )
-            )
-
-        return result, to_be_inserted.keys()
-
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs: Any) -> foast.FunctionDefinition:
         loc = self.get_location(node)
-        closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
-            self.closure_vars, self.get_location(node)
-        )
+        closure_var_symbols: list[foast.Symbol] = []
         for name in self.closure_vars.keys():
-            if name in skip_names:
-                continue
             try:
-                # TODO think about this mechanism
-                type_ = containers.get_constructor_type(self.closure_vars[name])
-            except KeyError:
+                type_ = type_translation.from_value(self.closure_vars[name])
+            except ValueError as _:
                 type_ = ts.DeferredType(constraint=None)
 
             closure_var_symbols.append(

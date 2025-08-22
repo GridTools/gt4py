@@ -649,6 +649,16 @@ def return_type_field(
     return ts.FieldType(dims=new_dims, dtype=field_type.dtype)
 
 
+@return_type.register
+def return_type_constructor(
+    constructor_type: ts.ConstructorType,
+    *,
+    with_args: Sequence[ts.TypeSpec],
+    with_kwargs: dict[str, ts.TypeSpec],
+) -> ts.TypeSpec:
+    return constructor_type.definition.returns
+
+
 UNDEFINED_ARG = types.new_class("UNDEFINED_ARG")
 
 
@@ -701,6 +711,24 @@ def canonicalize_function_arguments(
         ckwargs = {k: ckwargs[k] for k in func_type.kw_only_args.keys() if k in ckwargs}
 
     return tuple(cargs), ckwargs
+
+
+@canonicalize_arguments.register(ts.ConstructorType)
+def canonicalize_constructor_arguments(
+    constructor_type: ts.ConstructorType,
+    args: tuple | list,
+    kwargs: dict,
+    *,
+    ignore_errors: bool = False,
+    use_signature_ordering: bool = False,
+) -> tuple[tuple, dict]:
+    return canonicalize_arguments(
+        constructor_type.definition,
+        args,
+        kwargs,
+        ignore_errors=ignore_errors,
+        use_signature_ordering=use_signature_ordering,
+    )
 
 
 def structural_function_signature_incompatibilities(
@@ -838,6 +866,23 @@ def function_signature_incompatibilities_field(
             f"{source_dim.value} to target dim(s): "
             f"{', '.join([dim.value for dim in target_dims])}"
         )
+
+
+@function_signature_incompatibilities.register
+def function_signature_incompatibilities_constructor(
+    constructor_type: ts.ConstructorType,
+    args: Sequence[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
+) -> Iterator[str]:
+    if not all(is_type_or_tuple_of_type(arg, (ts.ScalarType, ts.FieldType)) for arg in args):
+        yield "Arguments to constructor must be fields, scalars or tuples thereof."
+        return
+
+    args, kwargs = canonicalize_arguments(constructor_type, args, kwargs, ignore_errors=True)
+
+    yield from function_signature_incompatibilities_func(
+        constructor_type.definition, args, kwargs, skip_canonicalization=True
+    )
 
 
 # TODO(havogt): Consider inlining the usage of this function in the call sites

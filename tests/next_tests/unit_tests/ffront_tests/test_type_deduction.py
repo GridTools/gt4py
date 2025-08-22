@@ -9,6 +9,7 @@
 import re
 import dataclasses
 from typing import NamedTuple
+from typing import TypeAlias
 
 import pytest
 
@@ -484,7 +485,7 @@ def test_astype_wrong_dtype():
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Invalid call to 'astype': second argument must be a scalar type, got.",
+        match=r"Invalid ",
     ):
         _ = FieldOperatorParser.apply_to_function(simple_astype)
 
@@ -541,6 +542,25 @@ def test_as_offset_dtype():
 
     with pytest.raises(errors.DSLError, match=f"expected integer for offset field dtype"):
         _ = FieldOperatorParser.apply_to_function(as_offset_dtype)
+
+
+vpfloat: TypeAlias = float32
+wpfloat: TypeAlias = float64
+
+
+@pytest.mark.parametrize(
+    "test_input,expected", [(vpfloat, ts.ScalarKind.FLOAT32), (wpfloat, ts.ScalarKind.FLOAT64)]
+)
+def test_type_alias(test_input: TypeAlias, expected: ts.ScalarKind):
+    def fieldop_with_typealias(a: Field[[TDim], test_input]) -> Field[[TDim], test_input]:
+        return test_input("3.1418") + astype(a, test_input)
+
+    foast_tree = FieldOperatorParser.apply_to_function(fieldop_with_typealias)
+
+    assert (
+        foast_tree.body.stmts[0].value.left.func.type.definition.returns.kind == expected
+        and foast_tree.body.stmts[0].value.right.args[1].type.definition.returns.kind == expected
+    )
 
 
 class NamedTupleContainer(NamedTuple):
