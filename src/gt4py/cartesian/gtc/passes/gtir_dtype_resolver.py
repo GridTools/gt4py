@@ -51,6 +51,9 @@ class _GTIRResolveAuto(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             loc=node.loc,
         )
 
+    def visit_IteratorAccess(self, iterator_access: gtir.IteratorAccess, **kwargs: Any):
+        return gtir.IteratorAccess(name=iterator_access.name, dtype=DataType.INT64)
+
     def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> gtir.ParAssignStmt:
         right = self.visit(node.right, **kwargs)
         left = self.visit(node.left, new_dtype=right.dtype, **kwargs)

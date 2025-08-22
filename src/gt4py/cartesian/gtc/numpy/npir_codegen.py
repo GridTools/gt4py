@@ -102,6 +102,9 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     VarKOffset = as_fmt("lk + {k}")
 
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
+        if isinstance(node.k_offset, npir.AbsoluteKIndex):
+            raise NotImplementedError("Absolute K indexing not yet implemented in numpy backend.")
+
         k_offset = (
             self.visit(node.k_offset, **kwargs)
             if isinstance(node.k_offset, npir.VarKOffset)
