@@ -63,7 +63,8 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
             domain_kwarg_ = [domain_kwarg]
         elif isinstance(domain_kwarg, past.TupleExpr):
             out_kwarg = new_kwargs["out"]
-            assert isinstance(out_kwarg, past.TupleExpr)
+            if not isinstance(out_kwarg, past.TupleExpr):
+                raise ValueError(f"TupleExpr are only allowed in 'domain', if '{out_kwarg}' is a tuple as well.")
             assert len(out_kwarg.elts) == len(domain_kwarg.elts)
             domain_kwarg_ = domain_kwarg.elts
         for dom in domain_kwarg_:
