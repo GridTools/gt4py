@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import re
-from typing import Optional, Pattern
+from typing import TypeAlias
 
 import pytest
 
@@ -19,7 +19,6 @@ from gt4py.next import (
     FieldOffset,
     astype,
     broadcast,
-    common,
     errors,
     float32,
     float64,
@@ -32,7 +31,7 @@ from gt4py.next.ffront.experimental import concat_where
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts
 
 # Meaningless dimensions, used for tests.
 TDim = Dimension("TDim")
@@ -537,3 +536,22 @@ def test_as_offset_dtype():
 
     with pytest.raises(errors.DSLError, match=f"expected integer for offset field dtype"):
         _ = FieldOperatorParser.apply_to_function(as_offset_dtype)
+
+
+vpfloat: TypeAlias = float32
+wpfloat: TypeAlias = float64
+
+
+@pytest.mark.parametrize(
+    "test_input,expected", [(vpfloat, ts.ScalarKind.FLOAT32), (wpfloat, ts.ScalarKind.FLOAT64)]
+)
+def test_type_alias(test_input: TypeAlias, expected: ts.ScalarKind):
+    def fieldop_with_typealias(a: Field[[TDim], test_input]) -> Field[[TDim], test_input]:
+        return test_input("3.1418") + astype(a, test_input)
+
+    foast_tree = FieldOperatorParser.apply_to_function(fieldop_with_typealias)
+
+    assert (
+        foast_tree.body.stmts[0].value.left.func.type.definition.returns.kind == expected
+        and foast_tree.body.stmts[0].value.right.args[1].type.definition.returns.kind == expected
+    )

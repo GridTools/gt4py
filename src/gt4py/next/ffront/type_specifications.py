@@ -19,10 +19,6 @@ class FieldOperatorType(ts.TypeSpec, ts.CallableType):
     definition: ts.FunctionType
 
 
-class ConstructorType(ts.TypeSpec, ts.CallableType):
-    definition: ts.FunctionType
-
-
 class ScanOperatorType(ts.TypeSpec, ts.CallableType):
     axis: common.Dimension
     definition: ts.FunctionType

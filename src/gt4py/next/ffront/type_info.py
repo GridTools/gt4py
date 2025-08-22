@@ -96,7 +96,6 @@ def return_type_fieldop(
 
 @type_info.canonicalize_arguments.register(ts_ffront.FieldOperatorType)
 @type_info.canonicalize_arguments.register(ts_ffront.ProgramType)
-@type_info.canonicalize_arguments.register(ts_ffront.ConstructorType)
 def canonicalize_program_or_fieldop_arguments(
     program_type: ts_ffront.ProgramType,
     args: tuple | list,
@@ -131,37 +130,6 @@ def canonicalize_scanop_arguments(
         use_signature_ordering=use_signature_ordering,
     )
     return tuple(cargs), ckwargs
-
-
-@type_info.function_signature_incompatibilities.register
-def function_signature_incompatibilities_constructor(
-    constructor_type: ts_ffront.ConstructorType,
-    args: Sequence[ts.TypeSpec],
-    kwargs: dict[str, ts.TypeSpec],
-) -> Iterator[str]:
-    if not all(
-        type_info.is_type_or_tuple_of_type(arg, (ts.ScalarType, ts.FieldType)) for arg in args
-    ):
-        yield "Arguments to constructor must be fields, scalars or tuples thereof."
-        return
-
-    args, kwargs = type_info.canonicalize_arguments(
-        constructor_type, args, kwargs, ignore_errors=True
-    )
-
-    yield from type_info.function_signature_incompatibilities_func(
-        constructor_type.definition, args, kwargs, skip_canonicalization=True
-    )
-
-
-@type_info.return_type.register
-def return_type_constructor(
-    constructor_type: ts_ffront.ConstructorType,
-    *,
-    with_args: Sequence[ts.TypeSpec],
-    with_kwargs: dict[str, ts.TypeSpec],
-) -> ts.TypeSpec:
-    return constructor_type.definition.returns
 
 
 @type_info.function_signature_incompatibilities.register

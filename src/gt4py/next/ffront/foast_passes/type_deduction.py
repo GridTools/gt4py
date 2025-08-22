@@ -762,7 +762,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 ts.FunctionType,
                 ts_ffront.FieldOperatorType,
                 ts_ffront.ScanOperatorType,
-                ts_ffront.ConstructorType,
+                ts.ConstructorType,
             ),
         ):
             # Since we use the `id` attribute in the latter part of the toolchain ensure we
@@ -926,23 +926,25 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return self._visit_reduction(node, **kwargs)
 
     def _visit_astype(self, node: foast.Call, **kwargs: Any) -> foast.Call:
-        value, new_type = node.args
+        value, new_type_constructor = node.args
         assert isinstance(
             value.type, (ts.FieldType, ts.ScalarType, ts.TupleType)
         )  # already checked using generic mechanism
 
-        if not isinstance(new_type, foast.Name) or new_type.id.upper() not in [
-            kind.name for kind in ts.ScalarKind
-        ]:
+        if not (
+            isinstance(new_type_constructor, foast.Name)
+            and isinstance(new_type_constructor.type, ts.ConstructorType)
+            and isinstance(new_type_constructor.type.definition.returns, ts.ScalarType)
+        ):
             raise errors.DSLError(
                 node.location,
-                f"Invalid call to 'astype': second argument must be a scalar type, got '{new_type}'.",
+                f"Invalid call to 'astype': second argument must be a scalar type, got '{new_type_constructor}'.",
             )
 
+        new_type = new_type_constructor.type.definition.returns
+
         return_type = type_info.apply_to_primitive_constituents(
-            lambda primitive_type: with_altered_scalar_kind(
-                primitive_type, getattr(ts.ScalarKind, new_type.id.upper())
-            ),
+            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind),
             value.type,
         )
         assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
