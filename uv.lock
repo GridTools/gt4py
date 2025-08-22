@@ -864,7 +864,7 @@ dependencies = [
 [[package]]
 name = "dace"
 version = "1.0.2"
-source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip#77dc937350e4fb5e0166c481993d1fa0f51d4ea2" }
+source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip#54c669ed0f0bc97eb077e84ace58f7596744c8b5" }
 resolution-markers = [
     "python_full_version >= '3.13'",
     "python_full_version == '3.12.*'",
@@ -1334,7 +1334,7 @@ build = [
     { name = "wheel" },
 ]
 dace-cartesian = [
-    { name = "dace", version = "1.0.2", source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip#77dc937350e4fb5e0166c481993d1fa0f51d4ea2" } },
+    { name = "dace", version = "1.0.2", source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip#54c669ed0f0bc97eb077e84ace58f7596744c8b5" } },
 ]
 dace-next = [
     { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_08_12#b9f6284e94854a95025b5774bd4b839fafb8fd59" } },
