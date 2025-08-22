@@ -8,7 +8,7 @@
 from typing import Any, Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next import errors
+from gt4py.next import common, errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
@@ -57,28 +57,35 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
         _ensure_no_sliced_field(new_kwargs["out"])
 
         domain_kwarg = new_kwargs["domain"]
-        if not isinstance(domain_kwarg, past.Dict):
+        if not isinstance(domain_kwarg, (past.Dict, past.TupleExpr)):
             raise ValueError(f"Only Dictionaries allowed in 'domain', got '{type(domain_kwarg)}'.")
+        if isinstance(domain_kwarg, past.Dict):
+            domain_kwarg_ = [domain_kwarg]
+        elif isinstance(domain_kwarg, past.TupleExpr):
+            out_kwarg = new_kwargs["out"]
+            assert isinstance(out_kwarg, past.TupleExpr)
+            assert len(out_kwarg.elts) == len(domain_kwarg.elts)
+            domain_kwarg_ = domain_kwarg.elts
+        for dom in domain_kwarg_:
+            if len(dom.values_) == 0 and len(dom.keys_) == 0:
+                raise ValueError("Empty domain not allowed.")
 
-        if len(domain_kwarg.values_) == 0 and len(domain_kwarg.keys_) == 0:
-            raise ValueError("Empty domain not allowed.")
-
-        for dim in domain_kwarg.keys_:
-            if not isinstance(dim.type, ts.DimensionType):
-                raise ValueError(
-                    f"Only 'Dimension' allowed in domain dictionary keys, got '{dim}' which is of type '{dim.type}'."
-                )
-        for domain_values in domain_kwarg.values_:
-            if len(domain_values.elts) != 2:
-                raise ValueError(
-                    f"Only 2 values allowed in domain range, got {len(domain_values.elts)}."
-                )
-            if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
-                domain_values.elts[1]
-            ):
-                raise ValueError(
-                    f"Only integer values allowed in domain range, got '{domain_values.elts[0].type}' and '{domain_values.elts[1].type}'."
-                )
+            for dim in dom.keys_:
+                if not isinstance(dim.type, ts.DimensionType):
+                    raise ValueError(
+                        f"Only 'Dimension' allowed in domain dictionary keys, got '{dim}' which is of type '{dim.type}'."
+                    )
+            for domain_values in dom.values_:
+                if len(domain_values.elts) != 2:
+                    raise ValueError(
+                        f"Only 2 values allowed in domain range, got {len(domain_values.elts)}."
+                    )
+                if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
+                    domain_values.elts[1]
+                ):
+                    raise ValueError(
+                        f"Only integer values allowed in domain range, got '{domain_values.elts[0].type}' and '{domain_values.elts[1].type}'."
+                    )
 
 
 class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -133,9 +140,16 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def visit_TupleExpr(self, node: past.TupleExpr, **kwargs: Any) -> past.TupleExpr:
         elts = self.visit(node.elts, **kwargs)
-        return past.TupleExpr(
-            elts=elts, type=ts.TupleType(types=[el.type for el in elts]), location=node.location
-        )
+        ttype: ts.TupleType
+        if any(isinstance(elt, past.Dict) for elt in node.elts):
+            assert all(isinstance(elt, past.Dict) for elt in node.elts)
+            # TODO: add check that Dict is DomainLike
+            ttype = ts.TupleType(
+                types=[ts.DomainType(dims=[common.Dimension(elt.keys_[0].id)]) for elt in elts]
+            )
+        else:
+            ttype = ts.TupleType(types=[elt.type for elt in elts])
+        return past.TupleExpr(elts=elts, type=ttype, location=node.location)
 
     def _deduce_binop_type(
         self, node: past.BinOp, *, left: past.Expr, right: past.Expr, **kwargs: Any

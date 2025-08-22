@@ -108,8 +108,18 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         domain = kwargs.pop("domain", None)
 
-        out_domain = common.domain(domain) if domain is not None else _get_out_domain(out)
+        if domain is not None:
+            if isinstance(out, tuple) and not isinstance(domain, tuple):
+                out_domain = tuple([domain] * len(out))
+            else:
+                out_domain = domain
+        else:
+            if isinstance(out, tuple):
+                out_domain = tuple(_get_out_domain(o) for o in out)
+            else:
+                out_domain = _get_out_domain(out)
 
+        # TODO?
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
 
         with embedded_context.update(**new_context_kwargs):
@@ -128,26 +138,32 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
         return op(*args, **kwargs)
 
 
-def _get_vertical_range(domain: common.Domain) -> common.NamedRange | eve.NothingType:
-    vertical_dim_filtered = [nr for nr in domain if nr.dim.kind == common.DimensionKind.VERTICAL]
-    assert len(vertical_dim_filtered) <= 1
-    return vertical_dim_filtered[0] if vertical_dim_filtered else eve.NOTHING
+def _get_vertical_range(
+    domain: common.Domain | tuple[common.Domain, ...],
+) -> common.NamedRange | eve.NothingType | tuple[common.NamedRange | eve.NothingType, ...]:
+    if isinstance(domain, tuple):
+        return tuple(_get_vertical_range(sub) for sub in domain)
+    else:
+        vertical_dim_filtered = [nr for nr in domain if nr.dim.kind == common.DimensionKind.VERTICAL]
+        assert len(vertical_dim_filtered) <= 1
+        return vertical_dim_filtered[0] if vertical_dim_filtered else eve.NOTHING
 
 
 def _tuple_assign_field(
     target: tuple[common.MutableField | tuple, ...] | common.MutableField,
     source: tuple[common.Field | tuple, ...] | common.Field,
-    domain: common.Domain,
+    domain: common.DomainLike | tuple[common.DomainLike | tuple, ...],
 ) -> None:
     @utils.tree_map
-    def impl(target: common.MutableField, source: common.Field) -> None:
+    def impl(target: common.MutableField, source: common.Field, domain: common.DomainLike) -> None:
+        domain = common.domain(domain)
         if isinstance(source, common.Field):
             target[domain] = source[domain]
         else:
             assert core_defs.is_scalar_type(source)
             target[domain] = source
 
-    impl(target, source)
+    impl(target, source, domain)
 
 
 def _intersect_scan_args(

@@ -160,15 +160,17 @@ def _range_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_{dim}_range"
 
 
-def _flatten_tuple_expr(node: past.Expr) -> list[past.Name | past.Subscript]:
-    if isinstance(node, (past.Name, past.Subscript)):
+def _flatten_tuple_expr(node: past.Expr) -> list[past.Name | past.Subscript | past.Dict]:
+    if isinstance(node, (past.Name, past.Subscript, past.Dict)):
         return [node]
     elif isinstance(node, past.TupleExpr):
         result = []
         for e in node.elts:
             result.extend(_flatten_tuple_expr(e))
         return result
-    raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
+    raise ValueError(
+        f"Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed, got '{type(node)}'."
+    )
 
 
 @dataclasses.dataclass
@@ -346,7 +348,7 @@ class ProgramLowering(
 
     def _construct_itir_domain_arg(
         self,
-        out_field: past.Name,
+        out_field: past.Name | past.Subscript | past.Dict,
         node_domain: Optional[past.Expr],
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
@@ -471,30 +473,37 @@ class ProgramLowering(
             flattened = _flatten_tuple_expr(out_arg)
 
             first_field = flattened[0]
-            assert all(
-                self.visit(field.type).dims == self.visit(first_field.type).dims
-                for field in flattened
-            ), "Incompatible fields in tuple: all fields must have the same dimensions."
 
             field_slice = None
             if isinstance(first_field, past.Subscript):
+                raise AssertionError  # TODO support slicing of multiple fields with different domain
                 assert all(isinstance(field, past.Subscript) for field in flattened), (
                     "Incompatible field in tuple: either all fields or no field must be sliced."
                 )
                 assert all(
                     concepts.eq_nonlocated(
                         first_field.slice_,
-                        field.slice_,  # type: ignore[union-attr] # mypy cannot deduce type
+                        field.slice_,
                     )
                     for field in flattened
                 ), "Incompatible field in tuple: all fields must be sliced in the same way."
                 field_slice = self._compute_field_slice(first_field)
                 first_field = first_field.value
 
-            return (
-                self._construct_itir_out_arg(out_arg),
-                self._construct_itir_domain_arg(first_field, domain_arg, field_slice),
-            )
+            if isinstance(domain_arg, past.TupleExpr):
+                domain_args = [
+                    self._construct_itir_domain_arg(field, domain, None)
+                    for field, domain in zip(
+                        flattened, _flatten_tuple_expr(domain_arg), strict=True
+                    )
+                ]
+                domain_expr = im.make_tuple(*domain_args)
+                return self._construct_itir_out_arg(out_arg), domain_expr
+            else:
+                return (
+                    self._construct_itir_out_arg(out_arg),
+                    self._construct_itir_domain_arg(first_field, domain_arg, field_slice),
+                )
         else:
             raise AssertionError(
                 "Unexpected 'out' argument. Must be a 'past.Subscript', 'past.Name' or 'past.TupleExpr' node."
