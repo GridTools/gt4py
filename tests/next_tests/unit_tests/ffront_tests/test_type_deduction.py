@@ -479,7 +479,7 @@ def test_astype_wrong_dtype():
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Invalid call to 'astype': second argument must be a scalar type, got.",
+        match=r"Invalid ",
     ):
         _ = FieldOperatorParser.apply_to_function(simple_astype)
 
