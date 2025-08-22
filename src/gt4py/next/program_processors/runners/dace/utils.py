@@ -166,7 +166,7 @@ def compose_subset(
         layout: The layout/order the subset should adhere to.
         subset_map: A map that mapps a dimension to the subset for that dimensions.
     """
-    assert gtx_common.order_dimensions(layout) == layout
+    assert gtx_common.order_dimensions(layout) == list(layout)
     assert len(subset_map) == len(layout)
     return dace_subsets.Range.from_string(", ".join(subset_map[dim] for dim in layout))
 
@@ -177,6 +177,7 @@ def decompose_subset(
 ) -> dict[gtx_common.Dimension, str]:
     assert isinstance(subset, dace_subsets.Range)
     assert len(layout) == len(subset)
+    assert gtx_common.order_dimensions(layout) == list(layout)
     return {dim: f"{start}:(({end}) + 1):{step}" for dim, (start, end, step) in zip(layout, subset)}
 
 
