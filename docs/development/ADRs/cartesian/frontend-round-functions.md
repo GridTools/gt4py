@@ -2,7 +2,6 @@
 
 In the context of adding support for a `round()` function in `gtscript`, facing divergent implementations in backend languages, we decided to implement `round()` with tie-breaking to even and `round_away_from_zero()` with tie-breaking away from zero to achieve consistent results while leaving the choice of behavior up to users. We considered multiple alternatives (see below), which all have their advantages and disadvantages.
 
-
 ## Context
 
 There are basically two predominant ways to round ties (e.g. when rounding 1.5 to an integer it's as close to 1.0 as it is to 2.0). The default in python, Kotlin, Julia, and C# is to split ties by rounding to the nearest even value, e.g.
@@ -86,17 +85,16 @@ class RoundingMode(enum.Enum):
     ROUND_TO_EVEN = enum.auto()
 
 def _get_default_rounding_mode() -> RoundingMode:
-    # TODO: fill in the default once the discussion settles
-    default = os.environ.get("GT4PY_ROUND_MODE_DEFAULT", default="SUBJECT_TO_DISCUSSION")
+    mode = os.environ.get("GT4PY_ROUND_MODE_DEFAULT", default="ROUND_TO_EVEN")
 
-    if default == "ROUND_AWAY_FROM_ZERO":
+    if mode == "ROUND_AWAY_FROM_ZERO":
         return RoundingMode.ROUND_AWAY_FROM_ZERO
 
-    if default == "ROUND_TO_EVEN":
+    if mode == "ROUND_TO_EVEN":
         return RoundingMode.ROUND_TO_EVEN
 
     known = ["ROUND_AWAY_FROM_ZERO", "ROUND_TO_EVEN"]
-    raise ValueError(f"Unexpected rounding mode default '{default}'. Expected one of {", ".join(known)}.")
+    raise ValueError(f"Unexpected rounding mode default '{mode}'. Expected one of {", ".join(known)}.")
 
 ROUND_MODE_DEFAULT: RoundingMode = _get_default_rounding_mode()
 ```
