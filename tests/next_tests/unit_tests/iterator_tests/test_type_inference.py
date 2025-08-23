@@ -100,9 +100,7 @@ def expression_test_cases():
             it_ts.NamedRangeType(dim=Vertex),
         ),
         (
-            im.call("cartesian_domain")(
-                im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
-            ),
+            im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)),
             ts.DomainType(dims=[IDim]),
         ),
         (
@@ -422,9 +420,7 @@ def test_unstructured_fencil_definition():
         im.named_range(
             itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
         ),
-        im.named_range(
-            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
-        ),
+        im.named_range(itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1),
     )
 
     testee = itir.Program(
@@ -491,9 +487,7 @@ def test_fencil_with_nb_field_input():
         im.named_range(
             itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
         ),
-        im.named_range(
-            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
-        ),
+        im.named_range(itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1),
     )
 
     testee = itir.Program(

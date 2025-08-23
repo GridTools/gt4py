@@ -216,7 +216,7 @@ def set_at(*args):
 
 
 @builtin_dispatch
-def get_domain(*args):
+def get_domain_range(*args):
     return BackendNotSelectedError()
 
 

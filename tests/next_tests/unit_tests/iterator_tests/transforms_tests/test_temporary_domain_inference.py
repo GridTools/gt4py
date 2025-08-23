@@ -12,7 +12,7 @@ import pytest
 from next_tests.integration_tests.cases import (
     IDim,
     Vertex,
-    unstructured_case,
+    mesh_descriptor,
     exec_alloc_descriptor,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -28,7 +28,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import inline_fundefs, global_tmps
-from gt4py.next.iterator.transforms.transform_get_domain import TransformGetDomain
+from gt4py.next.iterator.transforms.transform_get_domain import TransformGetDomainRange
 from gt4py.next.type_system import type_specifications as ts
 
 IOff = gtx.FieldOffset("IOff", source=IDim, target=(IDim,))
@@ -41,8 +41,8 @@ i_field_type = ts.FieldType(dims=[IDim], dtype=float_type)
 
 # override mesh descriptor to contain only the simple mesh
 @pytest.fixture
-def mesh_descriptor(exec_alloc_descriptor):
-    return simple_mesh(exec_alloc_descriptor.allocator)
+def mesh_descriptor():
+    return simple_mesh(None)
 
 
 def program_factory(
@@ -67,20 +67,20 @@ def run_test_program(
 ) -> None:
     ir = inline_fundefs.InlineFundefs().visit(testee)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
-    ir = TransformGetDomain.apply(ir, sizes=sizes)
+    ir = TransformGetDomainRange.apply(ir, sizes=sizes)
     actual_program = global_tmps.create_global_tmps(ir, offset_provider=offset_provider)
 
     assert actual_program == expected
 
 
-def test_trivial_shift(unstructured_case):
+def test_trivial_shift(mesh_descriptor):
     sizes = {"out": gtx.domain({Edge: (9, 13), Vertex: (0, 9)})}
     unstructured_domain_get_E = im.domain(
         common.GridType.UNSTRUCTURED,
         {
             Edge: (
-                im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Edge))),
-                im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Edge))),
+                im.tuple_get(0, im.call("get_domain_range")("out", im.axis_literal(Edge))),
+                im.tuple_get(1, im.call("get_domain_range")("out", im.axis_literal(Edge))),
             )
         },
     )
@@ -92,7 +92,7 @@ def test_trivial_shift(unstructured_case):
 
     unstructured_domain_V_37 = im.domain(common.GridType.UNSTRUCTURED, {Vertex: (3, 7)})
 
-    offset_provider = unstructured_case.offset_provider
+    offset_provider = mesh_descriptor.offset_provider
     testee = program_factory(
         params=[im.sym("vertex_values", v_field_type), im.sym("out", e_field_type)],
         body=[
@@ -130,7 +130,7 @@ def test_trivial_shift(unstructured_case):
     run_test_program(testee, expected, sizes, offset_provider)
 
 
-def test_trivial_shift_warning(unstructured_case):
+def test_trivial_shift_warning(mesh_descriptor):
     with pytest.warns(
         UserWarning,
         match=r"For Vertex\[horizontal\] the accessed range \[3, 9\[ covers 6 values, "
@@ -142,13 +142,13 @@ def test_trivial_shift_warning(unstructured_case):
             common.GridType.UNSTRUCTURED,
             {
                 Edge: (
-                    im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Edge))),
-                    im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Edge))),
+                    im.tuple_get(0, im.call("get_domain_range")("out", im.axis_literal(Edge))),
+                    im.tuple_get(1, im.call("get_domain_range")("out", im.axis_literal(Edge))),
                 )
             },
         )
 
-        offset_provider = unstructured_case.offset_provider
+        offset_provider = mesh_descriptor.offset_provider
         testee = program_factory(
             params=[im.sym("vertex_values", v_field_type), im.sym("out", e_field_type)],
             body=[
@@ -168,14 +168,14 @@ def test_trivial_shift_warning(unstructured_case):
         global_tmps.create_global_tmps(ir, offset_provider=offset_provider)
 
 
-def test_trivial_shift_switched(unstructured_case):
+def test_trivial_shift_switched(mesh_descriptor):
     sizes = {"out": gtx.domain({Edge: (2, 16), Vertex: (0, 9)})}
     unstructured_domain_get_E = im.domain(
         common.GridType.UNSTRUCTURED,
         {
             Edge: (
-                im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Edge))),
-                im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Edge))),
+                im.tuple_get(0, im.call("get_domain_range")("out", im.axis_literal(Edge))),
+                im.tuple_get(1, im.call("get_domain_range")("out", im.axis_literal(Edge))),
             )
         },
     )
@@ -185,7 +185,7 @@ def test_trivial_shift_switched(unstructured_case):
         {Edge: (im.tuple_get(0, im.make_tuple(2, 16)), im.tuple_get(1, im.make_tuple(2, 16)))},
     )
 
-    offset_provider = unstructured_case.offset_provider
+    offset_provider = mesh_descriptor.offset_provider
     testee = program_factory(
         params=[im.sym("vertex_values", v_field_type), im.sym("out", e_field_type)],
         body=[
@@ -223,14 +223,14 @@ def test_trivial_shift_switched(unstructured_case):
     run_test_program(testee, expected, sizes, offset_provider)
 
 
-def test_two_shifts(unstructured_case):
+def test_two_shifts(mesh_descriptor):
     sizes = {"out": gtx.domain({Edge: (3, 8), Vertex: (0, 9)})}
     unstructured_domain_get_E = im.domain(
         common.GridType.UNSTRUCTURED,
         {
             Edge: (
-                im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Edge))),
-                im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Edge))),
+                im.tuple_get(0, im.call("get_domain_range")("out", im.axis_literal(Edge))),
+                im.tuple_get(1, im.call("get_domain_range")("out", im.axis_literal(Edge))),
             )
         },
     )
@@ -242,7 +242,7 @@ def test_two_shifts(unstructured_case):
 
     unstructured_domain_V_39 = im.domain(common.GridType.UNSTRUCTURED, {Vertex: (3, 9)})
 
-    offset_provider = unstructured_case.offset_provider
+    offset_provider = mesh_descriptor.offset_provider
     testee = program_factory(
         params=[im.sym("vertex_values", v_field_type), im.sym("out", e_field_type)],
         body=[
@@ -289,7 +289,7 @@ def test_two_shifts(unstructured_case):
     run_test_program(testee, expected, sizes, offset_provider)
 
 
-def test_nested_shift(unstructured_case):
+def test_nested_shift(mesh_descriptor):
     sizes = {"out": gtx.domain({Edge: (0, 18), Vertex: (3, 7)})}
     unstructured_domain_V = im.domain(
         common.GridType.UNSTRUCTURED,
@@ -299,8 +299,8 @@ def test_nested_shift(unstructured_case):
         common.GridType.UNSTRUCTURED,
         {
             Vertex: (
-                im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(Vertex))),
-                im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(Vertex))),
+                im.tuple_get(0, im.call("get_domain_range")("out", im.axis_literal(Vertex))),
+                im.tuple_get(1, im.call("get_domain_range")("out", im.axis_literal(Vertex))),
             )
         },
     )
@@ -309,7 +309,7 @@ def test_nested_shift(unstructured_case):
 
     unstructured_domain_E_1216 = im.domain(common.GridType.UNSTRUCTURED, {Edge: (12, 16)})
 
-    offset_provider = unstructured_case.offset_provider
+    offset_provider = mesh_descriptor.offset_provider
 
     testee = program_factory(
         params=[im.sym("vertex_values", v_field_type), im.sym("out", v_field_type)],
@@ -372,8 +372,8 @@ def test_trivial_cartesian():
         common.GridType.CARTESIAN,
         {
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("out", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("out", im.axis_literal(IDim))),
             )
         },
     )
@@ -433,8 +433,8 @@ def test_trivial_cartesian_forward():
         common.GridType.CARTESIAN,
         {
             IDim: (
-                im.minus(im.tuple_get(0, im.call("get_domain")("out", im.axis_literal(IDim))), 4),
-                im.minus(im.tuple_get(1, im.call("get_domain")("out", im.axis_literal(IDim))), 4),
+                im.minus(im.tuple_get(0, im.call("get_domain_range")("out", im.axis_literal(IDim))), 4),
+                im.minus(im.tuple_get(1, im.call("get_domain_range")("out", im.axis_literal(IDim))), 4),
             )
         },
     )

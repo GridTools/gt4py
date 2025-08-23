@@ -231,7 +231,7 @@ GTFN_BUILTINS = [
     "can_deref",
     "cartesian_domain",
     "unstructured_domain",
-    "get_domain",
+    "get_domain_range",
     "named_range",
     "reduce",
     "index",

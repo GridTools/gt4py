@@ -273,11 +273,12 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <gridtools/fn/sid_neighbor_table.hpp>
     #include <gridtools/stencil/global_parameter.hpp>
     
+    // TODO(tehrengruber): This should disappear as soon as we introduce a proper builtin.
     namespace gridtools::fn {
         // TODO(tehrengruber): `typename gridtools::sid::lower_bounds_type<S>, typename gridtools::sid::upper_bounds_type<S>`
         // fails as type used for index calculations in gtfn differs
         template <class S, class D>
-        GT_FUNCTION gridtools::tuple<int, int> get_domain(S &&sid, D) {
+        GT_FUNCTION gridtools::tuple<int, int> get_domain_range(S &&sid, D) {
             return {gridtools::host_device::at_key<D>(gridtools::sid::get_lower_bounds(sid)),
                 gridtools::host_device::at_key<D>(gridtools::sid::get_upper_bounds(sid))};
         }

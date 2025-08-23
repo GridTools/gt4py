@@ -589,9 +589,10 @@ def as_fieldop(
 
 
 @_register_builtin_type_synthesizer
-def get_domain(field: ts.FieldType, dim: ts.DimensionType) -> ts.TupleType:
+def get_domain_range(field: ts.FieldType, dim: ts.DimensionType) -> ts.TupleType:
     return ts.TupleType(
-        types=[ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))] * 2
+        types=[ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))]
+        * 2
     )
 
 
