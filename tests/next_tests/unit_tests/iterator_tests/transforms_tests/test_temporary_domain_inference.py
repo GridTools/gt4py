@@ -163,7 +163,7 @@ def test_trivial_shift_warning(mesh_descriptor):
         )
         ir = inline_fundefs.InlineFundefs().visit(testee)
         ir = inline_fundefs.prune_unreferenced_fundefs(ir)
-        ir = TransformGetDomain.apply(ir, sizes=sizes)
+        ir = TransformGetDomainRange.apply(ir, sizes=sizes)
 
         global_tmps.create_global_tmps(ir, offset_provider=offset_provider)
 
