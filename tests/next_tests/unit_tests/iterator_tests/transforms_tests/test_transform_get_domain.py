@@ -22,6 +22,7 @@ from gt4py.next import Domain, common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.transform_get_domain import TransformGetDomainRange
+from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 
 
 def program_factory(
@@ -64,115 +65,50 @@ def run_test_program(
         body=[setat_factory(domain=domain, target=im.ref(target))],
     )
     actual = TransformGetDomainRange.apply(testee, sizes=sizes)
+    actual = CollapseTuple.apply(
+        actual, enabled_transformations=CollapseTuple.Transformation.COLLAPSE_TUPLE_GET_MAKE_TUPLE
+    )
     assert actual == expected
 
 
-def construct_domains(
-    domain_resolved: Domain, symbol_name: str, type: Union[common.GridType, str]
-) -> tuple[itir.FunCall, itir.FunCall]:
-    ranges_get = {}
-    ragnes_resolved = {}
-
-    for dim, r in zip(domain_resolved.dims, domain_resolved.ranges):
-        get_call = im.call("get_domain_range")(symbol_name, im.axis_literal(dim))
-        ranges_get[dim] = (im.tuple_get(0, get_call), im.tuple_get(1, get_call))
-        bounds = im.make_tuple(r.start, r.stop)
-        ragnes_resolved[dim] = (im.tuple_get(0, bounds), im.tuple_get(1, bounds))
-
-    return im.domain(type, ragnes_resolved), im.domain(type, ranges_get)
+def domain_as_expr(domain: gtx.Domain) -> itir.Expr:
+    return im.domain(
+        common.GridType.UNSTRUCTURED,
+        {d: (r.start, r.stop) for d, r in zip(domain.dims, domain.ranges)},
+    )
 
 
 def test_get_domain():
     sizes = {"out": gtx.domain({Vertex: (0, 10), KDim: (0, 20)})}
-    unstructured_domain, unstructured_domain_get = construct_domains(
-        sizes["out"], "out", "unstructured_domain"
-    )
+    get_domain_expr = im.get_field_domain(common.GridType.UNSTRUCTURED, "out", sizes["out"].dims)
 
-    run_test_program(["inp", "out"], sizes, "out", unstructured_domain, unstructured_domain_get)
-
-
-def test_get_domain_inside_as_fieldop():
-    sizes = {"out": gtx.domain({Vertex: (0, 10), KDim: (0, 20)})}
-    unstructured_domain, unstructured_domain_get = construct_domains(
-        sizes["out"], "out", "unstructured_domain"
-    )
-
-    testee = program_factory(
-        params=["inp", "out"],
-        body=[
-            itir.SetAt(
-                expr=im.as_fieldop(im.ref("deref"), unstructured_domain_get)(im.ref("inp")),
-                domain=unstructured_domain_get,
-                target=im.ref("out"),
-            ),
-        ],
-    )
-
-    expected = program_factory(
-        params=["inp", "out"],
-        body=[
-            itir.SetAt(
-                expr=im.as_fieldop(im.ref("deref"), unstructured_domain)(im.ref("inp")),
-                domain=unstructured_domain,
-                target=im.ref("out"),
-            ),
-        ],
-    )
-
-    actual = TransformGetDomainRange.apply(testee, sizes=sizes)
-    assert actual == expected
+    run_test_program(["inp", "out"], sizes, "out", domain_as_expr(sizes["out"]), get_domain_expr)
 
 
 def test_get_domain_tuples():
     sizes = {"out": (gtx.domain({Vertex: (0, 5)}), gtx.domain({Vertex: (0, 7)}))}
 
-    unstructured_domain_get = im.domain(
-        common.GridType.UNSTRUCTURED,
-        {
-            Vertex: (
-                im.tuple_get(
-                    0, im.call("get_domain_range")(im.tuple_get(0, "out"), im.axis_literal(Vertex))
-                ),
-                im.tuple_get(
-                    1, im.call("get_domain_range")(im.tuple_get(0, "out"), im.axis_literal(Vertex))
-                ),
-            )
-        },
-    )
-    unstructured_domain = im.domain(
-        common.GridType.UNSTRUCTURED,
-        {Vertex: (im.tuple_get(0, im.make_tuple(0, 5)), im.tuple_get(1, im.make_tuple(0, 5)))},
+    get_domain_expr = im.get_field_domain(
+        common.GridType.UNSTRUCTURED, im.tuple_get(1, "out"), sizes["out"][1].dims
     )
 
-    run_test_program(["inp", "out"], sizes, "out", unstructured_domain, unstructured_domain_get)
+    run_test_program(["inp", "out"], sizes, "out", domain_as_expr(sizes["out"][1]), get_domain_expr)
 
 
 def test_get_domain_nested_tuples():
     sizes = {"a": gtx.domain({KDim: (0, 3)})}
 
-    t0 = im.make_tuple("a", "b")
-    t1 = im.make_tuple("c", "d")
-    tup = im.make_tuple(im.tuple_get(0, t0), im.tuple_get(1, t1))
-
-    unstructured_domain_get = im.domain(
+    get_domain_expr = im.get_field_domain(
         common.GridType.UNSTRUCTURED,
-        {
-            KDim: (
-                im.tuple_get(
-                    0, im.call("get_domain_range")(im.tuple_get(0, tup), im.axis_literal(KDim))
-                ),
-                im.tuple_get(
-                    1, im.call("get_domain_range")(im.tuple_get(0, tup), im.axis_literal(KDim))
-                ),
-            )
-        },
-    )
-
-    unstructured_domain = im.domain(
-        common.GridType.UNSTRUCTURED,
-        {KDim: (im.tuple_get(0, im.make_tuple(0, 3)), im.tuple_get(1, im.make_tuple(0, 3)))},
+        im.tuple_get(
+            0,
+            im.make_tuple(
+                im.tuple_get(0, im.make_tuple("a", "b")), im.tuple_get(1, im.make_tuple("c", "d"))
+            ),
+        ),
+        sizes["a"].dims,
     )
 
     run_test_program(
-        ["inp", "a", "b", "c", "d"], sizes, "a", unstructured_domain, unstructured_domain_get
+        ["inp", "a", "b", "c", "d"], sizes, "a", domain_as_expr(sizes["a"]), get_domain_expr
     )

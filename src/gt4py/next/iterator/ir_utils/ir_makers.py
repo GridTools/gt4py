@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import typing
-from typing import Any, Callable, Optional, TypeAlias, Union
+from typing import Any, Callable, Iterable, Optional, TypeAlias, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
@@ -477,6 +477,27 @@ def domain(
     )
     expr.type = ts.DomainType(dims=list(ranges.keys()))
     return expr
+
+
+def get_field_domain(
+    grid_type: Union[common.GridType, str],
+    field: str | itir.Expr,
+    dims: Iterable[common.Dimension] | None = None,
+) -> itir.Expr:
+    if isinstance(field, itir.Expr) and isinstance(field.type, ts.FieldType):
+        assert dims is None or all(d1 == d2 for d1, d2 in zip(field.type.dims, dims, strict=True))
+        dims = field.type.dims
+
+    return domain(
+        grid_type,
+        {
+            dim: (
+                tuple_get(0, call("get_domain_range")(field, dim)),
+                tuple_get(1, call("get_domain_range")(field, dim)),
+            )
+            for dim in dims
+        },
+    )
 
 
 def named_range(
