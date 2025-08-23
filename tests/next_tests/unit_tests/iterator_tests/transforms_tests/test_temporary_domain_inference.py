@@ -28,7 +28,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import inline_fundefs, global_tmps
-from gt4py.next.iterator.transforms.transform_get_domain import TransformGetDomainRange
+from gt4py.next.iterator.transforms.transform_get_domain_range import TransformGetDomainRange
 from gt4py.next.type_system import type_specifications as ts
 
 IOff = gtx.FieldOffset("IOff", source=IDim, target=(IDim,))
