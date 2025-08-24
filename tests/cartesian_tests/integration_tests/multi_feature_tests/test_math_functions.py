@@ -22,6 +22,7 @@ from gt4py.cartesian.gtscript import (
     stencil,
     Field,
 )
+from gt4py.storage.cartesian import utils as storage_utils
 
 from ...definitions import ALL_BACKENDS
 
@@ -40,9 +41,11 @@ def test_erf(backend):
     stencil_erf(A, B)
 
     expected = np.array([math.erf(n) for n in initial_values[0, 0, :]], dtype=np.float32)
+    A = storage_utils.cpu_copy(A)
+    B = storage_utils.cpu_copy(B)
 
     assert (A[0, 0, :] == initial_values).all()
-    np.testing.assert_allclose(B[0, 0, :], expected)  # gpu generates slightly different values
+    np.testing.assert_allclose(B_[0, 0, :], expected)  # gpu generates slightly different values
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -59,6 +62,9 @@ def test_erfc(backend):
     stencil_erfc(A, B)
 
     expected = np.array([math.erfc(n) for n in initial_values[0, 0, :]], dtype=np.float32)
+    A = storage_utils.cpu_copy(A)
+    B = storage_utils.cpu_copy(B)
+
     assert (A[0, 0, :] == initial_values).all()
     np.testing.assert_allclose(B[0, 0, :], expected)  # gpu generates slightly different values
 
@@ -77,6 +83,9 @@ def test_round(backend):
     stencil_round(A, B)
 
     expected = np.array([-2.0, 0.0, 0.0, 0.0, 1.0, 1.0, 2.0], dtype=np.float32)
+    A = storage_utils.cpu_copy(A)
+    B = storage_utils.cpu_copy(B)
+
     assert (A[0, 0, :] == initial_values).all()
     assert (B[0, 0, :] == expected).all()
 
@@ -95,5 +104,8 @@ def test_round_away_from_zero(backend):
     stencil_round(A, B)
 
     expected = np.array([-2.0, -1.0, 0.0, 1.0, 1.0, 1.0, 2.0], dtype=np.float32)
+    A = storage_utils.cpu_copy(A)
+    B = storage_utils.cpu_copy(B)
+
     assert (A[0, 0, :] == initial_values).all()
     assert (B[0, 0, :] == expected).all()
