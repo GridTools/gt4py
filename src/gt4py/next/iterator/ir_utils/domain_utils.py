@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import warnings
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional
+
+import numpy as np
 
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.iterator.transforms import trace_shifts
+from gt4py.next.iterator.transforms import collapse_tuple, trace_shifts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
 
@@ -129,27 +132,66 @@ class SymbolicDomain:
                     trace_shifts.Sentinel.ALL_NEIGHBORS,
                     trace_shifts.Sentinel.VALUE,
                 ]
-                horizontal_sizes: dict[str, itir.Expr]
+                horizontal_sizes: dict[str, tuple[itir.Expr, itir.Expr]]
+                old_dim = connectivity_type.source_dim
+                new_dim = connectivity_type.codomain
                 if symbolic_domain_sizes is not None:
                     horizontal_sizes = {
-                        k: im.ensure_expr(v) for k, v in symbolic_domain_sizes.items()
+                        k: (im.literal(str(0), builtins.INTEGER_INDEX_BUILTIN), im.ensure_expr(v))
+                        for k, v in symbolic_domain_sizes.items()
                     }
                 else:
                     # note: ugly but cheap re-computation, but should disappear
                     assert common.is_offset_provider(offset_provider)
                     horizontal_sizes = {
-                        k: im.literal(str(v), builtins.INTEGER_INDEX_BUILTIN)
+                        k: (
+                            im.literal(str(0), builtins.INTEGER_INDEX_BUILTIN),
+                            im.literal(str(v), builtins.INTEGER_INDEX_BUILTIN),
+                        )
                         for k, v in _max_domain_sizes_by_location_type(offset_provider).items()
                     }
+                    start = 0
+                    stop = -1
+                    start_ = collapse_tuple.CollapseTuple.apply(
+                        new_ranges[old_dim].start,
+                        within_stencil=False,
+                        allow_undeclared_symbols=True,
+                    )
+                    stop_ = collapse_tuple.CollapseTuple.apply(
+                        new_ranges[old_dim].stop,
+                        within_stencil=False,
+                        allow_undeclared_symbols=True,
+                    )
+                    if isinstance(start_, itir.Literal) and isinstance(stop_, itir.Literal):
+                        start = int(start_.value)
+                        stop = int(stop_.value)
 
-                old_dim = connectivity_type.source_dim
-                new_dim = connectivity_type.codomain
+                    off_index = (
+                        slice(None) if val == trace_shifts.Sentinel.ALL_NEIGHBORS else val.value
+                    )
+                    accessed = offset_provider[off.value].ndarray[start:stop, off_index]
+                    min_ = np.min(accessed)
+                    max_ = np.max(accessed) + 1
+
+                    if (covered := np.unique(accessed).size) < (max_ - min_) / 2:
+                        warnings.warn(
+                            UserWarning(
+                                f"For {new_dim} the accessed range [{min_}, {max_}[ covers {max_ - min_} values, "
+                                f"but only {covered} are actually present and {max_ - min_ - covered} were added "
+                                f"in between {accessed}. Please consider reordering the mesh."
+                            ),
+                            stacklevel=2,
+                        )
+
+                    horizontal_sizes[new_dim.value] = (
+                        im.literal(str(min_), builtins.INTEGER_INDEX_BUILTIN),
+                        im.literal(str(max_), builtins.INTEGER_INDEX_BUILTIN),
+                    )
 
                 assert new_dim not in new_ranges or old_dim == new_dim
 
                 new_range = SymbolicRange(
-                    im.literal("0", builtins.INTEGER_INDEX_BUILTIN),
-                    horizontal_sizes[new_dim.value],
+                    horizontal_sizes[new_dim.value][0], horizontal_sizes[new_dim.value][1]
                 )
                 new_ranges = dict(
                     (dim, range_) if dim != old_dim else (new_dim, new_range)

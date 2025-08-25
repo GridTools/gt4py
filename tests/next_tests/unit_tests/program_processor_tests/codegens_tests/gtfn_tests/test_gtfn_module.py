@@ -77,9 +77,7 @@ def test_codegen(program_example):
     module = gtfn_module.translate_program_cpu(
         stages.CompilableProgram(
             data=fencil,
-            args=arguments.CompileTimeArgs.from_concrete_no_size(
-                *parameters, **{"offset_provider": {}}
-            ),
+            args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
         )
     )
     assert module.entry_point.name == fencil.id
@@ -91,9 +89,7 @@ def test_hash_and_diskcache(program_example, tmp_path):
     fencil, parameters = program_example
     compilable_program = stages.CompilableProgram(
         data=fencil,
-        args=arguments.CompileTimeArgs.from_concrete_no_size(
-            *parameters, **{"offset_provider": {}}
-        ),
+        args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
     hash = stages.fingerprint_compilable_program(compilable_program)
 
@@ -135,9 +131,7 @@ def test_gtfn_file_cache(program_example):
     fencil, parameters = program_example
     compilable_program = stages.CompilableProgram(
         data=fencil,
-        args=arguments.CompileTimeArgs.from_concrete_no_size(
-            *parameters, **{"offset_provider": {}}
-        ),
+        args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
     cached_gtfn_translation_step = gtfn.GTFNBackendFactory(
         gpu=False, cached=True, otf_workflow__cached_translation=True
