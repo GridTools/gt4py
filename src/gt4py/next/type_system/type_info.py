@@ -874,12 +874,6 @@ def function_signature_incompatibilities_constructor(
     args: Sequence[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
-    if not all(is_type_or_tuple_of_type(arg, (ts.ScalarType, ts.FieldType)) for arg in args):
-        yield "Arguments to constructor must be fields, scalars or tuples thereof."
-        return
-
-    args, kwargs = canonicalize_arguments(constructor_type, args, kwargs, ignore_errors=True)
-
     yield from function_signature_incompatibilities_func(
         constructor_type.definition, args, kwargs, skip_canonicalization=True
     )
