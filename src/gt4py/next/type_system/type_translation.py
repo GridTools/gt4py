@@ -19,7 +19,7 @@ import numpy as np
 import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.next import common
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -206,7 +206,7 @@ def from_value(value: Any) -> ts.TypeSpec:
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)
-    elif isinstance(value, types.ModuleType):
+    elif isinstance(value, (types.ModuleType, eve_utils.FrozenNamespace)):
         return UnknownPythonObject(value)
     elif isinstance(value, type) and isinstance(ctor_type := from_type_hint(value), ts.ScalarType):
         # construct type of type aka ConstructorType

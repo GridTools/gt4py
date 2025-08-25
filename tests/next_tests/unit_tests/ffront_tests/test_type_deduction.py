@@ -555,3 +555,14 @@ def test_type_alias(test_input: TypeAlias, expected: ts.ScalarKind):
         foast_tree.body.stmts[0].value.left.func.type.definition.returns.kind == expected
         and foast_tree.body.stmts[0].value.right.args[1].type.definition.returns.kind == expected
     )
+
+
+def test_unexpected_closure_var_error():
+    class _UnexpectedClosureVar: ...
+
+    def unexpected_closure_var(a: Field[[TDim], float64]):
+        b = _UnexpectedClosureVar()
+        return a + b
+
+    with pytest.raises(errors.DSLError, match=r"Unexpected object.*'_UnexpectedClosureVar'"):
+        _ = FieldOperatorParser.apply_to_function(unexpected_closure_var)
