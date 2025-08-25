@@ -20,7 +20,7 @@ from gt4py.eve import SourceLocation
 
 
 if TYPE_CHECKING:
-    from . import exceptions
+    from gt4py.next.errors import exceptions
 
 
 def get_source_from_location(location: SourceLocation) -> str:
