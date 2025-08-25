@@ -37,6 +37,9 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
         except TypeError as err:
             raise ValueError(f"Invalid scalar type definition ('{dtype}').") from err
 
+    if dt.hasobject:
+        raise ValueError("Object dtypes are not supported.")
+
     if dt.shape == () and dt.fields is None:
         match dt:
             case np.bool_:
@@ -84,6 +87,19 @@ def from_type_hint(
     args = typing.get_args(type_hint)
 
     match canonical_type:
+        case type() as t if t is type:
+            # type of type
+            assert len(args) == 1
+            constructed_type = ts.ScalarType(kind=get_scalar_kind(args[0]))
+            return ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                    pos_or_kw_args={},
+                    kw_only_args={},
+                    returns=constructed_type,
+                )
+            )
+
         case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
             return ts.ScalarType(kind=get_scalar_kind(type_hint))
 
@@ -208,16 +224,6 @@ def from_value(value: Any) -> ts.TypeSpec:
         return ts.TupleType(types=elems)
     elif isinstance(value, (types.ModuleType, eve_utils.FrozenNamespace)):
         return UnknownPythonObject(value)
-    elif isinstance(value, type) and isinstance(ctor_type := from_type_hint(value), ts.ScalarType):
-        # construct type of type aka ConstructorType
-        symbol_type = ts.ConstructorType(
-            definition=ts.FunctionType(
-                pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                pos_or_kw_args={},
-                kw_only_args={},
-                returns=ctor_type,
-            )
-        )
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)
