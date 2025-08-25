@@ -64,16 +64,19 @@ def get_gt_pyext_build_opts(
     is_rocm_gpu = core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
 
     if uses_cuda:
-        compute_capability = get_cuda_compute_capability()
-        cuda_arch = gt_config.build_settings["cuda_arch"] or compute_capability
-        if not cuda_arch:
-            raise RuntimeError("CUDA architecture could not be determined")
-        if cuda_arch.startswith("sm_"):
-            cuda_arch = cuda_arch.replace("sm_", "")
-        if compute_capability and int(compute_capability) < int(cuda_arch):
-            raise RuntimeError(
-                f"CUDA architecture {cuda_arch} exceeds compute capability {compute_capability}"
-            )
+        if is_rocm_gpu:
+            cuda_arch = gt_config.build_settings["cuda_arch"]
+        else:
+            compute_capability = get_cuda_compute_capability()
+            cuda_arch = gt_config.build_settings["cuda_arch"] or compute_capability
+            if not cuda_arch:
+                raise RuntimeError("CUDA architecture could not be determined")
+            if cuda_arch.startswith("sm_"):
+                cuda_arch = cuda_arch.replace("sm_", "")
+            if compute_capability and int(compute_capability) < int(cuda_arch):
+                raise RuntimeError(
+                    f"CUDA architecture {cuda_arch} exceeds compute capability {compute_capability}"
+                )
     else:
         cuda_arch = ""
 
@@ -102,6 +105,7 @@ def get_gt_pyext_build_opts(
             "-isystem{}".format(gt_include_path),
             "-fvisibility=hidden",
             "-fPIC",
+            *([f"--offload-arch={cuda_arch}"] if cuda_arch else []),
         ]
     else:
         extra_compile_args["cuda"] += [
