@@ -122,7 +122,7 @@ def from_type_hint(
 
         case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
             # This case matches `int`, `float`, etc. used as annotations
-            return ts.ScalarType(kind=get_scalar_kind(type_hint))
+            return ts.ScalarType(kind=get_scalar_kind(t))
 
         case builtins.tuple:
             if not args:
