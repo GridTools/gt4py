@@ -7,7 +7,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import re
-from typing import Optional, Pattern
+import dataclasses
+from typing import NamedTuple
+from typing import TypeAlias
 
 import pytest
 
@@ -19,7 +21,6 @@ from gt4py.next import (
     FieldOffset,
     astype,
     broadcast,
-    common,
     errors,
     float32,
     float64,
@@ -32,7 +33,8 @@ from gt4py.next.ffront.experimental import concat_where
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.ffront import type_specifications as ts_ffront
+from gt4py.next.type_system import type_specifications as ts
 
 # Meaningless dimensions, used for tests.
 TDim = Dimension("TDim")
@@ -473,14 +475,17 @@ def test_astype_dtype():
     )
 
 
+@dataclasses.dataclass
+class WrongConstructorType: ...
+
+
 def test_astype_wrong_dtype():
     def simple_astype(a: Field[[TDim], float64]):
-        # we just use broadcast here, but anything with type function is fine
-        return astype(a, broadcast)
+        return astype(a, WrongConstructorType)
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Invalid call to 'astype': second argument must be a scalar type, got.",
+        match=r"Invalid ",
     ):
         _ = FieldOperatorParser.apply_to_function(simple_astype)
 
@@ -537,3 +542,110 @@ def test_as_offset_dtype():
 
     with pytest.raises(errors.DSLError, match=f"expected integer for offset field dtype"):
         _ = FieldOperatorParser.apply_to_function(as_offset_dtype)
+
+
+vpfloat: TypeAlias = float32
+wpfloat: TypeAlias = float64
+
+
+@pytest.mark.parametrize(
+    "test_input,expected", [(vpfloat, ts.ScalarKind.FLOAT32), (wpfloat, ts.ScalarKind.FLOAT64)]
+)
+def test_type_alias(test_input: TypeAlias, expected: ts.ScalarKind):
+    def fieldop_with_typealias(a: Field[[TDim], test_input]) -> Field[[TDim], test_input]:
+        return test_input("3.1418") + astype(a, test_input)
+
+    foast_tree = FieldOperatorParser.apply_to_function(fieldop_with_typealias)
+
+    assert (
+        foast_tree.body.stmts[0].value.left.func.type.definition.returns.kind == expected
+        and foast_tree.body.stmts[0].value.right.args[1].type.definition.returns.kind == expected
+    )
+
+
+class NamedTupleContainer(NamedTuple):
+    x: Field[[TDim], float32]
+    y: Field[[TDim], float32]
+
+
+@dataclasses.dataclass
+class DataclassContainer:
+    x: Field[[TDim], float32]
+    y: Field[[TDim], float32]
+
+
+@dataclasses.dataclass
+class NestedDataclassContainer:
+    a: DataclassContainer
+    b: DataclassContainer
+    c: DataclassContainer
+
+
+class NestedNamedTupleDataclassContainer(NamedTuple):
+    a: DataclassContainer
+    b: DataclassContainer
+    c: DataclassContainer
+
+
+@dataclasses.dataclass
+class NestedDataclassNamedTupleContainer:
+    a: NamedTupleContainer
+    b: NamedTupleContainer
+    c: NamedTupleContainer
+
+
+@dataclasses.dataclass
+class NestedMixedTupleContainer:
+    a: NamedTupleContainer
+    b: DataclassContainer
+    c: NamedTupleContainer
+
+
+_EXPECTED_NAMED_TUPLE_TYPE = ts_ffront.NamedTupleType(
+    types=[
+        ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+        ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+    ],
+    keys=["x", "y"],
+)
+
+_EXPECTED_NESTED_NAMED_TUPLE_TYPE = ts_ffront.NamedTupleType(
+    types=[_EXPECTED_NAMED_TUPLE_TYPE, _EXPECTED_NAMED_TUPLE_TYPE, _EXPECTED_NAMED_TUPLE_TYPE],
+    keys=["a", "b", "c"],
+)
+
+
+@pytest.mark.parametrize(
+    "container",
+    [
+        DataclassContainer,
+        # NamedTupleContainer,
+    ],
+)
+def test_containers(container):
+    def containers(a: container) -> container:
+        return container(x=a.x, y=a.y)
+
+    parsed = FieldOperatorParser.apply_to_function(containers)
+
+    assert parsed.params[0].type == _EXPECTED_NAMED_TUPLE_TYPE
+    assert parsed.body.stmts[-1].value.type == _EXPECTED_NAMED_TUPLE_TYPE
+
+
+@pytest.mark.parametrize(
+    "container",
+    [
+        NestedDataclassContainer,
+        # NestedNamedTupleDataclassContainer,
+        # NestedDataclassNamedTupleContainer,
+        # NestedMixedTupleContainer,
+    ],
+)
+def test_nested_containers(container):
+    def containers(a: container) -> container:
+        return container(a=a.a, b=a.b, c=a.c)
+
+    parsed = FieldOperatorParser.apply_to_function(containers)
+
+    assert parsed.params[0].type == _EXPECTED_NESTED_NAMED_TUPLE_TYPE
+    assert parsed.body.stmts[-1].value.type == _EXPECTED_NESTED_NAMED_TUPLE_TYPE

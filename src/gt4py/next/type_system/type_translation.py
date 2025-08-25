@@ -20,7 +20,7 @@ import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
-from gt4py.next import common
+from gt4py.next import common, containers
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -82,6 +82,12 @@ def from_type_hint(
 
     canonical_type = typing.get_origin(type_hint) or type_hint
     args = typing.get_args(type_hint)
+
+    # TODO handle constructor type later?
+    try:
+        return containers.get_constructor_type(canonical_type).definition.returns
+    except KeyError:
+        ...
 
     match canonical_type:
         case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
@@ -208,6 +214,21 @@ def from_value(value: Any) -> ts.TypeSpec:
         return ts.TupleType(types=elems)
     elif isinstance(value, types.ModuleType):
         return UnknownPythonObject(value)
+    elif isinstance(value, type):
+        if isinstance((ctor_type := from_type_hint(value)), ts.ScalarType):
+            symbol_type = ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                    pos_or_kw_args={},
+                    kw_only_args={},
+                    returns=ctor_type,
+                )
+            )
+        else:
+            try:
+                return containers.get_constructor_type(value)
+            except KeyError:
+                symbol_type = None
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)

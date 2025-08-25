@@ -19,7 +19,7 @@ module in question is a submodule, defines `__all__` and exports many public API
 """
 
 # ruff: noqa: F401
-from . import common, ffront, iterator, program_processors
+from . import _default_collections, common, ffront, iterator, program_processors
 from .common import (
     Connectivity,
     Dimension,

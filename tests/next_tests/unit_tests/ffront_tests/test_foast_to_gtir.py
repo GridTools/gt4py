@@ -10,6 +10,8 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import dataclasses
+
 
 import numpy as np
 import pytest
@@ -28,6 +30,7 @@ from gt4py.next import (
     min_over,
     neighbor_sum,
     where,
+    _default_collections,  # for registering
 )
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
@@ -764,7 +767,7 @@ def test_reduction_lowering_neighbor_sum():
     reference = im.op_as_fieldop(
         im.reduce(
             "plus",
-            im.literal(value="0", typename="float64"),
+            im.literal(value="0", type_="float64"),
         )
     )(im.as_fieldop_neighbors("V2E", "edge_f"))
 
@@ -781,7 +784,7 @@ def test_reduction_lowering_max_over():
     reference = im.op_as_fieldop(
         im.reduce(
             "maximum",
-            im.literal(value=str(np.finfo(np.float64).min), typename="float64"),
+            im.literal(value=str(np.finfo(np.float64).min), type_="float64"),
         )
     )(im.as_fieldop_neighbors("V2E", "edge_f"))
 
@@ -798,7 +801,7 @@ def test_reduction_lowering_min_over():
     reference = im.op_as_fieldop(
         im.reduce(
             "minimum",
-            im.literal(value=str(np.finfo(np.float64).max), typename="float64"),
+            im.literal(value=str(np.finfo(np.float64).max), type_="float64"),
         )
     )(im.as_fieldop_neighbors("V2E", "edge_f"))
 
@@ -825,7 +828,7 @@ def test_reduction_lowering_expr():
         im.op_as_fieldop(
             im.reduce(
                 "plus",
-                im.literal(value="0", typename="float64"),
+                im.literal(value="0", type_="float64"),
             )
         )(mapped)
     )
@@ -926,3 +929,19 @@ def test_scalar_broadcast():
         1,
         im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))),
     )
+
+
+@dataclasses.dataclass
+class DataclassContainer:
+    a: gtx.Field[[TDim], float64]
+    b: gtx.Field[[TDim], float64]
+
+
+def test_containers():
+    def foo(inp: DataclassContainer) -> DataclassContainer:
+        return DataclassContainer(a=inp.a, b=inp.b)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert False  # TODO
