@@ -45,7 +45,7 @@ def test_erf(backend):
     B = storage_utils.cpu_copy(B)
 
     assert (A[0, 0, :] == initial_values).all()
-    np.testing.assert_allclose(B_[0, 0, :], expected)  # gpu generates slightly different values
+    np.testing.assert_allclose(B[0, 0, :], expected)  # gpu generates slightly different values
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
