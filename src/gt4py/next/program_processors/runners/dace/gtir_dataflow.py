@@ -59,13 +59,30 @@ class ValueExpr:
     This is different from `gtir_to_sdfg_types.FieldopData` which represents
     the result of a field operator, basically the data storage outside a global map.
 
+    For more information refer to the `MemletExpr`.
+
+    Todo:
+        What is the difference between `MemletExpr`?
+
     Args:
         dc_node: Access node to the data container, can be either a scalar or a local list.
         gt_dtype: GT4Py data type, which includes the `offset_type` local dimension for lists.
+        field_layout: What is the layout of the data.
     """
 
     dc_node: dace.nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
+    field_layout: list[gtx_common.Dimension]
+
+    def __post_init__(self) -> None:
+        # NOTE: This function is designed to match `MemletExpr::__post_init__()`, please see there.
+        assert isinstance(self.field_layout, list)
+        assert all(isinstance(dim, gtx_common.Dimension) for dim in self.field_layout)
+        assert isinstance(self.gt_dtype, (ts.ListType, ts.ScalarType))
+
+        assert gtx_common.order_dimensions(self.field_layout) == self.field_layout
+        if isinstance(self.gt_dtype, ts.ListType):
+            assert self.gt_dtype.offset_type in self.field_layout
 
 
 @dataclasses.dataclass(frozen=True)
@@ -73,15 +90,80 @@ class MemletExpr:
     """
     Scalar or array data access through a memlet.
 
+    Note:
+        - I think the description is a bit wrong, a "scalar MemletExpr" is that one
+            element from the array is read. When the datatype is 'List' it means that
+            multiple values are read, these are then local dimensions.
+        - Although I (phimuell) have introduced the `field_layout` filed, I myself am
+            not sure what it really means. I would say it is the "entirety of the
+            field that is accessed". It is quite clear when it is read or written, but
+            less clear in an AccessNode to AccessNode connection.
+        - There is an interesting case presented in `test_gtir_to_sdfg.py::test_gtir_connectivity_shift_chain`.
+            Part of that test is essentially computing `tmp_vertex_data = edge_data[V2E[:, 1]]`,
+            where `V2E[:, 1]` gets translated into a `MemletExpr`. Its subset is,
+            `[i_Vertex_gtx_horizontal, 1]`, where `i_Vertex_gtx_horizontal` is the index of
+            the surrounding Map. The subset can not be changed, so what should be the
+            `field_layout`? The first idea would be to use `[dims.VDim]`, since the thing
+            essentially runs over the vertex dimension, the downside is, that the second dimension
+            which, although fix, is missing and the two have the same length. If we are using
+            `[dims.VDim, dims.V2EDim]` then it would have the same length as `subset`. But it
+            includes a dimension that is not needed and we would have local dimensions in
+            `field_layout`.
+        - Slowly I start thinking that the `IteratorExpr` and `MemletExpr` are the same thing,
+            but on different angles. `IteratorExpr` is essentially GT4Py's view on the data,
+            while `MemletExpr` is DaCe's view. The main reason for this is because it also has
+            the `subset`.
+        - Considering that I think that we should go/aim for the second opportunity as the field
+            layout tells me how I have to interpret the different dimensions of the `subset`.
+            This is probably also the meaning of `field_layout`. Note that this decision might
+            make some fixes of mine wrong, maybe?
+
     Args:
         dc_node: Access node to the data container, can be either a scalar or a local list.
         gt_dtype: GT4Py data type, which includes the `offset_type` local dimension for lists.
         subset: Represents the subset to use in memlet to access the above data.
+        field_layout: The full layout of what is accessed by the Memlet.
     """
 
+    # NOTE: As it can be seen in `_vist_list_get()` `subset` does not include the whole subset.
+    #   as that function actively mutate/extend the subset before the edge is created.
     dc_node: dace.nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
     subset: dace_subsets.Range
+    field_layout: list[gtx_common.Dimension]
+
+    def __post_init__(self) -> None:
+        # NOTE: `None` means "I need it to make mypy happy and I have not yet though enough
+        #   to find out what to use, but I need to commit.
+        assert isinstance(self.field_layout, list)
+        assert all(isinstance(dim, gtx_common.Dimension) for dim in self.field_layout)
+        assert isinstance(self.gt_dtype, (ts.ListType, ts.ScalarType))
+        assert isinstance(self.subset, dace_subsets.Range)
+
+        # We expect that the field layout is in the correct order.
+        assert gtx_common.order_dimensions(self.field_layout) == self.field_layout
+
+        # As discussed above, a MemletExpr should be reflected to the data it maps.
+        #  Thus we require that the subset size has the same length as the `field_layout`
+        #  with the special exception of scalars.
+        if len(self.field_layout) == 0:
+            assert isinstance(self.gt_dtype, ts.ScalarType)
+            assert self.subset == dace_subsets.Range.from_string("0")
+        else:
+            assert len(self.subset) == len(self.field_layout)
+
+        # In the beginning we were requiring, beside the condition below, that for non-list
+        #  data, i.e. scalar, no dimension was local. However, I now think that this invariant
+        #  is wrong or over constraint. For example consider the accessing of offset tables.
+        #  But I am not sure if we should reinstall it?
+        if isinstance(self.gt_dtype, ts.ListType):
+            # `order_dimensions()` has made sure that there is only one local dimension,
+            #  thus we have to make sure that it is the right one.
+            assert self.gt_dtype.offset_type in self.field_layout
+        else:
+            # TODO(phimuell, edopao): Maybe reinstall this rule.
+            # assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in self.field_layout)  # noqa: ERA001 [commented-out-code]  # Hint for Edoardo
+            pass
 
 
 @dataclasses.dataclass(frozen=True)
@@ -108,6 +190,7 @@ class IteratorExpr:
             value is either the start index of dimension range or the compile-time value of
             a shift expression, or a composition of both, and it must be subtracted to the index
             variable when constructing the memlet subset range.
+            Note that `gt_dtype.offset_type` is not included here.
         indices: Maps each dimension to an index value, which could be either a symbolic value
             or the result of a tasklet computation like neighbors connectivity or dynamic offset.
     """
@@ -116,6 +199,23 @@ class IteratorExpr:
     gt_dtype: ts.ListType | ts.ScalarType
     field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymbolicType]]
     indices: dict[gtx_common.Dimension, DataExpr]
+
+    # TODO(phimuell, edopao): Does the exclusion of the LOCAL dimensions mean that,
+    #   _implicitly_, all dimensions listed in `field_domain` are iterated over?
+    #   However I wonder if this is correct, because we could have an `[dims.EdgeDim, dims.KDim]`
+    #   field and only iterate over one dimension, let's say `dims.EdgeDim`, because
+    #   we only process one vertical level. I think I have made that example somewhere
+    #   else, but I think this ambiguity should be solved by explicitly passing the
+    #   dimensions the outer map iterates over around.
+
+    def __post_init__(self) -> None:
+        if isinstance(self.gt_dtype, ts.ListType):
+            # TODO(edopao, phimuell): This is strange behaviour and in my (phimuell) opinion a bug.
+            assert self.gt_dtype.offset_type is not None
+            assert self.gt_dtype.offset_type not in [dim for dim, _ in self.field_domain]
+        assert [dim for dim, _ in self.field_domain] == gtx_common.order_dimensions(
+            [dim for dim, _ in self.field_domain]
+        )
 
     def get_field_type(self) -> ts.FieldType:
         return ts.FieldType([dim for dim, _ in self.field_domain], self.gt_dtype)
@@ -131,19 +231,43 @@ class IteratorExpr:
         if isinstance(self.gt_dtype, ts.ListType):
             assert len(field_desc.shape) == len(self.field_domain) + 1
             assert self.gt_dtype.offset_type is not None
-            field_domain = [*self.field_domain, (self.gt_dtype.offset_type, 0)]
+
+            # Making the dimension.
+            sorted_dims = gtx_common.order_dimensions(
+                [dim for dim, _ in self.field_domain] + [self.gt_dtype.offset_type]
+            )
+            local_dim_position = sorted_dims.index(self.gt_dtype.offset_type)
+
+            field_domain = (
+                self.field_domain[:local_dim_position]
+                + [(self.gt_dtype.offset_type, 0)]
+                + self.field_domain[local_dim_position:]
+            )
         else:
             assert len(field_desc.shape) == len(self.field_domain)
             field_domain = self.field_domain
 
-        return dace_subsets.Range.from_string(
-            ",".join(
-                str(self.indices[dim].value - offset)  # type: ignore[union-attr]
-                if dim in self.indices
-                else f"0:{size}"
+        return gtx_dace_utils.compose_subset(
+            [dim for dim, _ in field_domain],
+            {
+                dim: (
+                    str(self.indices[dim].value - offset)  # type: ignore[union-attr]
+                    if dim in self.indices
+                    else f"0:{size}"
+                )
                 for (dim, offset), size in zip(field_domain, field_desc.shape, strict=True)
-            )
+            },
         )
+
+    def get_full_field_domain(self) -> list[gtx_common.Dimension]:
+        """Returns the full field domain, i.e. including the offset dimension."""
+        if isinstance(self.gt_dtype, ts.ListType):
+            assert self.gt_dtype.offset_type is not None
+            return gtx_common.order_dimensions(
+                [dim for dim, _ in self.field_domain] + [self.gt_dtype.offset_type]
+            )
+        else:
+            return [dim for dim, _ in self.field_domain]
 
 
 class DataflowInputEdge(Protocol):
@@ -179,6 +303,7 @@ class MemletInputEdge(DataflowInputEdge):
     dest_conn: Optional[str]
 
     def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None:
+        # TODO(phimuell, edopao): There is `other_subset` missing.
         memlet = dace.Memlet(data=self.source.data, subset=self.subset)
         if map_entry is None:
             self.state.add_edge(self.source, None, self.dest, self.dest_conn, memlet)
@@ -234,7 +359,12 @@ class DataflowOutputEdge:
         map_exit: Optional[dace.nodes.MapExit],
         dest: dace.nodes.AccessNode,
         dest_subset: dace_subsets.Range,
-    ) -> None:
+    ) -> bool:
+        """Create the connection.
+
+        Might remove the last data container. Returns `True` is it was removed and
+        `False` if kept.
+        """
         write_edge = self.state.in_edges(self.result.dc_node)[0]
         write_size = (
             dace.symbolic.SymExpr(1)  # subset `None` not expected, but it can appear for scalars
@@ -244,10 +374,12 @@ class DataflowOutputEdge:
         # check the kind of node which writes the result
         if isinstance(write_edge.src, dace.nodes.Tasklet):
             # The temporary data written by a tasklet can be safely deleted
-            assert write_size.is_constant()
+            assert isinstance(write_size, int) or str(write_size).isdigit()
             remove_last_node = True
         elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
-            if write_size.is_constant():
+            # TODO(phimuell, edopao): We need a better justification here, best would
+            #   be a reference to a DaCe/GT4Py issue on GH.
+            if isinstance(write_size, int) or str(write_size).isdigit():
                 # Temporary data with compile-time size is allocated on the stack
                 # and therefore is safe to keep. We decide to keep it as a workaround
                 # for a dace issue with memlet propagation in combination with
@@ -292,6 +424,11 @@ class DataflowOutputEdge:
                 src_conn=src_node_connector,
                 memlet=dace.Memlet(data=dest.data, subset=dest_subset, other_subset=src_subset),
             )
+
+        # TODO(phimuell, edopao): The changes in the scan implementation implies that
+        #  the return value must actually be used, because one might have to act upon
+        #  if the strides are set correctly or not.
+        return remove_last_node
 
 
 DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
@@ -461,16 +598,38 @@ class LambdaToDataflow(eve.NodeVisitor):
         return self.subgraph_builder.unique_nsdfg_name(self.sdfg, prefix)
 
     def _construct_local_view(self, field: MemletExpr | ValueExpr) -> ValueExpr:
+        # TODO(phimuell, edopao): I do not think that this name is good, as someone (me) could
+        #   confuse "local" with a `DImensionKind.LOCAL` dimension. I would say that something
+        #   like "deref-size" is better. Essentially I would say it contains every dimension
+        #   that is not iterated over by the surrounding Map.
         if isinstance(field, MemletExpr):
             desc = field.dc_node.desc(self.sdfg)
+            # TODO(phimuell, edopao): This is a very fragile way to identify "local" dimensions,
+            #   whose name are probably wrong, see above. To identify them in a robust way, one
+            #   should pass the dimensions the surrounding Map iterates over to this function.
+            #   Consider an offset provider for `K` in a pure `K` field and you will see why it
+            #   fails.
+            source_field_layout = field.field_layout
+            assert source_field_layout is not None
             local_dim_indices = [i for i, size in enumerate(field.subset.size()) if size != 1]
             if len(local_dim_indices) == 0:
                 # we are accessing a single-element array with shape (1,)
                 view_shape = (1,)
                 view_strides = (1,)
+                view_field_layout = []
+                view_gt_dtype = (
+                    field.gt_dtype.element_type
+                    if isinstance(field.gt_dtype, ts.ListType)
+                    else field.gt_dtype
+                )
+
             else:
                 view_shape = tuple(desc.shape[i] for i in local_dim_indices)
                 view_strides = tuple(desc.strides[i] for i in local_dim_indices)
+                view_field_layout = [source_field_layout[i] for i in local_dim_indices]
+                # I have not the slightest clue if this is correct.
+                view_gt_dtype = field.gt_dtype
+
             view, _ = self.sdfg.add_view(
                 f"view_{field.dc_node.data}",
                 view_shape,
@@ -481,9 +640,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             local_view_node = self.state.add_access(view)
             self._add_input_data_edge(field.dc_node, field.subset, local_view_node)
 
-            return ValueExpr(local_view_node, desc.dtype)
+            return ValueExpr(local_view_node, view_gt_dtype, field_layout=view_field_layout)  # type: ignore[arg-type]  # No idea what is going on.
 
         else:
+            assert isinstance(field, ValueExpr)
             return field
 
     def _construct_tasklet_result(
@@ -517,6 +677,9 @@ class LambdaToDataflow(eve.NodeVisitor):
                 if use_array
                 else data_type
             ),
+            # TODO(phimuell, edopao): I am actually not sure what we should use here, but this
+            #   might be the right choice.
+            field_layout=([_CONST_DIM] if use_array else []),
         )
 
     def _visit_deref(self, node: gtir.FunCall) -> DataExpr:
@@ -552,7 +715,12 @@ class LambdaToDataflow(eve.NodeVisitor):
             # deref a zero-dimensional field
             assert len(arg_expr.field_domain) == 0
             assert isinstance(node.type, ts.ScalarType)
-            return MemletExpr(arg_expr.field, arg_expr.gt_dtype, subset="0")
+            return MemletExpr(
+                arg_expr.field,
+                arg_expr.gt_dtype,
+                subset=dace_subsets.Range.from_string("0"),
+                field_layout=[],
+            )
 
         # handle default case below: deref a field with one or more dimensions
 
@@ -561,7 +729,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         if all(isinstance(index, SymbolExpr) for index in arg_expr.indices.values()):
             # when all indices are symbolic expressions, we can perform direct field access through a memlet
             field_subset = arg_expr.get_memlet_subset(self.sdfg)
-            return MemletExpr(arg_expr.field, arg_expr.gt_dtype, field_subset)
+            return MemletExpr(
+                arg_expr.field,
+                arg_expr.gt_dtype,
+                field_subset,
+                field_layout=arg_expr.get_full_field_domain(),
+            )
 
         # when any of the indices is a runtime value (either a dynamic cartesian
         # offset or a connectivity offset), the deref is lowered to a tasklet
@@ -653,12 +826,17 @@ class LambdaToDataflow(eve.NodeVisitor):
                 # structures more explicit and thus makes it easier for MapFusion
                 # to correctly infer the data dependencies.
                 memlet_subset = arg.get_memlet_subset(self.sdfg)
-                arg_expr = MemletExpr(arg.field, arg.gt_dtype, memlet_subset)
+                arg_expr = MemletExpr(
+                    arg.field, arg.gt_dtype, memlet_subset, arg.get_full_field_domain()
+                )
             else:
                 # In order to shift the iterator inside the branch dataflow,
                 # we have to pass the full array shape.
                 arg_expr = MemletExpr(
-                    arg.field, arg.gt_dtype, dace_subsets.Range.from_array(arg_desc)
+                    arg.field,
+                    arg.gt_dtype,
+                    dace_subsets.Range.from_array(arg_desc),
+                    arg.get_full_field_domain(),
                 )
                 use_full_shape = True
         else:
@@ -689,7 +867,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         if isinstance(arg, IteratorExpr) and use_full_shape:
             return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, arg.indices)
         else:
-            return ValueExpr(inner_node, arg.gt_dtype)
+            assert isinstance(inner_desc, dace.data.Scalar)
+            return ValueExpr(inner_node, arg.gt_dtype, field_layout=[])
 
     def _visit_if_branch(
         self,
@@ -796,7 +975,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             output_node,
             dace.Memlet.from_array(output_data, output_desc),
         )
-        return ValueExpr(output_node, edge.result.gt_dtype)
+        # TODO(phimuell, edopao): In case of an array we have to think more.
+        assert isinstance(output_desc, dace.data.Scalar)
+        return ValueExpr(output_node, edge.result.gt_dtype, field_layout=[])
 
     def _visit_if(self, node: gtir.FunCall) -> ValueExpr | tuple[ValueExpr | tuple[Any, ...], ...]:
         """
@@ -819,7 +1000,11 @@ class LambdaToDataflow(eve.NodeVisitor):
                 None,
                 dace.Memlet.from_array(output, output_desc),
             )
-            return ValueExpr(output_node, inner_value.gt_dtype)
+            # TODO(phimuell, edopao): Since we map the output from the inside to the
+            #   outside it should be safe to use the same layout here as well.
+            return ValueExpr(
+                output_node, inner_value.gt_dtype, field_layout=inner_value.field_layout
+            )
 
         assert len(node.args) == 3
 
@@ -978,6 +1163,10 @@ class LambdaToDataflow(eve.NodeVisitor):
         connectivity_desc = self.sdfg.arrays[connectivity]
         connectivity_desc.transient = False
 
+        # TODO(phimuell, edopao): I (phimuell) am pretty sure that two creation of `MemletExpr`
+        #   are wrong. In both cases they are constructed with `node.type` as `gt_dtype`. However,
+        #   This is the type for the output, but bellow they are used for inputs.
+
         # The visitor is constructing a list of input connections that will be handled
         # by `translate_as_fieldop` (the primitive translator), that is responsible
         # of creating the map for the field domain. For each input connection, it will
@@ -986,29 +1175,50 @@ class LambdaToDataflow(eve.NodeVisitor):
         # node). For the specific case of `neighbors` we need to nest the neighbors map
         # inside the field map and the memlets will traverse the external map and write
         # to the view nodes. The simplify pass will remove the redundant access nodes.
+
+        # TODO(phimuell, edopao): I am pretty sure that we need this call here. Technically
+        #   it might be enough to use `it.field_domain` but this would be risky if `it` has
+        #   a `ListType`.
+        field_slice_layout = it.get_full_field_domain()
+        assert len(field_slice_layout) == len(it.field_domain)
+
+        field_slice_subset_components = {
+            dim: (
+                str(it.indices[dim].value - offset)  # type: ignore[union-attr]
+                # TODO(phimuell, edopao): What does this codomain check do?
+                if dim != offset_provider.codomain
+                else f"0:{size}"
+            )
+            for (dim, offset), size in zip(it.field_domain, field_desc.shape, strict=True)
+        }
+        field_slice_subset = gtx_dace_utils.compose_subset(
+            field_slice_layout, field_slice_subset_components
+        )
         field_slice = self._construct_local_view(
             MemletExpr(
                 dc_node=it.field,
-                gt_dtype=node.type,
-                subset=dace_subsets.Range.from_string(
-                    ",".join(
-                        str(it.indices[dim].value - offset)  # type: ignore[union-attr]
-                        if dim != offset_provider.codomain
-                        else f"0:{size}"
-                        for (dim, offset), size in zip(
-                            it.field_domain, field_desc.shape, strict=True
-                        )
-                    )
-                ),
+                gt_dtype=it.gt_dtype,
+                subset=field_slice_subset,
+                field_layout=field_slice_layout,
             )
+        )
+
+        # TODO(phimuell, edopao): This should be correct.
+        connectivity_slice_layout = list(offset_provider.domain)
+        connectivity_slice_subset = gtx_dace_utils.compose_subset(
+            connectivity_slice_layout,
+            {
+                offset_provider.source_dim: str(origin_index.value),
+                offset_provider.neighbor_dim: f"0:{offset_provider.max_neighbors}",
+            },
         )
         connectivity_slice = self._construct_local_view(
             MemletExpr(
                 dc_node=self.state.add_access(connectivity),
+                # TODO: Get the correct type? Is that thing correct?
                 gt_dtype=node.type,
-                subset=dace_subsets.Range.from_string(
-                    f"{origin_index.value}, 0:{offset_provider.max_neighbors}"
-                ),
+                subset=connectivity_slice_subset,
+                field_layout=connectivity_slice_layout,
             )
         )
 
@@ -1020,16 +1230,14 @@ class LambdaToDataflow(eve.NodeVisitor):
         neighbor_idx = gtir_to_sdfg_utils.get_map_variable(offset_type)
 
         index_connector = "__index"
+        field_connector = "__field"
         output_connector = "__val"
         tasklet_expression = f"{output_connector} = __field[{index_connector}]"
         input_memlets = {
-            "__field": self.sdfg.make_array_memlet(field_slice.dc_node.data),
+            field_connector: self.sdfg.make_array_memlet(field_slice.dc_node.data),
             index_connector: dace.Memlet(data=connectivity_slice.dc_node.data, subset=neighbor_idx),
         }
-        input_nodes = {
-            field_slice.dc_node.data: field_slice.dc_node,
-            connectivity_slice.dc_node.data: connectivity_slice.dc_node,
-        }
+        input_nodes = {field_slice.dc_node, connectivity_slice.dc_node}
 
         if offset_provider.has_skip_values:
             # in case of skip value we can write any dummy value
@@ -1051,19 +1259,23 @@ class LambdaToDataflow(eve.NodeVisitor):
             outputs={
                 output_connector: dace.Memlet(data=neighbors_temp, subset=neighbor_idx),
             },
-            output_nodes={neighbors_temp: neighbors_node},
+            output_nodes={neighbors_node},
             external_edges=True,
         )
 
+        # TODO(phimuell, edopao): Since by definition (at least the current one at the
+        #   time of writing), the result is the gathered result, the `field_layout`
+        #   must be the `offset_type`.
         return ValueExpr(
-            dc_node=neighbors_node, gt_dtype=ts.ListType(node.type.element_type, offset_type)
+            dc_node=neighbors_node,
+            gt_dtype=ts.ListType(node.type.element_type, offset_type),
+            field_layout=[offset_type],
         )
 
     def _visit_list_get(self, node: gtir.FunCall) -> ValueExpr:
         assert len(node.args) == 2
         index_arg = self.visit(node.args[0])
         src_arg = self.visit(node.args[1])
-        assert isinstance(src_arg, MemletExpr | ValueExpr)
 
         src_desc = src_arg.dc_node.desc(self.sdfg)
         if isinstance(src_arg, MemletExpr):
@@ -1083,9 +1295,15 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if isinstance(index_arg, SymbolExpr):
             assert index_arg.dc_dtype in dace.dtypes.INTEGER_TYPES
-            src_subset = dace_subsets.Range(src_subset[:-1]) + dace_subsets.Range.from_string(
-                index_arg.value
-            )
+            src_field_layout = src_arg.field_layout
+            assert len(src_field_layout) == len(src_subset)
+
+            # Replace the local dimension with a meaningful value.
+            src_subset_map = gtx_dace_utils.decompose_subset(src_field_layout, src_subset)
+            src_local_dim = gtx_dace_utils.find_local_dim(src_field_layout)
+            src_subset_map[src_local_dim] = index_arg.value
+            src_subset = gtx_dace_utils.compose_subset(src_field_layout, src_subset_map)
+
             if isinstance(src_arg, MemletExpr):
                 self._add_input_data_edge(src_arg.dc_node, src_subset, dst_node)
             else:
@@ -1118,7 +1336,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             raise TypeError(f"Unexpected value {index_arg} as index argument.")
 
-        return ValueExpr(dc_node=dst_node, gt_dtype=src_arg.gt_dtype.element_type)
+        # TODO(phimuell, edopao): Since `dst_node` seems to be always a scalar, we can do the following.
+        assert isinstance(self.sdfg.arrays[dst_node.data], dace.data.Scalar)
+        return ValueExpr(
+            dc_node=dst_node,
+            gt_dtype=src_arg.gt_dtype.element_type,
+            field_layout=[],
+        )
 
     def _visit_map(self, node: gtir.FunCall) -> ValueExpr:
         """
@@ -1160,6 +1384,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             assert input_arg.gt_dtype.offset_type is not None
             offset_type = input_arg.gt_dtype.offset_type
             if offset_type == _CONST_DIM:
+                # TODO(phimuell, edoapo): We should have a better name to identify them.
                 # this input argument is the result of `make_const_list`
                 continue
             offset_provider_t = self.subgraph_builder.get_offset_provider_type(offset_type.value)
@@ -1223,15 +1448,23 @@ class LambdaToDataflow(eve.NodeVisitor):
 
             origin_map_index = gtir_to_sdfg_utils.get_map_variable(offset_provider_type.source_dim)
 
+            connectivity_slice_layout = list(offset_provider_type.domain)
+            assert len(connectivity_slice_layout) == 2
+            connectivity_slice_subset = gtx_dace_utils.compose_subset(
+                connectivity_slice_layout,
+                {
+                    offset_provider_type.source_dim: origin_map_index,
+                    offset_provider_type.neighbor_dim: f"0:{offset_provider_type.max_neighbors}",
+                },
+            )
             connectivity_slice = self._construct_local_view(
                 MemletExpr(
                     dc_node=self.state.add_access(connectivity),
                     gt_dtype=ts.ListType(
                         element_type=node.type.element_type, offset_type=offset_type
                     ),
-                    subset=dace_subsets.Range.from_string(
-                        f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
-                    ),
+                    subset=connectivity_slice_subset,
+                    field_layout=connectivity_slice_layout,
                 )
             )
 
@@ -1263,9 +1496,15 @@ class LambdaToDataflow(eve.NodeVisitor):
             external_edges=True,
         )
 
+        # TODO(phimuell, edopao): Under the assumption that the operation only happens
+        #   inside big Maps, i.e. that a scalar array is generated, this should work.
+        result_gt_dtype = ts.ListType(node.type.element_type, offset_type)
+        result_field_layout = [offset_type]
+
         return ValueExpr(
             dc_node=result_node,
-            gt_dtype=ts.ListType(node.type.element_type, offset_type),
+            gt_dtype=result_gt_dtype,
+            field_layout=result_field_layout,
         )
 
     def _make_reduce_with_skip_values(
@@ -1295,6 +1534,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             isinstance(input_expr.gt_dtype, ts.ListType)
             and input_expr.gt_dtype.offset_type is not None
         )
+        assert input_expr.gt_dtype.offset_type in input_expr.field_layout
+
         offset_type = input_expr.gt_dtype.offset_type
         connectivity = gtx_dace_utils.connectivity_identifier(offset_type.value)
         connectivity_node = self.state.add_access(connectivity)
@@ -1369,7 +1610,8 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if isinstance(input_expr, MemletExpr):
             self._add_input_data_edge(input_expr.dc_node, input_expr.subset, nsdfg_node, "values")
-        else:
+        elif isinstance(input_expr, ValueExpr):
+            assert len(input_expr.field_layout) == len(input_expr.dc_node.desc(self.sdfg).shape)
             self.state.add_edge(
                 input_expr.dc_node,
                 None,
@@ -1377,14 +1619,25 @@ class LambdaToDataflow(eve.NodeVisitor):
                 "values",
                 self.sdfg.make_array_memlet(input_expr.dc_node.data),
             )
+        else:
+            raise ValueError(f"Got unexpected input: '{type(input_expr).__name__}'")
+
+        # Now pass the connectivity table into the reduction SDFG.
+        connectivity_slice_subset = gtx_dace_utils.compose_subset(
+            layout=offset_provider_type.domain,
+            subset_map={
+                offset_provider_type.source_dim: f"{origin_map_index}",
+                offset_provider_type.neighbor_dim: f"0:{offset_provider_type.max_neighbors}",
+            },
+        )
         self._add_input_data_edge(
             connectivity_node,
-            dace_subsets.Range.from_string(
-                f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
-            ),
+            connectivity_slice_subset,
             nsdfg_node,
             "neighbor_indices",
         )
+
+        # Now connect the output.
         self.state.add_edge(
             nsdfg_node,
             "acc",
@@ -1433,7 +1686,10 @@ class LambdaToDataflow(eve.NodeVisitor):
                 )
             self.state.add_nedge(reduce_node, result_node, dace.Memlet(data=result, subset="0"))
 
-        return ValueExpr(result_node, node.type)
+        # TODO(phimuell, edopao): I am actually not sure what the `field_layout` should be here.
+        #   In `_visit_map()` we could always say that we can use the LOCAL dimension. But here?
+        #   I think the most natural solution, since the result is a scalar, is to use `[]`.
+        return ValueExpr(result_node, node.type, field_layout=[])
 
     def _split_shift_args(
         self, args: list[gtir.Expr]
@@ -1592,11 +1848,20 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         shifted_indices = {dim: idx for dim, idx in it.indices.items() if dim != origin_dim}
         if isinstance(offset_expr, SymbolExpr):
-            # use memlet to retrieve the neighbor index
+            field_layout = list(connectivity.domain)
+            assert len(field_layout)
+            # TODO(phimuell, edopao): Check this.
+            subset_map = {
+                connectivity.source_dim: f"{origin_index.value}",
+                connectivity.neighbor_dim: f"{offset_expr.value}",
+            }
+            subset = gtx_dace_utils.compose_subset(layout=field_layout, subset_map=subset_map)
+
             shifted_indices[neighbor_dim] = MemletExpr(
                 dc_node=offset_table_node,
                 gt_dtype=it.gt_dtype,
-                subset=dace_subsets.Range.from_string(f"{origin_index.value}, {offset_expr.value}"),
+                subset=subset,
+                field_layout=field_layout,
             )
         else:
             # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node

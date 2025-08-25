@@ -103,6 +103,7 @@ class FieldopData:
                 dc_node=self.dc_node,
                 gt_dtype=self.gt_type,
                 subset=dace_subsets.Range.from_string("0"),
+                field_layout=[],
             )
 
         if isinstance(self.gt_type, ts.FieldType):
