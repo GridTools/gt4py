@@ -15,7 +15,7 @@ import dace
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
-from gt4py.next.otf import arguments, stages
+from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable, workflow as dace_worflow
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
@@ -37,11 +37,7 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        if fun.implicit_domain:
-            # Generate implicit domain size arguments only if necessary
-            size_args = arguments.iter_size_args(args)
-            args = (*args, *size_args)
-
+        # TODO: this doesn't belong here and should by done in the dace backend
         if not fun.sdfg_program._lastargs:
             # First call, the SDFG is not intitalized, so forward the call to `CompiledSDFG`
             # to proper initilize it. Later calls to this SDFG will be handled through
