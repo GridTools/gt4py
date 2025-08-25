@@ -932,8 +932,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )  # already checked using generic mechanism
 
         if not (
-            isinstance(new_type_constructor, foast.Name)
-            and isinstance(new_type_constructor.type, ts.ConstructorType)
+            isinstance(new_type_constructor.type, ts.ConstructorType)
             and isinstance(new_type_constructor.type.definition.returns, ts.ScalarType)
         ):
             raise errors.DSLError(

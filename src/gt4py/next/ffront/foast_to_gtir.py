@@ -382,9 +382,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         assert len(node.args) == 2
-        assert isinstance(node.args[1], foast.Name) and isinstance(
-            node.args[1].type, ts.ConstructorType
-        )
+        assert isinstance(node.args[1].type, ts.ConstructorType)
         obj = self.visit(node.args[0], **kwargs)
         new_type = node.args[1].type.definition.returns
         assert isinstance(new_type, ts.ScalarType)
