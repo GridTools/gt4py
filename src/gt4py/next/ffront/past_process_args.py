@@ -106,8 +106,13 @@ def _process_args(
                     )
                 index_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
                 size_args.extend(
-                    range_ if range_ else [ts.TupleType(types=[index_type, index_type])] * len(dims)  # type: ignore[arg-type]  # shape is always empty
+                    range_ if range_ else [ts.TupleType(types=[index_type, index_type])] * len(dims)
+                    # type: ignore[arg-type]  # shape is always empty
                 )
+                # for range_, dims in ranges_and_dims:
+                #     size_args.extend(
+                #         range_ if range_ else [ts.TupleType(types=[index_type, index_type])] * len(dims)  # type: ignore[arg-type]  # shape is always empty
+                #     )
     return tuple(rewritten_args), tuple(size_args), kwargs
 
 
