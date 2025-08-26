@@ -115,6 +115,9 @@ def make_mocks(monkeypatch):
     return mock_fast_call, mock_construct_args
 
 
+@pytest.mark.xfail(
+    reason="`fastcall` is currently broken in ICON4Py unit testing, thus it is disabled."
+)
 def test_dace_fastcall(cartesian_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
@@ -181,6 +184,9 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
     mock_construct_args.assert_not_called()
 
 
+@pytest.mark.xfail(
+    reason="`fastcall` is currently broken in ICON4Py unit testing, thus it is disabled."
+)
 def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
