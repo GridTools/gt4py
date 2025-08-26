@@ -46,14 +46,6 @@ def _merge_arguments(
     return new_args
 
 
-def _is_tuple_expr_of_literals(expr: itir.Expr):
-    if cpm.is_call_to(expr, "make_tuple"):
-        return all(_is_tuple_expr_of_literals(arg) for arg in expr.args)
-    if cpm.is_call_to(expr, "tuple_get"):
-        return _is_tuple_expr_of_literals(expr.args[1])
-    return isinstance(expr, itir.Literal)
-
-
 def _inline_as_fieldop_arg(
     arg: itir.Expr, *, uids: eve_utils.UIDGenerator
 ) -> tuple[itir.Expr, dict[str, itir.Expr]]:
@@ -142,7 +134,7 @@ def fuse_as_fieldop(
                 # transform scalar `if` into per-grid-point `if`
                 # TODO(tehrengruber): revisit if we want to inline if_
                 arg = im.op_as_fieldop("if_")(*arg.args)
-            elif _is_tuple_expr_of_literals(arg):
+            elif cpm.is_tuple_expr_of(lambda e: isinstance(e, itir.Literal), arg):
                 arg = im.op_as_fieldop(im.lambda_()(arg))()
             else:
                 raise NotImplementedError()
@@ -189,7 +181,7 @@ def fuse_as_fieldop(
 
 
 def _arg_inline_predicate(node: itir.Expr, shifts: set[tuple[itir.OffsetLiteral, ...]]) -> bool:
-    if _is_tuple_expr_of_literals(node):
+    if cpm.is_tuple_expr_of(lambda e: isinstance(e, itir.Literal), node):
         return True
 
     if (
