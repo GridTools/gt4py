@@ -266,6 +266,10 @@ def {_cb_get_stride}(ndarray, dim_index):
         arg = f"{_cb_args}[{i}]"
         assert isinstance(param.type_, ts.DataType)
         _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
+
+    # TODO(phimuell, edopao): The offset tables are not updated here. In normal simulations
+    #   this might not be a problem, however, inside the tests it might be a problem.
+
     code.dedent()
 
     src = codegen.format_python_source(code.text)
