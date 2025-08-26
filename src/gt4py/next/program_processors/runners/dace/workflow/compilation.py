@@ -43,9 +43,19 @@ def _get_sdfg_ctype_arglist_callback(
     spec = importlib.util.spec_from_loader(module_name, loader=None)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
-    exec(python_code, module.__dict__)
-    assert bind_func_name in module.__dict__
-    return module.__dict__[bind_func_name]
+
+    # TODO(phimuell, edopao): By copying the global scope we make sure that the
+    #   function `bind_func_name` is not put into the `module.__dict__` scope.
+    #   This can be an issue if two threads in parallel try to generated the name.
+    #   Essentially the function is now an object that only lives inside `scope`.
+    # TODO: Maybe switch to an empty `globals` all
+    scope = module.__dict__.copy()
+    assert bind_func_name not in scope
+    exec(python_code, scope)
+
+    assert bind_func_name in scope
+    assert bind_func_name not in module.__dict__
+    return scope[bind_func_name]
 
 
 class CompiledDaceProgram(stages.ExtendedCompiledProgram):
