@@ -931,9 +931,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             value.type, (ts.FieldType, ts.ScalarType, ts.TupleType)
         )  # already checked using generic mechanism
 
+        # Note: the type to convert to is uniquely identified by its GT4Py type (`ConstructorType`),
+        # not by e.g. its name.
         if not (
-            isinstance(new_type_constructor, foast.Name)
-            and isinstance(new_type_constructor.type, ts.ConstructorType)
+            isinstance(new_type_constructor.type, ts.ConstructorType)
             and isinstance(new_type_constructor.type.definition.returns, ts.ScalarType)
         ):
             raise errors.DSLError(

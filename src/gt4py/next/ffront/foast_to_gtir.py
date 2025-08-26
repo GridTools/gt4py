@@ -394,10 +394,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
+        # Note: the type to convert to is uniquely identified by its GT4Py type (`ConstructorType`),
+        # not by e.g. its name.
         assert len(node.args) == 2
-        assert isinstance(node.args[1], foast.Name) and isinstance(
-            node.args[1].type, ts.ConstructorType
-        )
+        assert isinstance(node.args[1].type, ts.ConstructorType)
         obj = self.visit(node.args[0], **kwargs)
         new_type = node.args[1].type.definition.returns
         assert isinstance(new_type, ts.ScalarType)
@@ -475,6 +475,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
     def _visit_type_constr(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
+        # Note: the type to convert to is uniquely identified by its GT4Py type (`ConstructorType`),
+        # not by e.g. its name.
         type_constructor = node.func
         assert isinstance(type_constructor.type, ts.ConstructorType)
 

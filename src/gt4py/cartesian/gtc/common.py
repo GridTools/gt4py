@@ -180,6 +180,8 @@ class NativeFunction(eve.StrEnum):
     TRUNC = "trunc"
     ERF = "erf"
     ERFC = "erfc"
+    ROUND = "round"
+    ROUND_AWAY_FROM_ZERO = "round_away_from_zero"
 
     INT32 = "int32"
     INT64 = "int64"
@@ -231,6 +233,8 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.FLOAT64: 1,
         NativeFunction.ERF: 1,
         NativeFunction.ERFC: 1,
+        NativeFunction.ROUND: 1,
+        NativeFunction.ROUND_AWAY_FROM_ZERO: 1,
     }.items()
 }
 
@@ -924,6 +928,8 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.FLOAT64: "float64",
         NativeFunction.ERF: "erf",
         NativeFunction.ERFC: "erfc",
+        NativeFunction.ROUND: "round",
+        NativeFunction.ROUND_AWAY_FROM_ZERO: "round_away_from_zero",
     },
 }
 

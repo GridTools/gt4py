@@ -485,3 +485,53 @@ def test_tuple_different_domain_nested():
     actual = global_tmps.create_global_tmps(testee, offset_provider)
     actual = collapse_tuple.CollapseTuple.apply(actual)
     assert actual == expected
+
+
+def test_domain_preservation():
+    domain = im.domain("cartesian_domain", {IDim: (0, 2)})
+    domain_tb = im.domain("cartesian_domain", {IDim: (0, 1)})
+    domain_fb = im.domain("cartesian_domain", {IDim: (1, 2)})
+    offset_provider = {}
+    testee = program_factory(
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.op_as_fieldop("plus")(  # no domain here
+                    # smaller domain for the next two exprs, must not be re-inferred
+                    im.as_fieldop("deref", domain_tb)("inp"),
+                    im.as_fieldop("deref", domain_fb)("inp"),
+                ),
+                domain=domain,
+            )
+        ],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+
+    expected = program_factory(
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
+        declarations=[
+            itir.Temporary(id="__tmp_1", domain=domain_tb, dtype=float_type),
+            itir.Temporary(id="__tmp_2", domain=domain_fb, dtype=float_type),
+        ],
+        body=[
+            itir.SetAt(
+                target=im.ref("__tmp_1"),
+                expr=im.as_fieldop("deref", domain_tb)("inp"),
+                domain=domain_tb,
+            ),
+            itir.SetAt(
+                target=im.ref("__tmp_2"),
+                expr=im.as_fieldop("deref", domain_fb)("inp"),
+                domain=domain_fb,
+            ),
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.op_as_fieldop("plus", domain)("__tmp_1", "__tmp_2"),
+                domain=domain,
+            ),
+        ],
+    )
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider)
+    assert actual == expected
