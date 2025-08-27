@@ -187,6 +187,7 @@ class DaCeTranslator(
         *args: Any,
         **kwargs: Any,
     ) -> dace.SDFG:
+        assert False, "THOU SHALL NOT PASS"  # noqa: B011
         with gtx_wfdcommon.dace_context(device_type=self.device_type):
             return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
 
