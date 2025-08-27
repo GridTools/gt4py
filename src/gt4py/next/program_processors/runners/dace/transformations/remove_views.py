@@ -119,4 +119,5 @@ class RemovePointwiseViews(dace_transformation.SingleStateTransformation):
             new_edge.data.other_subset = dst_in_edge_dst_subset
 
         graph.remove_edge(dst_in_edge)
+        sdfg.remove_data(src_node.data, validate=False)
         graph.remove_node(src_node)
