@@ -182,6 +182,8 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 NativeFunction.FLOAT64: "double",
                 NativeFunction.ERF: "std::erf",
                 NativeFunction.ERFC: "std::erfc",
+                NativeFunction.ROUND: "std::nearbyint",
+                NativeFunction.ROUND_AWAY_FROM_ZERO: "std::round",
             }[func]
         except KeyError as error:
             raise NotImplementedError(

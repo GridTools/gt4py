@@ -154,5 +154,9 @@ class FunctionType(TypeSpec, CallableType):
         return f"({args_str}) -> {self.returns}"
 
 
+class ConstructorType(TypeSpec, CallableType):
+    definition: FunctionType
+
+
 class DomainType(DataType):
     dims: list[common.Dimension]
