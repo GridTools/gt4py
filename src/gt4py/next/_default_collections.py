@@ -9,7 +9,6 @@
 import dataclasses
 
 from gt4py.next import containers
-from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -20,7 +19,7 @@ def _type_of_dataclass(cls: type) -> ts.ConstructorType:
     types = [type_translation.from_type_hint(field.type) for field in fields]
     fields = [field for field in dataclasses.fields(cls)]
     keys = [f.name for f in fields]
-    return_type = ts_ffront.NamedTupleType(types=types, keys=keys)
+    return_type = ts.NamedTupleType(types=types, keys=keys)
 
     return ts.ConstructorType(
         definition=ts.FunctionType(

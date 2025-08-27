@@ -45,3 +45,27 @@ def flatten(arg):
         if isinstance(arg, common.Field) or not dataclasses.is_dataclass(arg)
         else tuple(getattr(arg, f.name) for f in dataclasses.fields(arg))
     )
+
+
+
+# import functools
+# from collections.abc import Callable
+# from typing import TypeAlias, Any
+# from gt4py.eve.extended_typing import NestedTuple
+# from gt4py.eve import extended_typing as xtyping
+# from gt4py._core import definitions as core_defs
+
+
+# NestedTupleConstructor: TypeAlias = Callable[[Any], NestedTuple[core_defs.Scalar | Field]]
+
+# @functools.cache
+# def nested_tuple_constructor(container_type: type) -> NestedTupleConstructor:
+
+#     if issubclass(container_type, tuple):
+#         return 
+        
+#     if issubclass(container_type, xtyping.DataClass):
+#         return lambda x: {k: nested_tuple_constructor(type(v))(v) for k, v in x.items()}
+    
+# return  (c.field1, c.field2, ((f3:=c.field3.foo), c_field3.f4))
+

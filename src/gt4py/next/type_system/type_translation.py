@@ -12,18 +12,23 @@ from __future__ import annotations
 
 import builtins
 import collections.abc
+import dataclasses
 import functools
 import types
 import typing
-from typing import Any, ForwardRef, Optional
+from typing import Any, ForwardRef, Optional, Protocol, TypeAlias, TypeGuard, get_type_hints
 
 import numpy as np
 import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
-from gt4py.next import common, containers
+from gt4py.eve.extended_typing import TypeIs
+from gt4py.next import common
 from gt4py.next.type_system import type_info, type_specifications as ts
+
+
+PythonContainer: TypeAlias = xtyping._TypedNamedTuple | xtyping.DataClass
 
 
 def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
@@ -55,6 +60,22 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
                 raise ValueError(f"Impossible to map '{dtype}' value to a 'ScalarKind'.")
     else:
         raise ValueError(f"Non-trivial dtypes like '{dtype}' are not yet supported.")
+
+
+def is_container_type(type_: type) -> TypeIs[type[PythonContainer]]:
+    """Check if a class could be considered a container type."""
+    return xtyping.is_dataclass_type(type_) or issubclass(type_, tuple)
+
+
+def is_valid_dataclass_type(type_: type) -> bool:
+    """Check if a dataclass respects current constraints for dataclasses."""
+    return all(
+        f.init is True
+        and f.default is dataclasses.MISSING
+        and f.default_factory is dataclasses.MISSING
+        and f._field_type is dataclasses._FIELD  # type: ignore[attr-defined]  # private member
+        for f in dataclasses.fields(type_)
+    )
 
 
 def canonicalize_type_hint(
@@ -89,9 +110,11 @@ def canonicalize_type_hint(
 
     canonical_type = typing.get_origin(type_hint) or type_hint
     args = typing.get_args(type_hint)
+
     return canonical_type, args, tuple(extra_args)
 
 
+@eve_utils.optional_lru_cache(maxsize=None, typed=False)
 def from_type_hint(
     type_hint: Any,
     *,
@@ -108,20 +131,40 @@ def from_type_hint(
     match canonical_type:
         case builtins.type if args:
             # This case matches 'type[Foo]' (where the 'Foo' type is stored in args[0])
-            assert len(args) == 1
-            constructed_type = ts.ScalarType(kind=get_scalar_kind(args[0]))
-            return ts.ConstructorType(
-                definition=ts.FunctionType(
-                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                    pos_or_kw_args={},
-                    kw_only_args={},
-                    returns=constructed_type,
-                )
-            )
+            type_ = args[0]
+            constructed_type = nested_typing_callback(type_)
 
-        case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
-            # This case matches `int`, `float`, etc. used as annotations
-            return ts.ScalarType(kind=get_scalar_kind(t))
+            if isinstance(constructed_type, ts.ScalarType):
+                return ts.ConstructorType(
+                    definition=ts.FunctionType(
+                        pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                        pos_or_kw_args={},
+                        kw_only_args={},
+                        returns=constructed_type,
+                    )
+                )
+            elif isinstance(constructed_type, ts.NamedTupleType):
+                pos_or_kw_args = {
+                    k: t for k, t in zip(constructed_type.keys, constructed_type.types)
+                }
+                kw_only_args = (
+                    {
+                        f.name: pos_or_kw_args.pop(f.name)
+                        for f in dataclasses.fields(type_)
+                        if f.kw_only
+                    }
+                    if xtyping.is_dataclass_type(type_)
+                    else {}
+                )
+
+                return ts.ConstructorType(
+                    definition=ts.FunctionType(
+                        pos_only_args=[],
+                        pos_or_kw_args=pos_or_kw_args,
+                        kw_only_args=kw_only_args,
+                        returns=constructed_type,
+                    )
+                )
 
         case builtins.tuple:
             if not args:
@@ -131,6 +174,33 @@ def from_type_hint(
             tuple_types = [nested_typing_callback(arg) for arg in args]
             assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
             return ts.TupleType(types=tuple_types)
+
+
+        case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
+            # This case matches `int`, `float`, etc. used as annotations
+            return ts.ScalarType(kind=get_scalar_kind(t))
+
+        case type() as t if is_container_type(t):
+            python_types = []
+            keys = []
+            if xtyping.is_typed_named_tuple_type(t):
+                if not xtyping.is_typed_named_tuple_type(t):
+                    raise ValueError(f"Tuple subclass {t} is not a valid typed namedtuple.")
+                keys = list(t._fields)
+                hints = get_type_hints(t, globalns=globalns, localns=localns)
+                python_types = [hints[key] for key in keys]
+            elif xtyping.is_dataclass_type(t):
+                if not is_valid_dataclass_type(t):
+                    raise ValueError(
+                        f"Dataclass {t} is not a valid field container. Dataclasses with custom '__init__'"
+                        " functions, InitVars or default argument are not yet supported."
+                    )
+                keys, python_types = zip(*[(f.name, f.type) for f in dataclasses.fields(t)])
+            else:
+                print(f"\n\n\n\n {canonical_type} WTF!!!")
+                #assert False
+            types = [nested_typing_callback(type_) for type_ in python_types]
+            return ts.NamedTupleType(types=types, keys=list(keys))
 
         case common.Field:
             if (n_args := len(args)) != 2:
@@ -245,21 +315,6 @@ def from_value(value: Any) -> ts.TypeSpec:
         return ts.TupleType(types=elems)
     elif isinstance(value, (types.ModuleType, eve_utils.FrozenNamespace)):
         return UnknownPythonObject(value)
-    elif isinstance(value, type):
-        if isinstance((ctor_type := from_type_hint(value)), ts.ScalarType):
-            symbol_type = ts.ConstructorType(
-                definition=ts.FunctionType(
-                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                    pos_or_kw_args={},
-                    kw_only_args={},
-                    returns=ctor_type,
-                )
-            )
-        else:
-            try:
-                return containers.get_constructor_type(value)
-            except KeyError:
-                symbol_type = None
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)

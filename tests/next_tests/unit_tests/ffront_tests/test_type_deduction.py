@@ -33,7 +33,6 @@ from gt4py.next.ffront.experimental import concat_where
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.type_system import type_specifications as ts
 
 # Meaningless dimensions, used for tests.
@@ -562,7 +561,7 @@ def test_type_alias(test_input: TypeAlias, expected: ts.ScalarKind):
         and foast_tree.body.stmts[0].value.right.args[1].type.definition.returns.kind == expected
     )
 
-    
+
 def test_unexpected_closure_var_error():
     class _UnexpectedClosureVar: ...
 
@@ -612,7 +611,7 @@ class NestedMixedTupleContainer:
     c: NamedTupleContainer
 
 
-_EXPECTED_NAMED_TUPLE_TYPE = ts_ffront.NamedTupleType(
+_EXPECTED_NAMED_TUPLE_TYPE = ts.NamedTupleType(
     types=[
         ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
         ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
@@ -620,7 +619,7 @@ _EXPECTED_NAMED_TUPLE_TYPE = ts_ffront.NamedTupleType(
     keys=["x", "y"],
 )
 
-_EXPECTED_NESTED_NAMED_TUPLE_TYPE = ts_ffront.NamedTupleType(
+_EXPECTED_NESTED_NAMED_TUPLE_TYPE = ts.NamedTupleType(
     types=[_EXPECTED_NAMED_TUPLE_TYPE, _EXPECTED_NAMED_TUPLE_TYPE, _EXPECTED_NAMED_TUPLE_TYPE],
     keys=["a", "b", "c"],
 )
@@ -660,4 +659,3 @@ def test_nested_containers(container):
 
     assert parsed.params[0].type == _EXPECTED_NESTED_NAMED_TUPLE_TYPE
     assert parsed.body.stmts[-1].value.type == _EXPECTED_NESTED_NAMED_TUPLE_TYPE
-
