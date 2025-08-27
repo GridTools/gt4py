@@ -683,32 +683,30 @@ def canonicalize_function_arguments(
     ignore_errors: bool = False,
     use_signature_ordering: bool = False,
 ) -> tuple[tuple, dict]:
-    num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
-    cargs = [UNDEFINED_ARG] * max(num_pos_params, len(args))
+    num_pos_only_args = len(func_type.pos_only_args)
+    num_pos_or_kw_args = len(func_type.pos_or_kw_args)
+    cargs = [*args] + ([UNDEFINED_ARG] * max(num_pos_only_args + num_pos_or_kw_args - len(args), 0))
     ckwargs = {**kwargs}
-    for i, arg in enumerate(args):
-        cargs[i] = arg
+
+    pos_or_kw_args_names = [*func_type.pos_or_kw_args]
     for name in kwargs.keys():
         if name in func_type.pos_or_kw_args:
-            args_idx = len(func_type.pos_only_args) + list(func_type.pos_or_kw_args.keys()).index(
-                name
-            )
+            args_idx = num_pos_only_args + pos_or_kw_args_names.index(name)
             if cargs[args_idx] is UNDEFINED_ARG:
                 cargs[args_idx] = ckwargs.pop(name)
             elif not ignore_errors:
-                raise AssertionError(
+                raise ValueError(
                     f"Error canonicalizing function arguments. Got multiple values for argument '{name}'."
                 )
 
-    a, b = set(func_type.kw_only_args.keys()), set(ckwargs.keys())
-    invalid_kw_args = (a - b) | (b - a)
+    invalid_kw_args = func_type.kw_only_args.keys() ^ ckwargs.keys()
     if invalid_kw_args and (not ignore_errors or use_signature_ordering):
         # this error can not be ignored as otherwise the invariant that no arguments are dropped
         # is invalidated.
-        raise AssertionError(f"Invalid keyword arguments '{', '.join(invalid_kw_args)}'.")
+        raise ValueError(f"Invalid keyword arguments '{', '.join(invalid_kw_args)}'.")
 
     if use_signature_ordering:
-        ckwargs = {k: ckwargs[k] for k in func_type.kw_only_args.keys() if k in ckwargs}
+        ckwargs = {k: ckwargs[k] for k in func_type.kw_only_args if k in ckwargs}
 
     return tuple(cargs), ckwargs
 
