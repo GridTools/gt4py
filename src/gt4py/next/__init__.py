@@ -40,11 +40,6 @@ from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
 from .ffront.fbuiltins import *  # noqa: F403 [undefined-local-with-import-star]  explicitly reexport all from fbuiltins.__all__
 from .ffront.fbuiltins import FieldOffset
-from .iterator.embedded import (
-    NeighborTableOffsetProvider,  # TODO(havogt): deprecated
-    index_field,
-    np_as_located_field,
-)
 from .program_processors.runners.gtfn import (
     run_gtfn_cached as gtfn_cpu,
     run_gtfn_gpu_cached as gtfn_gpu,
@@ -75,10 +70,6 @@ __all__ = [
     "full",
     "as_field",
     "as_connectivity",
-    # from iterator
-    "NeighborTableOffsetProvider",
-    "index_field",
-    "np_as_located_field",
     # from ffront
     "FieldOffset",
     "field_operator",
