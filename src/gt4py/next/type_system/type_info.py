@@ -745,7 +745,7 @@ def structural_function_signature_incompatibilities(
     kwargs = {**kwargs}
 
     # check positional arguments
-    for name in [*kwargs]:
+    for name in kwargs:
         if name in func_type.pos_or_kw_args:
             args_idx = len(func_type.pos_only_args) + list(func_type.pos_or_kw_args.keys()).index(
                 name

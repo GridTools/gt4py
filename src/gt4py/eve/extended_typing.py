@@ -203,7 +203,8 @@ class DataClass(Protocol):
 
 
 if not TYPE_CHECKING:
-    # For runtime checks, the ABC subclass hook has better performance than the `runtime_checkable` decorator
+    # For runtime checks, the ABC subclass hook has better performance than
+    # the `runtime_checkable` decorator
     def __subclasshook__(cls, subclass: type) -> bool:
         return _dataclasses.is_dataclass(subclass)
 
@@ -230,7 +231,8 @@ class FrozenDataClass(DataClass, Protocol):
 
 
 if not TYPE_CHECKING:
-    # For performance reasons, we skip the @runtime_checkable decorator at runtime
+    # For runtime checks, the ABC subclass hook has better performance than
+    # the `runtime_checkable` decorator
     def __subclasshook__(cls, subclass: type) -> bool:
         try:
             return _dataclasses.is_dataclass(subclass) and (
