@@ -120,17 +120,6 @@ class _PrettyPrinter(TemplatedGenerator):
 
     UnaryOp = as_fmt("{op}{operand}")
 
-    IfStmt = as_fmt(
-        textwrap.dedent(
-            """
-            if {condition}:
-                {true_branch}
-            else:
-                {false_branch}
-            """
-        ).strip()
-    )
-
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> str:
         if node.op is dialect_ast_enums.UnaryOperator.NOT:
             op = "not "
@@ -228,6 +217,20 @@ class _PrettyPrinter(TemplatedGenerator):
             parenthesize = group != self._grouping(inner_node)
         inner_node_str = self.visit(inner_node)
         return f"({inner_node_str})" if parenthesize else inner_node_str
+
+    def visit_IfStmt(self, node: foast.IfStmt, **kwargs: Any) -> str:
+        condition = self.visit(node.condition, **kwargs)
+        true_branch = textwrap.indent(self.visit(node.true_branch, **kwargs), INDENTATION_PREFIX)
+        false_branch = textwrap.indent(self.visit(node.false_branch, **kwargs), INDENTATION_PREFIX)
+
+        return "\n".join(
+            [
+                f"if {condition}",
+                true_branch,
+                "else:",
+                false_branch,
+            ]
+        )
 
 
 def pretty_format(node: foast.LocatedNode) -> str:
