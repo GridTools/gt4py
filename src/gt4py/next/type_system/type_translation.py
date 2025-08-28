@@ -202,7 +202,8 @@ def from_type_hint(
                 print(f"\n\n\n\n {canonical_type} WTF!!!")
                 assert False
             types = [
-                from_type_hint(t, globalns=sys.modules[type_.__module__].__dict__) for t in python_types
+                from_type_hint(t, globalns=sys.modules[type_.__module__].__dict__)
+                for t in python_types
             ]
             return ts.NamedTupleType(types=types, keys=list(keys))
 

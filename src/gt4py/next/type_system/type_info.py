@@ -689,7 +689,7 @@ def canonicalize_function_arguments(
     ckwargs = {**kwargs}
 
     pos_or_kw_args_names = [*func_type.pos_or_kw_args]
-    for name in kwargs.keys():
+    for name in kwargs:
         if name in func_type.pos_or_kw_args:
             args_idx = num_pos_only_args + pos_or_kw_args_names.index(name)
             if cargs[args_idx] is UNDEFINED_ARG:
@@ -699,11 +699,17 @@ def canonicalize_function_arguments(
                     f"Error canonicalizing function arguments. Got multiple values for argument '{name}'."
                 )
 
-    invalid_kw_args = func_type.kw_only_args.keys() ^ ckwargs.keys()
-    if invalid_kw_args and (not ignore_errors or use_signature_ordering):
+    # TODO: Does this condition make sense? Should it be `not (ignore_errors or use_signature_ordering)`?
+    if (not ignore_errors or use_signature_ordering) and (
+        func_type.kw_only_args.keys() ^ ckwargs.keys()
+    ):
+        # TODO: does this comment make sense?
         # this error can not be ignored as otherwise the invariant that no arguments are dropped
         # is invalidated.
-        raise ValueError(f"Invalid keyword arguments '{', '.join(invalid_kw_args)}'.")
+        if missing_kw_args := (func_type.kw_only_args.keys() - ckwargs.keys()):
+            raise ValueError(f"Missing required keyword arguments: {[*missing_kw_args]}.")
+        if invalid_kw_args := (ckwargs.keys() - func_type.kw_only_args.keys()):
+            raise ValueError(f"Invalid keyword arguments: {[*invalid_kw_args]}.")
 
     if use_signature_ordering:
         ckwargs = {k: ckwargs[k] for k in func_type.kw_only_args if k in ckwargs}
