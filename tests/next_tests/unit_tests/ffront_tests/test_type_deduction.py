@@ -475,7 +475,8 @@ def test_astype_dtype():
 
 
 @dataclasses.dataclass
-class WrongConstructorType: ...
+class WrongConstructorType:
+    foo: int
 
 
 def test_astype_wrong_dtype():

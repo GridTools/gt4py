@@ -14,6 +14,7 @@ import builtins
 import collections.abc
 import dataclasses
 import functools
+import sys
 import types
 import typing
 from typing import Any, ForwardRef, Optional, Protocol, TypeAlias, TypeGuard, get_type_hints
@@ -69,12 +70,13 @@ def is_container_type(type_: type) -> TypeIs[type[PythonContainer]]:
 
 def is_valid_dataclass_type(type_: type) -> bool:
     """Check if a dataclass respects current constraints for dataclasses."""
-    return all(
+    fields = dataclasses.fields(type_)
+    return len(fields) and all(
         f.init is True
         and f.default is dataclasses.MISSING
         and f.default_factory is dataclasses.MISSING
         and f._field_type is dataclasses._FIELD  # type: ignore[attr-defined]  # private member
-        for f in dataclasses.fields(type_)
+        for f in fields
     )
 
 
@@ -122,7 +124,7 @@ def from_type_hint(
     localns: Optional[dict[str, Any]] = None,
 ) -> ts.TypeSpec:
     """Convert any kind of Python type hint to a GT4Py TypeSpec."""
-    nested_typing_callback = functools.partial(from_type_hint, globalns=globalns, localns=localns)
+    from_type_hint_same_ns = functools.partial(from_type_hint, globalns=globalns, localns=localns)
 
     canonical_type, args, extra_args = canonicalize_type_hint(
         type_hint, globalns=globalns, localns=localns
@@ -132,7 +134,7 @@ def from_type_hint(
         case builtins.type if args:
             # This case matches 'type[Foo]' (where the 'Foo' type is stored in args[0])
             type_ = args[0]
-            constructed_type = nested_typing_callback(type_)
+            constructed_type = from_type_hint_same_ns(type_)
 
             if isinstance(constructed_type, ts.ScalarType):
                 return ts.ConstructorType(
@@ -171,35 +173,37 @@ def from_type_hint(
                 raise ValueError(f"Tuple annotation '{type_hint}' requires at least one argument.")
             if Ellipsis in args:
                 raise ValueError(f"Unbound tuples '{type_hint}' are not allowed.")
-            tuple_types = [nested_typing_callback(arg) for arg in args]
+            tuple_types = [from_type_hint_same_ns(arg) for arg in args]
             assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
             return ts.TupleType(types=tuple_types)
 
-
-        case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
+        case type() as type_ if issubclass(type_, (bool, int, float, np.generic, str)):
             # This case matches `int`, `float`, etc. used as annotations
-            return ts.ScalarType(kind=get_scalar_kind(t))
+            return ts.ScalarType(kind=get_scalar_kind(type_))
 
-        case type() as t if is_container_type(t):
+        case type() as type_ if is_container_type(type_):
             python_types = []
             keys = []
-            if xtyping.is_typed_named_tuple_type(t):
-                if not xtyping.is_typed_named_tuple_type(t):
-                    raise ValueError(f"Tuple subclass {t} is not a valid typed namedtuple.")
-                keys = list(t._fields)
-                hints = get_type_hints(t, globalns=globalns, localns=localns)
+            if xtyping.is_typed_named_tuple_type(type_):
+                if not xtyping.is_typed_named_tuple_type(type_):
+                    raise ValueError(f"Tuple subclass {type_} is not a valid typed namedtuple.")
+                keys = list(type_._fields)
+                hints = get_type_hints(type_)
                 python_types = [hints[key] for key in keys]
-            elif xtyping.is_dataclass_type(t):
-                if not is_valid_dataclass_type(t):
+            elif xtyping.is_dataclass_type(type_):
+                if not is_valid_dataclass_type(type_):
                     raise ValueError(
-                        f"Dataclass {t} is not a valid field container. Dataclasses with custom '__init__'"
-                        " functions, InitVars or default argument are not yet supported."
+                        f"Dataclass {type_} is not a valid field container. Supported dataclasses"
+                        " must have at least one member, without custom '__init__'"
+                        " functions, 'InitVar's or default arguments."
                     )
-                keys, python_types = zip(*[(f.name, f.type) for f in dataclasses.fields(t)])
+                keys, python_types = zip(*[(f.name, f.type) for f in dataclasses.fields(type_)])
             else:
                 print(f"\n\n\n\n {canonical_type} WTF!!!")
-                #assert False
-            types = [nested_typing_callback(type_) for type_ in python_types]
+                assert False
+            types = [
+                from_type_hint(t, globalns=sys.modules[type_.__module__].__dict__) for t in python_types
+            ]
             return ts.NamedTupleType(types=types, keys=list(keys))
 
         case common.Field:
@@ -221,7 +225,7 @@ def from_type_hint(
                 raise ValueError(f"Invalid field dimensions '{dim_arg}'.")
 
             try:
-                dtype = nested_typing_callback(dtype_arg)
+                dtype = from_type_hint_same_ns(dtype_arg)
             except ValueError as error:
                 raise ValueError(
                     f"Field dtype argument must be a scalar type (got '{dtype_arg}')."
@@ -236,7 +240,7 @@ def from_type_hint(
 
             try:
                 arg_types, return_type = args
-                new_args = [nested_typing_callback(arg) for arg in arg_types]
+                new_args = [from_type_hint_same_ns(arg) for arg in arg_types]
                 assert all(isinstance(arg, ts.DataType) for arg in new_args)
             except Exception as error:
                 raise ValueError(f"Invalid callable annotations in '{type_hint}'.") from error
@@ -245,12 +249,12 @@ def from_type_hint(
             if len(kwargs_info) != 1:
                 raise ValueError(f"Invalid callable annotations in '{type_hint}'.")
             kwargs = {
-                arg: nested_typing_callback(arg_type)
+                arg: from_type_hint_same_ns(arg_type)
                 for arg, arg_type in kwargs_info[0].data.items()
             }
             assert all(isinstance(val, (ts.DataType, ts.DeferredType)) for val in kwargs.values())
 
-            returns = nested_typing_callback(return_type)
+            returns = from_type_hint_same_ns(return_type)
             assert isinstance(returns, (ts.DataType, ts.DeferredType, ts.VoidType))
 
             # TODO(tehrengruber): print better error when no return type annotation is given

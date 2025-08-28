@@ -47,7 +47,6 @@ def flatten(arg):
     )
 
 
-
 # import functools
 # from collections.abc import Callable
 # from typing import TypeAlias, Any
@@ -62,10 +61,9 @@ def flatten(arg):
 # def nested_tuple_constructor(container_type: type) -> NestedTupleConstructor:
 
 #     if issubclass(container_type, tuple):
-#         return 
-        
+#         return
+
 #     if issubclass(container_type, xtyping.DataClass):
 #         return lambda x: {k: nested_tuple_constructor(type(v))(v) for k, v in x.items()}
-    
-# return  (c.field1, c.field2, ((f3:=c.field3.foo), c_field3.f4))
 
+# return  (c.field1, c.field2, ((f3:=c.field3.foo), c_field3.f4))

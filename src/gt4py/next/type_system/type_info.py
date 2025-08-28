@@ -745,7 +745,7 @@ def structural_function_signature_incompatibilities(
     kwargs = {**kwargs}
 
     # check positional arguments
-    for name in {**kwargs}.keys():
+    for name in [*kwargs]:
         if name in func_type.pos_or_kw_args:
             args_idx = len(func_type.pos_only_args) + list(func_type.pos_or_kw_args.keys()).index(
                 name
@@ -873,7 +873,7 @@ def function_signature_incompatibilities_constructor(
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
     yield from function_signature_incompatibilities_func(
-        constructor_type.definition, args, kwargs, skip_canonicalization=True
+        constructor_type.definition, args, kwargs, skip_canonicalization=False
     )
 
 
@@ -914,8 +914,7 @@ def accepts_args(
 
     errors = function_signature_incompatibilities(callable_type, with_args, with_kwargs)
     if raise_exception:
-        error_list = list(errors)
-        if len(error_list) > 0:
+        if len(error_list := [*errors]) > 0:
             raise ValueError(
                 f"Invalid call to function of type '{callable_type}':\n"
                 + ("\n".join([f"  - {error}" for error in error_list]))

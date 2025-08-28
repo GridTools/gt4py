@@ -158,10 +158,7 @@ class NamedTupleType(TupleType):
 
     @functools.cached_property
     def keys_tree(self) -> NestedList[str]:
-        tree = [
-            getattr(tspec, "keys_tree", key)
-            for key, tspec in zip(self.keys, self.types)
-        ]
+        tree = [getattr(tspec, "keys_tree", key) for key, tspec in zip(self.keys, self.types)]
         return tree
 
 

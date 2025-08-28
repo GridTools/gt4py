@@ -593,21 +593,15 @@ def eval_forward_ref(
         Result: ...ict[str, ...uple[int, float]]
 
     """
-    actual_type = ForwardRef(ref) if isinstance(ref, str) else ref
+    obj = _types.SimpleNamespace(
+        __annotations__={"ref": ForwardRef(ref) if isinstance(ref, str) else ref}
+    )
 
-    def _f() -> None:
-        pass
+    safe_localns = {**localns} if localns else {}
+    safe_localns.setdefault("typing", _sys.modules[__name__])
+    safe_localns.setdefault("NoneType", type(None))
 
-    _f.__annotations__ = {"ref": actual_type}
-
-    if localns:
-        safe_localns = {**localns}
-        safe_localns.setdefault("typing", _sys.modules[__name__])
-        safe_localns.setdefault("NoneType", type(None))
-    else:
-        safe_localns = {"typing": _sys.modules[__name__], "NoneType": type(None)}
-
-    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]
+    actual_type = get_type_hints(obj, globalns, safe_localns, include_extras=include_extras)["ref"]
     assert not isinstance(actual_type, ForwardRef)
 
     return actual_type
