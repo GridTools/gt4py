@@ -148,6 +148,9 @@ def _parse_gt_param(
                         isinstance(array_size, dace.symbolic.SymbolicType)
                         and not array_size.is_constant()
                     ):
+                        # TODO(phimuell, edopao): Here is the implicit assumption that the shape
+                        #   fully consists of the domain range symbols. Which is probably a valid
+                        #   assumption for the shape. Also see the strides.
                         dim_range = f"{arg}.domain.ranges[{i}]"
                         rstart = gtx_dace_utils.range_start_symbol(param_name, i)
                         rstop = gtx_dace_utils.range_stop_symbol(param_name, i)
@@ -175,6 +178,9 @@ def _parse_gt_param(
                         assert array_stride.name == gtx_dace_utils.field_stride_symbol_name(
                             param_name, i
                         )
+                        # TODO(phimuell, edopao): This assumes that the stride is a single value.
+                        #   However, it should also be something like `a*b`. See also the proposed
+                        #   change where this function is called.
                         _parse_gt_param(
                             array_stride.name,
                             FIELD_SYMBOL_GT_TYPE,
@@ -261,16 +267,18 @@ def {_cb_get_stride}(ndarray, dim_index):
             arg3=_cb_last_call_args,
         )
     )
-    code.indent()
-    for i, param in enumerate(program_source.entry_point.parameters):
-        arg = f"{_cb_args}[{i}]"
-        assert isinstance(param.type_, ts.DataType)
-        _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
 
+    # TODO(phimuell, edopao): I think that it is more safe to iterate through the argument
+    #   list of the SDFG. As it would ensure that everything is updated. I would change the
+    #   iteration such that we iterate through all arguments the SDFG is needing and then
+    #   look where we get it from.
     # TODO(phimuell, edopao): The offset tables are not updated here. In normal simulations
     #   this might not be a problem, however, inside the tests it might be a problem.
-
-    code.dedent()
+    with code.indented():
+        for i, param in enumerate(program_source.entry_point.parameters):
+            arg = f"{_cb_args}[{i}]"
+            assert isinstance(param.type_, ts.DataType)
+            _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
 
     src = codegen.format_python_source(code.text)
     return stages.BindingSource(src, library_deps=tuple())
