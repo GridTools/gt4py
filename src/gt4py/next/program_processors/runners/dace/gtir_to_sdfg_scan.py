@@ -66,7 +66,10 @@ def _parse_scan_fieldop_arg(
         # In scan field operator, the arguments to the vertical stencil are passed by value.
         # Therefore, the full field shape is passed as `MemletExpr` rather than `IteratorExpr`.
         return gtir_dataflow.MemletExpr(
-            arg_expr.field, arg_expr.gt_dtype, arg_expr.get_memlet_subset(ctx.sdfg)
+            dc_node=arg_expr.field,
+            gt_dtype=arg_expr.gt_dtype,
+            subset=arg_expr.get_memlet_subset(ctx.sdfg),
+            field_layout=arg_expr.get_full_field_domain(),
         )
 
     arg = sdfg_builder.visit(node, ctx=ctx)
@@ -94,7 +97,7 @@ def _create_scan_field_operator_impl(
 
     Similar to `gtir_to_sdfg_primitives._create_field_operator_impl()` but
     for scan field operators. It differs in that the scan loop region produces
-    a field along the vertical dimension, rather than a single point.
+    a field along the "vertical" dimension, rather than a single point.
     Therefore, the memlet subset will write a slice into the result array, that
     corresponds to the full vertical shape for each horizontal grid point.
 
@@ -103,19 +106,27 @@ def _create_scan_field_operator_impl(
     """
     dataflow_output_desc = output_edge.result.dc_node.desc(ctx.sdfg)
     assert isinstance(dataflow_output_desc, dace.data.Array)
+    assert len(output_edge.result.field_layout) == 1
+    assert sdfg_builder.column_axis == output_edge.result.field_layout[0]  # type: ignore[attr-defined]  # `column_axis` is defined.
 
-    # the memory layout of the output field follows the field operator compute domain
+    # The memory layout of the output field follows the field operator compute domain
     field_dims, field_origin, field_shape = gtir_domain.get_field_layout(
         field_domain, ctx.target_domain
     )
     field_indices = gtir_domain.get_domain_indices(field_dims, field_origin)
     field_subset = dace_subsets.Range.from_indices(field_indices)
+    assert sdfg_builder.column_axis in field_dims  # type: ignore[attr-defined]  # `column_axis` is defined.
 
-    # the vertical dimension used as scan column is computed by the `LoopRegion`
+    # the "vertical" dimension used as scan column is computed by the `LoopRegion`
     # inside the map scope, therefore it is excluded from the map range
     scan_dim_index = [sdfg_builder.is_column_axis(dim) for dim in field_dims].index(True)
 
     # the map scope writes the full-shape dimension corresponding to the scan column
+    # TODO(phimuell, edopao): Why do we use `dataflow_output_desc.shape[0]` and not
+    #   something other? What happens in if have multiple dimensions (does this makes
+    #   sense)?
+    # TODO(phimuell, edopao): change this using the new utilities.
+    assert len(dataflow_output_desc.shape) == 1
     field_subset = (
         dace_subsets.Range(field_subset[:scan_dim_index])
         + dace_subsets.Range.from_string(f"0:{dataflow_output_desc.shape[0]}")
@@ -128,42 +139,89 @@ def _create_scan_field_operator_impl(
             raise TypeError(
                 f"Type mismatch, expected {output_type.dtype} got {output_edge.result.gt_dtype}."
             )
-        field_dtype = output_edge.result.gt_dtype
         # the scan field operator computes a column of scalar values
         assert len(dataflow_output_desc.shape) == 1
     else:
-        assert isinstance(output_type.dtype, ts.ListType)
-        assert isinstance(output_edge.result.gt_dtype.element_type, ts.ScalarType)
-        field_dtype = output_edge.result.gt_dtype.element_type
-        if field_dtype != output_type.dtype.element_type:
-            raise TypeError(
-                f"Type mismatch, expected {output_type.dtype.element_type} got {field_dtype}."
-            )
-        # the scan field operator computes a list of scalar values for each column level
-        # 1st dim: column level, 2nd dim: list of scalar values (e.g. `neighbors`)
-        assert len(dataflow_output_desc.shape) == 2
-        # the lines below extend the array with the local dimension added by the field operator
-        assert output_edge.result.gt_dtype.offset_type is not None
-        field_shape = [*field_shape, dataflow_output_desc.shape[1]]
-        field_subset = field_subset + dace_subsets.Range.from_string(
-            f"0:{dataflow_output_desc.shape[1]}"
-        )
+        # TODO(phimuell, edopao): I think this case is not properly handled.
+        #   Something that was not done is for example the update of `field_origin`.
+        #   Furthermore, if we have a list, then `scan_dim_index` would technically
+        #   be more than one index.
+        raise NotImplementedError("The case for List output in scans is not supported.")
 
-    # allocate local temporary storage
+    # Create the final data storage, that is outside of the surrounding Map.
+    # TODO(phimuell, edopao): In a previous version the stride was adapted. However,
+    #   this was done in a very strange way. First of all the stride of the "dummy
+    #   output" was modified, which does not make sense as it is removed. The strides
+    #   that must be updated is the strides of the output on the inside.
+    # TODO(phimuell, edopao): The name is a bit strange.
     field_name, field_desc = sdfg_builder.add_temp_array(
         ctx.sdfg, field_shape, dataflow_output_desc.dtype
     )
-    # the inner and outer strides have to match
-    scan_output_stride = field_desc.strides[scan_dim_index]
-    # also consider the stride of the local dimension, in case the scan field operator computes a list
-    local_strides = field_desc.strides[len(field_dims) :]
-    assert len(local_strides) == (1 if isinstance(output_edge.result.gt_dtype, ts.ListType) else 0)
-    new_inner_strides = [scan_output_stride, *local_strides]
-    dataflow_output_desc.set_shape(dataflow_output_desc.shape, new_inner_strides)
-
-    # and here the edge writing the dataflow result data through the map exit node
     field_node = ctx.state.add_access(field_name)
-    output_edge.connect(map_exit, field_node, field_subset)
+
+    # Now connect the final output node with the output of the nested SDFG. Note that
+    #  Up to now the nested SDFG is writing into a data container that has the size
+    #  to hold one column. The function bellow, that does the connection, will might
+    #  remove that in certain cases.
+    inner_map_output_temporary_removed = output_edge.connect(map_exit, field_node, field_subset)
+    assert ctx.state.in_degree(field_node) == 1
+
+    field_node_path = ctx.state.memlet_path(next(iter(ctx.state.in_edges(field_node))))
+    assert field_node_path[-1].dst is field_node
+
+    if inner_map_output_temporary_removed:
+        # The original output of the nested SDFG, the one that would be inside the Map,
+        #  has been deleted and the nested SDFG writes directly into the output. In
+        #  that case we have to adapt the stride of the data container on the inside.
+        nsdfg_scan = field_node_path[0].src
+        assert isinstance(nsdfg_scan, dace.nodes.NestedSDFG)
+        inner_output_name = field_node_path[0].src_conn
+        inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
+        assert len(inner_output_desc.shape) == 1
+
+        outside_output_stride = field_desc.strides[scan_dim_index]
+        if str(outside_output_stride).isdigit():
+            # It is a constant so we can just set it
+            inner_output_stride_symbol_name = outside_output_stride
+        else:
+            # The stride on the outside is a symbolic expression. We must map it into
+            #  the nested SDFG. To avoid confusion, we create a new symbol.
+            # TODO(phimuell, edopao): Selection of the type of the symbol is wrong.
+            # TODO(phimuell, edopao): Think if the helper functions in `transfromations/strides.py`
+            #   should be used.
+            inner_output_stride_symbol_name = nsdfg_scan.sdfg.add_symbol(
+                name=f"_gt4py_scan_stride_replacement_{field_name}_{scan_dim_index}__{inner_output_name}",
+                stype=dace.int32,
+                find_new_name=True,
+            )
+            nsdfg_scan.symbol_mapping[inner_output_stride_symbol_name] = outside_output_stride
+
+        # Update the stride on the inside.
+        inner_output_desc.set_shape(
+            new_shape=inner_output_desc.shape,
+            strides=(dace.symbolic.pystr_to_symbolic(inner_output_stride_symbol_name),),
+        )
+    else:
+        # The AccessNode on the inside of the Map was not removed but remains there.
+        #  Thus we do not have to update the strides, we do however, make some checks.
+        # TODO(phimuell, edopao): We need a unit test for that.
+        in_map_temporary_output_field = field_node_path[0].src
+        assert isinstance(in_map_temporary_output_field, dace.nodes.AccessNode)
+        in_map_temporary_output_field_desc = in_map_temporary_output_field.desc(ctx.sdfg)
+
+        assert ctx.state.in_degree(in_map_temporary_output_field) == 1
+        assert ctx.state.out_degree(in_map_temporary_output_field) == 1
+        inner_edge = next(iter(ctx.state.in_edges(in_map_temporary_output_field)))
+        nsdfg_scan = inner_edge.src
+        assert isinstance(nsdfg_scan, dace.nodes.NestedSDFG)
+
+        inner_output_name = inner_edge.src_conn
+        inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
+
+        assert len(inner_output_desc.shape) == 1
+        assert inner_output_desc.shape == in_map_temporary_output_field_desc.shape
+        assert inner_output_desc.strides == in_map_temporary_output_field_desc.strides
+        assert all(str(s).isdigit() for s in inner_output_desc.strides)
 
     return gtir_to_sdfg_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
@@ -216,6 +274,7 @@ def _create_scan_field_operator(
                 if not sdfg_builder.is_column_axis(domain_range.dim)
             },
         )
+        assert (len(map_entry.params) + 1) == len(domain)
 
     # here we setup the edges passing through the map entry node
     for edge in input_edges:
@@ -450,6 +509,7 @@ def _lower_lambda_to_nested_sdfg(
             output_subset = dace_subsets.Range.from_string(
                 f"{output_column_index}, 0:{scan_output_shape[1]}"
             )
+            raise NotImplementedError("Proper dimension ordering is not implemented.")
         scan_result_data = scan_result.dc_node.data
         scan_result_desc = scan_result.dc_node.desc(lambda_ctx.sdfg)
         scan_result_subset = dace_subsets.Range.from_array(scan_result_desc)
@@ -540,7 +600,15 @@ def _connect_nested_sdfg_output_to_temporaries(
         None,
         dace.Memlet.from_array(outer_dataname, outer_desc),
     )
-    output_expr = gtir_dataflow.ValueExpr(outer_node, inner_data.gt_type.dtype)
+
+    # TODO(phimuell, edopao): This works because we essentially clone the descriptor.
+    if isinstance(inner_data.gt_type, ts.FieldType):
+        field_layout = list(inner_data.gt_type.dims)
+    else:
+        field_layout = []
+    output_expr = gtir_dataflow.ValueExpr(
+        outer_node, inner_data.gt_type.dtype, field_layout=field_layout
+    )
     return gtir_dataflow.DataflowOutputEdge(outer_ctx.state, output_expr)
 
 

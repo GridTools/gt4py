@@ -2150,6 +2150,9 @@ def test_gtir_index():
 
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
+    # TODO(phimuell, edopao): I, phimuell, am not sure if this is correct, since you add
+    #   `i` essentially to `i`. So I would expect that the result is `2 * i` or something,
+    #   maybe a `+1` because of the shift.
     ref = np.concatenate(
         (v[:MARGIN], np.arange(MARGIN, N - MARGIN, dtype=np.int32), v[N - MARGIN :])
     )
