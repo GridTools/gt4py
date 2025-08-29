@@ -820,19 +820,23 @@ def function_signature_incompatibilities_func(
             yield from error_list
             return
 
-    num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
+    num_pos_only_args = len(func_type.pos_only_args)
+    num_pos_or_kw_args = len(func_type.pos_or_kw_args)
+    num_pos_params = num_pos_only_args + num_pos_or_kw_args
     assert len(args) >= num_pos_params
     for i, (a_arg, b_arg) in enumerate(
         zip(list(func_type.pos_only_args) + list(func_type.pos_or_kw_args.values()), args)
     ):
         if b_arg is not UNDEFINED_ARG and a_arg != b_arg and not is_compatible_type(a_arg, b_arg):
-            if i < len(func_type.pos_only_args):
+            if i < num_pos_only_args:
                 arg_repr = f"{_number_to_ordinal_number(i + 1)} argument"
             else:
-                arg_repr = f"argument '{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}'"
+                arg_repr = (
+                    f"argument '{list(func_type.pos_or_kw_args.keys())[i - num_pos_only_args]}'"
+                )
             yield f"Expected {arg_repr} to be of type '{a_arg}', got '{b_arg}'."
 
-    for kwarg in set(func_type.kw_only_args.keys()) & set(kwargs.keys()):
+    for kwarg in func_type.kw_only_args.keys() & kwargs.keys():
         if (a_kwarg := func_type.kw_only_args[kwarg]) != (
             b_kwarg := kwargs[kwarg]
         ) and not is_compatible_type(a_kwarg, b_kwarg):

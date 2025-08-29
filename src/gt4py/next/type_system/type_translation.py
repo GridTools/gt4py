@@ -17,7 +17,7 @@ import functools
 import sys
 import types
 import typing
-from typing import Any, ForwardRef, Optional, Protocol, TypeAlias, TypeGuard, get_type_hints
+from typing import Any, ForwardRef, Optional, TypeAlias, get_type_hints
 
 import numpy as np
 import numpy.typing as npt
@@ -182,14 +182,12 @@ def from_type_hint(
             return ts.ScalarType(kind=get_scalar_kind(type_))
 
         case type() as type_ if is_container_type(type_):
-            python_types = []
             keys = []
+            hints = get_type_hints(type_)
             if xtyping.is_typed_named_tuple_type(type_):
                 if not xtyping.is_typed_named_tuple_type(type_):
                     raise ValueError(f"Tuple subclass {type_} is not a valid typed namedtuple.")
                 keys = list(type_._fields)
-                hints = get_type_hints(type_)
-                python_types = [hints[key] for key in keys]
             elif xtyping.is_dataclass_type(type_):
                 if not is_valid_dataclass_type(type_):
                     raise ValueError(
@@ -197,15 +195,16 @@ def from_type_hint(
                         " must have at least one member, without custom '__init__'"
                         " functions, 'InitVar's or default arguments."
                     )
-                keys, python_types = zip(*[(f.name, f.type) for f in dataclasses.fields(type_)])
+                keys = [f.name for f in dataclasses.fields(type_)]
             else:
                 print(f"\n\n\n\n {canonical_type} WTF!!!")
                 assert False
+
             types = [
-                from_type_hint(t, globalns=sys.modules[type_.__module__].__dict__)
-                for t in python_types
+                from_type_hint(hints[key], globalns=sys.modules[type_.__module__].__dict__)
+                for key in keys
             ]
-            return ts.NamedTupleType(types=types, keys=list(keys))
+            return ts.NamedTupleType(types=types, keys=keys)
 
         case common.Field:
             if (n_args := len(args)) != 2:

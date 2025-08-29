@@ -7,12 +7,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
-
-from typing import Iterator, Optional, Sequence, Union
+from typing import Iterator, Optional, Sequence
 
 from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
+from gt4py.eve.extended_typing import NestedList
 from gt4py.next import common
-from gt4py.eve.extended_typing import NestedTuple, NestedList
 
 
 class TypeSpec(eve_datamodels.DataModel, kw_only=False, frozen=True): ...  # type: ignore[call-arg]
