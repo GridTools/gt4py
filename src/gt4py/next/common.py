@@ -645,7 +645,7 @@ if TYPE_CHECKING:
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
     class GTBuiltInFuncDispatcher(Protocol):
-        def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]: ...
+        def __call__(self, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]: ...
 
 
 # TODO(havogt): we need to describe when this interface should be used instead of the `Field` protocol.
