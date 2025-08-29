@@ -6,9 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Iterator, Optional, Sequence, Union
+import functools
+from typing import Iterator, Optional, Sequence
 
 from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
+from gt4py.eve.extended_typing import NestedList
 from gt4py.next import common
 
 
@@ -141,11 +143,29 @@ class TupleType(DataType):
         return len(self.types)
 
 
+class NamedTupleType(TupleType):
+    keys: list[str]
+
+    def __getattr__(self, name):
+        keys = object.__getattribute__(self, "keys")
+        if name in keys:
+            return self.types[keys.index(name)]
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+    def __str__(self) -> str:
+        return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
+
+    @functools.cached_property
+    def keys_tree(self) -> NestedList[str]:
+        tree = [getattr(tspec, "keys_tree", key) for key, tspec in zip(self.keys, self.types)]
+        return tree
+
+
 class FunctionType(TypeSpec, CallableType):
     pos_only_args: Sequence[TypeSpec]
     pos_or_kw_args: dict[str, TypeSpec]
     kw_only_args: dict[str, TypeSpec]
-    returns: Union[TypeSpec]
+    returns: TypeSpec
 
     def __str__(self) -> str:
         arg_strs = [str(arg) for arg in self.pos_only_args]

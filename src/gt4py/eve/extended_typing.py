@@ -194,6 +194,60 @@ class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
     def __delete__(self, _instance: _C) -> None: ...
 
 
+@runtime_checkable
+class DataClass(Protocol):
+    """Typing protocol for data classes."""
+
+    __dataclass_fields__: ClassVar[dict[str, _dataclasses.Field]]
+    __dataclass_params__: ClassVar[_DataclassParams]
+
+
+if not TYPE_CHECKING:
+    # For runtime checks, the ABC subclass hook has better performance than
+    # the `runtime_checkable` decorator
+    def __subclasshook__(cls, subclass: type) -> bool:
+        return _dataclasses.is_dataclass(subclass)
+
+    DataClass.__subclasshook__ = classmethod(__subclasshook__)
+
+
+class _DataclassParams(Protocol):
+    init: bool
+    repr: bool
+    eq: bool
+    order: bool
+    unsafe_hash: bool
+    frozen: bool
+    match_args: bool
+    kw_only: bool
+    slots: bool
+    weakref_slot: bool
+
+
+class FrozenDataClass(DataClass, Protocol):
+    __dataclass_params__: ClassVar[_FrozenDataclassParams]
+
+    def __setattr__(self, name: str, value: Any) -> Never: ...
+
+
+if not TYPE_CHECKING:
+    # For runtime checks, the ABC subclass hook has better performance than
+    # the `runtime_checkable` decorator
+    def __subclasshook__(cls, subclass: type) -> bool:
+        try:
+            return _dataclasses.is_dataclass(subclass) and (
+                subclass.__dataclass_params__.frozen is not None
+            )
+        except AttributeError:
+            return False
+
+    DataClass.__subclasshook__ = classmethod(__subclasshook__)
+
+
+class _FrozenDataclassParams(_DataclassParams, Protocol):
+    frozen: Literal[True]
+
+
 # -- Based on typeshed definitions --
 ReadOnlyBuffer: TypeAlias = Union[bytes, SupportsBytes]
 WriteableBuffer: TypeAlias = Union[
@@ -319,6 +373,35 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # -- Added functionality --
+class _TypedNamedTuple(Sequence[_T_co]):
+    _fields: ClassVar[tuple[str, ...]]
+
+    def _make(self, iterable: Iterable[_T_co]) -> Self: ...
+    def _asdict(self) -> dict[str, Any]: ...
+    def _replace(self, **kwargs: Any) -> Self: ...
+
+
+def is_typed_named_tuple_type(type_: type) -> TypeGuard[type[_TypedNamedTuple]]:
+    return (
+        issubclass(type_, tuple) and (_typing.NamedTuple in getattr(type_, "__orig_bases__", ()))
+    ) or (
+        (field_names := getattr(type_, "_fields", None)) is not None
+        and {*field_names} <= _typing.get_type_hints(type_).keys()
+    )
+
+
+def is_dataclass_type(type_: type) -> TypeGuard[type[DataClass]]:
+    return _dataclasses.is_dataclass(type_)
+
+
+def is_frozen_dataclass_type(type_: type) -> TypeGuard[type[FrozenDataClass]]:
+    return (
+        _dataclasses.is_dataclass(type_)
+        and (params := getattr(type_, "__dataclass_params__", None)) is not None
+        and cast(_FrozenDataclassParams, params).frozen is True
+    )
+
+
 _ArtefactTypes: tuple[type, ...] = (_types.GenericAlias,)
 
 # `Any` is a class since Python 3.11
@@ -433,12 +516,7 @@ def is_value_hashable_typing(
     return type_annotation is None
 
 
-def _is_protocol(type_: type, /) -> bool:
-    """Check if a type is a Protocol definition."""
-    return getattr(type_, "_is_protocol", False)
-
-
-is_protocol = getattr(_typing_extensions, "is_protocol", _is_protocol)
+is_protocol = _typing_extensions.is_protocol
 
 
 def get_partial_type_hints(
@@ -517,21 +595,15 @@ def eval_forward_ref(
         Result: ...ict[str, ...uple[int, float]]
 
     """
-    actual_type = ForwardRef(ref) if isinstance(ref, str) else ref
+    obj = _types.SimpleNamespace(
+        __annotations__={"ref": ForwardRef(ref) if isinstance(ref, str) else ref}
+    )
 
-    def _f() -> None:
-        pass
+    safe_localns = {**localns} if localns else {}
+    safe_localns.setdefault("typing", _sys.modules[__name__])
+    safe_localns.setdefault("NoneType", type(None))
 
-    _f.__annotations__ = {"ref": actual_type}
-
-    if localns:
-        safe_localns = {**localns}
-        safe_localns.setdefault("typing", _sys.modules[__name__])
-        safe_localns.setdefault("NoneType", type(None))
-    else:
-        safe_localns = {"typing": _sys.modules[__name__], "NoneType": type(None)}
-
-    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]
+    actual_type = get_type_hints(obj, globalns, safe_localns, include_extras=include_extras)["ref"]
     assert not isinstance(actual_type, ForwardRef)
 
     return actual_type
