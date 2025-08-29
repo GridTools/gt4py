@@ -243,7 +243,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     )
 
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
-        return self.offset_provider_type[offset]
+        return gtx_common.get_offset_type(self.offset_provider_type, offset)
 
     def make_field(
         self,

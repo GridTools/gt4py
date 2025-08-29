@@ -563,7 +563,7 @@ def execute_shift(
                 if tag == _CONST_DIM.value:
                     new_entry[i] = 0
                 else:
-                    offset_implementation = offset_provider[tag]
+                    offset_implementation = common.get_offset(offset_provider, tag)
                     assert common.is_neighbor_connectivity(offset_implementation)
                     source_dim = offset_implementation.__gt_type__().source_dim
                     cur_index = pos[source_dim.value]
@@ -579,8 +579,7 @@ def execute_shift(
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
         return cast(IncompletePosition, pos) | {tag: new_entry}
 
-    assert tag in offset_provider
-    offset_implementation = offset_provider[tag]
+    offset_implementation = common.get_offset(offset_provider, tag)
     if isinstance(offset_implementation, common.Dimension):
         new_pos = copy.copy(pos)
         if common.is_int_index(value := new_pos[offset_implementation.value]):
@@ -1354,7 +1353,12 @@ def constant_field(value: Any, dtype_like: Optional[core_defs.DTypeLike] = None)
 @builtins.shift.register(EMBEDDED)
 def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIterator]:
     def impl(it: ItIterator) -> ItIterator:
-        return it.shift(*list(o.value if isinstance(o, runtime.Offset) else o for o in offsets))
+        return it.shift(
+            # TODO
+            *list(
+                o.value if isinstance(o, (runtime.Offset, common.Dimension)) else o for o in offsets
+            )
+        )
 
     return impl
 
@@ -1377,7 +1381,7 @@ class _List(Generic[DT]):
         assert isinstance(element_type, ts.DataType)
         offset_provider = embedded_context.get_offset_provider()
         assert offset_provider is not None
-        connectivity = offset_provider[offset_tag]
+        connectivity = common.get_offset(offset_provider, offset_tag)
         assert common.is_neighbor_connectivity(connectivity)
         local_dim = connectivity.__gt_type__().neighbor_dim
         return ts.ListType(element_type=element_type, offset_type=local_dim)
@@ -1405,7 +1409,7 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     assert isinstance(offset_str, str)
     offset_provider = embedded_context.get_offset_provider()
     assert offset_provider is not None
-    connectivity = offset_provider[offset_str]
+    connectivity = common.get_offset(offset_provider, offset_str)
     assert common.is_neighbor_connectivity(connectivity)
     return _List(
         values=tuple(
@@ -1481,7 +1485,7 @@ class SparseListIterator:
             )
         offset_provider = embedded_context.get_offset_provider()
         assert offset_provider is not None
-        connectivity = offset_provider[self.list_offset]
+        connectivity = common.get_offset(offset_provider, self.list_offset)
         assert common.is_neighbor_connectivity(connectivity)
         return _List(
             values=tuple(
@@ -1728,7 +1732,7 @@ def _fieldspec_list_to_value(
             offset_provider = embedded_context.get_offset_provider()
             offset_type = type_.offset_type
             assert isinstance(offset_type, common.Dimension)
-            connectivity = offset_provider[offset_type.value]
+            connectivity = common.get_offset(offset_provider, offset_type.value)
             assert common.is_neighbor_connectivity(connectivity)
             return domain.insert(
                 len(domain),

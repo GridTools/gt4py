@@ -12,7 +12,7 @@ import pytest
 import gt4py.next as gtx
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, Ioff, JDim, Joff, cartesian_case
+from next_tests.integration_tests.cases import IDim, JDim, Joff, cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
 )
@@ -25,7 +25,7 @@ def lap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JDim], "
     return (
         -4.0 * in_field
         + in_field(IDim + 1)
-        + in_field(JDim + 1)
+        + in_field(Joff[1])  # TODO remove (just to make sure that syntax is not broken)
         + in_field(IDim - 1)
         + in_field(JDim - 1)
     )

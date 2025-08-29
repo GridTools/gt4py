@@ -511,7 +511,8 @@ def _resolve_dimensions(
         for off_literal in reversed(
             shift_tuple[::2]
         ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
-            offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
+            assert isinstance(off_literal.value, str)
+            offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
             if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
                 continue  # No shift applied
             if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
@@ -655,7 +656,7 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
                 assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                     offset_axis.value, str
                 )
-                type_ = offset_provider_type[offset_axis.value]
+                type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
                 if isinstance(type_, common.Dimension):
                     pass
                 elif isinstance(type_, common.NeighborConnectivityType):

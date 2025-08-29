@@ -72,20 +72,6 @@ class DimensionKind(StrEnum):
 _DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
 
 
-def dimension_to_implicit_offset(dim: str) -> str:
-    """
-    Return name of offset implicitly defined by a dimension.
-
-    Each dimension implicitly also defines an offset, such that we can allow syntax like::
-
-        field(TDim + 1)
-
-    without having to explicitly define an offset for ``TDim``. This function defines the respective
-    naming convention.
-    """
-    return f"_{dim}Off"
-
-
 @dataclasses.dataclass(frozen=True)
 class Dimension:
     value: str
@@ -98,13 +84,7 @@ class Dimension:
         return NamedIndex(self, val)
 
     def __add__(self, offset: int) -> Connectivity:
-        # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
-        from gt4py.next.ffront import fbuiltins
-
-        assert isinstance(self.value, str)
-        return fbuiltins.FieldOffset(
-            dimension_to_implicit_offset(self.value), source=self, target=(self,)
-        )[offset]
+        return CartesianConnectivity(self, offset)
 
     def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
@@ -1033,6 +1013,18 @@ def offset_provider_to_type(
     return {
         k: v.__gt_type__() if isinstance(v, Connectivity) else v for k, v in offset_provider.items()
     }
+
+
+def get_offset_type(
+    offset_provider_type: OffsetProviderType, offset: str
+) -> OffsetProviderTypeElem:
+    return offset_provider_type.get(
+        offset, Dimension(value=offset)
+    )  # TODO return a valid dimension
+
+
+def get_offset(offset_provider: OffsetProvider, offset: str) -> OffsetProviderElem:
+    return offset_provider.get(offset, Dimension(value=offset))  # TODO return a valid dimension
 
 
 def hash_offset_provider_unsafe(offset_provider: OffsetProvider) -> int:

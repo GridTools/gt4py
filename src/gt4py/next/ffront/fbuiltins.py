@@ -337,7 +337,7 @@ class FieldOffset(runtime.Offset):
         assert isinstance(self.value, str)
         current_offset_provider = embedded.context.get_offset_provider(None)
         assert current_offset_provider is not None
-        offset_definition = current_offset_provider[self.value]
+        offset_definition = common.get_offset(current_offset_provider, self.value)
 
         connectivity: common.Connectivity
         if isinstance(offset_definition, common.Dimension):
@@ -358,7 +358,7 @@ class FieldOffset(runtime.Offset):
         assert isinstance(self.value, str)
         current_offset_provider = embedded.context.get_offset_provider(None)
         assert current_offset_provider is not None
-        offset_definition = current_offset_provider[self.value]
+        offset_definition = common.get_offset(current_offset_provider, self.value)
 
         cache_key = id(offset_definition)
         if (connectivity := self._cache.get(cache_key, None)) is None:
