@@ -54,7 +54,6 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
-from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -1682,6 +1681,11 @@ def set_at(
     operators._tuple_assign_field(target, expr, domain)
 
 
+@runtime.get_domain_range.register(EMBEDDED)
+def get_domain_range(field: common.Field, dim: common.Dimension) -> tuple[int, int]:
+    return (field.domain[dim].unit_range.start, field.domain[dim].unit_range.stop)
+
+
 @runtime.if_stmt.register(EMBEDDED)
 def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[[], None]) -> None:
     """
@@ -1860,11 +1864,6 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             kwargs["column_axis"],
             common.UnitRange(0, 0),  # empty: indicates column operation, will update later
         )
-
-    import inspect
-
-    if len(args) < len(inspect.getfullargspec(fun).args):
-        args = (*args, *arguments.iter_size_args(args))
 
     with embedded_context.update(**context_vars):
         fun(*args)
