@@ -141,8 +141,8 @@ def tree_map(
                 assert result_collection_constructor is not None
                 return result_collection_constructor(impl(*arg) for arg in zip(*args))
 
-            return fun(  # type: ignore[call-arg, misc] # mypy not smart enough
-                *cast(_P.args, args)
+            return fun(
+                *cast(_P.args, args)  # type: ignore[valid-type]
             )  # mypy doesn't understand that `args` at this point is of type `_P.args`
 
         return impl

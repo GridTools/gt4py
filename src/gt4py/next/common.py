@@ -849,7 +849,6 @@ class NeighborConnectivityType(ConnectivityType):
 
 
 @runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but then it breaks in other places
 class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
