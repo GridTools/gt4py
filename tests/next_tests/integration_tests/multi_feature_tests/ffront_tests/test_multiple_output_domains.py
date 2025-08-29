@@ -11,9 +11,27 @@ import pytest
 import gt4py.next as gtx
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, JDim, cartesian_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import exec_alloc_descriptor
+from next_tests.integration_tests.cases import (
+    IDim,
+    JDim,
+    KDim,
+    C2E,
+    E2V,
+    V2E,
+    Edge,
+    Cell,
+    Vertex,
+    cartesian_case,
+    Case,
+)
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    exec_alloc_descriptor,
+    mesh_descriptor,
+)
 
+from gt4py.next import common
+
+KHalfDim = gtx.Dimension("KHalf", kind=gtx.DimensionKind.VERTICAL)
 pytestmark = pytest.mark.uses_cartesian_shift
 
 
@@ -30,8 +48,9 @@ def prog_orig(
     b: gtx.Field[[IDim], gtx.float32],
     out_a: gtx.Field[[IDim], gtx.float32],
     out_b: gtx.Field[[IDim], gtx.float32],
+    i_size: gtx.int32,
 ):
-    testee_orig(a, b, out=(out_b, out_a), domain={IDim: (0, 10)})
+    testee_orig(a, b, out=(out_b, out_a), domain={IDim: (0, i_size)})
 
 
 def test_program_orig(cartesian_case):
@@ -43,6 +62,35 @@ def test_program_orig(cartesian_case):
     cases.verify(
         cartesian_case,
         prog_orig,
+        a,
+        b,
+        out_a,
+        out_b,
+        cartesian_case.default_sizes[IDim],
+        inout=(out_b, out_a),
+        ref=(b, a),
+    )
+
+
+@gtx.program
+def prog_no_domain(
+    a: gtx.Field[[IDim], gtx.float32],
+    b: gtx.Field[[IDim], gtx.float32],
+    out_a: gtx.Field[[IDim], gtx.float32],
+    out_b: gtx.Field[[IDim], gtx.float32],
+):
+    testee_orig(a, b, out=(out_b, out_a))
+
+
+def test_program_no_domain(cartesian_case):
+    a = cases.allocate(cartesian_case, prog_no_domain, "a")()
+    b = cases.allocate(cartesian_case, prog_no_domain, "b")()
+    out_a = cases.allocate(cartesian_case, prog_no_domain, "out_a")()
+    out_b = cases.allocate(cartesian_case, prog_no_domain, "out_b")()
+
+    cases.verify(
+        cartesian_case,
+        prog_no_domain,
         a,
         b,
         out_a,
@@ -91,6 +139,238 @@ def test_program(cartesian_case):
     )
 
 
+@gtx.program
+def prog_out_as_tuple(
+    a: gtx.Field[[IDim], gtx.float32],
+    b: gtx.Field[[JDim], gtx.float32],
+    out: tuple[gtx.Field[[JDim], gtx.float32], gtx.Field[[IDim], gtx.float32]],
+    i_size: gtx.int32,
+    j_size: gtx.int32,
+):
+    testee(a, b, out=out, domain=({JDim: (0, j_size)}, {IDim: (0, i_size)}))
+
+
+def test_program_out_as_tuple(
+    cartesian_case,
+):  # TODO: this fails for most backends, merge PR #1893 first
+    a = cases.allocate(cartesian_case, prog_out_as_tuple, "a")()
+    b = cases.allocate(cartesian_case, prog_out_as_tuple, "b")()
+    out = cases.allocate(cartesian_case, prog_out_as_tuple, "out")()
+
+    cases.verify(
+        cartesian_case,
+        prog_out_as_tuple,
+        a,
+        b,
+        out,
+        cartesian_case.default_sizes[IDim],
+        cartesian_case.default_sizes[JDim],
+        inout=(out),
+        ref=(b, a),
+    )
+
+
+@gtx.field_operator
+def testee_nested_tuples(
+    a: gtx.Field[[IDim], gtx.float32],
+    b: gtx.Field[[JDim], gtx.float32],
+    c: gtx.Field[[KDim], gtx.float32],
+) -> tuple[
+    tuple[gtx.Field[[IDim], gtx.float32], gtx.Field[[IDim], gtx.float32]],
+    gtx.Field[[IDim], gtx.float32],
+]:
+    return (a, a), a
+
+
+@gtx.program
+def prog_nested_tuples(
+    a: gtx.Field[[IDim], gtx.float32],
+    b: gtx.Field[[JDim], gtx.float32],
+    c: gtx.Field[[KDim], gtx.float32],
+    out_a: gtx.Field[[IDim], gtx.float32],
+    out_b: gtx.Field[[JDim], gtx.float32],
+    out_c: gtx.Field[[KDim], gtx.float32],
+    i_size: gtx.int32,
+    j_size: gtx.int32,
+    k_size: gtx.int32,
+):
+    testee_nested_tuples(
+        a,
+        b,
+        c,
+        out=((out_a, out_a), out_a),
+        domain=(({IDim: (0, i_size)}, {IDim: (0, i_size)}), {IDim: (0, i_size)}),
+    )  # TODO: use JDim, KDim
+
+
+def test_program_nested_tuples(
+    cartesian_case,
+):  # TODO: this fails for most backends, merge PR #1893 first
+    a = cases.allocate(cartesian_case, prog_nested_tuples, "a")()
+    b = cases.allocate(cartesian_case, prog_nested_tuples, "b")()
+    c = cases.allocate(cartesian_case, prog_nested_tuples, "c")()
+    out_a = cases.allocate(cartesian_case, prog_nested_tuples, "out_a")()
+    out_b = cases.allocate(cartesian_case, prog_nested_tuples, "out_b")()
+    out_c = cases.allocate(cartesian_case, prog_nested_tuples, "out_c")()
+
+    cases.verify(
+        cartesian_case,
+        prog_nested_tuples,
+        a,
+        b,
+        c,
+        out_a,
+        out_b,
+        out_c,
+        cartesian_case.default_sizes[IDim],
+        cartesian_case.default_sizes[JDim],
+        cartesian_case.default_sizes[KDim],
+        inout=((out_a, out_a), out_a),
+        ref=((a, a), a),
+    )
+
+
+@gtx.field_operator
+def testee_two_vertical_dims(
+    a: gtx.Field[[KDim], gtx.float32], b: gtx.Field[[KHalfDim], gtx.float32]
+) -> tuple[gtx.Field[[KHalfDim], gtx.float32], gtx.Field[[KDim], gtx.float32]]:
+    return b, a
+
+
+@gtx.program
+def prog_two_vertical_dims(
+    a: gtx.Field[[KDim], gtx.float32],
+    b: gtx.Field[[KHalfDim], gtx.float32],
+    out_a: gtx.Field[[KDim], gtx.float32],
+    out_b: gtx.Field[[KHalfDim], gtx.float32],
+    k_size: gtx.int32,
+    k_half_size: gtx.int32,
+):
+    testee_two_vertical_dims(
+        a, b, out=(out_b, out_a), domain=({KHalfDim: (0, k_half_size)}, {KDim: (0, k_size)})
+    )
+
+
+def test_program_two_vertical_dims(cartesian_case):
+    a = cases.allocate(cartesian_case, prog_two_vertical_dims, "a")()
+    b = cases.allocate(cartesian_case, prog_two_vertical_dims, "b")()
+    out_a = cases.allocate(cartesian_case, prog_two_vertical_dims, "out_a")()
+    out_b = cases.allocate(cartesian_case, prog_two_vertical_dims, "out_b")()
+
+    cases.verify(
+        cartesian_case,
+        prog_two_vertical_dims,
+        a,
+        b,
+        out_a,
+        out_b,
+        cartesian_case.default_sizes[KDim],
+        cartesian_case.default_sizes[KHalfDim],
+        inout=(out_b, out_a),
+        ref=(b, a),
+    )
+
+
+@gtx.field_operator
+def testee_shift_e2c(a: cases.EField) -> tuple[cases.CField, cases.EField]:
+    return a(C2E[1]), a
+
+
+@gtx.program
+def prog_unstructured(
+    a: cases.EField,
+    out_a: cases.EField,
+    out_a_shifted: cases.CField,
+    c_size: gtx.int32,
+    e_size: gtx.int32,
+):
+    testee_shift_e2c(
+        a, out=(out_a_shifted, out_a), domain=({Cell: (0, c_size)}, {Edge: (0, e_size)})
+    )
+
+
+def test_program_unstructured(
+    exec_alloc_descriptor, mesh_descriptor
+):  # TODO: this fails for definitions_numpy, please see test_temporaries_with_sizes.py
+    unstructured_case = Case(
+        exec_alloc_descriptor,
+        offset_provider=mesh_descriptor.offset_provider,
+        default_sizes={
+            Edge: mesh_descriptor.num_edges,
+            Cell: mesh_descriptor.num_cells,
+        },
+        grid_type=common.GridType.UNSTRUCTURED,
+        allocator=exec_alloc_descriptor.allocator,
+    )
+    a = cases.allocate(unstructured_case, prog_unstructured, "a")()
+    out_a = cases.allocate(unstructured_case, prog_unstructured, "out_a")()
+    out_a_shifted = cases.allocate(unstructured_case, prog_unstructured, "out_a_shifted")()
+
+    cases.verify(
+        unstructured_case,
+        prog_unstructured,
+        a,
+        out_a,
+        out_a_shifted,
+        unstructured_case.default_sizes[Cell],
+        unstructured_case.default_sizes[Edge],
+        inout=(out_a_shifted, out_a),
+        ref=((a.ndarray)[mesh_descriptor.offset_provider["C2E"].asnumpy()[:, 1]], a),
+    )
+
+
+@gtx.field_operator
+def testee_temporary(a: cases.VField):
+    edge = a(E2V[1])
+    cell = edge(C2E[1])
+    return edge, cell
+
+
+@gtx.program
+def prog_temporary(
+    a: cases.VField,
+    out_edge: cases.EField,
+    out_cell: cases.CField,
+    c_size: gtx.int32,
+    e_size: gtx.int32,
+):
+    testee_temporary(
+        a, out=(out_edge, out_cell), domain=({Edge: (0, e_size)}, {Cell: (0, c_size)})
+    )  # TODO: specify other domain sizes?
+
+
+def test_program_temporary(
+    exec_alloc_descriptor, mesh_descriptor
+):  # TODO: this fails for definitions_numpy, please see test_temporaries_with_sizes.py
+    unstructured_case = Case(
+        exec_alloc_descriptor,
+        offset_provider=mesh_descriptor.offset_provider,
+        default_sizes={
+            Edge: mesh_descriptor.num_edges,
+            Cell: mesh_descriptor.num_cells,
+            Vertex: mesh_descriptor.num_vertices,
+        },
+        grid_type=common.GridType.UNSTRUCTURED,
+        allocator=exec_alloc_descriptor.allocator,
+    )
+    a = cases.allocate(unstructured_case, prog_temporary, "a")()
+    out_edge = cases.allocate(unstructured_case, prog_temporary, "out_edge")()
+    out_cell = cases.allocate(unstructured_case, prog_temporary, "out_cell")()
+
+    e2v = (a.ndarray)[mesh_descriptor.offset_provider["E2V"].asnumpy()[:, 1]]
+    cases.verify(
+        unstructured_case,
+        prog_temporary,
+        a,
+        out_edge,
+        out_cell,
+        unstructured_case.default_sizes[Cell],
+        unstructured_case.default_sizes[Edge],
+        inout=(out_edge, out_cell),
+        ref=(e2v, e2v[mesh_descriptor.offset_provider["C2E"].asnumpy()[:, 1]]),
+    )
+
+
 def test_direct_fo_orig(cartesian_case):
     a = cases.allocate(cartesian_case, testee_orig, "a")()
     b = cases.allocate(cartesian_case, testee_orig, "b")()
@@ -103,15 +383,14 @@ def test_direct_fo_orig(cartesian_case):
         b,
         out=out,
         ref=(b, a),
-        domain={IDim: (0, cartesian_case.default_sizes[IDim])}
+        domain={IDim: (0, cartesian_case.default_sizes[IDim])},
     )
 
+
 # TODO:
-#  - test without domain
-#  - test with nested tuples
-#  - test with different vertical domains KDim and KHalfDim
+#  - test with double nested tuples
 #  - test from  https://hackmd.io/m__8sBBATiqFWOPNMEPsfg
-#  - unstructured test with Local dimensions e.g. Vertex, E2V and Edge
+#  - vertical staggering with dependency
 
 #
 # def test_direct_fo(cartesian_case):
@@ -131,5 +410,3 @@ def test_direct_fo_orig(cartesian_case):
 #             {IDim: (0, cartesian_case.default_sizes[IDim])},
 #         ),
 #     )
-
-

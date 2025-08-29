@@ -135,7 +135,9 @@ def _get_vertical_range(
     if isinstance(domain, tuple):
         return tuple(_get_vertical_range(dom) for dom in domain)
     else:
-        vertical_dim_filtered = [nr for nr in common.domain(domain) if nr.dim.kind == common.DimensionKind.VERTICAL]
+        vertical_dim_filtered = [
+            nr for nr in common.domain(domain) if nr.dim.kind == common.DimensionKind.VERTICAL
+        ]
         assert len(vertical_dim_filtered) <= 1
         return vertical_dim_filtered[0] if vertical_dim_filtered else eve.NOTHING
 
@@ -154,10 +156,11 @@ def _tuple_assign_field(
             assert core_defs.is_scalar_type(source)
             target[domain] = source
 
-    if not isinstance(domain, tuple): # TODO: use a generic condition that also works for nested domains and targets
+    if not isinstance(
+        domain, tuple
+    ):  # TODO: use a generic condition that also works for nested domains and targets
         domain = utils.tree_map(lambda _: domain)(target)
     impl(target, source, domain)
-
 
 
 def _intersect_scan_args(

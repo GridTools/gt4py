@@ -366,7 +366,7 @@ class ProgramLowering(
         if any(
             not isinstance(out_field_type, ts.FieldType) or out_field_type.dims != out_dims
             for out_field_type in out_field_types
-        ): # TODO
+        ):  # TODO
             raise AssertionError(
                 f"Expected constituents of '{out_field.id}' argument to be"
                 " fields defined on the same dimensions. This error should be "
@@ -499,11 +499,11 @@ class ProgramLowering(
                 first_field = first_field.value
 
             if isinstance(domain_arg, past.TupleExpr):
-                domain_args = [
+                domain_args = [  # TODO: Test with out as one argument which is a tuple, don't flatten field
                     self._construct_itir_domain_arg(field, domain, None)
                     for field, domain in zip(
                         flattened, _flatten_tuple_expr(domain_arg), strict=True
-                    )
+                    )  # TODO use field type -> apply_to_primitive_constituents, path -> find relevant Dict expr -> call _construct_itir_domain_arg, test with wrong structure as well
                 ]
                 domain_expr = im.make_tuple(*domain_args)
                 return self._construct_itir_out_arg(out_arg), domain_expr
