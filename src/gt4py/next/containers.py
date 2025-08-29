@@ -39,7 +39,7 @@ def get_constructor_type(cls: type) -> ts.TupleType:
 
 
 # TODO customize
-def flatten(arg):
+def flatten(arg) -> tuple | common.Field:
     return (
         arg
         if isinstance(arg, common.Field) or not dataclasses.is_dataclass(arg)

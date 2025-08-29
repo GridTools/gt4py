@@ -19,6 +19,7 @@ import numpy as np
 import numpy.typing as npt
 
 import gt4py.eve as eve
+import gt4py.eve.extended_typing as xtyping
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -345,6 +346,13 @@ def dtype(dtype_like: DTypeLike) -> DType:
 
 
 # -- Custom protocols  --
+PythonContainer: TypeAlias = xtyping.TypedNamedTupleABC | xtyping.DataclassABC
+PYTHON_CONTAINER_TYPES: Final[Tuple[type, ...]] = cast(
+    Tuple[type, ...],
+    PythonContainer.__args__,  # type: ignore[attr-defined]
+)
+
+
 class GTDimsInterface(Protocol):
     """
     A `GTDimsInterface` is an object providing the `__gt_dims__` property, naming the buffer dimensions.

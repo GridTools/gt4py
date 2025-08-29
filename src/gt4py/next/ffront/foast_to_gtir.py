@@ -243,6 +243,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             ind = named_tup_type.keys.index(node.attr)
             return im.tuple_get(ind, self.visit(node.value, **kwargs))
 
+        raise AssertionError("Unreachable")
+
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         if isinstance(node.index.type, ts.IndexType):
             # `field[LocalDim(42)]`

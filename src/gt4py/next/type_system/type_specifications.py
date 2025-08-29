@@ -146,7 +146,7 @@ class TupleType(DataType):
 class NamedTupleType(TupleType):
     keys: list[str]
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> DataType | DimensionType | DeferredType:
         keys = object.__getattribute__(self, "keys")
         if name in keys:
             return self.types[keys.index(name)]
