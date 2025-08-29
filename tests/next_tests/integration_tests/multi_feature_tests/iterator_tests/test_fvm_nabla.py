@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("atlas4py")
 
 import gt4py.next as gtx
-from gt4py.next.iterator import library
+from gt4py.next.iterator import library, embedded
 from gt4py.next.iterator.atlas_utils import AtlasTable
 from gt4py.next.iterator.builtins import (
     deref,
@@ -305,7 +305,7 @@ def test_nabla_sign(program_processor):
         S_MXX,
         S_MYY,
         setup.vol_field,
-        gtx.index_field(Vertex),
+        embedded.index_field(Vertex),
         setup.is_pole_edge_field,
         offset_provider={
             "E2V": setup.edges2node_connectivity,
