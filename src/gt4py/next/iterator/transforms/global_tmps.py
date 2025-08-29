@@ -329,11 +329,15 @@ def create_global_tmps(
     This pass looks at all `as_fieldop` calls and transforms field-typed subexpressions of its
     arguments into temporaries.
     """
-    # TODO(tehrengruber): document why to keep existing domains and add test
     program = infer_domain.infer_program(
         program,
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
+        # Previous passes are allowed to create expressions without domains, but we must not
+        # overwrite other domains here. Instead, only reinfer expressions without a domain. We must
+        # not overwrite them since e.g. a `concat_where` expression might be rewritten into an
+        # `if_(cond, tb, fb)` expression where re-inference might extend the domain of tb and fb.
+        # See :class:`infer_domain.infer_expr` for details.
         keep_existing_domains=True,
     )
     program = type_inference.infer(

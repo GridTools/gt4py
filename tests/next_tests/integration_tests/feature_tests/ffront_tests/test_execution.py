@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
+from typing import TypeAlias
 
 import numpy as np
 import pytest
@@ -564,6 +565,39 @@ def test_astype_float(cartesian_case):
         testee,
         ref=lambda a: a.astype(np.float32),
         comparison=lambda a, b: np.all(a == b),
+    )
+
+
+int_alias: TypeAlias = int64
+
+
+def test_astype_alias(cartesian_case):
+    @gtx.field_operator
+    def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int_alias]:
+        b = astype(a, int_alias)
+        return b
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a: a.astype(int_alias),
+        comparison=lambda a, b: np.all(a == b),
+    )
+
+
+def test_type_constructor_alias(cartesian_case):
+    @gtx.field_operator
+    def testee() -> gtx.Field[[IDim], int_alias]:
+        return broadcast(int_alias(42), (IDim,))
+
+    ref = cases.allocate(
+        cartesian_case, testee, cases.RETURN, strategy=cases.ConstInitializer(42)
+    )()
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda: ref,
     )
 
 
