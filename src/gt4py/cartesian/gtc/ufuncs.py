@@ -19,13 +19,13 @@ except ImportError:
 
     # If scipy is not available, emulate gamma function using math.gamma
     gamma_ = np.vectorize(math.gamma)
-    gamma_.types = ["f->f", "d->d", "F->F", "D->D"]
+    gamma_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
     # If scipy is not available, emulate erf function using math.erf
     erf_ = np.vectorize(math.erf)
-    erf_.types = ["f->f", "d->d", "F->F", "D->D"]
+    erf_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
     # If scipy is not available, emulate erfc function using math.erfc
     erfc_ = np.vectorize(math.erfc)
-    erfc_.types = ["f->f", "d->d", "F->F", "D->D"]
+    erfc_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
 
 
 def _round_away_from_zero(num):

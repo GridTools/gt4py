@@ -253,6 +253,12 @@ module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
 
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
+implicit_reexport = true
+# factory-boy is broken, see https://github.com/FactoryBoy/factory_boy/pull/1114
+module = "factory.*"
+
 # -- pytest --
 [tool.pytest]
 

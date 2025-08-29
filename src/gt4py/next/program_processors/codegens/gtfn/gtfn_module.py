@@ -318,13 +318,13 @@ class GTFNTranslationStep(
         )
 
 
-class GTFNTranslationStepFactory(factory.Factory):
+class GTFNTranslationStepFactory(factory.Factory[GTFNTranslationStep]):
     class Meta:
         model = GTFNTranslationStep
 
 
-translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory()
+translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory()  # type: ignore[assignment] # factory-boy typing not precise enough
 
-translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory(
+translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory(  # type: ignore[assignment] # factory-boy typing not precise enough
     device_type=core_defs.DeviceType.CUDA
 )

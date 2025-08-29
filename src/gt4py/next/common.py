@@ -645,7 +645,7 @@ if TYPE_CHECKING:
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
     class GTBuiltInFuncDispatcher(Protocol):
-        def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]: ...
+        def __call__(self, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]: ...
 
 
 # TODO(havogt): we need to describe when this interface should be used instead of the `Field` protocol.
@@ -849,7 +849,6 @@ class NeighborConnectivityType(ConnectivityType):
 
 
 @runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but then it breaks in other places
 class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod

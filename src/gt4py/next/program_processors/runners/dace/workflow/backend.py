@@ -105,7 +105,7 @@ def make_dace_backend(
     Returns:
         A custom dace backend object.
     """
-    return DaCeBackendFactory(
+    return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
         auto_optimize=auto_optimize,
         cached=cached,
