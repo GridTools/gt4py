@@ -357,7 +357,7 @@ typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 
 [tool.ruff.lint.flake8-builtins]
-builtins-allowed-modules = ['builtins']
+builtins-allowed-modules = ['builtins', 'typing']
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
