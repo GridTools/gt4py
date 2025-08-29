@@ -19,6 +19,7 @@ module in question is a submodule, defines `__all__` and exports many public API
 """
 
 # ruff: noqa: F401
+from .._core.definitions import CUPY_DEVICE_TYPE, Device, DeviceType, is_scalar_type
 from . import common, ffront, iterator, program_processors, typing
 from .common import (
     Connectivity,
@@ -48,12 +49,25 @@ from .program_processors.runners.roundtrip import default as itir_python
 
 
 __all__ = [
+    "CUPY_DEVICE_TYPE",
+    "Device",
+    "DeviceType",
+    "is_scalar_type",
+]
+
+
+__all__ = [
     # submodules
     "common",
     "ffront",
     "iterator",
     "program_processors",
     "typing",
+    # from _core.definitions
+    "CUPY_DEVICE_TYPE",
+    "Device",
+    "DeviceType",
+    "is_scalar_type",
     # from common
     "Dimension",
     "DimensionKind",

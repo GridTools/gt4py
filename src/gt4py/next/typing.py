@@ -25,6 +25,6 @@ __all__ = [
     "FieldOperator",
     "OffsetProvider",
     "Program",
-    # from gt4py core for convenience
+    # from _core.definitions for convenience
     "Scalar",
 ]
