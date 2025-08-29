@@ -70,7 +70,7 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.DomainType
     elif t is type:
         return (
-            ts.FunctionType
+            ts.ConstructorType
         )  # our type of type is currently represented by the type constructor function
     elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
         return ts.TupleType
