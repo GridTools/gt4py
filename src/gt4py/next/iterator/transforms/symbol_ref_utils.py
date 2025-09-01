@@ -133,7 +133,7 @@ def collect_symbol_refs(
             node,
             symbol_names,
             ignore_builtins=ignore_builtins,
-            as_ref=cast(Literal[True, False], as_ref),
+            as_ref=cast(Literal[True, False], as_ref),  # type: ignore[redundant-cast] # mypy claims the cast is redundant, but then doesn't understand the `overload` of the callee.
         ).items()
         if count > 0
     ]
