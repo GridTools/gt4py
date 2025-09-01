@@ -17,7 +17,7 @@ from typing import Any, TypeAlias
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing, utils as eve_utils
-from gt4py.next import backend as gtx_backend, common, config, errors
+from gt4py.next import backend as gtx_backend, common, config, containers, errors
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
@@ -154,6 +154,7 @@ class CompiledProgramsPool:
         it is an error.
         """
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
+        args = [containers.flatten(arg) for arg in args]
         static_args_values = tuple(args[i] for i in self._static_arg_indices)
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
         try:

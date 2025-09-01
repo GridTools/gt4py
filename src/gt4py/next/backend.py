@@ -13,7 +13,7 @@ import typing
 from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators
+from gt4py.next import allocators as next_allocators, containers
 from gt4py.next.ffront import (
     foast_to_gtir,
     foast_to_past,
@@ -154,6 +154,8 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     ) -> None:
         if not isinstance(program, IT_PRG):
             args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
+        args = [containers.flatten(a) for a in args]
+        kwargs = {k: containers.flatten(v) for k, v in kwargs.items()}
         self.jit(program, *args, **kwargs)(*args, **kwargs)
 
     def jit(self, program: INPUT_DATA, *args: Any, **kwargs: Any) -> stages.CompiledProgram:

@@ -7,6 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import re
+import dataclasses
+from typing import NamedTuple
 from typing import TypeAlias
 
 import pytest
@@ -472,10 +474,14 @@ def test_astype_dtype():
     )
 
 
+@dataclasses.dataclass
+class WrongConstructorType:
+    foo: int
+
+
 def test_astype_wrong_dtype():
     def simple_astype(a: Field[[TDim], float64]):
-        # we just use broadcast here, but anything with type function is fine
-        return astype(a, broadcast)
+        return astype(a, WrongConstructorType)
 
     with pytest.raises(
         errors.DSLError,
@@ -566,3 +572,91 @@ def test_unexpected_closure_var_error():
 
     with pytest.raises(errors.DSLError, match=r"Unexpected object.*'_UnexpectedClosureVar'"):
         _ = FieldOperatorParser.apply_to_function(unexpected_closure_var)
+
+
+class NamedTupleContainer(NamedTuple):
+    x: Field[[TDim], float32]
+    y: Field[[TDim], float32]
+
+
+@dataclasses.dataclass
+class DataclassContainer:
+    x: Field[[TDim], float32]
+    y: Field[[TDim], float32]
+
+
+@dataclasses.dataclass
+class NestedDataclassContainer:
+    a: DataclassContainer
+    b: DataclassContainer
+    c: DataclassContainer
+
+
+class NestedNamedTupleDataclassContainer(NamedTuple):
+    a: DataclassContainer
+    b: DataclassContainer
+    c: DataclassContainer
+
+
+@dataclasses.dataclass
+class NestedDataclassNamedTupleContainer:
+    a: NamedTupleContainer
+    b: NamedTupleContainer
+    c: NamedTupleContainer
+
+
+@dataclasses.dataclass
+class NestedMixedTupleContainer:
+    a: NamedTupleContainer
+    b: DataclassContainer
+    c: NamedTupleContainer
+
+
+_EXPECTED_NAMED_TUPLE_TYPE = ts.NamedTupleType(
+    types=[
+        ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+        ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+    ],
+    keys=["x", "y"],
+)
+
+_EXPECTED_NESTED_NAMED_TUPLE_TYPE = ts.NamedTupleType(
+    types=[_EXPECTED_NAMED_TUPLE_TYPE, _EXPECTED_NAMED_TUPLE_TYPE, _EXPECTED_NAMED_TUPLE_TYPE],
+    keys=["a", "b", "c"],
+)
+
+
+@pytest.mark.parametrize(
+    "container",
+    [
+        DataclassContainer,
+        # NamedTupleContainer,
+    ],
+)
+def test_containers(container):
+    def containers(a: container) -> container:
+        return container(x=a.x, y=a.y)
+
+    parsed = FieldOperatorParser.apply_to_function(containers)
+
+    assert parsed.params[0].type == _EXPECTED_NAMED_TUPLE_TYPE
+    assert parsed.body.stmts[-1].value.type == _EXPECTED_NAMED_TUPLE_TYPE
+
+
+@pytest.mark.parametrize(
+    "container",
+    [
+        NestedDataclassContainer,
+        # NestedNamedTupleDataclassContainer,
+        # NestedDataclassNamedTupleContainer,
+        # NestedMixedTupleContainer,
+    ],
+)
+def test_nested_containers(container):
+    def containers(a: container) -> container:
+        return container(a=a.a, b=a.b, c=a.c)
+
+    parsed = FieldOperatorParser.apply_to_function(containers)
+
+    assert parsed.params[0].type == _EXPECTED_NESTED_NAMED_TUPLE_TYPE
+    assert parsed.body.stmts[-1].value.type == _EXPECTED_NESTED_NAMED_TUPLE_TYPE

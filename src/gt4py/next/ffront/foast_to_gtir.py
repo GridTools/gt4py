@@ -238,9 +238,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> itir.AxisLiteral:
         if isinstance(node.type, ts.DimensionType):
             return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
-        raise AssertionError(
-            "Unexpected attribute access. At this point all accesses should have been removed by `ClosureVarFolding`."
-        )
+
+        if isinstance(named_tup_type := node.value.type, ts.NamedTupleType):
+            ind = named_tup_type.keys.index(node.attr)
+            return im.tuple_get(ind, self.visit(node.value, **kwargs))
+
+        raise AssertionError("Unreachable")
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         if isinstance(node.index.type, ts.IndexType):
@@ -356,17 +359,29 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         ):
             visitor = getattr(self, f"_visit_{node.func.id}")
             return visitor(node, **kwargs)
-        elif isinstance(node.func, foast.Name) and isinstance(node.func.type, ts.ConstructorType):
-            return self._visit_type_constr(node, **kwargs)
         elif isinstance(
             node.func.type,
-            (ts.FunctionType, ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
+            (
+                ts.FunctionType,
+                ts_ffront.FieldOperatorType,
+                ts_ffront.ScanOperatorType,
+                ts.ConstructorType,
+            ),
         ):
             # ITIR has no support for keyword arguments. Instead, we concatenate both positional
             # and keyword arguments and use the unique order as given in the function signature.
             lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
                 node.func.type, self.visit(node.args, **kwargs), self.visit(node.kwargs, **kwargs)
             )
+            if isinstance(node.func, foast.Name) and isinstance(node.func.type, ts.ConstructorType):
+                if isinstance(node.func.type.definition.returns, ts.NamedTupleType):
+                    # construct a plain tuple from the custom container constructor
+                    return im.make_tuple(*lowered_args, *lowered_kwargs.values())
+                elif isinstance(node.func.type.definition.returns, ts.ScalarType):
+                    return self._visit_type_constr(node, **kwargs)
+                else:
+                    raise AssertionError("Unexpected constructor encounterd.")
+
             result = im.call(self.visit(node.func, **kwargs))(
                 *lowered_args, *lowered_kwargs.values()
             )

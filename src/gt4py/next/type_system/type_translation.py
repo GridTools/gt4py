@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import builtins
 import collections.abc
+import dataclasses
 import functools
+import sys
 import types
 import typing
-from typing import Any, ForwardRef, Optional
+from typing import Any, ForwardRef, Optional, get_type_hints
 
 import numpy as np
 import numpy.typing as npt
@@ -57,6 +59,18 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
         raise ValueError(f"Non-trivial dtypes like '{dtype}' are not yet supported.")
 
 
+def is_simple_dataclass_type(type_: type[xtyping.Dataclass]) -> bool:
+    """Check if a dataclass respects current constraints for dataclasses."""
+    fields = dataclasses.fields(type_)
+    return len(fields) > 0 and all(
+        f.init is True
+        and f.default is dataclasses.MISSING
+        and f.default_factory is dataclasses.MISSING
+        and f._field_type is dataclasses._FIELD  # type: ignore[attr-defined]  # private member
+        for f in fields
+    )
+
+
 @functools.singledispatch
 def make_constructor_type(type_spec: ts.TypeSpec, type_: type) -> ts.ConstructorType:
     """Create a constructor type spec for a given scalar or python type."""
@@ -75,11 +89,57 @@ def _make_constructor_scalar_type(type_spec: ts.ScalarType, type_: type) -> ts.C
     )
 
 
+@make_constructor_type.register
+def _make_constructor_namedtuple_type(
+    type_spec: ts.NamedTupleType, type_: type
+) -> ts.ConstructorType:
+    pos_or_kw_args = {k: t for k, t in zip(type_spec.keys, type_spec.types)}
+    kw_only_args = (
+        {f.name: pos_or_kw_args.pop(f.name) for f in dataclasses.fields(type_) if f.kw_only}
+        if issubclass(type_, xtyping.DataclassABC)
+        else {}
+    )
+
+    return ts.ConstructorType(
+        definition=ts.FunctionType(
+            pos_only_args=[],
+            pos_or_kw_args=pos_or_kw_args,
+            kw_only_args=kw_only_args,
+            returns=type_spec,
+        )
+    )
+
+
 def make_type(type_: type) -> ts.TypeSpec:
     """Create a type specification for a given type."""
 
     if issubclass(type_, (*core_defs.SCALAR_TYPES, str)):
         return ts.ScalarType(kind=get_scalar_kind(type_))
+
+    if issubclass(type_, core_defs.PYTHON_CONTAINER_TYPES):
+        keys = []
+        hints = get_type_hints(type_)
+        if issubclass(type_, xtyping.TypedNamedTupleABC):
+            keys = list(type_._fields)
+        elif issubclass(type_, xtyping.DataclassABC):
+            if not is_simple_dataclass_type(type_):
+                raise ValueError(
+                    f"Dataclass {type_} is not a valid field container. Supported dataclasses"
+                    " must have at least one member, without custom '__init__'"
+                    " functions, 'InitVar's or default arguments."
+                )
+            keys = [f.name for f in dataclasses.fields(type_)]
+        else:
+            raise AssertionError(f"Python container type {type_} does not seem correct.")
+
+        types = [
+            from_type_hint(hints[key], globalns=sys.modules[type_.__module__].__dict__)
+            for key in keys
+        ]
+        return ts.NamedTupleType(types=types, keys=keys)
+
+    if issubclass(type_, tuple) and type_ is not tuple:
+        raise ValueError(f"Untyped tuple subclass {type_} is not a valid typed namedtuple.")
 
     raise ValueError(f"Type {type_} not supported")
 
@@ -210,7 +270,7 @@ def from_type_hint(
             return make_constructor_type(constructed_type_spec, python_type)
 
         case type():
-            # This case matches 'int', 'float', etc. used as annotations
+            # This case matches 'int', 'float', 'FooContainer' etc. used as annotations
             return make_type(canonical_type)
 
     raise ValueError(f"'{type_hint}' type is not supported.")
