@@ -683,34 +683,42 @@ def canonicalize_function_arguments(
     ignore_errors: bool = False,
     use_signature_ordering: bool = False,
 ) -> tuple[tuple, dict]:
-    num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
-    cargs = [UNDEFINED_ARG] * max(num_pos_params, len(args))
-    ckwargs = {**kwargs}
-    for i, arg in enumerate(args):
-        cargs[i] = arg
-    for name in kwargs.keys():
+    num_pos_only_args = len(func_type.pos_only_args)
+    num_pos_or_kw_args = len(func_type.pos_or_kw_args)
+    canonical_args = [*args] + (
+        [UNDEFINED_ARG] * max(num_pos_only_args + num_pos_or_kw_args - len(args), 0)
+    )
+    canonical_kwargs = {**kwargs}
+
+    pos_or_kw_args_names = [*func_type.pos_or_kw_args]
+    for name in kwargs:
         if name in func_type.pos_or_kw_args:
-            args_idx = len(func_type.pos_only_args) + list(func_type.pos_or_kw_args.keys()).index(
-                name
-            )
-            if cargs[args_idx] is UNDEFINED_ARG:
-                cargs[args_idx] = ckwargs.pop(name)
+            args_idx = num_pos_only_args + pos_or_kw_args_names.index(name)
+            if canonical_args[args_idx] is UNDEFINED_ARG:
+                canonical_args[args_idx] = canonical_kwargs.pop(name)
             elif not ignore_errors:
-                raise AssertionError(
+                raise ValueError(
                     f"Error canonicalizing function arguments. Got multiple values for argument '{name}'."
                 )
 
-    a, b = set(func_type.kw_only_args.keys()), set(ckwargs.keys())
-    invalid_kw_args = (a - b) | (b - a)
-    if invalid_kw_args and (not ignore_errors or use_signature_ordering):
+    # TODO: Does this condition make sense? Should it be `not (ignore_errors or use_signature_ordering)`?
+    if (not ignore_errors or use_signature_ordering) and (
+        func_type.kw_only_args.keys() ^ canonical_kwargs.keys()
+    ):
+        # TODO: does this comment make sense?
         # this error can not be ignored as otherwise the invariant that no arguments are dropped
         # is invalidated.
-        raise AssertionError(f"Invalid keyword arguments '{', '.join(invalid_kw_args)}'.")
+        if missing_kw_args := (func_type.kw_only_args.keys() - canonical_kwargs.keys()):
+            raise ValueError(f"Missing required keyword arguments: {[*missing_kw_args]}.")
+        if invalid_kw_args := (canonical_kwargs.keys() - func_type.kw_only_args.keys()):
+            raise ValueError(f"Invalid keyword arguments: {[*invalid_kw_args]}.")
 
     if use_signature_ordering:
-        ckwargs = {k: ckwargs[k] for k in func_type.kw_only_args.keys() if k in ckwargs}
+        canonical_kwargs = {
+            k: canonical_kwargs[k] for k in func_type.kw_only_args if k in canonical_kwargs
+        }
 
-    return tuple(cargs), ckwargs
+    return tuple(canonical_args), canonical_kwargs
 
 
 @canonicalize_arguments.register(ts.ConstructorType)
@@ -747,7 +755,7 @@ def structural_function_signature_incompatibilities(
     kwargs = {**kwargs}
 
     # check positional arguments
-    for name in {**kwargs}.keys():
+    for name in [*kwargs]:
         if name in func_type.pos_or_kw_args:
             args_idx = len(func_type.pos_only_args) + list(func_type.pos_or_kw_args.keys()).index(
                 name
@@ -816,19 +824,23 @@ def function_signature_incompatibilities_func(
             yield from error_list
             return
 
-    num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
+    num_pos_only_args = len(func_type.pos_only_args)
+    num_pos_or_kw_args = len(func_type.pos_or_kw_args)
+    num_pos_params = num_pos_only_args + num_pos_or_kw_args
     assert len(args) >= num_pos_params
     for i, (a_arg, b_arg) in enumerate(
         zip(list(func_type.pos_only_args) + list(func_type.pos_or_kw_args.values()), args)
     ):
         if b_arg is not UNDEFINED_ARG and a_arg != b_arg and not is_compatible_type(a_arg, b_arg):
-            if i < len(func_type.pos_only_args):
+            if i < num_pos_only_args:
                 arg_repr = f"{_number_to_ordinal_number(i + 1)} argument"
             else:
-                arg_repr = f"argument '{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}'"
+                arg_repr = (
+                    f"argument '{list(func_type.pos_or_kw_args.keys())[i - num_pos_only_args]}'"
+                )
             yield f"Expected {arg_repr} to be of type '{a_arg}', got '{b_arg}'."
 
-    for kwarg in set(func_type.kw_only_args.keys()) & set(kwargs.keys()):
+    for kwarg in func_type.kw_only_args.keys() & kwargs.keys():
         if (a_kwarg := func_type.kw_only_args[kwarg]) != (
             b_kwarg := kwargs[kwarg]
         ) and not is_compatible_type(a_kwarg, b_kwarg):
@@ -875,7 +887,7 @@ def function_signature_incompatibilities_constructor(
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
     yield from function_signature_incompatibilities_func(
-        constructor_type.definition, args, kwargs, skip_canonicalization=True
+        constructor_type.definition, args, kwargs, skip_canonicalization=False
     )
 
 
@@ -916,8 +928,7 @@ def accepts_args(
 
     errors = function_signature_incompatibilities(callable_type, with_args, with_kwargs)
     if raise_exception:
-        error_list = list(errors)
-        if len(error_list) > 0:
+        if len(error_list := [*errors]) > 0:
             raise ValueError(
                 f"Invalid call to function of type '{callable_type}':\n"
                 + ("\n".join([f"  - {error}" for error in error_list]))
