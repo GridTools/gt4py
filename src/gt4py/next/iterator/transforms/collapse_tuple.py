@@ -15,6 +15,8 @@ import operator
 import re
 from typing import Literal, Optional
 
+from prompt_toolkit.layout.processors import Transformation
+
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
@@ -217,7 +219,19 @@ class CollapseTuple(
             False,
         ], "Parameter 'within_stencil' mandatory if node is not a 'Program'."
 
-        if not ignore_tuple_size:
+        requires_types = False
+        if enabled_transformations & (
+            cls.Transformation.PROPAGATE_TO_IF_ON_TUPLES_CPS
+            | cls.Transformation.FLATTEN_AS_FIELDOP_ARGS
+        ):
+            requires_types = True
+        elif (
+            not ignore_tuple_size
+            and enabled_transformations & cls.Transformation.COLLAPSE_MAKE_TUPLE_TUPLE_GET
+        ):
+            requires_types = True
+
+        if requires_types:
             node = itir_type_inference.infer(
                 node,
                 offset_provider_type=offset_provider_type,
