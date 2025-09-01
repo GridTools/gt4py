@@ -17,6 +17,7 @@ from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
 from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 
 
 MATH_BUILTINS_MAPPING = {
@@ -82,9 +83,10 @@ def builtin_cast(val: str, target_type: str) -> str:
 
 def builtin_get_domain_range(field: str, axis: str) -> str:
     # The builtin function returns a tuple of two values, the range start and stop.
-    # Here we return part of the symbol name: the full name also contains an additional
-    # suffix '_0' for range start or '_1' for stop, which correspond to the tuple fields.
-    return f"__{field}_{axis}_range"
+    # Here we return part of the symbol name: the full name also contains an
+    # additional suffix '_0' for range start or '_1' for stop, which is obtained
+    # from to the `get_tuple` index.
+    return gtx_dace_utils.range_symbol(field, axis)
 
 
 def builtin_if(cond: str, true_val: str, false_val: str) -> str:

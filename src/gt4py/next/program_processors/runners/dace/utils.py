@@ -92,14 +92,19 @@ def field_stride_symbol_name(field_name: str, axis: int) -> str:
     return field_symbol_name(field_name, axis, "stride")
 
 
+def range_symbol(field_name: str, axis: str) -> str:
+    """Common part of the name for the range start/stop symbols."""
+    return f"__{field_name}_{axis}_range"
+
+
 def range_start_symbol(field_name: str, dim: gtx_common.Dimension) -> str:
-    """Format name of start symbol for domain range, as expected by GTIR."""
-    return f"__{field_name}_{dim.value}_range_0"
+    """Format name of the start symbol for domain range."""
+    return f"{range_symbol(field_name, dim.value)}_0"
 
 
 def range_stop_symbol(field_name: str, dim: gtx_common.Dimension) -> str:
-    """Format name of stop symbol for domain range, as expected by GTIR."""
-    return f"__{field_name}_{dim.value}_range_1"
+    """Format name of the stop symbol for domain range."""
+    return f"{range_symbol(field_name, dim.value)}_1"
 
 
 def is_range_symbol(name: str) -> bool:
