@@ -133,8 +133,8 @@ def test_gtir_broadcast():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("x", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("x", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("x", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("x", im.axis_literal(IDim))),
             )
         },
     )
@@ -167,8 +167,8 @@ def test_gtir_cast():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("z", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("z", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("z", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("z", im.axis_literal(IDim))),
             )
         },
     )
@@ -237,8 +237,8 @@ def test_gtir_tuple_swap():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("x", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("x", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("x", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("x", im.axis_literal(IDim))),
             )
         },
     )
@@ -276,8 +276,8 @@ def test_gtir_tuple_args():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("y", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("y", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("y", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("y", im.axis_literal(IDim))),
             )
         },
     )
@@ -335,8 +335,8 @@ def test_gtir_tuple_expr():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("z", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("z", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("z", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("z", im.axis_literal(IDim))),
             )
         },
     )
@@ -383,8 +383,8 @@ def test_gtir_tuple_broadcast_scalar():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("y", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("y", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("y", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("y", im.axis_literal(IDim))),
             )
         },
     )
@@ -446,8 +446,8 @@ def test_gtir_zero_dim_fields():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("y", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("y", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("y", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("y", im.axis_literal(IDim))),
             )
         },
     )
@@ -487,13 +487,13 @@ def test_gtir_tuple_return():
             IDim: (
                 im.tuple_get(
                     0,
-                    im.call("get_domain")(
+                    im.call("get_domain_range")(
                         im.tuple_get(0, im.tuple_get(0, "z")), im.axis_literal(IDim)
                     ),
                 ),
                 im.tuple_get(
                     1,
-                    im.call("get_domain")(
+                    im.call("get_domain_range")(
                         im.tuple_get(0, im.tuple_get(0, "z")), im.axis_literal(IDim)
                     ),
                 ),
@@ -552,8 +552,8 @@ def test_gtir_tuple_target():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("x", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("x", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("x", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("x", im.axis_literal(IDim))),
             )
         },
     )
@@ -590,8 +590,8 @@ def test_gtir_update():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("x", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("x", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("x", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("x", im.axis_literal(IDim))),
             )
         },
     )
@@ -631,8 +631,8 @@ def test_gtir_sum2():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("z", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("z", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("z", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("z", im.axis_literal(IDim))),
             )
         },
     )
@@ -669,8 +669,8 @@ def test_gtir_sum2_sym():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("z", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("z", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("z", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("z", im.axis_literal(IDim))),
             )
         },
     )
@@ -705,8 +705,8 @@ def test_gtir_sum3():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("z", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("z", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("z", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("z", im.axis_literal(IDim))),
             )
         },
     )
@@ -758,8 +758,8 @@ def test_gtir_cond(s1, s2):
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("z", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("z", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("z", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("z", im.axis_literal(IDim))),
             )
         },
     )
@@ -809,8 +809,12 @@ def test_gtir_cond_with_tuple_return():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")(im.tuple_get(0, "z"), im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")(im.tuple_get(0, "z"), im.axis_literal(IDim))),
+                im.tuple_get(
+                    0, im.call("get_domain_range")(im.tuple_get(0, "z"), im.axis_literal(IDim))
+                ),
+                im.tuple_get(
+                    1, im.call("get_domain_range")(im.tuple_get(0, "z"), im.axis_literal(IDim))
+                ),
             )
         },
     )
@@ -870,8 +874,8 @@ def test_gtir_cond_nested(s1, s2):
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("z", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("z", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("z", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("z", im.axis_literal(IDim))),
             )
         },
     )
@@ -918,9 +922,9 @@ def test_gtir_cartesian_shift_left():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("x", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("x", im.axis_literal(IDim))),
                 im.minus(
-                    im.tuple_get(1, im.call("get_domain")("x", im.axis_literal(IDim))),
+                    im.tuple_get(1, im.call("get_domain_range")("x", im.axis_literal(IDim))),
                     gtir.Literal(value=str(OFFSET), type=SIZE_TYPE),
                 ),
             ),
@@ -1030,7 +1034,7 @@ def test_gtir_cartesian_shift_right():
         ranges={
             IDim: (
                 OFFSET,
-                im.tuple_get(1, im.call("get_domain")("x", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("x", im.axis_literal(IDim))),
             )
         },
     )
@@ -1137,8 +1141,8 @@ def test_gtir_connectivity_shift():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Edge: (
-                im.tuple_get(0, im.call("get_domain")("ce_field", im.axis_literal(Edge))),
-                im.tuple_get(1, im.call("get_domain")("ce_field", im.axis_literal(Edge))),
+                im.tuple_get(0, im.call("get_domain_range")("ce_field", im.axis_literal(Edge))),
+                im.tuple_get(1, im.call("get_domain_range")("ce_field", im.axis_literal(Edge))),
             )
         },
     )
@@ -1146,12 +1150,12 @@ def test_gtir_connectivity_shift():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Cell: (
-                im.tuple_get(0, im.call("get_domain")("ce_field", im.axis_literal(Cell))),
-                im.tuple_get(1, im.call("get_domain")("ce_field", im.axis_literal(Cell))),
+                im.tuple_get(0, im.call("get_domain_range")("ce_field", im.axis_literal(Cell))),
+                im.tuple_get(1, im.call("get_domain_range")("ce_field", im.axis_literal(Cell))),
             ),
             Edge: (
-                im.tuple_get(0, im.call("get_domain")("ce_field", im.axis_literal(Edge))),
-                im.tuple_get(1, im.call("get_domain")("ce_field", im.axis_literal(Edge))),
+                im.tuple_get(0, im.call("get_domain_range")("ce_field", im.axis_literal(Edge))),
+                im.tuple_get(1, im.call("get_domain_range")("ce_field", im.axis_literal(Edge))),
             ),
         },
     )
@@ -1159,12 +1163,12 @@ def test_gtir_connectivity_shift():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Cell: (
-                im.tuple_get(0, im.call("get_domain")("ce_field", im.axis_literal(Cell))),
-                im.tuple_get(1, im.call("get_domain")("ce_field", im.axis_literal(Cell))),
+                im.tuple_get(0, im.call("get_domain_range")("ce_field", im.axis_literal(Cell))),
+                im.tuple_get(1, im.call("get_domain_range")("ce_field", im.axis_literal(Cell))),
             ),
             Vertex: (
-                im.tuple_get(0, im.call("get_domain")("ev_field", im.axis_literal(Vertex))),
-                im.tuple_get(1, im.call("get_domain")("ev_field", im.axis_literal(Vertex))),
+                im.tuple_get(0, im.call("get_domain_range")("ev_field", im.axis_literal(Vertex))),
+                im.tuple_get(1, im.call("get_domain_range")("ev_field", im.axis_literal(Vertex))),
             ),
         },
     )
@@ -1320,8 +1324,8 @@ def test_gtir_connectivity_shift_chain():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Edge: (
-                im.tuple_get(0, im.call("get_domain")("edges", im.axis_literal(Edge))),
-                im.tuple_get(1, im.call("get_domain")("edges", im.axis_literal(Edge))),
+                im.tuple_get(0, im.call("get_domain_range")("edges", im.axis_literal(Edge))),
+                im.tuple_get(1, im.call("get_domain_range")("edges", im.axis_literal(Edge))),
             )
         },
     )
@@ -1385,8 +1389,8 @@ def test_gtir_neighbors_as_input():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Vertex: (
-                im.tuple_get(0, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
-                im.tuple_get(1, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(0, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(1, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
             )
         },
     )
@@ -1453,8 +1457,8 @@ def test_gtir_neighbors_as_output():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Vertex: (
-                im.tuple_get(0, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
-                im.tuple_get(1, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(0, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(1, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
             ),
             V2EDim: (0, SIMPLE_MESH.offset_provider_type["V2E"].max_neighbors),
         },
@@ -1463,8 +1467,8 @@ def test_gtir_neighbors_as_output():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Vertex: (
-                im.tuple_get(0, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
-                im.tuple_get(1, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(0, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(1, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
             )
         },
     )
@@ -1511,8 +1515,8 @@ def test_gtir_reduce():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Vertex: (
-                im.tuple_get(0, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
-                im.tuple_get(1, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(0, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(1, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
             )
         },
     )
@@ -1573,8 +1577,8 @@ def test_gtir_reduce_with_skip_values():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Vertex: (
-                im.tuple_get(0, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
-                im.tuple_get(1, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(0, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(1, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
             )
         },
     )
@@ -1639,8 +1643,8 @@ def test_gtir_reduce_dot_product():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Vertex: (
-                im.tuple_get(0, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
-                im.tuple_get(1, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(0, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(1, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
             )
         },
     )
@@ -1716,8 +1720,8 @@ def test_gtir_reduce_with_cond_neighbors(use_sparse):
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Vertex: (
-                im.tuple_get(0, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
-                im.tuple_get(1, im.call("get_domain")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(0, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
+                im.tuple_get(1, im.call("get_domain_range")("vertices", im.axis_literal(Vertex))),
             )
         },
     )
@@ -1881,8 +1885,8 @@ def test_gtir_let_lambda():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("y", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("y", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("y", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("y", im.axis_literal(IDim))),
             )
         },
     )
@@ -1891,7 +1895,9 @@ def test_gtir_let_lambda():
         ranges={
             IDim: (
                 1,
-                im.minus(im.tuple_get(1, im.call("get_domain")("y", im.axis_literal(IDim))), 1),
+                im.minus(
+                    im.tuple_get(1, im.call("get_domain_range")("y", im.axis_literal(IDim))), 1
+                ),
             )
         },
     )
@@ -1945,8 +1951,8 @@ def test_gtir_let_lambda_scalar_expression():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("y", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("y", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("y", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("y", im.axis_literal(IDim))),
             )
         },
     )
@@ -1965,7 +1971,9 @@ def test_gtir_let_lambda_scalar_expression():
                 # we create an inner symbol that will be mapped to a scalar expression of the parent node
                 expr=im.let(
                     "size_inner",
-                    im.plus(im.tuple_get(1, im.call("get_domain")("y", im.axis_literal(IDim))), 1),
+                    im.plus(
+                        im.tuple_get(1, im.call("get_domain_range")("y", im.axis_literal(IDim))), 1
+                    ),
                 )(
                     im.let("tmp", im.multiplies_("a", "b"))(
                         im.as_fieldop(
@@ -2004,8 +2012,8 @@ def test_gtir_let_lambda_with_connectivity():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Cell: (
-                im.tuple_get(0, im.call("get_domain")("cells", im.axis_literal(Cell))),
-                im.tuple_get(1, im.call("get_domain")("cells", im.axis_literal(Cell))),
+                im.tuple_get(0, im.call("get_domain_range")("cells", im.axis_literal(Cell))),
+                im.tuple_get(1, im.call("get_domain_range")("cells", im.axis_literal(Cell))),
             )
         },
     )
@@ -2070,7 +2078,19 @@ def test_gtir_let_lambda_with_connectivity():
 def test_gtir_let_lambda_with_origin():
     C2E_neighbor_idx = 1
     cell_domain = im.domain(
-        gtx_common.GridType.UNSTRUCTURED, ranges={Cell: (0, "ncells"), KDim: (1, "nlevels")}
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Cell: (
+                im.tuple_get(0, im.call("get_domain_range")("cells", im.axis_literal(Cell))),
+                im.tuple_get(1, im.call("get_domain_range")("cells", im.axis_literal(Cell))),
+            ),
+            KDim: (
+                im.plus(
+                    im.tuple_get(0, im.call("get_domain_range")("cells", im.axis_literal(KDim))), 1
+                ),
+                im.tuple_get(1, im.call("get_domain_range")("cells", im.axis_literal(KDim))),
+            ),
+        },
     )
 
     CKFTYPE = ts.FieldType(dims=[Cell, KDim], dtype=FLOAT_TYPE)
@@ -2082,9 +2102,6 @@ def test_gtir_let_lambda_with_origin():
         params=[
             gtir.Sym(id="cells", type=CKFTYPE),
             gtir.Sym(id="edges", type=EKFTYPE),
-            gtir.Sym(id="ncells", type=SIZE_TYPE),
-            gtir.Sym(id="nedges", type=SIZE_TYPE),
-            gtir.Sym(id="nlevels", type=SIZE_TYPE),
         ],
         declarations=[],
         body=[
@@ -2100,7 +2117,7 @@ def test_gtir_let_lambda_with_origin():
         ],
     )
 
-    sdfg = build_dace_sdfg(testee, SIMPLE_MESH.offset_provider_type)
+    sdfg = build_dace_sdfg(testee, SIMPLE_MESH.offset_provider)
 
     c = np.random.rand(SIMPLE_MESH.num_cells, N)
     e = np.random.rand(SIMPLE_MESH.num_edges, N)
@@ -2110,11 +2127,12 @@ def test_gtir_let_lambda_with_origin():
     )
 
     symbols = make_mesh_symbols(SIMPLE_MESH) | {
-        "nlevels": N,
-        "__cells_1_range_1": N,
+        "__cells_KDim_range_0": 0,
+        "__cells_KDim_range_1": N,
         "__cells_stride_0": c.strides[0] // c.itemsize,
         "__cells_stride_1": c.strides[1] // c.itemsize,
-        "__edges_1_range_1": N,
+        "__edges_KDim_range_0": 0,
+        "__edges_KDim_range_1": N,
         "__edges_stride_0": e.strides[0] // e.itemsize,
         "__edges_stride_1": e.strides[1] // e.itemsize,
     }
@@ -2135,8 +2153,8 @@ def test_gtir_let_lambda_with_cond(s):
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("y", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("y", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("y", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("y", im.axis_literal(IDim))),
             )
         },
     )
@@ -2177,11 +2195,11 @@ def test_gtir_let_lambda_with_tuple1():
             IDim: (
                 im.tuple_get(
                     0,
-                    im.call("get_domain")(im.tuple_get(0, "z"), im.axis_literal(IDim)),
+                    im.call("get_domain_range")(im.tuple_get(0, "z"), im.axis_literal(IDim)),
                 ),
                 im.tuple_get(
                     1,
-                    im.call("get_domain")(im.tuple_get(0, "z"), im.axis_literal(IDim)),
+                    im.call("get_domain_range")(im.tuple_get(0, "z"), im.axis_literal(IDim)),
                 ),
             )
         },
@@ -2243,11 +2261,11 @@ def test_gtir_let_lambda_with_tuple2():
             IDim: (
                 im.tuple_get(
                     0,
-                    im.call("get_domain")(im.tuple_get(0, "z"), im.axis_literal(IDim)),
+                    im.call("get_domain_range")(im.tuple_get(0, "z"), im.axis_literal(IDim)),
                 ),
                 im.tuple_get(
                     1,
-                    im.call("get_domain")(im.tuple_get(0, "z"), im.axis_literal(IDim)),
+                    im.call("get_domain_range")(im.tuple_get(0, "z"), im.axis_literal(IDim)),
                 ),
             )
         },
@@ -2308,8 +2326,8 @@ def test_gtir_if_scalars(s):
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("z", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("z", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("z", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("z", im.axis_literal(IDim))),
             )
         },
     )
@@ -2377,8 +2395,8 @@ def test_gtir_if_values():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("z", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("z", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("z", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("z", im.axis_literal(IDim))),
             )
         },
     )
@@ -2419,8 +2437,8 @@ def test_gtir_index():
         gtx_common.GridType.CARTESIAN,
         ranges={
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("x", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("x", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("x", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("x", im.axis_literal(IDim))),
             )
         },
     )
@@ -2430,7 +2448,7 @@ def test_gtir_index():
             IDim: (
                 MARGIN,
                 im.minus(
-                    im.tuple_get(1, im.call("get_domain")("x", im.axis_literal(IDim))), MARGIN
+                    im.tuple_get(1, im.call("get_domain_range")("x", im.axis_literal(IDim))), MARGIN
                 ),
             )
         },
@@ -2478,8 +2496,8 @@ def test_gtir_concat_where():
         gtx_common.GridType.CARTESIAN,
         {
             IDim: (
-                im.tuple_get(0, im.call("get_domain")("z", im.axis_literal(IDim))),
-                im.tuple_get(1, im.call("get_domain")("z", im.axis_literal(IDim))),
+                im.tuple_get(0, im.call("get_domain_range")("z", im.axis_literal(IDim))),
+                im.tuple_get(1, im.call("get_domain_range")("z", im.axis_literal(IDim))),
             )
         },
     )

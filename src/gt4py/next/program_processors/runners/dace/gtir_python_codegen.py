@@ -80,8 +80,8 @@ def builtin_cast(val: str, target_type: str) -> str:
     return MATH_BUILTINS_MAPPING[target_type].format(val)
 
 
-def builtin_get_domain(field: str, axis: str) -> str:
-    # The 'get_domain' returns a tuple of two values, the range start and stop.
+def builtin_get_domain_range(field: str, axis: str) -> str:
+    # The builtin function returns a tuple of two values, the range start and stop.
     # Here we return part of the symbol name: the full name also contains an additional
     # suffix '_0' for range start or '_1' for stop, which correspond to the tuple fields.
     return f"__{field}_{axis}_range"
@@ -106,7 +106,7 @@ def make_const_list(arg: str) -> str:
 
 GENERAL_BUILTIN_MAPPING: dict[str, Callable[..., str]] = {
     "cast_": builtin_cast,
-    "get_domain": builtin_get_domain,
+    "get_domain_range": builtin_get_domain_range,
     "if_": builtin_if,
     "make_const_list": make_const_list,
     "tuple_get": builtin_tuple_get,
