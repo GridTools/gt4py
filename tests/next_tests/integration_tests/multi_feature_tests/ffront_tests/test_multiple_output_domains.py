@@ -18,10 +18,16 @@ from next_tests.integration_tests.cases import (
     E2V,
     V2E,
     Edge,
+    EField,
+    CField,
+    VField,
     Cell,
     Vertex,
     cartesian_case,
     Case,
+    IField,
+    JField,
+    KField,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
@@ -35,18 +41,16 @@ pytestmark = pytest.mark.uses_cartesian_shift
 
 
 @gtx.field_operator
-def testee_orig(
-    a: gtx.Field[[IDim], gtx.float32], b: gtx.Field[[IDim], gtx.float32]
-) -> tuple[gtx.Field[[IDim], gtx.float32], gtx.Field[[IDim], gtx.float32]]:
+def testee_orig(a: IField, b: IField) -> tuple[IField, IField]:
     return b, a
 
 
 @gtx.program
 def prog_orig(
-    a: gtx.Field[[IDim], gtx.float32],
-    b: gtx.Field[[IDim], gtx.float32],
-    out_a: gtx.Field[[IDim], gtx.float32],
-    out_b: gtx.Field[[IDim], gtx.float32],
+    a: IField,
+    b: IField,
+    out_a: IField,
+    out_b: IField,
     i_size: gtx.int32,
 ):
     testee_orig(a, b, out=(out_b, out_a), domain={IDim: (0, i_size)})
@@ -73,10 +77,10 @@ def test_program_orig(cartesian_case):
 
 @gtx.program
 def prog_no_domain(
-    a: gtx.Field[[IDim], gtx.float32],
-    b: gtx.Field[[IDim], gtx.float32],
-    out_a: gtx.Field[[IDim], gtx.float32],
-    out_b: gtx.Field[[IDim], gtx.float32],
+    a: IField,
+    b: IField,
+    out_a: IField,
+    out_b: IField,
 ):
     testee_orig(a, b, out=(out_b, out_a))
 
@@ -100,18 +104,16 @@ def test_program_no_domain(cartesian_case):
 
 
 @gtx.field_operator
-def testee(
-    a: gtx.Field[[IDim], gtx.float32], b: gtx.Field[[JDim], gtx.float32]
-) -> tuple[gtx.Field[[JDim], gtx.float32], gtx.Field[[IDim], gtx.float32]]:
+def testee(a: IField, b: JField) -> tuple[JField, IField]:
     return b, a
 
 
 @gtx.program
 def prog(
-    a: gtx.Field[[IDim], gtx.float32],
-    b: gtx.Field[[JDim], gtx.float32],
-    out_a: gtx.Field[[IDim], gtx.float32],
-    out_b: gtx.Field[[JDim], gtx.float32],
+    a: IField,
+    b: JField,
+    out_a: IField,
+    out_b: JField,
     i_size: gtx.int32,
     j_size: gtx.int32,
 ):
@@ -140,9 +142,9 @@ def test_program(cartesian_case):
 
 @gtx.program
 def prog_out_as_tuple(
-    a: gtx.Field[[IDim], gtx.float32],
-    b: gtx.Field[[JDim], gtx.float32],
-    out: tuple[gtx.Field[[JDim], gtx.float32], gtx.Field[[IDim], gtx.float32]],
+    a: IField,
+    b: JField,
+    out: tuple[JField, IField],
     i_size: gtx.int32,
     j_size: gtx.int32,
 ):
@@ -171,24 +173,24 @@ def test_program_out_as_tuple(
 
 @gtx.field_operator
 def testee_nested_tuples(
-    a: gtx.Field[[IDim], gtx.float32],
-    b: gtx.Field[[JDim], gtx.float32],
-    c: gtx.Field[[KDim], gtx.float32],
+    a: IField,
+    b: JField,
+    c: KField,
 ) -> tuple[
-    tuple[gtx.Field[[IDim], gtx.float32], gtx.Field[[JDim], gtx.float32]],
-    gtx.Field[[KDim], gtx.float32],
+    tuple[IField, JField],
+    KField,
 ]:
     return (a, b), c
 
 
 @gtx.program
 def prog_nested_tuples(
-    a: gtx.Field[[IDim], gtx.float32],
-    b: gtx.Field[[JDim], gtx.float32],
-    c: gtx.Field[[KDim], gtx.float32],
-    out_a: gtx.Field[[IDim], gtx.float32],
-    out_b: gtx.Field[[JDim], gtx.float32],
-    out_c: gtx.Field[[KDim], gtx.float32],
+    a: IField,
+    b: JField,
+    c: KField,
+    out_a: IField,
+    out_b: JField,
+    out_c: KField,
     i_size: gtx.int32,
     j_size: gtx.int32,
     k_size: gtx.int32,
@@ -231,27 +233,27 @@ def test_program_nested_tuples(
 
 @gtx.field_operator
 def testee_double_nested_tuples(
-    a: gtx.Field[[IDim], gtx.float32],
-    b: gtx.Field[[JDim], gtx.float32],
-    c: gtx.Field[[KDim], gtx.float32],
+    a: IField,
+    b: JField,
+    c: KField,
 ) -> tuple[
     tuple[
-        gtx.Field[[IDim], gtx.float32],
-        tuple[gtx.Field[[JDim], gtx.float32], gtx.Field[[KDim], gtx.float32]],
+        IField,
+        tuple[JField, KField],
     ],
-    gtx.Field[[KDim], gtx.float32],
+    KField,
 ]:
     return (a, (b, c)), c
 
 
 @gtx.program
 def prog_double_nested_tuples(
-    a: gtx.Field[[IDim], gtx.float32],
-    b: gtx.Field[[JDim], gtx.float32],
-    c: gtx.Field[[KDim], gtx.float32],
-    out_a: gtx.Field[[IDim], gtx.float32],
-    out_b: gtx.Field[[JDim], gtx.float32],
-    out_c: gtx.Field[[KDim], gtx.float32],
+    a: IField,
+    b: JField,
+    c: KField,
+    out_a: IField,
+    out_b: JField,
+    out_c: KField,
     i_size: gtx.int32,
     j_size: gtx.int32,
     k_size: gtx.int32,
@@ -297,16 +299,16 @@ def test_program_double_nested_tuples(
 
 @gtx.field_operator
 def testee_two_vertical_dims(
-    a: gtx.Field[[KDim], gtx.float32], b: gtx.Field[[KHalfDim], gtx.float32]
-) -> tuple[gtx.Field[[KHalfDim], gtx.float32], gtx.Field[[KDim], gtx.float32]]:
+    a: KField, b: gtx.Field[[KHalfDim], gtx.float32]
+) -> tuple[gtx.Field[[KHalfDim], gtx.float32], KField]:
     return b, a
 
 
 @gtx.program
 def prog_two_vertical_dims(
-    a: gtx.Field[[KDim], gtx.float32],
+    a: KField,
     b: gtx.Field[[KHalfDim], gtx.float32],
-    out_a: gtx.Field[[KDim], gtx.float32],
+    out_a: KField,
     out_b: gtx.Field[[KHalfDim], gtx.float32],
     k_size: gtx.int32,
     k_half_size: gtx.int32,
@@ -337,15 +339,15 @@ def test_program_two_vertical_dims(cartesian_case):
 
 
 @gtx.field_operator
-def testee_shift_e2c(a: cases.EField) -> tuple[cases.CField, cases.EField]:
+def testee_shift_e2c(a: EField) -> tuple[CField, EField]:
     return a(C2E[1]), a
 
 
 @gtx.program
 def prog_unstructured(
-    a: cases.EField,
-    out_a: cases.EField,
-    out_a_shifted: cases.CField,
+    a: EField,
+    out_a: EField,
+    out_a_shifted: CField,
     c_size: gtx.int32,
     e_size: gtx.int32,
 ):
@@ -385,7 +387,7 @@ def test_program_unstructured(
 
 
 @gtx.field_operator
-def testee_temporary(a: cases.VField):
+def testee_temporary(a: VField):
     edge = a(E2V[1])
     cell = edge(C2E[1])
     return edge, cell
@@ -393,9 +395,9 @@ def testee_temporary(a: cases.VField):
 
 @gtx.program
 def prog_temporary(
-    a: cases.VField,
-    out_edge: cases.EField,
-    out_cell: cases.CField,
+    a: VField,
+    out_edge: EField,
+    out_cell: CField,
     c_size: gtx.int32,
     e_size: gtx.int32,
 ):
