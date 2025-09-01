@@ -176,6 +176,12 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 NativeFunction.FLOOR: "std::floor",
                 NativeFunction.CEIL: "std::ceil",
                 NativeFunction.TRUNC: "std::trunc",
+                NativeFunction.INT32: "std::int32_t",
+                NativeFunction.INT64: "std::int64_t",
+                NativeFunction.FLOAT32: "float",
+                NativeFunction.FLOAT64: "double",
+                NativeFunction.ERF: "std::erf",
+                NativeFunction.ERFC: "std::erfc",
             }[func]
         except KeyError as error:
             raise NotImplementedError(

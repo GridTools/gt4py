@@ -29,6 +29,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Edge,
     IDim,
     JDim,
+    KDim,
     MeshDescriptor,
     V2EDim,
     Vertex,
@@ -2063,6 +2064,68 @@ def test_gtir_let_lambda_with_connectivity():
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
     )
+    assert np.allclose(c, ref)
+
+
+def test_gtir_let_lambda_with_origin():
+    C2E_neighbor_idx = 1
+    cell_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED, ranges={Cell: (0, "ncells"), KDim: (1, "nlevels")}
+    )
+
+    CKFTYPE = ts.FieldType(dims=[Cell, KDim], dtype=FLOAT_TYPE)
+    EKFTYPE = ts.FieldType(dims=[Edge, KDim], dtype=FLOAT_TYPE)
+
+    testee = gtir.Program(
+        id="let_lambda_with_origin",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="cells", type=CKFTYPE),
+            gtir.Sym(id="edges", type=EKFTYPE),
+            gtir.Sym(id="ncells", type=SIZE_TYPE),
+            gtir.Sym(id="nedges", type=SIZE_TYPE),
+            gtir.Sym(id="nlevels", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.let("e1", im.op_as_fieldop("plus")("edges", 1.0))(
+                    im.as_fieldop(
+                        im.lambda_("it")(im.deref(im.shift("C2E", C2E_neighbor_idx)("it"))),
+                    )("e1")
+                ),
+                domain=cell_domain,
+                target=gtir.SymRef(id="cells"),
+            )
+        ],
+    )
+
+    sdfg = build_dace_sdfg(testee, SIMPLE_MESH.offset_provider_type)
+
+    c = np.random.rand(SIMPLE_MESH.num_cells, N)
+    e = np.random.rand(SIMPLE_MESH.num_edges, N)
+    connectivity_C2E = SIMPLE_MESH.offset_provider["C2E"]
+    ref = np.concatenate(
+        (c[:, :1], e[connectivity_C2E.asnumpy()[:, C2E_neighbor_idx], 1:] + 1.0), axis=1
+    )
+
+    symbols = make_mesh_symbols(SIMPLE_MESH) | {
+        "nlevels": N,
+        "__cells_1_range_1": N,
+        "__cells_stride_0": c.strides[0] // c.itemsize,
+        "__cells_stride_1": c.strides[1] // c.itemsize,
+        "__edges_1_range_1": N,
+        "__edges_stride_0": e.strides[0] // e.itemsize,
+        "__edges_stride_1": e.strides[1] // e.itemsize,
+    }
+
+    sdfg(
+        cells=c,
+        edges=e,
+        gt_conn_C2E=connectivity_C2E.ndarray,
+        **symbols,
+    )
+
     assert np.allclose(c, ref)
 
 

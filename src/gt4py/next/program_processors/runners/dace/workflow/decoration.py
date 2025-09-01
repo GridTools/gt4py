@@ -15,10 +15,9 @@ import dace
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
-from gt4py.next.otf import arguments, stages
+from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable, workflow as dace_worflow
-
-from . import common as dace_common
+from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
 
 def convert_args(
@@ -38,11 +37,7 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        if fun.implicit_domain:
-            # Generate implicit domain size arguments only if necessary
-            size_args = arguments.iter_size_args(args)
-            args = (*args, *size_args)
-
+        # TODO: this doesn't belong here and should by done in the dace backend
         if not fun.sdfg_program._lastargs:
             # First call, the SDFG is not intitalized, so forward the call to `CompiledSDFG`
             # to proper initilize it. Later calls to this SDFG will be handled through
@@ -69,10 +64,9 @@ def convert_args(
         ):
             # Observe that dace instrumentation adds runtime overhead:
             # DaCe writes an instrumentation report file for each SDFG run.
-            with dace.config.temporary_config():
+            with gtx_wfdcommon.dace_context(device_type=device):
                 # We need to set the cache folder and key config in order to retrieve
                 # the SDFG report file.
-                dace_common.set_dace_config(device_type=device)
                 prof_report = fun.sdfg_program.sdfg.get_latest_report()
             if prof_report is None:
                 raise RuntimeError(
