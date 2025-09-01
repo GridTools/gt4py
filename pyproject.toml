@@ -455,7 +455,7 @@ url = 'https://test.pypi.org/simple'
 atlas4py = {index = "test.pypi"}
 dace = [
   {git = "https://github.com/GridTools/dace", branch = "romanc/stree-to-sdfg", group = "dace-cartesian"},
-  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_08_12", group = "dace-next"}
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_08_28", group = "dace-next"}
 ]
 
 # -- versioningit --
