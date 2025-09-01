@@ -475,13 +475,20 @@ class ProgramLowering(
                 first_field = first_field.value
 
             if isinstance(domain_arg, past.TupleExpr):
-                domain_args = [  # TODO: Test with out as one argument which is a tuple, don't flatten field
-                    self._construct_itir_domain_arg(field, domain, None)
-                    for field, domain in zip(
-                        flattened, _flatten_tuple_expr(domain_arg), strict=True
-                    )  # TODO use field type -> apply_to_primitive_constituents, path -> find relevant Dict expr -> call _construct_itir_domain_arg, test with wrong structure as well
-                ]
-                domain_expr = im.make_tuple(*domain_args)
+                # TODO: Test with out as one argument which is a tuple, don't flatten field
+
+                domain_expr = type_info.apply_to_primitive_constituents(
+                    lambda field_type, path: self._construct_itir_domain_arg(
+                        functools.reduce(lambda e, i: e.elts[i], path, out_arg),
+                        functools.reduce(lambda e, i: e.elts[i], path, domain_arg)
+                        if isinstance(domain_arg, past.TupleExpr)
+                        else domain_arg,
+                        None,
+                    ),
+                    out_arg.type,
+                    with_path_arg=True,
+                    tuple_constructor=im.make_tuple,
+                )
                 return self._construct_itir_out_arg(out_arg), domain_expr
             else:
                 return (

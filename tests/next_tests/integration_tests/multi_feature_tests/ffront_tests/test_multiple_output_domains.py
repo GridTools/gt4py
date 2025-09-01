@@ -9,7 +9,6 @@
 import pytest
 
 import gt4py.next as gtx
-
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
     IDim,
@@ -176,10 +175,10 @@ def testee_nested_tuples(
     b: gtx.Field[[JDim], gtx.float32],
     c: gtx.Field[[KDim], gtx.float32],
 ) -> tuple[
-    tuple[gtx.Field[[IDim], gtx.float32], gtx.Field[[IDim], gtx.float32]],
-    gtx.Field[[IDim], gtx.float32],
+    tuple[gtx.Field[[IDim], gtx.float32], gtx.Field[[JDim], gtx.float32]],
+    gtx.Field[[KDim], gtx.float32],
 ]:
-    return (a, a), a
+    return (a, b), c
 
 
 @gtx.program
@@ -198,14 +197,14 @@ def prog_nested_tuples(
         a,
         b,
         c,
-        out=((out_a, out_a), out_a),
-        domain=(({IDim: (0, i_size)}, {IDim: (0, i_size)}), {IDim: (0, i_size)}),
-    )  # TODO: use JDim, KDim
+        out=((out_a, out_b), out_c),
+        domain=(({IDim: (0, i_size)}, {JDim: (0, j_size)}), {KDim: (0, k_size)}),
+    )
 
 
 def test_program_nested_tuples(
     cartesian_case,
-):  # TODO: this fails for most backends, merge PR #1893 first
+):
     a = cases.allocate(cartesian_case, prog_nested_tuples, "a")()
     b = cases.allocate(cartesian_case, prog_nested_tuples, "b")()
     c = cases.allocate(cartesian_case, prog_nested_tuples, "c")()
@@ -225,8 +224,74 @@ def test_program_nested_tuples(
         cartesian_case.default_sizes[IDim],
         cartesian_case.default_sizes[JDim],
         cartesian_case.default_sizes[KDim],
-        inout=((out_a, out_a), out_a),
-        ref=((a, a), a),
+        inout=((out_a, out_b), out_c),
+        ref=((a, b), c),
+    )
+
+
+@gtx.field_operator
+def testee_double_nested_tuples(
+    a: gtx.Field[[IDim], gtx.float32],
+    b: gtx.Field[[JDim], gtx.float32],
+    c: gtx.Field[[KDim], gtx.float32],
+) -> tuple[
+    tuple[
+        gtx.Field[[IDim], gtx.float32],
+        tuple[gtx.Field[[JDim], gtx.float32], gtx.Field[[KDim], gtx.float32]],
+    ],
+    gtx.Field[[KDim], gtx.float32],
+]:
+    return (a, (b, c)), c
+
+
+@gtx.program
+def prog_double_nested_tuples(
+    a: gtx.Field[[IDim], gtx.float32],
+    b: gtx.Field[[JDim], gtx.float32],
+    c: gtx.Field[[KDim], gtx.float32],
+    out_a: gtx.Field[[IDim], gtx.float32],
+    out_b: gtx.Field[[JDim], gtx.float32],
+    out_c: gtx.Field[[KDim], gtx.float32],
+    i_size: gtx.int32,
+    j_size: gtx.int32,
+    k_size: gtx.int32,
+):
+    testee_double_nested_tuples(
+        a,
+        b,
+        c,
+        out=((out_a, (out_b, out_c)), out_c),
+        domain=(
+            ({IDim: (0, i_size)}, ({JDim: (0, j_size)}, {KDim: (0, k_size)})),
+            {KDim: (0, k_size)},
+        ),
+    )
+
+
+def test_program_double_nested_tuples(
+    cartesian_case,
+):
+    a = cases.allocate(cartesian_case, prog_double_nested_tuples, "a")()
+    b = cases.allocate(cartesian_case, prog_double_nested_tuples, "b")()
+    c = cases.allocate(cartesian_case, prog_double_nested_tuples, "c")()
+    out_a = cases.allocate(cartesian_case, prog_double_nested_tuples, "out_a")()
+    out_b = cases.allocate(cartesian_case, prog_double_nested_tuples, "out_b")()
+    out_c = cases.allocate(cartesian_case, prog_double_nested_tuples, "out_c")()
+
+    cases.verify(
+        cartesian_case,
+        prog_double_nested_tuples,
+        a,
+        b,
+        c,
+        out_a,
+        out_b,
+        out_c,
+        cartesian_case.default_sizes[IDim],
+        cartesian_case.default_sizes[JDim],
+        cartesian_case.default_sizes[KDim],
+        inout=((out_a, (out_b, out_c)), out_c),
+        ref=((a, (b, c)), c),
     )
 
 
@@ -388,9 +453,8 @@ def test_direct_fo_orig(cartesian_case):
 
 
 # TODO:
-#  - test with double nested tuples
-#  - test from  https://hackmd.io/m__8sBBATiqFWOPNMEPsfg
 #  - vertical staggering with dependency
+#  - cleanup and refactor tests
 
 #
 # def test_direct_fo(cartesian_case):

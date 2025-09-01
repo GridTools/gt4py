@@ -56,8 +56,14 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
     if "domain" in new_kwargs:
         _ensure_no_sliced_field(new_kwargs["out"])
 
-        def check(dom, out):
+        def check(
+            dom: past.Dict | past.TupleExpr, out: past.TupleExpr | past.Name, level: int = 0
+        ) -> None:
             if isinstance(dom, past.Dict):
+                # Only reject tuple outputs if nested (level > 0)
+                if level > 0 and (isinstance(out, past.TupleExpr) or isinstance(out, ts.TupleType)):
+                    raise ValueError("Domain dict cannot map to tuple outputs.")
+
                 if len(dom.values_) == 0 and len(dom.keys_) == 0:
                     raise ValueError("Empty domain not allowed.")
 
@@ -78,20 +84,21 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
                             f"Only integer values allowed in domain range, got '{domain_values.elts[0].type}' and '{domain_values.elts[1].type}'."
                         )
             elif isinstance(dom, past.TupleExpr):
-                if not isinstance(out, past.TupleExpr) and not isinstance(out.type, ts.TupleType):
-                    raise ValueError(
-                        f"TupleExpr are only allowed in 'domain', if '{out}' is a tuple as well."
-                    )
                 if isinstance(out, past.TupleExpr):
                     out_elts = out.elts
-                    assert len(out_elts) == len(dom.elts)
-                else:
+                elif isinstance(out.type, ts.TupleType):
                     out_elts = out.type.types
-                    assert len(out_elts) == len(dom.elts)
+                else:
+                    raise ValueError(f"Tuple domain requires tuple output, got {type(out)}.")
+
+                if len(dom.elts) != len(out_elts):
+                    raise ValueError("Mismatched tuple lengths between domain and output.")
+
                 for d, o in zip(dom.elts, out_elts):
-                    check(d, o)
+                    check(d, o, level=level + 1)
+
             else:
-                raise ValueError(f"Only Dictionaries allowed in 'domain', got '{type(dom)}'.")
+                raise ValueError(f"'domain' must be Dict or TupleExpr, got {type(dom)}.")
 
         check(new_kwargs["domain"], new_kwargs["out"])
 
@@ -151,7 +158,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if any(isinstance(elt, past.Dict) for elt in elts):
             assert all(isinstance(elt, (past.Dict, past.TupleExpr)) for elt in elts)
 
-            def infer_type(elt):
+            def infer_type(elt: past.Dict | past.TupleExpr) -> ts.DomainType | ts.TupleType:
                 if isinstance(elt, past.Dict):
                     # TODO: add check that Dict is DomainLike
                     return ts.DomainType(dims=[common.Dimension(elt.keys_[0].id)])
