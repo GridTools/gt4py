@@ -143,10 +143,10 @@ def apply_common_transforms(
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
     # only run the unconditional version here instead of in the loop above.
-    if unconditionally_collapse_tuples:
+    if unconditionally_collapse_tuples:  # TODO(sf-n): delete this?
         ir = CollapseTuple.apply(
             ir,
-            ignore_tuple_size=True,
+            ignore_tuple_size=False,
             uids=collapse_tuple_uids,
             enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
             offset_provider_type=offset_provider_type,

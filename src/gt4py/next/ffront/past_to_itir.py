@@ -327,14 +327,17 @@ class ProgramLowering(
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
         assert isinstance(out_field.type, ts.TypeSpec)
-        out_field_types = type_info.primitive_constituents(out_field.type).to_list()
+        out_field_types = type_info.primitive_constituents(
+            out_field.type if hasattr(out_field, "type") else out_field
+        ).to_list()
+
         out_dims = cast(ts.FieldType, out_field_types[0]).dims
         if any(
             not isinstance(out_field_type, ts.FieldType) or out_field_type.dims != out_dims
             for out_field_type in out_field_types
-        ):  # TODO
+        ):
             raise AssertionError(
-                f"Expected constituents of '{out_field.id}' argument to be"
+                f"Expected constituents of '{getattr(out_field, 'id', out_field)}' argument to be"
                 " fields defined on the same dimensions. This error should be "
                 " caught in type deduction already."
             )
@@ -348,7 +351,6 @@ class ProgramLowering(
         )
 
         domain_args = []
-        domain_args_kind = []
         for dim_i, dim in enumerate(out_dims):
             # an expression for the range of a dimension
             dim_range = im.call("get_domain_range")(
@@ -383,7 +385,6 @@ class ProgramLowering(
                     args=[itir.AxisLiteral(value=dim.value, kind=dim.kind), lower, upper],
                 )
             )
-            domain_args_kind.append(dim.kind)
 
         if self.grid_type == common.GridType.CARTESIAN:
             domain_builtin = "cartesian_domain"
@@ -448,16 +449,17 @@ class ProgramLowering(
                     out_field_name, domain_arg, self._compute_field_slice(out_arg)
                 ),
             )
-        elif isinstance(out_arg, past.Name):
+        elif isinstance(out_arg, past.Name) and isinstance(out_arg.type, ts.FieldType):
             return (
                 self._construct_itir_out_arg(out_arg),
                 self._construct_itir_domain_arg(out_arg, domain_arg),
             )
-        elif isinstance(out_arg, past.TupleExpr):
+        elif isinstance(out_arg, past.TupleExpr) or (
+            isinstance(out_arg, past.Name) and isinstance(out_arg.type, ts.TupleType)
+        ):
             flattened = _flatten_tuple_expr(out_arg)
 
             first_field = flattened[0]
-
             field_slice = None
             if isinstance(first_field, past.Subscript):
                 raise AssertionError  # TODO support slicing of multiple fields with different domain
@@ -475,11 +477,19 @@ class ProgramLowering(
                 first_field = first_field.value
 
             if isinstance(domain_arg, past.TupleExpr):
-                # TODO: Test with out as one argument which is a tuple, don't flatten field
-
                 domain_expr = type_info.apply_to_primitive_constituents(
                     lambda field_type, path: self._construct_itir_domain_arg(
-                        functools.reduce(lambda e, i: e.elts[i], path, out_arg),
+                        functools.reduce(
+                            lambda e, i: (
+                                e.elts[i]
+                                if isinstance(e, past.TupleExpr)
+                                else past.Name(type=e.type.types[i], id=e.id, location=e.location)
+                                if isinstance(e, past.Name) and isinstance(e.type, ts.TupleType)
+                                else e
+                            ),
+                            path,
+                            out_arg,
+                        ),
                         functools.reduce(lambda e, i: e.elts[i], path, domain_arg)
                         if isinstance(domain_arg, past.TupleExpr)
                         else domain_arg,

@@ -24,6 +24,7 @@ from next_tests.integration_tests.cases import (
     Cell,
     Vertex,
     cartesian_case,
+    unstructured_case,
     Case,
     IField,
     JField,
@@ -38,6 +39,41 @@ from gt4py.next import common
 
 KHalfDim = gtx.Dimension("KHalf", kind=gtx.DimensionKind.VERTICAL)
 pytestmark = pytest.mark.uses_cartesian_shift
+
+
+@gtx.field_operator
+def testee_no_tuple(a: IField, b: IField) -> IField:
+    return a
+
+
+@gtx.program
+def prog_no_tuple(
+    a: IField,
+    b: IField,
+    out_a: IField,
+    out_b: IField,
+    i_size: gtx.int32,
+):
+    testee_no_tuple(a, b, out=out_a, domain={IDim: (0, i_size)})
+
+
+def test_program_no_tuple(cartesian_case):
+    a = cases.allocate(cartesian_case, prog_no_tuple, "a")()
+    b = cases.allocate(cartesian_case, prog_no_tuple, "b")()
+    out_a = cases.allocate(cartesian_case, prog_no_tuple, "out_a")()
+    out_b = cases.allocate(cartesian_case, prog_no_tuple, "out_b")()
+
+    cases.verify(
+        cartesian_case,
+        prog_no_tuple,
+        a,
+        b,
+        out_a,
+        out_b,
+        cartesian_case.default_sizes[IDim],
+        inout=out_a,
+        ref=a,
+    )
 
 
 @gtx.field_operator
@@ -106,6 +142,36 @@ def test_program_no_domain(cartesian_case):
 @gtx.field_operator
 def testee(a: IField, b: JField) -> tuple[JField, IField]:
     return b, a
+
+
+@gtx.program
+def prog_no_domain_differnet_fields(
+    a: IField,
+    b: JField,
+    out_a: IField,
+    out_b: JField,
+):
+    testee(a, b, out=(out_b, out_a))
+
+
+def test_program_no_domain_different_fields(
+    cartesian_case,
+):  # TODO: this still fails for some backends
+    a = cases.allocate(cartesian_case, prog_no_domain_differnet_fields, "a")()
+    b = cases.allocate(cartesian_case, prog_no_domain_differnet_fields, "b")()
+    out_a = cases.allocate(cartesian_case, prog_no_domain_differnet_fields, "out_a")()
+    out_b = cases.allocate(cartesian_case, prog_no_domain_differnet_fields, "out_b")()
+
+    cases.verify(
+        cartesian_case,
+        prog_no_domain_differnet_fields,
+        a,
+        b,
+        out_a,
+        out_b,
+        inout=(out_b, out_a),
+        ref=(b, a),
+    )
 
 
 @gtx.program
@@ -356,19 +422,7 @@ def prog_unstructured(
     )
 
 
-def test_program_unstructured(
-    exec_alloc_descriptor, mesh_descriptor
-):  # TODO: this fails for definitions_numpy, please see test_temporaries_with_sizes.py
-    unstructured_case = Case(
-        exec_alloc_descriptor,
-        offset_provider=mesh_descriptor.offset_provider,
-        default_sizes={
-            Edge: mesh_descriptor.num_edges,
-            Cell: mesh_descriptor.num_cells,
-        },
-        grid_type=common.GridType.UNSTRUCTURED,
-        allocator=exec_alloc_descriptor.allocator,
-    )
+def test_program_unstructured(unstructured_case):
     a = cases.allocate(unstructured_case, prog_unstructured, "a")()
     out_a = cases.allocate(unstructured_case, prog_unstructured, "out_a")()
     out_a_shifted = cases.allocate(unstructured_case, prog_unstructured, "out_a_shifted")()
@@ -382,7 +436,7 @@ def test_program_unstructured(
         unstructured_case.default_sizes[Cell],
         unstructured_case.default_sizes[Edge],
         inout=(out_a_shifted, out_a),
-        ref=((a.ndarray)[mesh_descriptor.offset_provider["C2E"].asnumpy()[:, 1]], a),
+        ref=((a.ndarray)[unstructured_case.offset_provider["C2E"].asnumpy()[:, 1]], a),
     )
 
 
@@ -406,25 +460,12 @@ def prog_temporary(
     )  # TODO: specify other domain sizes?
 
 
-def test_program_temporary(
-    exec_alloc_descriptor, mesh_descriptor
-):  # TODO: this fails for definitions_numpy, please see test_temporaries_with_sizes.py
-    unstructured_case = Case(
-        exec_alloc_descriptor,
-        offset_provider=mesh_descriptor.offset_provider,
-        default_sizes={
-            Edge: mesh_descriptor.num_edges,
-            Cell: mesh_descriptor.num_cells,
-            Vertex: mesh_descriptor.num_vertices,
-        },
-        grid_type=common.GridType.UNSTRUCTURED,
-        allocator=exec_alloc_descriptor.allocator,
-    )
+def test_program_temporary(unstructured_case):
     a = cases.allocate(unstructured_case, prog_temporary, "a")()
     out_edge = cases.allocate(unstructured_case, prog_temporary, "out_edge")()
     out_cell = cases.allocate(unstructured_case, prog_temporary, "out_cell")()
 
-    e2v = (a.ndarray)[mesh_descriptor.offset_provider["E2V"].asnumpy()[:, 1]]
+    e2v = (a.ndarray)[unstructured_case.offset_provider["E2V"].asnumpy()[:, 1]]
     cases.verify(
         unstructured_case,
         prog_temporary,
@@ -434,7 +475,7 @@ def test_program_temporary(
         unstructured_case.default_sizes[Cell],
         unstructured_case.default_sizes[Edge],
         inout=(out_edge, out_cell),
-        ref=(e2v, e2v[mesh_descriptor.offset_provider["C2E"].asnumpy()[:, 1]]),
+        ref=(e2v, e2v[unstructured_case.offset_provider["C2E"].asnumpy()[:, 1]]),
     )
 
 
@@ -456,6 +497,7 @@ def test_direct_fo_orig(cartesian_case):
 
 # TODO:
 #  - vertical staggering with dependency
+#  - test with different sizes (explicit domain and no domain) (use extend)
 #  - cleanup and refactor tests
 
 #
