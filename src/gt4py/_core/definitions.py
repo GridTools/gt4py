@@ -19,7 +19,6 @@ import numpy as np
 import numpy.typing as npt
 
 import gt4py.eve as eve
-import gt4py.eve.extended_typing as xtyping
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -505,23 +504,3 @@ class NDArrayObject(Protocol):
     def __or__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
     def __xor__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
-
-
-# -- Field containers --
-PythonContainer: TypeAlias = xtyping.TypedNamedTupleABC | xtyping.DataclassABC
-PYTHON_CONTAINER_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...],
-    PythonContainer.__args__,  # type: ignore[attr-defined]
-)
-
-
-@functools.cache
-def container_keys(container_type: type[PythonContainer]) -> tuple[str, ...]:
-    assert issubclass(container_type, PYTHON_CONTAINER_TYPES)
-
-    if issubclass(container_type, xtyping.TypedNamedTupleABC):
-        return container_type._fields
-    if issubclass(container_type, xtyping.DataclassABC):
-        return tuple(container_type.__dataclass_fields__.keys())
-
-    return ()

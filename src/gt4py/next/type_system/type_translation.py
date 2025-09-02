@@ -24,7 +24,7 @@ import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
-from gt4py.next import common
+from gt4py.next import common, containers
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -116,22 +116,16 @@ def make_type(type_: type) -> ts.TypeSpec:
     if issubclass(type_, (*core_defs.SCALAR_TYPES, str)):
         return ts.ScalarType(kind=get_scalar_kind(type_))
 
-    if issubclass(type_, core_defs.PYTHON_CONTAINER_TYPES):
-        keys = []
-        hints = get_type_hints(type_)
-        if issubclass(type_, xtyping.TypedNamedTupleABC):
-            keys = list(type_._fields)
-        elif issubclass(type_, xtyping.DataclassABC):
-            if not is_simple_dataclass_type(type_):
-                raise ValueError(
-                    f"Dataclass {type_} is not a valid field container. Supported dataclasses"
-                    " must have at least one member, without custom '__init__'"
-                    " functions, 'InitVar's or default arguments."
-                )
-            keys = [f.name for f in dataclasses.fields(type_)]
-        else:
-            raise AssertionError(f"Python container type {type_} does not seem correct.")
+    if issubclass(type_, containers.PYTHON_CONTAINER_TYPES):
+        if issubclass(type_, xtyping.DataclassABC) and not is_simple_dataclass_type(type_):
+            raise ValueError(
+                f"Dataclass {type_} is not a valid field container. Supported dataclasses"
+                " must have at least one member, without custom '__init__'"
+                " functions, 'InitVar's or default arguments."
+            )
 
+        keys = [*containers.container_keys(type_)]
+        hints = get_type_hints(type_)
         types = [
             from_type_hint(hints[key], globalns=sys.modules[type_.__module__].__dict__)
             for key in keys
