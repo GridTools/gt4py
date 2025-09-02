@@ -148,9 +148,9 @@ def _parse_gt_param(
                         isinstance(array_size, dace.symbolic.SymbolicType)
                         and not array_size.is_constant()
                     ):
-                        # TODO(phimuell, edopao): Here is the implicit assumption that the shape
-                        #   fully consists of the domain range symbols. Which is probably a valid
-                        #   assumption for the shape. Also see the strides.
+                        # The array shape is defined as a sequence of expressions
+                        # like 'range_stop - range_start', where 'range_start' and
+                        # 'range_stop' are SDFG symbols.
                         dim_range = f"{arg}.domain.ranges[{i}]"
                         rstart = gtx_dace_utils.range_start_symbol(param_name, i)
                         rstop = gtx_dace_utils.range_stop_symbol(param_name, i)
@@ -165,7 +165,7 @@ def _parse_gt_param(
                                 make_persistent,
                             )
                     else:
-                        # the array shape is set to constant value
+                        # The array shape is set to constant value in this dimension.
                         code.append(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.ndarray.shape[{i}]"
                         )
@@ -178,9 +178,8 @@ def _parse_gt_param(
                         assert array_stride.name == gtx_dace_utils.field_stride_symbol_name(
                             param_name, i
                         )
-                        # TODO(phimuell, edopao): This assumes that the stride is a single value.
-                        #   However, it should also be something like `a*b`. See also the proposed
-                        #   change where this function is called.
+                        # The strides of a global array are defined by a sequence
+                        # of SDFG symbols.
                         _parse_gt_param(
                             array_stride.name,
                             FIELD_SYMBOL_GT_TYPE,
@@ -190,7 +189,7 @@ def _parse_gt_param(
                             make_persistent,
                         )
                     else:
-                        # the array stride is set to constant value
+                        # The array stride is set to constant value in this dimension.
                         code.append(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {value}"
                         )
@@ -272,10 +271,8 @@ def {_cb_get_stride}(ndarray, dim_index):
     #   list of the SDFG. As it would ensure that everything is updated. I would change the
     #   iteration such that we iterate through all arguments the SDFG is needing and then
     #   look where we get it from.
-    # TODO(phimuell, edopao): The offset tables are not updated here. In normal simulations
-    #   this might not be a problem, however, inside the tests it might be a problem.
-    with code.indented():
-        for i, param in enumerate(program_source.entry_point.parameters):
+    for i, param in enumerate(program_source.entry_point.parameters):
+        with code.indented():
             arg = f"{_cb_args}[{i}]"
             assert isinstance(param.type_, ts.DataType)
             _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
