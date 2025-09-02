@@ -2151,11 +2151,11 @@ def test_gtir_index():
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     ref = np.concatenate(
-        (v[:MARGIN], np.arange(MARGIN, N - MARGIN, dtype=np.int32), v[N - MARGIN :])
+        (v[:MARGIN], np.arange(MARGIN, N - MARGIN, dtype=np.int32) * 2 + 1, v[N - MARGIN :])
     )
 
     sdfg(v, **FSYMBOLS)
-    np.allclose(v, ref)
+    assert np.all(v == ref)
 
 
 def test_gtir_concat_where():
