@@ -242,7 +242,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         aligned_index_offset = (
             (
                 items_per_aligned_block
-                * (int(math.ceil(aligned_index[dims_layout[-1]] / items_per_aligned_block)))
+                * (math.ceil(aligned_index[dims_layout[-1]] / items_per_aligned_block))
                 - aligned_index[dims_layout[-1]]
             )
             * item_size

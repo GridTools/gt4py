@@ -253,6 +253,12 @@ module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
 
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
+implicit_reexport = true
+# factory-boy is broken, see https://github.com/FactoryBoy/factory_boy/pull/1114
+module = "factory.*"
+
 # -- pytest --
 [tool.pytest]
 
@@ -357,7 +363,7 @@ typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 
 [tool.ruff.lint.flake8-builtins]
-builtins-allowed-modules = ['builtins']
+builtins-allowed-modules = ['builtins', 'typing']
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
@@ -449,7 +455,7 @@ url = 'https://test.pypi.org/simple'
 atlas4py = {index = "test.pypi"}
 dace = [
   {git = "https://github.com/GridTools/dace", branch = "romanc/stree-to-sdfg", group = "dace-cartesian"},
-  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_08_15", group = "dace-next"}
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_08_28", group = "dace-next"}
 ]
 
 # -- versioningit --

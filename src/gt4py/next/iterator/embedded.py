@@ -16,7 +16,6 @@ import dataclasses
 import itertools
 import math
 import operator
-import warnings
 
 import numpy as np
 import numpy.typing as npt
@@ -102,27 +101,6 @@ Scalar: TypeAlias = (
 
 
 class SparseTag(Tag): ...
-
-
-@xtyping.deprecated("Use a 'Connectivity' instead.")
-def NeighborTableOffsetProvider(
-    table: core_defs.NDArrayObject,
-    origin_axis: common.Dimension,
-    neighbor_axis: common.Dimension,
-    max_neighbors: int,
-    has_skip_values=True,
-) -> common.Connectivity:
-    return common._connectivity(
-        table,
-        codomain=neighbor_axis,
-        domain={
-            origin_axis: table.shape[0],
-            common.Dimension(
-                value="_DummyLocalDim", kind=common.DimensionKind.LOCAL
-            ): max_neighbors,
-        },
-        skip_value=common._DEFAULT_SKIP_VALUE if has_skip_values else None,
-    )
 
 
 # TODO(havogt): complete implementation and make available for fieldview embedded
@@ -1108,27 +1086,6 @@ def _shift_field_indices(
         _range2slice(r) if o == 0 else _shift_range(r, o)
         for r, o in zip(ranges_or_indices, offsets)
     )
-
-
-def np_as_located_field(
-    *axes: common.Dimension, origin: Optional[dict[common.Dimension, int]] = None
-) -> Callable[[np.ndarray], common.Field]:
-    warnings.warn("`np_as_located_field()` is deprecated, use `gtx.as_field()`", DeprecationWarning)  # noqa: B028 [no-explicit-stacklevel]
-
-    origin = origin or {}
-
-    def _maker(a) -> common.Field:
-        if a.ndim != len(axes):
-            raise TypeError("'ndarray.ndim' is incompatible with number of given dimensions.")
-        ranges = []
-        for d, s in zip(axes, a.shape):
-            offset = origin.get(d, 0)
-            ranges.append(common.UnitRange(-offset, s - offset))
-
-        res = common._field(a, domain=common.Domain(dims=tuple(axes), ranges=tuple(ranges)))
-        return res
-
-    return _maker
 
 
 @dataclasses.dataclass(frozen=True)

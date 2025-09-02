@@ -168,7 +168,7 @@ def apply_common_transforms(
             unrolled = NormalizeShifts().visit(unrolled)
             if unrolled == ir:
                 break
-            ir = unrolled  # type: ignore[assignment] # still a `itir.Program`
+            ir = unrolled
         else:
             raise RuntimeError("Reduction unrolling failed.")
 

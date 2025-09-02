@@ -17,10 +17,10 @@ from gt4py.next.program_processors.runners import gtfn
 @program_formatter.program_formatter
 def format_cpp(program: itir.Program, *args: Any, **kwargs: Any) -> str:
     # TODO(tehrengruber): This is a little ugly. Revisit.
-    gtfn_translation = gtfn.GTFNBackendFactory().executor.translation
+    gtfn_translation = gtfn.GTFNBackendFactory().executor.translation  # type: ignore[attr-defined]
     assert isinstance(gtfn_translation, GTFNTranslationStep)
     return gtfn_translation.generate_stencil_source(
         program,
-        offset_provider=kwargs.get("offset_provider", None),
+        offset_provider=kwargs.get("offset_provider", None),  # type: ignore[arg-type]
         column_axis=kwargs.get("column_axis", None),
     )
