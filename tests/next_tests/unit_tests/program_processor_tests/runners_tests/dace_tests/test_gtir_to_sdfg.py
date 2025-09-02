@@ -2116,7 +2116,7 @@ def test_gtir_if_values():
 
 def test_gtir_index():
     MARGIN = 2
-    assert MARGIN < N
+    assert (MARGIN * 2) < N
     domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "size")})
     subdomain = im.domain(
         gtx_common.GridType.CARTESIAN, ranges={IDim: (MARGIN, im.minus("size", MARGIN))}
