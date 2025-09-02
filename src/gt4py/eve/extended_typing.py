@@ -624,7 +624,7 @@ def eval_forward_ref(
 
     def f() -> None: ...
 
-    f.__annotations__["return"] = ForwardRef(ref) if isinstance(ref, str) else ref
+    f.__annotations__ = {"return": ForwardRef(ref) if isinstance(ref, str) else ref}
 
     safe_localns = {**localns} if localns else {}
     safe_localns.setdefault("typing", _sys.modules[__name__])
