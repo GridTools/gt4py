@@ -267,12 +267,12 @@ def {_cb_get_stride}(ndarray, dim_index):
         )
     )
 
-    # TODO(phimuell, edopao): I think that it is more safe to iterate through the argument
-    #   list of the SDFG. As it would ensure that everything is updated. I would change the
-    #   iteration such that we iterate through all arguments the SDFG is needing and then
-    #   look where we get it from.
-    for i, param in enumerate(program_source.entry_point.parameters):
-        with code.indented():
+    # The SDFG binding function is used with fast-call, to update the SDFG arguments
+    #   list, therefore it is only used from the second time the SDFG is called.
+    #   On the first time, we use the regular SDFG call, which constructs the SDFG
+    #   arguments list and validates that all data containers and free symbols are set.
+    with code.indented():
+        for i, param in enumerate(program_source.entry_point.parameters):
             arg = f"{_cb_args}[{i}]"
             assert isinstance(param.type_, ts.DataType)
             _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
