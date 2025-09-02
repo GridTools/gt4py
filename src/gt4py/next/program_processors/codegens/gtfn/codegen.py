@@ -153,7 +153,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
         # functions are represented as function objects that need to be instantiated
-        instantiate = "()" if self.is_functor_call(node) else ""
+        instantiate = "{}()" if self.is_functor_call(node) else ""
         return self.generic_visit(node, instantiate=instantiate)
 
     FunCall = as_fmt("{fun}{instantiate}({','.join(args)})")
