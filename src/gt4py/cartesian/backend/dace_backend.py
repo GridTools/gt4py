@@ -133,7 +133,10 @@ def _sdfg_add_arrays_and_edges(
                 ranges = []
 
             # Add data dimensions to the range
-            ranges += [(0, d, 1) for d in field_info[name].data_dims]
+            ranges += [
+                (0, d - 1, 1)  # d - 1 because ranges are inclusive
+                for d in field_info[name].data_dims
+            ]
 
             if name in inputs:
                 state.add_edge(
