@@ -714,8 +714,8 @@ def canonicalize_function_arguments(
         }
 
     else:
-        # Since there may be missing or invalid keyword arguments, we skip sorting the
-        # remaining keyword arguments in the signature ordering.
+        # Since there may be missing or invalid keyword arguments, we skip
+        # sorting the remaining keyword arguments in the signature ordering.
         # This is done to keep backwards compatibility with previous versions
         # of this function but it is a temporary solution.
         canonical_kwargs = remaining_kwargs
@@ -774,21 +774,23 @@ def structural_function_signature_incompatibilities(
             kwargs_msg = ""
         yield f"Function takes {num_pos_params} positional argument{'s' if num_pos_params != 1 else ''}, but {num_pos_args} {kwargs_msg}were given."
 
-    missing_positional_args = []
-    for i, arg_type in zip(
-        range(len(func_type.pos_only_args), num_pos_params),
-        func_type.pos_or_kw_args.keys(),
-    ):
-        if args[i] is UNDEFINED_ARG:
-            missing_positional_args.append(f"'{arg_type}'")
+    missing_positional_args = [
+        f"'{arg_type}'"
+        for arg, arg_type in zip(
+            args[len(func_type.pos_only_args) : num_pos_params],
+            func_type.pos_or_kw_args.keys(),
+        )
+        if arg is UNDEFINED_ARG
+    ]
+
     if missing_positional_args:
         yield f"Missing {len(missing_positional_args)} required positional argument{'s' if len(missing_positional_args) != 1 else ''}: {', '.join(missing_positional_args)}"
 
     # check for missing or extra keyword arguments
-    kw_a_m_b = set(func_type.kw_only_args.keys()) - set(kwargs.keys())
+    kw_a_m_b = func_type.kw_only_args.keys() - kwargs.keys()
     if len(kw_a_m_b) > 0:
         yield f"Missing required keyword argument{'s' if len(kw_a_m_b) != 1 else ''} '{', '.join(kw_a_m_b)}'."
-    kw_b_m_a = set(kwargs.keys()) - set(func_type.kw_only_args.keys())
+    kw_b_m_a = kwargs.keys() - func_type.kw_only_args.keys()
     if len(kw_b_m_a) > 0:
         yield f"Got unexpected keyword argument{'s' if len(kw_b_m_a) != 1 else ''} '{', '.join(kw_b_m_a)}'."
 
