@@ -57,15 +57,6 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
         raise ValueError(f"Non-trivial dtypes like '{dtype}' are not yet supported.")
 
 
-def make_type(type_: type) -> ts.TypeSpec:
-    """Create a type specification for a given type."""
-
-    if issubclass(type_, (*core_defs.SCALAR_TYPES, str)):
-        return ts.ScalarType(kind=get_scalar_kind(type_))
-
-    raise ValueError(f"Type {type_} not supported")
-
-
 def canonicalize_type_hint(
     type_hint: Any,
     *,
