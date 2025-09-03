@@ -149,14 +149,14 @@ def _create_field_operator_impl(
         extended_local_dims = gtx_common.order_dimensions([pseudo_local_dimension, *field_dims])
         local_idx = extended_local_dims.index(pseudo_local_dimension)
 
-        field_shape = (
-            field_shape[0:local_idx] + [dataflow_output_desc.shape[0]] + field_shape[local_idx:]
-        )
+        field_shape.insert(local_idx, dataflow_output_desc.shape[0])
         # Can only concatenate ranges and slicing in ranges returns lists and not ranges.
         field_subset = dace_subsets.Range(
-            field_subset[0:local_idx]
-            + [dace_subsets.Range.from_array(dataflow_output_desc)[0]]
-            + field_subset[local_idx:]
+            [
+                *field_subset[0:local_idx],
+                dace_subsets.Range.from_array(dataflow_output_desc)[0],
+                *field_subset[local_idx:],
+            ]
         )
 
     # allocate local temporary storage

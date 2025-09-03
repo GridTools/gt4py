@@ -238,11 +238,11 @@ class IteratorExpr:
             )
             local_dim_position = sorted_dims.index(self.gt_dtype.offset_type)
 
-            field_domain = (
-                self.field_domain[:local_dim_position]
-                + [(self.gt_dtype.offset_type, 0)]
-                + self.field_domain[local_dim_position:]
-            )
+            field_domain = [
+                *self.field_domain[:local_dim_position],
+                (self.gt_dtype.offset_type, 0),
+                *self.field_domain[local_dim_position:],
+            ]
         else:
             assert len(field_desc.shape) == len(self.field_domain)
             field_domain = self.field_domain
