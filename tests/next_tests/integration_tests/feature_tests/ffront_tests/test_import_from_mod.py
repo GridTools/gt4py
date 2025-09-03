@@ -21,7 +21,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     mesh_descriptor,
 )
 
-from next_tests.dummy_package import dummy_module
 
 
 def test_import_dims_module(cartesian_case):
@@ -56,6 +55,8 @@ def test_import_dims_module(cartesian_case):
 
 # TODO: these set of features should be allowed as module imports in a later PR
 def test_import_module_errors_future_allowed(cartesian_case):
+    from ....artifacts.dummy_package import dummy_module
+
     with pytest.raises(gtx.errors.DSLError):
 
         @gtx.field_operator
