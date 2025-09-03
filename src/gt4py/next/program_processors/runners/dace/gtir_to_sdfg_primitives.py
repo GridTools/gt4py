@@ -141,22 +141,18 @@ def _create_field_operator_impl(
         assert len(dataflow_output_desc.shape) == 1
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in field_dims)
-        assert output_edge.result.gt_dtype.offset_type is not None
-
-        pseudo_local_dimension = gtx_common.Dimension(
-            "NON_EXISTING_DIMENSION", gtx_common.DimensionKind.LOCAL
+        local_dim: gtx_common.Dimension = output_edge.result.gt_dtype.offset_type  # type: ignore[assignment]  # checked in ValueExpr.__post_init__
+        # construct the full subset according to the canonical field domain
+        extended_dims = gtx_common.order_dimensions(
+            [*field_dims, output_edge.result.gt_dtype.offset_type]  # type: ignore[list-item]  # checked in ValueExpr.__post_init__
         )
-        extended_local_dims = gtx_common.order_dimensions([pseudo_local_dimension, *field_dims])
-        local_idx = extended_local_dims.index(pseudo_local_dimension)
+        local_idx = extended_dims.index(local_dim)
 
         field_shape.insert(local_idx, dataflow_output_desc.shape[0])
-        # Can only concatenate ranges and slicing in ranges returns lists and not ranges.
-        field_subset = dace_subsets.Range(
-            [
-                *field_subset[0:local_idx],
-                dace_subsets.Range.from_array(dataflow_output_desc)[0],
-                *field_subset[local_idx:],
-            ]
+        field_subset = (
+            dace_subsets.Range(field_subset[:local_idx])
+            + dace_subsets.Range.from_array(dataflow_output_desc)
+            + dace_subsets.Range(field_subset[local_idx:])
         )
 
     # allocate local temporary storage
@@ -518,7 +514,6 @@ def translate_index(
     index_value = gtir_dataflow.ValueExpr(
         dc_node=index_node,
         gt_dtype=gtx_dace_utils.as_itir_type(gtir_to_sdfg_types.INDEX_DTYPE),
-        field_layout=[],  # Because it is a scalar.
     )
     index_write_tasklet = sdfg_builder.add_tasklet(
         "index",

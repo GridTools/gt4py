@@ -284,13 +284,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 raise ValueError(
                     f"The provided local dimension {local_dim} does not match any offset provider type."
                 )
-            non_local_dimensions = [
-                dim for dim in data_type.dims if dim.kind != gtx_common.DimensionKind.LOCAL
-            ]
-            assert non_local_dimensions == gtx_common.order_dimensions(non_local_dimensions)
             local_type = ts.ListType(element_type=data_type.dtype, offset_type=local_dim)
-            # TODO(phimuell, edopao): Not sure if that thing is consumed correctly.
-            field_type = ts.FieldType(dims=non_local_dimensions, dtype=local_type)
+            field_type = ts.FieldType(
+                dims=[dim for dim in data_type.dims if dim != local_dim], dtype=local_type
+            )
         else:
             raise NotImplementedError(
                 "Fields with more than one local dimension are not supported."
@@ -402,7 +399,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
         neighbor_table_types = gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
-        assert dims == gtx_common.order_dimensions(dims)
         shape = []
         for i, dim in enumerate(dims):
             if dim.kind == gtx_common.DimensionKind.LOCAL:
@@ -496,6 +492,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 dims = gt_type.dims
             elif not transient:  # 'ts.ListType': use 'offset_type' as local dimension
                 assert gt_type.dtype.offset_type is not None
+                assert gt_type.dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
                 assert isinstance(gt_type.dtype.element_type, ts.ScalarType)
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype.element_type)
                 dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])
@@ -718,11 +715,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
           The SDFG head state, eventually updated if the target write requires a new state.
         """
-
-        # TODO(edopao, phimuell): I think that every sub elements needs to know over what
-        #   we iterate, i.e. what are the dimensions the surrounding Map is iterating
-        #   over. I already mentioned that in my comments about the `_construct_local_view()`,
-        #   which I think is a wrong name. It would make it simpler to identify.
 
         # visit the domain expression
         domain = gtir_domain.extract_domain(stmt.domain)

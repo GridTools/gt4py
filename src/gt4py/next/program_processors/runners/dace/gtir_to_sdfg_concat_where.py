@@ -153,11 +153,6 @@ def _translate_concat_where_impl(
     Returns:
         The field resulted from concatanating the input fields on the lower and upper domain.
     """
-
-    # TODO(phimuell, edopao): I am not fully sure I kind of get the feeling that we
-    #   have to care about the layout in this function, but I am not fully sure.
-    #   It could be that the function does not really care about it.
-
     tb_data_desc, fb_data_desc = (inp.dc_node.desc(ctx.sdfg) for inp in [tb_field, fb_field])
     assert tb_data_desc.dtype == fb_data_desc.dtype
 

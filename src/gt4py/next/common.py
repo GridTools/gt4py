@@ -1156,7 +1156,7 @@ def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
     return sorted(dims, key=lambda dim: (_DIM_KIND_ORDER[dim.kind], dim.value))
 
 
-def check_dims(dims: list[Dimension]) -> None:
+def check_dims(dims: Sequence[Dimension]) -> None:
     if dims != order_dimensions(dims):
         raise ValueError(
             f"Dimensions '{', '.join(map(str, dims))}' are not ordered correctly, expected '{', '.join(map(str, order_dimensions(dims)))}'."
