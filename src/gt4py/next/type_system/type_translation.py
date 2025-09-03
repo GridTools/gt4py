@@ -57,24 +57,6 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
         raise ValueError(f"Non-trivial dtypes like '{dtype}' are not yet supported.")
 
 
-@functools.singledispatch
-def make_constructor_type(type_spec: ts.TypeSpec, type_: type) -> ts.ConstructorType:
-    """Create a constructor type spec for a given scalar or python type."""
-    raise TypeError(f"Cannot create constructor for type: {type_spec}")
-
-
-@make_constructor_type.register
-def _make_constructor_scalar_type(type_spec: ts.ScalarType, type_: type) -> ts.ConstructorType:
-    return ts.ConstructorType(
-        definition=ts.FunctionType(
-            pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-            pos_or_kw_args={},
-            kw_only_args={},
-            returns=type_spec,
-        )
-    )
-
-
 def make_type(type_: type) -> ts.TypeSpec:
     """Create a type specification for a given type."""
 
@@ -206,12 +188,23 @@ def from_type_hint(
         case builtins.type if args:
             # This case matches 'type[Foo]' (where the 'Foo' type is stored in args[0])
             python_type = args[0]
-            constructed_type_spec = from_type_hint_same_ns(python_type)
-            return make_constructor_type(constructed_type_spec, python_type)
 
-        case type():
+            constructed_type_spec = from_type_hint_same_ns(python_type)
+            if not isinstance(constructed_type_spec, ts.ScalarType):
+                raise TypeError(f"Cannot create constructor for type: {constructed_type_spec}")
+
+            return ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                    pos_or_kw_args={},
+                    kw_only_args={},
+                    returns=constructed_type_spec,
+                )
+            )
+
+        case type() if issubclass(canonical_type, (*core_defs.SCALAR_TYPES, str)):
             # This case matches 'int', 'float', etc. used as annotations
-            return make_type(canonical_type)
+            return ts.ScalarType(kind=get_scalar_kind(canonical_type))
 
     raise ValueError(f"'{type_hint}' type is not supported.")
 

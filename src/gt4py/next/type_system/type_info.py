@@ -669,7 +669,6 @@ def canonicalize_arguments(
     kwargs: dict,
     *,
     ignore_errors: bool = False,
-    use_signature_ordering: bool = False,
 ) -> tuple[tuple, dict]:
     raise NotImplementedError(f"Not implemented for type '{type(func_type).__name__}'.")
 
@@ -681,42 +680,45 @@ def canonicalize_function_arguments(
     kwargs: dict,
     *,
     ignore_errors: bool = False,
-    use_signature_ordering: bool = False,
 ) -> tuple[tuple, dict]:
     num_pos_only_args = len(func_type.pos_only_args)
     num_pos_or_kw_args = len(func_type.pos_or_kw_args)
     canonical_args = [*args] + (
         [UNDEFINED_ARG] * max(num_pos_only_args + num_pos_or_kw_args - len(args), 0)
     )
-    canonical_kwargs = {**kwargs}
+    remaining_kwargs = {**kwargs}
 
     pos_or_kw_args_names = [*func_type.pos_or_kw_args]
     for name in kwargs:
         if name in func_type.pos_or_kw_args:
             args_idx = num_pos_only_args + pos_or_kw_args_names.index(name)
             if canonical_args[args_idx] is UNDEFINED_ARG:
-                canonical_args[args_idx] = canonical_kwargs.pop(name)
+                canonical_args[args_idx] = remaining_kwargs.pop(name)
             elif not ignore_errors:
                 raise ValueError(
                     f"Error canonicalizing function arguments. Got multiple values for argument '{name}'."
                 )
 
-    # TODO: Does this condition make sense? Should it be `not (ignore_errors or use_signature_ordering)`?
-    if (not ignore_errors or use_signature_ordering) and (
-        func_type.kw_only_args.keys() ^ canonical_kwargs.keys()
-    ):
-        # TODO: does this comment make sense?
-        # this error can not be ignored as otherwise the invariant that no arguments are dropped
-        # is invalidated.
-        if missing_kw_args := (func_type.kw_only_args.keys() - canonical_kwargs.keys()):
+    missing_kw_args = func_type.kw_only_args.keys() - remaining_kwargs.keys()
+    invalid_kw_args = remaining_kwargs.keys() - func_type.kw_only_args.keys()
+
+    if not ignore_errors:
+        if missing_kw_args:
             raise ValueError(f"Missing required keyword arguments: {[*missing_kw_args]}.")
-        if invalid_kw_args := (canonical_kwargs.keys() - func_type.kw_only_args.keys()):
+        if invalid_kw_args:
             raise ValueError(f"Invalid keyword arguments: {[*invalid_kw_args]}.")
 
-    if use_signature_ordering:
+        # Sort remaining keyword arguments in the signature ordering
         canonical_kwargs = {
-            k: canonical_kwargs[k] for k in func_type.kw_only_args if k in canonical_kwargs
+            k: remaining_kwargs[k] for k in func_type.kw_only_args if k in remaining_kwargs
         }
+
+    else:
+        # Since there may be missing or invalid keyword arguments, we skip sorting the
+        # remaining keyword arguments in the signature ordering.
+        # This is done to keep backwards compatibility with previous versions
+        # of this function but it is a temporary solution.
+        canonical_kwargs = remaining_kwargs
 
     return tuple(canonical_args), canonical_kwargs
 
@@ -728,14 +730,12 @@ def canonicalize_constructor_arguments(
     kwargs: dict,
     *,
     ignore_errors: bool = False,
-    use_signature_ordering: bool = False,
 ) -> tuple[tuple, dict]:
     return canonicalize_arguments(
         constructor_type.definition,
         args,
         kwargs,
         ignore_errors=ignore_errors,
-        use_signature_ordering=use_signature_ordering,
     )
 
 
@@ -886,9 +886,7 @@ def function_signature_incompatibilities_constructor(
     args: Sequence[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
-    yield from function_signature_incompatibilities_func(
-        constructor_type.definition, args, kwargs, skip_canonicalization=False
-    )
+    yield from function_signature_incompatibilities_func(constructor_type.definition, args, kwargs)
 
 
 # TODO(havogt): Consider inlining the usage of this function in the call sites
