@@ -54,7 +54,6 @@ def apply_common_transforms(
     unroll_reduce=False,
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
-    unconditionally_collapse_tuples=False,
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
@@ -139,18 +138,6 @@ def apply_common_transforms(
             symbolic_domain_sizes=symbolic_domain_sizes,
             uids=tmp_uids,
         )
-
-    # Since `CollapseTuple` relies on the type inference which does not support returning tuples
-    # larger than the number of closure outputs as given by the unconditional collapse, we can
-    # only run the unconditional version here instead of in the loop above.
-    if unconditionally_collapse_tuples:
-        ir = CollapseTuple.apply(
-            ir,
-            ignore_tuple_size=True,
-            uids=collapse_tuple_uids,
-            enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
-            offset_provider_type=offset_provider_type,
-        )  # type: ignore[assignment]  # always an itir.Program
 
     ir = NormalizeShifts().visit(ir)
 
