@@ -102,14 +102,12 @@ def canonicalize_program_or_fieldop_arguments(
     kwargs: dict,
     *,
     ignore_errors: bool = False,
-    use_signature_ordering: bool = False,
 ) -> tuple[tuple, dict]:
     return type_info.canonicalize_arguments(
         program_type.definition,
         args,
         kwargs,
         ignore_errors=ignore_errors,
-        use_signature_ordering=use_signature_ordering,
     )
 
 
@@ -120,14 +118,12 @@ def canonicalize_scanop_arguments(
     kwargs: dict,
     *,
     ignore_errors: bool = False,
-    use_signature_ordering: bool = False,
 ) -> tuple[tuple, dict]:
     (_, *cargs), ckwargs = type_info.canonicalize_arguments(
         scanop_type.definition,
         (None, *args),
         kwargs,
         ignore_errors=ignore_errors,
-        use_signature_ordering=use_signature_ordering,
     )
     return tuple(cargs), ckwargs
 

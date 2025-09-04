@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Iterator, Optional, Sequence, Union
+from typing import Iterator, Optional, Sequence
 
 from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
 from gt4py.next import common
@@ -23,7 +23,7 @@ class DataType(TypeSpec):
     """
 
 
-class CallableType:
+class CallableType(TypeSpec):
     """
     A base type for all types are callable.
 
@@ -141,11 +141,11 @@ class TupleType(DataType):
         return len(self.types)
 
 
-class FunctionType(TypeSpec, CallableType):
+class FunctionType(CallableType):
     pos_only_args: Sequence[TypeSpec]
     pos_or_kw_args: dict[str, TypeSpec]
     kw_only_args: dict[str, TypeSpec]
-    returns: Union[TypeSpec]
+    returns: TypeSpec
 
     def __str__(self) -> str:
         arg_strs = [str(arg) for arg in self.pos_only_args]
@@ -154,7 +154,7 @@ class FunctionType(TypeSpec, CallableType):
         return f"({args_str}) -> {self.returns}"
 
 
-class ConstructorType(TypeSpec, CallableType):
+class ConstructorType(CallableType):
     definition: FunctionType
 
 
