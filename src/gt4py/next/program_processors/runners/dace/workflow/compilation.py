@@ -44,13 +44,11 @@ def _get_sdfg_ctype_arglist_callback(
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
 
-    # By copying the global scope we make sure that the function `bind_func_name`
-    #   is not put into the `module.__dict__` scope.
-    #   This can be an issue if two threads in parallel try to generate the name.
-    #   Essentially the function is now an object that only lives inside `scope`.
-    scope = module.__dict__.copy()
-    assert bind_func_name not in scope
-    exec(python_code, scope)
+    # We use a different dict for the locals namespace, in order to avoid that
+    #   the function `bind_func_name` is added to the current scope.
+    #   This can be an issue if two threads in parallel generate the same name.
+    exec(python_code, scope := {})  # type: ignore[var-annotated]
+    assert bind_func_name not in module.__dict__
 
     assert bind_func_name in scope
     assert bind_func_name not in module.__dict__
