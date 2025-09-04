@@ -268,12 +268,7 @@ class DataflowOutputEdge:
         map_exit: Optional[dace.nodes.MapExit],
         dest: dace.nodes.AccessNode,
         dest_subset: dace_subsets.Range,
-    ) -> bool:
-        """Create the connection.
-
-        Might remove the last data container. Returns `True` is it was removed,
-        `False` if kept.
-        """
+    ) -> None:
         write_edge = self.state.in_edges(self.result.dc_node)[0]
         write_size = (
             dace.symbolic.SymExpr(1)  # subset `None` not expected, but it can appear for scalars
@@ -331,8 +326,6 @@ class DataflowOutputEdge:
                 src_conn=src_node_connector,
                 memlet=dace.Memlet(data=dest.data, subset=dest_subset, other_subset=src_subset),
             )
-
-        return remove_last_node
 
 
 DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
