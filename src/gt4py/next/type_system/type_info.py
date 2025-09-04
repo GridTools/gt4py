@@ -662,6 +662,7 @@ def return_type_constructor(
 UNDEFINED_ARG = types.new_class("UNDEFINED_ARG")
 
 
+# TODO(egparedes): replace by `inspect.Signature.bind()`
 @functools.singledispatch
 def canonicalize_arguments(
     func_type: ts.CallableType,
@@ -708,17 +709,11 @@ def canonicalize_function_arguments(
         if invalid_kw_args:
             raise ValueError(f"Invalid keyword arguments: {[*invalid_kw_args]}.")
 
-        # Sort remaining keyword arguments in the signature ordering
-        canonical_kwargs = {
-            k: remaining_kwargs[k] for k in func_type.kw_only_args if k in remaining_kwargs
-        }
-
-    else:
-        # Since there may be missing or invalid keyword arguments, we skip
-        # sorting the remaining keyword arguments in the signature ordering.
-        # This is done to keep backwards compatibility with previous versions
-        # of this function but it is a temporary solution.
-        canonical_kwargs = remaining_kwargs
+    # Sort remaining keyword arguments in the signature ordering,
+    # keeping the invalid ones at the end if 'ignore_errors' is True.
+    canonical_kwargs = {
+        k: remaining_kwargs[k] for k in func_type.kw_only_args if k in remaining_kwargs
+    } | {k: remaining_kwargs[k] for k in invalid_kw_args}
 
     return tuple(canonical_args), canonical_kwargs
 
