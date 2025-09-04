@@ -237,7 +237,7 @@ class DataflowOutputEdge:
     ) -> bool:
         """Create the connection.
 
-        Might remove the last data container. Returns `True` is it was removed,
+        Might remove the last data container. Returns `True` if it was removed,
         `False` if kept.
         """
         write_edge = self.state.in_edges(self.result.dc_node)[0]
@@ -249,10 +249,12 @@ class DataflowOutputEdge:
         # check the kind of node which writes the result
         if isinstance(write_edge.src, dace.nodes.Tasklet):
             # The temporary data written by a tasklet can be safely deleted
-            assert write_size.is_constant()
+            assert isinstance(write_size, int) or str(write_size).isdigit()
             remove_last_node = True
         elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
-            if write_size.is_constant():
+            # TODO(phimuell, edopao): We need a better justification here, best would
+            #   be a reference to a DaCe/GT4Py issue on GH.
+            if isinstance(write_size, int) or str(write_size).isdigit():
                 # Temporary data with compile-time size is allocated on the stack
                 # and therefore is safe to keep. We decide to keep it as a workaround
                 # for a dace issue with memlet propagation in combination with
