@@ -168,7 +168,6 @@ def _create_scan_field_operator_impl(
     else:
         # The AccessNode on the inside of the Map was not removed but remains there.
         #  Thus we do not have to update the strides, we do however, make some checks.
-        # TODO(edopao): This case exists in icon4py, but a gt4py unittest is missing.
         in_map_temporary_output_field = field_node_path[0].src
         assert in_map_temporary_output_field == output_edge.result.dc_node
 
