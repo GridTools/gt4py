@@ -133,7 +133,7 @@ def build_dace_sdfg(
             },
         )
     return dace_backend.build_sdfg_from_gtir(
-        ir, offset_provider_type, disable_field_origin_on_program_arguments=True
+        ir, offset_provider_type, column_axis=KDim, disable_field_origin_on_program_arguments=True
     )
 
 
@@ -2288,3 +2288,50 @@ def test_gtir_concat_where_two_dimensions():
     sdfg(a, b, c, d, **field_symbols)
 
     np.allclose(d, ref)
+
+
+def test_gtir_scan():
+    K = 20
+    domain = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, "size"), KDim: (0, "nlevels")})
+    testee = gtir.Program(
+        id=f"gtir_scan",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="y", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+            gtir.Sym(id="nlevels", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.as_fieldop(
+                    im.scan(
+                        im.lambda_("state", "inp")(im.plus("state", im.deref("inp"))), True, 0.0
+                    )
+                )("x"),
+                domain=domain,
+                target=gtir.SymRef(id="y"),
+            )
+        ],
+    )
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+
+    a = np.random.rand(N, K)
+    b = np.random.rand(N, K)
+    ref = np.add.accumulate(a, axis=1)
+
+    symbols = FSYMBOLS | {
+        "nlevels": K,
+        "__x_0_range_1": a.shape[0],
+        "__x_1_range_1": a.shape[1],
+        "__x_stride_0": a.strides[0] // a.itemsize,
+        "__x_stride_1": a.strides[1] // a.itemsize,
+        "__y_0_range_1": b.shape[0],
+        "__y_1_range_1": b.shape[1],
+        "__y_stride_0": b.strides[0] // b.itemsize,
+        "__y_stride_1": b.strides[1] // b.itemsize,
+    }
+
+    sdfg(a, b, **symbols)
+    assert np.allclose(b, ref)
