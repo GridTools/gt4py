@@ -70,7 +70,7 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.DomainType
     elif t is type:
         return (
-            ts.FunctionType
+            ts.ConstructorType
         )  # our type of type is currently represented by the type constructor function
     elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
         return ts.TupleType
@@ -254,7 +254,7 @@ def _make_unary_math_builtin(name: str) -> None:
             value
         )  # default implementation for scalars, Fields are handled via dispatch
 
-        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))  # type: ignore[operator] # calling a function of unknown type
+        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))  # type: ignore[operator, arg-type] # calling a function of unknown type; trunc not supported for all types
 
     impl.__name__ = name
     globals()[name] = BuiltInFunction(impl)

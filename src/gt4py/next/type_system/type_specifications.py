@@ -53,6 +53,17 @@ class DimensionType(TypeSpec):
         return str(self.dim)
 
 
+class IndexType(TypeSpec):
+    """
+    Represents the type of an index into a dimension.
+    """
+
+    dim: common.Dimension
+
+    def __str__(self) -> str:
+        return f"Index[{self.dim}]"
+
+
 class OffsetType(TypeSpec):
     # TODO(havogt): replace by ConnectivityType
     source: common.Dimension
@@ -141,6 +152,10 @@ class FunctionType(TypeSpec, CallableType):
         kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
+
+
+class ConstructorType(TypeSpec, CallableType):
+    definition: FunctionType
 
 
 class DomainType(DataType):

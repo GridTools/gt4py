@@ -49,14 +49,26 @@ def parse_definition(
     module: str,
     externals: Optional[Dict[str, Any]] = None,
     dtypes: Dict[Type, Type] = None,
+    literal_int_precision: int | None = None,
+    literal_float_precision: int | None = None,
     rebuild=False,
     **kwargs,
-):
+) -> nodes.StencilDefinition:
     original_annotations = gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
 
-    build_options = gt_definitions.BuildOptions(
-        name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=None
-    )
+    build_args = {
+        "name": name,
+        "module": module,
+        "rebuild": rebuild,
+        "build_info": None,
+        "backend_opts": kwargs,
+    }
+    if literal_int_precision is not None:
+        build_args["literal_int_precision"] = literal_int_precision
+    if literal_float_precision is not None:
+        build_args["literal_float_precision"] = literal_float_precision
+
+    build_options = gt_definitions.BuildOptions(**build_args)
 
     gt_frontend.GTScriptFrontend.prepare_stencil_definition(
         definition_func, externals=externals or {}
@@ -210,6 +222,25 @@ class TestInlinedExternals:
                 name=inspect.stack()[0][3],
                 module=self.__class__.__name__,
             )
+
+    def test_np_bool_external(self):
+        def stencil(input_field: gtscript.Field[float], output_field: gtscript.Field[float]):
+            from __externals__ import flag
+
+            with computation(PARALLEL), interval(...):
+                add_me = 1 if flag else 5
+                output_field = input_field + add_me
+
+        def_ir = parse_definition(
+            stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            externals={
+                "flag": np.bool_(True),
+            },
+        )
+
+        assert set(def_ir.externals.keys()) == {"flag"}
 
 
 class TestFunction:
@@ -1823,3 +1854,139 @@ class TestAnnotations:
         assert "wb" in annotations
         assert annotations["wb"] == int
         assert len(annotations) == 6
+
+
+class TestLiteralCasts:
+    def setup_method(self):
+        def float_cast(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                field[0, 0, 0] = float(0)
+
+        def int_cast(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                field[0, 0, 0] = int(0)
+
+        self.float_cast = float_cast
+        self.int_cast = int_cast
+
+    def test_explicit_64_int_cast(self):
+        def_ir = parse_definition(
+            self.int_cast,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_int_precision=64,
+        )
+        cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
+        assert cast_call.func == nodes.NativeFunction.INT64
+
+    def test_explicit_32_int_cast(self):
+        def_ir = parse_definition(
+            self.int_cast,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_int_precision=32,
+        )
+        cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
+        assert cast_call.func == nodes.NativeFunction.INT32
+
+    def test_explicit_32_float_cast(self):
+        def_ir = parse_definition(
+            self.float_cast,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_float_precision=32,
+        )
+        cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
+        assert cast_call.func == nodes.NativeFunction.FLOAT32
+
+    def test_explicit_64_float_cast(self):
+        def_ir = parse_definition(
+            self.float_cast,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_float_precision=64,
+        )
+        cast_call: nodes.NativeFuncCall = def_ir.computations[0].body.stmts[0].value
+        assert cast_call.func == nodes.NativeFunction.FLOAT64
+
+
+class TestTemporaryTypes:
+    def setup_method(self):
+        def temporary_int_stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                temporary: int = 12
+                field[0, 0, 0] = temporary
+
+        def temporary_float_stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                temporary: float = 12
+                field[0, 0, 0] = temporary
+
+        self.int_stencil = temporary_int_stencil
+        self.float_stencil = temporary_float_stencil
+
+    def test_explicit_64_int_temp_defn(self):
+        def_ir = parse_definition(
+            self.int_stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_int_precision=64,
+        )
+
+        field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
+        assert field_declaration.data_type == nodes.DataType.INT64
+
+    def test_explicit_32_int_temp_defn(self):
+        def_ir = parse_definition(
+            self.int_stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_int_precision=32,
+        )
+
+        field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
+        assert field_declaration.data_type == nodes.DataType.INT32
+
+    def test_explicit_64_float_temp_defn(self):
+        def_ir = parse_definition(
+            self.float_stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_float_precision=64,
+        )
+
+        field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
+        assert field_declaration.data_type == nodes.DataType.FLOAT64
+
+    def test_explicit_32_float_temp_defn(self):
+        def_ir = parse_definition(
+            self.float_stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_float_precision=32,
+        )
+
+        field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
+        assert field_declaration.data_type == nodes.DataType.FLOAT32
+
+
+class TestNumpyTypedConstants:
+    def setup_method(self):
+        self.constant = np.float32(42.0)
+
+        def assign_constant(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                field[0, 0, 0] = self.constant
+
+        self.stencil = assign_constant
+
+    def test_assign_constant_numpy_typed(self):
+        def_ir = parse_definition(
+            self.stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        constant: nodes.ScalarLiteral = def_ir.computations[0].body.stmts[0].value
+        assert isinstance(constant, nodes.ScalarLiteral)
+        assert constant.data_type == nodes.DataType.FLOAT32

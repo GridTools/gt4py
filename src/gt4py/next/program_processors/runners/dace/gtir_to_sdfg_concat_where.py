@@ -426,7 +426,6 @@ def _translate_concat_where_impl(
             lower_output_subset.append((0, size - 1, 1))
             upper_output_subset.append((0, size - 1, 1))
 
-    # use dynamic memlets because the subset range could be empty, but this is known only at runtime
     ctx.state.add_nedge(
         lower.dc_node,
         output_node,
@@ -434,7 +433,6 @@ def _translate_concat_where_impl(
             data=lower.dc_node.data,
             subset=dace_subsets.Range(lower_subset),
             other_subset=dace_subsets.Range(lower_output_subset),
-            dynamic=True,
         ),
     )
     ctx.state.add_nedge(
@@ -444,7 +442,6 @@ def _translate_concat_where_impl(
             data=upper.dc_node.data,
             subset=dace_subsets.Range(upper_subset),
             other_subset=dace_subsets.Range(upper_output_subset),
-            dynamic=True,
         ),
     )
 

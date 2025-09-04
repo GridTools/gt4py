@@ -16,7 +16,7 @@ import collections
 import inspect
 import numbers
 import types
-from typing import Callable, Dict, Type
+from typing import Callable, Dict, Type, Union
 
 import numpy as np
 
@@ -59,6 +59,19 @@ MATH_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "erf",
+    "erfc",
+    "round",
+    "round_away_from_zero",
+}
+
+TYPE_HINT_AND_CAST_BUILTINS = {
+    "int32",
+    "int64",
+    "float32",
+    "float64",
+    "int",
+    "float",
 }
 
 builtins = {
@@ -84,11 +97,18 @@ builtins = {
     "__INLINED",
     "compile_assert",
     *MATH_BUILTINS,
+    *TYPE_HINT_AND_CAST_BUILTINS,
 }
 
-IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert"}
+IGNORE_WHEN_INLINING = {
+    *MATH_BUILTINS,
+    *TYPE_HINT_AND_CAST_BUILTINS,
+    "compile_assert",
+}
 
-__all__ = [*list(builtins), "function", "stencil", "lazy_stencil"]
+IGNORE_IN_ALL = {"int", "float"}
+
+__all__ = [*[b for b in builtins if b not in IGNORE_IN_ALL], "function", "stencil", "lazy_stencil"]
 
 __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
@@ -160,6 +180,8 @@ def stencil(
     rebuild=False,
     cache_settings=None,
     raise_if_not_cached=False,
+    literal_int_precision=gt_definitions.LITERAL_INT_PRECISION,
+    literal_float_precision=gt_definitions.LITERAL_FLOAT_PRECISION,
     **kwargs,
 ):
     """Generate an implementation of the stencil definition with the specified backend.
@@ -213,6 +235,14 @@ def stencil(
             - `root_path`: (str)
             - `dir_name`: (str)
 
+        literal_int_precision: `int` optional
+            Value to define the precision of generic `int` casts.
+            (System literal precision by default).
+
+        literal_float_precision: `int` optional
+            Value to define the precision of generic `float` casts.
+            (System literal precision by default).
+
         **kwargs: `dict`, optional
             Extra backend-specific options. Check the specific backend
             documentation for further information.
@@ -251,6 +281,14 @@ def stencil(
         raise ValueError(f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')")
     if cache_settings is not None and not isinstance(cache_settings, dict):
         raise ValueError(f"Invalid 'cache_settings' dictionary ('{cache_settings}')")
+    if not isinstance(literal_int_precision, int) and literal_int_precision not in (32, 64):
+        raise ValueError(
+            f"Invalid 'literal_int_precision'. Got '{literal_int_precision}', expected 32 or 64."
+        )
+    if not isinstance(literal_float_precision, int) and literal_float_precision not in (32, 64):
+        raise ValueError(
+            f"Invalid 'literal_float_precision'. Got '{literal_float_precision}', expected 32 or 64."
+        )
 
     module = None
     if name:
@@ -285,6 +323,8 @@ def stencil(
         backend_opts=kwargs,
         build_info=build_info,
         cache_settings=cache_settings or {},
+        literal_int_precision=literal_int_precision,
+        literal_float_precision=literal_float_precision,
         impl_opts=_impl_opts,
     )
 
@@ -768,142 +808,191 @@ def compile_assert(expr):
     pass
 
 
+# GTScript builtins: type cast & hints
+int32 = np.int32
+int64 = np.int64
+float32 = np.float32
+float64 = np.float64
+_gt_all_op_types = Union[int32, int64, float32, float64]
+
+
 # GTScript builtins: math functions
-def abs(x):  # noqa: A001 [builtin-variable-shadowing]
+def abs(x) -> _gt_all_op_types:  # type: ignore[empty-body] # noqa: A001 [builtin-variable-shadowing]
     """Return the absolute value of the argument"""
     pass
 
 
-def min(x, y):  # noqa: A001 [builtin-variable-shadowing]
+def min(x, y) -> _gt_all_op_types:  # type: ignore[empty-body]  # noqa: A001 [builtin-variable-shadowing]
     """Return the smallest of two or more arguments."""
     pass
 
 
-def max(x, y):  # noqa: A001 [builtin-variable-shadowing]
+def max(x, y) -> _gt_all_op_types:  # type: ignore[empty-body]  # noqa: A001 [builtin-variable-shadowing]
     """Return the largest of two or more arguments."""
     pass
 
 
-def mod(x, y):
+def mod(x, y) -> _gt_all_op_types:  # type: ignore[empty-body]
     """returns the first argument modulo the second one"""
     pass
 
 
-def sin(x):
+def sin(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the sine of x radians"""
     pass
 
 
-def cos(x):
+def cos(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the cosine of x radians."""
     pass
 
 
-def tan(x):
+def tan(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the tangent of x radians."""
     pass
 
 
-def asin(x):
+def asin(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """return the arc sine of x, in radians."""
     pass
 
 
-def acos(x):
+def acos(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the arc cosine of x, in radians."""
     pass
 
 
-def atan(x):
+def atan(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the arc tangent of x, in radians."""
     pass
 
 
-def sinh(x):
+def sinh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the hyperbolic sine of x radians"""
     pass
 
 
-def cosh(x):
+def cosh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the hyperbolic cosine of x radians."""
     pass
 
 
-def tanh(x):
+def tanh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the hyperbolic tangent of x radians."""
     pass
 
 
-def asinh(x):
+def asinh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """return the inverse hyperbolic sine of x, in radians."""
     pass
 
 
-def acosh(x):
+def acosh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the inverse hyperbolic cosine of x, in radians."""
     pass
 
 
-def atanh(x):
+def atanh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the inverse hyperbolic tangent of x, in radians."""
     pass
 
 
-def sqrt(x):
+def sqrt(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the square root of x."""
     pass
 
 
-def exp(x):
+def exp(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return e raised to the power x, where e is the base of natural logarithms."""
     pass
 
 
-def log(x):
+def log(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the natural logarithm of x (to base e)."""
     pass
 
 
-def log10(x):
+def log10(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the base-10 logarithm of x."""
     pass
 
 
-def gamma(x):
+def gamma(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the gamma function of x."""
     pass
 
 
-def cbrt(x):
+def cbrt(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the cubic root of x."""
     pass
 
 
-def isfinite(x):
+def isfinite(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return True if x is neither an infinity nor a NaN, and False otherwise. (Note that 0.0 is considered finite.)"""
     pass
 
 
-def isinf(x):
+def isinf(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return True if x is a positive or negative infinity, and False otherwise."""
     pass
 
 
-def isnan(x):
+def isnan(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return True if x is a NaN (not a number), and False otherwise."""
     pass
 
 
-def floor(x):
+def floor(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the floor of x, the largest integer less than or equal to x."""
     pass
 
 
-def ceil(x):
+def ceil(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the ceiling of x, the smallest integer greater than or equal to x."""
     pass
 
 
-def trunc(x):
+def trunc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the Real value x truncated to an Integral (usually an integer)"""
+    pass
+
+
+def erf(x) -> _gt_all_op_types:  # type: ignore[empty-body]
+    """Computes the error function of `x`."""
+    pass
+
+
+def erfc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
+    """Computes the complementary error function of `x`, which is `1.0 - erf(x)`."""
+    pass
+
+
+def round(x) -> _gt_all_op_types:  # type: ignore[empty-body] # noqa: A001 [builtin-variable-shadowing]
+    """
+    Computes the nearest integer value to `x`, rounding halfway cases to even numbers.
+
+        Examples:
+        -0.5 -> -0.0, 0.5 -> 0.0, 1.5 -> 2.0, 2.5 -> 2.0
+
+    This is in alignment with the IEEE754 standard python's built-in round() function.
+
+    In contrast, `round_away_from_zero()` splits ties away from zero e.g. 2.5 will
+    round to 3.0 and -0.5 will round to -1.0.
+    """
+    pass
+
+
+def round_away_from_zero(x) -> _gt_all_op_types:  # type: ignore[empty-body]
+    """
+    Computes the nearest integer value to `x`, rounding halfway cases away from zero.
+
+        Examples:
+        -0.5 -> -1.0, 0.5 -> 0.0, 1.5 -> 2.0, 2.5 -> 3.0
+
+    This is in alignment with C(++) and FORTRAN standard round functions that round away
+    from zero by default.
+
+    In contrast, `round()` implements "Banker's rounding" and splits ties to the nearest
+    even integer, e.g. 1.5 and 2.5 both round to 2.0.
+    """
     pass
