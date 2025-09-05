@@ -87,6 +87,10 @@ class NodeVisitor:
 
     """
 
+    #: Cache for visitor method names per node class to speed up dispatching.
+    #: Note that we cache the visitor method name, not the bound method itself,
+    #: to avoid implicitly caching the visitor state, which could lead to
+    #: unexpected behavior.
     _node_visitor_cache_: ClassVar[dict[type, str] | None] = None
 
     def __init_subclass__(cls) -> None:
