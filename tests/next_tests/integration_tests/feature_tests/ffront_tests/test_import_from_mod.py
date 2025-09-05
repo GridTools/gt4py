@@ -22,7 +22,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-
 def test_import_dims_module(cartesian_case):
     @gtx.field_operator
     def mod_op(f: cases.IField) -> cases.IKField:

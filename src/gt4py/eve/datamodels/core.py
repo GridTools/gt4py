@@ -1332,6 +1332,8 @@ def _make_concrete_with_cache(
             },
         )
 
+    concrete_cls.__datamodel_generic_name__ = datamodel_cls.__name__.split("__")[0]  # type: ignore[attr-defined]  # adding new attribute
+
     return concrete_cls
 
 

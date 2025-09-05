@@ -20,7 +20,6 @@ from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-
 class CustomInt32DType:
     @property
     def dtype(self) -> np.dtype:
