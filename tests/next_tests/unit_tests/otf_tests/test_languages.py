@@ -22,7 +22,6 @@ def test_basic_settings_with_cpp_rejected():
             language_settings=languages.LanguageSettings(
                 formatter_key="cpp", formatter_style="llvm", file_extension="cpp"
             ),
-            implicit_domain=False,
         )
 
 
@@ -38,5 +37,4 @@ def test_header_files_settings_with_cpp_accepted():
             file_extension="cpp",
             header_extension="hpp",
         ),
-        implicit_domain=False,
     )

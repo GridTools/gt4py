@@ -176,7 +176,6 @@ def test_bind_sdfg(persistent_config):
             library_deps=tuple(),
             language=languages.SDFG,
             language_settings=_language_settings(),
-            implicit_domain=False,
         )
     )
 

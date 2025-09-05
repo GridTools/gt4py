@@ -65,7 +65,7 @@ class Compiler(
     def __call__(
         self,
         inp: stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
-    ) -> stages.ExtendedCompiledProgram:
+    ) -> stages.CompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
@@ -87,12 +87,7 @@ class Compiler(
             importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
         )
 
-        @dataclasses.dataclass(frozen=True)
-        class Wrapper(stages.ExtendedCompiledProgram):
-            implicit_domain: bool = inp.program_source.implicit_domain
-            __call__: stages.CompiledProgram = compiled_prog
-
-        return Wrapper()
+        return compiled_prog
 
 
 class CompilerFactory(factory.Factory):

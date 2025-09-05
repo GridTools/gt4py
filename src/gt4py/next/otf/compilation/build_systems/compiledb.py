@@ -66,7 +66,6 @@ class CompiledbFactory(
             cmake_flags=self.cmake_extra_flags or [],
             language=source.program_source.language,
             language_settings=source.program_source.language_settings,
-            implicit_domain=source.program_source.implicit_domain,
         )
 
         compiledb_template = _cc_get_compiledb(
@@ -256,7 +255,6 @@ def _cc_prototype_program_source(
     cmake_flags: list[str],
     language: type[SrcL],
     language_settings: languages.LanguageWithHeaderFilesSettings,
-    implicit_domain: bool,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
@@ -265,7 +263,6 @@ def _cc_prototype_program_source(
         library_deps=deps,
         language=language,
         language_settings=language_settings,
-        implicit_domain=implicit_domain,
     )
 
 
