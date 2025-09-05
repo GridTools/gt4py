@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import dataclasses
-import importlib
 import os
 import pathlib
 from typing import Any, Callable, Sequence
@@ -29,30 +28,26 @@ def _get_sdfg_ctype_arglist_callback(
     [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]], None
 ]:
     """
-    Helper method to load dynamically generated Python code as a module and return
-    a function to update the list of SDFG call arguments.
+    Helper method to load dynamically generated Python code which will be used
+    to update the list of SDFG call arguments.
+
+    It loads the Python code inside an empty namespace, without modifying the current
+    global namespace. This is done to support parallel compilation, in which it can
+    happen that two threads generate the same `bind_func_name` for the callback function.
 
     Args:
-        module_name: Name to use to load the python code as a module.
+        module_name: Set on the loaded callback function for debugging.
         bind_func_name: Name to use for the translation function.
-        python_code: String containg the Python code to load.
+        python_code: String containing the Python code to load.
 
     Returns:
         A callable object to update the list of SDFG call arguments.
     """
-    spec = importlib.util.spec_from_loader(module_name, loader=None)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-
-    # We use a different dict for the locals namespace, in order to avoid that
-    #   the function `bind_func_name` is added to the current scope.
-    #   This can be an issue if two threads in parallel generate the same name.
-    exec(python_code, scope := {})  # type: ignore[var-annotated]
-    assert bind_func_name not in module.__dict__
-
-    assert bind_func_name in scope
-    assert bind_func_name not in module.__dict__
-    return scope[bind_func_name]
+    exec(python_code, global_namespace := {})  # type: ignore[var-annotated]
+    assert bind_func_name not in globals()
+    assert bind_func_name in global_namespace
+    global_namespace[bind_func_name].__module__ = module_name
+    return global_namespace[bind_func_name]
 
 
 class CompiledDaceProgram(stages.ExtendedCompiledProgram):
