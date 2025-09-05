@@ -10,6 +10,8 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import dataclasses
+
 
 import numpy as np
 import pytest
@@ -28,6 +30,7 @@ from gt4py.next import (
     min_over,
     neighbor_sum,
     where,
+    _default_collections,  # for registering
 )
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
@@ -926,3 +929,19 @@ def test_scalar_broadcast():
         1,
         im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))),
     )
+
+
+@dataclasses.dataclass
+class DataclassContainer:
+    a: gtx.Field[[TDim], float64]
+    b: gtx.Field[[TDim], float64]
+
+
+def test_containers():
+    def foo(inp: DataclassContainer) -> DataclassContainer:
+        return DataclassContainer(a=inp.a, b=inp.b)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    # assert False  # TODO
