@@ -10,15 +10,15 @@ from __future__ import annotations
 
 import dataclasses
 import os
-import pathlib
 from typing import Any, Callable, Sequence
 
 import dace
 import factory
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import config
+from gt4py.next import config as gtx_config
 from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
 
@@ -111,9 +111,9 @@ class DaCeCompiler(
     """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
     bind_func_name: str
-    cache_lifetime: config.BuildCacheLifetime
+    cache_lifetime: gtx_config.BuildCacheLifetime
     device_type: core_defs.DeviceType
-    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
+    cmake_build_type: gtx_config.CMakeBuildType = gtx_config.CMakeBuildType.DEBUG
 
     def __call__(
         self,
@@ -123,14 +123,13 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-            sdfg_build_folder = pathlib.Path(sdfg.build_folder)
+            sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
-            print(f" == {sdfg_build_folder}: lock pending")
+
+            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
-                print(f" == {sdfg_build_folder}: lock acquired")
                 sdfg_program = sdfg.compile(validate=False)
-                print(f" == {sdfg_build_folder}: lock release")
 
         assert inp.binding_source is not None
         return CompiledDaceProgram(
