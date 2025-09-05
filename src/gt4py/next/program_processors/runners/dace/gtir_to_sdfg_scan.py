@@ -65,8 +65,11 @@ def _parse_scan_fieldop_arg(
             return arg_expr
         # In scan field operator, the arguments to the vertical stencil are passed by value.
         # Therefore, the full field shape is passed as `MemletExpr` rather than `IteratorExpr`.
+        field_type = ts.FieldType(
+            dims=[dim for dim, _ in arg_expr.field_domain], dtype=arg_expr.gt_dtype
+        )
         return gtir_dataflow.MemletExpr(
-            arg_expr.field, arg_expr.gt_dtype, arg_expr.get_memlet_subset(ctx.sdfg)
+            arg_expr.field, field_type, arg_expr.get_memlet_subset(ctx.sdfg)
         )
 
     arg = sdfg_builder.visit(node, ctx=ctx)
