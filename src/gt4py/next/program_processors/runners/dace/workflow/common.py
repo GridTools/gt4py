@@ -40,15 +40,18 @@ def set_dace_config(
     #   a thread local variable. This means it is safe to set values that are different
     #   for each thread.
 
-    # We rely on gt4py to get a unique build folder for each SDFG
-    dace.Config.set("cache", value="single")
-
     # We rely on dace cache to avoid recompiling the SDFG.
     #   Note that the workflow step with the persistent `FileCache` store
     #   is translating from `CompilableProgram` (ITIR.Program + CompileTimeArgs)
     #   to `ProgramSource`, so this step is storing in cache only the result
     #   of the SDFG transformations, not the compiled program binary.
     dace.Config.set("compiler.use_cache", value=True)
+
+    # We rely on gt4py function `get_cache_folder` to get a unique build folder
+    #   for each SDFG. Within this folder, by setting 'cache=single', dace will
+    #   cache the generated code and build binaries, without creating any sub-folder
+    #   structure.
+    dace.Config.set("cache", value="single")
 
     # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
