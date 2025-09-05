@@ -59,31 +59,34 @@ stages:
     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
     EXTRA_UV_SYNC_ARGS: "--extra cuda12"
 
-# TODO: rocm steps are in draft state for now to show how to add support in the future
-# .build_extra_rocm:
-#   variables:
-#     # jfrog.svc.cscs.ch/dockerhub/rocm is the cached version of docker.io/rocm
-#     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
-#     EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
-#     EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx90a"
+.build_extra_rocm:
+  variables:
+    # jfrog.svc.cscs.ch/dockerhub/rocm is the cached version of docker.io/rocm
+    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
+    EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
+    EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx942 ROCM_HOME=/opt/rocm"
+    UBUNTU_VERSION: '22.04'
 
 build_cscs_gh200:
   extends:
     - .container-builder-cscs-gh200
     - .build_common
     - .build_extra_cuda
+  needs: []
 
-# .build_cscs_amd_rocm:
-#   extends:
-#     - .container-builder-cscs-zen2
-#     - .build_common
-#     - .build_extra_rocm
+build_cscs_amd_rocm:
+  extends:
+    - .container-builder-cscs-zen2
+    - .build_common
+    - .build_extra_rocm
+  needs: []
 
 # -- Test stage --
 .test_common:
   stage: test
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
+    TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6_0) to test 
     CSCS_CUDA_MPS: 1
     SLURM_GPUS_PER_NODE: 4
     SLURM_JOB_NUM_NODES: 1
@@ -91,28 +94,33 @@ build_cscs_gh200:
   parallel:
     matrix:
       - SUBPACKAGE: [cartesian]
-        VARIANT: ["internal", "dace"]
-        SUBVARIANT: ["cuda12", "cpu"]
+        VARIANT: ['internal', 'dace']
+        SUBVARIANT: ['cuda12', 'rocm6_0', 'cpu']
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: eve
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: next
-        VARIANT: ["internal", "dace"]
-        SUBVARIANT: ["cuda12", "cpu"]
+        VARIANT: ['internal', 'dace']
+        SUBVARIANT: ['cuda12', 'rocm6_0', 'cpu']
         DETAIL: ["nomesh", "atlas"]
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: [storage]
-        VARIANT: ["cuda12", "cpu"]
+        VARIANT: ['cuda12', 'rocm6_0', 'cpu']
         PY_VERSION: *test_python_versions
-  rules:
-    - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
-      variables:
-        # TODO: investigate why the dace tests seem to hang with multiple jobs
-        GT4PY_BUILD_JOBS: 1
-        SLURM_TIMELIMIT: "00:15:00"
-    - when: on_success
+  rules: &exclude_variants_rules
+    # Extended jobs should reference this list anchor at the proper position of their
+    # `rules` section, and also add an extra `- when: on_success` rule at the end.
+    - if: '($SUBVARIANT == "cpu" || ($SUBPACKAGE == "storage" && $VARIANT == "cpu")) && ($TEST_VARIANTS !~ /(^|\s)cpu(\s|$)/)'
+      when: never
+    - if: '($SUBVARIANT == "cuda12" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda12")) && ($TEST_VARIANTS !~ /(^|\s)cuda12(\s|$)/)'
+      when: never
+    - if: '($SUBVARIANT == "rocm6_0" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm6_0")) && ($TEST_VARIANTS !~ /(^|\s)rocm6_0(\s|$)/)'
+      when: never
+
   script:
-    # Since the image does not contain the repo, we need to clone it before running the tests
+    # Since the image does not contain the repo, we need to clone it before running the tests.
+    # The output folder is inside the docker image (${WORKDIR}/gt4py), so it won't take up
+    # space on $SCRATCH but in a ephemeral tmpfs mount in the running node.
     # for git>=2.49: mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --revision "${CI_COMMIT_SHA}" "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
@@ -123,17 +131,45 @@ test_cscs_gh200:
   extends:
     - .container-runner-santis-gh200
     - .test_common
+  needs:
+    - build_cscs_gh200
   variables:
+    TEST_VARIANTS: 'cpu cuda12'
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+  rules:
+    - *exclude_variants_rules
+    - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
+      variables:
+        # TODO: investigate why the dace tests seem to hang with multiple jobs
+        GT4PY_BUILD_JOBS: 1
+        SLURM_TIMELIMIT: "00:15:00"
+    - when: on_success
 
-# .test_cscs_amd_rocm:
-#   extends:
-#     - .tds-container-runner-beverin-mi200
-#     - .test_common
-#   variables:
-#   variables:
-#     GT4PY_BUILD_JOBS: 8
-#     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
-#     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+test_cscs_amd_rocm:
+  extends:
+    - .tds-container-runner-beverin-mi200
+    - .test_common
+  needs:
+    - build_cscs_amd_rocm
+  variables:
+    TEST_VARIANTS: 'cpu rocm6_0'
+    GT4PY_BUILD_JOBS: 8
+    # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
+    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+    SLURM_PARTITION: mi300
+    CMAKE_PREFIX_PATH: /opt/rocm # for next
+    CUDA_HOME: /opt/rocm # for cartesian
+    SLURM_TIMELIMIT: 20 # relaxed relative to santis as there is no pressure on the queue
+  rules:
+    - if: $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
+      when: never
+    - *exclude_variants_rules
+    - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'internal' && $SUBVARIANT == 'cpu'
+      variables:
+        CXX: g++
+    - when: on_success
+      variables:
+        CXX: /opt/rocm/bin/hipcc
+

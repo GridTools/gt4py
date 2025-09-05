@@ -57,6 +57,7 @@ pytestmark = pytest.mark.usefixtures(
 )  # use the fixture for all tests in this module
 
 N = 10
+BOOL_TYPE = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 FLOAT_TYPE = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 IFTYPE = ts.FieldType(dims=[IDim], dtype=FLOAT_TYPE)
 CFTYPE = ts.FieldType(dims=[Cell], dtype=FLOAT_TYPE)
@@ -124,7 +125,7 @@ def build_dace_sdfg(
         # run domain inference in order to add the domain annex information to the IR nodes
         ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     offset_provider_type = gtx_common.offset_provider_to_type(offset_provider)
-    return dace_backend.build_sdfg_from_gtir(ir, offset_provider_type)
+    return dace_backend.build_sdfg_from_gtir(ir, offset_provider_type, column_axis=KDim)
 
 
 def get_domain_range(
@@ -1279,18 +1280,27 @@ def test_gtir_connectivity_shift_chain():
 
 
 def test_gtir_neighbors_as_input():
+    MESH_NUM_LEVELS = 10
+    EKFTYPE = ts.FieldType(dims=[Edge, KDim], dtype=FLOAT_TYPE)
+    VKFTYPE = ts.FieldType(dims=[Vertex, KDim], dtype=FLOAT_TYPE)
+    V2E_KFTYPE = ts.FieldType(dims=[Vertex, V2EDim, KDim], dtype=EFTYPE.dtype)
+    gtx_common.check_dims(V2E_KFTYPE.dims)
+
     init_value = np.random.rand()
     vertex_domain = im.domain(
         gtx_common.GridType.UNSTRUCTURED,
-        ranges={Vertex: get_domain_range("vertices", Vertex)},
+        ranges={
+            Vertex: get_domain_range("vertices", Vertex),
+            KDim: get_domain_range("vertices", KDim),
+        },
     )
     testee = gtir.Program(
         id="neighbors_as_input",
         function_definitions=[],
         params=[
-            gtir.Sym(id="v2e_field", type=V2E_FTYPE),
-            gtir.Sym(id="edges", type=EFTYPE),
-            gtir.Sym(id="vertices", type=VFTYPE),
+            gtir.Sym(id="v2e_field", type=V2E_KFTYPE),
+            gtir.Sym(id="edges", type=EKFTYPE),
+            gtir.Sym(id="vertices", type=VKFTYPE),
         ],
         declarations=[],
         body=[
@@ -1316,27 +1326,37 @@ def test_gtir_neighbors_as_input():
 
     connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
 
-    v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.shape[1])
-    e = np.random.rand(SIMPLE_MESH.num_edges)
-    v = np.empty(SIMPLE_MESH.num_vertices, dtype=v2e_field.dtype)
+    v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.shape[1], MESH_NUM_LEVELS)
+    e = np.random.rand(SIMPLE_MESH.num_edges, MESH_NUM_LEVELS)
+    v = np.empty([SIMPLE_MESH.num_vertices, MESH_NUM_LEVELS], dtype=v2e_field.dtype)
 
     v_ref = [
         functools.reduce(lambda x, y: x + y, v2e_values + e[v2e_neighbors], init_value)
         for v2e_neighbors, v2e_values in zip(connectivity_V2E.asnumpy(), v2e_field, strict=True)
     ]
 
-    sdfg(
-        v2e_field,
-        e,
-        v,
-        gt_conn_V2E=connectivity_V2E.ndarray,
-        **FSYMBOLS,
-        **make_mesh_symbols(SIMPLE_MESH),
-        __v2e_field_Vertex_range_0=0,
-        __v2e_field_Vertex_range_1=SIMPLE_MESH.num_vertices,
-        __v2e_field_stride_0=connectivity_V2E.shape[1],
-        __v2e_field_stride_1=1,
-    )
+    symbols = make_mesh_symbols(SIMPLE_MESH) | {
+        # override SDFG symbols for array shape and strides because of extra K-dimension
+        "__edges_KDim_range_0": 0,
+        "__edges_KDim_range_1": e.shape[1],
+        "__edges_stride_0": e.strides[0] // e.itemsize,
+        "__edges_stride_1": e.strides[1] // e.itemsize,
+        "__vertices_KDim_range_0": 0,
+        "__vertices_KDim_range_1": v.shape[1],
+        "__vertices_stride_0": v.strides[0] // v.itemsize,
+        "__vertices_stride_1": v.strides[1] // v.itemsize,
+        "__v2e_field_Vertex_range_0": 0,
+        "__v2e_field_Vertex_range_1": v2e_field.shape[0],
+        "__v2e_field_V2E_range_0": 0,
+        "__v2e_field_V2E_range_1": v2e_field.shape[1],
+        "__v2e_field_KDim_range_0": 0,
+        "__v2e_field_KDim_range_1": v2e_field.shape[2],
+        "__v2e_field_stride_0": v2e_field.strides[0] // v2e_field.itemsize,
+        "__v2e_field_stride_1": v2e_field.strides[1] // v2e_field.itemsize,
+        "__v2e_field_stride_2": v2e_field.strides[2] // v2e_field.itemsize,
+    }
+
+    sdfg(v2e_field, e, v, gt_conn_V2E=connectivity_V2E.ndarray, **symbols)
     assert np.allclose(v, v_ref)
 
 
@@ -2245,7 +2265,7 @@ def test_gtir_if_values():
 
 def test_gtir_index():
     MARGIN = 2
-    assert MARGIN < N
+    assert (MARGIN * 2) < N
     domain = im.domain(
         gtx_common.GridType.CARTESIAN,
         ranges={IDim: get_domain_range("x", IDim)},
@@ -2288,11 +2308,11 @@ def test_gtir_index():
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     ref = np.concatenate(
-        (v[:MARGIN], np.arange(MARGIN, N - MARGIN, dtype=np.int32), v[N - MARGIN :])
+        (v[:MARGIN], np.arange(MARGIN, N - MARGIN, dtype=np.int32) * 2 + 1, v[N - MARGIN :])
     )
 
     sdfg(v, **FSYMBOLS)
-    np.allclose(v, ref)
+    assert np.all(v == ref)
 
 
 def test_gtir_concat_where():
@@ -2436,3 +2456,80 @@ def test_gtir_concat_where_two_dimensions():
     sdfg(a, b, c, d, **field_symbols)
 
     np.allclose(d, ref)
+
+
+@pytest.mark.parametrize(
+    ["id", "use_symbolic_column_size"],
+    [("gtir_scan_with_constant_column_size", False), ("gtir_scan_with_symbolic_column_size", True)],
+    ids=["constant_column_size", "symbolic_column_size"],
+)
+def test_gtir_scan(id, use_symbolic_column_size):
+    K = 20
+    VAL = 1.2
+    domain = im.domain(
+        gtx_common.GridType.CARTESIAN,
+        {
+            IDim: get_domain_range("z", IDim),
+            KDim: get_domain_range("z", KDim) if use_symbolic_column_size else (0, K),
+        },
+    )
+    testee = gtir.Program(
+        id=id,
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="y", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="z", type=ts.FieldType(dims=[IDim, KDim], dtype=BOOL_TYPE)),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.as_fieldop(
+                    im.scan(
+                        im.lambda_("state", "inp")(
+                            im.if_(
+                                im.tuple_get(1, "state"),
+                                im.make_tuple(
+                                    im.plus(VAL, im.deref("inp")),
+                                    False,
+                                ),
+                                im.make_tuple(
+                                    im.plus(im.tuple_get(0, "state"), im.deref("inp")),
+                                    False,
+                                ),
+                            )
+                        ),
+                        True,
+                        im.make_tuple(0.0, True),
+                    )
+                )("x"),
+                domain=domain,
+                target=im.make_tuple(gtir.SymRef(id="y"), gtir.SymRef(id="z")),
+            )
+        ],
+    )
+
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+
+    a = np.random.rand(N, K)
+    b = np.random.rand(N, K)
+    z = np.full([N, K], False, dtype=np.bool_)
+    ref = np.add.accumulate(a, axis=1) + VAL
+
+    symbols = FSYMBOLS | {
+        "__x_KDim_range_0": 0,
+        "__x_KDim_range_1": a.shape[1],
+        "__x_stride_0": a.strides[0] // a.itemsize,
+        "__x_stride_1": a.strides[1] // a.itemsize,
+        "__y_KDim_range_0": 0,
+        "__y_KDim_range_1": b.shape[1],
+        "__y_stride_0": b.strides[0] // b.itemsize,
+        "__y_stride_1": b.strides[1] // b.itemsize,
+        "__z_KDim_range_0": 0,
+        "__z_KDim_range_1": z.shape[1],
+        "__z_stride_0": z.strides[0] // z.itemsize,
+        "__z_stride_1": z.strides[1] // z.itemsize,
+    }
+
+    sdfg(a, b, z, **symbols)
+    assert np.allclose(b, ref)
