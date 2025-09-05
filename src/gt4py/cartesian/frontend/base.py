@@ -104,8 +104,8 @@ def from_name(name: str) -> type[Frontend]:
     """Return frontend by name."""
     frontend_cls = REGISTRY.get(name, None)
     if frontend_cls is None:
-        raise NotImplementedError(
-            f"Frontend '{name} is not implemented. Options are: {REGISTRY.names}."
+        raise ValueError(
+            f"Frontend '{name} is not registered. Valid options are: {REGISTRY.names}."
         )
     return frontend_cls
 
