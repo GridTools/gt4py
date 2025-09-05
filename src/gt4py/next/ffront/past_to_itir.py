@@ -474,35 +474,31 @@ class ProgramLowering(
                 field_slice = self._compute_field_slice(first_field)
                 first_field = first_field.value
 
-            if isinstance(domain_arg, past.TupleExpr):
-                domain_expr = type_info.apply_to_primitive_constituents(
-                    lambda field_type, path: self._construct_itir_domain_arg(
-                        functools.reduce(
-                            lambda e, i: (
-                                e.elts[i]
-                                if isinstance(e, past.TupleExpr)
-                                else past.Name(type=e.type.types[i], id=e.id, location=e.location)
-                                if isinstance(e, past.Name) and isinstance(e.type, ts.TupleType)
-                                else e
-                            ),
-                            path,
-                            out_arg,
+            domain_expr = type_info.apply_to_primitive_constituents(
+                lambda field_type, path: self._construct_itir_domain_arg(
+                    functools.reduce(
+                        lambda e, i: (
+                            e.elts[i]
+                            if isinstance(e, past.TupleExpr)
+                            else past.Name(type=e.type.types[i], id=e.id, location=e.location)
+                            if isinstance(e, past.Name) and isinstance(e.type, ts.TupleType)
+                            else e
                         ),
+                        path,
+                        out_arg,
+                    ),
+                    (
                         functools.reduce(lambda e, i: e.elts[i], path, domain_arg)
                         if isinstance(domain_arg, past.TupleExpr)
-                        else domain_arg,
-                        None,
+                        else domain_arg
                     ),
-                    out_arg.type,
-                    with_path_arg=True,
-                    tuple_constructor=im.make_tuple,
-                )
-                return self._construct_itir_out_arg(out_arg), domain_expr
-            else:
-                return (
-                    self._construct_itir_out_arg(out_arg),
-                    self._construct_itir_domain_arg(first_field, domain_arg, field_slice),
-                )
+                    None,  # TODO: support slicing
+                ),
+                out_arg.type,
+                with_path_arg=True,
+                tuple_constructor=im.make_tuple,
+            )
+            return self._construct_itir_out_arg(out_arg), domain_expr
         else:
             raise AssertionError(
                 "Unexpected 'out' argument. Must be a 'past.Subscript', 'past.Name' or 'past.TupleExpr' node."

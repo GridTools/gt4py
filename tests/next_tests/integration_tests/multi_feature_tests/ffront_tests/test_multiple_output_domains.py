@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import copy
 import pytest
 
 import gt4py.next as gtx
@@ -156,7 +157,7 @@ def prog_no_domain_differnet_fields(
 
 def test_program_no_domain_different_fields(
     cartesian_case,
-):  # TODO: this still fails for some backends
+):
     a = cases.allocate(cartesian_case, prog_no_domain_differnet_fields, "a")()
     b = cases.allocate(cartesian_case, prog_no_domain_differnet_fields, "b")()
     out_a = cases.allocate(cartesian_case, prog_no_domain_differnet_fields, "out_a")()
@@ -219,7 +220,7 @@ def prog_out_as_tuple(
 
 def test_program_out_as_tuple(
     cartesian_case,
-):  # TODO: this fails for most backends, merge PR #1893 first
+):
     a = cases.allocate(cartesian_case, prog_out_as_tuple, "a")()
     b = cases.allocate(cartesian_case, prog_out_as_tuple, "b")()
     out = cases.allocate(cartesian_case, prog_out_as_tuple, "out")()
@@ -234,6 +235,65 @@ def test_program_out_as_tuple(
         cartesian_case.default_sizes[JDim],
         inout=(out),
         ref=(b, a),
+    )
+
+
+@gtx.program
+def prog_out_as_tuple_different_sizes(
+    a: IField,
+    b: JField,
+    out: tuple[JField, IField],
+    i_size: gtx.int32,
+    j_size: gtx.int32,
+    restrict_i_0: gtx.int32,
+    restrict_i_1: gtx.int32,
+    restrict_j_0: gtx.int32,
+    restrict_j_1: gtx.int32,
+):
+    testee(
+        a,
+        b,
+        out=out,
+        domain=(
+            {JDim: (restrict_j_0, j_size + restrict_j_1)},
+            {IDim: (restrict_i_0, i_size + restrict_i_1)},
+        ),
+    )
+
+
+def test_program_out_as_tuple_different_sizes(
+    cartesian_case,
+):
+    restrict_i = (1, -3)
+    restrict_j = (2, -4)
+    i_size = cartesian_case.default_sizes[IDim]
+    j_size = cartesian_case.default_sizes[JDim]
+    a = cases.allocate(cartesian_case, prog_out_as_tuple_different_sizes, "a")()
+    b = cases.allocate(cartesian_case, prog_out_as_tuple_different_sizes, "b")()
+    out = cases.allocate(
+        cartesian_case,
+        prog_out_as_tuple_different_sizes,
+        "out",
+        extend={IDim: (-restrict_i[0], restrict_i[1]), JDim: (-restrict_j[0], restrict_j[1])},
+    )()
+
+    cases.verify(
+        cartesian_case,
+        prog_out_as_tuple_different_sizes,
+        a,
+        b,
+        out,
+        i_size,
+        j_size,
+        restrict_i[0],
+        restrict_i[1],
+        restrict_j[0],
+        restrict_j[1],
+        inout=(out),
+        ref=(
+            b.ndarray[restrict_j[0] : j_size + restrict_j[1]],
+            a.ndarray[restrict_i[0] : i_size + restrict_i[1]],
+        ),
     )
 
 
@@ -454,16 +514,39 @@ def prog_temporary(
     out_cell: CField,
     c_size: gtx.int32,
     e_size: gtx.int32,
+    restrict_edge_0: gtx.int32,
+    restrict_edge_1: gtx.int32,
+    restrict_cell_0: gtx.int32,
+    restrict_cell_1: gtx.int32,
 ):
     testee_temporary(
-        a, out=(out_edge, out_cell), domain=({Edge: (0, e_size)}, {Cell: (0, c_size)})
-    )  # TODO: specify other domain sizes?
+        a,
+        out=(out_edge, out_cell),
+        domain=(
+            {Edge: (restrict_edge_0, e_size + restrict_edge_1)},
+            {Cell: (restrict_cell_0, c_size + restrict_cell_1)},
+        ),
+    )
 
 
 def test_program_temporary(unstructured_case):
+    restrict_edge = (4, -2)
+    restrict_cell = (3, -1)
+    cell_size = unstructured_case.default_sizes[Cell]
+    edge_size = unstructured_case.default_sizes[Edge]
     a = cases.allocate(unstructured_case, prog_temporary, "a")()
-    out_edge = cases.allocate(unstructured_case, prog_temporary, "out_edge")()
-    out_cell = cases.allocate(unstructured_case, prog_temporary, "out_cell")()
+    out_edge = cases.allocate(
+        unstructured_case,
+        prog_temporary,
+        "out_edge",
+        extend={Edge: (-restrict_edge[0], restrict_edge[1])},
+    )()
+    out_cell = cases.allocate(
+        unstructured_case,
+        prog_temporary,
+        "out_cell",
+        extend={Cell: (-restrict_cell[0], restrict_cell[1])},
+    )()
 
     e2v = (a.ndarray)[unstructured_case.offset_provider["E2V"].asnumpy()[:, 1]]
     cases.verify(
@@ -472,10 +555,19 @@ def test_program_temporary(unstructured_case):
         a,
         out_edge,
         out_cell,
-        unstructured_case.default_sizes[Cell],
-        unstructured_case.default_sizes[Edge],
+        cell_size,
+        edge_size,
+        restrict_edge[0],
+        restrict_edge[1],
+        restrict_cell[0],
+        restrict_cell[1],
         inout=(out_edge, out_cell),
-        ref=(e2v, e2v[unstructured_case.offset_provider["C2E"].asnumpy()[:, 1]]),
+        ref=(
+            e2v[restrict_edge[0] : edge_size + restrict_edge[1]],
+            e2v[unstructured_case.offset_provider["C2E"].asnumpy()[:, 1]][
+                restrict_cell[0] : cell_size + restrict_cell[1]
+            ],
+        ),
     )
 
 
@@ -497,7 +589,6 @@ def test_direct_fo_orig(cartesian_case):
 
 # TODO:
 #  - vertical staggering with dependency
-#  - test with different sizes (explicit domain and no domain) (use extend)
 #  - cleanup and refactor tests
 
 #
