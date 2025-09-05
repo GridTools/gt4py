@@ -107,22 +107,24 @@ class NodeVisitor:
         forwarded to the visitor method.
         """
         node_class = node.__class__
-        node_class_name = node_class.__name__
 
         if (cache := self.__class__._node_visitor_cache_) is None or (
             visitor_name := cache.get(node_class, None)
         ) is None:
-            if hasattr(node_class, "__datamodel_generic_name__"):
-                # For concretized data model classes, use the generic name
-                node_class_name = node_class.__datamodel_generic_name__
+            # For concretized data model classes, use the generic name
+            node_class_name = node_class.__name__
+            if "__datamodel_generic_name__" in node_class.__dict__:
+                node_class_name = node_class.__datamodel_generic_name__  # type: ignore[union-attr]
+            else:
+                node_class_name = node_class.__name__
             visitor_name = "visit_" + node_class_name
 
             if not hasattr(self, visitor_name):
                 visitor_name = "generic_visit"
                 if isinstance(node, concepts.Node):
-                    for base_class in node.__class__.__mro__[1:-1]:
-                        if hasattr(base_class, "__datamodel_generic_name__"):
-                            node_class_name = base_class.__datamodel_generic_name__
+                    for base_class in node_class.__mro__[1:-1]:
+                        if "__datamodel_generic_name__" in base_class.__dict__:
+                            node_class_name = base_class.__datamodel_generic_name__  # type: ignore[union-attr]
                         else:
                             node_class_name = base_class.__name__
                         base_visitor_name = "visit_" + node_class_name
