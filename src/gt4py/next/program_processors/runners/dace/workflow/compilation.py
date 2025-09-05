@@ -48,7 +48,7 @@ def _get_sdfg_ctype_arglist_callback(
     return module.__dict__[bind_func_name]
 
 
-class CompiledDaceProgram(stages.ExtendedCompiledProgram):
+class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_program: dace.CompiledSDFG
 
     # Sorted list of SDFG arguments as they appear in program ABI and corresponding data type;
@@ -66,10 +66,8 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
         program: dace.CompiledSDFG,
         bind_func_name: str,
         binding_source: stages.BindingSource[languages.SDFG, languages.Python],
-        implicit_domain: bool,
     ):
         self.sdfg_program = program
-        self.implicit_domain = implicit_domain
 
         # `dace.CompiledSDFG.arglist()` returns an ordered dictionary that maps the argument
         # name to its data type, in the same order as arguments appear in the program ABI.
@@ -132,7 +130,6 @@ class DaCeCompiler(
             sdfg_program,
             self.bind_func_name,
             inp.binding_source,
-            inp.program_source.implicit_domain,
         )
 
 
