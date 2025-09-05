@@ -85,7 +85,7 @@ def builtin_get_domain_range(field: str, axis: str) -> str:
     # The builtin function returns a tuple of two values, the range start and stop.
     # Here we return part of the symbol name: the full name also contains an
     # additional suffix '_0' for range start or '_1' for stop, which is obtained
-    # from to the `get_tuple` index.
+    # from to the `tuple_get` index.
     return gtx_dace_utils.range_symbol(field, axis)
 
 

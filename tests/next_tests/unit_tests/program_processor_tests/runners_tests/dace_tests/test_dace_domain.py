@@ -86,12 +86,12 @@ def test_symbolic_domain():
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Vertex: domain_utils.SymbolicRange(
-                start=im.tuple_get(0, im.call("get_domain")("arg", im.axis_literal(Vertex))),
-                stop=im.tuple_get(1, im.call("get_domain")("arg", im.axis_literal(Vertex))),
+                start=im.tuple_get(0, im.call("get_domain_range")("arg", im.axis_literal(Vertex))),
+                stop=im.tuple_get(1, im.call("get_domain_range")("arg", im.axis_literal(Vertex))),
             ),
             KDim: domain_utils.SymbolicRange(
-                start=im.tuple_get(0, im.call("get_domain")("arg", im.axis_literal(KDim))),
-                stop=im.tuple_get(1, im.call("get_domain")("arg", im.axis_literal(KDim))),
+                start=im.tuple_get(0, im.call("get_domain_range")("arg", im.axis_literal(KDim))),
+                stop=im.tuple_get(1, im.call("get_domain_range")("arg", im.axis_literal(KDim))),
             ),
         },
     )
