@@ -347,11 +347,11 @@ class SDFGManager:
             tmp_sdfg.orig_sdfg = None
 
     @staticmethod
-    def _save_sdfg(sdfg: SDFG, path: str, validate: bool = False) -> None:
+    def _save_sdfg(sdfg: SDFG, path: pathlib.Path, validate: bool = False) -> None:
         if validate:
             sdfg.validate()
         SDFGManager._strip_history(sdfg)
-        sdfg.save(path)
+        sdfg.save(str(path))
 
     def sdfg_via_schedule_tree(self, *, validate: bool = True, simplify: bool = True) -> SDFG:
         """Lower OIR into an SDFG via Schedule Tree transpile first.
@@ -369,8 +369,13 @@ class SDFGManager:
         )
 
         do_cache = self.builder.caching.name != "nocaching"
-        if do_cache and path in SDFGManager._loaded_sdfgs:
-            return SDFGManager._loaded_sdfgs[path]
+        if do_cache:
+            if path in SDFGManager._loaded_sdfgs:
+                return SDFGManager._loaded_sdfgs[path]
+            if path.exists():
+                sdfg = SDFG.from_file(path)
+                SDFGManager._loaded_sdfgs[path] = sdfg
+                return sdfg
 
         # Create SDFG
         stree = self.schedule_tree()
@@ -381,7 +386,7 @@ class SDFGManager:
         )
 
         if do_cache:
-            self._save_sdfg(sdfg, str(path))
+            self._save_sdfg(sdfg, path)
             SDFGManager._loaded_sdfgs[path] = sdfg
 
             if self.debug_stree:
@@ -393,12 +398,17 @@ class SDFGManager:
 
     def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]) -> SDFG:
         basename = self.builder.module_path.with_suffix("")
-        path = f"{basename}_{shash(origin, domain)}.sdfg"
+        path = pathlib.Path(f"{basename}_{shash(origin, domain)}.sdfg")
 
         # check if the same sdfg is already loaded
         do_cache = self.builder.caching.name != "nocache"
-        if do_cache and path in SDFGManager._loaded_sdfgs:
-            return SDFGManager._loaded_sdfgs[path]
+        if do_cache:
+            if path in SDFGManager._loaded_sdfgs:
+                return SDFGManager._loaded_sdfgs[path]
+            if path.exists():
+                sdfg = SDFG.from_file(path)
+                SDFGManager._loaded_sdfgs[path] = sdfg
+                return sdfg
 
         # Otherwise, wrap and save sdfg from scratch
         sdfg = self.sdfg_via_schedule_tree()
@@ -828,8 +838,8 @@ class DaceCPUBackend(BaseDaceBackend):
     storage_info: ClassVar[layout.LayoutInfo] = {
         "alignment": 1,
         "device": "cpu",
-        "layout_map": layout.layout_maker_factory((1, 0, 2)),
-        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((1, 0, 2))),
+        "layout_map": layout.layout_maker_factory((1, 2, 0)),
+        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((1, 2, 0))),
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
