@@ -163,8 +163,6 @@ class GTFNTranslationStep(
             pass_manager.apply_common_transforms,
             extract_temporaries=True,
             offset_provider=offset_provider,
-            # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
-            unconditionally_collapse_tuples=True,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
         )
 
