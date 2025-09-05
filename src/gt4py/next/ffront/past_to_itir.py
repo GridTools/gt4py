@@ -9,11 +9,12 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 from typing import Any, Optional, cast
 
 import devtools
 
-from gt4py.eve import NodeTranslator, concepts, traits
+from gt4py.eve import NodeTranslator, concepts, traits, utils as eve_utils
 from gt4py.next import common, config, errors
 from gt4py.next.ffront import (
     fbuiltins,
@@ -24,7 +25,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.stages import AOT_PRG
-from gt4py.next.iterator import builtins, ir as itir
+from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import remap_symbols
 from gt4py.next.otf import arguments, stages, workflow
@@ -160,15 +161,17 @@ def _range_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_{dim}_range"
 
 
-def _flatten_tuple_expr(node: past.Expr) -> list[past.Name | past.Subscript]:
-    if isinstance(node, (past.Name, past.Subscript)):
+def _flatten_tuple_expr(node: past.Expr) -> list[past.Name | past.Subscript | past.Dict]:
+    if isinstance(node, (past.Name, past.Subscript, past.Dict)):
         return [node]
     elif isinstance(node, past.TupleExpr):
         result = []
         for e in node.elts:
             result.extend(_flatten_tuple_expr(e))
         return result
-    raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
+    raise ValueError(
+        f"Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed, got '{type(node)}'."
+    )
 
 
 @dataclasses.dataclass
@@ -222,32 +225,6 @@ class ProgramLowering(
     ) -> itir.Program:
         return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
 
-    def _gen_size_params_from_program(self, node: past.Program) -> list[itir.Sym]:
-        """Generate symbols for each field param and dimension."""
-        size_params = []
-        for param in node.params:
-            fields_dims: list[list[common.Dimension]] = (
-                type_info.primitive_constituents(param.type)
-                .if_isinstance(ts.FieldType)
-                .getattr("dims")
-                .filter(lambda dims: len(dims) > 0)
-                .to_list()
-            )
-            if len(fields_dims) > 0:  # otherwise `param` has no constituent which is of `FieldType`
-                assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
-                index_type = ts.ScalarType(
-                    kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
-                )
-                for dim_idx in range(len(fields_dims[0])):
-                    size_params.append(
-                        itir.Sym(
-                            id=_range_arg_from_field(param.id, dim_idx),
-                            type=ts.TupleType(types=[index_type, index_type]),
-                        )
-                    )
-
-        return size_params
-
     def visit_Program(
         self,
         node: past.Program,
@@ -264,7 +241,6 @@ class ProgramLowering(
 
         implicit_domain = False
         if any("domain" not in body_entry.kwargs for body_entry in node.body):
-            params = params + self._gen_size_params_from_program(node)
             implicit_domain = True
 
         set_ats = [self._visit_field_operator_call(stmt, **kwargs) for stmt in node.body]
@@ -344,28 +320,40 @@ class ProgramLowering(
 
     def _construct_itir_domain_arg(
         self,
-        out_field: past.Name,
+        out_field: past.Name | past.Subscript | past.Dict,
         node_domain: Optional[past.Expr],
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
         assert isinstance(out_field.type, ts.TypeSpec)
-        out_field_types = type_info.primitive_constituents(out_field.type).to_list()
+        out_field_types = type_info.primitive_constituents(
+            out_field.type if hasattr(out_field, "type") else out_field
+        ).to_list()
+
         out_dims = cast(ts.FieldType, out_field_types[0]).dims
         if any(
             not isinstance(out_field_type, ts.FieldType) or out_field_type.dims != out_dims
             for out_field_type in out_field_types
         ):
             raise AssertionError(
-                f"Expected constituents of '{out_field.id}' argument to be"
+                f"Expected constituents of '{getattr(out_field, 'id', out_field)}' argument to be"
                 " fields defined on the same dimensions. This error should be "
                 " caught in type deduction already."
             )
+        # if the out_field is a (potentially nested) tuple we get the domain from its first
+        # element
+        first_out_el_path = eve_utils.first(
+            type_info.primitive_constituents(out_field.type, with_path_arg=True)
+        )[1]
+        first_out_el = functools.reduce(
+            lambda expr, i: im.tuple_get(i, expr), first_out_el_path, out_field.id
+        )
 
         domain_args = []
-        domain_args_kind = []
         for dim_i, dim in enumerate(out_dims):
             # an expression for the range of a dimension
-            dim_range = itir.SymRef(id=_range_arg_from_field(out_field.id, dim_i))
+            dim_range = im.call("get_domain_range")(
+                first_out_el, itir.AxisLiteral(value=dim.value, kind=dim.kind)
+            )
             dim_start, dim_stop = im.tuple_get(0, dim_range), im.tuple_get(1, dim_range)
             # bounds
             lower: itir.Expr
@@ -395,7 +383,6 @@ class ProgramLowering(
                     args=[itir.AxisLiteral(value=dim.value, kind=dim.kind), lower, upper],
                 )
             )
-            domain_args_kind.append(dim.kind)
 
         if self.grid_type == common.GridType.CARTESIAN:
             domain_builtin = "cartesian_domain"
@@ -460,39 +447,58 @@ class ProgramLowering(
                     out_field_name, domain_arg, self._compute_field_slice(out_arg)
                 ),
             )
-        elif isinstance(out_arg, past.Name):
+        elif isinstance(out_arg, past.Name) and isinstance(out_arg.type, ts.FieldType):
             return (
                 self._construct_itir_out_arg(out_arg),
                 self._construct_itir_domain_arg(out_arg, domain_arg),
             )
-        elif isinstance(out_arg, past.TupleExpr):
+        elif isinstance(out_arg, past.TupleExpr) or (
+            isinstance(out_arg, past.Name) and isinstance(out_arg.type, ts.TupleType)
+        ):
             flattened = _flatten_tuple_expr(out_arg)
 
             first_field = flattened[0]
-            assert all(
-                self.visit(field.type).dims == self.visit(first_field.type).dims
-                for field in flattened
-            ), "Incompatible fields in tuple: all fields must have the same dimensions."
-
             field_slice = None
             if isinstance(first_field, past.Subscript):
+                raise AssertionError  # TODO support slicing of multiple fields with different domain
                 assert all(isinstance(field, past.Subscript) for field in flattened), (
                     "Incompatible field in tuple: either all fields or no field must be sliced."
                 )
                 assert all(
                     concepts.eq_nonlocated(
                         first_field.slice_,
-                        field.slice_,  # type: ignore[union-attr] # mypy cannot deduce type
+                        field.slice_,
                     )
                     for field in flattened
                 ), "Incompatible field in tuple: all fields must be sliced in the same way."
                 field_slice = self._compute_field_slice(first_field)
                 first_field = first_field.value
 
-            return (
-                self._construct_itir_out_arg(out_arg),
-                self._construct_itir_domain_arg(first_field, domain_arg, field_slice),
+            domain_expr = type_info.apply_to_primitive_constituents(
+                lambda field_type, path: self._construct_itir_domain_arg(
+                    functools.reduce(
+                        lambda e, i: (
+                            e.elts[i]
+                            if isinstance(e, past.TupleExpr)
+                            else past.Name(type=e.type.types[i], id=e.id, location=e.location)
+                            if isinstance(e, past.Name) and isinstance(e.type, ts.TupleType)
+                            else e
+                        ),
+                        path,
+                        out_arg,
+                    ),
+                    (
+                        functools.reduce(lambda e, i: e.elts[i], path, domain_arg)
+                        if isinstance(domain_arg, past.TupleExpr)
+                        else domain_arg
+                    ),
+                    None,  # TODO: support slicing
+                ),
+                out_arg.type,
+                with_path_arg=True,
+                tuple_constructor=im.make_tuple,
             )
+            return self._construct_itir_out_arg(out_arg), domain_expr
         else:
             raise AssertionError(
                 "Unexpected 'out' argument. Must be a 'past.Subscript', 'past.Name' or 'past.TupleExpr' node."

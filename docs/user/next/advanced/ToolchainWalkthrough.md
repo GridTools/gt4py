@@ -139,9 +139,7 @@ jit_args = gtx.otf.arguments.JITArgs.from_signature(
     offset_provider=OFFSET_PROVIDER,
 )
 
-aot_args = gtx.otf.arguments.CompileTimeArgs.from_concrete_no_size(
-    *jit_args.args, **jit_args.kwargs
-)
+aot_args = gtx.otf.arguments.CompileTimeArgs.from_concrete(*jit_args.args, **jit_args.kwargs)
 ```
 
 ```python
