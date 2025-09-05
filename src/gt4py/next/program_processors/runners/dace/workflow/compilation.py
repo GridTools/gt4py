@@ -126,8 +126,11 @@ class DaCeCompiler(
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
             sdfg_build_folder = pathlib.Path(sdfg.build_folder)
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
+            print(f" == {sdfg_build_folder}: lock pending")
             with locking.lock(sdfg_build_folder):
+                print(f" == {sdfg_build_folder}: lock acquired")
                 sdfg_program = sdfg.compile(validate=False)
+                print(f" == {sdfg_build_folder}: lock release")
 
         assert inp.binding_source is not None
         return CompiledDaceProgram(
