@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import enum
 import random
 import string
@@ -18,7 +20,6 @@ from gt4py.eve.concepts import (
     SourceLocation,
     SourceLocationGroup,
     SymbolName,
-    VType,
 )
 from gt4py.eve.datamodels import Coerced
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
@@ -48,9 +49,6 @@ class StrKind(StrEnum):
     BLA = "bla"
     FIZ = "fiz"
     FUZ = "fuz"
-
-
-SimpleVType = VType("simple")
 
 
 class EmptyNode(Node):
@@ -117,6 +115,10 @@ class CompoundNode(Node):
     simple_loc: SimpleNodeWithLoc
     simple_opt: SimpleNodeWithOptionals
     other_simple_opt: Optional[SimpleNodeWithOptionals]
+
+
+class RecursiveCompoundNode(CompoundNode):
+    children: list[RecursiveCompoundNode]
 
 
 class CompoundNodeWithSymbols(Node):
@@ -402,6 +404,30 @@ def make_compound_node(*, fixed: bool = False) -> CompoundNode:
         simple_loc=make_simple_node_with_loc(),
         simple_opt=make_simple_node_with_optionals(),
         other_simple_opt=None,
+    )
+
+
+def make_recursive_compound_node(
+    num_levels: int = 5, width: int = 5, *, fixed: bool = False
+) -> RecursiveCompoundNode:
+    assert num_levels > 0
+    node = make_compound_node(fixed=fixed)
+    children = (
+        [
+            make_recursive_compound_node(num_levels=num_levels - 1, width=width, fixed=fixed)
+            for _ in range(width)
+        ]
+        if num_levels > 1
+        else []
+    )
+    return RecursiveCompoundNode(
+        int_value=node.int_value,
+        location=node.location,
+        simple=node.simple,
+        simple_loc=node.simple_loc,
+        simple_opt=node.simple_opt,
+        other_simple_opt=node.other_simple_opt,
+        children=children,
     )
 
 

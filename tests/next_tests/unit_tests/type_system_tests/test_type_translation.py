@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-#
 import typing
 
 import numpy as np
@@ -18,8 +17,6 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
-
-from ... import dummy_package
 
 
 class CustomInt32DType:
@@ -191,6 +188,8 @@ def test_as_from_dtype(dtype):
 
 
 def test_from_value_module():
+    from ...artifacts import dummy_package
+
     assert isinstance(
         type_translation.from_value(dummy_package), type_translation.UnknownPythonObject
     )
