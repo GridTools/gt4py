@@ -45,9 +45,13 @@ def set_dace_config(
     #   is translating from `CompilableProgram` (ITIR.Program + CompileTimeArgs)
     #   to `ProgramSource`, so this step is storing in cache only the result
     #   of the SDFG transformations, not the compiled program binary.
-    dace.Config.set("cache", value="hash")  # use the SDFG hash as cache key
-    dace.Config.set("default_build_folder", value=str(config.BUILD_CACHE_DIR / "dace_cache"))
     dace.Config.set("compiler.use_cache", value=True)
+
+    # We rely on gt4py function `get_cache_folder` to get a unique build folder
+    #   for each program. Within this folder, by setting 'cache=single', dace will
+    #   cache the generated code and binary objects for the program SDFG, without
+    #   creating any further sub-folder to compile the SDFG.
+    dace.Config.set("cache", value="single")
 
     # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
