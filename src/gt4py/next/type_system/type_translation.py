@@ -93,6 +93,7 @@ def canonicalize_type_hint(
     return canonical_type, args, tuple(extra_args)
 
 
+@eve_utils.optional_lru_cache(maxsize=None, typed=False)
 def from_type_hint(
     type_hint: Any,
     *,
@@ -100,36 +101,19 @@ def from_type_hint(
     localns: Optional[dict[str, Any]] = None,
 ) -> ts.TypeSpec:
     """Convert any kind of Python type hint to a GT4Py TypeSpec."""
-    nested_typing_callback = functools.partial(from_type_hint, globalns=globalns, localns=localns)
+    from_type_hint_same_ns = functools.partial(from_type_hint, globalns=globalns, localns=localns)
 
     canonical_type, args, extra_args = canonicalize_type_hint(
         type_hint, globalns=globalns, localns=localns
     )
 
     match canonical_type:
-        case builtins.type if args:
-            # This case matches 'type[Foo]' (where the 'Foo' type is stored in args[0])
-            assert len(args) == 1
-            constructed_type = ts.ScalarType(kind=get_scalar_kind(args[0]))
-            return ts.ConstructorType(
-                definition=ts.FunctionType(
-                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                    pos_or_kw_args={},
-                    kw_only_args={},
-                    returns=constructed_type,
-                )
-            )
-
-        case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
-            # This case matches `int`, `float`, etc. used as annotations
-            return ts.ScalarType(kind=get_scalar_kind(t))
-
         case builtins.tuple:
             if not args:
                 raise ValueError(f"Tuple annotation '{type_hint}' requires at least one argument.")
             if Ellipsis in args:
                 raise ValueError(f"Unbound tuples '{type_hint}' are not allowed.")
-            tuple_types = [nested_typing_callback(arg) for arg in args]
+            tuple_types = [from_type_hint_same_ns(arg) for arg in args]
             assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
             return ts.TupleType(types=tuple_types)
 
@@ -152,7 +136,7 @@ def from_type_hint(
                 raise ValueError(f"Invalid field dimensions '{dim_arg}'.")
 
             try:
-                dtype = nested_typing_callback(dtype_arg)
+                dtype = from_type_hint_same_ns(dtype_arg)
             except ValueError as error:
                 raise ValueError(
                     f"Field dtype argument must be a scalar type (got '{dtype_arg}')."
@@ -167,7 +151,7 @@ def from_type_hint(
 
             try:
                 arg_types, return_type = args
-                new_args = [nested_typing_callback(arg) for arg in arg_types]
+                new_args = [from_type_hint_same_ns(arg) for arg in arg_types]
                 assert all(isinstance(arg, ts.DataType) for arg in new_args)
             except Exception as error:
                 raise ValueError(f"Invalid callable annotations in '{type_hint}'.") from error
@@ -176,12 +160,12 @@ def from_type_hint(
             if len(kwargs_info) != 1:
                 raise ValueError(f"Invalid callable annotations in '{type_hint}'.")
             kwargs = {
-                arg: nested_typing_callback(arg_type)
+                arg: from_type_hint_same_ns(arg_type)
                 for arg, arg_type in kwargs_info[0].data.items()
             }
             assert all(isinstance(val, (ts.DataType, ts.DeferredType)) for val in kwargs.values())
 
-            returns = nested_typing_callback(return_type)
+            returns = from_type_hint_same_ns(return_type)
             assert isinstance(returns, (ts.DataType, ts.DeferredType, ts.VoidType))
 
             # TODO(tehrengruber): print better error when no return type annotation is given
@@ -191,6 +175,27 @@ def from_type_hint(
                 kw_only_args={},  # TODO
                 returns=returns,
             )
+
+        case builtins.type if args:
+            # This case matches 'type[Foo]' (where the 'Foo' type is stored in args[0])
+            python_type = args[0]
+
+            constructed_type_spec = from_type_hint_same_ns(python_type)
+            if not isinstance(constructed_type_spec, ts.ScalarType):
+                raise TypeError(f"Cannot create constructor for type: {constructed_type_spec}")
+
+            return ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                    pos_or_kw_args={},
+                    kw_only_args={},
+                    returns=constructed_type_spec,
+                )
+            )
+
+        case type() if issubclass(canonical_type, (*core_defs.SCALAR_TYPES, str)):
+            # This case matches 'int', 'float', etc. used as annotations
+            return ts.ScalarType(kind=get_scalar_kind(canonical_type))
 
     raise ValueError(f"'{type_hint}' type is not supported.")
 
@@ -250,9 +255,7 @@ def from_value(value: Any) -> ts.TypeSpec:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)
 
-    if isinstance(symbol_type, (ts.DataType, ts.OffsetType, ts.DimensionType)) or (
-        isinstance(symbol_type, ts.CallableType) and isinstance(symbol_type, ts.TypeSpec)
-    ):
+    if isinstance(symbol_type, (ts.DataType, ts.CallableType, ts.OffsetType, ts.DimensionType)):
         return symbol_type
     else:
         raise ValueError(f"Impossible to map '{value}' value to a 'Symbol'.")

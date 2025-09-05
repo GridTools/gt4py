@@ -78,7 +78,6 @@ def _solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
     z_q: gtx.Field[[Cell, KDim], float],
     w: gtx.Field[[Cell, KDim], float],
 ) -> tuple[gtx.Field[[Cell, KDim], float], gtx.Field[[Cell, KDim], float]]:
-    """In inlining, relies on CollapseTuple with ignore_tuple_size=True (only working with gtfn)."""
     z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
     z_c = z_beta * z_alpha(Koff[1])
     z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
