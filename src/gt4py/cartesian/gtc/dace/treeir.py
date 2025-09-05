@@ -81,9 +81,6 @@ class Axis(eve.StrEnum):
     def iteration_dace_symbol(self):
         return utils.get_dace_symbol(self.iteration_symbol())
 
-    def tile_dace_symbol(self):
-        return utils.get_dace_symbol(self.tile_symbol())
-
 
 class Bounds(eve.Node):
     start: str
