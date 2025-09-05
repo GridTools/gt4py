@@ -101,7 +101,7 @@ class FieldopData:
             assert isinstance(self.dc_node.desc(sdfg), dace.data.Scalar)
             return gtir_dataflow.MemletExpr(
                 dc_node=self.dc_node,
-                gt_dtype=self.gt_type,
+                gt_field=ts.FieldType(dims=[], dtype=self.gt_type),
                 subset=dace_subsets.Range.from_string("0"),
             )
 
