@@ -15,6 +15,7 @@ Definitions in 'typing_extensions' take priority over those in 'typing'.
 from __future__ import annotations
 
 # ruff: noqa: F401, F405
+import abc as _abc
 import array as _array
 import dataclasses as _dataclasses
 import functools as _functools
@@ -433,12 +434,115 @@ def is_value_hashable_typing(
     return type_annotation is None
 
 
-def _is_protocol(type_: type, /) -> bool:
-    """Check if a type is a Protocol definition."""
-    return getattr(type_, "_is_protocol", False)
+class TypedNamedTupleABC(_abc.ABC, Generic[_T_co]):
+    """ABC for `tuple` subclasses created with `collections.abc.namedtuple()`."""
+
+    # Replicate the standard tuple API
+    @overload
+    @_abc.abstractmethod
+    def __getitem__(self, index: int) -> _T_co: ...
+
+    @overload
+    @_abc.abstractmethod
+    def __getitem__(self, index: slice) -> Self: ...
+
+    @_abc.abstractmethod
+    def __getitem__(self, index: Union[int, slice]) -> Union[_T_co, Self]: ...
+
+    @_abc.abstractmethod
+    def __len__(self) -> int: ...
+
+    @_abc.abstractmethod
+    def __contains__(self, value: object) -> bool: ...
+
+    @_abc.abstractmethod
+    def __iter__(self) -> Iterator[_T_co]: ...
+
+    @_abc.abstractmethod
+    def __add__(self, other: Self) -> Self: ...
+
+    @_abc.abstractmethod
+    def __mul__(self, other: int) -> Self: ...
+
+    @_abc.abstractmethod
+    def __rmul__(self, other: int) -> Self: ...
+
+    @_abc.abstractmethod
+    def index(self, value: Any, start: int = 0, stop: Optional[int] = None) -> int: ...
+
+    @_abc.abstractmethod
+    def count(self, value: Any) -> int: ...
+
+    # Add specific namedtuple methods
+    _fields: ClassVar[tuple[str, ...]]
+
+    @_abc.abstractmethod
+    def _make(self, iterable: Iterable) -> Self: ...
+
+    @_abc.abstractmethod
+    def _asdict(self) -> dict[str, Any]: ...
+
+    @_abc.abstractmethod
+    def _replace(self, **kwargs: Any) -> Self: ...
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        return (
+            issubclass(subclass, tuple)
+            and (_typing.NamedTuple in getattr(subclass, "__orig_bases__", ()))
+        ) or (
+            (field_names := getattr(subclass, "_fields", None)) is not None
+            and {*field_names} <= _typing.get_type_hints(subclass).keys()
+        )
 
 
-is_protocol = getattr(_typing_extensions, "is_protocol", _is_protocol)
+class DataclassABC(_abc.ABC):
+    """ABC for data classes."""
+
+    __dataclass_fields__: ClassVar[dict[str, _dataclasses.Field]]
+    __dataclass_params__: ClassVar[_DataclassParamsABC]
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        return _dataclasses.is_dataclass(subclass)
+
+
+class _DataclassParamsABC(_abc.ABC):
+    init: bool
+    repr: bool
+    eq: bool
+    order: bool
+    unsafe_hash: bool
+    frozen: bool
+    match_args: bool
+    kw_only: bool
+    slots: bool
+    weakref_slot: bool
+
+
+class FrozenDataclass(DataclassABC):
+    """ABC for frozen data classes."""
+
+    __dataclass_params__: ClassVar[_FrozenDataclassParamsABC]
+
+    @_abc.abstractmethod
+    def __setattr__(self, name: str, value: Any) -> Never: ...
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        try:
+            return _dataclasses.is_dataclass(subclass) and (
+                subclass.__dataclass_params__.frozen is not None  # type: ignore[attr-defined]  # subclass.__dataclass_params__ is ok after check
+            )
+        except AttributeError:
+            return False
+
+
+class _FrozenDataclassParamsABC(_DataclassParamsABC):
+    frozen: Literal[True]
+
+
+is_protocol = _typing_extensions.is_protocol
 
 
 def get_partial_type_hints(
@@ -517,21 +621,16 @@ def eval_forward_ref(
         Result: ...ict[str, ...uple[int, float]]
 
     """
-    actual_type = ForwardRef(ref) if isinstance(ref, str) else ref
 
-    def _f() -> None:
-        pass
+    def f() -> None: ...
 
-    _f.__annotations__ = {"ref": actual_type}
+    f.__annotations__ = {"return": ForwardRef(ref) if isinstance(ref, str) else ref}
 
-    if localns:
-        safe_localns = {**localns}
-        safe_localns.setdefault("typing", _sys.modules[__name__])
-        safe_localns.setdefault("NoneType", type(None))
-    else:
-        safe_localns = {"typing": _sys.modules[__name__], "NoneType": type(None)}
+    safe_localns = {**localns} if localns else {}
+    safe_localns.setdefault("typing", _sys.modules[__name__])
+    safe_localns.setdefault("NoneType", type(None))
 
-    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]
+    actual_type = get_type_hints(f, globalns, safe_localns, include_extras=include_extras)["return"]
     assert not isinstance(actual_type, ForwardRef)
 
     return actual_type

@@ -57,6 +57,7 @@ pytestmark = pytest.mark.usefixtures(
 )  # use the fixture for all tests in this module
 
 N = 10
+BOOL_TYPE = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 FLOAT_TYPE = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 IFTYPE = ts.FieldType(dims=[IDim], dtype=FLOAT_TYPE)
 CFTYPE = ts.FieldType(dims=[Cell], dtype=FLOAT_TYPE)
@@ -133,7 +134,7 @@ def build_dace_sdfg(
             },
         )
     return dace_backend.build_sdfg_from_gtir(
-        ir, offset_provider_type, disable_field_origin_on_program_arguments=True
+        ir, offset_provider_type, column_axis=KDim, disable_field_origin_on_program_arguments=True
     )
 
 
@@ -2303,3 +2304,83 @@ def test_gtir_concat_where_two_dimensions():
     sdfg(a, b, c, d, **field_symbols)
 
     np.allclose(d, ref)
+
+
+@pytest.mark.parametrize(
+    ["id", "use_symbolic_column_size"],
+    [("gtir_scan_with_constant_column_size", False), ("gtir_scan_with_symbolic_column_size", True)],
+    ids=["constant_column_size", "symbolic_column_size"],
+)
+def test_gtir_scan(id, use_symbolic_column_size):
+    K = 20
+    VAL = 1.2
+    domain = im.domain(
+        gtx_common.GridType.CARTESIAN,
+        {
+            IDim: (0, "size"),
+            KDim: (0, "nlevels" if use_symbolic_column_size else K),
+        },
+    )
+    testee = gtir.Program(
+        id=id,
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="y", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="w", type=ts.FieldType(dims=[IDim, KDim], dtype=BOOL_TYPE)),
+            gtir.Sym(id="nlevels", type=SIZE_TYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.as_fieldop(
+                    im.scan(
+                        im.lambda_("state", "inp")(
+                            im.if_(
+                                im.tuple_get(1, "state"),
+                                im.make_tuple(
+                                    im.plus(VAL, im.deref("inp")),
+                                    False,
+                                ),
+                                im.make_tuple(
+                                    im.plus(im.tuple_get(0, "state"), im.deref("inp")),
+                                    False,
+                                ),
+                            )
+                        ),
+                        True,
+                        im.make_tuple(0.0, True),
+                    )
+                )("x"),
+                domain=domain,
+                target=im.make_tuple(gtir.SymRef(id="y"), gtir.SymRef(id="w")),
+            )
+        ],
+    )
+
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+
+    a = np.random.rand(N, K)
+    b = np.random.rand(N, K)
+    w = np.full([N, K], False, dtype=np.bool_)
+    ref = np.add.accumulate(a, axis=1) + VAL
+
+    symbols = FSYMBOLS | {
+        "nlevels": K,
+        "__x_0_range_1": a.shape[0],
+        "__x_1_range_1": a.shape[1],
+        "__x_stride_0": a.strides[0] // a.itemsize,
+        "__x_stride_1": a.strides[1] // a.itemsize,
+        "__y_0_range_1": b.shape[0],
+        "__y_1_range_1": b.shape[1],
+        "__y_stride_0": b.strides[0] // b.itemsize,
+        "__y_stride_1": b.strides[1] // b.itemsize,
+        "__w_0_range_1": w.shape[0],
+        "__w_1_range_1": w.shape[1],
+        "__w_stride_0": w.strides[0] // w.itemsize,
+        "__w_stride_1": w.strides[1] // w.itemsize,
+    }
+
+    sdfg(a, b, w, **symbols)
+    assert np.allclose(b, ref)
