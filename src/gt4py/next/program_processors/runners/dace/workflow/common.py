@@ -48,9 +48,9 @@ def set_dace_config(
     dace.Config.set("compiler.use_cache", value=True)
 
     # We rely on gt4py function `get_cache_folder` to get a unique build folder
-    #   for each SDFG. Within this folder, by setting 'cache=single', dace will
-    #   cache the generated code and binary objects, without creating any further
-    #   sub-folder the SDFG to compile.
+    #   for each program. Within this folder, by setting 'cache=single', dace will
+    #   cache the generated code and binary objects for the program SDFG, without
+    #   creating any further sub-folder to compile the SDFG.
     dace.Config.set("cache", value="single")
 
     # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
