@@ -265,9 +265,7 @@ class ProgramLowering(
 
         assert isinstance(node.func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
 
-        args, node_kwargs = type_info.canonicalize_arguments(
-            node.func.type, node.args, node_kwargs, use_signature_ordering=True
-        )
+        args, node_kwargs = type_info.canonicalize_arguments(node.func.type, node.args, node_kwargs)
 
         lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
 
