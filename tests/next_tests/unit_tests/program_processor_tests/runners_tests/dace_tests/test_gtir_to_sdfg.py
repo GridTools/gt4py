@@ -1212,15 +1212,24 @@ def test_gtir_connectivity_shift_chain():
 
 
 def test_gtir_neighbors_as_input():
+    MESH_NUM_LEVELS = 10
+    EKFTYPE = ts.FieldType(dims=[Edge, KDim], dtype=FLOAT_TYPE)
+    VKFTYPE = ts.FieldType(dims=[Vertex, KDim], dtype=FLOAT_TYPE)
+    V2E_KFTYPE = ts.FieldType(dims=[Vertex, V2EDim, KDim], dtype=EFTYPE.dtype)
+    gtx_common.check_dims(V2E_KFTYPE.dims)
+
     init_value = np.random.rand()
-    vertex_domain = im.domain(gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices")})
+    vertex_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED, ranges={Vertex: (0, "nvertices"), KDim: (0, "nlevels")}
+    )
     testee = gtir.Program(
         id="neighbors_as_input",
         function_definitions=[],
         params=[
-            gtir.Sym(id="v2e_field", type=V2E_FTYPE),
-            gtir.Sym(id="edges", type=EFTYPE),
-            gtir.Sym(id="vertices", type=VFTYPE),
+            gtir.Sym(id="v2e_field", type=V2E_KFTYPE),
+            gtir.Sym(id="edges", type=EKFTYPE),
+            gtir.Sym(id="vertices", type=VKFTYPE),
+            gtir.Sym(id="nlevels", type=SIZE_TYPE),
             gtir.Sym(id="nvertices", type=SIZE_TYPE),
         ],
         declarations=[],
@@ -1247,27 +1256,33 @@ def test_gtir_neighbors_as_input():
 
     connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
 
-    v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.shape[1])
-    e = np.random.rand(SIMPLE_MESH.num_edges)
-    v = np.empty(SIMPLE_MESH.num_vertices, dtype=v2e_field.dtype)
+    v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.shape[1], MESH_NUM_LEVELS)
+    e = np.random.rand(SIMPLE_MESH.num_edges, MESH_NUM_LEVELS)
+    v = np.empty([SIMPLE_MESH.num_vertices, MESH_NUM_LEVELS], dtype=v2e_field.dtype)
 
     v_ref = [
         functools.reduce(lambda x, y: x + y, v2e_values + e[v2e_neighbors], init_value)
         for v2e_neighbors, v2e_values in zip(connectivity_V2E.asnumpy(), v2e_field, strict=True)
     ]
 
-    sdfg(
-        v2e_field,
-        e,
-        v,
-        gt_conn_V2E=connectivity_V2E.ndarray,
-        **FSYMBOLS,
-        **make_mesh_symbols(SIMPLE_MESH),
-        __v2e_field_0_range_1=SIMPLE_MESH.num_vertices,
-        __v2e_field_size_1=connectivity_V2E.shape[1],
-        __v2e_field_stride_0=connectivity_V2E.shape[1],
-        __v2e_field_stride_1=1,
-    )
+    symbols = make_mesh_symbols(SIMPLE_MESH) | {
+        "nlevels": MESH_NUM_LEVELS,
+        # override SDFG symbols for array shape and strides because of extra K-dimension
+        "__edges_size_1": e.shape[1],
+        "__edges_stride_0": e.strides[0] // e.itemsize,
+        "__edges_stride_1": e.strides[1] // e.itemsize,
+        "__vertices_size_1": v.shape[1],
+        "__vertices_stride_0": v.strides[0] // v.itemsize,
+        "__vertices_stride_1": v.strides[1] // v.itemsize,
+        "__v2e_field_0_range_1": v2e_field.shape[0],
+        "__v2e_field_1_range_1": v2e_field.shape[1],
+        "__v2e_field_2_range_1": v2e_field.shape[2],
+        "__v2e_field_stride_0": v2e_field.strides[0] // v2e_field.itemsize,
+        "__v2e_field_stride_1": v2e_field.strides[1] // v2e_field.itemsize,
+        "__v2e_field_stride_2": v2e_field.strides[2] // v2e_field.itemsize,
+    }
+
+    sdfg(v2e_field, e, v, gt_conn_V2E=connectivity_V2E.ndarray, **symbols)
     assert np.allclose(v, v_ref)
 
 
