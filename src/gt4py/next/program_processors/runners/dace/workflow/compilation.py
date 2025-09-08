@@ -16,7 +16,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import config as gtx_config
+from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
@@ -50,7 +50,7 @@ def _get_sdfg_ctype_arglist_callback(
     return global_namespace[bind_func_name]
 
 
-class CompiledDaceProgram(stages.ExtendedCompiledProgram):
+class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_program: dace.CompiledSDFG
 
     # Sorted list of SDFG arguments as they appear in program ABI and corresponding data type;
@@ -68,10 +68,8 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
         program: dace.CompiledSDFG,
         bind_func_name: str,
         binding_source: stages.BindingSource[languages.SDFG, languages.Python],
-        implicit_domain: bool,
     ):
         self.sdfg_program = program
-        self.implicit_domain = implicit_domain
 
         # `dace.CompiledSDFG.arglist()` returns an ordered dictionary that maps the argument
         # name to its data type, in the same order as arguments appear in the program ABI.
@@ -111,9 +109,9 @@ class DaCeCompiler(
     """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
     bind_func_name: str
-    cache_lifetime: gtx_config.BuildCacheLifetime
+    cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType
-    cmake_build_type: gtx_config.CMakeBuildType = gtx_config.CMakeBuildType.DEBUG
+    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
 
     def __call__(
         self,
@@ -136,7 +134,6 @@ class DaCeCompiler(
             sdfg_program,
             self.bind_func_name,
             inp.binding_source,
-            inp.program_source.implicit_domain,
         )
 
 
