@@ -49,7 +49,6 @@ from gt4py.cartesian.gtscript import (
     tan,
     tanh,
     trunc,
-    round,
 )
 
 
