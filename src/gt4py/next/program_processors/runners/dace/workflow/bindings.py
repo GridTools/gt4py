@@ -14,13 +14,14 @@ from typing import Final
 import dace
 
 from gt4py.eve import codegen
+from gt4py.next import common as gtx_common
 from gt4py.next.iterator import builtins as itir_builtins
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 from gt4py.next.type_system import type_specifications as ts
 
 
-FIELD_RANGE_PARAM_RE: Final[re.Pattern] = re.compile(r"^__(.+)_(\d+)_range$")
+FIELD_RANGE_PARAM_RE: Final[re.Pattern] = re.compile(r"^__(.+)_(\S+)_range$")
 FIELD_SYMBOL_GT_TYPE: Final[ts.ScalarType] = ts.ScalarType(
     kind=getattr(ts.ScalarKind, itir_builtins.INTEGER_INDEX_BUILTIN.upper())
 )
@@ -86,9 +87,10 @@ def _parse_gt_param(
         # Special handling of tuples
         if (m := FIELD_RANGE_PARAM_RE.match(param_name)) is not None:
             # Domain range is expressed as a tuple in each dimension
-            gt_field_name, dim_index = m[1], int(m[2])
-            rstart = gtx_dace_utils.range_start_symbol(gt_field_name, dim_index)
-            rstop = gtx_dace_utils.range_stop_symbol(gt_field_name, dim_index)
+            gt_field_name, dim_value = m[1], m[2]
+            dim = gtx_common.Dimension(dim_value)
+            rstart = gtx_dace_utils.range_start_symbol(gt_field_name, dim)
+            rstop = gtx_dace_utils.range_stop_symbol(gt_field_name, dim)
             for i, tuple_param_name in enumerate([rstart, rstop]):
                 tuple_arg = f"{arg}[{i}]"
                 tuple_param_type = param_type.types[i]
@@ -143,7 +145,9 @@ def _parse_gt_param(
                 )
                 code.append(f"assert gtx_common.Domain.is_finite({arg}.domain)")
                 code.append(f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}.data_ptr()")
-                for i, array_size in enumerate(sdfg_arg_desc.shape):
+                for i, (dim, array_size) in enumerate(
+                    zip(param_type.dims, sdfg_arg_desc.shape, strict=True)
+                ):
                     if (
                         isinstance(array_size, dace.symbolic.SymbolicType)
                         and not array_size.is_constant()
@@ -152,8 +156,8 @@ def _parse_gt_param(
                         # like 'range_stop - range_start', where 'range_start' and
                         # 'range_stop' are SDFG symbols.
                         dim_range = f"{arg}.domain.ranges[{i}]"
-                        rstart = gtx_dace_utils.range_start_symbol(param_name, i)
-                        rstop = gtx_dace_utils.range_stop_symbol(param_name, i)
+                        rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
+                        rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
                         for suffix, symbol_name in [("start", rstart), ("stop", rstop)]:
                             value = f"{dim_range}.{suffix}"
                             _parse_gt_param(
