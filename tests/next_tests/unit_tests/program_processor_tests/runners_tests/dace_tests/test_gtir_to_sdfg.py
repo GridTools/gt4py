@@ -13,7 +13,7 @@ Note: this test module covers the fieldview flavour of ITIR.
 """
 
 import functools
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import numpy as np
 import pytest
@@ -129,12 +129,18 @@ def build_dace_sdfg(
 
 
 def get_domain_range(
-    field: str | gtir.Expr, dim: gtx_common.Dimension
+    field: str | gtir.Expr, dim: gtx_common.Dimension, margin: Optional[tuple[int, int]] = None
 ) -> tuple[gtir.Expr, gtir.Expr]:
-    return (
+    r = (
         im.tuple_get(0, im.call("get_domain_range")(field, im.axis_literal(dim))),
         im.tuple_get(1, im.call("get_domain_range")(field, im.axis_literal(dim))),
     )
+    if margin is not None:
+        r = (
+            im.plus(r[0], margin[0]),
+            im.minus(r[1], margin[1]),
+        )
+    return r
 
 
 def test_gtir_broadcast():
@@ -839,13 +845,7 @@ def test_gtir_cartesian_shift_left():
     domain = im.domain(
         gtx_common.GridType.CARTESIAN,
         ranges={
-            IDim: (
-                get_domain_range("x", IDim)[0],
-                im.minus(
-                    get_domain_range("x", IDim)[1],
-                    gtir.Literal(value=str(OFFSET), type=SIZE_TYPE),
-                ),
-            ),
+            IDim: get_domain_range("x", IDim, (0, OFFSET)),
         },
     )
 
@@ -949,12 +949,7 @@ def test_gtir_cartesian_shift_right():
     OFFSET = 1
     domain = im.domain(
         gtx_common.GridType.CARTESIAN,
-        ranges={
-            IDim: (
-                im.plus(get_domain_range("x", IDim)[0], OFFSET),
-                get_domain_range("x", IDim)[1],
-            )
-        },
+        ranges={IDim: get_domain_range("x", IDim, (OFFSET, 0))},
     )
 
     # cartesian shift with literal integer offset
@@ -1280,18 +1275,26 @@ def test_gtir_connectivity_shift_chain():
 
 
 def test_gtir_neighbors_as_input():
-    MESH_NUM_LEVELS = 10
+    MARGIN = 10
+    MESH_NUM_LEVELS = 25
     EKFTYPE = ts.FieldType(dims=[Edge, KDim], dtype=FLOAT_TYPE)
     VKFTYPE = ts.FieldType(dims=[Vertex, KDim], dtype=FLOAT_TYPE)
     V2E_KFTYPE = ts.FieldType(dims=[Vertex, V2EDim, KDim], dtype=EFTYPE.dtype)
     gtx_common.check_dims(V2E_KFTYPE.dims)
 
     init_value = np.random.rand()
-    vertex_domain = im.domain(
+    outer_domain = im.domain(
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Vertex: get_domain_range("vertices", Vertex),
-            KDim: get_domain_range("vertices", KDim),
+            KDim: get_domain_range("vertices", KDim, (MARGIN, MARGIN)),
+        },
+    )
+    inner_domain = im.domain(
+        gtx_common.GridType.UNSTRUCTURED,
+        ranges={
+            Vertex: get_domain_range("x", Vertex),
+            KDim: get_domain_range("x", KDim),
         },
     )
     testee = gtir.Program(
@@ -1305,35 +1308,50 @@ def test_gtir_neighbors_as_input():
         declarations=[],
         body=[
             gtir.SetAt(
-                expr=im.as_fieldop(
-                    im.lambda_("it")(
-                        im.reduce("plus", im.literal_from_value(init_value))(im.deref("it"))
-                    ),
-                    vertex_domain,
+                expr=im.let(
+                    "x",
+                    im.as_fieldop_neighbors("V2E", "edges", outer_domain),
                 )(
-                    im.op_as_fieldop(im.map_("plus"), vertex_domain)(
-                        "v2e_field",
-                        im.as_fieldop_neighbors("V2E", "edges", vertex_domain),
-                    )
+                    im.as_fieldop(
+                        im.lambda_("it")(
+                            im.reduce("plus", im.literal_from_value(init_value))(im.deref("it"))
+                        ),
+                        inner_domain,
+                    )(im.op_as_fieldop(im.map_("divides"), inner_domain)("v2e_field", "x"))
                 ),
-                domain=vertex_domain,
+                domain=outer_domain,
                 target=gtir.SymRef(id="vertices"),
             )
         ],
     )
 
-    sdfg = build_dace_sdfg(testee, SIMPLE_MESH.offset_provider)
+    # skip domain inference to test correct symbol mapping in let-statements,
+    # based on canonical order of field dimensions
+    sdfg = build_dace_sdfg(testee, SIMPLE_MESH.offset_provider, skip_domain_inference=True)
 
     connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
 
     v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.shape[1], MESH_NUM_LEVELS)
     e = np.random.rand(SIMPLE_MESH.num_edges, MESH_NUM_LEVELS)
-    v = np.empty([SIMPLE_MESH.num_vertices, MESH_NUM_LEVELS], dtype=v2e_field.dtype)
+    v = np.random.rand(SIMPLE_MESH.num_vertices, MESH_NUM_LEVELS)
 
-    v_ref = [
-        functools.reduce(lambda x, y: x + y, v2e_values + e[v2e_neighbors], init_value)
-        for v2e_neighbors, v2e_values in zip(connectivity_V2E.asnumpy(), v2e_field, strict=True)
-    ]
+    v_ref = np.concatenate(
+        [
+            v[:, :MARGIN],
+            list(
+                functools.reduce(
+                    lambda x, y: x + y,
+                    (v2e_values / e[v2e_neighbors])[:, MARGIN:-MARGIN],
+                    init_value,
+                )
+                for v2e_neighbors, v2e_values in zip(
+                    connectivity_V2E.asnumpy(), v2e_field, strict=True
+                )
+            ),
+            v[:, -MARGIN:],
+        ],
+        axis=1,
+    )
 
     symbols = make_mesh_symbols(SIMPLE_MESH) | {
         # override SDFG symbols for array shape and strides because of extra K-dimension
@@ -1779,12 +1797,7 @@ def test_gtir_let_lambda():
     )
     subdomain = im.domain(
         gtx_common.GridType.CARTESIAN,
-        ranges={
-            IDim: (
-                im.plus(get_domain_range("y", IDim)[0], 1),
-                im.minus(get_domain_range("y", IDim)[1], 1),
-            )
-        },
+        ranges={IDim: get_domain_range("y", IDim, (1, 1))},
     )
     testee = gtir.Program(
         id="let_lambda",
@@ -1949,15 +1962,13 @@ def test_gtir_let_lambda_with_connectivity():
 
 
 def test_gtir_let_lambda_with_origin():
+    MESH_NUM_LEVELS = 25
     C2E_neighbor_idx = 1
     cell_domain = im.domain(
         gtx_common.GridType.UNSTRUCTURED,
         ranges={
             Cell: get_domain_range("cells", Cell),
-            KDim: (
-                im.plus(get_domain_range("cells", KDim)[0], 1),
-                get_domain_range("cells", KDim)[1],
-            ),
+            KDim: get_domain_range("cells", KDim, (1, 0)),
         },
     )
 
@@ -1987,8 +1998,8 @@ def test_gtir_let_lambda_with_origin():
 
     sdfg = build_dace_sdfg(testee, SIMPLE_MESH.offset_provider)
 
-    c = np.random.rand(SIMPLE_MESH.num_cells, N)
-    e = np.random.rand(SIMPLE_MESH.num_edges, N)
+    c = np.random.rand(SIMPLE_MESH.num_cells, MESH_NUM_LEVELS)
+    e = np.random.rand(SIMPLE_MESH.num_edges, MESH_NUM_LEVELS)
     connectivity_C2E = SIMPLE_MESH.offset_provider["C2E"]
     ref = np.concatenate(
         (c[:, :1], e[connectivity_C2E.asnumpy()[:, C2E_neighbor_idx], 1:] + 1.0), axis=1
@@ -1996,11 +2007,11 @@ def test_gtir_let_lambda_with_origin():
 
     symbols = make_mesh_symbols(SIMPLE_MESH) | {
         "__cells_KDim_range_0": 0,
-        "__cells_KDim_range_1": N,
+        "__cells_KDim_range_1": MESH_NUM_LEVELS,
         "__cells_stride_0": c.strides[0] // c.itemsize,
         "__cells_stride_1": c.strides[1] // c.itemsize,
         "__edges_KDim_range_0": 0,
-        "__edges_KDim_range_1": N,
+        "__edges_KDim_range_1": MESH_NUM_LEVELS,
         "__edges_stride_0": e.strides[0] // e.itemsize,
         "__edges_stride_1": e.strides[1] // e.itemsize,
     }
@@ -2272,12 +2283,7 @@ def test_gtir_index():
     )
     subdomain = im.domain(
         gtx_common.GridType.CARTESIAN,
-        ranges={
-            IDim: (
-                im.plus(get_domain_range("x", IDim)[0], MARGIN),
-                im.minus(get_domain_range("x", IDim)[1], MARGIN),
-            )
-        },
+        ranges={IDim: get_domain_range("x", IDim, (MARGIN, MARGIN))},
     )
 
     testee = gtir.Program(
