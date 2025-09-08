@@ -154,35 +154,28 @@ class FieldopData:
         # are assumed to be compiled-time values (not symbolic), therefore the start and
         # stop range symbols of the inner field only extend over the global dimensions.
         if isinstance(self.gt_type.dtype, ts.ListType):
-            assert (
-                self.gt_type.dtype.offset_type is not None
-            )  # it should contain the local dimension
-            full_dims = gtx_common.order_dimensions(
-                [*self.gt_type.dims, self.gt_type.dtype.offset_type]
-            )
+            local_dim = self.gt_type.dtype.offset_type
+            assert local_dim is not None
+            full_dims = gtx_common.order_dimensions([*self.gt_type.dims, local_dim])
             globals_size = [
                 size
                 for dim, size in zip(full_dims, outer_desc.shape, strict=True)
-                if dim.kind != gtx_common.DimensionKind.LOCAL
+                if dim != local_dim
             ]
         else:
             globals_size = outer_desc.shape
-        return (
-            {
-                gtx_dace_utils.range_start_symbol(dataname, dim): origin
-                for dim, origin in zip(self.gt_type.dims, self.origin, strict=True)
+
+        symbol_mapping: dict[str, dace.symbolic.SymbolicType] = {}
+        for dim, origin, size in zip(self.gt_type.dims, self.origin, globals_size, strict=True):
+            symbol_mapping |= {
+                gtx_dace_utils.range_start_symbol(dataname, dim): origin,
+                gtx_dace_utils.range_stop_symbol(dataname, dim): (origin + size),
             }
-            | {
-                gtx_dace_utils.range_stop_symbol(dataname, dim): (origin + size)
-                for dim, origin, size in zip(
-                    self.gt_type.dims, self.origin, globals_size, strict=True
-                )
+        for i, stride in enumerate(outer_desc.strides):
+            symbol_mapping |= {
+                gtx_dace_utils.field_stride_symbol_name(dataname, i): stride,
             }
-            | {
-                gtx_dace_utils.field_stride_symbol_name(dataname, i): stride
-                for i, stride in enumerate(outer_desc.strides)
-            }
-        )
+        return symbol_mapping
 
 
 FieldopResult: TypeAlias = FieldopData | tuple[FieldopData | tuple, ...]
