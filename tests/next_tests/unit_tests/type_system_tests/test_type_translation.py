@@ -189,6 +189,7 @@ def test_as_from_dtype(dtype):
 
 def test_from_value_module():
     import next_tests.artifacts.dummy_package as dummy_package
+
     # TODO(egparedes): the following import should not be necessary
     #  but it seems to fail if the import is not here. It should be
     #  investigated.

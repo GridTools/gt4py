@@ -112,11 +112,7 @@ class NodeVisitor:
             visitor_name := cache.get(node_class, None)
         ) is None:
             # For concretized data model classes, use the generic name
-            node_class_name = node_class.__name__
-            if "__datamodel_generic_name__" in node_class.__dict__:
-                node_class_name = node_class.__datamodel_generic_name__  # type: ignore[union-attr]
-            else:
-                node_class_name = node_class.__name__
+            node_class_name = getattr(node_class, "__datamodel_generic_name__", node_class.__name__)
             visitor_name = "visit_" + node_class_name
 
             if not hasattr(self, visitor_name):
