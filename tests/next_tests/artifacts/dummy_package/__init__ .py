@@ -7,3 +7,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from . import dummy_module
+
+__all__ = ["dummy_module"]

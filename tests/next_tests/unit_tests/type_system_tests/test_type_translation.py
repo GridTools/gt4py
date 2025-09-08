@@ -188,7 +188,11 @@ def test_as_from_dtype(dtype):
 
 
 def test_from_value_module():
-    from ...artifacts import dummy_package
+    import next_tests.artifacts.dummy_package as dummy_package
+    # TODO(egparedes): the following import should not be necessary
+    #  but it seems to fail if the import is not here. It should be
+    #  investigated.
+    import next_tests.artifacts.dummy_package.dummy_module
 
     assert isinstance(
         type_translation.from_value(dummy_package), type_translation.UnknownPythonObject
