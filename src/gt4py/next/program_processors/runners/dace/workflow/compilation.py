@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import dataclasses
 import os
-import pathlib
 from typing import Any, Callable, Sequence
 
 import dace
@@ -19,6 +18,7 @@ import factory
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
 
@@ -121,9 +121,11 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-            sdfg_build_folder = pathlib.Path(sdfg.build_folder)
+            sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
+
+            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
                 sdfg_program = sdfg.compile(validate=False)
 
