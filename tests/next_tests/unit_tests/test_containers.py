@@ -9,12 +9,13 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import NamedTuple
+from typing import NamedTuple, Final
 
 import pytest
 
 from gt4py import next as gtx
-from gt4py.next import Dimension, Field, float32, Dims
+from gt4py.eve.extended_typing import NestedTuple
+from gt4py.next import Dimension, Field, float32, Dims, containers
 
 
 # Meaningless dimensions, used for tests.
@@ -22,6 +23,7 @@ TDim = Dimension("TDim")
 SDim = Dimension("SDim")
 
 
+# Sample container types
 class NamedTupleContainer(NamedTuple):
     x: Field[Dims[TDim], float32]
     y: Field[Dims[TDim], float32]
@@ -60,116 +62,106 @@ class NestedMixedTupleContainer:
     c: NamedTupleContainer
 
 
-@pytest.mark.parametrize(
-    ["nested_tuple", "container_type", "expected_container"],
-    [
-        (
-            (
-                x := gtx.constructors.full({TDim: 5}, 2.0),
-                y := gtx.constructors.full({TDim: 5}, 3.0),
-            ),
-            NamedTupleContainer,
-            NamedTupleContainer(x, y),
+CONTAINER_SAMPLES: Final[
+    list[tuple[containers.PythonContainer, NestedTuple[containers.PythonContainerValue]]]
+] = [
+    (
+        NamedTupleContainer(
+            x := gtx.constructors.full({TDim: 5}, 2.0),
+            y := gtx.constructors.full({TDim: 5}, 3.0),
         ),
-        (
-            (
-                x := gtx.constructors.full({TDim: 5}, 2.0),
-                y := gtx.constructors.full({TDim: 5}, 3.0),
-            ),
-            DataclassContainer,
-            DataclassContainer(x, y),
+        (x, y),
+    ),
+    (
+        DataclassContainer(
+            x := gtx.constructors.full({TDim: 5}, 2.0),
+            y := gtx.constructors.full({TDim: 5}, 3.0),
         ),
-        (
-            (
-                (
-                    a_x := gtx.constructors.full({TDim: 5}, 2.0),
-                    a_y := gtx.constructors.full({TDim: 5}, 3.0),
-                ),
-                (
-                    b_x := gtx.constructors.full({TDim: 5}, 4.0),
-                    b_y := gtx.constructors.full({TDim: 5}, 5.0),
-                ),
-                (
-                    c_x := gtx.constructors.full({TDim: 5}, 6.0),
-                    c_y := gtx.constructors.full({TDim: 5}, 7.0),
-                ),
+        (x, y),
+    ),
+    (
+        NestedDataclassContainer(
+            a := DataclassContainer(
+                a_x := gtx.constructors.full({TDim: 5}, 2.0),
+                a_y := gtx.constructors.full({TDim: 5}, 3.0),
             ),
-            NestedDataclassContainer,
-            NestedDataclassContainer(
-                DataclassContainer(a_x, a_y),
-                DataclassContainer(b_x, b_y),
-                DataclassContainer(c_x, c_y),
+            b := DataclassContainer(
+                b_x := gtx.constructors.full({TDim: 5}, 4.0),
+                b_y := gtx.constructors.full({TDim: 5}, 5.0),
+            ),
+            c := DataclassContainer(
+                c_x := gtx.constructors.full({TDim: 5}, 6.0),
+                c_y := gtx.constructors.full({TDim: 5}, 7.0),
             ),
         ),
-        (
-            (
-                (
-                    a_x := gtx.constructors.full({TDim: 5}, 2.0),
-                    a_y := gtx.constructors.full({TDim: 5}, 3.0),
-                ),
-                (
-                    b_x := gtx.constructors.full({TDim: 5}, 4.0),
-                    b_y := gtx.constructors.full({TDim: 5}, 5.0),
-                ),
-                (
-                    c_x := gtx.constructors.full({TDim: 5}, 6.0),
-                    c_y := gtx.constructors.full({TDim: 5}, 7.0),
-                ),
+        ((a_x, a_y), (b_x, b_y), (c_x, c_y)),
+    ),
+    (
+        NestedNamedTupleDataclassContainer(
+            a := DataclassContainer(
+                a_x := gtx.constructors.full({TDim: 5}, 2.0),
+                a_y := gtx.constructors.full({TDim: 5}, 3.0),
             ),
-            NestedNamedTupleDataclassContainer,
-            NestedNamedTupleDataclassContainer(
-                DataclassContainer(a_x, a_y),
-                DataclassContainer(b_x, b_y),
-                DataclassContainer(c_x, c_y),
+            b := DataclassContainer(
+                b_x := gtx.constructors.full({TDim: 5}, 4.0),
+                b_y := gtx.constructors.full({TDim: 5}, 5.0),
+            ),
+            c := DataclassContainer(
+                c_x := gtx.constructors.full({TDim: 5}, 6.0),
+                c_y := gtx.constructors.full({TDim: 5}, 7.0),
             ),
         ),
-        (
-            (
-                (
-                    a_x := gtx.constructors.full({TDim: 5}, 2.0),
-                    a_y := gtx.constructors.full({TDim: 5}, 3.0),
-                ),
-                (
-                    b_x := gtx.constructors.full({TDim: 5}, 4.0),
-                    b_y := gtx.constructors.full({TDim: 5}, 5.0),
-                ),
-                (
-                    c_x := gtx.constructors.full({TDim: 5}, 6.0),
-                    c_y := gtx.constructors.full({TDim: 5}, 7.0),
-                ),
+        ((a_x, a_y), (b_x, b_y), (c_x, c_y)),
+    ),
+    (
+        NestedDataclassNamedTupleContainer(
+            a := NamedTupleContainer(
+                a_x := gtx.constructors.full({TDim: 5}, 2.0),
+                a_y := gtx.constructors.full({TDim: 5}, 3.0),
             ),
-            NestedDataclassNamedTupleContainer,
-            NestedDataclassNamedTupleContainer(
-                NamedTupleContainer(a_x, a_y),
-                NamedTupleContainer(b_x, b_y),
-                NamedTupleContainer(c_x, c_y),
+            b := NamedTupleContainer(
+                b_x := gtx.constructors.full({TDim: 5}, 4.0),
+                b_y := gtx.constructors.full({TDim: 5}, 5.0),
+            ),
+            c := NamedTupleContainer(
+                c_x := gtx.constructors.full({TDim: 5}, 6.0),
+                c_y := gtx.constructors.full({TDim: 5}, 7.0),
             ),
         ),
-        (
-            (
-                (
-                    a_x := gtx.constructors.full({TDim: 5}, 2.0),
-                    a_y := gtx.constructors.full({TDim: 5}, 3.0),
-                ),
-                (
-                    b_x := gtx.constructors.full({TDim: 5}, 4.0),
-                    b_y := gtx.constructors.full({TDim: 5}, 5.0),
-                ),
-                (
-                    c_x := gtx.constructors.full({TDim: 5}, 6.0),
-                    c_y := gtx.constructors.full({TDim: 5}, 7.0),
-                ),
+        ((a_x, a_y), (b_x, b_y), (c_x, c_y)),
+    ),
+    (
+        NestedMixedTupleContainer(
+            a := NamedTupleContainer(
+                a_x := gtx.constructors.full({TDim: 5}, 2.0),
+                a_y := gtx.constructors.full({TDim: 5}, 3.0),
             ),
-            NestedMixedTupleContainer,
-            NestedMixedTupleContainer(
-                NamedTupleContainer(a_x, a_y),
-                DataclassContainer(b_x, b_y),
-                NamedTupleContainer(c_x, c_y),
+            b := DataclassContainer(
+                b_x := gtx.constructors.full({TDim: 5}, 4.0),
+                b_y := gtx.constructors.full({TDim: 5}, 5.0),
+            ),
+            c := NamedTupleContainer(
+                c_x := gtx.constructors.full({TDim: 5}, 6.0),
+                c_y := gtx.constructors.full({TDim: 5}, 7.0),
             ),
         ),
-    ],
-)
-def test_make_container_constructor(nested_tuple, container_type, expected_container):
+        ((a_x, a_y), (b_x, b_y), (c_x, c_y)),
+    ),
+]
+
+
+@pytest.mark.parametrize(["container", "expected_nested_tuple"], CONTAINER_SAMPLES)
+def test_make_container_extractor(container, expected_nested_tuple):
+    container_type = type(container)
+    extractor = gtx.containers.make_container_extractor(container_type)
+
+    assert extractor(container) == expected_nested_tuple
+    # assert extractor(container) is container or not isinstance(container, tuple)
+
+
+@pytest.mark.parametrize(["expected_container", "nested_tuple"], CONTAINER_SAMPLES)
+def test_make_container_constructor(expected_container, nested_tuple):
+    container_type = type(expected_container)
     constructor = gtx.containers.make_container_constructor(container_type)
     constructed_container = constructor(nested_tuple)
 
