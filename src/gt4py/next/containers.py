@@ -63,6 +63,7 @@ from gt4py.eve.extended_typing import NestedTuple
 if TYPE_CHECKING:
     from gt4py.next.type_system import type_specifications as ts
 
+VALUE_TYPES: Final[tuple[type, ...]] = tuple([*core_defs.SCALAR_TYPES, common.Field])
 
 PythonContainer: TypeAlias = xtyping.TypedNamedTupleABC | xtyping.DataclassABC
 PYTHON_CONTAINER_TYPES: Final[tuple[type, ...]] = typing.cast(
@@ -118,48 +119,93 @@ def make_container_extractor(
 PythonContainerT = TypeVar("PythonContainerT", bound=PythonContainer)
 
 
+def _get_args_info(container_type: type[PythonContainer]) -> tuple[int, list[str]]:
+    assert issubclass(container_type, PythonContainer)
+
+    # Use a constructor signature without variadic parameters
+    for method_name in ("__new__", "__init__"):
+        params = inspect.signature(getattr(container_type, method_name)).parameters
+        if not (
+            {p.kind for p in params.values()}
+            & {inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD}
+        ):
+            break
+    else:
+        raise TypeError(
+            f"Type {container_type} with variadic parameters in constructor are not supported"
+        )
+    if len(params) == 1:
+        raise TypeError(f"Type {container_type} has no parameters in constructor")
+
+    params = {k: v for k, v in [*params.items()][1:]}  # drop 'self' / 'cls' parameter
+    args_count = sum(
+        p.kind in {inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD}
+        for p in params.values()
+    )
+    kwargs_keys = [
+        key for key, param in params.items() if param.kind == inspect.Parameter.KEYWORD_ONLY
+    ]
+    assert args_count + len(kwargs_keys) == len(params), "Variadic parameters are not supported"
+
+    return args_count, kwargs_keys
+
+
 @functools.cache
 def make_container_constructor(
     container_type: type[PythonContainerT],
 ) -> Callable[[ts.NestedTuple], PythonContainerT]:
     assert isinstance(container_type, type)
+    assert issubclass(container_type, PythonContainer)
+
     global_ns = {}
 
     def make_constructor_expr(
-        in_arg: str, container_type: type[PythonContainer], container_type_key: str
+        in_arg: str, container_type: type[PythonContainer], container_type_alias: str
     ):
-        if isinstance(container_type, core_defs.SCALAR_TYPES):
+        # We reached the leaf of the nested container construction so we just return the argument as is
+        if container_type in VALUE_TYPES or xtyping.get_origin(container_type) in VALUE_TYPES:
             return in_arg
-        
-        assert isinstance(container_type, PythonContainer)
-        global_ns[container_type_key] = container_type
-        params = inspect.signature(container_type.__init__).parameters
-        args_count = sum(
-            p.kind in {inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD}
-            for p in params.values()
-        )
-        kwargs_keys = [key for key, param in params.items() if param.kind == inspect.Parameter.KEYWORD_ONLY]
-        assert args_count + len(kwargs_keys) == len(params), "Variadic parameters are not supported"
 
-        call_args = (
-            f"*{in_arg}[:args_count], {', '.join(f'{k}={in_arg}[{args_count + i}]' for i, k in enumerate(kwargs_keys))}"
-            if kwargs_keys
-            else f"*{in_arg}"
-        )
+        assert issubclass(container_type, PythonContainer)
 
+        # Store the container type alias in the global namespace for eval
+        global_ns[container_type_alias] = container_type
 
-        children_hints = xtyping.get_type_hints(container_type)
-        call_args = {
-            key: make_constructor_expr(
-                f"{in_arg}.{key}", children_hints[key], f"{container_type_key}_{key}"
-            )
-            for key in container_keys(container_type)
+        # Recursively generate the constructor call
+        args_count, kwargs_keys = _get_args_info(container_type)
+        children_hints = {
+            key: xtyping.get_origin(value) or value
+            for key, value in xtyping.get_type_hints(container_type).items()
         }
+        if {children_hints[key] for key in container_keys(container_type)} <= {*VALUE_TYPES}:
+            # Fast path: all children are values, so we can just use argument unpacking
+            call_args = (
+                f"*{in_arg}[:{args_count}], {', '.join(f'{k}={in_arg}[{args_count + i}]' for i, k in enumerate(kwargs_keys))}"
+                if kwargs_keys
+                else f"*{in_arg}"
+            )
+        else:
+            # General path: we need to recursively construct children containers
+            call_args_items = []
+            for i, key in enumerate(container_keys(container_type)):
+                if children_hints[key] in VALUE_TYPES:
+                    call_args_items.append(f"{in_arg}[{i}]")
+                else:
+                    *path_keys, _ = container_type_alias[2:].split("__")
+                    children_container = children_hints[key].__name__
+                    children_container_alias = (
+                        f"{'__'.join(path_keys)}__{key}__{children_container}"
+                    )
+                    value = make_constructor_expr(
+                        f"{in_arg}[{i}]", children_hints[key], children_container_alias
+                    )
+                    call_args_items.append(f"{key}={value}")
+            call_args = ", ".join(call_args_items)
 
+        return f"{container_type_alias}({call_args})"
 
-
-        return f"{container_type_key}({call_args})"
-
-    return eval(
-        f"lambda x: {make_constructor_expr('x', container_type, 'container_type')}", global_ns
+    constructor_func_src = (
+        f"lambda x: {make_constructor_expr('x', container_type, f'{container_type.__name__}')}"
     )
+
+    return eval(constructor_func_src, global_ns)
