@@ -152,17 +152,31 @@ class FieldopData:
         assert isinstance(outer_desc, dace.data.Array)
         # origin and size of the local dimension, in case of a field with `ListType` data,
         # are assumed to be compiled-time values (not symbolic), therefore the start and
-        # stop range symbols of the inner field only extend over the global dimensions
+        # stop range symbols of the inner field only extend over the global dimensions.
+        if isinstance(self.gt_type.dtype, ts.ListType):
+            assert (
+                self.gt_type.dtype.offset_type is not None
+            )  # it should contain the local dimension
+            full_dims = gtx_common.order_dimensions(
+                [*self.gt_type.dims, self.gt_type.dtype.offset_type]
+            )
+            globals_size = [
+                size
+                for dim, size in zip(full_dims, outer_desc.shape, strict=True)
+                if dim.kind != gtx_common.DimensionKind.LOCAL
+            ]
+        else:
+            globals_size = outer_desc.shape
         return (
             {
-                gtx_dace_utils.range_start_symbol(dataname, dim): (self.origin[i])
-                for i, dim in enumerate(self.gt_type.dims)
+                gtx_dace_utils.range_start_symbol(dataname, dim): origin
+                for dim, origin in zip(self.gt_type.dims, self.origin, strict=True)
             }
             | {
-                gtx_dace_utils.range_stop_symbol(dataname, dim): (
-                    self.origin[i] + outer_desc.shape[i]
+                gtx_dace_utils.range_stop_symbol(dataname, dim): (origin + size)
+                for dim, origin, size in zip(
+                    self.gt_type.dims, self.origin, globals_size, strict=True
                 )
-                for i, dim in enumerate(self.gt_type.dims)
             }
             | {
                 gtx_dace_utils.field_stride_symbol_name(dataname, i): stride
