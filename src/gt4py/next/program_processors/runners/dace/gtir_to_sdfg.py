@@ -293,8 +293,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 "Fields with more than one local dimension are not supported."
             )
         field_origin = tuple(
-            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.range_start_symbol(data_node.data, axis))
-            for axis in range(len(field_type.dims))
+            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.range_start_symbol(data_node.data, dim))
+            for dim in field_type.dims
         )
         return gtir_to_sdfg_types.FieldopData(data_node, field_type, field_origin)
 
@@ -415,8 +415,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 shape.append(
                     dace.symbolic.pystr_to_symbolic(
                         "{} - {}".format(
-                            gtx_dace_utils.range_stop_symbol(name, i),
-                            gtx_dace_utils.range_start_symbol(name, i),
+                            gtx_dace_utils.range_stop_symbol(name, dim),
+                            gtx_dace_utils.range_start_symbol(name, dim),
                         )
                     )
                 )
@@ -509,28 +509,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         elif isinstance(gt_type, ts.ScalarType):
             dc_dtype = gtx_dace_utils.as_dace_type(gt_type)
-            if (
-                gtx_dace_utils.is_range_symbol(name)
-                or symbolic_params is None
-                or name in symbolic_params
-            ):
-                if name in sdfg.symbols:
-                    # Sometimes, when the field domain is implicitly derived from
-                    # the field shape, the gt4py lowering adds the field domain
-                    # range symbols as scalar arguments to the program IR.
-                    # Suppose a field '__sym', then gt4py will add '__sym_0_range_0'
-                    # and '__sym_0_range_1'.
-                    # Therefore, here we check whether the shape symbol was already
-                    # created by `_make_array_shape_and_strides()`, when allocating
-                    # storage for field arguments. We assume that the scalar argument
-                    # for field domain, if present, always follows the field argument.
-                    assert gtx_dace_utils.is_range_symbol(name)
-                    if sdfg.symbols[name].dtype != dc_dtype:
-                        raise ValueError(
-                            f"Type mismatch on argument {name}: got {dc_dtype}, expected {sdfg.symbols[name].dtype}."
-                        )
-                else:
-                    sdfg.add_symbol(name, dc_dtype)
+            if symbolic_params is None or name in symbolic_params:
+                sdfg.add_symbol(name, dc_dtype)
             else:
                 sdfg.add_scalar(name, dc_dtype, transient=transient)
 
@@ -1070,8 +1050,7 @@ def _remove_field_origin_symbols(ir: gtir.Program, sdfg: dace.SDFG) -> None:
             dataname = str(psymbol.id)
             # set all range start symbols to constant value 0
             range_start_symbols |= {
-                gtx_dace_utils.range_start_symbol(dataname, i): 0
-                for i in range(len(psymbol.type.dims))
+                gtx_dace_utils.range_start_symbol(dataname, dim): 0 for dim in psymbol.type.dims
             }
     # we set all range start symbols to 0 in the top-level SDFG and proagate them to nested SDFGs
     gtx_transformations.gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
