@@ -40,9 +40,6 @@ def set_dace_config(
     #   a thread local variable. This means it is safe to set values that are different
     #   for each thread.
 
-    # We rely on gt4py to get a unique build folder for each SDFG
-    dace.Config.set("cache", value="single")
-
     # We rely on dace cache to avoid recompiling the SDFG.
     #   Note that the workflow step with the persistent `FileCache` store
     #   is translating from `CompilableProgram` (ITIR.Program + CompileTimeArgs)
