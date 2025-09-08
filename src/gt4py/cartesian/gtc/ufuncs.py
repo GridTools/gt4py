@@ -13,36 +13,30 @@ from gt4py._core.definitions import float32, float64, int8, int16, int32, int64 
 
 try:
     from scipy.special import erf as erf_, erfc as erfc_, gamma as gamma_
-
 except ImportError:
     import math
 
     # If scipy is not available, emulate gamma function using math.gamma
     gamma_ = np.vectorize(math.gamma)
-    gamma_.types = ["f->f", "d->d", "F->F", "D->D"]
+    gamma_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
     # If scipy is not available, emulate erf function using math.erf
     erf_ = np.vectorize(math.erf)
-    erf_.types = ["f->f", "d->d", "F->F", "D->D"]
+    erf_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
     # If scipy is not available, emulate erfc function using math.erfc
     erfc_ = np.vectorize(math.erfc)
-    erfc_.types = ["f->f", "d->d", "F->F", "D->D"]
+    erfc_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
 
 
 def _round_away_from_zero(num):
-    """Computes the nearest integer value to num, rounding halfway cases away from zero.
-    Examples:
-        -0.5 -> -1.0, 0.5 -> 0.0, 1.5 -> 2.0, 2.5 -> 3.0
-    This is in alignment with C(++) and FORTRAN standard round functions that round away
-    from zero by default.
-    In contrast, python (since v3) and numpy use "Banker's rounding", and round to the nearest
-    even value, e.g. 1.5 and 2.5 round to 2.0, -0.5 and 0.5 round to 0.0.
-    """
+    """Computes the nearest integer value to num, rounding halfway cases away from zero."""
     return np.copysign(np.floor(np.abs(num) + 0.5), num)
 
 
-round_ = _round_away_from_zero
+round_ = np.round
 round_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
 
+round_away_from_zero_ = _round_away_from_zero
+round_away_from_zero_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
 
 positive: np.ufunc = np.positive
 negative: np.ufunc = np.negative
@@ -94,4 +88,5 @@ ceil: np.ufunc = np.ceil
 trunc: np.ufunc = np.trunc
 erf: np.ufunc = erf_
 erfc: np.ufunc = erfc_
-round: np.ufunc = round_  # type: ignore[assignment] # noqa: A001
+round: np.ufunc = round_  # type: ignore # noqa: A001
+round_away_from_zero: np.ufunc = round_away_from_zero_  # type: ignore

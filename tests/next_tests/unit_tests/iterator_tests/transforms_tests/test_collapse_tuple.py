@@ -92,18 +92,6 @@ def test_incompatible_size_make_tuple_tuple_get():
     assert actual == testee  # did nothing
 
 
-def test_merged_with_smaller_outer_size_make_tuple_tuple_get():
-    testee = im.make_tuple(im.tuple_get(0, im.make_tuple("first", "second")))
-    actual = CollapseTuple.apply(
-        testee,
-        ignore_tuple_size=True,
-        enabled_transformations=CollapseTuple.Transformation.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
-        allow_undeclared_symbols=True,
-        within_stencil=False,
-    )
-    assert actual == im.make_tuple("first", "second")
-
-
 def test_simple_tuple_get_make_tuple():
     expected = im.ref("bar")
     testee = im.tuple_get(1, im.make_tuple("foo", expected))

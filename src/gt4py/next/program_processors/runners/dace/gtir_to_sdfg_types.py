@@ -101,7 +101,7 @@ class FieldopData:
             assert isinstance(self.dc_node.desc(sdfg), dace.data.Scalar)
             return gtir_dataflow.MemletExpr(
                 dc_node=self.dc_node,
-                gt_dtype=self.gt_type,
+                gt_field=ts.FieldType(dims=[], dtype=self.gt_type),
                 subset=dace_subsets.Range.from_string("0"),
             )
 
@@ -148,19 +148,21 @@ class FieldopData:
         """
         if isinstance(self.gt_type, ts.ScalarType):
             return {}
-        ndims = len(self.gt_type.dims)
         outer_desc = self.dc_node.desc(sdfg)
         assert isinstance(outer_desc, dace.data.Array)
         # origin and size of the local dimension, in case of a field with `ListType` data,
         # are assumed to be compiled-time values (not symbolic), therefore the start and
         # stop range symbols of the inner field only extend over the global dimensions
         return (
-            {gtx_dace_utils.range_start_symbol(dataname, i): (self.origin[i]) for i in range(ndims)}
+            {
+                gtx_dace_utils.range_start_symbol(dataname, dim): (self.origin[i])
+                for i, dim in enumerate(self.gt_type.dims)
+            }
             | {
-                gtx_dace_utils.range_stop_symbol(dataname, i): (
+                gtx_dace_utils.range_stop_symbol(dataname, dim): (
                     self.origin[i] + outer_desc.shape[i]
                 )
-                for i in range(ndims)
+                for i, dim in enumerate(self.gt_type.dims)
             }
             | {
                 gtx_dace_utils.field_stride_symbol_name(dataname, i): stride

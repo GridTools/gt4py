@@ -14,13 +14,14 @@ from typing import Final
 import dace
 
 from gt4py.eve import codegen
+from gt4py.next import common as gtx_common
 from gt4py.next.iterator import builtins as itir_builtins
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 from gt4py.next.type_system import type_specifications as ts
 
 
-FIELD_RANGE_PARAM_RE: Final[re.Pattern] = re.compile(r"^__(.+)_(\d+)_range$")
+FIELD_RANGE_PARAM_RE: Final[re.Pattern] = re.compile(r"^__(.+)_(\S+)_range$")
 FIELD_SYMBOL_GT_TYPE: Final[ts.ScalarType] = ts.ScalarType(
     kind=getattr(ts.ScalarKind, itir_builtins.INTEGER_INDEX_BUILTIN.upper())
 )
@@ -86,9 +87,10 @@ def _parse_gt_param(
         # Special handling of tuples
         if (m := FIELD_RANGE_PARAM_RE.match(param_name)) is not None:
             # Domain range is expressed as a tuple in each dimension
-            gt_field_name, dim_index = m[1], int(m[2])
-            rstart = gtx_dace_utils.range_start_symbol(gt_field_name, dim_index)
-            rstop = gtx_dace_utils.range_stop_symbol(gt_field_name, dim_index)
+            gt_field_name, dim_value = m[1], m[2]
+            dim = gtx_common.Dimension(dim_value)
+            rstart = gtx_dace_utils.range_start_symbol(gt_field_name, dim)
+            rstop = gtx_dace_utils.range_stop_symbol(gt_field_name, dim)
             for i, tuple_param_name in enumerate([rstart, rstop]):
                 tuple_arg = f"{arg}[{i}]"
                 tuple_param_type = param_type.types[i]
@@ -143,14 +145,19 @@ def _parse_gt_param(
                 )
                 code.append(f"assert gtx_common.Domain.is_finite({arg}.domain)")
                 code.append(f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}.data_ptr()")
-                for i, array_size in enumerate(sdfg_arg_desc.shape):
+                for i, (dim, array_size) in enumerate(
+                    zip(param_type.dims, sdfg_arg_desc.shape, strict=True)
+                ):
                     if (
                         isinstance(array_size, dace.symbolic.SymbolicType)
                         and not array_size.is_constant()
                     ):
+                        # The array shape is defined as a sequence of expressions
+                        # like 'range_stop - range_start', where 'range_start' and
+                        # 'range_stop' are SDFG symbols.
                         dim_range = f"{arg}.domain.ranges[{i}]"
-                        rstart = gtx_dace_utils.range_start_symbol(param_name, i)
-                        rstop = gtx_dace_utils.range_stop_symbol(param_name, i)
+                        rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
+                        rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
                         for suffix, symbol_name in [("start", rstart), ("stop", rstop)]:
                             value = f"{dim_range}.{suffix}"
                             _parse_gt_param(
@@ -162,7 +169,7 @@ def _parse_gt_param(
                                 make_persistent,
                             )
                     else:
-                        # the array shape is set to constant value
+                        # The array shape is set to constant value in this dimension.
                         code.append(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.ndarray.shape[{i}]"
                         )
@@ -175,6 +182,8 @@ def _parse_gt_param(
                         assert array_stride.name == gtx_dace_utils.field_stride_symbol_name(
                             param_name, i
                         )
+                        # The strides of a global array are defined by a sequence
+                        # of SDFG symbols.
                         _parse_gt_param(
                             array_stride.name,
                             FIELD_SYMBOL_GT_TYPE,
@@ -184,7 +193,7 @@ def _parse_gt_param(
                             make_persistent,
                         )
                     else:
-                        # the array stride is set to constant value
+                        # The array stride is set to constant value in this dimension.
                         code.append(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {value}"
                         )
@@ -261,12 +270,16 @@ def {_cb_get_stride}(ndarray, dim_index):
             arg3=_cb_last_call_args,
         )
     )
-    code.indent()
-    for i, param in enumerate(program_source.entry_point.parameters):
-        arg = f"{_cb_args}[{i}]"
-        assert isinstance(param.type_, ts.DataType)
-        _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
-    code.dedent()
+
+    # The SDFG binding function is used with fast-call, to update the SDFG arguments
+    #   list, therefore it is only used from the second time the SDFG is called.
+    #   On the first time, we use the regular SDFG call, which constructs the SDFG
+    #   arguments list and validates that all data containers and free symbols are set.
+    with code.indented():
+        for i, param in enumerate(program_source.entry_point.parameters):
+            arg = f"{_cb_args}[{i}]"
+            assert isinstance(param.type_, ts.DataType)
+            _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
 
     src = codegen.format_python_source(code.text)
     return stages.BindingSource(src, library_deps=tuple())

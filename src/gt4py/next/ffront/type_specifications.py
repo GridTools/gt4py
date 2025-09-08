@@ -11,14 +11,14 @@ import gt4py.next.type_system.type_specifications as ts
 from gt4py.next import common
 
 
-class ProgramType(ts.TypeSpec, ts.CallableType):
+class ProgramType(ts.CallableType):
     definition: ts.FunctionType
 
 
-class FieldOperatorType(ts.TypeSpec, ts.CallableType):
+class FieldOperatorType(ts.CallableType):
     definition: ts.FunctionType
 
 
-class ScanOperatorType(ts.TypeSpec, ts.CallableType):
+class ScanOperatorType(ts.CallableType):
     axis: common.Dimension
     definition: ts.FunctionType

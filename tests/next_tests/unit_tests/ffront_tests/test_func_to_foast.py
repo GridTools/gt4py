@@ -271,7 +271,7 @@ def test_adr13_wrong_return_type_annotation():
     def wrong_return_type_annotation() -> gtx.Field[[], float]:
         return 1.0
 
-    with pytest.raises(errors.DSLError, match=r"expected 'float.*'"):
+    with pytest.raises(errors.DSLError, match=r"got 'float.*'"):
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
 
 

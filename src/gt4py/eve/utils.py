@@ -438,7 +438,10 @@ def optional_lru_cache(
     """
 
     def _decorator(func: Callable[_P, _T]) -> Callable[_P, _T]:
-        cached = functools.lru_cache(maxsize=maxsize, typed=typed)(func)
+        if maxsize is None and not typed:
+            cached = functools.cache(func)
+        else:
+            cached = functools.lru_cache(maxsize=maxsize, typed=typed)(func)
 
         @functools.wraps(func)
         def inner(*args: Any, **kwargs: Any) -> Any:

@@ -130,8 +130,8 @@ class VerticalLoop(TreeScope):
     iteration_variable: eve.SymbolRef
     """
     DaCe 1.x (without CFGs) maps sequential loops to a state machine with the iteration variable
-    on inter state edges. Having unique symbols makes DaCe 1.x happy allows renaming symbols via
-    search & replace.
+    on interstate edges. Having unique symbols makes DaCe 1.x happy and allows to rename symbols
+    via search & replace.
     """
     loop_order: common.LoopOrder
     bounds_k: Bounds
