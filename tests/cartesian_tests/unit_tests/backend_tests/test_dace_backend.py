@@ -8,6 +8,10 @@
 
 import pytest
 
+# Skip this module when we collecting tests and "dace" is not installed as a dependency.
+pytest.importorskip("dace")
+
+
 from dace import nodes
 
 from gt4py.cartesian import backend
