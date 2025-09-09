@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import dataclasses
-import warnings
 from typing import Any, Optional
 
 import dace
@@ -44,14 +43,12 @@ def find_constant_symbols(
                 h_dims = [dim for dim in p.type.dims if dim.kind == common.DimensionKind.HORIZONTAL]
                 if len(h_dims) == 0:
                     continue
-                elif len(h_dims) > 1:
-                    warnings.warn(
-                        f"Unsupported field with multiple horizontal dimensions '{p}'.",
-                        stacklevel=2,
-                    )
-                    continue
-                else:
+                elif len(h_dims) == 1:
                     dim = h_dims[0]
+                else:
+                    raise NotImplementedError(
+                        f"Unsupported field with multiple horizontal dimensions '{p}'."
+                    )
                 if isinstance(p.type.dtype, ts.ListType):
                     assert p.type.dtype.offset_type is not None
                     full_dims = common.order_dimensions([*p.type.dims, p.type.dtype.offset_type])
