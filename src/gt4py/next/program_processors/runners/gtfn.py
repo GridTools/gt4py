@@ -46,7 +46,7 @@ def convert_arg(arg: Any) -> Any:
 
 
 def convert_args(
-    inp: stages.ExtendedCompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
         *args: Any,

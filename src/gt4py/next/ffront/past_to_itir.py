@@ -109,7 +109,6 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         params=itir_program.params,
         declarations=itir_program.declarations,
         body=body,
-        implicit_domain=itir_program.implicit_domain,
     )
 
     if config.DEBUG or inp.data.debug:
@@ -239,10 +238,6 @@ class ProgramLowering(
 
         params = self.visit(node.params)
 
-        implicit_domain = False
-        if any("domain" not in body_entry.kwargs for body_entry in node.body):
-            implicit_domain = True
-
         set_ats = [self._visit_field_operator_call(stmt, **kwargs) for stmt in node.body]
         return itir.Program(
             id=node.id,
@@ -250,7 +245,6 @@ class ProgramLowering(
             params=params,
             declarations=[],
             body=set_ats,
-            implicit_domain=implicit_domain,
         )
 
     def _visit_field_operator_call(self, node: past.Call, **kwargs: Any) -> itir.SetAt:

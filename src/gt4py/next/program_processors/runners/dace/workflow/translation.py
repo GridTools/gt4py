@@ -291,7 +291,6 @@ class DaCeTranslator(
                 language_settings=languages.LanguageSettings(
                     formatter_key="", formatter_style="", file_extension="sdfg"
                 ),
-                implicit_domain=inp.data.implicit_domain,
             )
         )
         return module
