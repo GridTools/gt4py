@@ -14,7 +14,7 @@ from typing import Any, Optional, cast
 
 import devtools
 
-from gt4py.eve import NodeTranslator, concepts, traits, utils as eve_utils
+from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next import common, config, errors
 from gt4py.next.ffront import (
     fbuiltins,
@@ -314,14 +314,12 @@ class ProgramLowering(
 
     def _construct_itir_domain_arg(
         self,
-        out_field: past.Name | past.Subscript | past.Dict,
+        out_field: past.Name,
         node_domain: Optional[past.Expr],
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
         assert isinstance(out_field.type, ts.TypeSpec)
-        out_field_types = type_info.primitive_constituents(
-            out_field.type if hasattr(out_field, "type") else out_field
-        ).to_list()
+        out_field_types = type_info.primitive_constituents(out_field.type).to_list()
 
         out_dims = cast(ts.FieldType, out_field_types[0]).dims
         if any(
@@ -329,24 +327,16 @@ class ProgramLowering(
             for out_field_type in out_field_types
         ):
             raise AssertionError(
-                f"Expected constituents of '{getattr(out_field, 'id', out_field)}' argument to be"
+                f"Expected constituents of '{out_field.id}' argument to be"
                 " fields defined on the same dimensions. This error should be "
                 " caught in type deduction already."
             )
-        # if the out_field is a (potentially nested) tuple we get the domain from its first
-        # element
-        first_out_el_path = eve_utils.first(
-            type_info.primitive_constituents(out_field.type, with_path_arg=True)
-        )[1]
-        first_out_el = functools.reduce(
-            lambda expr, i: im.tuple_get(i, expr), first_out_el_path, out_field.id
-        )
 
         domain_args = []
         for dim_i, dim in enumerate(out_dims):
             # an expression for the range of a dimension
             dim_range = im.call("get_domain_range")(
-                first_out_el, itir.AxisLiteral(value=dim.value, kind=dim.kind)
+                out_field.id, itir.AxisLiteral(value=dim.value, kind=dim.kind)
             )
             dim_start, dim_stop = im.tuple_get(0, dim_range), im.tuple_get(1, dim_range)
             # bounds
