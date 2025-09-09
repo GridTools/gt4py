@@ -4,13 +4,11 @@ In the context of performance optimizations, comparing with other implementation
 
 ## Context
 
-During performance evaluation of the schedule tree based DaCe backend, we noticed that the direct oir -> schedule tree translation leaves us with a K-I-J loop structure (from outside in). This loops structure (and memory layout) is not 1:1 comparable to other implementations (e.g. the existing GridTools backends). We thus decided to write a pass to optionally change the loop order to be 1:1 comparable to the `gt:cpu_kfirst` backend. Inspired by the GridTools backends, we named that additional backend `dac:cpu_kfirst`.
+During performance evaluation of the schedule tree based DaCe backend, we noticed that the direct oir -> schedule tree translation leaves us with a K-I-J loop structure (from outside in). This loops structure (and memory layout) is not 1:1 comparable to other implementations (e.g. the existing GridTools backends).
 
 ## Decision
 
-What is the change that we're proposing and/or doing?
-
-We chose option X because [justification. e.g., only option, which meets k.o. criterion or decision driver | which resolves force | ... | comes out best (see below)].
+We decided to write a pass to optionally change the loop order to be 1:1 comparable to the `gt:cpu_kfirst` backend. Inspired by the GridTools backends, we named that additional backend `dace:cpu_kfirst`.
 
 ## Consequences
 
