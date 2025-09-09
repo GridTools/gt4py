@@ -28,6 +28,7 @@ from gt4py.next.type_system import type_specifications as ts
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     IDim,
     KDim,
+    V2EDim,
     Vertex,
     skip_value_mesh,
 )
@@ -56,7 +57,7 @@ def test_find_constant_symbols(has_unit_stride):
         id=f"find_constant_symbols_{int(has_unit_stride)}",
         function_definitions=[],
         params=[
-            itir.Sym(id="x", type=ts.FieldType(dims=[Vertex], dtype=FloatType)),
+            itir.Sym(id="x", type=ts.FieldType(dims=[Vertex, V2EDim, KDim], dtype=FloatType)),
             itir.Sym(id="y", type=ts.FieldType(dims=[Vertex, KDim], dtype=FloatType)),
             itir.Sym(id="h_size", type=IntType),
             itir.Sym(id="v_size", type=IntType),
@@ -64,7 +65,9 @@ def test_find_constant_symbols(has_unit_stride):
         declarations=[],
         body=[
             itir.SetAt(
-                expr=im.op_as_fieldop("plus")("x", 1.0),
+                expr=im.as_fieldop(
+                    im.lambda_("it")(im.reduce("plus", im.literal_from_value(1.0))(im.deref("it"))),
+                )("x"),
                 domain=im.domain(
                     gtx_common.GridType.UNSTRUCTURED,
                     ranges={Vertex: (0, "h_size"), KDim: (0, "v_size")},
@@ -76,7 +79,11 @@ def test_find_constant_symbols(has_unit_stride):
 
     sdfg = dace.SDFG(ir.id)
     x_size_0 = dace.symbol("__x_size_0", dace.int32)
+    x_size_1 = SKIP_VALUE_MESH.offset_provider_type["V2E"].max_neighbors
+    x_size_2 = dace.symbol("__x_size_0", dace.int32)
     x_stride_0 = dace.symbol("__x_stride_0", dace.int32)
+    x_stride_1 = dace.symbol("__x_stride_1", dace.int32)
+    x_stride_2 = dace.symbol("__x_stride_2", dace.int32)
     y_size_0 = dace.symbol("__y_size_0", dace.int32)
     y_size_1 = dace.symbol("__y_size_1", dace.int32)
     y_stride_0 = dace.symbol("__y_stride_0", dace.int32)
@@ -85,7 +92,12 @@ def test_find_constant_symbols(has_unit_stride):
     gt_conn_V2E_size_1 = SKIP_VALUE_MESH.offset_provider_type["V2E"].max_neighbors
     gt_conn_V2E_stride_0 = dace.symbol("__gt_conn_V2E_stride_0", dace.int32)
     gt_conn_V2E_stride_1 = dace.symbol("__gt_conn_V2E_stride_1", dace.int32)
-    sdfg.add_array("x", [x_size_0], dace.float64, strides=[x_stride_0])
+    sdfg.add_array(
+        "x",
+        [x_size_0, x_size_1, x_size_2],
+        dace.float64,
+        strides=[x_stride_0, x_stride_1, x_stride_2],
+    )
     sdfg.add_array("y", [y_size_0, y_size_1], dace.float64, strides=[y_stride_0, y_stride_1])
     sdfg.add_array(
         "gt_conn_V2E",
