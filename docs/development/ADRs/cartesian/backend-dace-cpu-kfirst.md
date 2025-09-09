@@ -1,6 +1,6 @@
 # Backend `dace:cpu_kfirst`
 
-In the context of performance optimizations, comparing with other implementations, we decided to add `dace:cpu_kfirst` next to `dace:cpu` (j-first layout) to achieve the same loop structure in the generated code. We considered replacing the default and accept the maintenance overhead of yet another backend.
+In the context of performance optimizations, comparing with other implementations, we decided to add `dace:cpu_kfirst` next to `dace:cpu` (j-first layout) to achieve the same loop structure in the generated code. We considered replacing the default and accept the maintenance overhead of another backend.
 
 ## Context
 
