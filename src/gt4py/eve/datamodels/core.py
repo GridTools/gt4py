@@ -1242,6 +1242,11 @@ def _make_datamodel(
     return new_cls
 
 
+class _DataModelGenericNameProperty:
+    def __get__(self, instance: Any, owner_class: type | None = None) -> str | None:
+        return owner_class.__name__.split("__")[0] if owner_class is not None else None
+
+
 @utils.optional_lru_cache(maxsize=None, typed=True)
 def _make_concrete_with_cache(
     datamodel_cls: Type[GenericDataModelT],
@@ -1309,6 +1314,9 @@ def _make_concrete_with_cache(
         **new_field_c_attrs,
     }
     concrete_cls = type(class_name, (datamodel_cls,), namespace)
+    concrete_cls.__datamodel_generic_name__ = (  # type: ignore[attr-defined]  # adding new attribute
+        _DataModelGenericNameProperty()
+    )
 
     # Update the tuple of generic parameters in the new class, in case
     # this is a partial concretization

@@ -36,7 +36,6 @@ from .concepts import (
     SourceLocationGroup,
     SymbolName,
     SymbolRef,
-    VType,
     register_annex_user,
 )
 from .datamodels import (
@@ -82,7 +81,6 @@ __all__ = [  # noqa: RUF022 `__all__` is not sorted
     "SourceLocationGroup",
     "SymbolName",
     "SymbolRef",
-    "VType",
     "register_annex_user",
     # datamodels
     "Coerced",
