@@ -40,7 +40,7 @@ class DaCeWorkflowFactory(factory.Factory):
         auto_optimize: bool = False
         make_persistent: bool = False
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
         )
 
@@ -73,6 +73,7 @@ class DaCeWorkflowFactory(factory.Factory):
         DaCeCompilationStepFactory,
         bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
+        device_type=factory.SelfAttribute("..device_type"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )
     decoration = factory.LazyAttribute(

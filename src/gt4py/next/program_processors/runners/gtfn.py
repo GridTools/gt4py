@@ -20,7 +20,7 @@ import gt4py.next.allocators as next_allocators
 from gt4py._core import locking
 from gt4py.next import backend, common, config, field_utils, metrics
 from gt4py.next.embedded import nd_array_field
-from gt4py.next.otf import arguments, recipes, stages, workflow
+from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -46,7 +46,7 @@ def convert_arg(arg: Any) -> Any:
 
 
 def convert_args(
-    inp: stages.ExtendedCompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
         *args: Any,
@@ -74,7 +74,6 @@ def convert_args(
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
         inp(
             *converted_args,
-            *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
             *conn_args,
             **opt_kwargs,
         )
@@ -141,10 +140,10 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
     class Params:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
         )
-        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(
+        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
 

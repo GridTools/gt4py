@@ -16,7 +16,6 @@ import dataclasses
 import itertools
 import math
 import operator
-import warnings
 
 import numpy as np
 import numpy.typing as npt
@@ -54,7 +53,6 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
-from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -102,27 +100,6 @@ Scalar: TypeAlias = (
 
 
 class SparseTag(Tag): ...
-
-
-@xtyping.deprecated("Use a 'Connectivity' instead.")
-def NeighborTableOffsetProvider(
-    table: core_defs.NDArrayObject,
-    origin_axis: common.Dimension,
-    neighbor_axis: common.Dimension,
-    max_neighbors: int,
-    has_skip_values=True,
-) -> common.Connectivity:
-    return common._connectivity(
-        table,
-        codomain=neighbor_axis,
-        domain={
-            origin_axis: table.shape[0],
-            common.Dimension(
-                value="_DummyLocalDim", kind=common.DimensionKind.LOCAL
-            ): max_neighbors,
-        },
-        skip_value=common._DEFAULT_SKIP_VALUE if has_skip_values else None,
-    )
 
 
 # TODO(havogt): complete implementation and make available for fieldview embedded
@@ -1110,27 +1087,6 @@ def _shift_field_indices(
     )
 
 
-def np_as_located_field(
-    *axes: common.Dimension, origin: Optional[dict[common.Dimension, int]] = None
-) -> Callable[[np.ndarray], common.Field]:
-    warnings.warn("`np_as_located_field()` is deprecated, use `gtx.as_field()`", DeprecationWarning)  # noqa: B028 [no-explicit-stacklevel]
-
-    origin = origin or {}
-
-    def _maker(a) -> common.Field:
-        if a.ndim != len(axes):
-            raise TypeError("'ndarray.ndim' is incompatible with number of given dimensions.")
-        ranges = []
-        for d, s in zip(axes, a.shape):
-            offset = origin.get(d, 0)
-            ranges.append(common.UnitRange(-offset, s - offset))
-
-        res = common._field(a, domain=common.Domain(dims=tuple(axes), ranges=tuple(ranges)))
-        return res
-
-    return _maker
-
-
 @dataclasses.dataclass(frozen=True)
 class IndexField(common.Field):
     """
@@ -1678,6 +1634,11 @@ def set_at(expr: common.Field, domain: common.DomainLike, target: common.Mutable
     operators._tuple_assign_field(target, expr, common.domain(domain))
 
 
+@runtime.get_domain_range.register(EMBEDDED)
+def get_domain_range(field: common.Field, dim: common.Dimension) -> tuple[int, int]:
+    return (field.domain[dim].unit_range.start, field.domain[dim].unit_range.stop)
+
+
 @runtime.if_stmt.register(EMBEDDED)
 def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[[], None]) -> None:
     """
@@ -1856,11 +1817,6 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             kwargs["column_axis"],
             common.UnitRange(0, 0),  # empty: indicates column operation, will update later
         )
-
-    import inspect
-
-    if len(args) < len(inspect.getfullargspec(fun).args):
-        args = (*args, *arguments.iter_size_args(args))
 
     with embedded_context.update(**context_vars):
         fun(*args)

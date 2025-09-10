@@ -84,29 +84,29 @@ def gt_gpu_transformation(
 
     # Now turn it into a GPU SDFG
     sdfg.apply_gpu_transformations(
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
         simplify=False,
     )
 
     # The documentation recommends to run simplify afterwards
-    gtx_transformations.gt_simplify(sdfg)
+    gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     if try_removing_trivial_maps:
         # TODO(phimuell): Figuring out if it is still important/needed to do or if
         #   it can be removed, it should definitely be reworked.
         gt_remove_trivial_gpu_maps(
             sdfg=sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
-        gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+        gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     # TODO(phimuell): Fixing the stride problem in DaCe.
     sdfg = gt_gpu_transform_non_standard_memlet(
         sdfg=sdfg,
         map_postprocess=True,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -117,6 +117,8 @@ def gt_gpu_transformation(
             block_size=gpu_block_size,
             launch_bounds=gpu_launch_bounds,
             launch_factor=gpu_launch_factor,
+            validate=False,
+            validate_all=validate_all,
         )
 
     if validate_all or validate:
@@ -188,6 +190,7 @@ def gt_gpu_transform_non_standard_memlet(
 
     # Now try to fuse the maps together, but restrict them that at least one map
     #  needs to be new.
+    # TODO(phimuell): Improve this by replacing it by an explicit loop.
     sdfg.apply_transformations_repeated(
         [
             gtx_transformations.MapFusionVertical(
@@ -199,7 +202,7 @@ def gt_gpu_transform_non_standard_memlet(
                 check_fusion_callback=restrict_fusion_to_newly_created_maps_horizontal,
             ),
         ],
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -241,6 +244,9 @@ def gt_gpu_transform_non_standard_memlet(
                 reversed(map_to_modify.range.ranges), reversed(map_to_modify.range.tile_sizes)
             )
         )
+
+    if validate or validate_all:
+        sdfg.validate()
 
     return sdfg
 
@@ -350,8 +356,10 @@ def gt_set_gpu_blocksize(
     block_size: Optional[Sequence[int | str] | str],
     launch_bounds: Optional[int | str] = None,
     launch_factor: Optional[int] = None,
+    validate: bool = True,
+    validate_all: bool = False,
     **kwargs: Any,
-) -> Any:
+) -> int:
     """Set the block size related properties of _all_ Maps.
 
     It supports the same arguments as `GPUSetBlockSize`, however it also has
@@ -364,6 +372,8 @@ def gt_set_gpu_blocksize(
         launch_bounds: The value for the launch bound that should be used.
         launch_factor: If no `launch_bounds` was given use the number of threads
             in a block multiplied by this number.
+        validate: Perform validation at the end of the function.
+        validate_all: Perform validation also on intermediate steps.
 
     Note:
         If a Map is found whose range is smaller than the specified block size for
@@ -377,7 +387,40 @@ def gt_set_gpu_blocksize(
         }.items():
             if f"{arg}_{dim}d" not in kwargs:
                 kwargs[f"{arg}_{dim}d"] = val
-    return sdfg.apply_transformations_once_everywhere(GPUSetBlockSize(**kwargs))
+
+    setter = GPUSetBlockSize(**kwargs)
+
+    configured_maps = 0
+    for state in sdfg.states():
+        scope_dict: Union[None, dict[Any, Any]] = None
+        cfg_id = state.parent_graph.cfg_id
+        state_id = state.block_id
+        for node in state.nodes():
+            if not isinstance(node, dace_nodes.MapEntry):
+                continue
+            if scope_dict is None:
+                scope_dict = state.scope_dict()
+            if scope_dict[node] is not None:
+                continue
+            candidate = {GPUSetBlockSize.map_entry: node}
+            setter.setup_match(
+                sdfg=sdfg,
+                cfg_id=cfg_id,
+                state_id=state_id,
+                subgraph=candidate,
+                expr_index=0,
+                override=True,
+            )
+            if setter.can_be_applied(state, 0, sdfg, False):
+                setter.apply(state, sdfg)
+                if validate_all:
+                    sdfg.validate()
+                configured_maps += 1
+
+    if validate and (not validate_all):
+        sdfg.validate()
+
+    return configured_maps
 
 
 def _make_gpu_block_parser_for(
@@ -491,6 +534,9 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         - "Over specification" is ignored, i.e. if `(32, 3, 1)` is passed as block
             size for 1 dimensional maps, then it is changed to `(32, 1, 1)`.
         - In case the Map has more than 3 dimension, normal DaCe semantic is used.
+
+    Todo:
+        - Turn this into a function.
     """
 
     _block_size_default: Final[tuple[int, int, int]] = (32, 1, 1)
@@ -656,6 +702,8 @@ def gt_remove_trivial_gpu_maps(
         sdfg: The SDFG that we process.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
+
+    Todo: Improve this function.
     """
 
     # First we try to promote and fuse them with other non-trivial maps.
@@ -665,9 +713,9 @@ def gt_remove_trivial_gpu_maps(
             only_gpu_maps=True,
         ),
         validate=False,
-        validate_all=False,
+        validate_all=validate_all,
     )
-    gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+    gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     # Now we try to fuse them together, however, we restrict the fusion to trivial
     #  GPU map.
@@ -696,6 +744,7 @@ def gt_remove_trivial_gpu_maps(
                 return False
         return True
 
+    # TODO(phimuell): Replace this with a more performant loop.
     sdfg.apply_transformations_repeated(
         [
             gtx_transformations.MapFusionVertical(
@@ -707,9 +756,12 @@ def gt_remove_trivial_gpu_maps(
                 check_fusion_callback=restrict_to_trivial_gpu_maps,
             ),
         ],
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
+
+    if validate and (not validate_all):
+        sdfg.validate()
 
     return sdfg
 
@@ -732,6 +784,8 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         - This transformation should not be run on its own, instead it
             is run within the context of `gt_gpu_transformation()`.
         - This transformation must be run after the GPU Transformation.
+
+    Todo: Figuring out if this transformation is still needed.
     """
 
     only_gpu_maps = dace_properties.Property(
@@ -827,17 +881,18 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         #  do a temporary promotion, it is important that we do not perform the
         #  renaming. If the old symbol is still used, it is used inside a tasklet
         #  so it would show up (temporarily) as free symbol.
+        # NOTE: We use the same options as in `MapPromoter`, however, since we do
+        #   not have the list of single use data available, we have to specify it.
         org_trivial_map_params = copy.deepcopy(trivial_map.params)
         org_trivial_map_range = copy.deepcopy(trivial_map.range)
         try:
             self._promote_map(graph, replace_trivail_map_parameter=False)
             if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
-                # `assume_always_shared` does not influences if Maps can be fused or not,
-                #  it only influences what happens to the intermediate storage. If we set
-                #  it we do not need to scan the entire SDFG.
                 options={
-                    "assume_always_shared": True,
+                    "only_toplevel_maps": True,
+                    "require_all_intermediates": True,
+                    "require_exclusive_intermediates": True,
                 },
                 first_map_exit=trivial_map_exit,
                 array=self.access_node,
@@ -864,15 +919,19 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         self._promote_map(graph)
 
         # Perform the fusing if requested.
+        #  For the selection of the option, see the `can_be_applied()` function.
         if not self.do_not_fuse:
-            # We can not specify `assume_always_shared` here, because we have to handle the
-            #  intermediate properly.
             gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
+                options={
+                    "only_toplevel_maps": True,
+                    "require_all_intermediates": True,
+                    "require_exclusive_intermediates": True,
+                },
                 first_map_exit=trivial_map_exit,
                 array=access_node,
                 second_map_entry=second_map_entry,
-                verify=True,
+                verify=False,  # Do not rerun `can_be_applied()`.
             )
 
     def _promote_map(
@@ -906,3 +965,22 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         # Now copy parameter and the ranges from the second to the trivial map.
         trivial_map.params = copy.deepcopy(second_map.params)
         trivial_map.range = copy.deepcopy(second_map.range)
+
+
+def gt_gpu_apply_mempool(sdfg: dace.SDFG) -> None:
+    """Enables the stream ordered memory allocator in CUDA code generation.
+
+    It sets the `pool` flag on all transients allocated in GPU global memory.
+    The dace code genarator will handle this flag by calling `cudaMallocAsync`
+    and `cudaFreeAsync` in the CUDA code for allocation/release of the buffers.
+
+    Args:
+        sdfg: The SDFG that should be processed.
+    """
+    for _, _, desc in sdfg.arrays_recursive():
+        if (
+            isinstance(desc, dace.data.Array)
+            and desc.storage == dace.StorageType.GPU_Global
+            and desc.transient
+        ):
+            desc.pool = True

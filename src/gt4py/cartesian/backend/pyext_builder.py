@@ -11,6 +11,7 @@ import copy
 import io
 import os
 import shutil
+import threading
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, TypedDict, Union
 
 import pybind11
@@ -20,6 +21,9 @@ from setuptools.command.build_ext import build_ext
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
+
+
+_SETUPTOOLS_LOCK = threading.Lock()
 
 
 class SetuptoolsArgs(TypedDict):
@@ -60,16 +64,19 @@ def get_gt_pyext_build_opts(
     is_rocm_gpu = core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
 
     if uses_cuda:
-        compute_capability = get_cuda_compute_capability()
-        cuda_arch = gt_config.build_settings["cuda_arch"] or compute_capability
-        if not cuda_arch:
-            raise RuntimeError("CUDA architecture could not be determined")
-        if cuda_arch.startswith("sm_"):
-            cuda_arch = cuda_arch.replace("sm_", "")
-        if compute_capability and int(compute_capability) < int(cuda_arch):
-            raise RuntimeError(
-                f"CUDA architecture {cuda_arch} exceeds compute capability {compute_capability}"
-            )
+        if is_rocm_gpu:
+            cuda_arch = gt_config.build_settings["cuda_arch"]
+        else:
+            compute_capability = get_cuda_compute_capability()
+            cuda_arch = gt_config.build_settings["cuda_arch"] or compute_capability
+            if not cuda_arch:
+                raise RuntimeError("CUDA architecture could not be determined")
+            if cuda_arch.startswith("sm_"):
+                cuda_arch = cuda_arch.replace("sm_", "")
+            if compute_capability and int(compute_capability) < int(cuda_arch):
+                raise RuntimeError(
+                    f"CUDA architecture {cuda_arch} exceeds compute capability {compute_capability}"
+                )
     else:
         cuda_arch = ""
 
@@ -98,6 +105,7 @@ def get_gt_pyext_build_opts(
             "-isystem{}".format(gt_include_path),
             "-fvisibility=hidden",
             "-fPIC",
+            *([f"--offload-arch={cuda_arch}"] if cuda_arch else []),
         ]
     else:
         extra_compile_args["cuda"] += [
@@ -178,15 +186,14 @@ def setuptools_setup(*, build_ext_class: type[build_ext] | None, **kwargs) -> No
     This is a workaround because any config file that sets an element of
     'cmdclass' will override (instead of extend) the 'cmdclass' dict passed
     as argument to 'setuptools.setup()'.
-
-    Note: This is NOT thread-safe.
     """
-    old_setup_stop_after = setuptools.distutils.core._setup_stop_after
-    setuptools.distutils.core._setup_stop_after = "commandline"
-    dist = setuptools.setup(**kwargs)
-    if build_ext_class is not None:
-        dist.cmdclass.update({"build_ext": build_ext_class})
-    setuptools.distutils.core._setup_stop_after = old_setup_stop_after
+    with _SETUPTOOLS_LOCK:
+        old_setup_stop_after = setuptools.distutils.core._setup_stop_after
+        setuptools.distutils.core._setup_stop_after = "commandline"
+        dist = setuptools.setup(**kwargs)
+        if build_ext_class is not None:
+            dist.cmdclass.update({"build_ext": build_ext_class})
+        setuptools.distutils.core._setup_stop_after = old_setup_stop_after
     setuptools.distutils.core.run_commands(dist)
 
 

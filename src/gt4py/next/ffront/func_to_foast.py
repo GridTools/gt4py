@@ -9,10 +9,9 @@
 from __future__ import annotations
 
 import ast
-import builtins
 import textwrap
 import typing
-from typing import Any, Callable, Iterable, Mapping, Type
+from typing import Any, Type
 
 import gt4py.eve as eve
 from gt4py.next import errors
@@ -35,7 +34,6 @@ from gt4py.next.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
-from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.ffront.stages import AOT_DSL_FOP, AOT_FOP, DSL_FOP, FOP
 from gt4py.next.otf import toolchain, workflow
@@ -158,7 +156,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         closure_vars: dict[str, Any],
         annotations: dict[str, Any],
     ) -> foast.FunctionDefinition:
-        foast_node, closure_vars = TypeAliasReplacement.apply(foast_node, closure_vars)
         foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
         foast_node = DeadClosureVarElimination.apply(foast_node)
         foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
@@ -173,63 +170,31 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                 raise errors.DSLError(
                     foast_node.location,
-                    "Annotated return type does not match deduced return type: expected "
-                    f"'{foast_node.type.returns}'"  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
-                    f", got '{annotated_return_type}'.",
+                    "Annotated return type does not match deduced return type: annotation is "
+                    f"'{annotated_return_type}'"  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
+                    f", got '{foast_node.type.returns}'.",
                 )
         return foast_node
 
-    def _builtin_type_constructor_symbols(
-        self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
-    ) -> tuple[list[foast.Symbol], Iterable[str]]:
-        result: list[foast.Symbol] = []
-        skipped_types = {"tuple"}
-        python_type_builtins: dict[str, Callable[[Any], Any]] = {
-            name: getattr(builtins, name)
-            for name in set(fbuiltins.TYPE_BUILTIN_NAMES) - skipped_types
-            if hasattr(builtins, name)
-        }
-        captured_type_builtins = {
-            name: value
-            for name, value in captured_vars.items()
-            if name in fbuiltins.TYPE_BUILTIN_NAMES and value is getattr(fbuiltins, name)
-        }
-        to_be_inserted = python_type_builtins | captured_type_builtins
-        for name, value in to_be_inserted.items():
-            result.append(
-                foast.Symbol(
-                    id=name,
-                    type=ts.FunctionType(
-                        pos_only_args=[
-                            ts.DeferredType(constraint=ts.ScalarType)
-                        ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
-                        pos_or_kw_args={},
-                        kw_only_args={},
-                        returns=typing.cast(ts.DataType, type_translation.from_type_hint(value)),
-                    ),
-                    namespace=dialect_ast_enums.Namespace.CLOSURE,
-                    location=location,
-                )
-            )
-
-        return result, to_be_inserted.keys()
-
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs: Any) -> foast.FunctionDefinition:
         loc = self.get_location(node)
-        closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
-            self.closure_vars, self.get_location(node)
-        )
+        closure_var_symbols: list[foast.Symbol] = []
         for name in self.closure_vars.keys():
-            if name in skip_names:
-                continue
-            closure_var_symbols.append(
-                foast.Symbol(
-                    id=name,
-                    type=ts.DeferredType(constraint=None),
-                    namespace=dialect_ast_enums.Namespace.CLOSURE,
-                    location=self.get_location(node),
+            try:
+                type_ = type_translation.from_value(self.closure_vars[name])
+                closure_var_symbols.append(
+                    foast.Symbol(
+                        id=name,
+                        type=type_,
+                        namespace=dialect_ast_enums.Namespace.CLOSURE,
+                        location=self.get_location(node),
+                    )
                 )
-            )
+            except ValueError as e:
+                raise errors.DSLTypeError(
+                    loc,
+                    f"Unexpected object '{name}' of type '{type(self.closure_vars[name])}' encountered.",
+                ) from e
 
         new_body = self._visit_stmts(node.body, self.get_location(node), **kwargs)
 
@@ -318,9 +283,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             raise errors.DSLError(self.get_location(node), "Can only assign to names.")
 
         if node.annotation is not None:
-            assert isinstance(node.annotation, ast.Constant), (
-                "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
-            )
+            assert isinstance(node.annotation, ast.Constant) and isinstance(
+                node.annotation.value, str
+            ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
+
             context = {**fbuiltins.BUILTINS, **self.closure_vars}
             annotation = eval(node.annotation.value, context)
             target_type = type_translation.from_type_hint(annotation, globalns=context)
@@ -335,31 +301,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=self.get_location(node),
         )
 
-    @staticmethod
-    def _match_index(node: ast.expr) -> int:
-        if isinstance(node, ast.Constant):
-            return node.value
-        if (
-            isinstance(node, ast.UnaryOp)
-            and isinstance(node.op, ast.unaryop)
-            and isinstance(node.operand, ast.Constant)
-        ):
-            if isinstance(node.op, ast.USub):
-                return -node.operand.value
-            if isinstance(node.op, ast.UAdd):
-                return node.operand.value
-        raise ValueError(f"Not an index: '{node}'.")
-
     def visit_Subscript(self, node: ast.Subscript, **kwargs: Any) -> foast.Subscript:
-        try:
-            index = self._match_index(node.slice)
-        except ValueError:
-            raise errors.DSLError(
-                self.get_location(node.slice), "Expected an integral index."
-            ) from None
-
         return foast.Subscript(
-            value=self.visit(node.value), index=index, location=self.get_location(node)
+            value=self.visit(node.value),
+            index=self.visit(node.slice),
+            location=self.get_location(node),
         )
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:

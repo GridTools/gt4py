@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from functools import reduce
+from typing import TypeAlias
 
 import numpy as np
 import pytest
@@ -564,6 +565,39 @@ def test_astype_float(cartesian_case):
         testee,
         ref=lambda a: a.astype(np.float32),
         comparison=lambda a, b: np.all(a == b),
+    )
+
+
+int_alias: TypeAlias = int64
+
+
+def test_astype_alias(cartesian_case):
+    @gtx.field_operator
+    def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int_alias]:
+        b = astype(a, int_alias)
+        return b
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a: a.astype(int_alias),
+        comparison=lambda a, b: np.all(a == b),
+    )
+
+
+def test_type_constructor_alias(cartesian_case):
+    @gtx.field_operator
+    def testee() -> gtx.Field[[IDim], int_alias]:
+        return broadcast(int_alias(42), (IDim,))
+
+    ref = cases.allocate(
+        cartesian_case, testee, cases.RETURN, strategy=cases.ConstInitializer(42)
+    )()
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda: ref,
     )
 
 
@@ -1258,4 +1292,25 @@ def test_constant_closure_vars(cartesian_case):
 
     cases.verify_with_default_data(
         cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
+    )
+
+
+def test_local_index_premapped_field(request, unstructured_case):
+    if request.node.get_closest_marker(pytest.mark.uses_mesh_with_skip_values.name):
+        pytest.skip("This test only works with non-skip value meshes.")
+
+    @gtx.field_operator
+    def testee(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex], int32]:
+        shifted = inp(V2E)
+        return shifted[V2EDim(0)] + shifted[V2EDim(1)] + shifted[V2EDim(2)] + shifted[V2EDim(3)]
+
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    cases.verify(
+        unstructured_case,
+        testee,
+        inp,
+        out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
+        ref=np.sum(inp.asnumpy()[v2e_table], axis=1),
     )

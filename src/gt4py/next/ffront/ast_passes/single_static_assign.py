@@ -78,7 +78,9 @@ class _AssignmentTracker:
 
 
 def _merge_assignment_tracker(a: _AssignmentTracker, b: _AssignmentTracker) -> _AssignmentTracker:
-    return _AssignmentTracker({k: max(a.count(k), b.count(k)) for k in (a.names() & b.names())})
+    return _AssignmentTracker(
+        {k: max(a.count(k), b.count(k)) for k in sorted(a.names() & b.names())}
+    )
 
 
 @dataclasses.dataclass

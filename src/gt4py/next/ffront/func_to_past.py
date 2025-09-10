@@ -13,6 +13,7 @@ import dataclasses
 import typing
 from typing import Any, cast
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -231,10 +232,15 @@ class ProgramParser(DialectParser[past.Program]):
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> past.Constant:
         loc = self.get_location(node)
-        if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
+        if (
+            isinstance(node.op, ast.USub)
+            and isinstance(node.operand, ast.Constant)
+            and core_defs.is_scalar_type(node.operand.value)
+            and not isinstance(node.operand.value, core_defs.BOOL_TYPES)
+        ):
             symbol_type = type_translation.from_value(node.operand.value)
             return past.Constant(value=-node.operand.value, type=symbol_type, location=loc)
-        raise errors.DSLError(loc, "Unary operators are only applicable to literals.")
+        raise errors.DSLError(loc, "Unary operators are only applicable to scalar literals.")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
         symbol_type = type_translation.from_value(node.value)
