@@ -12,6 +12,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
+    check_inout_field,
     concat_where,
     dead_code_elimination,
     fuse_as_fieldop,
@@ -91,6 +92,8 @@ def apply_common_transforms(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
+    ir = check_inout_field.CheckInOutField.apply(ir, offset_provider=offset_provider)
+
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
 
     ir = concat_where.transform_to_as_fieldop(ir)
