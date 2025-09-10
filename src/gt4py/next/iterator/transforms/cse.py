@@ -396,7 +396,7 @@ def extract_subexpression(
         if not eligible_ids:
             continue
 
-        expr_id = uid_generator.sequential_id()
+        expr_id = uid_generator.random_id()  # TODO: undo, but make sure we don't get collisions
         extracted[itir.Sym(id=expr_id)] = expr
         expr_ref = itir.SymRef(id=expr_id)
         for id_ in eligible_ids:

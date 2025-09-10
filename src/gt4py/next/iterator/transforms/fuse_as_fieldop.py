@@ -25,6 +25,7 @@ from gt4py.next.iterator.ir_utils import (
     misc as ir_misc,
 )
 from gt4py.next.iterator.transforms import (
+    cse,
     fixed_point_transformation,
     inline_center_deref_lift_vars,
     inline_lambdas,
@@ -182,6 +183,7 @@ def fuse_as_fieldop(
         new_stencil, opcount_preserving=True, force_inline_lift_args=True
     )
     new_stencil = inline_lifts.InlineLifts().visit(new_stencil)
+    new_stencil = cse.CommonSubexpressionElimination.apply(new_stencil, within_stencil=True)
 
     new_node = im.as_fieldop(new_stencil, domain)(*new_args.values())
 
