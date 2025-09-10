@@ -2,11 +2,15 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [1.0.9] - 2025-09-08
+## [1.0.9] - 2025-09-10
+
+### General
+
+- Performance optimizations in `eve.visitors` classes, by caching visitor methods at class level.
 
 ### Cartesian
 
-Several fixes in dace backend.
+- Some fixes in dace backend.
 
 ### Next
 
