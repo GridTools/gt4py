@@ -87,30 +87,55 @@ class NodeVisitor:
 
     """
 
+    #: Cache for visitor method names per node class to speed up dispatching.
+    #: Note that we cache the visitor method name, not the bound method itself,
+    #: to avoid implicitly caching the visitor state, which could lead to
+    #: unexpected behavior.
+    _node_visitor_cache_: ClassVar[dict[type, str] | None] = None
+
+    def __init_subclass__(cls) -> None:
+        super().__init_subclass__()
+        if "_node_visitor_cache_" not in cls.__dict__:
+            cls._node_visitor_cache_ = {}
+
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
-        visitor = self.generic_visit
+        """
+        Visit a node, dispatching to the appropriate visitor method.
 
-        class_name = node.__class__.__name__
-        if "__" in class_name:
+        The visitor method lookup follows the dispatching mechanism
+        described in the class docstring. Keyword arguments are
+        forwarded to the visitor method.
+        """
+        node_class = node.__class__
+
+        if (cache := self.__class__._node_visitor_cache_) is None or (
+            visitor_name := cache.get(node_class, None)
+        ) is None:
             # For concretized data model classes, use the generic name
-            class_name = class_name[: class_name.find("__")]
-        method_name = "visit_" + class_name
+            node_class_name = getattr(node_class, "__datamodel_generic_name__", node_class.__name__)
+            visitor_name = "visit_" + node_class_name
 
-        if hasattr(self, method_name):
-            visitor = getattr(self, method_name)
-        elif isinstance(node, concepts.Node):
-            for node_class in node.__class__.__mro__[1:]:
-                class_name = node_class.__name__
-                if "__" in class_name:
-                    class_name = class_name[: class_name.find("__")]
-                method_name = "visit_" + class_name
+            if not hasattr(self, visitor_name):
+                visitor_name = "generic_visit"
+                if isinstance(node, concepts.Node):
+                    for base_class in node_class.__mro__[1:-1]:
+                        if "__datamodel_generic_name__" in base_class.__dict__:
+                            node_class_name = base_class.__datamodel_generic_name__  # type: ignore[union-attr]
+                        else:
+                            node_class_name = base_class.__name__
+                        base_visitor_name = "visit_" + node_class_name
 
-                if hasattr(self, method_name):
-                    visitor = getattr(self, method_name)
-                    break
+                        if hasattr(self, base_visitor_name):
+                            visitor_name = base_visitor_name
+                            break
+                        if base_class is concepts.Node:
+                            break
 
-                if node_class is concepts.Node:
-                    break
+            assert hasattr(self, visitor_name)
+            if cache is not None:
+                cache[node_class] = visitor_name
+
+        visitor = getattr(self, visitor_name)
 
         return visitor(node, **kwargs)
 

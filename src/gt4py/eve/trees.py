@@ -89,8 +89,8 @@ register_tree_like(str, bytes, iter_values_fn=lambda _: iter(()), iter_items_fn=
 register_tree_like(
     collections.abc.Sequence,  # type: ignore[type-abstract]  # It should be concrete class
     collections.abc.Set,  # type: ignore[type-abstract]  # It should be concrete class
-    iter_values_fn=lambda x: iter(x),
-    iter_items_fn=lambda x: enumerate(x),
+    iter_values_fn=iter,
+    iter_items_fn=enumerate,
 )
 
 register_tree_like(
