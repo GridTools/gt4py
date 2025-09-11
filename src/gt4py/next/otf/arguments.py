@@ -10,27 +10,24 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-import functools
 import typing
-from pickletools import ArgumentDescriptor
-from typing import Any, Generic, Optional, TypeAlias
+from typing import Any, Generic, Mapping, Optional
 
 from typing_extensions import Self
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing
-from gt4py.next import common, utils, errors
+from gt4py.next import common, errors
 from gt4py.next.otf import toolchain, workflow
-from gt4py.next.type_system import type_specifications as ts, type_translation, type_info
-from gt4py.next.type_system.type_info import apply_to_primitive_constituents
+from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+
 
 DATA_T = typing.TypeVar("DATA_T")
 T = typing.TypeVar("T")
-TOrTupleOf: TypeAlias = T | tuple["TupleOf[T]", ...]
-ArgumentDescriptorT = typing.TypeVar("ArgumentDescriptorT", bound=ArgumentDescriptor)
+
 
 class ArgumentDescriptor:
-    def validate(self, name: str, type_: ts.TypeSpec):
+    def validate(self, name: str, type_: ts.TypeSpec) -> None:
         """
         Validate argument descriptor.
 
@@ -40,7 +37,7 @@ class ArgumentDescriptor:
         pass
 
     @classmethod
-    def attribute_extractor(cls, arg_expr: str) -> dict[str, str]:
+    def attribute_extractor(cls, arg_expr: str) -> dict[str, str]:  # type: ignore[empty-body]  # classmethod is abstract
         """
         Return a mapping from the attributes of our descriptor to the expressions to retrieve them.
 
@@ -51,16 +48,17 @@ class ArgumentDescriptor:
         """
         ...
 
-@dataclasses.dataclass(frozen=True)
-class StaticArg(ArgumentDescriptor, Generic[T]):
-    value: TOrTupleOf[core_defs.ScalarT]
 
-    def __post_init__(self):
+@dataclasses.dataclass(frozen=True)
+class StaticArg(ArgumentDescriptor, Generic[core_defs.ScalarT]):
+    value: extended_typing.MaybeNestedInTuple[core_defs.ScalarT]
+
+    def __post_init__(self) -> None:
         # transform enum value into the actual value
         if isinstance(self.value, enum.Enum):
             object.__setattr__(self, "value", self.value.value)
 
-    def validate(self, name: str, type_: ts.TypeSpec):
+    def validate(self, name: str, type_: ts.TypeSpec) -> None:
         if not type_info.is_type_or_tuple_of_type(type_, ts.ScalarType):
             raise errors.DSLTypeError(
                 message=f"Invalid static argument '{name}' with type '{type_}' (only scalars or (nested) tuples of scalars can be static).",
@@ -75,16 +73,9 @@ class StaticArg(ArgumentDescriptor, Generic[T]):
             )
 
     @classmethod
-    def attribute_extractor(cls, arg_expr: str):
+    def attribute_extractor(cls, arg_expr: str) -> dict[str, str]:
         return {"value": arg_expr}
 
-
-class _RuntimeArgument:
-    pass
-
-#: Sentinel value used to describe that there is no ArgumentDescriptor for an argument. Can be
-#: used by transformation passes for consistency checks.
-RUNTIME_ARGUMENT = _RuntimeArgument()
 
 @dataclasses.dataclass(frozen=True)
 class JITArgs:
@@ -106,7 +97,10 @@ class CompileTimeArgs:
     kwargs: dict[str, ts.TypeSpec]
     offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     column_axis: Optional[common.Dimension]
-    argument_descriptors: dict[type[ArgumentDescriptor], extended_typing.MaybeNestedInTuple[ArgumentDescriptor | _RuntimeArgument]]
+    argument_descriptors: Mapping[
+        type[ArgumentDescriptor],
+        dict[str, ArgumentDescriptor],
+    ]
 
     @property
     def offset_provider_type(self) -> common.OffsetProviderType:
@@ -123,6 +117,7 @@ class CompileTimeArgs:
             kwargs={
                 k: type_translation.from_value(v) for k, v in kwargs_copy.items() if v is not None
             },
+            argument_descriptors={},
         )
 
     @classmethod

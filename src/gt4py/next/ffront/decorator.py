@@ -283,7 +283,7 @@ class Program:
             backend=self.backend,
             definition_stage=self.definition_stage,
             program_type=program_type,
-            argument_descriptor_mapping=argument_descriptor_mapping,
+            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
         )
 
     def _extend_offset_provider(

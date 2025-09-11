@@ -64,9 +64,9 @@ def _validate_args(
 
 def _process_args(
     past_node: past.Program,
-    args: Sequence[ts.TypeSpec | arguments.StaticArg],
-    kwargs: dict[str, ts.TypeSpec | arguments.StaticArg],
-) -> tuple[tuple, dict[str, Any]]:
+    args: Sequence[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
+) -> tuple[tuple[ts.TypeSpec], dict[str, ts.TypeSpec]]:
     if not isinstance(past_node.type, ts_ffront.ProgramType):
         raise TypeError("Can not process arguments for PAST programs prior to type inference.")
 

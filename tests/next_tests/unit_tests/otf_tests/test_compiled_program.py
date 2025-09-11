@@ -16,6 +16,7 @@ from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
 
+
 def test_static_arg_from_enum():
     class SomeEnum(eve.IntEnum):
         FOO = 1
@@ -30,7 +31,9 @@ def test_static_args_non_scalar_type():
         match="only scalars.*can be static",
     ):
         static_arg = arguments.StaticArg(value=1)
-        static_arg.validate("foo", ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
+        static_arg.validate(
+            "foo", ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
+        )
 
 
 def test_sanitize_static_args_wrong_type():
@@ -73,8 +76,10 @@ def test_inlining_of_scalars_works():
         data=prog.definition_stage,
         args=arguments.CompileTimeArgs(
             args=list(prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
-            kwargs={}, offset_provider={}, column_axis=None,
-            argument_descriptors={arguments.StaticArg: {"cond": arguments.StaticArg(value=True)}}
+            kwargs={},
+            offset_provider={},
+            column_axis=None,
+            argument_descriptors={arguments.StaticArg: {"cond": arguments.StaticArg(value=True)}},
         ),
     )
 
