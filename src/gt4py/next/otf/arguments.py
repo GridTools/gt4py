@@ -9,24 +9,94 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 import typing
-from typing import Any, Generic, Optional
+from pickletools import ArgumentDescriptor
+from typing import Any, Generic, Optional, TypeAlias
 
 from typing_extensions import Self
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
+from gt4py.eve import extended_typing
+from gt4py.next import common, utils, Field, errors
 from gt4py.next.otf import toolchain, workflow
-from gt4py.next.type_system import type_specifications as ts, type_translation
-
+from gt4py.next.type_system import type_specifications as ts, type_translation, type_info
+from gt4py.next.type_system.type_info import apply_to_primitive_constituents
 
 DATA_T = typing.TypeVar("DATA_T")
+T = typing.TypeVar("T")
+TOrTupleOf: TypeAlias = T | tuple["TupleOf[T]", ...]
+ArgumentDescriptorT = typing.TypeVar("ArgumentDescriptorT", bound=ArgumentDescriptor)
 
+class PartialValue(Generic[ArgumentDescriptorT]):
+    attrs: dict[str, Any]
+    items: dict[Any, Any]
+
+    def __init__(self):
+        object.__setattr__(self, "attrs", {})
+        object.__setattr__(self, "items", {})
+
+    def __setattr__(self, key: str, value: Any) -> None:
+        object.__getattribute__(self, "attrs")[key] = value
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        object.__getattribute__(self, "items")[key] = value
+
+    @property
+    def empty(self):
+        return not self.attrs and not self.items
+
+class ArgumentDescriptor:
+    def validate(self, name: str, type_: ts.TypeSpec):
+        """
+        Validate argument descriptor.
+
+        This function is called when the type of the argument is available. The name is merely
+        given to give good error messages.
+        """
+        pass
+
+    @classmethod
+    def attribute_extractor(cls, arg_expr: str) -> dict[str, str]:
+        """
+        Return a mapping from the attributes of our descriptor to the expressions to retrieve them.
+
+        E.g. if `arg_expr` would be `myarg` and the result of this function
+        `{'value': 'my_arg.value'}` then the descriptor is constructed as
+        `ArgumentDescriptor(value=my_arg.value)`. We use expression here such that we can compute
+        a cache key by just hashing `my_arg.value` instead of first constructing the descriptor.
+        """
+        ...
 
 @dataclasses.dataclass(frozen=True)
-class StaticArg(Generic[core_defs.ScalarT]):
-    value: core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...]
-    type_: ts.TypeSpec
+class StaticArg(ArgumentDescriptor, Generic[T]):
+    value: TOrTupleOf[core_defs.ScalarT]
+
+    def validate(self, name: str, type_: ts.TypeSpec):
+        if not type_info.is_type_or_tuple_of_type(type_, ts.ScalarType):
+            raise errors.DSLTypeError(
+                message=f"Invalid static argument '{name}' with type '{type_}' (only scalars or (nested) tuples of scalars can be static).",
+                location=None,
+            )
+
+        actual_type = type_translation.from_value(self.value)
+        if actual_type != type_:
+            raise errors.DSLTypeError(
+                message=f"Invalid static argument '{name}', expected '{type_}', but static value '{self.value}' has type '{actual_type}'.",
+                location=None,
+            )
+
+    @classmethod
+    def attribute_extractor(cls, arg_expr: str):
+        return {"value": arg_expr}
+
+@dataclasses.dataclass(frozen=True)
+class FieldDomainDescriptor(ArgumentDescriptor):
+    domain: common.Domain
+
+    @classmethod
+    def attribute_extractor(cls, arg_expr: str):
+        return {"domain": f"({arg_expr}).domain"}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -45,10 +115,11 @@ class JITArgs:
 class CompileTimeArgs:
     """Compile-time standins for arguments to a GTX program to be used in ahead-of-time compilation."""
 
-    args: tuple[ts.TypeSpec | StaticArg, ...]
-    kwargs: dict[str, ts.TypeSpec | StaticArg]
+    args: tuple[ts.TypeSpec, ...]
+    kwargs: dict[str, ts.TypeSpec]
     offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     column_axis: Optional[common.Dimension]
+    argument_descriptors: dict[type[ArgumentDescriptor], PartialValue[ArgumentDescriptor]]
 
     @property
     def offset_provider_type(self) -> common.OffsetProviderType:
@@ -57,21 +128,23 @@ class CompileTimeArgs:
     @classmethod
     def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
         """Convert concrete GTX program arguments into their compile-time counterparts."""
-        compile_args = tuple(type_translation.from_value(arg) for arg in args)
-        kwargs_copy = kwargs.copy()
-        offset_provider = kwargs_copy.pop("offset_provider", {})
+        kwargs = kwargs.copy()
+        offset_provider = kwargs.pop("offset_provider", {})
+        column_axis = kwargs.pop("column_axis", None)
+        compile_args = tuple(StaticArg.from_value(arg) for arg in args)
+        compile_kwargs = {
+            k: StaticArg.from_value(v) for k, v in kwargs.items() if v is not None
+        }
         return cls(
             args=compile_args,
+            kwargs=compile_kwargs,
             offset_provider=offset_provider,
-            column_axis=kwargs_copy.pop("column_axis", None),
-            kwargs={
-                k: type_translation.from_value(v) for k, v in kwargs_copy.items() if v is not None
-            },
+            column_axis=column_axis,
         )
 
     @classmethod
     def empty(cls) -> Self:
-        return cls(tuple(), {}, {}, None)
+        return cls(tuple(), {}, {}, None, {})
 
 
 def jit_to_aot_args(
@@ -86,17 +159,3 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
 ]:
     """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
     return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
-
-
-def find_first_field(tuple_arg: tuple[Any, ...]) -> Optional[common.Field]:
-    for element in tuple_arg:
-        match element:
-            case tuple():
-                found = find_first_field(element)
-                if found:
-                    return found
-            case common.Field():
-                return element
-            case _:
-                pass
-    return None

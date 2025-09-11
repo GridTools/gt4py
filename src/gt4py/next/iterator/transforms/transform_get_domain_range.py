@@ -115,7 +115,4 @@ class TransformGetDomainRange(PreserveLocationVisitor, NodeTranslator):
         index = next((i for i, d in enumerate(domain.dims) if d.value == dim.value), None)
         assert index is not None, f"Dimension {dim.value} not found in {domain.dims}"
 
-        start = domain.ranges[index].start
-        stop = domain.ranges[index].stop
-        node = im.make_tuple(start, stop)
-        return node
+        return im.make_tuple(domain.ranges[index].start, domain.ranges[index].stop)

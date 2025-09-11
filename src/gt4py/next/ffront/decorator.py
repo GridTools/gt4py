@@ -110,6 +110,7 @@ class Program:
     static_params: (
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
+    static_domains: bool
 
     _extended_offset_provider_cache: eve_utils.CustomMapping = dataclasses.field(
         default_factory=lambda: eve_utils.CustomMapping(common.hash_offset_provider_unsafe),
@@ -125,6 +126,7 @@ class Program:
         grid_type: common.GridType | None = None,
         enable_jit: bool | None = None,
         static_params: Sequence[str] | None = None,
+        static_domains: bool = False,
         connectivities: Optional[
             common.OffsetProvider
         ] = None,  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
@@ -136,6 +138,7 @@ class Program:
             connectivities=connectivities,
             enable_jit=enable_jit,
             static_params=static_params,
+            static_domains=static_domains
         )
 
     # needed in testing
@@ -273,13 +276,29 @@ class Program:
         if self.static_params is None:
             object.__setattr__(self, "static_params", ())
 
+        def path_to_expr(path: Sequence[int]):
+            return "".join(map(lambda idx: f"[{idx}]", path))
+
+        static_domain_args = []
+        if self.static_domains:
+            func_type = self.past_stage.past_node.type.definition
+            param_types = func_type.pos_or_kw_args | func_type.kw_only_args
+            for name, type_ in param_types.items():
+                for el_type, path in type_info.primitive_constituents(type_, with_path_arg=True):
+                    static_domain_args.append(f"{name}{path_to_expr(path)}")
+
+        argument_descriptor_mapping = {
+            arguments.StaticArg: self.static_params,
+            arguments.FieldDomainDescriptor: static_domain_args
+        }
+
         program_type = self.past_stage.past_node.type
         assert isinstance(program_type, ts_ffront.ProgramType)
         return compiled_program.CompiledProgramsPool(
             backend=self.backend,
             definition_stage=self.definition_stage,
             program_type=program_type,
-            static_params=self.static_params,
+            argument_descriptor_mapping=argument_descriptor_mapping,
         )
 
     def _extend_offset_provider(
@@ -574,6 +593,7 @@ def program(
     grid_type: common.GridType | None,
     enable_jit: bool | None,
     static_params: Sequence[str] | None,
+    static_domains: bool,
     frozen: bool,
 ) -> Callable[[types.FunctionType], Program]: ...
 
@@ -586,6 +606,7 @@ def program(
     grid_type: common.GridType | None = None,
     enable_jit: bool | None = None,  # only relevant if static_params are set
     static_params: Sequence[str] | None = None,
+    static_domains: bool = False,
     frozen: bool = False,
 ) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:
     """
@@ -614,6 +635,7 @@ def program(
             ),
             grid_type=grid_type,
             enable_jit=enable_jit,
+            static_domains=static_domains,
             static_params=static_params,
         )
         if frozen:
