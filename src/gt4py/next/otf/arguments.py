@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
+import enum
 import functools
 import typing
 from pickletools import ArgumentDescriptor
@@ -27,24 +28,6 @@ DATA_T = typing.TypeVar("DATA_T")
 T = typing.TypeVar("T")
 TOrTupleOf: TypeAlias = T | tuple["TupleOf[T]", ...]
 ArgumentDescriptorT = typing.TypeVar("ArgumentDescriptorT", bound=ArgumentDescriptor)
-
-class PartialValue(Generic[ArgumentDescriptorT]):
-    attrs: dict[str, Any]
-    items: dict[Any, Any]
-
-    def __init__(self):
-        object.__setattr__(self, "attrs", {})
-        object.__setattr__(self, "items", {})
-
-    def __setattr__(self, key: str, value: Any) -> None:
-        object.__getattribute__(self, "attrs")[key] = value
-
-    def __setitem__(self, key: Any, value: Any) -> None:
-        object.__getattribute__(self, "items")[key] = value
-
-    @property
-    def empty(self):
-        return not self.attrs and not self.items
 
 class ArgumentDescriptor:
     def validate(self, name: str, type_: ts.TypeSpec):
@@ -72,6 +55,11 @@ class ArgumentDescriptor:
 class StaticArg(ArgumentDescriptor, Generic[T]):
     value: TOrTupleOf[core_defs.ScalarT]
 
+    def __post_init__(self):
+        # transform enum value into the actual value
+        if isinstance(self.value, enum.Enum):
+            object.__setattr__(self, "value", self.value.value)
+
     def validate(self, name: str, type_: ts.TypeSpec):
         if not type_info.is_type_or_tuple_of_type(type_, ts.ScalarType):
             raise errors.DSLTypeError(
@@ -90,6 +78,13 @@ class StaticArg(ArgumentDescriptor, Generic[T]):
     def attribute_extractor(cls, arg_expr: str):
         return {"value": arg_expr}
 
+
+class _RuntimeArgument:
+    pass
+
+#: Sentinel value used to describe that there is no ArgumentDescriptor for an argument. Can be
+#: used by transformation passes for consistency checks.
+RUNTIME_ARGUMENT = _RuntimeArgument()
 
 @dataclasses.dataclass(frozen=True)
 class JITArgs:
@@ -111,7 +106,7 @@ class CompileTimeArgs:
     kwargs: dict[str, ts.TypeSpec]
     offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     column_axis: Optional[common.Dimension]
-    argument_descriptors: dict[type[ArgumentDescriptor], PartialValue[ArgumentDescriptor]]
+    argument_descriptors: dict[type[ArgumentDescriptor], extended_typing.MaybeNestedInTuple[ArgumentDescriptor | _RuntimeArgument]]
 
     @property
     def offset_provider_type(self) -> common.OffsetProviderType:

@@ -40,13 +40,15 @@ def _hash_compiled_program_unsafe(cp_key: CompiledProgramsKey) -> int:
 def _make_tuple_expr(el_exprs):
     return "".join((f"{el},") for el in el_exprs)
 
+def _make_param_context_from_func_type(func_type: ts.FunctionType, type_map: Callable[[ts.TypeSpec], Any] = lambda x: x):
+    params = func_type.pos_or_kw_args | func_type.kw_only_args
+    return {param: type_info.apply_to_primitive_constituents(
+        type_map, type_, tuple_constructor=lambda *els: tuple(els)
+    ) for param, type_ in params.items()}
+
 def _get_type_of_param_expr(program_type: ts_ffront.ProgramType, expr: str):
     # TODO: error handling
-    func_type = program_type.definition
-    params = func_type.pos_or_kw_args | func_type.kw_only_args
-    vars = {param: type_info.apply_to_primitive_constituents(lambda x: x, type_, tuple_constructor=lambda *els: tuple(els))
-            for param, type_ in params.items()}
-    return eval(expr, vars)
+    return eval(expr, _make_param_context_from_func_type(program_type.definition))
 
 @dataclasses.dataclass
 class CompiledProgramsPool:
@@ -81,11 +83,12 @@ class CompiledProgramsPool:
         init=False,
     )  # cache the offset provider type in order to avoid recomputing it at each program call
 
-    def __postinit__(self) -> None:
+    def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
         assert not self.program_type.definition.kw_only_args
         assert not self.program_type.definition.pos_only_args
+        self._validate_argument_descriptor_mapping()
 
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
@@ -164,15 +167,30 @@ class CompiledProgramsPool:
                 for expr, attr in expr_descriptor_attr_mapping.items():
                     descriptor = descriptor_cls(**attr(*args, **kwargs))
                     descriptors[descriptor_cls][expr] = descriptor
-            self.validate_argument_descriptors(descriptors)
+            self._validate_argument_descriptors(descriptors)
             return descriptors
         return _impl
 
-    def validate_argument_descriptors(self, all_descriptors: dict[type[arguments.ArgumentDescriptor], dict[str, arguments.ArgumentDescriptor]]):
+    def _validate_argument_descriptors(self, all_descriptors: dict[type[arguments.ArgumentDescriptor], dict[str, arguments.ArgumentDescriptor]]):
         for descriptors in all_descriptors.values():
             for expr, descriptor in descriptors.items():
                 param_type = _get_type_of_param_expr(self.program_type, expr)  # TODO: error handling if type is wrong
                 descriptor.validate(expr, param_type)
+
+    def _validate_argument_descriptor_mapping(self):
+        if self.argument_descriptor_mapping is None:
+            return
+        context = _make_param_context_from_func_type(self.program_type.definition, lambda x: None)
+        for descr_cls, exprs in self.argument_descriptor_mapping.items():
+            for expr in exprs:
+                try:
+                    assert eval(expr, context) == None
+                except:
+                    raise errors.DSLTypeError(
+                        message=f"Invalid parameter expression '{expr}' for '{descr_cls.__name__}'. "
+                                f"Must be the name of a parameter or an access to one of its elements.",
+                        location=None,
+                    )
 
     def _compile_variant(
         self,
@@ -181,6 +199,7 @@ class CompiledProgramsPool:
     ) -> None:
         if self.argument_descriptor_mapping is None:
             self.argument_descriptor_mapping = {descr_cls: descriptor_expr_mapping.keys() for descr_cls, descriptor_expr_mapping in argument_descriptors.items()}
+            self._validate_argument_descriptor_mapping()
         else:
             for descr_cls, descriptor_expr_mapping in argument_descriptors.items():
                 if (expected := set(self.argument_descriptor_mapping[descr_cls])) != (got := set(descriptor_expr_mapping.keys())):
@@ -188,19 +207,15 @@ class CompiledProgramsPool:
                         f"Argument descriptor {descr_cls.__name__} must be the same for all compiled programs. Got {list(got)}, expected {list(expected)}."
                     )
 
-        self.validate_argument_descriptors(argument_descriptors)
+        self._validate_argument_descriptors(argument_descriptors)
 
-        assert self.argument_descriptor_mapping is not None
-
-        named_params = self.program_type.definition.pos_or_kw_args.keys() | self.program_type.definition.kw_only_args.keys()
-
-        # TODO: use full structure
-        # TODO: check that
-        structured_descriptors = DefaultDict(lambda: {k: arguments.PartialValue() for k in named_params})
+        structured_descriptors = {}
         for descriptor_cls, descriptor_expr_mapping in argument_descriptors.items():
-            assert "__descriptor" not in structured_descriptors
+            structured_descriptors[descriptor_cls] = _make_param_context_from_func_type(self.program_type.definition, lambda x: arguments.RUNTIME_ARGUMENT)
+            assert "__descriptor" not in structured_descriptors[descriptor_cls]
             for expr, descriptor in descriptor_expr_mapping.items():
-                # TODO: gracefully catch error
+                # note: we don't need to handle any errors here since the `expr` has been validated
+                #  in `_validate_argument_descriptor_mapping`
                 exec(f"{expr} = __descriptor", {"__descriptor": descriptor}, structured_descriptors[descriptor_cls])
 
         key = (
