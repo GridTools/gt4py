@@ -43,7 +43,7 @@ class ArgumentDescriptor:
 
         E.g. if `arg_expr` would be `myarg` and the result of this function
         `{'value': 'my_arg.value'}` then the descriptor is constructed as
-        `ArgumentDescriptor(value=my_arg.value)`. We use expression here such that we can compute
+        `ArgumentDescriptor(value=my_arg.value)`. We use an expression here such that we can compute
         a cache key by just hashing `my_arg.value` instead of first constructing the descriptor.
         """
         ...
