@@ -34,6 +34,10 @@ CompiledProgramsKey: TypeAlias = tuple[
 ArgumentDescriptors: TypeAlias = dict[
     type[arguments.ArgumentDescriptor], dict[str, arguments.ArgumentDescriptor]
 ]
+StructuredArgumentDescriptors: TypeAlias = dict[
+    type[arguments.ArgumentDescriptor],
+    dict[str, extended_typing.MaybeNestedInTuple[arguments.ArgumentDescriptor | None]],
+]
 
 
 def _hash_compiled_program_unsafe(cp_key: CompiledProgramsKey) -> int:
@@ -150,10 +154,7 @@ class CompiledProgramsPool:
 
     def _argument_descriptor_cache_key_from_structured_descriptors(
         self,
-        argument_descriptors: dict[
-            type[arguments.ArgumentDescriptor],
-            dict[str, extended_typing.MaybeNestedInTuple[arguments.ArgumentDescriptor | None]],
-        ],
+        structured_descriptors: StructuredArgumentDescriptors,
     ) -> tuple:
         elements = []
         for descriptor_cls, arg_exprs in self.argument_descriptor_mapping.items():  # type: ignore[union-attr]  # can never be `None` at this point
@@ -162,7 +163,7 @@ class CompiledProgramsPool:
                 attrs = attr_extractor.keys()
                 for attr in attrs:
                     elements.append(
-                        getattr(eval(f"{arg_expr}", argument_descriptors[descriptor_cls]), attr)
+                        getattr(eval(f"{arg_expr}", structured_descriptors[descriptor_cls]), attr)
                     )
         return tuple(elements)
 
@@ -249,7 +250,7 @@ class CompiledProgramsPool:
 
         self._validate_argument_descriptors(argument_descriptors)
 
-        structured_descriptors = {}
+        structured_descriptors: StructuredArgumentDescriptors = {}
         for descriptor_cls, descriptor_expr_mapping in argument_descriptors.items():
             structured_descriptors[descriptor_cls] = _make_param_context_from_func_type(
                 self.program_type.definition, lambda x: None
