@@ -13,7 +13,7 @@ import dataclasses
 import functools
 import itertools
 from collections.abc import Sequence
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, Callable, DefaultDict
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing, utils as eve_utils
@@ -37,75 +37,16 @@ def _hash_compiled_program_unsafe(cp_key: CompiledProgramsKey) -> int:
     assert common.is_offset_provider_type(offset_provider)
     return hash((values, id(offset_provider)))
 
+def _make_tuple_expr(el_exprs):
+    return "".join((f"{el},") for el in el_exprs)
 
-def _validate_types(
-    program_name: str,
-    static_args: dict[str, ScalarOrTupleOfScalars],
-    program_type: ts_ffront.ProgramType,
-) -> None:
-    unknown_args = list(
-        set(static_args.keys()) - set(program_type.definition.pos_or_kw_args.keys())
-    )
-    if unknown_args:
-        raise errors.DSLTypeError(
-            message=f"Invalid static arguments provided for '{program_name}' with type '{program_type}', the following are not parameters of the program:\n"
-            + ("\n".join([f"  - '{arg}'" for arg in unknown_args])),
-            location=None,
-        )
-
-    param_types = program_type.definition.pos_or_kw_args
-
-    if type_errors := [
-        f"'{name}' with type '{param_types[name]}' cannot be static."
-        for name in static_args
-        if not type_info.is_type_or_tuple_of_type(param_types[name], ts.ScalarType)
-    ]:
-        raise errors.DSLTypeError(
-            message=f"Invalid static arguments provided for '{program_name}' with type '{program_type}' (only scalars or (nested) tuples of scalars can be static):\n"
-            + ("\n".join([f"  - {error}" for error in type_errors])),
-            location=None,
-        )
-
-    static_arg_types = {name: tt.from_value(value) for name, value in static_args.items()}
-    types_from_values = [
-        static_arg_types[name]  # use type of the provided value for the static arguments
-        if name in static_arg_types
-        else type_  # else use the type from progam_type which will never mismatch
-        for name, type_ in program_type.definition.pos_or_kw_args.items()
-    ]
-    assert not program_type.definition.pos_only_args
-    assert not program_type.definition.kw_only_args
-
-    if mismatch_errors := list(
-        type_info.function_signature_incompatibilities(
-            program_type, args=types_from_values, kwargs={}
-        )
-    ):
-        raise errors.DSLTypeError(
-            message=f"Invalid static argument types when trying to compile '{program_name}' with type '{program_type}':\n"
-            + ("\n".join([f"  - {error}" for error in mismatch_errors])),
-            location=None,
-        )
-
-
-def _sanitize_static_args(
-    program_name: str,
-    static_args: dict[str, ScalarOrTupleOfScalars],
-    program_type: ts_ffront.ProgramType,
-) -> dict[str, ScalarOrTupleOfScalars]:
-    """
-    Sanitize static arguments to be used in the program compilation.
-
-    This function will convert all values to their corresponding type
-    and check that the types are compatible with the program type.
-    """
-    _validate_types(program_name, static_args, program_type)
-
-    return {
-        name: tt.unsafe_cast_to(value, program_type.definition.pos_or_kw_args[name])  # type: ignore[arg-type] # checked in _validate_types
-        for name, value in static_args.items()
-    }
-
+def _get_type_of_param_expr(program_type: ts_ffront.ProgramType, expr: str):
+    # TODO: error handling
+    func_type = program_type.definition
+    params = func_type.pos_or_kw_args | func_type.kw_only_args
+    vars = {param: type_info.apply_to_primitive_constituents(lambda x: x, type_, tuple_constructor=lambda *els: tuple(els))
+            for param, type_ in params.items()}
+    return eval(expr, vars)
 
 @dataclasses.dataclass
 class CompiledProgramsPool:
@@ -125,7 +66,10 @@ class CompiledProgramsPool:
     backend: gtx_backend.Backend
     definition_stage: ffront_stages.ProgramDefinition
     program_type: ts_ffront.ProgramType
-    static_params: Sequence[str] | None = None  # not ordered
+    #: mapping from an argument descriptor type to a list of parameters or expression thereof
+    #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
+    #: Note: The list is not ordered.
+    argument_descriptor_mapping: dict[type[arguments.ArgumentDescriptor], list[str]] | None
 
     _compiled_programs: eve_utils.CustomMapping = dataclasses.field(
         default_factory=lambda: eve_utils.CustomMapping(_hash_compiled_program_unsafe),
@@ -154,7 +98,8 @@ class CompiledProgramsPool:
         it is an error.
         """
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
-        static_args_values = tuple(args[i] for i in self._static_arg_indices)
+        static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
+        # TODO: dispatching over offset provider type is wrong. especially when we use compile time domains. test?
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
         try:
             self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)
@@ -164,45 +109,102 @@ class CompiledProgramsPool:
             program(*args, **kwargs, offset_provider=offset_provider)
         except KeyError as e:
             if enable_jit:
-                assert self.static_params is not None
-                static_args = {
-                    name: value
-                    for name, value in zip(self.static_params, static_args_values, strict=True)
-                }
-                self._compile_variant(static_args=static_args, offset_provider=offset_provider)
+                assert self.argument_descriptor_mapping is not None
+                self._compile_variant(
+                    argument_descriptors=self._make_argument_descriptors(*args, **kwargs),
+                    offset_provider=offset_provider
+                )
                 return self(
                     *args, offset_provider=offset_provider, enable_jit=False, **kwargs
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 
+    # TODO: test that compares _argument_descriptor_cache_key_from_args with _argument_descriptor_cache_key_from_descriptor
     @functools.cached_property
-    def _static_arg_indices(self) -> tuple[int, ...]:
-        if self.static_params is None:
-            # this could also be done in `__call__` but would be an extra if in the fast path
-            self.static_params = ()
+    def _argument_descriptor_cache_key_from_args(self) -> Callable:
+        func_type = self.program_type.definition
+        params = func_type.pos_only_args + list(func_type.pos_or_kw_args.keys()) + list(func_type.kw_only_args.keys())
+        elements = []
+        for descriptor_cls, arg_exprs in self.argument_descriptor_mapping.items():
+            for arg_expr in arg_exprs:
+                attr_extractor = descriptor_cls.attribute_extractor(arg_expr)
+                elements.extend(attr_extractor.values())
+        return eval(f"""lambda {",".join(params)}: ({_make_tuple_expr(elements)})""")
 
-        all_params = list(self.program_type.definition.pos_or_kw_args.keys())
-        return tuple(all_params.index(p) for p in self.static_params)
+    def _argument_descriptor_cache_key_from_descriptor(self, argument_descriptors: dict[type[arguments.ArgumentDescriptor], dict[str, arguments.ArgumentDescriptor]]) -> tuple:
+        elements = []
+        for descriptor_cls, arg_exprs in self.argument_descriptor_mapping.items():
+            for arg_expr in arg_exprs:
+                attr_extractor = descriptor_cls.attribute_extractor(arg_expr)
+                attrs = attr_extractor.keys()
+                for attr in attrs:
+                    elements.append(getattr(eval(f"{arg_expr}", argument_descriptors[descriptor_cls]), attr))
+        return tuple(elements)
+
+    @functools.cached_property
+    def _make_argument_descriptors(self) -> Callable:
+        def make_dict_expr(exprs: dict[str, str]):
+            return "{"+",".join((f"'{k}': {v}" for k, v in exprs.items()))+"}"
+
+        # for each argument expression build a lambda function that constructs (the attributes of)
+        # its argument descriptor
+        func_type = self.program_type.definition
+        params = func_type.pos_only_args + list(func_type.pos_or_kw_args.keys()) + list(
+            func_type.kw_only_args.keys())
+        descriptor_attrs = DefaultDict(dict)
+        for descriptor_cls, arg_exprs in self.argument_descriptor_mapping.items():
+            for arg_expr in arg_exprs:
+                attr_exprs = descriptor_cls.attribute_extractor(arg_expr)
+                descriptor_attrs[descriptor_cls][arg_expr] = eval(f"""lambda {",".join(params)}: {make_dict_expr(attr_exprs)}""")
+
+        def _impl(*args, **kwargs):
+            descriptors = {}
+            for descriptor_cls, expr_descriptor_attr_mapping in descriptor_attrs.items():
+                descriptors[descriptor_cls] = {}
+                for expr, attr in expr_descriptor_attr_mapping.items():
+                    descriptor = descriptor_cls(**attr(*args, **kwargs))
+                    descriptors[descriptor_cls][expr] = descriptor
+            self.validate_argument_descriptors(descriptors)
+            return descriptors
+        return _impl
+
+    def validate_argument_descriptors(self, all_descriptors: dict[type[arguments.ArgumentDescriptor], dict[str, arguments.ArgumentDescriptor]]):
+        for descriptors in all_descriptors.values():
+            for expr, descriptor in descriptors.items():
+                param_type = _get_type_of_param_expr(self.program_type, expr)  # TODO: error handling if type is wrong
+                descriptor.validate(expr, param_type)
 
     def _compile_variant(
         self,
-        static_args: dict[str, ScalarOrTupleOfScalars],
+        argument_descriptors: dict[type[arguments.ArgumentDescriptor], dict[str, arguments.ArgumentDescriptor]],
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
     ) -> None:
-        assert self.static_params is not None
-        static_args = _sanitize_static_args(
-            self.definition_stage.definition.__name__, static_args, self.program_type
-        )
+        if self.argument_descriptor_mapping is None:
+            self.argument_descriptor_mapping = {descr_cls: descriptor_expr_mapping.keys() for descr_cls, descriptor_expr_mapping in argument_descriptors.items()}
+        else:
+            for descr_cls, descriptor_expr_mapping in argument_descriptors.items():
+                if (expected := set(self.argument_descriptor_mapping[descr_cls])) != (got := set(descriptor_expr_mapping.keys())):
+                    raise ValueError(
+                        f"Argument descriptor {descr_cls.__name__} must be the same for all compiled programs. Got {list(got)}, expected {list(expected)}."
+                    )
 
-        args = tuple(
-            arguments.StaticArg(value=static_args[name], type_=type_)
-            if name in self.static_params
-            else type_
-            for name, type_ in self.program_type.definition.pos_or_kw_args.items()
-        )
+        self.validate_argument_descriptors(argument_descriptors)
+
+        assert self.argument_descriptor_mapping is not None
+
+        named_params = self.program_type.definition.pos_or_kw_args.keys() | self.program_type.definition.kw_only_args.keys()
+
+        # TODO: use full structure
+        # TODO: check that
+        structured_descriptors = DefaultDict(lambda: {k: arguments.PartialValue() for k in named_params})
+        for descriptor_cls, descriptor_expr_mapping in argument_descriptors.items():
+            assert "__descriptor" not in structured_descriptors
+            for expr, descriptor in descriptor_expr_mapping.items():
+                # TODO: gracefully catch error
+                exec(f"{expr} = __descriptor", {"__descriptor": descriptor}, structured_descriptors[descriptor_cls])
 
         key = (
-            tuple(static_args[p] for p in self.static_params),
+            self._argument_descriptor_cache_key_from_descriptor(structured_descriptors),
             self._offset_provider_to_type_unsafe(offset_provider),
         )
         if key in self._compiled_programs:
@@ -211,8 +213,9 @@ class CompiledProgramsPool:
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
             column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
-            args=args,
-            kwargs={},
+            args=tuple(self.program_type.definition.pos_only_args) + tuple(self.program_type.definition.pos_or_kw_args.values()),
+            kwargs=self.program_type.definition.kw_only_args,
+            argument_descriptors=argument_descriptors,
         )
         self._compiled_programs[key] = _async_compilation_pool.submit(
             self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
@@ -250,17 +253,12 @@ class CompiledProgramsPool:
             pool.compile(static_arg0=[0], static_arg1=[2]).compile(static_arg=[1], static_arg1=[3])
                 will compile for (0,2), (1,3)
         """
-        if self.static_params is None:
-            self.static_params = tuple(static_args.keys())
-        elif set(self.static_params) != set(static_args.keys()):
-            raise ValueError(
-                f"Static arguments must be the same for all compiled programs. Got {list(static_args.keys())}, expected {self.static_params}."
-            )
-
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
                 self._compile_variant(
-                    dict(zip(static_args.keys(), static_values, strict=True)),
+                    argument_descriptors={
+                        arguments.StaticArg: dict(zip(static_args.keys(), map(arguments.StaticArg, static_values), strict=True)),
+                    },
                     offset_provider=offset_provider,
                 )
 

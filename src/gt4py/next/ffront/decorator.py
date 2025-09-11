@@ -273,13 +273,20 @@ class Program:
         if self.static_params is None:
             object.__setattr__(self, "static_params", ())
 
+        def path_to_expr(path: Sequence[int]):
+            return "".join(map(lambda idx: f"[{idx}]", path))
+
+        argument_descriptor_mapping = {
+            arguments.StaticArg: self.static_params,
+        }
+
         program_type = self.past_stage.past_node.type
         assert isinstance(program_type, ts_ffront.ProgramType)
         return compiled_program.CompiledProgramsPool(
             backend=self.backend,
             definition_stage=self.definition_stage,
             program_type=program_type,
-            static_params=self.static_params,
+            argument_descriptor_mapping=argument_descriptor_mapping,
         )
 
     def _extend_offset_provider(

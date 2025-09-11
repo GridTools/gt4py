@@ -138,12 +138,13 @@ def _verify_program_has_expected_true_value(program: itir.Program):
 
 
 def test_inlining_of_scalars_works():
-    args = prog.past_stage.past_node.type.definition.pos_or_kw_args
-    args = [arguments.StaticArg(value=True, type_=v) if k == "cond" else v for k, v in args.items()]
-
     input_pair = toolchain.CompilableProgram(
         data=prog.definition_stage,
-        args=arguments.CompileTimeArgs(args=args, kwargs={}, offset_provider={}, column_axis=None),
+        args=arguments.CompileTimeArgs(
+            args=list(prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
+            kwargs={}, offset_provider={}, column_axis=None,
+            argument_descriptors={arguments.StaticArg: {"cond": arguments.StaticArg(value=True)}}
+        ),
     )
 
     transformed = backend.DEFAULT_TRANSFORMS(input_pair).data
