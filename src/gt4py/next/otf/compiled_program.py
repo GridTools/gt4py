@@ -176,8 +176,6 @@ class CompiledProgramsPool:
         def make_dict_expr(exprs: dict[str, str]) -> str:
             return "{" + ",".join((f"'{k}': {v}" for k, v in exprs.items())) + "}"
 
-        #
-        # its argument descriptor
         func_type = self.program_type.definition
         params = list(func_type.pos_or_kw_args.keys()) + list(func_type.kw_only_args.keys())
         retrievers: dict[type[arguments.ArgumentDescriptor], dict[str, Callable]] = DefaultDict(
