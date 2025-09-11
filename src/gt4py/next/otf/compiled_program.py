@@ -244,7 +244,7 @@ class CompiledProgramsPool:
                     got := set(descriptor_expr_mapping.keys())
                 ):
                     raise ValueError(
-                        f"Argument descriptor {descr_cls.__name__} must be the same for all compiled programs. Got {list(got)}, expected {list(expected)}."
+                        f"Argument descriptor {descr_cls.__name__} must be the same for all compiled programs, got {list(got)} expected {list(expected)}."
                     )
 
         self._validate_argument_descriptors(argument_descriptors)
