@@ -120,18 +120,14 @@ class CompileTimeArgs:
     @classmethod
     def from_concrete(cls, *args: Any, **kwargs: Any) -> Self:
         """Convert concrete GTX program arguments into their compile-time counterparts."""
-        kwargs = kwargs.copy()
-        offset_provider = kwargs.pop("offset_provider", {})
-        column_axis = kwargs.pop("column_axis", None)
-        compile_args = tuple(StaticArg.from_value(arg) for arg in args)
-        compile_kwargs = {
-            k: StaticArg.from_value(v) for k, v in kwargs.items() if v is not None
-        }
+        kwargs_copy = kwargs.copy()
         return cls(
-            args=compile_args,
-            kwargs=compile_kwargs,
-            offset_provider=offset_provider,
-            column_axis=column_axis,
+            args=tuple(type_translation.from_value(arg) for arg in args),
+            offset_provider=kwargs_copy.pop("offset_provider", {}),
+            column_axis=kwargs_copy.pop("column_axis", None),
+            kwargs={
+                k: type_translation.from_value(v) for k, v in kwargs_copy.items() if v is not None
+            },
         )
 
     @classmethod

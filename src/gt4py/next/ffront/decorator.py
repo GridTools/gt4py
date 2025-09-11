@@ -273,9 +273,6 @@ class Program:
         if self.static_params is None:
             object.__setattr__(self, "static_params", ())
 
-        def path_to_expr(path: Sequence[int]):
-            return "".join(map(lambda idx: f"[{idx}]", path))
-
         argument_descriptor_mapping = {
             arguments.StaticArg: self.static_params,
         }
