@@ -282,6 +282,7 @@ class FuseAsFieldOp(
     enabled_transformations = Transformation.all()
 
     uids: eve_utils.UIDGenerator
+    offset_provider_type: common.OffsetProviderType
 
     @classmethod
     def apply(
@@ -308,9 +309,11 @@ class FuseAsFieldOp(
         if not uids:
             uids = eve_utils.UIDGenerator()
 
-        new_node = cls(uids=uids, enabled_transformations=enabled_transformations).visit(
-            node, within_set_at_expr=within_set_at_expr
-        )
+        new_node = cls(
+            uids=uids,
+            enabled_transformations=enabled_transformations,
+            offset_provider_type=offset_provider_type,
+        ).visit(node, within_set_at_expr=within_set_at_expr)
         # The `FuseAsFieldOp` pass does not fully preserve the type information yet. In particular
         # for the generated lifts this is tricky and error-prone. For simplicity, we just reinfer
         # everything here ensuring later passes can use the information.
