@@ -40,15 +40,21 @@ def find_constant_symbols(
         # Search the stride symbols corresponding to the horizontal dimension
         for p in ir.params:
             if isinstance(p.type, ts.FieldType):
-                dims = p.type.dims
-                if len(dims) == 0:
+                h_dims = [dim for dim in p.type.dims if dim.kind == common.DimensionKind.HORIZONTAL]
+                if len(h_dims) == 0:
                     continue
-                elif len(dims) == 1:
-                    dim_index = 0
-                elif len(dims) == 2:
-                    dim_index = 0 if dims[0].kind == common.DimensionKind.HORIZONTAL else 1
+                elif len(h_dims) == 1:
+                    dim = h_dims[0]
                 else:
-                    raise ValueError(f"Unsupported field with dims={dims}.")
+                    raise NotImplementedError(
+                        f"Unsupported field with multiple horizontal dimensions '{p}'."
+                    )
+                if isinstance(p.type.dtype, ts.ListType):
+                    assert p.type.dtype.offset_type is not None
+                    full_dims = common.order_dimensions([*p.type.dims, p.type.dtype.offset_type])
+                    dim_index = full_dims.index(dim)
+                else:
+                    dim_index = p.type.dims.index(dim)
                 stride_name = gtx_dace_utils.field_stride_symbol_name(p.id, dim_index)
                 constant_symbols[stride_name] = 1
         # Same for connectivity tables, for which the first dimension is always horizontal
