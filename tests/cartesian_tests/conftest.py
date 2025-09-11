@@ -43,7 +43,7 @@ def pytest_addoption(parser):
 def pytest_sessionstart(session):
     gt_config.cache_settings["dir_name"] = pytest_gt_cache_dir
     if session.config.option.keep_gtcache:
-        print(f"\nNOTE: gt4py caches will be retained at {pytest_gt_cache_dir}")
+        print(f"\nNOTE: gt4py caches will be retained at {pytest_gt_cache_dir}\n")
 
 
 def pytest_sessionfinish(session):
