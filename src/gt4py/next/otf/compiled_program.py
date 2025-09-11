@@ -135,7 +135,6 @@ class CompiledProgramsPool:
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 
-    # TODO: test that compares _argument_descriptor_cache_key_from_args with _argument_descriptor_cache_key_from_descriptor
     @functools.cached_property
     def _argument_descriptor_cache_key_from_args(self) -> Callable:
         func_type = self.program_type.definition
