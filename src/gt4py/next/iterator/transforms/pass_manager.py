@@ -65,6 +65,7 @@ def apply_common_transforms(
     tmp_uids = eve_utils.UIDGenerator(prefix="__tmp")
     mergeasfop_uids = eve_utils.UIDGenerator()
     collapse_tuple_uids = eve_utils.UIDGenerator()
+    cse_uids = eve_utils.UIDGenerator()
 
     ir = MergeLet().visit(ir)
     ir = inline_fundefs.InlineFundefs().visit(ir)
@@ -126,7 +127,9 @@ def apply_common_transforms(
 
     # breaks in test_zero_dim_tuple_arg as trivial tuple_get is not inlined
     if common_subexpression_elimination:
-        ir = CommonSubexpressionElimination.apply(ir, offset_provider_type=offset_provider_type)
+        ir = CommonSubexpressionElimination.apply(
+            ir, offset_provider_type=offset_provider_type, uids=cse_uids
+        )
         ir = MergeLet().visit(ir)
         ir = InlineLambdas.apply(ir, opcount_preserving=True)
 

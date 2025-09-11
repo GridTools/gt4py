@@ -396,7 +396,7 @@ def extract_subexpression(
         if not eligible_ids:
             continue
 
-        expr_id = uid_generator.random_id()  # TODO: undo, but make sure we don't get collisions
+        expr_id = uid_generator.sequential_id(prefix="_cs")
         extracted[itir.Sym(id=expr_id)] = expr
         expr_ref = itir.SymRef(id=expr_id)
         for id_ in eligible_ids:
@@ -435,9 +435,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
 
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    uids: UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="_cs")
-    )
+    uids: UIDGenerator = dataclasses.field(repr=False)
 
     collect_all: bool = dataclasses.field(default=False)
 
@@ -447,6 +445,8 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         node: ProgramOrExpr,
         within_stencil: bool | None = None,
         offset_provider_type: common.OffsetProviderType | None = None,
+        *,
+        uids: UIDGenerator | None = None,
     ) -> ProgramOrExpr:
         is_program = isinstance(node, itir.Program)
         if is_program:
@@ -457,11 +457,14 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
                 "The expression's context must be specified using `within_stencil`."
             )
 
+        if not uids:
+            uids = UIDGenerator()
+
         offset_provider_type = offset_provider_type or {}
         node = itir_type_inference.infer(
             node, offset_provider_type=offset_provider_type, allow_undeclared_symbols=not is_program
         )
-        return cls().visit(node, within_stencil=within_stencil)
+        return cls(uids=uids).visit(node, within_stencil=within_stencil)
 
     def generic_visit(self, node, **kwargs):
         if cpm.is_call_to(node, "as_fieldop"):
