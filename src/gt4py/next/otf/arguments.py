@@ -18,7 +18,7 @@ from typing_extensions import Self
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing
-from gt4py.next import common, utils, Field, errors
+from gt4py.next import common, utils, errors
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation, type_info
 from gt4py.next.type_system.type_info import apply_to_primitive_constituents

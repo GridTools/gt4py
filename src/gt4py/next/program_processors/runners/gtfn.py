@@ -46,7 +46,7 @@ def convert_arg(arg: Any) -> Any:
 
 
 def convert_args(
-    inp: stages.ExtendedCompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
         *args: Any,
@@ -140,10 +140,10 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
     class Params:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
         )
-        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(
+        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
 

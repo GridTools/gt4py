@@ -223,6 +223,25 @@ class TestInlinedExternals:
                 module=self.__class__.__name__,
             )
 
+    def test_np_bool_external(self):
+        def stencil(input_field: gtscript.Field[float], output_field: gtscript.Field[float]):
+            from __externals__ import flag
+
+            with computation(PARALLEL), interval(...):
+                add_me = 1 if flag else 5
+                output_field = input_field + add_me
+
+        def_ir = parse_definition(
+            stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            externals={
+                "flag": np.bool_(True),
+            },
+        )
+
+        assert set(def_ir.externals.keys()) == {"flag"}
+
 
 class TestFunction:
     def test_error_invalid(self):

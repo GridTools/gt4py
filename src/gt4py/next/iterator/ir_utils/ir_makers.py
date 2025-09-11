@@ -321,8 +321,8 @@ def shift(offset, value=None):
     return call(call("shift")(*args))
 
 
-def literal(value: str, typename: str) -> itir.Literal:
-    return itir.Literal(value=value, type=ensure_type(typename))
+def literal(value: str, type_: str | ts.TypeSpec) -> itir.Literal:
+    return itir.Literal(value=value, type=ensure_type(type_))
 
 
 def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
