@@ -60,7 +60,9 @@ def _make_param_context_from_func_type(
 
 
 def _get_type_of_param_expr(program_type: ts_ffront.ProgramType, expr: str) -> ts.TypeSpec:
-    return eval(expr, _make_param_context_from_func_type(program_type.definition))
+    type_ = eval(expr, _make_param_context_from_func_type(program_type.definition))
+    assert isinstance(type_, ts.TypeSpec)
+    return type_
 
 
 @dataclasses.dataclass
@@ -206,9 +208,7 @@ class CompiledProgramsPool:
     ) -> None:
         for descriptors in all_descriptors.values():
             for expr, descriptor in descriptors.items():
-                param_type = _get_type_of_param_expr(
-                    self.program_type, expr
-                )  # TODO: error handling if type is wrong
+                param_type = _get_type_of_param_expr(self.program_type, expr)
                 descriptor.validate(expr, param_type)
 
     def _validate_argument_descriptor_mapping(self) -> None:
