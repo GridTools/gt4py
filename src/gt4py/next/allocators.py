@@ -87,6 +87,12 @@ def is_field_allocation_tool(obj: Any) -> TypeGuard[FieldBufferAllocationUtil]:
     return is_field_allocator(obj) or is_field_allocator_factory(obj)
 
 
+def is_field_allocation_tool_for(
+    obj: Any, device: core_defs.DeviceTypeT
+) -> TypeGuard[FieldBufferAllocationUtil]:
+    return is_field_allocator_for(obj, device) or is_field_allocator_factory_for(obj, device)
+
+
 def get_allocator(
     obj: Any,
     *,

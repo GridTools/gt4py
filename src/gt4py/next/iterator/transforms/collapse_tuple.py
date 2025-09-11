@@ -15,8 +15,6 @@ import operator
 import re
 from typing import Literal, Optional
 
-from prompt_toolkit.layout.processors import Transformation
-
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
@@ -173,7 +171,6 @@ class CollapseTuple(
             return functools.reduce(operator.or_, self.__members__.values())
 
     uids: eve_utils.UIDGenerator
-    ignore_tuple_size: bool
     enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     REINFER_TYPES = True
@@ -185,7 +182,6 @@ class CollapseTuple(
         cls,
         node: itir.Node,
         *,
-        ignore_tuple_size: bool = False,
         remove_letified_make_tuple_elements: bool = True,
         offset_provider_type: Optional[common.OffsetProviderType] = None,
         within_stencil: Optional[bool] = None,
@@ -202,8 +198,6 @@ class CollapseTuple(
             node: The node to transform.
 
         Keyword arguments:
-            ignore_tuple_size: Apply the transformation even if length of the inner tuple is greater
-                than the length of the outer tuple.
             remove_letified_make_tuple_elements: Run `InlineLambdas` as a post-processing step
                 to remove left-overs from `LETIFY_MAKE_TUPLE_ELEMENTS` transformation.
                 `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)` -> {1, 2}`
@@ -225,11 +219,6 @@ class CollapseTuple(
             | cls.Transformation.FLATTEN_AS_FIELDOP_ARGS
         ):
             requires_types = True
-        elif (
-            not ignore_tuple_size
-            and enabled_transformations & cls.Transformation.COLLAPSE_MAKE_TUPLE_TUPLE_GET
-        ):
-            requires_types = True
 
         if requires_types:
             node = itir_type_inference.infer(
@@ -239,7 +228,6 @@ class CollapseTuple(
             )
 
         new_node = cls(
-            ignore_tuple_size=ignore_tuple_size,
             enabled_transformations=enabled_transformations,
             uids=uids,
         ).visit(node, within_stencil=within_stencil)
@@ -280,12 +268,9 @@ class CollapseTuple(
                     return None
 
             itir_type_inference.reinfer(first_expr)  # type is needed so reinfer on-demand
-            assert self.ignore_tuple_size or isinstance(
-                first_expr.type, (ts.TupleType, ts.DeferredType)
-            )
-            if self.ignore_tuple_size or (
-                isinstance(first_expr.type, ts.TupleType)
-                and len(first_expr.type.types) == len(node.args)
+            assert isinstance(first_expr.type, (ts.TupleType, ts.DeferredType))
+            if isinstance(first_expr.type, ts.TupleType) and len(first_expr.type.types) == len(
+                node.args
             ):
                 return first_expr
         return None

@@ -2,6 +2,21 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.8] - 2025-09-03
+
+### Cartesian
+
+- feature: support for `round` and `round_away_from_zero`
+- fix: support for np.bool\_ in gtscript ValueInliner
+
+### Development
+
+- Add AMD MI300 system to CSCS CI with testing for HIP
+
+### Next
+
+See commit history.
+
 ## [1.0.7] - 2025-08-12
 
 ### Cartesian

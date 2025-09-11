@@ -37,7 +37,6 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        # TODO: this doesn't belong here and should by done in the dace backend
         if not fun.sdfg_program._lastargs:
             # First call, the SDFG is not intitalized, so forward the call to `CompiledSDFG`
             # to proper initilize it. Later calls to this SDFG will be handled through
