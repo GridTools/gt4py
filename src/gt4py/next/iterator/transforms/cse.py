@@ -90,7 +90,7 @@ def _is_collectable_expr(node: itir.Node) -> bool:
         # do also not collect index nodes because otherwise the right hand side of SetAts becomes a let statement
         #  instead of an as_fieldop
         if cpm.is_call_to(
-            node, ("lift", "shift", "reduce", "map_", "index")
+            node, ("lift", "shift", "neighbors", "reduce", "map_", "index")
         ) or cpm.is_applied_lift(node):
             return False
         return True
