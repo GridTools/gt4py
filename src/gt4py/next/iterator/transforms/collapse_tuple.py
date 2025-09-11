@@ -213,11 +213,6 @@ class CollapseTuple(
             False,
         ], "Parameter 'within_stencil' mandatory if node is not a 'Program'."
 
-        node = itir_type_inference.infer(
-            node,
-            offset_provider_type=offset_provider_type,
-            allow_undeclared_symbols=allow_undeclared_symbols,
-        )
         requires_types = False
         if enabled_transformations & (
             cls.Transformation.PROPAGATE_TO_IF_ON_TUPLES_CPS

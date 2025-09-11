@@ -90,7 +90,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
 
     def visit_VerticalLoop(self, node: tir.VerticalLoop, ctx: Context) -> None:
         # In any case, define the iteration symbol
-        ctx.tree.symbols[tir.Axis.K.iteration_symbol()] = dtypes.int32
+        ctx.tree.symbols[node.iteration_variable] = dtypes.int32
 
         # For serial loops, create a ForScope and add it to the tree
         if node.loop_order != common.LoopOrder.PARALLEL:
@@ -104,7 +104,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         # For parallel loops, create a map and add it to the tree
         dace_map = nodes.Map(
             label=f"vertical_loop_{id(node)}",
-            params=[tir.Axis.K.iteration_symbol()],
+            params=[node.iteration_variable],
             ndrange=subsets.Range(
                 # -1 because range bounds are inclusive
                 [(node.bounds_k.start, f"{node.bounds_k.end} - 1", 1)]
@@ -162,7 +162,7 @@ def _for_scope_header(node: tir.VerticalLoop) -> dcf.ForScope:
 
     plus_minus = "+" if node.loop_order == common.LoopOrder.FORWARD else "-"
     comparison = "<" if node.loop_order == common.LoopOrder.FORWARD else ">="
-    iteration_var = tir.Axis.K.iteration_symbol()
+    iteration_var = node.iteration_variable
 
     for_scope = dcf.ForScope(
         condition=CodeBlock(

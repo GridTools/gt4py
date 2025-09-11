@@ -14,6 +14,7 @@ dace = pytest.importorskip("dace")
 
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import interface
+from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 from gt4py.next.program_processors.runners.dace.workflow import bindings as dace_bindings_stage
 from gt4py.next.type_system import type_specifications as ts
 
@@ -102,14 +103,26 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
     B_stride0, _ = (dace.symbol(f"__B_stride_{i}") for i in (0, 1))
     B, _ = sdfg.add_array("B", B_shape, dace.int32, strides=(B_stride0, 1))
 
-    C_0_dim0_rstart, C_0_dim0_rstop = (dace.symbol(f"__C_0_0_range_{i}") for i in (0, 1))
-    C_0_dim1_rstart, C_0_dim1_rstop = (dace.symbol(f"__C_0_1_range_{i}") for i in (0, 1))
+    C_0_dim0_rstart, C_0_dim0_rstop = (
+        dace.symbol(gtx_dace_utils.range_start_symbol("C_0", ffront_test_utils.IDim)),
+        dace.symbol(gtx_dace_utils.range_stop_symbol("C_0", ffront_test_utils.IDim)),
+    )
+    C_0_dim1_rstart, C_0_dim1_rstop = (
+        dace.symbol(gtx_dace_utils.range_start_symbol("C_0", ffront_test_utils.JDim)),
+        dace.symbol(gtx_dace_utils.range_stop_symbol("C_0", ffront_test_utils.JDim)),
+    )
     C_0_shape = (C_0_dim0_rstop - C_0_dim0_rstart, C_0_dim1_rstop - C_0_dim1_rstart)
     C_0_strides = tuple(dace.symbol(f"__C_0_stride_{i}") for i in (0, 1))
     C_0, _ = sdfg.add_array("C_0", C_0_shape, dace.int32, strides=C_0_strides)
 
-    C_1_0_dim0_rstart, C_1_0_dim0_rstop = (dace.symbol(f"__C_1_0_0_range_{i}") for i in (0, 1))
-    C_1_0_dim1_rstart, C_1_0_dim1_rstop = (dace.symbol(f"__C_1_0_1_range_{i}") for i in (0, 1))
+    C_1_0_dim0_rstart, C_1_0_dim0_rstop = (
+        dace.symbol(gtx_dace_utils.range_start_symbol("C_1_0", ffront_test_utils.IDim)),
+        dace.symbol(gtx_dace_utils.range_stop_symbol("C_1_0", ffront_test_utils.IDim)),
+    )
+    C_1_0_dim1_rstart, C_1_0_dim1_rstop = (
+        dace.symbol(gtx_dace_utils.range_start_symbol("C_1_0", ffront_test_utils.JDim)),
+        dace.symbol(gtx_dace_utils.range_stop_symbol("C_1_0", ffront_test_utils.JDim)),
+    )
     C_1_0_shape = (C_1_0_dim0_rstop - C_1_0_dim0_rstart, C_1_0_dim1_rstop - C_1_0_dim1_rstart)
     C_1_0_strides = tuple(dace.symbol(f"__C_1_0_stride_{i}") for i in (0, 1))
     C_1_0, _ = sdfg.add_array("C_1_0", C_1_0_shape, dace.int32, strides=C_1_0_strides)
@@ -118,8 +131,14 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
 
     D, _ = sdfg.add_scalar("D", dace.float64)
 
-    E_dim0_rstart, E_dim0_rstop = (dace.symbol(f"__E_0_range_{i}") for i in (0, 1))
-    E_dim1_rstart, E_dim1_rstop = (dace.symbol(f"__E_1_range_{i}") for i in (0, 1))
+    E_dim0_rstart, E_dim0_rstop = (
+        dace.symbol(gtx_dace_utils.range_start_symbol("E", ffront_test_utils.IDim)),
+        dace.symbol(gtx_dace_utils.range_stop_symbol("E", ffront_test_utils.IDim)),
+    )
+    E_dim1_rstart, E_dim1_rstop = (
+        dace.symbol(gtx_dace_utils.range_start_symbol("E", ffront_test_utils.JDim)),
+        dace.symbol(gtx_dace_utils.range_stop_symbol("E", ffront_test_utils.JDim)),
+    )
     E_shape = (E_dim0_rstop - E_dim0_rstart, E_dim1_rstop - E_dim1_rstart)
     E_strides = tuple(dace.symbol(f"__E_stride_{i}") for i in (0, 1))
     E, _ = sdfg.add_array("E", E_shape, dace.int32, strides=E_strides)
