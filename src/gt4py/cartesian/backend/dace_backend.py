@@ -34,9 +34,11 @@ from gt4py.cartesian.backend.gtc_common import (
 )
 from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
 from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.gtc.dace import passes
 from gt4py.cartesian.gtc.dace.oir_to_treeir import OIRToTreeIR
 from gt4py.cartesian.gtc.dace.treeir_to_stree import TreeIRToScheduleTree
 from gt4py.cartesian.gtc.dace.utils import array_dimensions, replace_strides
+from gt4py.cartesian.gtc.definitions import CartesianSpace
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
 from gt4py.cartesian.gtc.passes.oir_optimizations import caches
@@ -91,7 +93,7 @@ def _sdfg_add_arrays_and_edges(
     nsdfg: nodes.NestedSDFG,
     inputs: set[str] | dict[str, dtypes.typeclass],
     outputs: set[str] | dict[str, dtypes.typeclass],
-    origins,
+    origins: dict[str, tuple[int, ...]],
 ) -> None:
     for name, array in inner_sdfg.arrays.items():
         if array.transient:
@@ -111,27 +113,30 @@ def _sdfg_add_arrays_and_edges(
                 shape=shape,
                 storage=array.storage,
             )
-            if isinstance(origins, tuple):
-                origin = [o for a, o in zip("IJK", origins) if a in axes]
-            else:
-                origin = origins.get(name, origins.get("_all_", None))
-                if len(origin) == 3:
-                    origin = [o for a, o in zip("IJK", origin) if a in axes]
+
+            # Calculate memlet ranges taking the origin into account
+            ranges = []
+            origin = origins.get(name, origins.get("_all_", None))
+
+            if origin is None:
+                raise ValueError("Freeze origin/domain: Unspecified origin for field `{name}`.")
 
             # Read boundaries for axis-bound fields
-            if axes != ():
-                ranges = [
+            index = 0
+            for cartesian_index, axis in enumerate(CartesianSpace.names):
+                if axis not in axes:
+                    continue
+                o = origin[index]
+                e = field_info[name].boundary.lower_indices[cartesian_index]
+                s = inner_sdfg.arrays[name].shape[index]
+                ranges.append(
+                    # s - 1 because ranges are inclusive
                     (o - max(0, e), o - max(0, e) + s - 1, 1)
-                    for o, e, s in zip(
-                        origin,
-                        field_info[name].boundary.lower_indices,
-                        inner_sdfg.arrays[name].shape,
-                    )
-                ]
-            else:
-                ranges = []
+                )
+                index += 1
 
             # Add data dimensions to the range
+            # NOTE: origin and boundary of data dimensions are always 0
             ranges += [
                 (0, d - 1, 1)  # d - 1 because ranges are inclusive
                 for d in field_info[name].data_dims
@@ -382,6 +387,12 @@ class SDFGManager:
 
         # Create SDFG
         stree = self.schedule_tree()
+
+        if self.builder.backend.name.endswith("_kfirst"):
+            # re-order loops to match loops with memory layout
+            flipper = passes.PushVerticalMapDown()
+            flipper.visit(stree)
+
         sdfg = stree.as_sdfg(
             validate=validate,
             simplify=simplify,
@@ -843,6 +854,24 @@ class DaceCPUBackend(BaseDaceBackend):
         "device": "cpu",
         "layout_map": layout.layout_maker_factory((1, 2, 0)),
         "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((1, 2, 0))),
+    }
+    MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
+
+    options = BaseGTBackend.GT_BACKEND_OPTS
+
+    def generate_extension(self) -> None:
+        return self.make_extension(uses_cuda=False)
+
+
+@register
+class DaceCPUKFirstBackend(BaseDaceBackend):
+    name = "dace:cpu_kfirst"
+    languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
+    storage_info: ClassVar[layout.LayoutInfo] = {
+        "alignment": 1,
+        "device": "cpu",
+        "layout_map": layout.layout_maker_factory((0, 1, 2)),
+        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((0, 1, 2))),
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 

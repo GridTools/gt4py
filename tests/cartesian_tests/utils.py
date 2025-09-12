@@ -6,14 +6,22 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import numpy as np
+from typing import Any, Union
+
 try:
     import dace
 except ImportError:
     dace = None
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
 
 class ArrayWrapper:
-    def __init__(self, array, **kwargs):
+    def __init__(self, array: Union[np.ndarray, "cp.ndarray"], **_kwargs: Any) -> None:
         self.array = array
 
     @property
@@ -29,15 +37,23 @@ class ArrayWrapper:
 
 
 class DimensionsWrapper(ArrayWrapper):
-    def __init__(self, dimensions, **kwargs):
-        self.__gt_dims__ = dimensions
+    def __init__(self, dimensions: tuple[str, ...], **kwargs: Any) -> None:
         super().__init__(**kwargs)
+        if len(self.array.shape) != len(dimensions):
+            raise ValueError(
+                f"Non matching dimensions of array.shape {self.array.shape} and dimensions {dimensions}."
+            )
+        self.__gt_dims__ = dimensions
 
 
 class OriginWrapper(ArrayWrapper):
-    def __init__(self, *, origin, **kwargs):
-        self.__gt_origin__ = origin
+    def __init__(self, *, origin: tuple[int, ...], **kwargs: Any) -> None:
         super().__init__(**kwargs)
+        if len(self.array.shape) != len(origin):
+            raise ValueError(
+                f"Non matching dimensions of array.shape {self.array.shape} and origin {origin}."
+            )
+        self.__gt_origin__ = origin
 
     def __descriptor__(self):
         res = super().__descriptor__()
