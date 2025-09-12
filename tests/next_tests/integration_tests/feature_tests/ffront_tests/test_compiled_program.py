@@ -748,7 +748,7 @@ def test_compile_variants_non_existing_param(cartesian_case, compile_variants_te
 
 
 def test_compile_variants_wrong_type(cartesian_case, compile_variants_testee_not_compiled):
-    with pytest.raises(errors.DSLTypeError, match="Expected.*'scalar_int'.*int32"):
+    with pytest.raises(errors.DSLTypeError, match="'scalar_int'.*expected.*int32"):
         compile_variants_testee_not_compiled.compile(scalar_int=[1.0], offset_provider={})
 
 

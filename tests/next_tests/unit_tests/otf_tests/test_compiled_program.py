@@ -9,124 +9,57 @@
 import pytest
 
 from gt4py import eve, next as gtx
-from gt4py.next import errors, backend
-from gt4py.next.ffront import type_specifications as ts_ffront
-from gt4py.next.otf import compiled_program, toolchain, arguments
+from gt4py.next import errors, backend, broadcast, common
+from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
+from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import toolchain, arguments
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
 
 
-class SomeEnum(eve.IntEnum):
-    FOO = 1
+def test_static_arg_from_enum():
+    class SomeEnum(eve.IntEnum):
+        FOO = 1
+
+    static_arg = arguments.StaticArg(value=SomeEnum.FOO)
+    assert static_arg.value == 1
 
 
-@pytest.mark.parametrize(
-    "value, type_, expected",
-    [
-        (gtx.int32(1), ts.ScalarType(kind=ts.ScalarKind.INT32), gtx.int32(1)),
-        (gtx.int64(1), ts.ScalarType(kind=ts.ScalarKind.INT64), gtx.int64(1)),
-        (1, ts.ScalarType(kind=ts.ScalarKind.INT32), gtx.int32(1)),
-        (True, ts.ScalarType(kind=ts.ScalarKind.BOOL), True),
-        (False, ts.ScalarType(kind=ts.ScalarKind.BOOL), False),
-        (SomeEnum.FOO, ts.ScalarType(kind=ts.ScalarKind.INT32), gtx.int32(1)),
-        (
-            (1, (2.0, gtx.float32(3.0))),
-            ts.TupleType(
-                types=[
-                    ts.ScalarType(kind=ts.ScalarKind.INT32),
-                    ts.TupleType(
-                        types=[
-                            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-                            ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
-                        ]
-                    ),
-                ]
-            ),
-            (gtx.float32(1), (gtx.float64(2.0), gtx.float32(3.0))),
-        ),
-    ],
-)
-def test_sanitize_static_args(value, type_, expected):
-    program_type = ts_ffront.ProgramType(
-        definition=ts.FunctionType(
-            pos_only_args=[],
-            pos_or_kw_args={
-                "testee": type_,
-            },
-            kw_only_args={},
-            returns=ts.VoidType(),
-        )
-    )
-
-    result = compiled_program._sanitize_static_args(
-        "testee_program", {"testee": value}, program_type
-    )
-    assert result == {"testee": expected}
-
-
-def test_sanitize_static_args_non_scalar_type():
-    program_type = ts_ffront.ProgramType(
-        definition=ts.FunctionType(
-            pos_only_args=[],
-            pos_or_kw_args={
-                "foo": ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
-            },
-            kw_only_args={},
-            returns=ts.VoidType(),
-        )
-    )
+def test_static_args_non_scalar_type():
     with pytest.raises(
         errors.DSLTypeError,
-        match="foo.*cannot be static",
+        match="only scalars.*can be static",
     ):
-        compiled_program._sanitize_static_args("foo_program", {"foo": gtx.int32(1)}, program_type)
+        static_arg = arguments.StaticArg(value=1)
+        static_arg.validate(
+            "foo", ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
+        )
 
 
 def test_sanitize_static_args_wrong_type():
-    program_type = ts_ffront.ProgramType(
-        definition=ts.FunctionType(
-            pos_only_args=[],
-            pos_or_kw_args={"foo": ts.ScalarType(kind=ts.ScalarKind.INT32)},
-            kw_only_args={},
-            returns=ts.VoidType(),
-        )
-    )
-    with pytest.raises(errors.DSLTypeError, match="got 'int64'"):
-        compiled_program._sanitize_static_args("foo_program", {"foo": gtx.int64(1)}, program_type)
-
-
-def test_sanitize_static_args_non_existing_parameter():
-    program_type = ts_ffront.ProgramType(
-        definition=ts.FunctionType(
-            pos_only_args=[],
-            pos_or_kw_args={"foo": ts.ScalarType(kind=ts.ScalarKind.INT32)},
-            kw_only_args={},
-            returns=ts.VoidType(),
-        )
-    )
-    with pytest.raises(errors.DSLTypeError, match="'unknown_param'"):
-        compiled_program._sanitize_static_args(
-            "foo_program", {"unknown_param": gtx.int64(1)}, program_type
-        )
+    with pytest.raises(
+        errors.DSLTypeError,
+        match="expected 'int32'.*has.*'int64'",
+    ):
+        static_arg = arguments.StaticArg(value=gtx.int64(1))
+        static_arg.validate("foo", ts.ScalarType(kind=ts.ScalarKind.INT32))
 
 
 TDim = gtx.Dimension("TDim")
 
 
 @gtx.field_operator
-def fop(cond: bool, a: gtx.Field[gtx.Dims[TDim], float], b: gtx.Field[gtx.Dims[TDim], float]):
-    return a if cond else b
+def fop(cond: bool):
+    return broadcast(cond, (TDim,))
 
 
 @gtx.program
 def prog(
     cond: bool,
-    a: gtx.Field[gtx.Dims[TDim], gtx.float64],
-    b: gtx.Field[gtx.Dims[TDim], gtx.float64],
-    out: gtx.Field[gtx.Dims[TDim], gtx.float64],
+    out: gtx.Field[gtx.Dims[TDim], bool],
 ):
-    fop(cond, a, b, out=out)
+    fop(cond, out=out)
 
 
 def _verify_program_has_expected_true_value(program: itir.Program):
@@ -138,12 +71,15 @@ def _verify_program_has_expected_true_value(program: itir.Program):
 
 
 def test_inlining_of_scalars_works():
-    args = prog.past_stage.past_node.type.definition.pos_or_kw_args
-    args = [arguments.StaticArg(value=True, type_=v) if k == "cond" else v for k, v in args.items()]
-
     input_pair = toolchain.CompilableProgram(
         data=prog.definition_stage,
-        args=arguments.CompileTimeArgs(args=args, kwargs={}, offset_provider={}, column_axis=None),
+        args=arguments.CompileTimeArgs(
+            args=list(prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
+            kwargs={},
+            offset_provider={},
+            column_axis=None,
+            argument_descriptors={arguments.StaticArg: {"cond": arguments.StaticArg(value=True)}},
+        ),
     )
 
     transformed = backend.DEFAULT_TRANSFORMS(input_pair).data
@@ -171,10 +107,31 @@ def test_inlining_of_scalar_works_integration():
     testee = prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
     testee(
         cond=True,
-        a=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
-        b=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
-        out=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
+        out=gtx.zeros(domain={TDim: 1}, dtype=bool),
         offset_provider={},
     )
 
     _verify_program_has_expected_true_value(hijacked_program.data)
+
+def _verify_program_has_expected_domain(program: itir.Program, expected_domain: gtx.Domain):
+    assert isinstance(program.body[0], itir.SetAt)
+    assert isinstance(program.body[0].expr, itir.FunCall)
+    assert program.body[0].expr.fun == itir.SymRef(id="fop")
+    domain = CollapseTuple.apply(program.body[0].domain, within_stencil=False)
+    assert domain == im.domain(common.GridType.CARTESIAN, expected_domain)
+
+def test_inlining_of_static_domain_works():
+    domain = gtx.Domain(dims=(TDim,), ranges=(gtx.UnitRange(0, 1),))
+    input_pair = toolchain.CompilableProgram(
+        data=prog.definition_stage,
+        args=arguments.CompileTimeArgs(
+            args=list(prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
+            kwargs={},
+            offset_provider={},
+            column_axis=None,
+            argument_descriptors={arguments.FieldDomainDescriptor: {"out": arguments.FieldDomainDescriptor(domain)}},
+        ),
+    )
+
+    transformed = backend.DEFAULT_TRANSFORMS(input_pair).data
+    _verify_program_has_expected_domain(transformed, domain)

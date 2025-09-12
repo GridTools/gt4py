@@ -94,20 +94,18 @@ def expression_test_cases():
         (im.call("make_const_list")(True), ts.ListType(element_type=bool_type)),
         (im.list_get(0, im.ref("l", ts.ListType(element_type=bool_type))), bool_type),
         (
-            im.call("named_range")(
+            im.named_range(
                 itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
             ),
             it_ts.NamedRangeType(dim=Vertex),
         ),
         (
-            im.call("cartesian_domain")(
-                im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
-            ),
+            im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)),
             ts.DomainType(dims=[IDim]),
         ),
         (
             im.call("unstructured_domain")(
-                im.call("named_range")(
+                im.named_range(
                     itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
                 )
             ),
@@ -238,13 +236,13 @@ def expression_test_cases():
                 im.as_fieldop(
                     im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
                     im.call("cartesian_domain")(
-                        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
                     ),
                 )(im.ref("inp", float_i_field), 1.0),
                 im.as_fieldop(
                     "deref",
                     im.call("cartesian_domain")(
-                        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
                     ),
                 )(im.ref("inp", float_i_field)),
             ),
@@ -389,7 +387,7 @@ def test_cast_first_arg_inference():
 
 def test_cartesian_fencil_definition():
     cartesian_domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
     )
 
     testee = itir.Program(
@@ -419,12 +417,10 @@ def test_cartesian_fencil_definition():
 def test_unstructured_fencil_definition():
     mesh = simple_mesh(None)
     unstructured_domain = im.call("unstructured_domain")(
-        im.call("named_range")(
+        im.named_range(
             itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
         ),
-        im.call("named_range")(
-            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
-        ),
+        im.named_range(itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1),
     )
 
     testee = itir.Program(
@@ -457,7 +453,7 @@ def test_unstructured_fencil_definition():
 
 def test_function_definition():
     cartesian_domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
     )
 
     testee = itir.Program(
@@ -488,12 +484,10 @@ def test_function_definition():
 def test_fencil_with_nb_field_input():
     mesh = simple_mesh(None)
     unstructured_domain = im.call("unstructured_domain")(
-        im.call("named_range")(
+        im.named_range(
             itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
         ),
-        im.call("named_range")(
-            itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1
-        ),
+        im.named_range(itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1),
     )
 
     testee = itir.Program(
@@ -521,7 +515,7 @@ def test_fencil_with_nb_field_input():
 
 def test_program_tuple_setat_short_target():
     cartesian_domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
     )
 
     testee = itir.Program(
@@ -552,7 +546,7 @@ def test_program_tuple_setat_short_target():
 
 def test_program_setat_without_domain():
     cartesian_domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
     )
 
     testee = itir.Program(
@@ -576,7 +570,7 @@ def test_program_setat_without_domain():
 
 def test_if_stmt():
     cartesian_domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
     )
 
     testee = itir.IfStmt(
