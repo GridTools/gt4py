@@ -39,8 +39,8 @@ stages:
   variables:
     # jfrog.svc.cscs.ch/dockerhub/ubuntu is the cached version of docker.io/ubuntu
     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/ubuntu:${UBUNTU_VERSION}
-    # CSCS_REBUILD_POLICY: 'always' => rebuild even if target tag exists already
-    CSCS_REBUILD_POLICY: if-not-exists  # default, i.e. we could also skip the variable
+    CSCS_REBUILD_POLICY: always # rebuild even if target tag exists already
+    # CSCS_REBUILD_POLICY: if-not-exists  # default, i.e. we could also skip the variable
     DOCKERFILE: ci/Dockerfile
     # We pass the build arguments to the Dockerfile as a JSON array of names.
     # The actual values will be taken from environment variables with the same
