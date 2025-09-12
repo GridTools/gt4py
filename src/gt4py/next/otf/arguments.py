@@ -40,7 +40,7 @@ class ArgumentDescriptor(abc.ABC):
     compiled is fast.
     """
 
-    def validate(self, name: str, type_: ts.TypeSpec) -> None:
+    def validate(self, name: str, type_: ts.TypeSpec) -> None:  # noqa: B027  # method is not abstract, but just empty when not implemented
         """
         Validate argument descriptor.
 
@@ -51,7 +51,7 @@ class ArgumentDescriptor(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def attribute_extractor(cls, arg_expr: str) -> dict[str, str]:  # type: ignore[empty-body]  # classmethod is abstract
+    def attribute_extractor(cls, arg_expr: str) -> dict[str, str]:
         """
         Return a mapping from the attributes of our descriptor to the expressions to retrieve them.
 
