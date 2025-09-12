@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import abc
 import dataclasses
 import enum
 import typing
@@ -26,8 +27,20 @@ DATA_T = typing.TypeVar("DATA_T")
 T = typing.TypeVar("T")
 
 
-class ArgumentDescriptor:
-    def validate(self, name: str, type_: ts.TypeSpec) -> None:
+class ArgumentDescriptor(abc.ABC):
+    """
+    Abstract class to represent, extract, validate compile time information of an argument.
+
+    The information that is available at compile time is extracted from the runtime argument
+    (or provided when pre-compiling) is described by a set of (python) expressions returned by the
+    `attribute_extractor` class-method. These expressions are evaluated in the context of the
+    arguments. We chose expressions here instead of a method taking the actual value such that we
+    can code generate a single expression for all argument descriptors only retrieving the necessary
+    values without actually constructing the descriptors. That way the cache key computation to the
+    compiled is fast.
+    """
+
+    def validate(self, name: str, type_: ts.TypeSpec) -> None:  # noqa: B027  # method is not abstract, but just empty when not implemented
         """
         Validate argument descriptor.
 
@@ -37,7 +50,8 @@ class ArgumentDescriptor:
         pass
 
     @classmethod
-    def attribute_extractor(cls, arg_expr: str) -> dict[str, str]:  # type: ignore[empty-body]  # classmethod is abstract
+    @abc.abstractmethod
+    def attribute_extractor(cls, arg_expr: str) -> dict[str, str]:
         """
         Return a mapping from the attributes of our descriptor to the expressions to retrieve them.
 

@@ -59,7 +59,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         ...     kwargs={},
         ...     offset_provider={"I": IDim},
         ...     column_axis=None,
-        ...     argument_descriptors={}
+        ...     argument_descriptors={},
         ... )
 
         >>> itir_copy = past_to_gtir(
@@ -105,7 +105,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         ):
             raise NotImplementedError("Only top-level arguments can be static.")
         static_args = {
-            name: im.literal_from_tuple_value(descr.value)
+            name: im.literal_from_tuple_value(descr.value)  # type: ignore[attr-defined]  # type checked above
             for name, descr in static_arg_descriptors.items()
         }
         body = remap_symbols.RemapSymbolRefs().visit(itir_program.body, symbol_map=static_args)
