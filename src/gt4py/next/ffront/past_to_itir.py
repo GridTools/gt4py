@@ -58,7 +58,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         ...     kwargs={},
         ...     offset_provider={"I": IDim},
         ...     column_axis=None,
-        ...     argument_descriptors={}
+        ...     argument_descriptors={},
         ... )
 
         >>> itir_copy = past_to_gtir(

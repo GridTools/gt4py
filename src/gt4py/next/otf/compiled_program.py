@@ -34,7 +34,7 @@ CompiledProgramsKey: TypeAlias = tuple[
 ArgumentDescriptors: TypeAlias = dict[
     type[arguments.ArgumentDescriptor], dict[str, arguments.ArgumentDescriptor]
 ]
-StructuredArgumentDescriptors: TypeAlias = dict[
+ArgumentDescriptorContext: TypeAlias = dict[
     type[arguments.ArgumentDescriptor],
     dict[str, extended_typing.MaybeNestedInTuple[arguments.ArgumentDescriptor | None]],
 ]
@@ -74,9 +74,9 @@ class CompiledProgramsPool:
     """
     A pool of compiled programs for a given program and backend.
 
-    If 'static_params' is set (or static arguments are passed to 'compile'),
-    the pool will create a program for each argument that is marked static
-    and each 'OffsetProviderType'.
+    If 'argument_descriptor_mapping' is populated the pool will create a program for each
+    argument that has an argument descriptor. E.g., if a param is marked static we create
+    a new program for each value of that parameter.
 
     If `enable_jit` is True in the call to the pool, it will compile a program
     with static arguments corresponding to the 'static_params', otherwise it
@@ -143,6 +143,14 @@ class CompiledProgramsPool:
 
     @functools.cached_property
     def _argument_descriptor_cache_key_from_args(self) -> Callable:
+        """
+        Given the entire set of runtime arguments compute the cache key used to retrieve the
+        instance of the compiled program which is compiled for the argument descriptors from
+        the given set of arguments.
+
+        This is part of the performance critical path that is called on every program call,
+        hence we code generate a single lambda expression here.
+        """
         func_type = self.program_type.definition
         params = list(func_type.pos_or_kw_args.keys()) + list(func_type.kw_only_args.keys())
         elements: list[str] = []
@@ -152,10 +160,33 @@ class CompiledProgramsPool:
                 elements.extend(attr_extractor.values())
         return eval(f"""lambda {",".join(params)}: ({_make_tuple_expr(elements)})""")
 
-    def _argument_descriptor_cache_key_from_structured_descriptors(
+    def _argument_descriptor_cache_key_from_descriptors(
         self,
-        structured_descriptors: StructuredArgumentDescriptors,
+        argument_descriptors: ArgumentDescriptors,
     ) -> tuple:
+        """
+        Given a set of argument descriptors deduce the cache key used to retrieve the instance
+        of the compiled program which is compiled for the given argument descriptors.
+
+        This function is not performance critical as it is only called once when compiling a
+        variant.
+        """
+        # first build a context that we can evaluate parameter expressions on descriptors in
+        descriptor_context: ArgumentDescriptorContext = {}
+        for descriptor_cls, descriptor_expr_mapping in argument_descriptors.items():
+            descriptor_context[descriptor_cls] = _make_param_context_from_func_type(
+                self.program_type.definition, lambda x: None
+            )
+            assert "__descriptor" not in descriptor_context[descriptor_cls]
+            for expr, descriptor in descriptor_expr_mapping.items():
+                # note: we don't need to handle any errors here since the `expr` has been validated
+                #  in `_validate_argument_descriptor_mapping`
+                exec(
+                    f"{expr} = __descriptor",
+                    {"__descriptor": descriptor},
+                    descriptor_context[descriptor_cls],
+                )
+
         elements = []
         for descriptor_cls, arg_exprs in self.argument_descriptor_mapping.items():  # type: ignore[union-attr]  # can never be `None` at this point
             for arg_expr in arg_exprs:
@@ -163,12 +194,12 @@ class CompiledProgramsPool:
                 attrs = attr_extractor.keys()
                 for attr in attrs:
                     elements.append(
-                        getattr(eval(f"{arg_expr}", structured_descriptors[descriptor_cls]), attr)
+                        getattr(eval(f"{arg_expr}", descriptor_context[descriptor_cls]), attr)
                     )
         return tuple(elements)
 
     @functools.cached_property
-    def _descriptor_attr_retrievers(
+    def _argument_descriptor_attr_retrievers(
         self,
     ) -> dict[type[arguments.ArgumentDescriptor], dict[str, Callable]]:
         """
@@ -194,8 +225,9 @@ class CompiledProgramsPool:
         return retrievers
 
     def _make_argument_descriptors(self, *args: Any, **kwargs: Any) -> ArgumentDescriptors:
+        """Given a set of runtime arguments construct all argument descriptors from them."""
         descriptors: ArgumentDescriptors = {}
-        for descriptor_cls, attr_retrievers in self._descriptor_attr_retrievers.items():
+        for descriptor_cls, attr_retrievers in self._argument_descriptor_attr_retrievers.items():
             descriptors[descriptor_cls] = {}
             for expr, attr_retriever in attr_retrievers.items():
                 descriptor = descriptor_cls(**attr_retriever(*args, **kwargs))
@@ -211,6 +243,22 @@ class CompiledProgramsPool:
             for expr, descriptor in descriptors.items():
                 param_type = _get_type_of_param_expr(self.program_type, expr)
                 descriptor.validate(expr, param_type)
+
+    def _initialize_argument_descriptor_mapping(self, argument_descriptors: ArgumentDescriptors):
+        if self.argument_descriptor_mapping is None:
+            self.argument_descriptor_mapping = {
+                descr_cls: list(descriptor_expr_mapping.keys())
+                for descr_cls, descriptor_expr_mapping in argument_descriptors.items()
+            }
+            self._validate_argument_descriptor_mapping()
+        else:
+            for descr_cls, descriptor_expr_mapping in argument_descriptors.items():
+                if (expected := set(self.argument_descriptor_mapping[descr_cls])) != (
+                    got := set(descriptor_expr_mapping.keys())
+                ):
+                    raise ValueError(
+                        f"Argument descriptor {descr_cls.__name__} must be the same for all compiled programs, got {list(got)} expected {list(expected)}."
+                    )
 
     def _validate_argument_descriptor_mapping(self) -> None:
         if self.argument_descriptor_mapping is None:
@@ -233,40 +281,11 @@ class CompiledProgramsPool:
         argument_descriptors: ArgumentDescriptors,
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
     ) -> None:
-        if self.argument_descriptor_mapping is None:
-            self.argument_descriptor_mapping = {
-                descr_cls: list(descriptor_expr_mapping.keys())
-                for descr_cls, descriptor_expr_mapping in argument_descriptors.items()
-            }
-            self._validate_argument_descriptor_mapping()
-        else:
-            for descr_cls, descriptor_expr_mapping in argument_descriptors.items():
-                if (expected := set(self.argument_descriptor_mapping[descr_cls])) != (
-                    got := set(descriptor_expr_mapping.keys())
-                ):
-                    raise ValueError(
-                        f"Argument descriptor {descr_cls.__name__} must be the same for all compiled programs, got {list(got)} expected {list(expected)}."
-                    )
-
+        self._initialize_argument_descriptor_mapping(argument_descriptors)
         self._validate_argument_descriptors(argument_descriptors)
 
-        structured_descriptors: StructuredArgumentDescriptors = {}
-        for descriptor_cls, descriptor_expr_mapping in argument_descriptors.items():
-            structured_descriptors[descriptor_cls] = _make_param_context_from_func_type(
-                self.program_type.definition, lambda x: None
-            )
-            assert "__descriptor" not in structured_descriptors[descriptor_cls]
-            for expr, descriptor in descriptor_expr_mapping.items():
-                # note: we don't need to handle any errors here since the `expr` has been validated
-                #  in `_validate_argument_descriptor_mapping`
-                exec(
-                    f"{expr} = __descriptor",
-                    {"__descriptor": descriptor},
-                    structured_descriptors[descriptor_cls],
-                )
-
         key = (
-            self._argument_descriptor_cache_key_from_structured_descriptors(structured_descriptors),  # type: ignore[arg-type] # mypy not smart enough
+            self._argument_descriptor_cache_key_from_descriptors(argument_descriptors),  # type: ignore[arg-type] # mypy not smart enough
             self._offset_provider_to_type_unsafe(offset_provider),
         )
         if key in self._compiled_programs:

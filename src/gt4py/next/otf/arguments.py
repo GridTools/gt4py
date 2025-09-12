@@ -27,6 +27,18 @@ T = typing.TypeVar("T")
 
 
 class ArgumentDescriptor:
+    """
+    Abstract class to represent, extract, validate compile time information of an argument.
+
+    The information that is available at compile time is extracted from the runtime argument
+    (or provided when pre-compiling) is described by a set of (python) expressions returned by the
+    `attribute_extractor` class-method. These expressions are evaluated in the context of the
+    arguments. We chose expressions here instead of a method taking the actual value such that we
+    can code generate a single expression for all argument descriptors only retrieving the necessary
+    values without actually constructing the descriptors. That way the cache key computation to the
+    compiled is fast.
+    """
+
     def validate(self, name: str, type_: ts.TypeSpec) -> None:
         """
         Validate argument descriptor.
