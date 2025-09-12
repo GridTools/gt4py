@@ -9,9 +9,10 @@
 import pytest
 
 from gt4py import eve, next as gtx
-from gt4py.next import errors, backend
-from gt4py.next.ffront import type_specifications as ts_ffront
-from gt4py.next.otf import compiled_program, toolchain, arguments
+from gt4py.next import errors, backend, broadcast, common
+from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
+from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import toolchain, arguments
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
@@ -49,18 +50,16 @@ TDim = gtx.Dimension("TDim")
 
 
 @gtx.field_operator
-def fop(cond: bool, a: gtx.Field[gtx.Dims[TDim], float], b: gtx.Field[gtx.Dims[TDim], float]):
-    return a if cond else b
+def fop(cond: bool):
+    return broadcast(cond, (TDim,))
 
 
 @gtx.program
 def prog(
     cond: bool,
-    a: gtx.Field[gtx.Dims[TDim], gtx.float64],
-    b: gtx.Field[gtx.Dims[TDim], gtx.float64],
-    out: gtx.Field[gtx.Dims[TDim], gtx.float64],
+    out: gtx.Field[gtx.Dims[TDim], bool],
 ):
-    fop(cond, a, b, out=out)
+    fop(cond, out=out)
 
 
 def _verify_program_has_expected_true_value(program: itir.Program):
@@ -108,10 +107,31 @@ def test_inlining_of_scalar_works_integration():
     testee = prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
     testee(
         cond=True,
-        a=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
-        b=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
-        out=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
+        out=gtx.zeros(domain={TDim: 1}, dtype=bool),
         offset_provider={},
     )
 
     _verify_program_has_expected_true_value(hijacked_program.data)
+
+def _verify_program_has_expected_domain(program: itir.Program, expected_domain: gtx.Domain):
+    assert isinstance(program.body[0], itir.SetAt)
+    assert isinstance(program.body[0].expr, itir.FunCall)
+    assert program.body[0].expr.fun == itir.SymRef(id="fop")
+    domain = CollapseTuple.apply(program.body[0].domain, within_stencil=False)
+    assert domain == im.domain(common.GridType.CARTESIAN, expected_domain)
+
+def test_inlining_of_static_domain_works():
+    domain = gtx.Domain(dims=(TDim,), ranges=(gtx.UnitRange(0, 1),))
+    input_pair = toolchain.CompilableProgram(
+        data=prog.definition_stage,
+        args=arguments.CompileTimeArgs(
+            args=list(prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
+            kwargs={},
+            offset_provider={},
+            column_axis=None,
+            argument_descriptors={arguments.FieldDomainDescriptor: {"out": arguments.FieldDomainDescriptor(domain)}},
+        ),
+    )
+
+    transformed = backend.DEFAULT_TRANSFORMS(input_pair).data
+    _verify_program_has_expected_domain(transformed, domain)
