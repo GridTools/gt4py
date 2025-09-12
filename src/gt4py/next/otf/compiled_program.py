@@ -287,7 +287,7 @@ class CompiledProgramsPool:
         self._validate_argument_descriptors(argument_descriptors)
 
         key = (
-            self._argument_descriptor_cache_key_from_descriptors(argument_descriptors),  # type: ignore[arg-type] # mypy not smart enough
+            self._argument_descriptor_cache_key_from_descriptors(argument_descriptors),
             self._offset_provider_to_type_unsafe(offset_provider),
         )
         if key in self._compiled_programs:
