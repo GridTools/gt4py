@@ -487,6 +487,9 @@ def get_field_domain(
     if isinstance(field, itir.Expr) and isinstance(field.type, ts.FieldType):
         assert dims is None or all(d1 == d2 for d1, d2 in zip(field.type.dims, dims, strict=True))
         dims = field.type.dims
+    else:
+        if dims is None:
+            raise ValueError("Field expression must be typed if 'dims' is not given.")
 
     return domain(
         grid_type,
