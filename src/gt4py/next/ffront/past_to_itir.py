@@ -105,7 +105,6 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
     static_args = {
         name: im.literal_from_tuple_value(descr.value)
         for name, descr in static_arg_descriptors.items()
-        if isinstance(descr, arguments.StaticArg)
     }
     body = remap_symbols.RemapSymbolRefs().visit(itir_program.body, symbol_map=static_args)
     itir_program = itir.Program(
