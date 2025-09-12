@@ -117,16 +117,14 @@ def _sdfg_add_arrays_and_edges(
             ranges = []
             origin = origins.get(name, origins.get("_all_", None))
 
+            if origin is None:
+                raise ValueError("Freeze origin/domain: Unspecified origin for field `{name}`.")
+
             # Read boundaries for axis-bound fields
             index = 0
             for cartesian_index, axis in enumerate(CartesianSpace.names):
                 if axis not in axes:
                     continue
-                # TODO: Not sure yet how we can get into situations where
-                #       origin is None in the first place. Tests fail if we
-                #       just assume that. To be investigated when adding
-                #       more tests for this part of the code.
-                assert origin is not None
                 o = origin[index]
                 e = field_info[name].boundary.lower_indices[cartesian_index]
                 s = inner_sdfg.arrays[name].shape[index]
