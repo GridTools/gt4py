@@ -76,12 +76,13 @@ class CompiledProgramsPool:
 
     If 'argument_descriptor_mapping' is populated the pool will create a program for each
     argument that has an argument descriptor. E.g., if a param is marked static we create
-    a new program for each value of that parameter.
+    a new program for each value of that parameter. See :ref:`arguments.ArgumentDescriptor` for
+    more information on argument descriptors.
 
     If `enable_jit` is True in the call to the pool, it will compile a program
-    with static arguments corresponding to the 'static_params', otherwise it
+    with static information as described in `argument_descriptor_mapping`, otherwise it
     will error. In the latter case, the pool needs to be filled with call(s)
-    to 'compile' before it can be used.
+    to `compile` before it can be used.
     """
 
     backend: gtx_backend.Backend
@@ -121,7 +122,8 @@ class CompiledProgramsPool:
         """
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
-        # TODO: dispatching over offset provider type is wrong. especially when we use compile time domains. test?
+        # TODO: Dispatching over offset provider type is wrong, especially when we use compile time
+        #  domains.
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
         try:
             self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)
