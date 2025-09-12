@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import abc
 import dataclasses
 import enum
 import typing
@@ -26,7 +27,7 @@ DATA_T = typing.TypeVar("DATA_T")
 T = typing.TypeVar("T")
 
 
-class ArgumentDescriptor:
+class ArgumentDescriptor(abc.ABC):
     """
     Abstract class to represent, extract, validate compile time information of an argument.
 
@@ -49,6 +50,7 @@ class ArgumentDescriptor:
         pass
 
     @classmethod
+    @abc.abstractmethod
     def attribute_extractor(cls, arg_expr: str) -> dict[str, str]:  # type: ignore[empty-body]  # classmethod is abstract
         """
         Return a mapping from the attributes of our descriptor to the expressions to retrieve them.

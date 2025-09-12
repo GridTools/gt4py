@@ -246,7 +246,9 @@ class CompiledProgramsPool:
                 param_type = _get_type_of_param_expr(self.program_type, expr)
                 descriptor.validate(expr, param_type)
 
-    def _initialize_argument_descriptor_mapping(self, argument_descriptors: ArgumentDescriptors) -> None:
+    def _initialize_argument_descriptor_mapping(
+        self, argument_descriptors: ArgumentDescriptors
+    ) -> None:
         if self.argument_descriptor_mapping is None:
             self.argument_descriptor_mapping = {
                 descr_cls: list(descriptor_expr_mapping.keys())
