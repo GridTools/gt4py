@@ -106,7 +106,7 @@ def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
 
 
 def _has_gpu_schedule(sdfg: dace.SDFG) -> bool:
-    """Check if any map of the given SDFG is scheduled on GPU."""
+    """Check if any node (e.g. maps) of the given SDFG is scheduled on GPU."""
     return any(
         getattr(node, "schedule", dace.dtype.ScheduleType.Default) in dace.dtypes.GPU_SCHEDULES
         for node, _ in sdfg.all_nodes_recursive()
