@@ -105,6 +105,14 @@ def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
     )
 
 
+def _has_gpu_schedule(sdfg: dace.SDFG) -> bool:
+    """Check if any map of the given SDFG is scheduled on GPU."""
+    return any(
+        getattr(node, "schedule", dace.dtype.ScheduleType.Default) in dace.dtypes.GPU_SCHEDULES
+        for node, _ in sdfg.all_nodes_recursive()
+    )
+
+
 def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     """Process the SDFG such that the call is synchronous.
 
@@ -115,9 +123,14 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     Todo: Revisit this function once DaCe changes its behaviour in this regard.
     """
 
-    # This is only a problem on GPU.
-    # TODO(phimuell): Figuring out what about OpenMP.
     if not gpu:
+        # This is only a problem on GPU. Dace uses OpenMP on CPU and
+        # the OpenMP parallel region creates a synchronization point.
+        return
+    elif not _has_gpu_schedule(sdfg):
+        # Even when the target device is GPU, it can happen that dace
+        # emits code without GPU kernels. In this case, the cuda headers
+        # are not imported and the SDFG is compiled as plain C++.
         return
 
     assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1, (
