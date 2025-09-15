@@ -16,11 +16,5 @@ def list_index(collection: list[tn.ScheduleTreeNode], node: tn.ScheduleTreeNode)
     Comparing with the `is` operator ensures memory comparison. The function `list.index()`
     uses value comparison and might thus yield different results.
     """
-    index = 0
-    for element in collection:
-        # compare with "is" to get memory comparison. ".index()" uses value comparison
-        if element is node:
-            return index
-        index += 1
-
-    raise StopIteration
+    # compare with "is" to get memory comparison. ".index()" uses value comparison
+    return next(index for index, element in enumerate(collection) if element is node)
