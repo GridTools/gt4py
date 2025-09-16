@@ -28,13 +28,20 @@ _lock_constructor: _LockConstructor = filelock.FileLock
 
 
 def lock(directory: pathlib.Path | str, suffix: str = ".lock") -> ContextManager:
-    """Create a lock for the given path."""
+    """
+    Create a lock for the given path.
+
+    If the path is a directory, it must already exist.
+    """
     directory = pathlib.Path(directory)
-    if not directory.is_dir():
-        raise ValueError(f"Expected a directory, got: {directory}")
 
     # Identifier of the lock implementation to avoid conflicts
     # when switching between different implementations.
     identifier = f"{eve_utils.a10n(_lock_constructor.__module__)}_{eve_utils.a10n(_lock_constructor.__name__)}"
-    path = directory / f"{identifier}{suffix}"
+
+    if directory.is_dir():
+        path = directory / f"{identifier}{suffix}"
+    else:
+        path = directory.with_suffix(f".{identifier}{suffix}")
+
     return _lock_constructor(str(path))
