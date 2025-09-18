@@ -78,7 +78,7 @@ VALUE_TYPES: Final[tuple[type, ...]] = tuple([*core_defs.SCALAR_TYPES, common.Fi
 
 
 @functools.cache
-def container_keys(container_type: type[PythonContainer]) -> tuple[str, ...]:
+def get_keys_of(container_type: type[PythonContainer]) -> tuple[str, ...]:
     """Get the keys of the container type."""
     assert issubclass(container_type, PythonContainer)
 
@@ -117,7 +117,7 @@ def make_container_extractor(container_type: type[PythonContainer]) -> NestedTup
             key: make_extractor_expr(f"{in_arg}.{key}", children_hints[key])
             if issubclass(children_hints[key], PYTHON_CONTAINER_TYPES)
             else f"{in_arg}.{key}"
-            for key in container_keys(container_type)
+            for key in get_keys_of(container_type)
         }
         if issubclass(container_type, tuple) and all(
             value.endswith(f".{key}") for key, value in args.items()
@@ -198,7 +198,7 @@ def make_container_constructor(
         }
         args_count, kwargs_keys = _get_args_info(container_type)
 
-        if {children_hints[key] for key in container_keys(container_type)} <= {*VALUE_TYPES}:
+        if {children_hints[key] for key in get_keys_of(container_type)} <= {*VALUE_TYPES}:
             # Fast path: all children are values, so we can just use argument unpacking
             call_args = (
                 f"*{in_arg}[:{args_count}], {', '.join(f'{k}={in_arg}[{args_count + i}]' for i, k in enumerate(kwargs_keys))}"
@@ -208,7 +208,7 @@ def make_container_constructor(
         else:
             # General path: we need to recursively construct children containers
             call_args_items = []
-            for i, key in enumerate(container_keys(container_type)):
+            for i, key in enumerate(get_keys_of(container_type)):
                 if children_hints[key] in VALUE_TYPES:
                     call_args_items.append(f"{in_arg}[{i}]")
                 else:

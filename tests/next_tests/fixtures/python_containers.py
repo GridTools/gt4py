@@ -11,6 +11,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import inspect
+import typing
 
 from typing import NamedTuple, Final, Protocol
 
@@ -27,6 +28,7 @@ TDim = Dimension("TDim")
 SDim = Dimension("SDim")
 
 
+@typing.runtime_checkable
 class PythonContainerDefinition(Protocol):
     @classmethod
     @abc.abstractmethod
@@ -37,6 +39,10 @@ class PythonContainerDefinition(Protocol):
     @classmethod
     @abc.abstractmethod
     def reference_type_spec(cls) -> ts.NamedTupleType: ...
+
+    # @classmethod
+    # @abc.abstractmethod
+    # def reference_constructor_type_spec(cls) -> ts.ConstructorType: ...
 
 
 # -- Sample container types --
@@ -283,9 +289,7 @@ class NestedMixedTupleContainer:
 PYTHON_CONTAINER_DEFINITIONS: list[type] = [
     definition
     for definition in globals().values()
-    if isinstance(definition, type)
-    and not inspect.isabstract(definition)
-    and "container" in definition.__name__.lower()
+    if type(definition) is type and issubclass(definition, PythonContainerDefinition)
 ]
 
 

@@ -14,6 +14,7 @@ import builtins
 import collections.abc
 import dataclasses
 import functools
+import pkgutil
 import sys
 import types
 import typing
@@ -71,7 +72,7 @@ def is_simple_dataclass_type(type_: type[xtyping.Dataclass]) -> bool:
     )
 
 
-def make_constructor_type(type_spec: ts.TypeSpec, type_: type) -> ts.ConstructorType:
+def make_constructor_type(type_spec: ts.TypeSpec) -> ts.ConstructorType:
     """Create a constructor type spec for a given scalar or python type."""
 
     match type_spec:
@@ -86,6 +87,7 @@ def make_constructor_type(type_spec: ts.TypeSpec, type_: type) -> ts.Constructor
             )
 
         case ts.NamedTupleType() as named_tuple_type:
+            type_ = pkgutil.resolve_name(named_tuple_type.original_python_type)
             pos_or_kw_args = {k: t for k, t in zip(type_spec.keys, type_spec.types)}
             kw_only_args = (
                 {f.name: pos_or_kw_args.pop(f.name) for f in dataclasses.fields(type_) if f.kw_only}
@@ -119,7 +121,7 @@ def make_type(type_: type) -> ts.TypeSpec:
                 " functions, 'InitVar's or default arguments."
             )
 
-        keys = [*containers.container_keys(type_)]
+        keys = [*containers.get_keys_of(type_)]
         hints = get_type_hints(type_)
         types = [
             from_type_hint(hints[key], globalns=sys.modules[type_.__module__].__dict__)
@@ -258,7 +260,7 @@ def from_type_hint(
             # This case matches 'type[Foo]' (where the 'Foo' type is stored in args[0])
             python_type = args[0]
             constructed_type_spec = from_type_hint_same_ns(python_type)
-            return make_constructor_type(constructed_type_spec, python_type)
+            return make_constructor_type(constructed_type_spec)
 
         case type():
             # This case matches 'int', 'float', 'FooContainer' etc. used as annotations
