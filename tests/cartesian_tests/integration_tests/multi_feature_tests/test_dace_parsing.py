@@ -21,6 +21,7 @@ import pathlib
 import re
 import typing
 
+from gt4py._core import definitions as core_defs
 from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.gtscript import PARALLEL, computation, interval
@@ -68,6 +69,7 @@ def tuple_st(min_value, max_value):
 @pytest.mark.parametrize(
     "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
 )
+@pytest.mark.skipif(core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM)
 def test_basic(decorator, backend):
     @decorator(backend=backend)
     def defn(outp: gtscript.Field[np.float64], par: np.float64):
