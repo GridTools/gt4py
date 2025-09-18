@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
+import pkgutil
 from typing import TYPE_CHECKING, Callable
 
 from gt4py.next import common
@@ -87,6 +88,13 @@ def container_keys(container_type: type[PythonContainer]) -> tuple[str, ...]:
         return tuple(container_type.__dataclass_fields__.keys())
 
     return ()
+
+
+def make_container_extractor_from_type_spec(
+    container_type_spec: ts.NamedTupleType,
+) -> NestedTupleConstructor:
+    assert isinstance(container_type_spec, ts.NamedTupleType)
+    return make_container_extractor(pkgutil.resolve_name(container_type_spec.original_python_type))
 
 
 @functools.cache

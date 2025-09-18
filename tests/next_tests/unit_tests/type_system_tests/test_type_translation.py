@@ -20,6 +20,7 @@ from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from ... import dummy_package
+from next_tests.fixtures import  python_containers as pc
 
 
 class CustomInt32DType:
@@ -67,6 +68,7 @@ def test_invalid_scalar_kind():
                 ]
             ),
         ),
+        *[(pc_cls, pc_cls.reference_type_spec()) for pc_cls in pc.PYTHON_CONTAINER_DEFINITIONS],
         (
             tuple[bool, typing.Tuple[int, float]],
             ts.TupleType(

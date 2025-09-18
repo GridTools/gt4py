@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import functools
+from __future__ import annotations
+
 from typing import Iterator, Optional, Sequence
 
 from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
@@ -145,6 +146,7 @@ class TupleType(DataType):
 
 class NamedTupleType(TupleType):
     keys: list[str]
+    original_python_type: str  # pkgutil.resolve_name() format: 'pkg.module:symbol.attr'
 
     def __getattr__(self, name: str) -> DataType | DimensionType | DeferredType:
         keys = object.__getattribute__(self, "keys")
@@ -155,14 +157,7 @@ class NamedTupleType(TupleType):
     def __str__(self) -> str:
         return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
 
-    @functools.cached_property
-    def nested_keys(self) -> NestedTuple[str]:
-        tree = tuple(
-            getattr(tspec, "nested_keys", key) for key, tspec in zip(self.keys, self.types)
-        )
-        return tree
-
-
+    
 class FunctionType(CallableType):
     pos_only_args: Sequence[TypeSpec]
     pos_or_kw_args: dict[str, TypeSpec]
@@ -178,6 +173,10 @@ class FunctionType(CallableType):
 
 class ConstructorType(CallableType):
     definition: FunctionType
+
+    @property
+    def constructed_type(self) -> TypeSpec:
+        return self.definition.returns
 
 
 class DomainType(DataType):

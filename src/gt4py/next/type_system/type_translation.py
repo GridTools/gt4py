@@ -71,43 +71,38 @@ def is_simple_dataclass_type(type_: type[xtyping.Dataclass]) -> bool:
     )
 
 
-@functools.singledispatch
 def make_constructor_type(type_spec: ts.TypeSpec, type_: type) -> ts.ConstructorType:
     """Create a constructor type spec for a given scalar or python type."""
-    raise TypeError(f"Cannot create constructor for type: {type_spec}")
 
+    match type_spec:
+        case ts.ScalarType():
+            return ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                    pos_or_kw_args={},
+                    kw_only_args={},
+                    returns=type_spec,
+                )
+            )
 
-@make_constructor_type.register
-def _make_constructor_scalar_type(type_spec: ts.ScalarType, type_: type) -> ts.ConstructorType:
-    return ts.ConstructorType(
-        definition=ts.FunctionType(
-            pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-            pos_or_kw_args={},
-            kw_only_args={},
-            returns=type_spec,
-        )
-    )
+        case ts.NamedTupleType() as named_tuple_type:
+            pos_or_kw_args = {k: t for k, t in zip(type_spec.keys, type_spec.types)}
+            kw_only_args = (
+                {f.name: pos_or_kw_args.pop(f.name) for f in dataclasses.fields(type_) if f.kw_only}
+                if issubclass(type_, xtyping.DataclassABC)
+                else {}
+            )
 
+            return ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[],
+                    pos_or_kw_args=pos_or_kw_args,
+                    kw_only_args=kw_only_args,
+                    returns=type_spec,
+                )
+            )
 
-@make_constructor_type.register
-def _make_constructor_namedtuple_type(
-    type_spec: ts.NamedTupleType, type_: type
-) -> ts.ConstructorType:
-    pos_or_kw_args = {k: t for k, t in zip(type_spec.keys, type_spec.types)}
-    kw_only_args = (
-        {f.name: pos_or_kw_args.pop(f.name) for f in dataclasses.fields(type_) if f.kw_only}
-        if issubclass(type_, xtyping.DataclassABC)
-        else {}
-    )
-
-    return ts.ConstructorType(
-        definition=ts.FunctionType(
-            pos_only_args=[],
-            pos_or_kw_args=pos_or_kw_args,
-            kw_only_args=kw_only_args,
-            returns=type_spec,
-        )
-    )
+    raise ValueError(f"ConstructorType not implemented for {type_spec}.")
 
 
 def make_type(type_: type) -> ts.TypeSpec:
@@ -130,7 +125,9 @@ def make_type(type_: type) -> ts.TypeSpec:
             from_type_hint(hints[key], globalns=sys.modules[type_.__module__].__dict__)
             for key in keys
         ]
-        return ts.NamedTupleType(types=types, keys=keys)
+        return ts.NamedTupleType(
+            types=types, keys=keys, original_python_type=f"{type_.__module__}:{type_.__qualname__}"
+        )
 
     if issubclass(type_, tuple) and type_ is not tuple:
         raise ValueError(f"Untyped tuple subclass {type_} is not a valid typed namedtuple.")
