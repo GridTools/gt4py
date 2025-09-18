@@ -169,7 +169,7 @@ def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]) -> np.ndarray:
     if cp is not None:
         # it's not clear from the documentation if cp.asnumpy guarantees a copy.
         # worst case, this copies twice.
-        return array.asnumpy()
+        return np.array(cp.asnumpy(array))
     else:
         return np.array(array)
 
