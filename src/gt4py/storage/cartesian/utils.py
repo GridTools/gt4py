@@ -166,13 +166,10 @@ def normalize_storage_spec(
 
 
 def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]) -> np.ndarray:
-    if hasattr(array, "__dlpack_device__"):
-        # workaround for a cupy issue with HIP-arrays
-        return np.from_dlpack(array)
-    elif cp is not None:
+    if cp is not None:
         # it's not clear from the documentation if cp.asnumpy guarantees a copy.
         # worst case, this copies twice.
-        return np.array(cp.asnumpy(array))
+        return array.asnumpy()
     else:
         return np.array(array)
 
