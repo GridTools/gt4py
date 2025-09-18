@@ -69,7 +69,10 @@ def tuple_st(min_value, max_value):
 @pytest.mark.parametrize(
     "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
 )
-@pytest.mark.skipif(core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM)
+@pytest.mark.skipif(
+    core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM,
+    reason="HIP/ROCm does not support cuda array interface",
+)
 def test_basic(decorator, backend):
     @decorator(backend=backend)
     def defn(outp: gtscript.Field[np.float64], par: np.float64):
