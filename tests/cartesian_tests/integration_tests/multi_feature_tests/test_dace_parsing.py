@@ -88,7 +88,7 @@ def test_basic(decorator, backend):
         defn(locoutp, par=locinp)
 
     call_stencil_object(locoutp=outp, locinp=inp)
-    outp = storage_utils.cpu_copy(outp)
+    outp = storage_utils.cpu_copy(outp.array)
 
     assert np.allclose(outp, 7.0)
 
