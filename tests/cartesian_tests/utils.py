@@ -24,10 +24,6 @@ class ArrayWrapper:
     def __cuda_array_interface__(self):
         return self.array.__cuda_array_interface__
 
-    @property
-    def __hip_array_interface__(self):
-        return self.__cuda_array_interface__
-
     def __descriptor__(self):
         return dace.data.create_datadescriptor(self.array)
 
