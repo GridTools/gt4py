@@ -127,7 +127,7 @@ build_cscs_amd_rocm:
     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
     - cd "${WORKDIR}/gt4py" && uv run --script noxfile.py -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
 
-.test_cscs_gh200:
+test_cscs_gh200:
   extends:
     - .container-runner-santis-gh200
     - .test_common
@@ -163,8 +163,7 @@ test_cscs_amd_rocm:
     CUDA_HOME: /opt/rocm # for cartesian
     SLURM_TIMELIMIT: 20 # relaxed relative to santis as there is no pressure on the queue
   rules:
-    # tmp: enable cartesian/dace tests on rocm to test fixes
-    - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
+    - if: $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
       when: never
     - *exclude_variants_rules
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'internal' && $SUBVARIANT == 'cpu'
