@@ -127,21 +127,49 @@ class CompiledProgramsPool:
     program_type: ts_ffront.ProgramType
     static_params: Sequence[str] | None = None  # not ordered
 
-    _compiled_programs: eve_utils.CustomMapping = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMapping(_hash_compiled_program_unsafe),
-        init=False,
-    )
+    @functools.cached_property
+    def _compiled_programs(self) -> eve_utils.CustomMapping:
+        return eve_utils.CustomMapping(_hash_compiled_program_unsafe)
 
-    _offset_provider_type_cache: eve_utils.CustomMapping = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMapping(common.hash_offset_provider_unsafe),
-        init=False,
-    )  # cache the offset provider type in order to avoid recomputing it at each program call
+    @functools.cached_property
+    def _offset_provider_type_cache(self) -> eve_utils.CustomMapping:
+        # cache the offset provider type in order to avoid recomputing it at each program call
+        return eve_utils.CustomMapping(common.hash_offset_provider_unsafe)
 
-    def __postinit__(self) -> None:
+    @functools.cached_property
+    def _arg_extractors(self) -> dict[int, containers.NestedTupleConstructor] | None:
+        extractors: dict[int, containers.NestedTupleConstructor] = {}
+        for i, type_spec in enumerate(
+            [
+                *self.program_type.definition.pos_only_args,
+                *self.program_type.definition.pos_or_kw_args.values(),
+            ]
+        ):
+            if isinstance(type_spec, ts.NamedTupleType):
+                extractors[i] = containers.make_container_extractor_from_type_spec(type_spec)
+
+        return extractors if extractors else None
+
+    @functools.cached_property
+    def _kwarg_extractors(self) -> dict[str, containers.NestedTupleConstructor] | None:
+        extractors: dict[str, containers.NestedTupleConstructor] = {}
+        for name, type_spec in self.program_type.definition.kw_only_args.items():
+            if isinstance(type_spec, ts.NamedTupleType):
+                extractors[name] = containers.make_container_extractor_from_type_spec(type_spec)
+
+        return extractors if extractors else None
+
+    def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
         assert not self.program_type.definition.kw_only_args
         assert not self.program_type.definition.pos_only_args
+
+        # Force initialization of all cached properties here to minimize first-time call overhead
+        self._compiled_programs  # initialize the mapping
+        self._offset_provider_type_cache  # initialize the mapping
+        self._arg_extractors  # initialize the mapping
+        self._kwarg_extractors  # initialize the mapping
 
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
@@ -154,7 +182,17 @@ class CompiledProgramsPool:
         it is an error.
         """
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
-        args = [containers.flatten(arg) for arg in args]
+
+        # TODO(egparedes): why not part of canonicalize_arguments?
+        if self._arg_extractors is not None:
+            new_args = [*args]
+            for i, extractor in self._arg_extractors.items():
+                new_args[i] = extractor(args[i])
+            args = tuple(new_args)
+        if self._kwarg_extractors is not None:
+            for k, extractor in self._kwarg_extractors.items():
+                kwargs[k] = extractor(kwargs[k])
+
         static_args_values = tuple(args[i] for i in self._static_arg_indices)
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
         try:
