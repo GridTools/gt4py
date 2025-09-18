@@ -129,7 +129,7 @@ build_cscs_amd_rocm:
 
 test_cscs_gh200:
   extends:
-    - .container-runner-daint-gh200
+    - .container-runner-santis-gh200
     - .test_common
   needs:
     - build_cscs_gh200

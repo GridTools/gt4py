@@ -72,3 +72,7 @@ if [ ! -z "${EXTRA_UV_PIP_ARGS}" ]; then
     uv pip install --compile-bytecode ${EXTRA_UV_PIP_ARGS}
 fi
 EOF
+
+# Workaround for an issue in Container Engine
+RUN unlink /etc/localtime
+RUN touch /etc/localtime
