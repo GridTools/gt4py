@@ -129,7 +129,7 @@ build_cscs_amd_rocm:
 
 test_cscs_gh200:
   extends:
-    - .container-runner-santis-gh200
+    - .container-runner-daint-gh200
     - .test_common
   needs:
     - build_cscs_gh200
@@ -161,7 +161,7 @@ test_cscs_amd_rocm:
     SLURM_PARTITION: mi300
     CMAKE_PREFIX_PATH: /opt/rocm # for next
     CUDA_HOME: /opt/rocm # for cartesian
-    SLURM_TIMELIMIT: 20 # relaxed relative to santis as there is no pressure on the queue
+    SLURM_TIMELIMIT: 20 # relaxed relative to gh200 as there is no pressure on the queue
   rules:
     - if: $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
       when: never
