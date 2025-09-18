@@ -25,6 +25,7 @@ from gt4py.next.iterator.ir_utils import (
     misc as ir_misc,
 )
 from gt4py.next.iterator.transforms import (
+    cse,
     fixed_point_transformation,
     inline_center_deref_lift_vars,
     inline_lambdas,
@@ -182,6 +183,9 @@ def fuse_as_fieldop(
         new_stencil, opcount_preserving=True, force_inline_lift_args=True
     )
     new_stencil = inline_lifts.InlineLifts().visit(new_stencil)
+    new_stencil = cse.CommonSubexpressionElimination.apply(
+        new_stencil, within_stencil=True, uids=uids
+    )
 
     new_node = im.as_fieldop(new_stencil, domain)(*new_args.values())
 
@@ -278,6 +282,7 @@ class FuseAsFieldOp(
     enabled_transformations = Transformation.all()
 
     uids: eve_utils.UIDGenerator
+    offset_provider_type: common.OffsetProviderType
 
     @classmethod
     def apply(
@@ -304,9 +309,11 @@ class FuseAsFieldOp(
         if not uids:
             uids = eve_utils.UIDGenerator()
 
-        new_node = cls(uids=uids, enabled_transformations=enabled_transformations).visit(
-            node, within_set_at_expr=within_set_at_expr
-        )
+        new_node = cls(
+            uids=uids,
+            enabled_transformations=enabled_transformations,
+            offset_provider_type=offset_provider_type,
+        ).visit(node, within_set_at_expr=within_set_at_expr)
         # The `FuseAsFieldOp` pass does not fully preserve the type information yet. In particular
         # for the generated lifts this is tricky and error-prone. For simplicity, we just reinfer
         # everything here ensuring later passes can use the information.
