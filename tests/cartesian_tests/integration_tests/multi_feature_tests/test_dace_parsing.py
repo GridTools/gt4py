@@ -88,9 +88,8 @@ def test_basic(decorator, backend):
         defn(locoutp, par=locinp)
 
     call_stencil_object(locoutp=outp, locinp=inp)
-    outp = storage_utils.cpu_copy(outp)
 
-    assert np.allclose(outp, 7.0)
+    assert np.allclose(np.asarray(outp), 7.0)
 
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
