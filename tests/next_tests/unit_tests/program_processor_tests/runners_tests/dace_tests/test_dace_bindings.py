@@ -39,25 +39,30 @@ def _get_stride(ndarray, dim_index):
 _binding_source_not_persistent = (
     _bind_header
     + f"""\
-def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
-    last_call_args[4] = ctypes.c_double(args[0])
+def {_bind_func_name}(device, sdfg_argtypes, args, offset_provider, last_call_args):
+    last_call_args[5] = ctypes.c_double(args[0])
     last_call_args[0].value = args[1].data_ptr()
-    last_call_args[7] = ctypes.c_int(_get_stride(args[1].ndarray, 0))
+    last_call_args[8] = ctypes.c_int(_get_stride(args[1].ndarray, 0))
     last_call_args[1].value = args[2][0].data_ptr()
-    last_call_args[8] = ctypes.c_int(_get_stride(args[2][0].ndarray, 0))
-    last_call_args[9] = ctypes.c_int(_get_stride(args[2][0].ndarray, 1))
+    last_call_args[9] = ctypes.c_int(_get_stride(args[2][0].ndarray, 0))
+    last_call_args[10] = ctypes.c_int(_get_stride(args[2][0].ndarray, 1))
     last_call_args[2].value = args[2][1][0].data_ptr()
-    last_call_args[10] = ctypes.c_int(_get_stride(args[2][1][0].ndarray, 0))
-    last_call_args[11] = ctypes.c_int(_get_stride(args[2][1][0].ndarray, 1))
-    last_call_args[5] = ctypes.c_double(args[2][1][1])
-    last_call_args[6] = ctypes.c_double(args[3])
+    last_call_args[11] = ctypes.c_int(_get_stride(args[2][1][0].ndarray, 0))
+    last_call_args[12] = ctypes.c_int(_get_stride(args[2][1][0].ndarray, 1))
+    last_call_args[6] = ctypes.c_double(args[2][1][1])
+    last_call_args[7] = ctypes.c_double(args[3])
     last_call_args[3].value = args[4].data_ptr()
-    last_call_args[12] = ctypes.c_int(args[4].domain.ranges[0].start)
-    last_call_args[13] = ctypes.c_int(args[4].domain.ranges[0].stop)
-    last_call_args[14] = ctypes.c_int(args[4].domain.ranges[1].start)
-    last_call_args[15] = ctypes.c_int(args[4].domain.ranges[1].stop)
-    last_call_args[16] = ctypes.c_int(_get_stride(args[4].ndarray, 0))
-    last_call_args[17] = ctypes.c_int(_get_stride(args[4].ndarray, 1))\
+    last_call_args[13] = ctypes.c_int(args[4].domain.ranges[0].start)
+    last_call_args[14] = ctypes.c_int(args[4].domain.ranges[0].stop)
+    last_call_args[15] = ctypes.c_int(args[4].domain.ranges[1].start)
+    last_call_args[16] = ctypes.c_int(args[4].domain.ranges[1].stop)
+    last_call_args[17] = ctypes.c_int(_get_stride(args[4].ndarray, 0))
+    last_call_args[18] = ctypes.c_int(_get_stride(args[4].ndarray, 1))
+    table = offset_provider[E2V]
+    last_call_args[4].value = table.data_ptr()
+    last_call_args[19] = ctypes.c_int(table.ndarray.shape[0])
+    last_call_args[20] = ctypes.c_int(_get_stride(table.ndarray, 0))
+    last_call_args[21] = ctypes.c_int(_get_stride(table.ndarray, 1))\
 """
 )
 
@@ -65,18 +70,23 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
 _binding_source_persistent = (
     _bind_header
     + f"""\
-def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
-    last_call_args[4] = ctypes.c_double(args[0])
+def {_bind_func_name}(device, sdfg_argtypes, args, offset_provider, last_call_args):
+    last_call_args[5] = ctypes.c_double(args[0])
     last_call_args[0].value = args[1].data_ptr()
     last_call_args[1].value = args[2][0].data_ptr()
     last_call_args[2].value = args[2][1][0].data_ptr()
-    last_call_args[5] = ctypes.c_double(args[2][1][1])
-    last_call_args[6] = ctypes.c_double(args[3])
+    last_call_args[6] = ctypes.c_double(args[2][1][1])
+    last_call_args[7] = ctypes.c_double(args[3])
     last_call_args[3].value = args[4].data_ptr()
-    last_call_args[12] = ctypes.c_int(args[4].domain.ranges[0].start)
-    last_call_args[13] = ctypes.c_int(args[4].domain.ranges[0].stop)
-    last_call_args[14] = ctypes.c_int(args[4].domain.ranges[1].start)
-    last_call_args[15] = ctypes.c_int(args[4].domain.ranges[1].stop)\
+    last_call_args[13] = ctypes.c_int(args[4].domain.ranges[0].start)
+    last_call_args[14] = ctypes.c_int(args[4].domain.ranges[0].stop)
+    last_call_args[15] = ctypes.c_int(args[4].domain.ranges[1].start)
+    last_call_args[16] = ctypes.c_int(args[4].domain.ranges[1].stop)
+    table = offset_provider[E2V]
+    last_call_args[4].value = table.data_ptr()
+    last_call_args[19] = ctypes.c_int(table.ndarray.shape[0])
+    last_call_args[20] = ctypes.c_int(_get_stride(table.ndarray, 0))
+    last_call_args[21] = ctypes.c_int(_get_stride(table.ndarray, 1))\
 """
 )
 
@@ -100,7 +110,7 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
     # set 'B_dim1' size to constant value to test the case of constant size in one dimension
     B_shape = (B_dim0_rstop - B_dim0_rstart, 10)
     # set 'B_dim1' stride to constant value
-    B_stride0, _ = (dace.symbol(f"__B_stride_{i}") for i in (0, 1))
+    B_stride0, _ = [dace.symbol(gtx_dace_utils.field_stride_symbol_name("B", i)) for i in range(2)]
     B, _ = sdfg.add_array("B", B_shape, dace.int32, strides=(B_stride0, 1))
 
     C_0_dim0_rstart, C_0_dim0_rstop = (
@@ -112,7 +122,7 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
         dace.symbol(gtx_dace_utils.range_stop_symbol("C_0", ffront_test_utils.JDim)),
     )
     C_0_shape = (C_0_dim0_rstop - C_0_dim0_rstart, C_0_dim1_rstop - C_0_dim1_rstart)
-    C_0_strides = tuple(dace.symbol(f"__C_0_stride_{i}") for i in (0, 1))
+    C_0_strides = [dace.symbol(gtx_dace_utils.field_stride_symbol_name("C_0", i)) for i in range(2)]
     C_0, _ = sdfg.add_array("C_0", C_0_shape, dace.int32, strides=C_0_strides)
 
     C_1_0_dim0_rstart, C_1_0_dim0_rstop = (
@@ -124,7 +134,9 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
         dace.symbol(gtx_dace_utils.range_stop_symbol("C_1_0", ffront_test_utils.JDim)),
     )
     C_1_0_shape = (C_1_0_dim0_rstop - C_1_0_dim0_rstart, C_1_0_dim1_rstop - C_1_0_dim1_rstart)
-    C_1_0_strides = tuple(dace.symbol(f"__C_1_0_stride_{i}") for i in (0, 1))
+    C_1_0_strides = [
+        dace.symbol(gtx_dace_utils.field_stride_symbol_name("C_1_0", i)) for i in range(2)
+    ]
     C_1_0, _ = sdfg.add_array("C_1_0", C_1_0_shape, dace.int32, strides=C_1_0_strides)
 
     C_1_1, _ = sdfg.add_scalar("C_1_1", dace.float64)
@@ -140,13 +152,34 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
         dace.symbol(gtx_dace_utils.range_stop_symbol("E", ffront_test_utils.JDim)),
     )
     E_shape = (E_dim0_rstop - E_dim0_rstart, E_dim1_rstop - E_dim1_rstart)
-    E_strides = tuple(dace.symbol(f"__E_stride_{i}") for i in (0, 1))
+    E_strides = [dace.symbol(gtx_dace_utils.field_stride_symbol_name("E", i)) for i in range(2)]
     E, _ = sdfg.add_array("E", E_shape, dace.int32, strides=E_strides)
 
+    conn = gtx_dace_utils.connectivity_identifier("E2V")
+    conn_hsize = dace.symbol(gtx_dace_utils.field_size_symbol_name(conn, 0))
+    conn_shape = (conn_hsize, 5)
+    conn_strides = [dace.symbol(f"__{conn}_stride_{i}") for i in range(2)]
+    sdfg.add_array(conn, conn_shape, dace.int32, strides=conn_strides)
+
     st = sdfg.add_state()
+    temp, _ = sdfg.add_temp_transient([conn_hsize], dace.int32)
+    temp_node = st.add_access(temp)
+    st.add_mapped_tasklet(
+        "access_table",
+        code="result = neighbors[2]",
+        map_ranges=dict(i=f"0:{conn_hsize}"),
+        inputs={
+            "neighbors": dace.Memlet(data=conn, subset=f"i, 0:5"),
+        },
+        outputs={
+            "result": dace.Memlet(data=temp, subset="i"),
+        },
+        output_nodes={temp_node},
+        external_edges=True,
+    )
     st.add_mapped_tasklet(
         "compute",
-        code="result = arg0 + arg1 + arg2 + arg3 + arg4 + arg5",
+        code="result = arg0 + arg1 + arg2 + arg3 + arg4 + arg5 + arg6",
         map_ranges=dict(i=f"{E_dim0_rstart}:{E_dim0_rstop}", j=f"{E_dim1_rstart}:{E_dim1_rstop}"),
         inputs={
             "arg0": dace.Memlet(data=A, subset="0"),
@@ -155,7 +188,9 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
             "arg3": dace.Memlet(data=C_1_0, subset=f"i-{E_dim0_rstart},j-{E_dim1_rstart}"),
             "arg4": dace.Memlet(data=C_1_1, subset="0"),
             "arg5": dace.Memlet(data=D, subset="0"),
+            "arg6": dace.Memlet(data=temp, subset=f"i-{E_dim0_rstart}"),
         },
+        input_nodes={temp_node},
         outputs={
             "result": dace.Memlet(data=E, subset=f"i-{E_dim0_rstart},j-{E_dim1_rstart}"),
         },

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from typing import Final
 
 import dace
@@ -31,6 +32,81 @@ _cb_device: Final[str] = "device"
 _cb_get_stride: Final[str] = "_get_stride"
 _cb_sdfg_argtypes: Final[str] = "sdfg_argtypes"
 _cb_last_call_args: Final[str] = "last_call_args"
+_cb_neighbor_table: Final[str] = "table"
+_cb_offset_provider: Final[str] = "offset_provider"
+
+
+def _update_field_ptr(
+    arg: str, sdfg_arg_desc: dace.data.Array, sdfg_arg_index: int, code: codegen.TextBlock
+) -> None:
+    assert not sdfg_arg_desc.transient
+    code.append(f"assert field_utils.verify_device_field_type({arg}.ndarray, {_cb_device})")
+    code.append(f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes.c_void_p)")
+    code.append(f"assert gtx_common.Domain.is_finite({arg}.ndarray.domain)")
+    code.append(f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}.data_ptr()")
+
+
+def _update_field_shape(
+    field_name: str,
+    field_type: ts.FieldType,
+    arg: str,
+    sdfg_arg_desc: dace.data.Array,
+    sdfg_arg_index: int,
+    code: codegen.TextBlock,
+    sdfg_arglist: dict[str, dace.data.Data],
+    make_persistent: bool,
+) -> None:
+    for i, (dim, array_size) in enumerate(zip(field_type.dims, sdfg_arg_desc.shape, strict=True)):
+        if isinstance(array_size, dace.symbolic.SymbolicType) and not array_size.is_constant():
+            # The array shape is defined as a sequence of expressions
+            # like 'range_stop - range_start', where 'range_start' and
+            # 'range_stop' are SDFG symbols.
+            dim_range = f"{arg}.domain.ranges[{i}]"
+            rstart = gtx_dace_utils.range_start_symbol(field_name, dim)
+            rstop = gtx_dace_utils.range_stop_symbol(field_name, dim)
+            for suffix, symbol_name in [("start", rstart), ("stop", rstop)]:
+                value = f"{dim_range}.{suffix}"
+                _parse_gt_param(
+                    symbol_name,
+                    FIELD_SYMBOL_GT_TYPE,
+                    value,
+                    code,
+                    sdfg_arglist,
+                    make_persistent,
+                )
+        else:
+            # The array shape is set to constant value in this dimension.
+            code.append(
+                f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.ndarray.shape[{i}]"
+            )
+
+
+def _update_strides(
+    field_name: str,
+    arg: str,
+    sdfg_arg_desc: dace.data.Array,
+    sdfg_arg_index: int,
+    code: codegen.TextBlock,
+    sdfg_arglist: dict[str, dace.data.Data],
+    make_persistent: bool,
+) -> None:
+    for i, array_stride in enumerate(sdfg_arg_desc.strides):
+        value = f"{_cb_get_stride}({arg}.ndarray, {i})"
+        if isinstance(array_stride, dace.symbolic.SymbolicType) and not array_stride.is_constant():
+            assert array_stride.name == gtx_dace_utils.field_stride_symbol_name(field_name, i)
+            # The strides of a global array are defined by a sequence
+            # of SDFG symbols.
+            _parse_gt_param(
+                array_stride.name,
+                FIELD_SYMBOL_GT_TYPE,
+                value,
+                code,
+                sdfg_arglist,
+                make_persistent,
+            )
+        else:
+            # The array stride is set to constant value in this dimension.
+            code.append(f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {value}")
 
 
 def _update_sdfg_scalar_arg(
@@ -139,64 +215,26 @@ def _parse_gt_param(
                 )
             else:
                 assert isinstance(sdfg_arg_desc, dace.data.Array)
-                code.append(f"assert field_utils.verify_device_field_type({arg}, {_cb_device})")
-                code.append(
-                    f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes.c_void_p)"
+                _update_field_ptr(arg, sdfg_arg_desc, sdfg_arg_index, code)
+                _update_field_shape(
+                    param_name,
+                    param_type,
+                    arg,
+                    sdfg_arg_desc,
+                    sdfg_arg_index,
+                    code,
+                    sdfg_arglist,
+                    make_persistent,
                 )
-                code.append(f"assert gtx_common.Domain.is_finite({arg}.domain)")
-                code.append(f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}.data_ptr()")
-                for i, (dim, array_size) in enumerate(
-                    zip(param_type.dims, sdfg_arg_desc.shape, strict=True)
-                ):
-                    if (
-                        isinstance(array_size, dace.symbolic.SymbolicType)
-                        and not array_size.is_constant()
-                    ):
-                        # The array shape is defined as a sequence of expressions
-                        # like 'range_stop - range_start', where 'range_start' and
-                        # 'range_stop' are SDFG symbols.
-                        dim_range = f"{arg}.domain.ranges[{i}]"
-                        rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
-                        rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
-                        for suffix, symbol_name in [("start", rstart), ("stop", rstop)]:
-                            value = f"{dim_range}.{suffix}"
-                            _parse_gt_param(
-                                symbol_name,
-                                FIELD_SYMBOL_GT_TYPE,
-                                value,
-                                code,
-                                sdfg_arglist,
-                                make_persistent,
-                            )
-                    else:
-                        # The array shape is set to constant value in this dimension.
-                        code.append(
-                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.ndarray.shape[{i}]"
-                        )
-                for i, array_stride in enumerate(sdfg_arg_desc.strides):
-                    value = f"{_cb_get_stride}({arg}.ndarray, {i})"
-                    if (
-                        isinstance(array_stride, dace.symbolic.SymbolicType)
-                        and not array_stride.is_constant()
-                    ):
-                        assert array_stride.name == gtx_dace_utils.field_stride_symbol_name(
-                            param_name, i
-                        )
-                        # The strides of a global array are defined by a sequence
-                        # of SDFG symbols.
-                        _parse_gt_param(
-                            array_stride.name,
-                            FIELD_SYMBOL_GT_TYPE,
-                            value,
-                            code,
-                            sdfg_arglist,
-                            make_persistent,
-                        )
-                    else:
-                        # The array stride is set to constant value in this dimension.
-                        code.append(
-                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {value}"
-                        )
+                _update_strides(
+                    param_name,
+                    arg,
+                    sdfg_arg_desc,
+                    sdfg_arg_index,
+                    code,
+                    sdfg_arglist,
+                    make_persistent,
+                )
 
         elif isinstance(param_type, ts.ScalarType):
             assert isinstance(sdfg_arg_desc, dace.data.Scalar)
@@ -221,6 +259,40 @@ def _parse_gt_param(
 
         else:
             raise ValueError(f"Unexpected paramter type {param_type}")
+
+
+def _parse_gt_connectivities(
+    code: codegen.TextBlock, sdfg_arglist: dict[str, dace.data.Data]
+) -> None:
+    for sdfg_arg_index, (arg_name, arg_desc) in enumerate(sdfg_arglist.items()):
+        if not gtx_dace_utils.is_connectivity_identifier(arg_name):
+            continue
+        assert isinstance(arg_desc, dace.data.Array)
+        assert len(arg_desc.shape) == 2
+        origin_size_arg = gtx_dace_utils.field_size_symbol_name(arg_name, 0)
+        assert str(arg_desc.shape[0]) == origin_size_arg
+        assert isinstance(arg_desc.shape[1], int) or str(arg_desc.shape[1]).isdigit()
+        m = gtx_dace_utils.CONNECTIVITY_INDENTIFIER_RE.match(arg_name)
+        assert m is not None
+        code.append(f"{_cb_neighbor_table} = {_cb_offset_provider}[{m[1]}]")
+        _update_field_ptr(_cb_neighbor_table, arg_desc, sdfg_arg_index, code)
+        _parse_gt_param(  # set the size in the horizontal dimension
+            origin_size_arg,
+            FIELD_SYMBOL_GT_TYPE,
+            f"{_cb_neighbor_table}.ndarray.shape[0]",
+            code,
+            sdfg_arglist,
+            make_persistent=False,
+        )
+        _update_strides(
+            arg_name,
+            _cb_neighbor_table,
+            arg_desc,
+            sdfg_arg_index,
+            code,
+            sdfg_arglist,
+            make_persistent=False,
+        )
 
 
 def _create_sdfg_bindings(
@@ -262,12 +334,13 @@ def {_cb_get_stride}(ndarray, dim_index):
 """)
     code.empty_line()
     code.append(
-        "def {funname}({arg0}, {arg1}, {arg2}, {arg3}):".format(
+        "def {funname}({arg0}, {arg1}, {arg2}, {arg3}, {arg4}):".format(
             funname=bind_func_name,
             arg0=_cb_device,
             arg1=_cb_sdfg_argtypes,
             arg2=_cb_args,
-            arg3=_cb_last_call_args,
+            arg3=_cb_offset_provider,
+            arg4=_cb_last_call_args,
         )
     )
 
@@ -280,6 +353,12 @@ def {_cb_get_stride}(ndarray, dim_index):
             arg = f"{_cb_args}[{i}]"
             assert isinstance(param.type_, ts.DataType)
             _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
+
+        # During test execution, it can happen that the same program is invoked twice
+        #   with different offset providers, therefore we have to update the array
+        #   pointers of connectivities.
+        if "pytest" in sys.modules:
+            _parse_gt_connectivities(code, sdfg_arglist)
 
     src = codegen.format_python_source(code.text)
     return stages.BindingSource(src, library_deps=tuple())
