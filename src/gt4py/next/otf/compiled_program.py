@@ -137,8 +137,8 @@ class CompiledProgramsPool:
         return eve_utils.CustomMapping(common.hash_offset_provider_unsafe)
 
     @functools.cached_property
-    def _arg_extractors(self) -> dict[int, containers.NestedTupleConstructor] | None:
-        extractors: dict[int, containers.NestedTupleConstructor] = {}
+    def _arg_extractors(self) -> dict[int, containers.PythonContainerConstructor] | None:
+        extractors: dict[int, containers.PythonContainerConstructor] = {}
         for i, type_spec in enumerate(
             [
                 *self.program_type.definition.pos_only_args,
@@ -151,8 +151,8 @@ class CompiledProgramsPool:
         return extractors if extractors else None
 
     @functools.cached_property
-    def _kwarg_extractors(self) -> dict[str, containers.NestedTupleConstructor] | None:
-        extractors: dict[str, containers.NestedTupleConstructor] = {}
+    def _kwarg_extractors(self) -> dict[str, containers.PythonContainerConstructor] | None:
+        extractors: dict[str, containers.PythonContainerConstructor] = {}
         for name, type_spec in self.program_type.definition.kw_only_args.items():
             if isinstance(type_spec, ts.NamedTupleType):
                 extractors[name] = containers.make_container_extractor_from_type_spec(type_spec)
@@ -181,17 +181,20 @@ class CompiledProgramsPool:
         (defined by 'static_params') in case `enable_jit` is True. Otherwise,
         it is an error.
         """
-        args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
+        canonical_args, canonical_kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
 
         # TODO(egparedes): why not part of canonicalize_arguments?
-        if self._arg_extractors is not None:
-            new_args = [*args]
+        if self._arg_extractors is None:
+            args = canonical_args
+        else:
+            args_tmp = [*args]
             for i, extractor in self._arg_extractors.items():
-                new_args[i] = extractor(args[i])
-            args = tuple(new_args)
+                args_tmp[i] = extractor(canonical_args[i])
+            args = tuple(args_tmp)
+
         if self._kwarg_extractors is not None:
             for k, extractor in self._kwarg_extractors.items():
-                kwargs[k] = extractor(kwargs[k])
+                kwargs[k] = extractor(canonical_kwargs[k])
 
         static_args_values = tuple(args[i] for i in self._static_arg_indices)
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
@@ -210,7 +213,7 @@ class CompiledProgramsPool:
                 }
                 self._compile_variant(static_args=static_args, offset_provider=offset_provider)
                 return self(
-                    *args, offset_provider=offset_provider, enable_jit=False, **kwargs
+                    *canonical_args, offset_provider=offset_provider, enable_jit=False, **canonical_kwargs
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 

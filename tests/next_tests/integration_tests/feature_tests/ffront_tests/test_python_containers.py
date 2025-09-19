@@ -21,8 +21,6 @@ from gt4py.next.type_system import type_specifications as ts
 
 pytestmark = pytest.mark.uses_cartesian_shift
 
-# TODO move to a proper location
-
 # IDim = gtx.Dimension("i")
 # JDim = gtx.Dimension("j")
 

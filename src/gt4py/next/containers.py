@@ -13,10 +13,7 @@ import pkgutil
 from typing import TYPE_CHECKING, Callable
 
 from gt4py.next import common
-
-
-if TYPE_CHECKING:
-    from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts
 
 # functools.singledispatch would be nice, but would have to be on the metaclass level
 _registry: list[tuple[Callable[[type], bool], Callable[[type], ts.TupleType] | ts.TupleType]] = []
@@ -67,7 +64,14 @@ if TYPE_CHECKING:
 
 PythonContainer: TypeAlias = xtyping.TypedNamedTupleABC | xtyping.DataclassABC
 PythonContainerValue: TypeAlias = core_defs.Scalar | common.Field
-NestedTupleConstructor: TypeAlias = Callable[[Any], NestedTuple[PythonContainerValue]]
+
+PythonContainerExtractor: TypeAlias = Callable[[Any], NestedTuple[PythonContainerValue]]
+
+PythonContainerT = TypeVar("PythonContainerT", bound=PythonContainer)
+PythonContainerConstructor: TypeAlias = Callable[
+    [NestedTuple[PythonContainerValue]], PythonContainerT
+]
+
 
 PYTHON_CONTAINER_TYPES: Final[tuple[type, ...]] = typing.cast(
     tuple[type, ...],
@@ -92,13 +96,22 @@ def get_keys_of(container_type: type[PythonContainer]) -> tuple[str, ...]:
 
 def make_container_extractor_from_type_spec(
     container_type_spec: ts.NamedTupleType,
-) -> NestedTupleConstructor:
+) -> PythonContainerExtractor:
     assert isinstance(container_type_spec, ts.NamedTupleType)
     return make_container_extractor(pkgutil.resolve_name(container_type_spec.original_python_type))
 
 
+def make_container_constructor_from_type_spec(
+    container_type_spec: ts.NamedTupleType,
+) -> PythonContainerConstructor:
+    assert isinstance(container_type_spec, ts.NamedTupleType)
+    return make_container_constructor(
+        pkgutil.resolve_name(container_type_spec.original_python_type)
+    )
+
+
 @functools.cache
-def make_container_extractor(container_type: type[PythonContainer]) -> NestedTupleConstructor:
+def make_container_extractor(container_type: type[PythonContainer]) -> PythonContainerExtractor:
     """
     Create an extractor function for the given container type.
 
@@ -129,9 +142,6 @@ def make_container_extractor(container_type: type[PythonContainer]) -> NestedTup
 
     extractor_func_src = f"lambda x: {make_extractor_expr('x', container_type)}"
     return eval(extractor_func_src)
-
-
-PythonContainerT = TypeVar("PythonContainerT", bound=PythonContainer)
 
 
 def _get_args_info(container_type: type[PythonContainer]) -> tuple[int, list[str]]:
@@ -168,7 +178,7 @@ def _get_args_info(container_type: type[PythonContainer]) -> tuple[int, list[str
 @functools.cache
 def make_container_constructor(
     container_type: type[PythonContainerT],
-) -> Callable[[ts.NestedTuple], PythonContainerT]:
+) -> PythonContainerConstructor[PythonContainerT]:
     """
     Create a constructor function for the given container type.
 

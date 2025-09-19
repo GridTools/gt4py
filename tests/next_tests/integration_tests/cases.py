@@ -8,9 +8,6 @@
 
 from __future__ import annotations
 
-
-# TODO: changes in this file are super hacked...
-
 import copy
 import dataclasses
 import functools
@@ -20,8 +17,6 @@ import typing
 from typing import Any, Callable, Literal, Optional, Mapping, Protocol, TypeAlias
 
 import numpy as np
-import collections
-from gt4py.next import containers
 import pytest
 
 import gt4py.next as gtx
@@ -33,11 +28,11 @@ from gt4py.next import (
     backend as next_backend,
     common,
     constructors,
+    containers,
     field_utils,
     utils as gt_utils,
 )
 from gt4py.next.ffront import decorator
-from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from next_tests import definitions as test_definitions
@@ -375,7 +370,7 @@ def allocate(
         domain, extend
     )  # TODO: this should take into account the Domain of the allocated field
 
-    arg_type = get_rich_param_types(fieldview_prog)[name]
+    arg_type = get_param_types(fieldview_prog)[name]
     if strategy is None:
         if name in ["out", RETURN]:
             strategy = ZeroInitializer()
@@ -481,9 +476,7 @@ def verify(
 
     out_comp = out or inout
     assert out_comp is not None
-    out_comp = containers.flatten(out_comp)
     out_comp_ndarray = field_utils.asnumpy(out_comp)
-    ref = containers.flatten(ref)
     ref_ndarray = field_utils.asnumpy(ref)
 
     assert comparison(ref_ndarray, out_comp_ndarray), (
@@ -588,7 +581,6 @@ def _allocate_from_type(
     tuple_start: Optional[int] = None,
 ) -> FieldViewArg:
     """Allocate data based on the type or a (nested) tuple thereof."""
-    cls, arg_type = arg_type
     match arg_type:
         case ts.FieldType(dims=dims, dtype=arg_dtype):
             return strategy.field(
@@ -598,44 +590,28 @@ def _allocate_from_type(
             )
         case ts.ScalarType(kind=kind):
             return strategy.scalar(dtype=dtype or kind.name.lower())
-        case ts.ConstructorType(definition=definition):
-            tmp = list(
-                _allocate_from_type(
-                    case=case, arg_type=(None, t), domain=domain, dtype=dtype, strategy=strategy
-                )
-                for t in definition.returns.types
-            )
-            return cls(**{k: v for k, v in zip(definition.returns.keys, tmp)})
-        #     return collections.namedtuple(
-        #         gt4py.next.ffront.type_specifications.NamedTupleType.__name__, keys
-        #     )(*tp)
-
-        case ts.TupleType(types=types):
-            return tuple(
+        case ts.TupleType(types=types) as arg_tuple_type_spec:
+            allocated_tuple = tuple(
                 (
                     _allocate_from_type(
-                        case=case, arg_type=(None, t), domain=domain, dtype=dtype, strategy=strategy
+                        case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
                     )
                     for t in types
                 )
             )
+            if isinstance(arg_tuple_type_spec, ts.NamedTupleType):
+                container_constructor = containers.make_container_constructor_from_type_spec(
+                    arg_tuple_type_spec
+                )
+                allocated_tuple = container_constructor(allocated_tuple)
+            return allocated_tuple
         case _:
             raise TypeError(
                 f"Can not allocate for type '{arg_type}' with initializer '{strategy or 'default'}'."
             )
 
 
-def get_param_type(type_hint) -> ts.TypeSpec:
-    try:
-        ctor_type = containers.get_constructor_type(type_hint)
-        return type_hint, ctor_type
-
-    except KeyError:
-        ...
-    return type_hint, type_translation.from_type_hint(type_hint)
-
-
-def get_rich_param_types(
+def get_param_types(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
 ) -> dict[str, ts.TypeSpec]:
     if fieldview_prog.definition is None:
@@ -643,16 +619,8 @@ def get_rich_param_types(
             f"test cases do not support '{type(fieldview_prog)}' with empty .definition attribute (as you would get from .as_program())."
         )
     annotations = xtyping.get_type_hints(fieldview_prog.definition)
-
-    return {name: get_param_type(type_hint) for name, type_hint in annotations.items()}
-
-
-def get_param_types(
-    fieldview_prog: decorator.FieldOperator | decorator.Program,
-) -> dict[str, ts.TypeSpec]:
     return {
-        k: v[1].definition.returns if isinstance(v[1], ts.ConstructorType) else v[1]
-        for k, v in get_rich_param_types(fieldview_prog).items()
+        name: type_translation.from_type_hint(type_hint) for name, type_hint in annotations.items()
     }
 
 
