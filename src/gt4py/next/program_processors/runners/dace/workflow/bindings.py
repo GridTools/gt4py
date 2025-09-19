@@ -274,19 +274,20 @@ def _parse_gt_connectivities(
         assert isinstance(arg_desc.shape[1], int) or str(arg_desc.shape[1]).isdigit()
         m = gtx_dace_utils.CONNECTIVITY_INDENTIFIER_RE.match(arg_name)
         assert m is not None
-        code.append(f"{_cb_neighbor_table} = {_cb_offset_provider}[{m[1]}]")
-        _update_field_ptr(_cb_neighbor_table, arg_desc, sdfg_arg_index, code)
+        conn = f"{_cb_neighbor_table}_{m[1]}"
+        code.append(f"{conn} = {_cb_offset_provider}[{m[1]}]")
+        _update_field_ptr(conn, arg_desc, sdfg_arg_index, code)
         _parse_gt_param(  # set the size in the horizontal dimension
             origin_size_arg,
             FIELD_SYMBOL_GT_TYPE,
-            f"{_cb_neighbor_table}.ndarray.shape[0]",
+            f"{conn}.ndarray.shape[0]",
             code,
             sdfg_arglist,
             make_persistent=False,
         )
         _update_strides(
             arg_name,
-            _cb_neighbor_table,
+            conn,
             arg_desc,
             sdfg_arg_index,
             code,
