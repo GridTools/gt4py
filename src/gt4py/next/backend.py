@@ -154,8 +154,8 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     ) -> None:
         if not isinstance(program, IT_PRG):
             args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
-        args = [containers.flatten(a) for a in args]
-        kwargs = {k: containers.flatten(v) for k, v in kwargs.items()}
+        args = [containers.extract(a) for a in args]
+        kwargs = {k: containers.extract(v) for k, v in kwargs.items()}
         self.jit(program, *args, **kwargs)(*args, **kwargs)
 
     def jit(self, program: INPUT_DATA, *args: Any, **kwargs: Any) -> stages.CompiledProgram:

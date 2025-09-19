@@ -108,15 +108,21 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         domain = kwargs.pop("domain", None)
 
-        flat_out = containers.flatten(out)  # TODO
-        out_domain = common.domain(domain) if domain is not None else _get_out_domain(flat_out)
+        container_extracted_out = containers.extract(
+            out
+        )  # TODO alternatively we could make all functions work on named tuples directly
+        out_domain = (
+            common.domain(domain)
+            if domain is not None
+            else _get_out_domain(container_extracted_out)
+        )
 
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
 
         with embedded_context.update(**new_context_kwargs):
             res = op(*args, **kwargs)
-        flat_res = containers.flatten(res)  # TODO
-        _tuple_assign_field(flat_out, flat_res, domain=out_domain)
+        container_extracted_res = containers.extract(res)  # TODO
+        _tuple_assign_field(container_extracted_out, container_extracted_res, domain=out_domain)
         return None
     else:
         # called from other field_operator or missing `out` argument

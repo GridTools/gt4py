@@ -671,3 +671,6 @@ def test_nested_containers(container, nested_types):
     expected = _expected_nested_named_tuple_type_maker(container, nested_types)
     assert parsed.params[0].type == expected
     assert parsed.body.stmts[-1].value.type == expected
+
+
+# TODO add tests that mix NamedTupleType and TupleType

@@ -35,7 +35,7 @@ PythonContainerConstructor: TypeAlias = Callable[
 
 PYTHON_CONTAINER_TYPES: Final[tuple[type, ...]] = typing.cast(
     tuple[type, ...],
-    PythonContainer.__args__,  # type: ignore[attr-defined]
+    PythonContainer.__args__,
 )
 
 VALUE_TYPES: Final[tuple[type, ...]] = tuple([*core_defs.SCALAR_TYPES, common.Field])
@@ -81,7 +81,7 @@ def make_container_extractor(container_type: type[PythonContainer]) -> PythonCon
     """
     assert issubclass(container_type, PythonContainer)
 
-    def make_extractor_expr(in_arg: str, container_type: type[PythonContainer]):
+    def make_extractor_expr(in_arg: str, container_type: type[PythonContainer]) -> str:
         children_hints = {
             key: xtyping.get_origin(value) or value
             for key, value in xtyping.get_type_hints(container_type).items()
@@ -151,7 +151,7 @@ def make_container_constructor(
 
     def make_constructor_expr(
         in_arg: str, container_type: type[PythonContainer], container_type_alias: str
-    ):
+    ) -> str:
         # We reached the leaf of the nested container construction so we just return the argument as is
         if container_type in VALUE_TYPES or xtyping.get_origin(container_type) in VALUE_TYPES:
             return in_arg
@@ -200,3 +200,18 @@ def make_container_constructor(
     )
 
     return eval(constructor_func_src, global_ns)
+
+
+# TODO added by havogt
+def extract(
+    container,
+) -> NestedTuple[
+    PythonContainerValue
+]:  # TODO the input is NestedAnyContainer[PythonContainerValue], to be defined
+    """Extract the values from a container into a nested tuple."""
+    # TODO recurse into tuples or handle in make_container_extractor?
+    # if isinstance(container, tuple):
+    #     return tuple(extract(c) for c in container)
+    if isinstance(container, PythonContainer):
+        return make_container_extractor(type(container))(container)
+    return container

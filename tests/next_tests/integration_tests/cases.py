@@ -476,7 +476,9 @@ def verify(
 
     out_comp = out or inout
     assert out_comp is not None
+    out_comp = containers.extract(out_comp)
     out_comp_ndarray = field_utils.asnumpy(out_comp)
+    ref = containers.extract(ref)
     ref_ndarray = field_utils.asnumpy(ref)
 
     assert comparison(ref_ndarray, out_comp_ndarray), (
