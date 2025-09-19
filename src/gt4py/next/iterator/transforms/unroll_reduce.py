@@ -16,6 +16,7 @@ from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
+from gt4py.next.type_system import type_specifications as ts
 
 
 def _is_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
@@ -59,7 +60,11 @@ def _get_partial_offset_tag(arg: itir.FunCall) -> str:
 
 
 def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
-    return [_get_partial_offset_tag(arg) for arg in _get_neighbors_args(reduce_args)]
+    return [
+        arg.type.offset_type.value
+        for arg in reduce_args
+        if isinstance(arg.type, ts.ListType) and arg.type.offset_type is not None
+    ]
 
 
 def _get_connectivity(
