@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import re
-import sys
 from typing import Final
 
 import dace
@@ -358,8 +357,7 @@ def {_cb_get_stride}(ndarray, dim_index):
         # During test execution, it can happen that the same program is invoked twice
         #   with different offset providers, therefore we have to update the array
         #   pointers of connectivities.
-        if "pytest" in sys.modules:
-            _parse_gt_connectivities(code, sdfg_arglist)
+        _parse_gt_connectivities(code, sdfg_arglist)
 
     src = codegen.format_python_source(code.text)
     return stages.BindingSource(src, library_deps=tuple())
