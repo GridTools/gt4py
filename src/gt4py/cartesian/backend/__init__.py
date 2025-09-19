@@ -34,11 +34,11 @@ __all__ = [
 
 
 try:
-    from .dace_backend import DaceCPUBackend, DaceGPUBackend
+    from .dace_backend import DaceCPUBackend, DaceCPUKFirstBackend, DaceGPUBackend
 
-    __all__ += ["DaceCPUBackend", "DaceGPUBackend"]
+    __all__ += ["DaceCPUBackend", "DaceCPUKFirstBackend", "DaceGPUBackend"]
 except ImportError:
     warn(
-        "GT4Py was unable to load DaCe. DaCe backends (`dace:cpu` and `dace:gpu`) will not be available.",
+        "GT4Py was unable to load DaCe. DaCe backends (`dace:cpu`, `dace:cpu_kfirst`, and `dace:gpu`) will not be available.",
         stacklevel=2,
     )

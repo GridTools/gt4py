@@ -44,7 +44,7 @@ class StencilBuilder:
 
     Notes
     -----
-    Backends can use the :py:meth:`with_backend_data` method the :py:meth:`backend_data` property
+    Backends can use the :py:meth:`with_backend_data` method and the :py:meth:`backend_data` property
     to set and retrieve backend specific information for use in later steps.
     """
 

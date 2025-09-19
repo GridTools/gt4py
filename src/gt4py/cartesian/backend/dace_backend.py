@@ -34,6 +34,7 @@ from gt4py.cartesian.backend.gtc_common import (
 )
 from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
 from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.gtc.dace import passes
 from gt4py.cartesian.gtc.dace.oir_to_treeir import OIRToTreeIR
 from gt4py.cartesian.gtc.dace.treeir_to_stree import TreeIRToScheduleTree
 from gt4py.cartesian.gtc.dace.utils import array_dimensions, replace_strides
@@ -382,6 +383,12 @@ class SDFGManager:
 
         # Create SDFG
         stree = self.schedule_tree()
+
+        if self.builder.backend.name.endswith("_kfirst"):
+            # re-order loops to match loops with memory layout
+            flipper = passes.PushVerticalMapDown()
+            flipper.visit(stree)
+
         sdfg = stree.as_sdfg(
             validate=validate,
             simplify=simplify,
@@ -843,6 +850,24 @@ class DaceCPUBackend(BaseDaceBackend):
         "device": "cpu",
         "layout_map": layout.layout_maker_factory((1, 2, 0)),
         "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((1, 2, 0))),
+    }
+    MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
+
+    options = BaseGTBackend.GT_BACKEND_OPTS
+
+    def generate_extension(self) -> None:
+        return self.make_extension(uses_cuda=False)
+
+
+@register
+class DaceCPUKFirstBackend(BaseDaceBackend):
+    name = "dace:cpu_kfirst"
+    languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
+    storage_info: ClassVar[layout.LayoutInfo] = {
+        "alignment": 1,
+        "device": "cpu",
+        "layout_map": layout.layout_maker_factory((0, 1, 2)),
+        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((0, 1, 2))),
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
