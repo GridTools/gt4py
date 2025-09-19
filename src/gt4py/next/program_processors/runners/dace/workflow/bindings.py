@@ -40,9 +40,9 @@ def _update_field_ptr(
     arg: str, sdfg_arg_desc: dace.data.Array, sdfg_arg_index: int, code: codegen.TextBlock
 ) -> None:
     assert not sdfg_arg_desc.transient
-    code.append(f"assert field_utils.verify_device_field_type({arg}.ndarray, {_cb_device})")
+    code.append(f"assert field_utils.verify_device_field_type({arg}, {_cb_device})")
     code.append(f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes.c_void_p)")
-    code.append(f"assert gtx_common.Domain.is_finite({arg}.ndarray.domain)")
+    code.append(f"assert gtx_common.Domain.is_finite({arg}.domain)")
     code.append(f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}.data_ptr()")
 
 
