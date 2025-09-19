@@ -54,7 +54,7 @@ def convert_args(
         else:
             # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
             #  so we just update it with the current call arguments.
-            update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
+            update_sdfg_call_args(args, offset_provider, fun.sdfg_program._lastargs[0])
             fun.fast_call()
 
         metric_collection = metrics.get_active_metric_collection()
