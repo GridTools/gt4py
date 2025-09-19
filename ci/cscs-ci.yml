@@ -127,8 +127,7 @@ build_cscs_amd_rocm:
     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
     - cd "${WORKDIR}/gt4py" && uv run --script noxfile.py -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
 
-# TODO(edopao): CI on santis was temporarily disabled because of vCluster issue
-.test_cscs_gh200:
+test_cscs_gh200:
   extends:
     - .container-runner-santis-gh200
     - .test_common
