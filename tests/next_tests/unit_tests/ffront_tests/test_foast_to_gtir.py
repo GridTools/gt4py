@@ -30,7 +30,6 @@ from gt4py.next import (
     min_over,
     neighbor_sum,
     where,
-    _default_collections,  # for registering
 )
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa

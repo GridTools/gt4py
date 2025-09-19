@@ -166,10 +166,10 @@ class CompiledProgramsPool:
         assert not self.program_type.definition.pos_only_args
 
         # Force initialization of all cached properties here to minimize first-time call overhead
-        self._compiled_programs  # initialize the mapping
-        self._offset_provider_type_cache  # initialize the mapping
-        self._arg_extractors  # initialize the mapping
-        self._kwarg_extractors  # initialize the mapping
+        self._compiled_programs  # noqa: B018
+        self._offset_provider_type_cache  # noqa: B018
+        self._arg_extractors  # noqa: B018
+        self._kwarg_extractors  # noqa: B018
 
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
@@ -181,7 +181,9 @@ class CompiledProgramsPool:
         (defined by 'static_params') in case `enable_jit` is True. Otherwise,
         it is an error.
         """
-        canonical_args, canonical_kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
+        canonical_args, canonical_kwargs = type_info.canonicalize_arguments(
+            self.program_type, args, kwargs
+        )
 
         # TODO(egparedes): why not part of canonicalize_arguments?
         if self._arg_extractors is None:
@@ -213,7 +215,10 @@ class CompiledProgramsPool:
                 }
                 self._compile_variant(static_args=static_args, offset_provider=offset_provider)
                 return self(
-                    *canonical_args, offset_provider=offset_provider, enable_jit=False, **canonical_kwargs
+                    *canonical_args,
+                    offset_provider=offset_provider,
+                    enable_jit=False,
+                    **canonical_kwargs,
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 

@@ -8,8 +8,8 @@
 
 import re
 import dataclasses
-from typing import NamedTuple
-from typing import TypeAlias
+from typing import NamedTuple, TypeAlias
+from collections.abc import Sequence
 
 import pytest
 
@@ -612,25 +612,34 @@ class NestedMixedTupleContainer:
     c: NamedTupleContainer
 
 
-_EXPECTED_NAMED_TUPLE_TYPE = ts.NamedTupleType(
-    types=[
-        ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
-        ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
-    ],
-    keys=["x", "y"],
-)
+def _expected_named_tuple_type_maker(original_python_type: type) -> ts.NamedTupleType:
+    return ts.NamedTupleType(
+        types=[
+            ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+            ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+        ],
+        keys=["x", "y"],
+        original_python_type=f"{original_python_type.__module__}:{original_python_type.__qualname__}",
+    )
 
-_EXPECTED_NESTED_NAMED_TUPLE_TYPE = ts.NamedTupleType(
-    types=[_EXPECTED_NAMED_TUPLE_TYPE, _EXPECTED_NAMED_TUPLE_TYPE, _EXPECTED_NAMED_TUPLE_TYPE],
-    keys=["a", "b", "c"],
-)
+
+def _expected_nested_named_tuple_type_maker(
+    original_python_type: type, element_types: Sequence[type]
+) -> ts.NamedTupleType:
+    inner_types = [_expected_named_tuple_type_maker(elem) for elem in element_types]
+
+    return ts.NamedTupleType(
+        types=inner_types,
+        keys=["a", "b", "c"],
+        original_python_type=f"{original_python_type.__module__}:{original_python_type.__qualname__}",
+    )
 
 
 @pytest.mark.parametrize(
     "container",
     [
+        NamedTupleContainer,
         DataclassContainer,
-        # NamedTupleContainer,
     ],
 )
 def test_containers(container):
@@ -639,24 +648,26 @@ def test_containers(container):
 
     parsed = FieldOperatorParser.apply_to_function(containers)
 
-    assert parsed.params[0].type == _EXPECTED_NAMED_TUPLE_TYPE
-    assert parsed.body.stmts[-1].value.type == _EXPECTED_NAMED_TUPLE_TYPE
+    expected = _expected_named_tuple_type_maker(container)
+    assert parsed.params[0].type == expected
+    assert parsed.body.stmts[-1].value.type == expected
 
 
 @pytest.mark.parametrize(
-    "container",
+    "container, nested_types",
     [
-        NestedDataclassContainer,
-        # NestedNamedTupleDataclassContainer,
-        # NestedDataclassNamedTupleContainer,
-        # NestedMixedTupleContainer,
+        (NestedDataclassContainer, [DataclassContainer] * 3),
+        (NestedNamedTupleDataclassContainer, [DataclassContainer] * 3),
+        (NestedDataclassNamedTupleContainer, [NamedTupleContainer] * 3),
+        (NestedMixedTupleContainer, [NamedTupleContainer, DataclassContainer, NamedTupleContainer]),
     ],
 )
-def test_nested_containers(container):
-    def containers(a: container) -> container:
-        return container(a=a.a, b=a.b, c=a.c)
+def test_nested_containers(container, nested_types):
+    def containers(cont: container) -> container:
+        return container(a=cont.a, b=cont.b, c=cont.c)
 
     parsed = FieldOperatorParser.apply_to_function(containers)
 
-    assert parsed.params[0].type == _EXPECTED_NESTED_NAMED_TUPLE_TYPE
-    assert parsed.body.stmts[-1].value.type == _EXPECTED_NESTED_NAMED_TUPLE_TYPE
+    expected = _expected_nested_named_tuple_type_maker(container, nested_types)
+    assert parsed.params[0].type == expected
+    assert parsed.body.stmts[-1].value.type == expected
