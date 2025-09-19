@@ -275,7 +275,7 @@ def _parse_gt_connectivities(
         m = gtx_dace_utils.CONNECTIVITY_INDENTIFIER_RE.match(arg_name)
         assert m is not None
         conn = f"{_cb_neighbor_table}_{m[1]}"
-        code.append(f"{conn} = {_cb_offset_provider}[{m[1]}]")
+        code.append(f'{conn} = {_cb_offset_provider}["{m[1]}"]')
         _update_field_ptr(conn, arg_desc, sdfg_arg_index, code)
         _parse_gt_param(  # set the size in the horizontal dimension
             origin_size_arg,

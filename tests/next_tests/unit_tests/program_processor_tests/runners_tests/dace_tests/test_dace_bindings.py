@@ -58,7 +58,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, offset_provider, last_call_ar
     last_call_args[16] = ctypes.c_int(args[4].domain.ranges[1].stop)
     last_call_args[17] = ctypes.c_int(_get_stride(args[4].ndarray, 0))
     last_call_args[18] = ctypes.c_int(_get_stride(args[4].ndarray, 1))
-    table_E2V = offset_provider[E2V]
+    table_E2V = offset_provider["E2V"]
     last_call_args[4].value = table_E2V.data_ptr()
     last_call_args[19] = ctypes.c_int(table_E2V.ndarray.shape[0])
     last_call_args[20] = ctypes.c_int(_get_stride(table_E2V.ndarray, 0))
@@ -82,7 +82,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, offset_provider, last_call_ar
     last_call_args[14] = ctypes.c_int(args[4].domain.ranges[0].stop)
     last_call_args[15] = ctypes.c_int(args[4].domain.ranges[1].start)
     last_call_args[16] = ctypes.c_int(args[4].domain.ranges[1].stop)
-    table_E2V = offset_provider[E2V]
+    table_E2V = offset_provider["E2V"]
     last_call_args[4].value = table_E2V.data_ptr()
     last_call_args[19] = ctypes.c_int(table_E2V.ndarray.shape[0])
     last_call_args[20] = ctypes.c_int(_get_stride(table_E2V.ndarray, 0))
