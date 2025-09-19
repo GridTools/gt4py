@@ -24,14 +24,14 @@ AOT_PRG: TypeAlias = toolchain.CompilableProgram[
 
 
 def transform_program_args(inp: AOT_PRG) -> AOT_PRG:
-    rewritten_args, size_args, kwargs = _process_args(
+    rewritten_args, rewritten_kwargs = _process_args(
         past_node=inp.data.past_node, args=inp.args.args, kwargs=inp.args.kwargs
     )
     return toolchain.CompilableProgram(
         data=inp.data,
         args=arguments.CompileTimeArgs(
-            args=tuple((*rewritten_args, *(size_args))),
-            kwargs=kwargs,
+            args=rewritten_args,
+            kwargs=rewritten_kwargs,
             offset_provider=inp.args.offset_provider,
             column_axis=inp.args.column_axis,
         ),
@@ -65,50 +65,20 @@ def _process_args(
     past_node: past.Program,
     args: Sequence[ts.TypeSpec | arguments.StaticArg],
     kwargs: dict[str, ts.TypeSpec | arguments.StaticArg],
-) -> tuple[tuple, tuple, dict[str, Any]]:
+) -> tuple[tuple, dict[str, Any]]:
     if not isinstance(past_node.type, ts_ffront.ProgramType):
         raise TypeError("Can not process arguments for PAST programs prior to type inference.")
 
     args, kwargs = type_info.canonicalize_arguments(past_node.type, args, kwargs)
+
+    # validate arguments
     arg_types = tuple(arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in args)
     kwarg_types = {
         k: (v.type_ if isinstance(v, arguments.StaticArg) else v) for k, v in kwargs.items()
     }
     _validate_args(past_node=past_node, arg_types=arg_types, kwarg_types=kwarg_types)
 
-    implicit_domain = any(
-        isinstance(stmt, past.Call) and "domain" not in stmt.kwargs for stmt in past_node.body
-    )
-
-    # extract size of all field arguments
-    size_args: list[ts.TypeSpec] = []
-    rewritten_args = list(args)
-    for param_idx, param in enumerate(past_node.params):
-        if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
-            # TODO(tehrengruber): Previously this function was called with the actual arguments
-            #  not their type. The check using the shape here is not functional anymore and
-            #  should instead be placed in a proper location.
-            ranges_and_dims = [
-                *_field_constituents_range_and_dims(arg_types[param_idx], param.type)
-            ]
-            # check that all non-scalar like constituents have the same shape and dimension, e.g.
-            # for `(scalar, (field1, field2))` the two fields need to have the same shape and
-            # dimension
-            if ranges_and_dims:
-                range_, dims = ranges_and_dims[0]
-                if not all(
-                    el_range == range_ and el_dims == dims
-                    for (el_range, el_dims) in ranges_and_dims
-                ):
-                    raise ValueError(
-                        "Constituents of composite arguments (e.g. the elements of a"
-                        " tuple) need to have the same shape and dimensions."
-                    )
-                index_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
-                size_args.extend(
-                    range_ if range_ else [ts.TupleType(types=[index_type, index_type])] * len(dims)  # type: ignore[arg-type]  # shape is always empty
-                )
-    return tuple(rewritten_args), tuple(size_args), kwargs
+    return args, kwargs
 
 
 def _field_constituents_range_and_dims(

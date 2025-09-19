@@ -40,15 +40,21 @@ def find_constant_symbols(
         # Search the stride symbols corresponding to the horizontal dimension
         for p in ir.params:
             if isinstance(p.type, ts.FieldType):
-                dims = p.type.dims
-                if len(dims) == 0:
+                h_dims = [dim for dim in p.type.dims if dim.kind == common.DimensionKind.HORIZONTAL]
+                if len(h_dims) == 0:
                     continue
-                elif len(dims) == 1:
-                    dim_index = 0
-                elif len(dims) == 2:
-                    dim_index = 0 if dims[0].kind == common.DimensionKind.HORIZONTAL else 1
+                elif len(h_dims) == 1:
+                    dim = h_dims[0]
                 else:
-                    raise ValueError(f"Unsupported field with dims={dims}.")
+                    raise NotImplementedError(
+                        f"Unsupported field with multiple horizontal dimensions '{p}'."
+                    )
+                if isinstance(p.type.dtype, ts.ListType):
+                    assert p.type.dtype.offset_type is not None
+                    full_dims = common.order_dimensions([*p.type.dims, p.type.dtype.offset_type])
+                    dim_index = full_dims.index(dim)
+                else:
+                    dim_index = p.type.dims.index(dim)
                 stride_name = gtx_dace_utils.field_stride_symbol_name(p.id, dim_index)
                 constant_symbols[stride_name] = 1
         # Same for connectivity tables, for which the first dimension is always horizontal
@@ -99,6 +105,14 @@ def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
     )
 
 
+def _has_gpu_schedule(sdfg: dace.SDFG) -> bool:
+    """Check if any node (e.g. maps) of the given SDFG is scheduled on GPU."""
+    return any(
+        getattr(node, "schedule", dace.dtypes.ScheduleType.Default) in dace.dtypes.GPU_SCHEDULES
+        for node, _ in sdfg.all_nodes_recursive()
+    )
+
+
 def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     """Process the SDFG such that the call is synchronous.
 
@@ -109,9 +123,14 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     Todo: Revisit this function once DaCe changes its behaviour in this regard.
     """
 
-    # This is only a problem on GPU.
-    # TODO(phimuell): Figuring out what about OpenMP.
     if not gpu:
+        # This is only a problem on GPU. Dace uses OpenMP on CPU and
+        # the OpenMP parallel region creates a synchronization point.
+        return
+    elif not _has_gpu_schedule(sdfg):
+        # Even when the target device is GPU, it can happen that dace
+        # emits code without GPU kernels. In this case, the cuda headers
+        # are not imported and the SDFG is compiled as plain C++.
         return
 
     assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1, (
@@ -291,7 +310,6 @@ class DaCeTranslator(
                 language_settings=languages.LanguageSettings(
                     formatter_key="", formatter_style="", file_extension="sdfg"
                 ),
-                implicit_domain=inp.data.implicit_domain,
             )
         )
         return module

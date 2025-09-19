@@ -22,8 +22,12 @@ from . import utils as gtx_dace_utils
 def get_field_domain_symbols(name: str, domain: gtx_common.Domain) -> dict[str, int]:
     assert gtx_common.Domain.is_finite(domain)
     return {
-        gtx_dace_utils.range_start_symbol(name, i): r.start for i, r in enumerate(domain.ranges)
-    } | {gtx_dace_utils.range_stop_symbol(name, i): r.stop for i, r in enumerate(domain.ranges)}
+        gtx_dace_utils.range_start_symbol(name, dim): r.start
+        for dim, r in zip(domain.dims, domain.ranges, strict=True)
+    } | {
+        gtx_dace_utils.range_stop_symbol(name, dim): r.stop
+        for dim, r in zip(domain.dims, domain.ranges, strict=True)
+    }
 
 
 def get_array_shape_symbols(
