@@ -75,27 +75,28 @@ def tuple_st(min_value, max_value):
 )
 def test_basic(decorator, backend):
     @decorator(backend=backend)
-    def defn(outp: gtscript.Field[np.float64], par: np.float64):
+    def stencil_definition(out_field: gtscript.Field[np.float64], scalar: np.float64):
         with computation(PARALLEL), interval(...):
-            outp = par  # noqa: F841 [unused-variable]
+            out_field[0, 0, 0] = scalar
 
-    outp = OriginWrapper(
+    output = OriginWrapper(
         array=gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
 
-    inp = 7.0
+    fill_value = 7.0
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_stencil_object(locoutp, locinp):
-        defn(locoutp, par=locinp)
+        stencil_definition(locoutp, scalar=locinp)
 
-    call_stencil_object(locoutp=outp, locinp=inp)
-    outp = storage_utils.cpu_copy(outp)
+    call_stencil_object(locoutp=output, locinp=fill_value)
 
-    assert np.allclose(outp, 7.0)
+    # Download the data from the wrapper cupy array to be compared on cpu
+    output = storage_utils.cpu_copy(output.array)
+    assert np.allclose(output, fill_value)
 
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
