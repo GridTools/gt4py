@@ -28,6 +28,7 @@ from gt4py.next import (
     backend as next_backend,
     common,
     constructors,
+    containers,
     field_utils,
     utils as gt_utils,
 )
@@ -475,7 +476,9 @@ def verify(
 
     out_comp = out or inout
     assert out_comp is not None
+    out_comp = containers.extract(out_comp)
     out_comp_ndarray = field_utils.asnumpy(out_comp)
+    ref = containers.extract(ref)
     ref_ndarray = field_utils.asnumpy(ref)
 
     assert comparison(ref_ndarray, out_comp_ndarray), (
@@ -589,8 +592,8 @@ def _allocate_from_type(
             )
         case ts.ScalarType(kind=kind):
             return strategy.scalar(dtype=dtype or kind.name.lower())
-        case ts.TupleType(types=types):
-            return tuple(
+        case ts.TupleType(types=types) as arg_tuple_type_spec:
+            allocated_tuple = tuple(
                 (
                     _allocate_from_type(
                         case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
@@ -598,6 +601,12 @@ def _allocate_from_type(
                     for t in types
                 )
             )
+            if isinstance(arg_tuple_type_spec, ts.NamedTupleType):
+                container_constructor = containers.make_container_constructor_from_type_spec(
+                    arg_tuple_type_spec
+                )
+                allocated_tuple = container_constructor(allocated_tuple)
+            return allocated_tuple
         case _:
             raise TypeError(
                 f"Can not allocate for type '{arg_type}' with initializer '{strategy or 'default'}'."
