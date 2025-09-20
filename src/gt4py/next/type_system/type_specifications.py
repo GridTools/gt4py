@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import Iterator, Optional, Sequence
 
 from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
-from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common
 
 
@@ -157,7 +156,7 @@ class NamedTupleType(TupleType):
     def __str__(self) -> str:
         return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
 
-    
+
 class FunctionType(CallableType):
     pos_only_args: Sequence[TypeSpec]
     pos_or_kw_args: dict[str, TypeSpec]

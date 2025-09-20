@@ -60,18 +60,6 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
         raise ValueError(f"Non-trivial dtypes like '{dtype}' are not yet supported.")
 
 
-def is_simple_dataclass_type(type_: type[xtyping.Dataclass]) -> bool:
-    """Check if a dataclass respects current constraints for dataclasses."""
-    fields = dataclasses.fields(type_)
-    return len(fields) > 0 and all(
-        f.init is True
-        and f.default is dataclasses.MISSING
-        and f.default_factory is dataclasses.MISSING
-        and f._field_type is dataclasses._FIELD  # type: ignore[attr-defined]  # private member
-        for f in fields
-    )
-
-
 def make_constructor_type(type_spec: ts.TypeSpec) -> ts.ConstructorType:
     """Create a constructor type spec for a given scalar or python type."""
 
@@ -113,8 +101,10 @@ def make_type(type_: type) -> ts.TypeSpec:
     if issubclass(type_, (*core_defs.SCALAR_TYPES, str)):
         return ts.ScalarType(kind=get_scalar_kind(type_))
 
-    if issubclass(type_, containers.PYTHON_CONTAINER_TYPES):
-        if issubclass(type_, xtyping.DataclassABC) and not is_simple_dataclass_type(type_):
+    if issubclass(type_, containers.PY_CONTAINER_TYPES):
+        if issubclass(type_, xtyping.DataclassABC) and not issubclass(
+            type_, containers.PyContainerDataclassABC
+        ):
             raise ValueError(
                 f"Dataclass {type_} is not a valid field container. Supported dataclasses"
                 " must have at least one member, without custom '__init__'"

@@ -137,8 +137,8 @@ class CompiledProgramsPool:
         return eve_utils.CustomMapping(common.hash_offset_provider_unsafe)
 
     @functools.cached_property
-    def _arg_extractors(self) -> dict[int, containers.PythonContainerConstructor] | None:
-        extractors: dict[int, containers.PythonContainerConstructor] = {}
+    def _arg_extractors(self) -> dict[int, containers.PyContainerConstructor] | None:
+        extractors: dict[int, containers.PyContainerConstructor] = {}
         for i, type_spec in enumerate(
             [
                 *self.program_type.definition.pos_only_args,
@@ -151,8 +151,8 @@ class CompiledProgramsPool:
         return extractors if extractors else None
 
     @functools.cached_property
-    def _kwarg_extractors(self) -> dict[str, containers.PythonContainerConstructor] | None:
-        extractors: dict[str, containers.PythonContainerConstructor] = {}
+    def _kwarg_extractors(self) -> dict[str, containers.PyContainerConstructor] | None:
+        extractors: dict[str, containers.PyContainerConstructor] = {}
         for name, type_spec in self.program_type.definition.kw_only_args.items():
             if isinstance(type_spec, ts.NamedTupleType):
                 extractors[name] = containers.make_container_extractor_from_type_spec(type_spec)

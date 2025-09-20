@@ -33,7 +33,7 @@ class PythonContainerDefinition(Protocol):
     @abc.abstractmethod
     def reference_sample(
         cls,
-    ) -> tuple[NestedTuple[containers.PythonContainerValue], containers.PythonContainer]: ...
+    ) -> tuple[NestedTuple[containers.common.NumericValue], containers.PyContainer]: ...
 
     @classmethod
     @abc.abstractmethod
@@ -56,7 +56,7 @@ class NamedTupleContainer(NamedTuple):
     @classmethod
     def reference_sample(
         cls,
-    ) -> tuple[NestedTuple[containers.PythonContainerValue], NamedTupleContainer]:
+    ) -> tuple[NestedTuple[containers.common.NumericValue], NamedTupleContainer]:
         return (
             (
                 x := gtx.constructors.full({TDim: 5}, 2.0),
@@ -85,7 +85,7 @@ class DataclassContainer:
     @classmethod
     def reference_sample(
         cls,
-    ) -> tuple[NestedTuple[containers.PythonContainerValue], DataclassContainer]:
+    ) -> tuple[NestedTuple[containers.common.NumericValue], DataclassContainer]:
         return (
             (
                 x := gtx.constructors.full({TDim: 5}, 2.0),
@@ -115,7 +115,7 @@ class NestedDataclassContainer:
     @classmethod
     def reference_sample(
         cls,
-    ) -> tuple[NestedTuple[containers.PythonContainerValue], NestedDataclassContainer]:
+    ) -> tuple[NestedTuple[containers.common.NumericValue], NestedDataclassContainer]:
         return (
             (
                 (
@@ -159,7 +159,7 @@ class NestedNamedTupleDataclassContainer(NamedTuple):
     @classmethod
     def reference_sample(
         cls,
-    ) -> tuple[NestedTuple[containers.PythonContainerValue], NestedNamedTupleDataclassContainer]:
+    ) -> tuple[NestedTuple[containers.common.NumericValue], NestedNamedTupleDataclassContainer]:
         return (
             (
                 (
@@ -204,7 +204,7 @@ class NestedDataclassNamedTupleContainer:
     @classmethod
     def reference_sample(
         cls,
-    ) -> tuple[NestedTuple[containers.PythonContainerValue], NestedDataclassNamedTupleContainer]:
+    ) -> tuple[NestedTuple[containers.common.NumericValue], NestedDataclassNamedTupleContainer]:
         return (
             (
                 (
@@ -249,7 +249,7 @@ class NestedMixedTupleContainer:
     @classmethod
     def reference_sample(
         cls,
-    ) -> tuple[NestedTuple[containers.PythonContainerValue], NestedMixedTupleContainer]:
+    ) -> tuple[NestedTuple[containers.common.NumericValue], NestedMixedTupleContainer]:
         return (
             (
                 (
