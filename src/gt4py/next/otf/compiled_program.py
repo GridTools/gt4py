@@ -12,14 +12,15 @@ import concurrent.futures
 import dataclasses
 import functools
 import itertools
-from typing import Any, Callable, DefaultDict, Sequence, TypeAlias, TypeVar
+from typing import Any, Callable, Sequence, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing, utils as eve_utils
-from gt4py.next import backend as gtx_backend, common, config, errors
+from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.utils import tree_map
 
 
 T = TypeVar("T")
@@ -32,11 +33,11 @@ CompiledProgramsKey: TypeAlias = tuple[
     tuple[ScalarOrTupleOfScalars, ...], common.OffsetProviderType
 ]
 ArgumentDescriptors: TypeAlias = dict[
-    type[arguments.ArgumentDescriptor], dict[str, arguments.ArgumentDescriptor]
+    type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
 ArgumentDescriptorContext: TypeAlias = dict[
-    type[arguments.ArgumentDescriptor],
-    dict[str, extended_typing.MaybeNestedInTuple[arguments.ArgumentDescriptor | None]],
+    type[arguments.ArgStaticDescriptor],
+    dict[str, extended_typing.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]],
 ]
 
 
@@ -64,9 +65,41 @@ def _make_param_context_from_func_type(
 
 
 def _get_type_of_param_expr(program_type: ts_ffront.ProgramType, expr: str) -> ts.TypeSpec:
-    type_ = eval(expr, _make_param_context_from_func_type(program_type.definition))
+    structured_type_ = eval(expr, _make_param_context_from_func_type(program_type.definition))
+    type_ = tree_map(
+        lambda v: v, result_collection_constructor=lambda elts: ts.TupleType(types=list(elts))
+    )(structured_type_)
     assert isinstance(type_, ts.TypeSpec)
     return type_
+
+
+def _make_argument_descriptors(
+    program_type: ts_ffront.ProgramType,
+    argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]],
+    args: tuple[Any],
+    kwargs: dict[str, Any],
+) -> ArgumentDescriptors:
+    """Given a set of runtime arguments construct all argument descriptors from them."""
+    func_type = program_type.definition
+    params = list(func_type.pos_or_kw_args.keys()) + list(func_type.kw_only_args.keys())
+    descriptors: ArgumentDescriptors = {}
+    for descriptor_cls, exprs in argument_descriptor_mapping.items():
+        descriptors[descriptor_cls] = {}
+        for expr in exprs:
+            argument = eval(f"""lambda {",".join(params)}: {expr}""")(*args, **kwargs)
+            descriptors[descriptor_cls][expr] = descriptor_cls.from_value(argument)
+    _validate_argument_descriptors(program_type, descriptors)
+    return descriptors
+
+
+def _validate_argument_descriptors(
+    program_type: ts_ffront.ProgramType,
+    all_descriptors: ArgumentDescriptors,
+) -> None:
+    for descriptors in all_descriptors.values():
+        for expr, descriptor in descriptors.items():
+            param_type = _get_type_of_param_expr(program_type, expr)
+            descriptor.validate(expr, param_type)
 
 
 @dataclasses.dataclass
@@ -91,7 +124,7 @@ class CompiledProgramsPool:
     #: mapping from an argument descriptor type to a list of parameters or expression thereof
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
     #: Note: The list is not ordered.
-    argument_descriptor_mapping: dict[type[arguments.ArgumentDescriptor], Sequence[str]] | None
+    argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
 
     _compiled_programs: eve_utils.CustomMapping = dataclasses.field(
         default_factory=lambda: eve_utils.CustomMapping(_hash_compiled_program_unsafe),
@@ -135,7 +168,9 @@ class CompiledProgramsPool:
             if enable_jit:
                 assert self.argument_descriptor_mapping is not None
                 self._compile_variant(
-                    argument_descriptors=self._make_argument_descriptors(*args, **kwargs),
+                    argument_descriptors=_make_argument_descriptors(
+                        self.program_type, self.argument_descriptor_mapping, args, kwargs
+                    ),
                     offset_provider=offset_provider,
                 )
                 return self(
@@ -158,7 +193,7 @@ class CompiledProgramsPool:
         elements: list[str] = []
         for descriptor_cls, arg_exprs in self.argument_descriptor_mapping.items():  # type: ignore[union-attr]  # can never be `None` at this point
             for arg_expr in arg_exprs:
-                attr_extractor = descriptor_cls.attribute_extractor(arg_expr)
+                attr_extractor = descriptor_cls.attribute_extractor_exprs(arg_expr)
                 elements.extend(attr_extractor.values())
         return eval(f"""lambda {",".join(params)}: ({_make_tuple_expr(elements)})""")
 
@@ -192,59 +227,13 @@ class CompiledProgramsPool:
         elements = []
         for descriptor_cls, arg_exprs in self.argument_descriptor_mapping.items():  # type: ignore[union-attr]  # can never be `None` at this point
             for arg_expr in arg_exprs:
-                attr_extractor = descriptor_cls.attribute_extractor(arg_expr)
+                attr_extractor = descriptor_cls.attribute_extractor_exprs(arg_expr)
                 attrs = attr_extractor.keys()
                 for attr in attrs:
                     elements.append(
                         getattr(eval(f"{arg_expr}", descriptor_context[descriptor_cls]), attr)
                     )
         return tuple(elements)
-
-    @functools.cached_property
-    def _argument_descriptor_attr_retrievers(
-        self,
-    ) -> dict[type[arguments.ArgumentDescriptor], dict[str, Callable]]:
-        """
-        For each argument expression build a lambda function that constructs (the attributes of)
-        its argument descriptor
-        """
-
-        def make_dict_expr(exprs: dict[str, str]) -> str:
-            return "{" + ",".join((f"'{k}': {v}" for k, v in exprs.items())) + "}"
-
-        func_type = self.program_type.definition
-        params = list(func_type.pos_or_kw_args.keys()) + list(func_type.kw_only_args.keys())
-        retrievers: dict[type[arguments.ArgumentDescriptor], dict[str, Callable]] = DefaultDict(
-            dict
-        )
-        for descriptor_cls, arg_exprs in self.argument_descriptor_mapping.items():  # type: ignore[union-attr]  # can never be `None` at this point
-            for arg_expr in arg_exprs:
-                attr_exprs = descriptor_cls.attribute_extractor(arg_expr)
-                retrievers[descriptor_cls][arg_expr] = eval(
-                    f"""lambda {",".join(params)}: {make_dict_expr(attr_exprs)}"""
-                )
-
-        return retrievers
-
-    def _make_argument_descriptors(self, *args: Any, **kwargs: Any) -> ArgumentDescriptors:
-        """Given a set of runtime arguments construct all argument descriptors from them."""
-        descriptors: ArgumentDescriptors = {}
-        for descriptor_cls, attr_retrievers in self._argument_descriptor_attr_retrievers.items():
-            descriptors[descriptor_cls] = {}
-            for expr, attr_retriever in attr_retrievers.items():
-                descriptor = descriptor_cls(**attr_retriever(*args, **kwargs))
-                descriptors[descriptor_cls][expr] = descriptor
-        self._validate_argument_descriptors(descriptors)
-        return descriptors
-
-    def _validate_argument_descriptors(
-        self,
-        all_descriptors: ArgumentDescriptors,
-    ) -> None:
-        for descriptors in all_descriptors.values():
-            for expr, descriptor in descriptors.items():
-                param_type = _get_type_of_param_expr(self.program_type, expr)
-                descriptor.validate(expr, param_type)
 
     def _initialize_argument_descriptor_mapping(
         self, argument_descriptors: ArgumentDescriptors
@@ -271,9 +260,11 @@ class CompiledProgramsPool:
         for descr_cls, exprs in self.argument_descriptor_mapping.items():
             for expr in exprs:
                 try:
-                    if eval(expr, context) is not None:
+                    if any(
+                        v is not None for v in gtx_utils.flatten_nested_tuple(eval(expr, context))
+                    ):
                         raise ValueError()
-                except (ValueError, KeyError):
+                except (ValueError, KeyError, NameError):
                     raise errors.DSLTypeError(  # noqa: B904 # we don't care about the original exception
                         message=f"Invalid parameter expression '{expr}' for '{descr_cls.__name__}'. "
                         f"Must be the name of a parameter or an access to one of its elements.",
@@ -286,7 +277,7 @@ class CompiledProgramsPool:
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
     ) -> None:
         self._initialize_argument_descriptor_mapping(argument_descriptors)
-        self._validate_argument_descriptors(argument_descriptors)
+        _validate_argument_descriptors(self.program_type, argument_descriptors)
 
         key = (
             self._argument_descriptor_cache_key_from_descriptors(argument_descriptors),
