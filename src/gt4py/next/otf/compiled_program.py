@@ -260,6 +260,8 @@ class CompiledProgramsPool:
         for descr_cls, exprs in self.argument_descriptor_mapping.items():
             for expr in exprs:
                 try:
+                    # TODO(tehrengruber): Re-evaluate the way we validate here when we add support
+                    #  for containers.
                     if any(
                         v is not None for v in gtx_utils.flatten_nested_tuple(eval(expr, context))
                     ):
