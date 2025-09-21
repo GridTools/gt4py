@@ -7,16 +7,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
-import pathlib
-import tempfile
-from typing import Any, Optional
+from typing import Any
 
 import factory
 import numpy as np
 
 import gt4py._core.definitions as core_defs
-from gt4py._core import filecache
 import gt4py.next.allocators as next_allocators
+from gt4py._core import filecache
 from gt4py.next import backend, common, config, field_utils, metrics
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.otf import recipes, stages, workflow

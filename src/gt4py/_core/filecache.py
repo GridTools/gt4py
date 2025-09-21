@@ -1,9 +1,17 @@
-from typing import Hashable, Any
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 import pathlib
 import pickle
+from typing import Any, Hashable
 
-from gt4py.eve import utils as eve_utils
 from gt4py._core import locking
+from gt4py.eve import utils as eve_utils
+
 
 class FileCache:
     path: pathlib.Path
@@ -26,7 +34,7 @@ class FileCache:
             with open(self._get_path(key), "rb") as f:
                 return pickle.load(f)
 
-    def __setitem__(self, key: Hashable, value: Any):
+    def __setitem__(self, key: Hashable, value: Any) -> None:
         with locking.lock(self._get_path(key)):
             with open(self._get_path(key), "wb") as f:
                 pickle.dump(value, f, protocol=pickle.HIGHEST_PROTOCOL)

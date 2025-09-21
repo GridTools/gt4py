@@ -13,7 +13,7 @@ from typing import Final
 
 import factory
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, filecache
 from gt4py.next import config
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -26,7 +26,6 @@ from gt4py.next.program_processors.runners.dace.workflow.compilation import (
 from gt4py.next.program_processors.runners.dace.workflow.translation import (
     DaCeTranslationStepFactory,
 )
-from gt4py.next.program_processors.runners.gtfn import FileCache
 
 
 _GT_DACE_BINDING_FUNCTION_NAME: Final[str] = "update_sdfg_args"
@@ -49,7 +48,7 @@ class DaCeWorkflowFactory(factory.Factory):
                 lambda o: workflow.CachedStep(
                     o.bare_translation,
                     hash_function=stages.fingerprint_compilable_program,
-                    cache=FileCache(str(config.BUILD_CACHE_DIR / "translation_cache")),
+                    cache=filecache.FileCache(str(config.BUILD_CACHE_DIR / "translation_cache")),
                 )
             ),
         )
