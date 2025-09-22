@@ -722,7 +722,10 @@ def infer_type(
     if isinstance(value, type):
         return Type[value]
 
-    if isinstance(value, tuple):
+    if isinstance(value, tuple) and not isinstance(value, TypedNamedTupleABC):
+        # Special case for tuples, which can have multiple types.
+        # We should not confuse them with namedtuples, which are
+        # treated as normal classes.
         _, args = _collapse_type_args(*(_infer(item) for item in value))
         if args:
             return StdGenericAliasType(tuple, args)

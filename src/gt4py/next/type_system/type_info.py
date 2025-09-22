@@ -931,3 +931,10 @@ def accepts_args(
         return True
 
     return next(errors, None) is None
+
+
+def needs_value_extraction(type_spec: ts.TypeSpec) -> bool:
+    return isinstance(type_spec, ts.NamedTupleType) or (
+        isinstance(type_spec, ts.TupleType)
+        and any(needs_value_extraction(t) for t in type_spec.types)
+    )

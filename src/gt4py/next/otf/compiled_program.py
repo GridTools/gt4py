@@ -12,7 +12,8 @@ import concurrent.futures
 import dataclasses
 import functools
 import itertools
-from collections.abc import Sequence
+import pkgutil
+from collections.abc import Callable, Sequence
 from typing import Any, TypeAlias
 
 from gt4py._core import definitions as core_defs
@@ -107,6 +108,66 @@ def _sanitize_static_args(
     }
 
 
+def _make_arg_extractor_expr(arg_name: str, type_spec: ts.TypeSpec) -> str:
+    match type_spec:
+        case ts.NamedTupleType():
+            return containers.make_extractor_expr(
+                arg_name, pkgutil.resolve_name(type_spec.original_python_type)
+            )
+        case ts.TupleType():
+            return ", ".join(
+                _make_arg_extractor_expr(f"{arg_name}[{i}]", t)
+                if type_info.needs_value_extraction(t)
+                else f"{arg_name}[{i}]"
+                for i, t in enumerate(type_spec.types)
+            )
+        case _:
+            return arg_name
+
+# TODO(egparedes): memoize this function (or the one above) if TypeSpecs become hashable
+def _make_args_extractor(program_type: ts_ffront.ProgramType) -> Callable | None:
+    args_param = "args"
+    kwargs_param = "kwargs"
+    num_args_to_extract = 0
+    num_kwargs_to_extract = 0
+    extractor_exprs: dict[int | str, str] = {}
+
+    for i, type_spec in enumerate(
+        pos_args := [
+            *program_type.definition.pos_only_args,
+            *program_type.definition.pos_or_kw_args.values(),
+        ]
+    ):
+        if type_info.needs_value_extraction(type_spec):
+            num_args_to_extract += 1
+            extractor_exprs[i] = _make_arg_extractor_expr(f"{args_param}[{i}]", type_spec)
+        else:
+            extractor_exprs[i] = f"{args_param}[{i}]"
+
+    for name, type_spec in program_type.definition.kw_only_args.items():
+        if type_info.needs_value_extraction(type_spec):
+            num_kwargs_to_extract += 1
+            extractor_exprs[name] = _make_arg_extractor_expr(f"{args_param}[{name}]", type_spec)
+
+    if num_args_to_extract + num_kwargs_to_extract:
+        args_expr = (
+            f"({str.join(', ', (extractor_exprs[i] for i, _ in enumerate(pos_args)))})"
+            if num_args_to_extract
+            else args_param
+        )
+        kwargs_expr = (
+            f"{{ {str.join(', ', (f'{k}={extractor_exprs[k]}' for k in program_type.definition.kw_only_args))} }}"
+            if num_kwargs_to_extract
+            else kwargs_param
+        )
+
+        extractor_func_src = f"lambda *{args_param}, **{kwargs_param}: ({args_expr}, {kwargs_expr})"
+
+        return eval(extractor_func_src)
+
+    return None
+
+
 @dataclasses.dataclass
 class CompiledProgramsPool:
     """
@@ -137,27 +198,8 @@ class CompiledProgramsPool:
         return eve_utils.CustomMapping(common.hash_offset_provider_unsafe)
 
     @functools.cached_property
-    def _arg_extractors(self) -> dict[int, containers.PyContainerConstructor] | None:
-        extractors: dict[int, containers.PyContainerConstructor] = {}
-        for i, type_spec in enumerate(
-            [
-                *self.program_type.definition.pos_only_args,
-                *self.program_type.definition.pos_or_kw_args.values(),
-            ]
-        ):
-            if isinstance(type_spec, ts.NamedTupleType):
-                extractors[i] = containers.make_container_extractor_from_type_spec(type_spec)
-
-        return extractors if extractors else None
-
-    @functools.cached_property
-    def _kwarg_extractors(self) -> dict[str, containers.PyContainerConstructor] | None:
-        extractors: dict[str, containers.PyContainerConstructor] = {}
-        for name, type_spec in self.program_type.definition.kw_only_args.items():
-            if isinstance(type_spec, ts.NamedTupleType):
-                extractors[name] = containers.make_container_extractor_from_type_spec(type_spec)
-
-        return extractors if extractors else None
+    def _numeric_values_extractor(self) -> Callable | None:
+        return _make_args_extractor(self.program_type)
 
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
@@ -168,8 +210,7 @@ class CompiledProgramsPool:
         # Force initialization of all cached properties here to minimize first-time call overhead
         self._compiled_programs  # noqa: B018
         self._offset_provider_type_cache  # noqa: B018
-        self._arg_extractors  # noqa: B018
-        self._kwarg_extractors  # noqa: B018
+        self._numeric_values_extractor  # noqa: B018
 
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
@@ -186,17 +227,10 @@ class CompiledProgramsPool:
         )
 
         # TODO(egparedes): why not part of canonicalize_arguments?
-        if self._arg_extractors is None:
-            args = canonical_args
+        if (extractor := self._numeric_values_extractor) is not None:
+            args, kwargs = extractor(*canonical_args, **canonical_kwargs)
         else:
-            args_tmp = [*args]
-            for i, extractor in self._arg_extractors.items():
-                args_tmp[i] = extractor(canonical_args[i])
-            args = tuple(args_tmp)
-
-        if self._kwarg_extractors is not None:
-            for k, extractor in self._kwarg_extractors.items():
-                kwargs[k] = extractor(canonical_kwargs[k])
+            args, kwargs = canonical_args, canonical_kwargs
 
         static_args_values = tuple(args[i] for i in self._static_arg_indices)
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
