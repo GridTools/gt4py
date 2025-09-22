@@ -12,7 +12,7 @@ import abc
 import dataclasses
 import enum
 import typing
-from typing import Any, Generic, Mapping, Optional
+from typing import Any, Generic, Mapping, Optional, final
 
 from typing_extensions import Self
 
@@ -27,7 +27,11 @@ DATA_T = typing.TypeVar("DATA_T")
 T = typing.TypeVar("T")
 
 
-class ArgumentDescriptor(abc.ABC):
+def _make_dict_expr(exprs: dict[str, str]) -> str:
+    return "{" + ",".join((f"'{k}': {v}" for k, v in exprs.items())) + "}"
+
+
+class ArgStaticDescriptor(abc.ABC):
     """
     Abstract class to represent, extract, validate compile time information of an argument.
 
@@ -42,7 +46,7 @@ class ArgumentDescriptor(abc.ABC):
 
     def validate(self, name: str, type_: ts.TypeSpec) -> None:  # noqa: B027  # method is not abstract, but just empty when not implemented
         """
-        Validate argument descriptor.
+        Validate argument descriptor in the context of an actual program.
 
         This function is called when the type of the argument is available. The name is merely
         given to give good error messages.
@@ -50,8 +54,14 @@ class ArgumentDescriptor(abc.ABC):
         pass
 
     @classmethod
+    @final
+    def from_value(cls, value: Any) -> ArgStaticDescriptor:
+        attr_exprs = cls.attribute_extractor_exprs("self")
+        return cls(**eval(f"""lambda self: {_make_dict_expr(attr_exprs)}""")(value))
+
+    @classmethod
     @abc.abstractmethod
-    def attribute_extractor(cls, arg_expr: str) -> dict[str, str]:
+    def attribute_extractor_exprs(cls, arg_expr: str) -> dict[str, str]:
         """
         Return a mapping from the attributes of our descriptor to the expressions to retrieve them.
 
@@ -64,7 +74,7 @@ class ArgumentDescriptor(abc.ABC):
 
 
 @dataclasses.dataclass(frozen=True)
-class StaticArg(ArgumentDescriptor, Generic[core_defs.ScalarT]):
+class StaticArg(ArgStaticDescriptor, Generic[core_defs.ScalarT]):
     value: extended_typing.MaybeNestedInTuple[core_defs.ScalarT]
 
     def __post_init__(self) -> None:
@@ -87,7 +97,7 @@ class StaticArg(ArgumentDescriptor, Generic[core_defs.ScalarT]):
             )
 
     @classmethod
-    def attribute_extractor(cls, arg_expr: str) -> dict[str, str]:
+    def attribute_extractor_exprs(cls, arg_expr: str) -> dict[str, str]:
         return {"value": arg_expr}
 
 @dataclasses.dataclass(frozen=True)
@@ -120,8 +130,8 @@ class CompileTimeArgs:
     offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     column_axis: Optional[common.Dimension]
     argument_descriptors: Mapping[
-        type[ArgumentDescriptor],
-        dict[str, ArgumentDescriptor],
+        type[ArgStaticDescriptor],
+        dict[str, ArgStaticDescriptor],
     ]
 
     @property

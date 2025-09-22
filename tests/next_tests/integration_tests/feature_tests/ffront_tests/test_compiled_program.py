@@ -754,7 +754,7 @@ def test_compile_variants_wrong_type(cartesian_case, compile_variants_testee_not
 
 def test_compile_variants_error_static_field(cartesian_case, compile_variants_testee_not_compiled):
     field_a = cases.allocate(cartesian_case, compile_variants_testee_not_compiled, "field_a")()
-    with pytest.raises(errors.DSLTypeError, match="field_a.*cannot be static"):
+    with pytest.raises(errors.DSLTypeError, match="Invalid static argument.*field_a"):
         compile_variants_testee_not_compiled.compile(field_a=[field_a], offset_provider={})
 
 
