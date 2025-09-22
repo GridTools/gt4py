@@ -62,7 +62,7 @@ def test_shift_by_one_execution(cartesian_case):
     # TODO(tehrengruber): slicing located fields not supported currently
     # shift_by_one(in_field, out=out_field[:-1], offset_provider={"Ioff": IDim})
 
-    @gtx.program
+    @gtx.program(static_domains=True)
     def shift_by_one_program(in_field: cases.IFloatField, out_field: cases.IFloatField):
         shift_by_one(in_field, out=out_field[:-1])
 
@@ -82,7 +82,9 @@ def test_shift_by_one_execution(cartesian_case):
 
 
 def test_copy_execution(cartesian_case, copy_program_def):
-    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend, static_domains=True)
+    copy_program = gtx.program(
+        copy_program_def, backend=cartesian_case.backend, static_domains=True
+    )
 
     cases.verify_with_default_data(cartesian_case, copy_program, ref=lambda in_field: in_field)
 

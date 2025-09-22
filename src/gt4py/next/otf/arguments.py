@@ -106,7 +106,7 @@ class FieldDomainDescriptor(ArgStaticDescriptor):
     domain: common.Domain
 
     @classmethod
-    def attribute_extractor(cls, arg_expr: str):
+    def attribute_extractor_exprs(cls, arg_expr: str):
         return {"domain": f"({arg_expr}).domain"}
 
 

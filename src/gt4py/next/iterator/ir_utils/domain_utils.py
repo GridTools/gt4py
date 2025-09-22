@@ -143,7 +143,6 @@ class SymbolicDomain:
                     trace_shifts.Sentinel.ALL_NEIGHBORS,
                     trace_shifts.Sentinel.VALUE,
                 ]
-                horizontal_sizes: dict[str, tuple[itir.Expr, itir.Expr]]
                 old_dim = connectivity_type.source_dim
                 new_dim = connectivity_type.codomain
                 assert new_dim not in new_ranges or old_dim == new_dim
