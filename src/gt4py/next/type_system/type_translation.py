@@ -300,6 +300,9 @@ def from_value(value: Any) -> ts.TypeSpec:
         dtype = from_type_hint(value.dtype.scalar_type)
         assert isinstance(dtype, ts.ScalarType)
         symbol_type = ts.FieldType(dims=dims, dtype=dtype)
+    # TODO: figure out how to handle containers
+    elif isinstance(value, containers.PyContainer):
+        return make_type(value.__class__)
     elif isinstance(value, tuple):
         # Since the elements of the tuple might be one of the special cases
         # above, we can not resort to generic `infer_type` but need to do it
