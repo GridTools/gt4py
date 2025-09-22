@@ -113,12 +113,14 @@ def test_inlining_of_scalar_works_integration():
 
     _verify_program_has_expected_true_value(hijacked_program.data)
 
+
 def _verify_program_has_expected_domain(program: itir.Program, expected_domain: gtx.Domain):
     assert isinstance(program.body[0], itir.SetAt)
     assert isinstance(program.body[0].expr, itir.FunCall)
     assert program.body[0].expr.fun == itir.SymRef(id="fop")
     domain = CollapseTuple.apply(program.body[0].domain, within_stencil=False)
     assert domain == im.domain(common.GridType.CARTESIAN, expected_domain)
+
 
 def test_inlining_of_static_domain_works():
     domain = gtx.Domain(dims=(TDim,), ranges=(gtx.UnitRange(0, 1),))
@@ -129,7 +131,9 @@ def test_inlining_of_static_domain_works():
             kwargs={},
             offset_provider={},
             column_axis=None,
-            argument_descriptors={arguments.FieldDomainDescriptor: {"out": arguments.FieldDomainDescriptor(domain)}},
+            argument_descriptors={
+                arguments.FieldDomainDescriptor: {"out": arguments.FieldDomainDescriptor(domain)}
+            },
         ),
     )
 

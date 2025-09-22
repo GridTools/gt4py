@@ -433,8 +433,12 @@ def test_trivial_cartesian_forward():
         common.GridType.CARTESIAN,
         {
             IDim: (
-                im.minus(im.tuple_get(0, im.call("get_domain_range")("out", im.axis_literal(IDim))), 4),
-                im.minus(im.tuple_get(1, im.call("get_domain_range")("out", im.axis_literal(IDim))), 4),
+                im.minus(
+                    im.tuple_get(0, im.call("get_domain_range")("out", im.axis_literal(IDim))), 4
+                ),
+                im.minus(
+                    im.tuple_get(1, im.call("get_domain_range")("out", im.axis_literal(IDim))), 4
+                ),
             )
         },
     )

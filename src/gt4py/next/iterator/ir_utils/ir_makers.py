@@ -485,6 +485,7 @@ def domain(
     expr.type = ts.DomainType(dims=list(ranges.keys()))
     return expr
 
+
 def get_field_domain(
     grid_type: Union[common.GridType, str],
     field: str | itir.Expr,

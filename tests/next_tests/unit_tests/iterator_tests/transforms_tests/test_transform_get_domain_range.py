@@ -85,7 +85,9 @@ def test_get_domain_tuples():
         common.GridType.UNSTRUCTURED, im.tuple_get(1, "out"), sizes["out"][1].dims
     )
 
-    run_test_program(["inp", "out"], sizes, "out", im.domain_as_expr(sizes["out"][1]), get_domain_expr)
+    run_test_program(
+        ["inp", "out"], sizes, "out", im.domain_as_expr(sizes["out"][1]), get_domain_expr
+    )
 
 
 def test_get_domain_nested_tuples():

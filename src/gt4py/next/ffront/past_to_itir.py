@@ -15,7 +15,7 @@ from typing import Any, Optional, cast
 import devtools
 
 from gt4py.eve import NodeTranslator, concepts, traits, utils as eve_utils
-from gt4py.next import common, config, errors
+from gt4py.next import common, config, errors, utils
 from gt4py.next.ffront import (
     fbuiltins,
     gtcallable,
@@ -30,7 +30,6 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import remap_symbols, transform_get_domain_range
 from gt4py.next.otf import arguments, stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
-from gt4py.next import utils
 
 
 # FIXME[#1582](tehrengruber): This should only depend on the program not the arguments. Remove
@@ -119,11 +118,11 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
 
     if arguments.FieldDomainDescriptor in inp.args.argument_descriptors:
         field_domains = {
-            param: utils.tree_map(lambda x: x.domain)(v) for param, v in inp.args.argument_descriptors[arguments.FieldDomainDescriptor].items()
+            param: utils.tree_map(lambda x: x.domain)(v)
+            for param, v in inp.args.argument_descriptors[arguments.FieldDomainDescriptor].items()
         }
         itir_program = transform_get_domain_range.TransformGetDomainRange.apply(
-            itir_program,
-            sizes=field_domains
+            itir_program, sizes=field_domains
         )
 
     if config.DEBUG or inp.data.debug:

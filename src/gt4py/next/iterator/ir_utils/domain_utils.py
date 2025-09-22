@@ -22,6 +22,17 @@ from gt4py.next.iterator.transforms import collapse_tuple, trace_shifts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
 
+#: Threshold fraction of domain points which may be added to a domain on translation in order
+#: to have a contiguous domain before a warning is raised.
+NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD: float = 1 / 4
+
+#: Skip printing warnings after exceeding `NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD` this many times.
+NON_CONTIGUOUS_DOMAIN_MAX_WARNINGS: int = 5
+
+#: Number of warnings raised after exceeding `NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD`
+_NON_CONTIGUOUS_DOMAIN_WARNING_COUNTER: int = 0
+
+
 def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> dict[str, int]:
     """
     Extract horizontal domain sizes from an `offset_provider`.
@@ -135,64 +146,67 @@ class SymbolicDomain:
                 horizontal_sizes: dict[str, tuple[itir.Expr, itir.Expr]]
                 old_dim = connectivity_type.source_dim
                 new_dim = connectivity_type.codomain
+                assert new_dim not in new_ranges or old_dim == new_dim
                 if symbolic_domain_sizes is not None:
-                    horizontal_sizes = {
-                        k: (im.literal(str(0), builtins.INTEGER_INDEX_BUILTIN), im.ensure_expr(v))
-                        for k, v in symbolic_domain_sizes.items()
-                    }
+                    new_range = SymbolicRange(
+                        im.literal(str(0), builtins.INTEGER_INDEX_BUILTIN),
+                        im.ensure_expr(symbolic_domain_sizes[new_dim.value]),
+                    )
                 else:
-                    # note: ugly but cheap re-computation, but should disappear
                     assert common.is_offset_provider(offset_provider)
-                    horizontal_sizes = {
-                        k: (
-                            im.literal(str(0), builtins.INTEGER_INDEX_BUILTIN),
-                            im.literal(str(v), builtins.INTEGER_INDEX_BUILTIN),
-                        )
-                        for k, v in _max_domain_sizes_by_location_type(offset_provider).items()
-                    }
-                    start = 0
-                    stop = -1
-                    start_ = collapse_tuple.CollapseTuple.apply(
-                        new_ranges[old_dim].start,
-                        within_stencil=False,
-                        allow_undeclared_symbols=True,
-                    )
-                    stop_ = collapse_tuple.CollapseTuple.apply(
-                        new_ranges[old_dim].stop,
-                        within_stencil=False,
-                        allow_undeclared_symbols=True,
-                    )
-                    if isinstance(start_, itir.Literal) and isinstance(stop_, itir.Literal):
-                        start = int(start_.value)
-                        stop = int(stop_.value)
+                    skip_value = offset_provider[off.value].skip_value
 
-                    off_index = (
-                        slice(None) if val == trace_shifts.Sentinel.ALL_NEIGHBORS else val.value
-                    )
-                    accessed = offset_provider[off.value].ndarray[start:stop, off_index]
+                    # fold & convert expr into actual integers
+                    range_exprs = new_ranges[old_dim].start, new_ranges[old_dim].stop
+                    range_exprs = [
+                        collapse_tuple.CollapseTuple.apply(
+                            expr,
+                            within_stencil=False,
+                            allow_undeclared_symbols=True,
+                        )
+                        for expr in range_exprs
+                    ]
+                    assert all(isinstance(expr, itir.Literal) for expr in range_exprs)
+                    start, stop = (int(literal.value) for literal in range_exprs)
+
+                    if val in [trace_shifts.Sentinel.ALL_NEIGHBORS, trace_shifts.Sentinel.VALUE]:
+                        nb_index = slice(None)
+                    else:
+                        nb_index = val.value
+
+                    accessed = offset_provider[off.value].ndarray[start:stop, nb_index]
+
+                    if np.any(accessed == skip_value):
+                        raise NotImplementedError(
+                            f"Translating '{self.as_expr()}' using '{shift[0].value}' contains "
+                            f"skipped values. This is not supported."
+                        )
+
                     min_ = np.min(accessed)
                     max_ = np.max(accessed) + 1
 
-                    if (covered := np.unique(accessed).size) < (max_ - min_) / 2:
+                    fraction_accessed = np.unique(accessed).size / (max_ - min_)
+
+                    if (
+                        fraction_accessed < NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD
+                        and (_NON_CONTIGUOUS_DOMAIN_WARNING_COUNTER := +1)
+                        < NON_CONTIGUOUS_DOMAIN_MAX_WARNINGS
+                    ):
                         warnings.warn(
                             UserWarning(
-                                f"For {new_dim} the accessed range [{min_}, {max_}[ covers {max_ - min_} values, "
-                                f"but only {covered} are actually present and {max_ - min_ - covered} were added "
-                                f"in between {accessed}. Please consider reordering the mesh."
+                                f"Translating '{self.as_expr()}' using '{shift[0].value}' requires "
+                                f"computations on many additional points "
+                                f"({round((1 - fraction_accessed) * 100)}%) in order to get a contiguous "
+                                f"domain. Please consider reordering your mesh."
                             ),
                             stacklevel=2,
                         )
 
-                    horizontal_sizes[new_dim.value] = (
+                    new_range = SymbolicRange(
                         im.literal(str(min_), builtins.INTEGER_INDEX_BUILTIN),
                         im.literal(str(max_), builtins.INTEGER_INDEX_BUILTIN),
                     )
 
-                assert new_dim not in new_ranges or old_dim == new_dim
-
-                new_range = SymbolicRange(
-                    horizontal_sizes[new_dim.value][0], horizontal_sizes[new_dim.value][1]
-                )
                 new_ranges = dict(
                     (dim, range_) if dim != old_dim else (new_dim, new_range)
                     for dim, range_ in new_ranges.items()

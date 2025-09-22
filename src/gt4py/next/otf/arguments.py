@@ -100,8 +100,9 @@ class StaticArg(ArgStaticDescriptor, Generic[core_defs.ScalarT]):
     def attribute_extractor_exprs(cls, arg_expr: str) -> dict[str, str]:
         return {"value": arg_expr}
 
+
 @dataclasses.dataclass(frozen=True)
-class FieldDomainDescriptor(ArgumentDescriptor):
+class FieldDomainDescriptor(ArgStaticDescriptor):
     domain: common.Domain
 
     @classmethod

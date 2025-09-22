@@ -138,7 +138,7 @@ class Program:
             connectivities=connectivities,
             enable_jit=enable_jit,
             static_params=static_params,
-            static_domains=static_domains
+            static_domains=static_domains,
         )
 
     # needed in testing
@@ -289,7 +289,7 @@ class Program:
 
         argument_descriptor_mapping = {
             arguments.StaticArg: self.static_params,
-            arguments.FieldDomainDescriptor: static_domain_args
+            arguments.FieldDomainDescriptor: static_domain_args,
         }
 
         program_type = self.past_stage.past_node.type
