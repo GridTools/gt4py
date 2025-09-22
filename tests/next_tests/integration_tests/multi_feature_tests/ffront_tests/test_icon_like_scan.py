@@ -32,20 +32,20 @@ Koff = gtx.FieldOffset("Koff", KDim, (KDim,))
 
 
 class State(NamedTuple):
-    z_q_m1: float
-    w_m1: float
+    z_q_new: float
+    w_new: float
     first_level: bool
 
 
-@gtx.scan_operator(axis=KDim, forward=True, init=State(z_q_m1=0.0, w_m1=0.0, first_level=True))
+@gtx.scan_operator(axis=KDim, forward=True, init=State(z_q_new=0.0, w_new=0.0, first_level=True))
 def _scan(state: State, w: float, z_q: float, z_a: float, z_b: float, z_c: float) -> State:
-    z_g = z_b + z_a * state.z_q_m1
+    z_g = z_b + z_a * state.z_q_new
     z_q_new = (0.0 - z_c) * z_g
-    w_new = z_a * state.w_m1 * z_g
+    w_new = z_a * state.w_new * z_g
     return (
-        State(z_q_m1=z_q, w_m1=w, first_level=False)
+        State(z_q_new=z_q, w_new=w, first_level=False)
         if state.first_level
-        else State(z_q_m1=z_q_new, w_m1=w_new, first_level=False)
+        else State(z_q_new=z_q_new, w_new=w_new, first_level=False)
     )
 
 
