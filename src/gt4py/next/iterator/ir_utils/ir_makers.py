@@ -7,12 +7,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import typing
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Iterable, Optional, TypeAlias, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
+
+
+ExprLike: TypeAlias = Union[str, core_defs.Scalar, common.Dimension, itir.Expr]
 
 
 def sym(sym_or_name: Union[str, itir.Sym], type_: str | ts.TypeSpec | None = None) -> itir.Sym:
@@ -68,7 +71,7 @@ def ref(
     return ref
 
 
-def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> itir.Expr:
+def ensure_expr(expr_like: ExprLike) -> itir.Expr:
     """
     Convert literals into a SymRef or Literal and let expressions pass unchanged.
 
@@ -83,14 +86,16 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
     >>> ensure_expr(itir.OffsetLiteral(value="i"))
     OffsetLiteral(value='i')
     """
-    if isinstance(literal_or_expr, str):
-        return ref(literal_or_expr)
-    elif core_defs.is_scalar_type(literal_or_expr):
-        return literal_from_value(literal_or_expr)
-    elif literal_or_expr is None:
+    if isinstance(expr_like, str):
+        return ref(expr_like)
+    elif core_defs.is_scalar_type(expr_like):
+        return literal_from_value(expr_like)
+    elif expr_like is None:
         return itir.NoneLiteral()
-    assert isinstance(literal_or_expr, itir.Expr), literal_or_expr
-    return literal_or_expr
+    elif isinstance(expr_like, common.Dimension):
+        return axis_literal(expr_like)
+    assert isinstance(expr_like, itir.Expr), expr_like
+    return expr_like
 
 
 def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.OffsetLiteral:
@@ -462,8 +467,8 @@ def domain(
         grid_type = f"{grid_type!s}_domain"
     expr = call(grid_type)(
         *[
-            call("named_range")(
-                axis_literal(d),
+            named_range(
+                d,
                 r[0],
                 r[1],
             )
@@ -472,6 +477,36 @@ def domain(
     )
     expr.type = ts.DomainType(dims=list(ranges.keys()))
     return expr
+
+
+def get_field_domain(
+    grid_type: Union[common.GridType, str],
+    field: str | itir.Expr,
+    dims: Iterable[common.Dimension] | None = None,
+) -> itir.Expr:
+    if isinstance(field, itir.Expr) and isinstance(field.type, ts.FieldType):
+        assert dims is None or all(d1 == d2 for d1, d2 in zip(field.type.dims, dims, strict=True))
+        dims = field.type.dims
+    else:
+        if dims is None:
+            raise ValueError("Field expression must be typed if 'dims' is not given.")
+
+    return domain(
+        grid_type,
+        {
+            dim: (
+                tuple_get(0, call("get_domain_range")(field, dim)),
+                tuple_get(1, call("get_domain_range")(field, dim)),
+            )
+            for dim in dims
+        },
+    )
+
+
+def named_range(
+    dim: itir.AxisLiteral | common.Dimension, start: itir.Expr, stop: itir.Expr
+) -> itir.FunCall:
+    return call("named_range")(dim, start, stop)
 
 
 def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Callable:
