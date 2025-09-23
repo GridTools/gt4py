@@ -14,7 +14,7 @@ from typing import Any, Optional, cast
 
 import devtools
 
-from gt4py.eve import NodeTranslator, concepts, traits
+from gt4py.eve import NodeTranslator, traits
 from gt4py.next import common, config, errors
 from gt4py.next.ffront import (
     fbuiltins,
@@ -331,42 +331,53 @@ class ProgramLowering(
                 " fields defined on the same dimensions. This error should be "
                 " caught in type deduction already."
             )
+        primitive_paths = [
+            path for _, path in type_info.primitive_constituents(out_field.type, with_path_arg=True)
+        ]
+        tuple_elements = [
+            functools.reduce(lambda expr, i: im.tuple_get(i, expr), path, out_field.id)
+            for path in primitive_paths
+        ]
 
         domain_args = []
-        for dim_i, dim in enumerate(out_dims):
-            # an expression for the range of a dimension
-            dim_range = im.call("get_domain_range")(
-                out_field.id, itir.AxisLiteral(value=dim.value, kind=dim.kind)
-            )
-            dim_start, dim_stop = im.tuple_get(0, dim_range), im.tuple_get(1, dim_range)
-            # bounds
-            lower: itir.Expr
-            upper: itir.Expr
-            if node_domain is not None:
-                assert isinstance(node_domain, past.Dict)
-                lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
-            else:
-                lower = self._visit_slice_bound(
-                    slices[dim_i].lower if slices else None,
-                    dim_start,
-                    dim_start,
-                    dim_stop,
-                )
-                upper = self._visit_slice_bound(
-                    slices[dim_i].upper if slices else None,
-                    dim_stop,
-                    dim_start,
-                    dim_stop,
+        for el in tuple_elements:
+            for dim_i, dim in enumerate(out_dims):
+                # an expression for the range of a dimension
+                dim_range = im.call("get_domain_range")(
+                    el, itir.AxisLiteral(value=dim.value, kind=dim.kind)
                 )
 
-            if dim.kind == common.DimensionKind.LOCAL:
-                raise ValueError(f"common.Dimension '{dim.value}' must not be local.")
-            domain_args.append(
-                itir.FunCall(
-                    fun=itir.SymRef(id="named_range"),
-                    args=[itir.AxisLiteral(value=dim.value, kind=dim.kind), lower, upper],
+                dim_start, dim_stop = im.tuple_get(0, dim_range), im.tuple_get(1, dim_range)
+                # bounds
+                lower: itir.Expr
+                upper: itir.Expr
+                if node_domain is not None:
+                    assert isinstance(node_domain, past.Dict)
+                    lower, upper = self._construct_itir_initialized_domain_arg(
+                        dim_i, dim, node_domain
+                    )
+                else:
+                    lower = self._visit_slice_bound(
+                        slices[dim_i].lower if slices else None,
+                        dim_start,
+                        dim_start,
+                        dim_stop,
+                    )
+                    upper = self._visit_slice_bound(
+                        slices[dim_i].upper if slices else None,
+                        dim_stop,
+                        dim_start,
+                        dim_stop,
+                    )
+
+                if dim.kind == common.DimensionKind.LOCAL:
+                    raise ValueError(f"common.Dimension '{dim.value}' must not be local.")
+                domain_args.append(
+                    itir.FunCall(
+                        fun=itir.SymRef(id="named_range"),
+                        args=[itir.AxisLiteral(value=dim.value, kind=dim.kind), lower, upper],
+                    )
                 )
-            )
 
         if self.grid_type == common.GridType.CARTESIAN:
             domain_builtin = "cartesian_domain"
@@ -439,38 +450,28 @@ class ProgramLowering(
         elif isinstance(out_arg, past.TupleExpr) or (
             isinstance(out_arg, past.Name) and isinstance(out_arg.type, ts.TupleType)
         ):
-            flattened = _flatten_tuple_expr(out_arg)
-
-            first_field = flattened[0]
-            field_slice = None
-            if isinstance(first_field, past.Subscript):
-                raise AssertionError  # TODO support slicing of multiple fields with different domain
-                assert all(isinstance(field, past.Subscript) for field in flattened), (
-                    "Incompatible field in tuple: either all fields or no field must be sliced."
-                )
-                assert all(
-                    concepts.eq_nonlocated(
-                        first_field.slice_,
-                        field.slice_,
-                    )
-                    for field in flattened
-                ), "Incompatible field in tuple: all fields must be sliced in the same way."
-                field_slice = self._compute_field_slice(first_field)
-                first_field = first_field.value
-
             domain_expr = type_info.apply_to_primitive_constituents(
                 lambda field_type, path: self._construct_itir_domain_arg(
-                    functools.reduce(
-                        lambda e, i: (
-                            e.elts[i]
-                            if isinstance(e, past.TupleExpr)
-                            else past.Name(type=e.type.types[i], id=e.id, location=e.location)
-                            if isinstance(e, past.Name) and isinstance(e.type, ts.TupleType)
-                            else e
-                        ),
-                        path,
-                        out_arg,
-                    ),
+                    functools.reduce(lambda e, i: e.elts[i], path, out_arg),
+                    functools.reduce(lambda e, i: e.elts[i], path, domain_arg)
+                    if isinstance(domain_arg, past.TupleExpr)
+                    else domain_arg,
+                    None,  # TODO: support slicing
+                )
+                if isinstance(out_arg, past.TupleExpr)
+                else self._construct_itir_domain_arg(
+                    # Create a temporary past.Name-like object that carries the indexed information
+                    type(
+                        "SyntheticElement",
+                        (),
+                        {
+                            "id": functools.reduce(
+                                lambda expr, i: im.tuple_get(i, expr), path, out_arg.id
+                            ),
+                            "type": field_type,
+                            "location": out_arg.location,
+                        },
+                    )(),
                     (
                         functools.reduce(lambda e, i: e.elts[i], path, domain_arg)
                         if isinstance(domain_arg, past.TupleExpr)
