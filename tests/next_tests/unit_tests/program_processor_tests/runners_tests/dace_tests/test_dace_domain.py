@@ -39,7 +39,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 def test_simplify_domain_expr(param):
     domain_expr = im.domain(
         gtx_common.GridType.CARTESIAN,
-        ranges={
+        {
             Cell: ("horizontal_start", "horizontal_end"),
             KDim: ("vertical_start", "vertical_end"),
         },
@@ -58,7 +58,7 @@ def test_gtir_domain():
 
     ir = im.domain(
         gtx_common.GridType.UNSTRUCTURED,
-        ranges={
+        {
             Vertex: (1, 10),
             KDim: (2, 20),
         },
