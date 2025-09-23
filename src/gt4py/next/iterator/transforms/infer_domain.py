@@ -55,7 +55,7 @@ AccessedDomains: TypeAlias = dict[str, DomainAccess]
 
 class InferenceOptions(typing.TypedDict):
     offset_provider: common.OffsetProvider | common.OffsetProviderType
-    symbolic_domain_sizes: Optional[dict[str, str]]
+    symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]]
     allow_uninferred: bool
     keep_existing_domains: bool
 
@@ -126,7 +126,7 @@ def _extract_accessed_domains(
     input_ids: list[str],
     target_domain: NonTupleDomainAccess,
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
-    symbolic_domain_sizes: Optional[dict[str, str]],
+    symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]],
 ) -> dict[str, NonTupleDomainAccess]:
     accessed_domains: dict[str, NonTupleDomainAccess] = {}
 
@@ -182,7 +182,7 @@ def _infer_as_fieldop(
     target_domain: DomainAccess,
     *,
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
-    symbolic_domain_sizes: Optional[dict[str, str]],
+    symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]],
     allow_uninferred: bool,
     keep_existing_domains: bool,
 ) -> tuple[itir.FunCall, AccessedDomains]:
@@ -441,7 +441,7 @@ def infer_expr(
     domain: DomainAccess,
     *,
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
-    symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]] = None,
     allow_uninferred: bool = False,
     keep_existing_domains: bool = False,
 ) -> tuple[itir.Expr, AccessedDomains]:
@@ -457,7 +457,7 @@ def infer_expr(
 
     Keyword Arguments:
     - symbolic_domain_sizes: A dictionary mapping axes names, e.g., `I`, `Vertex`, to a symbol
-      name that evaluates to the length of that axis.
+      name or expression that evaluates to the length of that axis.
     - allow_uninferred: Allow `as_fieldop` expressions whose domain is either unknown (e.g.
       because of a dynamic shift) or never accessed.
     - keep_existing_domains: If `True`, keep existing domains in `as_fieldop` expressions and
@@ -550,7 +550,7 @@ def infer_program(
     program: itir.Program,
     *,
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
-    symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]] = None,
     allow_uninferred: bool = False,
     keep_existing_domains: bool = False,
 ) -> itir.Program:

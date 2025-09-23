@@ -96,6 +96,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         inp.data.past_node, function_definitions=lowered_funcs, grid_type=grid_type
     )
 
+    # TODO(tehrengruber): Put this in a dedicated transformation step.
     if arguments.StaticArg in inp.args.argument_descriptors:
         static_arg_descriptors = inp.args.argument_descriptors[arguments.StaticArg]
         if not all(
@@ -116,6 +117,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
             body=body,
         )
 
+    # TODO(tehrengruber): Put this in a dedicated transformation step.
     if arguments.FieldDomainDescriptor in inp.args.argument_descriptors:
         field_domains = {
             param: utils.tree_map(lambda x: x.domain)(v)

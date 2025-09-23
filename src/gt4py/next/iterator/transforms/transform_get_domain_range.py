@@ -7,10 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Dict
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
@@ -28,7 +28,7 @@ class _DomainDeduction(NodeTranslator):
         return None  # means we could not deduce the domain
 
     def visit_SymRef(
-        self, node: itir.SymRef, *, sizes: Dict[str, common.Domain], **kwargs
+        self, node: itir.SymRef, *, sizes: dict[str, MaybeNestedInTuple[common.Domain]], **kwargs
     ) -> DomainOrTupleThereof | None:
         return sizes.get(node.id, None)
 
@@ -94,7 +94,7 @@ class TransformGetDomainRange(PreserveLocationVisitor, NodeTranslator):
     """
 
     @classmethod
-    def apply(cls, program: itir.Program, sizes: Dict[str, common.Domain]):
+    def apply(cls, program: itir.Program, sizes: dict[str, MaybeNestedInTuple[common.Domain]]):
         return cls().visit(program, sizes=sizes)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs) -> itir.FunCall:

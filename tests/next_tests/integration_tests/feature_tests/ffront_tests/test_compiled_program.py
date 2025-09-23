@@ -5,7 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
+from typing import Optional
 from unittest import mock
 
 import numpy as np
@@ -30,6 +30,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     skip_value_mesh,
 )
 
+from gt4py.next.otf import arguments
 
 _raise_on_compile = mock.Mock()
 _raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
@@ -812,3 +813,42 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
         offset_provider=cartesian_case.offset_provider,
     )
     assert np.allclose(out.asnumpy(), field_a.asnumpy() * 3 + field_b.asnumpy() * 4)
+
+
+def test_compile_variants_decorator_static_domains(compile_variants_field_operator, cartesian_case):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    captured_cargs: Optional[arguments.CompileTimeArgs] = None
+
+    class CaptureCompileTimeArgsBackend:
+        def __getattr__(self, name):
+            return getattr(cartesian_case.backend, name)
+
+        def compile(self, program, compile_time_args):
+            nonlocal captured_cargs
+            captured_cargs = compile_time_args
+
+            return cartesian_case.backend.compile(program, compile_time_args)
+
+    @gtx.field_operator
+    def identity(inp: cases.IField):
+        return inp
+
+    @gtx.program(backend=CaptureCompileTimeArgsBackend(), static_domains=True)
+    def testee(inp: cases.IField, out: cases.IField):
+        identity(inp, out=out)
+
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    out = cases.allocate(cartesian_case, testee, "out")()
+
+    testee(inp, out, offset_provider={})
+    assert np.allclose(out.ndarray, inp.ndarray)
+
+    assert testee._compiled_programs.argument_descriptor_mapping[
+        arguments.FieldDomainDescriptor
+    ] == ["inp", "out"]
+    assert captured_cargs.argument_descriptors[arguments.FieldDomainDescriptor] == {
+        "inp": arguments.FieldDomainDescriptor(inp.domain),
+        "out": arguments.FieldDomainDescriptor(out.domain),
+    }

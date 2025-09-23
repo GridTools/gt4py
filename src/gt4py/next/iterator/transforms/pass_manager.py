@@ -5,12 +5,12 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
-from typing import Optional, Protocol
+from typing import Any, Mapping, Optional, Protocol
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import (
     concat_where,
     dead_code_elimination,
@@ -22,6 +22,7 @@ from gt4py.next.iterator.transforms import (
     inline_fundefs,
     inline_lifts,
     remove_broadcast,
+    symbol_ref_utils,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -42,6 +43,42 @@ class GTIRTransform(Protocol):
     ) -> itir.Program: ...
 
 
+def _max_domain_range_sizes(offset_provider: Mapping[str, Any]) -> dict[str, itir.Literal]:
+    """
+    Extract horizontal domain sizes from an `offset_provider`.
+
+    Considers the shape of the neighbor table to get the size of each `source_dim` and the maximum
+    value inside the neighbor table to get the size of each `codomain`.
+    """
+    sizes: dict[str, int] = {}
+    for provider in offset_provider.values():
+        if common.is_neighbor_connectivity(provider):
+            conn_type = provider.__gt_type__()
+            sizes[conn_type.source_dim.value] = max(
+                sizes.get(conn_type.source_dim.value, 0), provider.ndarray.shape[0]
+            )
+            sizes[conn_type.codomain.value] = max(
+                sizes.get(conn_type.codomain.value, 0),
+                provider.ndarray.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
+            )
+    sizes_exprs = {k: im.literal_from_value(v) for k, v in sizes.items()}
+    return sizes_exprs
+
+
+def _has_dynamic_domains(ir: itir.Program) -> bool:
+    # note: this function does not respect symbol collisions with builtins. As it is a temporary
+    # workaround we don't care about this corner cases.
+    domains = set()
+    domains |= ir.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
+    for as_fop in (
+        ir.walk_values()
+        .if_isinstance(itir.FunCall)
+        .filter(lambda node: cpm.is_call_to(node, "as_fieldop") and len(node.args) == 2)
+    ):
+        domains.add(as_fop.args[1])
+    return len(symbol_ref_utils.collect_symbol_refs(domains)) > 0
+
+
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
 #  `extract_temporaries` and `temporary_extraction_heuristics` which is inconvenient.
 def apply_common_transforms(
@@ -56,11 +93,17 @@ def apply_common_transforms(
     force_inline_lambda_args=False,
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
-    symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]] = None,
 ) -> itir.Program:
     assert isinstance(ir, itir.Program)
 
     offset_provider_type = common.offset_provider_to_type(offset_provider)
+
+    # TODO(tehrengruber): Remove this option again as soon as we have the necessary builtins
+    #  to work with / translate domains.
+    if _has_dynamic_domains(ir):
+        assert not symbolic_domain_sizes, "Options are mutually exclusive."
+        symbolic_domain_sizes = _max_domain_range_sizes(offset_provider)  # type: ignore[assignment]
 
     tmp_uids = eve_utils.UIDGenerator(prefix="__tmp")
     mergeasfop_uids = eve_utils.UIDGenerator()

@@ -11,7 +11,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import warnings
-from typing import Any, Callable, Iterable, Literal, Mapping, Optional
+from typing import Callable, Iterable, Literal, Optional
 
 import numpy as np
 
@@ -31,27 +31,6 @@ NON_CONTIGUOUS_DOMAIN_MAX_WARNINGS: int = 5
 
 #: Number of warnings raised after exceeding `NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD`
 _NON_CONTIGUOUS_DOMAIN_WARNING_COUNTER: int = 0
-
-
-def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> dict[str, int]:
-    """
-    Extract horizontal domain sizes from an `offset_provider`.
-
-    Considers the shape of the neighbor table to get the size of each `source_dim` and the maximum
-    value inside the neighbor table to get the size of each `codomain`.
-    """
-    sizes = dict[str, int]()
-    for provider in offset_provider.values():
-        if common.is_neighbor_connectivity(provider):
-            conn_type = provider.__gt_type__()
-            sizes[conn_type.source_dim.value] = max(
-                sizes.get(conn_type.source_dim.value, 0), provider.ndarray.shape[0]
-            )
-            sizes[conn_type.codomain.value] = max(
-                sizes.get(conn_type.codomain.value, 0),
-                provider.ndarray.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
-            )
-    return sizes
 
 
 @dataclasses.dataclass(frozen=True)
@@ -113,7 +92,7 @@ class SymbolicDomain:
         offset_provider: common.OffsetProvider | common.OffsetProviderType,
         #: A dictionary mapping axes names to their length. See
         #: func:`gt4py.next.iterator.transforms.infer_domain.infer_expr` for more details.
-        symbolic_domain_sizes: Optional[dict[str, str]] = None,
+        symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]] = None,
     ) -> SymbolicDomain:
         offset_provider_type = common.offset_provider_to_type(offset_provider)
 
@@ -146,34 +125,37 @@ class SymbolicDomain:
                 old_dim = connectivity_type.source_dim
                 new_dim = connectivity_type.codomain
                 assert new_dim not in new_ranges or old_dim == new_dim
-                if symbolic_domain_sizes is not None:
+                if symbolic_domain_sizes is not None and new_dim.value in symbolic_domain_sizes:
                     new_range = SymbolicRange(
                         im.literal(str(0), builtins.INTEGER_INDEX_BUILTIN),
                         im.ensure_expr(symbolic_domain_sizes[new_dim.value]),
                     )
                 else:
                     assert common.is_offset_provider(offset_provider)
-                    skip_value = offset_provider[off.value].skip_value
+                    connectivity = offset_provider[off.value]
+                    assert isinstance(connectivity, common.Connectivity)
+                    skip_value = connectivity.skip_value
 
                     # fold & convert expr into actual integers
                     range_exprs = new_ranges[old_dim].start, new_ranges[old_dim].stop
-                    range_exprs = [
+                    range_exprs = tuple(
                         collapse_tuple.CollapseTuple.apply(
                             expr,
                             within_stencil=False,
                             allow_undeclared_symbols=True,
                         )
                         for expr in range_exprs
-                    ]
+                    )  # type: ignore[assignment]  # mypy not smart enough
                     assert all(isinstance(expr, itir.Literal) for expr in range_exprs)
-                    start, stop = (int(literal.value) for literal in range_exprs)
+                    start, stop = (int(literal.value) for literal in range_exprs)  # type: ignore[attr-defined]  # mypy does not understand assert above
 
+                    nb_index: slice | int
                     if val in [trace_shifts.Sentinel.ALL_NEIGHBORS, trace_shifts.Sentinel.VALUE]:
                         nb_index = slice(None)
                     else:
-                        nb_index = val.value
+                        nb_index = val.value  # type: ignore[assignment]  # assert above
 
-                    accessed = offset_provider[off.value].ndarray[start:stop, nb_index]
+                    accessed = connectivity.ndarray[start:stop, nb_index]
 
                     if np.any(accessed == skip_value):
                         raise NotImplementedError(
@@ -181,10 +163,9 @@ class SymbolicDomain:
                             f"skipped values. This is not supported."
                         )
 
-                    min_ = np.min(accessed)
-                    max_ = np.max(accessed) + 1
+                    new_start, new_stop = accessed.min(), accessed.max() + 1  # type: ignore[attr-defined]  # TODO(havogt): improve typing for NDArrayObject
 
-                    fraction_accessed = np.unique(accessed).size / (max_ - min_)
+                    fraction_accessed = np.unique(accessed).size / (new_stop - new_start)  # type: ignore[call-overload]  # TODO(havogt): improve typing for NDArrayObject
 
                     if (
                         fraction_accessed < NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD
@@ -202,8 +183,8 @@ class SymbolicDomain:
                         )
 
                     new_range = SymbolicRange(
-                        im.literal(str(min_), builtins.INTEGER_INDEX_BUILTIN),
-                        im.literal(str(max_), builtins.INTEGER_INDEX_BUILTIN),
+                        im.literal(str(new_start), builtins.INTEGER_INDEX_BUILTIN),
+                        im.literal(str(new_stop), builtins.INTEGER_INDEX_BUILTIN),
                     )
 
                 new_ranges = dict(

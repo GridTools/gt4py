@@ -246,7 +246,7 @@ class CompiledProgramsPool:
             self._validate_argument_descriptor_mapping()
         else:
             for descr_cls, descriptor_expr_mapping in argument_descriptors.items():
-                if (expected := set(self.argument_descriptor_mapping[descr_cls])) != (
+                if (expected := set(self.argument_descriptor_mapping.get(descr_cls, {}))) != (
                     got := set(descriptor_expr_mapping.keys())
                 ):
                     raise ValueError(
