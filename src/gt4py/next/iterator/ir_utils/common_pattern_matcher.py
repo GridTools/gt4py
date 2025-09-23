@@ -7,10 +7,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from collections.abc import Iterable
-from typing import Any, Generic, List, TypeAlias, TypeGuard, TypeVar
+from typing import Any, Callable, Generic, List, TypeAlias, TypeGuard, TypeVar
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import FunCall as GTFNIRFunCall
+from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import (
+    Expr as GTFNIRExpr,
+    SymRef as GTFNIRSymRef,
+)
 
 
 _Fun = TypeVar("_Fun", bound=itir.Expr)
@@ -44,8 +49,8 @@ def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_FunCallToSymRe
     assert not isinstance(fun, itir.Node)  # to avoid accidentally passing the fun as first argument
     if isinstance(fun, str):
         return (
-            isinstance(node, itir.FunCall)
-            and isinstance(node.fun, itir.SymRef)
+            isinstance(node, itir.FunCall | GTFNIRFunCall)
+            and isinstance(node.fun, itir.SymRef | GTFNIRSymRef)
             and node.fun.id == fun
         )
     else:
@@ -135,3 +140,14 @@ def is_identity_as_fieldop(node: itir.Expr) -> TypeGuard[_FunCallToFunCallToRef]
     ):
         return True
     return False
+
+
+def is_tuple_expr_of(
+    pred: Callable[[Any], bool],
+    expr: itir.Expr | GTFNIRExpr,
+) -> bool:
+    if is_call_to(expr, "make_tuple"):
+        return all(is_tuple_expr_of(pred, arg) for arg in expr.args)
+    if is_call_to(expr, "tuple_get"):
+        return is_tuple_expr_of(pred, expr.args[1])
+    return pred(expr)
