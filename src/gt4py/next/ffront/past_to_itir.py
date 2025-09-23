@@ -314,7 +314,7 @@ class ProgramLowering(
 
     def _construct_itir_domain_arg(
         self,
-        out_field: past.Name,
+        out_field: past.Name | past.Subscript,
         node_domain: Optional[past.Expr],
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
@@ -334,8 +334,13 @@ class ProgramLowering(
         primitive_paths = [
             path for _, path in type_info.primitive_constituents(out_field.type, with_path_arg=True)
         ]
+        assert isinstance(out_field, (past.Name, past.Subscript)) or (hasattr(out_field, "id"))
         tuple_elements = [
-            functools.reduce(lambda expr, i: im.tuple_get(i, expr), path, out_field.id)
+            functools.reduce(
+                lambda expr, i: im.tuple_get(i, expr),
+                path,
+                out_field.value.id if isinstance(out_field, past.Subscript) else out_field.id,
+            )
             for path in primitive_paths
         ]
 
@@ -462,7 +467,7 @@ class ProgramLowering(
                 else self._construct_itir_domain_arg(
                     # Create a temporary past.Name-like object that carries the indexed information
                     type(
-                        "SyntheticElement",
+                        "NameLikeObject",
                         (),
                         {
                             "id": functools.reduce(

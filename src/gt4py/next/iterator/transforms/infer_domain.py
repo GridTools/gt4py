@@ -483,7 +483,7 @@ def infer_expr(
         domain,
         fill_value=DomainAccessDescriptor.NEVER,
         # el_types already has the right structure, we only want to change domain
-        bidirectional=False,
+        bidirectional=False if not isinstance(expr.type, ts.DeferredType) else True,
     )
 
     if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):

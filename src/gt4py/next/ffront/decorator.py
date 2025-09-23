@@ -636,6 +636,7 @@ OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
 #     else:
 #         return outs[common.domain(domains)]
 
+
 @dataclasses.dataclass(frozen=True)
 class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     """
