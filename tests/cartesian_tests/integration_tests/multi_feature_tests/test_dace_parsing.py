@@ -23,7 +23,7 @@ import typing
 
 from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
-from gt4py.cartesian.gtscript import PARALLEL, computation, interval
+from gt4py.cartesian.gtscript import FORWARD, PARALLEL, computation, interval
 from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.storage.cartesian import utils as storage_utils
 from gt4py.cartesian.backend.dace_lazy_stencil import DaCeLazyStencil
@@ -92,6 +92,89 @@ def test_basic(decorator, backend):
     # Download the data from the wrapper cupy array to be compared on cpu
     output = storage_utils.cpu_copy(output.array)
     assert np.allclose(output, fill_value)
+
+
+def test_ij_field(decorator):
+    backend = "dace:cpu"
+
+    @decorator(backend=backend)
+    def defn(out_field: gtscript.Field[gtscript.IJ, np.float32], scalar: np.float32):
+        with computation(FORWARD), interval(...):
+            out_field = scalar  # noqa: F841 [unused-variable]
+
+    field = OriginWrapper(
+        array=gt_storage.zeros(dtype=np.float32, shape=(5, 8), backend=backend),
+        origin=(0, 0),
+    )
+
+    value = 42.0
+
+    @dace.program()
+    def call_stencil_object(stencil_out, stencil_scalar):
+        defn(stencil_out, stencil_scalar)
+
+    call_stencil_object(stencil_out=field, stencil_scalar=value)
+
+    assert np.allclose(field, value)
+
+
+def test_k_field(decorator):
+    backend = "dace:cpu"
+
+    @decorator(backend=backend)
+    def defn(out_field: gtscript.Field[np.int32], k_field: gtscript.Field[gtscript.K, np.int32]):
+        with computation(FORWARD), interval(0, 1):
+            out_field = k_field  # noqa: F841 [unused-variable]
+        with computation(FORWARD), interval(1, None):
+            out_field = out_field[0, 0, -1] + k_field
+
+    field = OriginWrapper(
+        array=gt_storage.zeros(dtype=np.int32, shape=(5, 8, 3), backend=backend),
+        origin=(0, 0, 0),
+    )
+    k_field = OriginWrapper(
+        array=gt_storage.ones(dtype=np.int32, shape=(3,), backend=backend), origin=(0,)
+    )
+
+    @dace.program()
+    def call_stencil_object(stencil_out, stencil_k):
+        defn(stencil_out, stencil_k)
+
+    call_stencil_object(stencil_out=field, stencil_k=k_field)
+
+    assert np.allclose(field.array[:, :, 0], 1)
+    assert np.allclose(field.array[:, :, 1], 2)
+    assert np.allclose(field.array[:, :, 2], 3)
+
+
+def test_k_field_with_data_dimension(decorator):
+    backend = "dace:cpu"
+    FloatField_Extra_Dim = gtscript.Field[gtscript.K, (np.float32, (12,))]
+
+    @decorator(backend=backend)
+    def defn(out_field: gtscript.Field[np.int32], k_field: FloatField_Extra_Dim):
+        with computation(FORWARD), interval(0, 1):
+            out_field = k_field[0][9]  # noqa: F841 [unused-variable]
+        with computation(FORWARD), interval(1, None):
+            out_field = out_field[0, 0, -1] + k_field[0][10] + k_field[0][11]
+
+    field = OriginWrapper(
+        array=gt_storage.zeros(dtype=np.int32, shape=(5, 8, 3), backend=backend),
+        origin=(0, 0, 0),
+    )
+    k_field = OriginWrapper(
+        array=gt_storage.ones(dtype=np.float32, shape=(3, 12), backend=backend), origin=(0, 0)
+    )
+
+    @dace.program()
+    def call_stencil_object(stencil_out, stencil_k):
+        defn(stencil_out, stencil_k)
+
+    call_stencil_object(stencil_out=field, stencil_k=k_field)
+
+    assert np.allclose(field.array[:, :, 0], 1)
+    assert np.allclose(field.array[:, :, 1], 3)
+    assert np.allclose(field.array[:, :, 2], 5)
 
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
