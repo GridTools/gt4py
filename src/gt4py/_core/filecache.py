@@ -44,8 +44,8 @@ class FileCache:
     def __delitem__(self, key: Hashable) -> None:
         if key not in self:
             raise KeyError(key)
-        with locking.lock(self._get_path(key)):
-            self._get_path(key).unlink()
+        with locking.lock(path := self._get_path(key)):
+            path.unlink()
 
     def __contains__(self, key: Hashable) -> bool:
         return self._get_path(key).exists()
