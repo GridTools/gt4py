@@ -8,48 +8,9 @@
 
 import pytest
 
-from gt4py import next as gtx
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import constant_folding
-from gt4py.next.type_system import type_specifications as ts
-
-
-@pytest.mark.parametrize(
-    "value,expected",
-    [
-        (itir.Literal(value="True", type=ts.ScalarType(kind=ts.ScalarKind.BOOL)), True),
-        (itir.Literal(value="False", type=ts.ScalarType(kind=ts.ScalarKind.BOOL)), False),
-        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.INT8)), gtx.int8(1)),
-        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.UINT8)), gtx.uint8(1)),
-        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.INT16)), gtx.int16(1)),
-        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.UINT16)), gtx.uint16(1)),
-        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.INT32)), gtx.int32(1)),
-        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.UINT32)), gtx.uint32(1)),
-        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.INT64)), gtx.int64(1)),
-        (itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.UINT64)), gtx.uint64(1)),
-        (
-            itir.Literal(value="0.1", type=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
-            gtx.float32("0.1"),
-        ),
-        (
-            itir.Literal(value="0.1", type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
-            gtx.float64("0.1"),
-        ),
-        (
-            itir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
-            gtx.float64("1.0"),
-        ),
-    ],
-    ids=lambda param: f"Literal[{param.value}, {param.type}]"
-    if isinstance(param, itir.Literal)
-    else str(param),
-)
-def test_value_from_literal(value, expected):
-    result = constant_folding._value_from_literal(value)
-
-    assert result == expected
-    assert type(result) is type(expected)
 
 
 @pytest.mark.parametrize(
