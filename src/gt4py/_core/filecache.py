@@ -18,8 +18,8 @@ from gt4py.eve import utils as eve_utils
 class FileCache:
     path: pathlib.Path
 
-    def __init__(self, path: str):
-        self.path = pathlib.Path(path)
+    def __init__(self, path: str | os.PathLike):
+        self.path = pathlib.Path(path).resolve()
         self.path.mkdir(parents=True, exist_ok=True)
 
     def _get_path(self, key: Hashable) -> pathlib.Path:
