@@ -215,6 +215,13 @@ def apply_fieldview_transforms(
 ) -> itir.Program:
     offset_provider_type = common.offset_provider_to_type(offset_provider)
 
+    # TODO(tehrengruber): Remove this option again as soon as we have the necessary builtins
+    #  to work with / translate domains.
+    if _has_dynamic_domains(ir):
+        symbolic_domain_sizes = _max_domain_range_sizes(offset_provider)  # type: ignore[assignment]
+    else:
+        symbolic_domain_sizes = None
+
     ir = inline_fundefs.InlineFundefs().visit(ir)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     ir = dead_code_elimination.dead_code_elimination(ir, offset_provider_type=offset_provider_type)
@@ -226,6 +233,8 @@ def apply_fieldview_transforms(
     ir = concat_where.canonicalize_domain_argument(ir)
     ir = ConstantFolding.apply(ir)  # type: ignore[assignment]  # always an itir.Program
 
-    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    ir = infer_domain.infer_program(
+        ir, symbolic_domain_sizes=symbolic_domain_sizes, offset_provider=offset_provider
+    )
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
     return ir
