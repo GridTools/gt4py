@@ -722,6 +722,7 @@ class Case:
                 Vertex: mesh_descriptor.num_vertices,
                 Edge: mesh_descriptor.num_edges,
                 Cell: mesh_descriptor.num_cells,
+                KDim: mesh_descriptor.num_levels,
             },
             grid_type=common.GridType.UNSTRUCTURED,
             allocator=allocator,

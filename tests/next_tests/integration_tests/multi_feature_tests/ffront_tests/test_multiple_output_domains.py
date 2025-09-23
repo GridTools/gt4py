@@ -587,25 +587,39 @@ def test_direct_fo_orig(cartesian_case):
     )
 
 
+def test_direct_fo(cartesian_case):
+    a = cases.allocate(cartesian_case, testee, "a")()
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        a,
+        b,
+        out=out,
+        ref=(b, a),
+        domain=(
+            {JDim: (0, cartesian_case.default_sizes[JDim])},
+            {IDim: (0, cartesian_case.default_sizes[IDim])},
+        ),
+    )
+
+
+def test_direct_fo_no_domain(cartesian_case):
+    a = cases.allocate(cartesian_case, testee, "a")()
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        a,
+        b,
+        out=out,
+        ref=(b, a),
+    )
+
+
 # TODO:
 #  - vertical staggering with dependency
-#  - cleanup and refactor tests
-
-#
-# def test_direct_fo(cartesian_case):
-#     a = cases.allocate(cartesian_case, testee, "a")()
-#     b = cases.allocate(cartesian_case, testee, "b")()
-#     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-#
-#     cases.verify(
-#         cartesian_case,
-#         testee,
-#         a,
-#         b,
-#         out=out,
-#         ref=(b, a),
-#         domain=(
-#             {JDim: (0, cartesian_case.default_sizes[JDim])},
-#             {IDim: (0, cartesian_case.default_sizes[IDim])},
-#         ),
-#     )

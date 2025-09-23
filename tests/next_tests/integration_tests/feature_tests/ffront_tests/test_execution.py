@@ -756,7 +756,7 @@ def test_tuple_arg(cartesian_case):
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
-    expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[IDim], 1)
+    expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[KDim], 1)
     out = cartesian_case.as_field([KDim], np.zeros((cartesian_case.default_sizes[KDim],)))
 
     if not forward:
