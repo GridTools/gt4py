@@ -32,8 +32,8 @@ class FileCache:
     def __getitem__(self, key: Hashable) -> Any:
         if key not in self:
             raise KeyError(key)
-        with locking.lock(self._get_path(key)):
-            with open(self._get_path(key), "rb") as f:
+        with locking.lock(path := self._get_path(key)):
+            with open(path, "rb") as f:
                 return pickle.load(f)
 
     def __setitem__(self, key: Hashable, value: Any) -> None:
