@@ -25,7 +25,7 @@ class FileCache:
     def _get_path(self, key: Hashable) -> pathlib.Path:
         """Return the path where an item with `key` is stored."""
         key = eve_utils.content_hash(key)
-        path = self.path.joinpath(key).with_suffix(".pkl")
+        path = self.path / f"{key}.pkl"
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
