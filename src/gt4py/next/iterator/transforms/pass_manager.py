@@ -218,7 +218,7 @@ def apply_fieldview_transforms(
     # TODO(tehrengruber): Remove this option again as soon as we have the necessary builtins
     #  to work with / translate domains.
     if _has_dynamic_domains(ir):
-        symbolic_domain_sizes = _max_domain_range_sizes(offset_provider)  # type: ignore[assignment]
+        symbolic_domain_sizes = _max_domain_range_sizes(offset_provider)
     else:
         symbolic_domain_sizes = None
 
@@ -234,7 +234,9 @@ def apply_fieldview_transforms(
     ir = ConstantFolding.apply(ir)  # type: ignore[assignment]  # always an itir.Program
 
     ir = infer_domain.infer_program(
-        ir, symbolic_domain_sizes=symbolic_domain_sizes, offset_provider=offset_provider
+        ir,
+        symbolic_domain_sizes=symbolic_domain_sizes,  # type: ignore[arg-type]
+        offset_provider=offset_provider,
     )
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
     return ir
