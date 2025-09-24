@@ -7,9 +7,9 @@ on:
 
   ## COMMENTED OUT: only for testing CI action changes.
   ## It only works for PRs to `main` branch from branches in the upstream gt4py repo.
-  pull_request:
-    branches:
-      - main
+  # pull_request:
+  #   branches:
+  #   - main
   ## END
 
 jobs:
@@ -32,9 +32,9 @@ jobs:
         # dependencies-strategy -> The strategy that `uv lock` should use to select
         # between the different compatible versions for a given package requirement
         # [arg: --resolution, env: UV_RESOLUTION=]
-        dependencies-strategy: ["highest"]
-        gt4py-module: ["cartesian"]
-        os: ["macos-latest"]
+        dependencies-strategy: ["lowest-direct", "highest"]
+        gt4py-module: ["cartesian", "eve", "next", "storage"]
+        os: ["ubuntu-latest", "macos-latest"]
         python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
 
@@ -75,7 +75,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         uses: slackapi/slack-github-action@v1.23.0
         with:
-          channel-id: ${{ vars.SLACK_BOT_CHANNEL_TEST }} # Use SLACK_BOT_CHANNEL_TEST for testing
+          channel-id: ${{ vars.SLACK_BOT_CHANNEL }} # Use SLACK_BOT_CHANNEL_TEST for testing
           payload: |
             {
               "text": "Failed tests for ${{ github.workflow }} (dependencies-strategy=${{ matrix.dependencies-strategy }}, python=${{ matrix.python-version }}, component=${{ matrix.gt4py-module }}) [https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}].",
@@ -104,7 +104,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         uses: slackapi/slack-github-action@v1.23.0
         with:
-          channel-id: ${{ vars.SLACK_BOT_CHANNEL_TEST }} # Use SLACK_BOT_CHANNEL_TEST for testing
+          channel-id: ${{ vars.SLACK_BOT_CHANNEL }} # Use SLACK_BOT_CHANNEL_TEST for testing
           payload: |
             {
               "text": "Weekly reminder to check the latest runs of the GT4Py Daily CI workflow at the GitHub Actions dashboard [https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml].",
