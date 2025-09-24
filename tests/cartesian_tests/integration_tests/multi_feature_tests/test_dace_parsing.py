@@ -115,7 +115,7 @@ def test_ij_field(decorator):
 
     call_stencil_object(stencil_out=field, stencil_scalar=value)
 
-    assert np.allclose(field, value)
+    assert np.allclose(field.array, value)
 
 
 def test_k_field(decorator):
