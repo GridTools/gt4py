@@ -19,113 +19,6 @@ from gt4py.next import common, Field, containers
 
 from ..artifacts import pycontainers as pc
 
-# Meaningless dimensions
-TDim = pc.TDim
-SDim = pc.SDim
-
-CONTAINERS_AS_VALUES: Final[
-    list[tuple[NestedTuple[containers.common.NumericValue], containers.PyContainer]]
-] = [
-    (
-        (
-            x := gtx.constructors.full({TDim: 5}, 2.0),
-            y := gtx.constructors.full({TDim: 5}, 3.0),
-        ),
-        pc.NamedTupleContainer(x, y),
-    ),
-    (
-        (
-            x := gtx.constructors.full({TDim: 5}, 2.0),
-            y := gtx.constructors.full({TDim: 5}, 3.0),
-        ),
-        pc.DataclassContainer(x, y),
-    ),
-    (
-        (
-            (
-                a_x := gtx.constructors.full({TDim: 5}, 2.0),
-                a_y := gtx.constructors.full({TDim: 5}, 3.0),
-            ),
-            (
-                b_x := gtx.constructors.full({TDim: 5}, 4.0),
-                b_y := gtx.constructors.full({TDim: 5}, 5.0),
-            ),
-            (
-                c_x := gtx.constructors.full({TDim: 5}, 6.0),
-                c_y := gtx.constructors.full({TDim: 5}, 7.0),
-            ),
-        ),
-        pc.NestedDataclassContainer(
-            pc.DataclassContainer(a_x, a_y),
-            pc.DataclassContainer(b_x, b_y),
-            pc.DataclassContainer(c_x, c_y),
-        ),
-    ),
-    (
-        (
-            (
-                a_x := gtx.constructors.full({TDim: 5}, 2.0),
-                a_y := gtx.constructors.full({TDim: 5}, 3.0),
-            ),
-            (
-                b_x := gtx.constructors.full({TDim: 5}, 4.0),
-                b_y := gtx.constructors.full({TDim: 5}, 5.0),
-            ),
-            (
-                c_x := gtx.constructors.full({TDim: 5}, 6.0),
-                c_y := gtx.constructors.full({TDim: 5}, 7.0),
-            ),
-        ),
-        pc.NestedNamedTupleDataclassContainer(
-            pc.DataclassContainer(a_x, a_y),
-            pc.DataclassContainer(b_x, b_y),
-            pc.DataclassContainer(c_x, c_y),
-        ),
-    ),
-    (
-        (
-            (
-                a_x := gtx.constructors.full({TDim: 5}, 2.0),
-                a_y := gtx.constructors.full({TDim: 5}, 3.0),
-            ),
-            (
-                b_x := gtx.constructors.full({TDim: 5}, 4.0),
-                b_y := gtx.constructors.full({TDim: 5}, 5.0),
-            ),
-            (
-                c_x := gtx.constructors.full({TDim: 5}, 6.0),
-                c_y := gtx.constructors.full({TDim: 5}, 7.0),
-            ),
-        ),
-        pc.NestedDataclassNamedTupleContainer(
-            pc.NamedTupleContainer(a_x, a_y),
-            pc.NamedTupleContainer(b_x, b_y),
-            pc.NamedTupleContainer(c_x, c_y),
-        ),
-    ),
-    (
-        (
-            (
-                a_x := gtx.constructors.full({TDim: 5}, 2.0),
-                a_y := gtx.constructors.full({TDim: 5}, 3.0),
-            ),
-            (
-                b_x := gtx.constructors.full({TDim: 5}, 4.0),
-                b_y := gtx.constructors.full({TDim: 5}, 5.0),
-            ),
-            (
-                c_x := gtx.constructors.full({TDim: 5}, 6.0),
-                c_y := gtx.constructors.full({TDim: 5}, 7.0),
-            ),
-        ),
-        pc.NestedMixedTupleContainer(
-            pc.NamedTupleContainer(a_x, a_y),
-            pc.DataclassContainer(b_x, b_y),
-            pc.NamedTupleContainer(c_x, c_y),
-        ),
-    ),
-]
-
 
 @dataclasses.dataclass
 class DataclassWithDefaults:
@@ -163,7 +56,7 @@ def test_is_dataclass_container_(type_: type, is_container: bool):
 
 @pytest.mark.parametrize(
     "expected_nested_tuple, container",
-    CONTAINERS_AS_VALUES,
+    pc.CONTAINERS_AND_VALUES,
     ids=lambda val: val.__class__.__name__,
 )
 def test_make_container_extractor(
@@ -185,7 +78,7 @@ def test_make_container_extractor(
 
 @pytest.mark.parametrize(
     "nested_tuple, expected_container",
-    CONTAINERS_AS_VALUES,
+    pc.CONTAINERS_AND_VALUES,
     ids=lambda val: val.__class__.__name__,
 )
 def test_make_container_constructor(

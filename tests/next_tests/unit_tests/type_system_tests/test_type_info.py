@@ -435,7 +435,7 @@ def test_return_type(
                     ),
                 ],
                 keys=["a", "b"],
-                original_python_type="some.module:SomeClass"
+                original_python_type="some.module:SomeClass",
             ),
             True,
         ),
@@ -452,8 +452,7 @@ def test_return_type(
                             ),
                         ],
                         keys=["x", "y"],
-                        original_python_type="some.module:SomeClass"
-
+                        original_python_type="some.module:SomeClass",
                     ),
                 ]
             ),
@@ -463,4 +462,3 @@ def test_return_type(
 )
 def test_needs_value_extraction(type_spec: ts.TypeSpec, expected: bool):
     assert type_info.needs_value_extraction(type_spec) is expected
-

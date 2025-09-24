@@ -150,7 +150,12 @@ def extract(
 def extract(
     value: Any, pass_through_values: bool = True
 ) -> MaybeNestedInTuple[common.NumericValue]:
-    """Extract the values from a container into a nested tuple."""
+    """
+    Extract the values from a container into a nested tuple.
+
+    For non-container values, return them as-is if `pass_through_values` is `True`,
+    otherwise raise a `TypeError`.
+    """
     if isinstance(value, common.NUMERIC_VALUE_TYPES):
         return typing.cast(common.NumericValue, value)
     if isinstance(value, containers.PY_CONTAINER_TYPES):
@@ -159,6 +164,7 @@ def extract(
         return tuple(extract(v, pass_through_values=pass_through_values) for v in value)
     if pass_through_values:
         return value
+
     raise TypeError(f"Cannot extract value from {type(value)}.")
 
 
@@ -179,7 +185,7 @@ def _make_arg_extractor_expr(arg_name: str, type_spec: ts.TypeSpec) -> str:
             return arg_name
 
 
-# TODO(egparedes): memoize this function (or the one above) if TypeSpecs become hashable
+# TODO(egparedes): memoize this function (and/or the one above) if TypeSpecs become hashable
 def make_numeric_value_args_extractor(
     function: ts.FunctionType,
 ) -> Callable[..., tuple[tuple, dict[str, Any]]] | None:

@@ -62,3 +62,107 @@ class NestedMixedTupleContainer:
     a: NamedTupleContainer
     b: DataclassContainer
     c: NamedTupleContainer
+
+
+CONTAINERS_AND_VALUES: Final[
+    list[tuple[NestedTuple[containers.common.NumericValue], containers.PyContainer]]
+] = [
+    (
+        (
+            x := gtx.constructors.full({TDim: 5}, 2.0),
+            y := gtx.constructors.full({TDim: 5}, 3.0),
+        ),
+        NamedTupleContainer(x, y),
+    ),
+    (
+        (
+            x := gtx.constructors.full({TDim: 5}, 2.0),
+            y := gtx.constructors.full({TDim: 5}, 3.0),
+        ),
+        DataclassContainer(x, y),
+    ),
+    (
+        (
+            (
+                a_x := gtx.constructors.full({TDim: 5}, 2.0),
+                a_y := gtx.constructors.full({TDim: 5}, 3.0),
+            ),
+            (
+                b_x := gtx.constructors.full({TDim: 5}, 4.0),
+                b_y := gtx.constructors.full({TDim: 5}, 5.0),
+            ),
+            (
+                c_x := gtx.constructors.full({TDim: 5}, 6.0),
+                c_y := gtx.constructors.full({TDim: 5}, 7.0),
+            ),
+        ),
+        NestedDataclassContainer(
+            DataclassContainer(a_x, a_y),
+            DataclassContainer(b_x, b_y),
+            DataclassContainer(c_x, c_y),
+        ),
+    ),
+    (
+        (
+            (
+                a_x := gtx.constructors.full({TDim: 5}, 2.0),
+                a_y := gtx.constructors.full({TDim: 5}, 3.0),
+            ),
+            (
+                b_x := gtx.constructors.full({TDim: 5}, 4.0),
+                b_y := gtx.constructors.full({TDim: 5}, 5.0),
+            ),
+            (
+                c_x := gtx.constructors.full({TDim: 5}, 6.0),
+                c_y := gtx.constructors.full({TDim: 5}, 7.0),
+            ),
+        ),
+        NestedNamedTupleDataclassContainer(
+            DataclassContainer(a_x, a_y),
+            DataclassContainer(b_x, b_y),
+            DataclassContainer(c_x, c_y),
+        ),
+    ),
+    (
+        (
+            (
+                a_x := gtx.constructors.full({TDim: 5}, 2.0),
+                a_y := gtx.constructors.full({TDim: 5}, 3.0),
+            ),
+            (
+                b_x := gtx.constructors.full({TDim: 5}, 4.0),
+                b_y := gtx.constructors.full({TDim: 5}, 5.0),
+            ),
+            (
+                c_x := gtx.constructors.full({TDim: 5}, 6.0),
+                c_y := gtx.constructors.full({TDim: 5}, 7.0),
+            ),
+        ),
+        NestedDataclassNamedTupleContainer(
+            NamedTupleContainer(a_x, a_y),
+            NamedTupleContainer(b_x, b_y),
+            NamedTupleContainer(c_x, c_y),
+        ),
+    ),
+    (
+        (
+            (
+                a_x := gtx.constructors.full({TDim: 5}, 2.0),
+                a_y := gtx.constructors.full({TDim: 5}, 3.0),
+            ),
+            (
+                b_x := gtx.constructors.full({TDim: 5}, 4.0),
+                b_y := gtx.constructors.full({TDim: 5}, 5.0),
+            ),
+            (
+                c_x := gtx.constructors.full({TDim: 5}, 6.0),
+                c_y := gtx.constructors.full({TDim: 5}, 7.0),
+            ),
+        ),
+        NestedMixedTupleContainer(
+            NamedTupleContainer(a_x, a_y),
+            DataclassContainer(b_x, b_y),
+            NamedTupleContainer(c_x, c_y),
+        ),
+    ),
+]
