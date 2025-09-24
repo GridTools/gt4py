@@ -215,7 +215,7 @@ def test_origin_offsetting_frozen(domain, outp_origin):
 
     call_frozen_stencil()
 
-    assert np.allclose(inp, 7.0)
+    assert np.allclose(np.asarray(inp), 7.0)
 
     assert np.allclose(
         np.asarray(outp)[
@@ -264,7 +264,7 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
 
     call_stencil_object()
 
-    assert np.allclose(inp, 7.0)
+    assert np.allclose(np.asarray(inp), 7.0)
 
     assert np.allclose(
         np.asarray(outp)[
@@ -362,7 +362,7 @@ def test_optional_arg_noprovide():
 
     call_frozen_stencil()
 
-    assert np.allclose(inp, 7.0)
+    assert np.allclose(np.asarray(inp), 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
@@ -416,7 +416,7 @@ def test_optional_arg_provide(decorator):
 
     call_stencil()
 
-    assert np.allclose(inp, 7.0)
+    assert np.allclose(np.asarray(inp), 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
@@ -476,7 +476,7 @@ def test_optional_arg_provide_aot(decorator):
     csdfg = call_stencil.compile()
     csdfg(inp=inp, outp=outp, unused_field=unused_field, unused_par=7.0)
 
-    assert np.allclose(inp, 7.0)
+    assert np.allclose(np.asarray(inp), 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
