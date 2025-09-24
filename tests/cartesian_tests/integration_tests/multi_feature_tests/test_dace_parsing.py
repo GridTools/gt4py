@@ -94,9 +94,10 @@ def test_basic(decorator, backend):
     assert np.allclose(output, fill_value)
 
 
-def test_ij_field(decorator):
-    backend = "dace:cpu"
-
+@pytest.mark.parametrize(
+    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
+)
+def test_ij_field(decorator, backend):
     @decorator(backend=backend)
     def defn(out_field: gtscript.Field[gtscript.IJ, np.float32], scalar: np.float32):
         with computation(FORWARD), interval(...):
@@ -109,18 +110,21 @@ def test_ij_field(decorator):
 
     value = 42.0
 
-    @dace.program()
+    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_stencil_object(stencil_out, stencil_scalar):
         defn(stencil_out, stencil_scalar)
 
     call_stencil_object(stencil_out=field, stencil_scalar=value)
 
-    assert np.allclose(field.array, value)
+    # Download the data from the wrapper cupy array to be compared on cpu
+    field = storage_utils.cpu_copy(field.array)
+    assert np.allclose(field, value)
 
 
-def test_k_field(decorator):
-    backend = "dace:cpu"
-
+@pytest.mark.parametrize(
+    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
+)
+def test_k_field(decorator, backend):
     @decorator(backend=backend)
     def defn(out_field: gtscript.Field[np.int32], k_field: gtscript.Field[gtscript.K, np.int32]):
         with computation(FORWARD), interval(0, 1):
@@ -136,19 +140,23 @@ def test_k_field(decorator):
         array=gt_storage.ones(dtype=np.int32, shape=(3,), backend=backend), origin=(0,)
     )
 
-    @dace.program()
+    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_stencil_object(stencil_out, stencil_k):
         defn(stencil_out, stencil_k)
 
     call_stencil_object(stencil_out=field, stencil_k=k_field)
 
-    assert np.allclose(field.array[:, :, 0], 1)
-    assert np.allclose(field.array[:, :, 1], 2)
-    assert np.allclose(field.array[:, :, 2], 3)
+    # Download the data from the wrapper cupy array to be compared on cpu
+    field = storage_utils.cpu_copy(field.array)
+    assert np.allclose(field[:, :, 0], 1)
+    assert np.allclose(field[:, :, 1], 2)
+    assert np.allclose(field[:, :, 2], 3)
 
 
-def test_k_field_with_data_dimension(decorator):
-    backend = "dace:cpu"
+@pytest.mark.parametrize(
+    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
+)
+def test_k_field_with_data_dimension(decorator, backend):
     FloatField_Extra_Dim = gtscript.Field[gtscript.K, (np.float32, (12,))]
 
     @decorator(backend=backend)
@@ -166,15 +174,17 @@ def test_k_field_with_data_dimension(decorator):
         array=gt_storage.ones(dtype=np.float32, shape=(3, 12), backend=backend), origin=(0, 0)
     )
 
-    @dace.program()
+    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_stencil_object(stencil_out, stencil_k):
         defn(stencil_out, stencil_k)
 
     call_stencil_object(stencil_out=field, stencil_k=k_field)
 
-    assert np.allclose(field.array[:, :, 0], 1)
-    assert np.allclose(field.array[:, :, 1], 3)
-    assert np.allclose(field.array[:, :, 2], 5)
+    # Download the data from the wrapper cupy array to be compared on cpu
+    field = storage_utils.cpu_copy(field.array)
+    assert np.allclose(field[:, :, 0], 1)
+    assert np.allclose(field[:, :, 1], 3)
+    assert np.allclose(field[:, :, 2], 5)
 
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
