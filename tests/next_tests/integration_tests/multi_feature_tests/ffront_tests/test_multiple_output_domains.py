@@ -7,6 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+
+import numpy as np
 import pytest
 
 import gt4py.next as gtx
@@ -43,14 +45,14 @@ pytestmark = pytest.mark.uses_cartesian_shift
 
 
 @gtx.field_operator
-def testee_no_tuple(a: IField, b: IField) -> IField:
+def testee_no_tuple(a: IField, b: JField) -> IField:
     return a
 
 
 @gtx.program
 def prog_no_tuple(
     a: IField,
-    b: IField,
+    b: JField,
     out_a: IField,
     out_b: IField,
     i_size: gtx.int32,
@@ -204,6 +206,42 @@ def test_program(cartesian_case):
         cartesian_case.default_sizes[JDim],
         inout=(out_b, out_a),
         ref=(b, a),
+    )
+
+@gtx.program
+def prog_slicing(
+    a: IField,
+    b: JField,
+    out_a: IField,
+    out_b: JField,
+    i_size: gtx.int32,
+    j_size: gtx.int32,
+):
+    testee(
+        a,
+        b,
+        out=(out_b[2:-2], out_a[1:-1]),
+    )
+
+
+def test_program_slicing(cartesian_case):
+    a = cases.allocate(cartesian_case, prog, "a")()
+    b = cases.allocate(cartesian_case, prog, "b")()
+    out_a = cases.allocate(cartesian_case, prog, "out_a")()
+    out_b = cases.allocate(cartesian_case, prog, "out_b")()
+    out_a_ =copy.deepcopy(out_a)
+    out_b_ =copy.deepcopy(out_b)
+    cases.verify(
+        cartesian_case,
+        prog_slicing,
+        a,
+        b,
+        out_a,
+        out_b,
+        cartesian_case.default_sizes[IDim],
+        cartesian_case.default_sizes[JDim],
+        inout=(out_b, out_a),
+        ref=(np.concatenate([out_b_.ndarray[0:2], b.ndarray[2:-2], out_b_.ndarray[-2:]]), np.concatenate([out_a_.ndarray[0:1], a.ndarray[1:-1], out_a_.ndarray[-1:]])),
     )
 
 

@@ -56,12 +56,11 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
     if "domain" in new_kwargs:
         _ensure_no_sliced_field(new_kwargs["out"])
 
-        def check(
-            dom: past.Dict | past.TupleExpr, out: past.TupleExpr | past.Name, level: int = 0
-        ) -> None:
+        def validate_domain_out(dom: past.Dict | past.TupleExpr, out: past.TupleExpr | past.Name,
+                                is_nested: bool = False) -> None:
             if isinstance(dom, past.Dict):
-                # Only reject tuple outputs if nested (level > 0)
-                if level > 0 and (isinstance(out, past.TupleExpr) or isinstance(out, ts.TupleType)):
+                # Only reject tuple outputs if nested
+                if is_nested and (isinstance(out, past.TupleExpr) or isinstance(out, ts.TupleType)):
                     raise ValueError("Domain dict cannot map to tuple outputs.")
 
                 if len(dom.values_) == 0 and len(dom.keys_) == 0:
@@ -72,17 +71,17 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
                         raise ValueError(
                             f"Only 'Dimension' allowed in domain dictionary keys, got '{dim}' which is of type '{dim.type}'."
                         )
+
                 for domain_values in dom.values_:
                     if len(domain_values.elts) != 2:
                         raise ValueError(
                             f"Only 2 values allowed in domain range, got {len(domain_values.elts)}."
                         )
-                    if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
-                        domain_values.elts[1]
-                    ):
+                    if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(domain_values.elts[1]):
                         raise ValueError(
                             f"Only integer values allowed in domain range, got '{domain_values.elts[0].type}' and '{domain_values.elts[1].type}'."
                         )
+
             elif isinstance(dom, past.TupleExpr):
                 if isinstance(out, past.TupleExpr):
                     out_elts = out.elts
@@ -95,12 +94,12 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
                     raise ValueError("Mismatched tuple lengths between domain and output.")
 
                 for d, o in zip(dom.elts, out_elts):
-                    check(d, o, level=level + 1)
+                    validate_domain_out(d, o, is_nested=True)
 
             else:
                 raise ValueError(f"'domain' must be Dict or TupleExpr, got {type(dom)}.")
 
-        check(new_kwargs["domain"], new_kwargs["out"])
+        validate_domain_out(new_kwargs["domain"], new_kwargs["out"])
 
 
 class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):

@@ -455,14 +455,25 @@ class ProgramLowering(
         elif isinstance(out_arg, past.TupleExpr) or (
             isinstance(out_arg, past.Name) and isinstance(out_arg.type, ts.TupleType)
         ):
+            def get_field_and_slice(field_expr, path):
+                """Extract field and its slice for a given path through the tuple structure."""
+                current_field = functools.reduce(lambda e, i: e.elts[i], path, out_arg)
+
+                if isinstance(current_field, past.Subscript):
+                    return current_field.value, self._compute_field_slice(current_field)
+                else:
+                    return current_field, None
+
             domain_expr = type_info.apply_to_primitive_constituents(
-                lambda field_type, path: self._construct_itir_domain_arg(
-                    functools.reduce(lambda e, i: e.elts[i], path, out_arg),
-                    functools.reduce(lambda e, i: e.elts[i], path, domain_arg)
-                    if isinstance(domain_arg, past.TupleExpr)
-                    else domain_arg,
-                    None,  # TODO: support slicing
-                )
+                lambda field_type, path: (
+                    lambda field, slice_info: self._construct_itir_domain_arg(
+                        field,
+                        functools.reduce(lambda e, i: e.elts[i], path, domain_arg)
+                        if isinstance(domain_arg, past.TupleExpr)
+                        else domain_arg,
+                        slice_info,
+                    )
+                )(*get_field_and_slice(None, path))
                 if isinstance(out_arg, past.TupleExpr)
                 else self._construct_itir_domain_arg(
                     # Create a temporary past.Name-like object that carries the indexed information
@@ -477,12 +488,10 @@ class ProgramLowering(
                             "location": out_arg.location,
                         },
                     )(),
-                    (
-                        functools.reduce(lambda e, i: e.elts[i], path, domain_arg)
-                        if isinstance(domain_arg, past.TupleExpr)
-                        else domain_arg
-                    ),
-                    None,  # TODO: support slicing
+                    functools.reduce(lambda e, i: e.elts[i], path, domain_arg)
+                    if isinstance(domain_arg, past.TupleExpr)
+                    else domain_arg,
+                    None,  # Name with TupleType doesn't support per-field slicing
                 ),
                 out_arg.type,
                 with_path_arg=True,
