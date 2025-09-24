@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import os
 import pathlib
 from typing import ContextManager, Protocol
 
@@ -17,7 +18,7 @@ from gt4py.eve import utils as eve_utils
 
 
 class _LockConstructor(Protocol):
-    def __call__(self, path: str, /) -> ContextManager: ...
+    def __call__(self, path: str | os.PathLike, /) -> ContextManager: ...
 
     @property
     def __name__(self) -> str: ...

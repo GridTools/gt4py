@@ -547,6 +547,10 @@ _VT = TypeVar("_VT")
 
 
 class OpaqueMutableMapping(Protocol[_KT, _VT]):
+    """
+    Mutable mapping without access to the keys, just setting, getting, deleting with a given key.
+    """
+
     def __getitem__(self, key: _KT) -> _VT: ...
 
     def __setitem__(self, key: _KT, value: _VT) -> None: ...

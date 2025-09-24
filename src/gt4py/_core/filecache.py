@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
+import os
 import pathlib
 import pickle
 from typing import Any, Hashable
@@ -26,7 +27,6 @@ class FileCache:
         """Return the path where an item with `key` is stored."""
         key = eve_utils.content_hash(key)
         path = self.path / f"{key}.pkl"
-        path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
     def __getitem__(self, key: Hashable) -> Any:
@@ -37,9 +37,9 @@ class FileCache:
                 return pickle.load(f)
 
     def __setitem__(self, key: Hashable, value: Any) -> None:
-        with locking.lock(self._get_path(key)):
-            with open(self._get_path(key), "wb") as f:
-                pickle.dump(value, f, protocol=pickle.HIGHEST_PROTOCOL)
+        with locking.lock(path := self._get_path(key)):
+            with open(path, "wb") as f:
+                pickle.dump(value, f, protocol=5)
 
     def __delitem__(self, key: Hashable) -> None:
         if key not in self:
