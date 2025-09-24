@@ -836,7 +836,7 @@ def test_compile_variants_decorator_static_domains(compile_variants_field_operat
         return inp
 
     @gtx.program(backend=CaptureCompileTimeArgsBackend(), static_domains=True)
-    def testee(inp: cases.IField, out: cases.IField):
+    def testee(inp: tuple[cases.IField, cases.IField], out: cases.IField):
         identity(inp, out=out)
 
     inp = cases.allocate(cartesian_case, testee, "inp")()

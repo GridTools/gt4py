@@ -55,6 +55,22 @@ def _make_param_context_from_func_type(
     func_type: ts.FunctionType,
     type_map: Callable[[ts.TypeSpec], T] = lambda x: x,  # type: ignore[assignment, return-value]  # mypy not smart enough to narrow type for default
 ) -> dict[str, extended_typing.MaybeNestedInTuple[T]]:
+    """
+    Create a context to evaluate expressions in from a function type.
+
+    >>> int32_t, int64_t = (
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT32),
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
+    ... )
+    >>> type_ = ts.FunctionType(
+    ...     pos_only_args=[],
+    ...     pos_or_kw_args={"inp1": ts.TupleType(types=[int32_t, int64_t])},
+    ...     kw_only_args={"inp2": int64_t},
+    ...     returns=int64_t,
+    ... )
+    >>> context = _make_param_context_from_func_type(type_)
+    >>> assert context == {"inp1": (int32_t, int64_t), "inp2": int64_t}
+    """
     params = func_type.pos_or_kw_args | func_type.kw_only_args
     return {
         param: type_info.apply_to_primitive_constituents(
@@ -155,8 +171,8 @@ class CompiledProgramsPool:
         """
         args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
-        # TODO: Dispatching over offset provider type is wrong, especially when we use compile time
-        #  domains.
+        # TODO(tehrengruber): Dispatching over offset provider type is wrong, especially when we
+        #  use compile time domains.
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
         try:
             self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)
@@ -315,6 +331,8 @@ class CompiledProgramsPool:
             self._offset_provider_type_cache[offset_provider] = op_type
         return op_type
 
+    # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
+    #  domains.
     def compile(
         self,
         offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
