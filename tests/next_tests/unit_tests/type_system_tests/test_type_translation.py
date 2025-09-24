@@ -18,7 +18,7 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
-from tests.next_tests.artifacts import pycontainers as pc
+from ...artifacts import pycontainers as pc
 
 
 class CustomInt32DType:
@@ -50,6 +50,10 @@ def test_invalid_scalar_kind():
         type_translation.get_scalar_kind(np.dtype("i4, (2,3)f8, f4"))
 
 
+def _make_type_string_for_container(cls: type) -> str:
+    return f"{cls.__module__}:{cls.__qualname__}"
+
+
 @pytest.mark.parametrize(
     "value,expected",
     [
@@ -66,7 +70,6 @@ def test_invalid_scalar_kind():
                 ]
             ),
         ),
-        *[(pc_cls, pc_cls.reference_type_spec()) for pc_cls in pc.PYTHON_CONTAINER_DEFINITIONS],
         (
             tuple[bool, typing.Tuple[int, float]],
             ts.TupleType(
@@ -112,6 +115,81 @@ def test_invalid_scalar_kind():
         (
             typing.Annotated[typing.ForwardRef("float"), "foo"],
             ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+        ),
+        # Python container types
+        (
+            pc.NamedTupleContainer,
+            NamedTupleContainerTypeSpec := ts.NamedTupleType(
+                types=[
+                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                ],
+                keys=["x", "y"],
+                original_python_type=_make_type_string_for_container(pc.NamedTupleContainer),
+            ),
+        ),
+        (
+            pc.DataclassContainer,
+            DataclassContainerTypeSpec := ts.NamedTupleType(
+                types=[
+                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                ],
+                keys=["x", "y"],
+                original_python_type=_make_type_string_for_container(pc.DataclassContainer),
+            ),
+        ),
+        (
+            pc.NestedDataclassContainer,
+            ts.NamedTupleType(
+                types=[
+                    DataclassContainerTypeSpec,
+                    DataclassContainerTypeSpec,
+                    DataclassContainerTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(pc.NestedDataclassContainer),
+            ),
+        ),
+        (
+            pc.NestedNamedTupleDataclassContainer,
+            ts.NamedTupleType(
+                types=[
+                    DataclassContainerTypeSpec,
+                    DataclassContainerTypeSpec,
+                    DataclassContainerTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    pc.NestedNamedTupleDataclassContainer
+                ),
+            ),
+        ),
+        (
+            pc.NestedDataclassNamedTupleContainer,
+            ts.NamedTupleType(
+                types=[
+                    NamedTupleContainerTypeSpec,
+                    NamedTupleContainerTypeSpec,
+                    NamedTupleContainerTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    pc.NestedDataclassNamedTupleContainer
+                ),
+            ),
+        ),
+        (
+            pc.NestedMixedTupleContainer,
+            ts.NamedTupleType(
+                types=[
+                    NamedTupleContainerTypeSpec,
+                    DataclassContainerTypeSpec,
+                    NamedTupleContainerTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(pc.NestedMixedTupleContainer),
+            ),
         ),
     ],
 )
