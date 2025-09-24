@@ -129,12 +129,15 @@ def add_func_to_fingerprint(obj: types.FunctionType, hasher: xtyping.HashlibAlgo
 
 @add_content_to_fingerprint.register
 def add_dict_to_fingerprint(obj: dict, hasher: xtyping.HashlibAlgorithm) -> None:
-    for key, value in sorted(
-        obj.items(),
-        key=lambda x: (x[0].__module__, x[0].__qualname__) if isinstance(x[0], type) else x[0],
-    ):
+    # just a small helper to additionally allow sorting types (by just using their name)
+    def key_function(key: Any) -> Any:
+        if isinstance(key, type):
+            return key
+        return key
+
+    for key in sorted(obj, key=key_function):
         add_content_to_fingerprint(key, hasher)
-        add_content_to_fingerprint(value, hasher)
+        add_content_to_fingerprint(obj[key], hasher)
 
 
 @add_content_to_fingerprint.register
