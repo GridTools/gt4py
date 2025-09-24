@@ -182,7 +182,6 @@ def test_k_field_with_data_dimension(decorator, backend):
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
-@pytest.mark.skipif(sys.platform == "darwin", reason="unexpected flaky behavior on macos")
 def test_origin_offsetting_frozen(domain, outp_origin):
     backend = "dace:cpu"
 
@@ -232,7 +231,6 @@ def test_origin_offsetting_frozen(domain, outp_origin):
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
-@pytest.mark.skipif(sys.platform == "darwin", reason="unexpected flaky behavior on macos")
 def test_origin_offsetting_nofrozen(domain, outp_origin):
     backend = "dace:cpu"
 
@@ -281,7 +279,6 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
-@pytest.mark.skipif(sys.platform == "darwin", reason="unexpected flaky behavior on macos")
 def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
     backend = "dace:cpu"
 
