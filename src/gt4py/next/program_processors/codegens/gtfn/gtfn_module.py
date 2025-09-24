@@ -163,8 +163,6 @@ class GTFNTranslationStep(
             pass_manager.apply_common_transforms,
             extract_temporaries=True,
             offset_provider=offset_provider,
-            # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
-            unconditionally_collapse_tuples=True,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
         )
 
@@ -263,7 +261,6 @@ class GTFNTranslationStep(
             source_code=source_code,
             language=self._language(),
             language_settings=self._language_settings(),
-            implicit_domain=inp.data.implicit_domain,
         )
         return module
 
@@ -318,13 +315,13 @@ class GTFNTranslationStep(
         )
 
 
-class GTFNTranslationStepFactory(factory.Factory):
+class GTFNTranslationStepFactory(factory.Factory[GTFNTranslationStep]):
     class Meta:
         model = GTFNTranslationStep
 
 
-translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory()
+translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory()  # type: ignore[assignment] # factory-boy typing not precise enough
 
-translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory(
+translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory(  # type: ignore[assignment] # factory-boy typing not precise enough
     device_type=core_defs.DeviceType.CUDA
 )

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import collections.abc
 import sys
-import timeit
 import types
 import typing
 

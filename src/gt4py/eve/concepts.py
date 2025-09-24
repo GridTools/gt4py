@@ -215,27 +215,6 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
             setattr(new_node, k, v)
         return new_node
 
-    # TODO(egparedes): add useful hashes to base node
-    # # @property
-    # def content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def annex_content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def node_content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def instance_content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def instance_id(self) -> int:
-    #     ...
-
 
 NodeT = TypeVar("NodeT", bound="Node")
 ValueNode = Union[bool, bytes, int, float, str, IntEnum, StrEnum]
@@ -250,11 +229,6 @@ class FrozenNode(Node, frozen=True):  # type: ignore[call-arg]  # frozen from Da
 
 class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
     pass
-
-
-class VType(datamodels.FrozenModel):
-    # Unique name
-    name: str
 
 
 def eq_nonlocated(a: Node, b: Node) -> bool:

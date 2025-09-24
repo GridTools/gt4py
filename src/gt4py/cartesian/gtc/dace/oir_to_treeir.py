@@ -61,10 +61,11 @@ class OIRToTreeIR(eve.NodeVisitor):
         self._device_type = device_type_translate[device_type.upper()]
         self._api_signature = builder.gtir.api_signature
         self._k_bounds = compute_k_boundary(builder.gtir)
+        self._vloop_sections = 0
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         dace_tasklet, inputs, outputs = oir_to_tasklet.OIRToTasklet().visit_CodeBlock(
-            node, root=ctx.root
+            node, root=ctx.root, scope=ctx.current_scope
         )
 
         tasklet = tir.Tasklet(
@@ -266,6 +267,9 @@ class OIRToTreeIR(eve.NodeVisitor):
         )
 
         loop = tir.VerticalLoop(
+            iteration_variable=eve.SymbolRef(
+                f"{tir.Axis.K.iteration_symbol()}_{self._vloop_sections}"
+            ),
             loop_order=loop_order,
             bounds_k=bounds,
             schedule=self._vertical_loop_schedule(),
@@ -275,6 +279,8 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         with loop.scope(ctx):
             self.visit(node.horizontal_executions, ctx=ctx)
+
+        self._vloop_sections += 1
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, ctx: tir.Context) -> None:
         if node.caches:
@@ -288,6 +294,11 @@ class OIRToTreeIR(eve.NodeVisitor):
         dimensions: dict[str, tuple[bool, bool, bool]] = {}
         symbols: tir.SymbolDict = {}
         shift: dict[str, dict[tir.Axis, int]] = {}  # dict of field_name -> (dict of axis -> shift)
+
+        # Make sure we have the domain symbols of all 3 dimensions defined at all times.
+        # They will be used e.g. for loop bounds or data sizing
+        for axis in tir.Axis.dims_3d():
+            symbols[axis.domain_symbol()] = dtypes.int32
 
         # this is ij blocks = horizontal execution
         field_extents, block_extents = oir_utils.compute_extents(
@@ -399,9 +410,12 @@ class OIRToTreeIR(eve.NodeVisitor):
         for index, axis in enumerate(tir.Axis.dims_3d()):
             if ctx.root.dimensions[field.name][index]:
                 shift_str = f" + {shift[axis]}" if shift[axis] != 0 else ""
-                indices.append(
-                    f"{axis.iteration_symbol()}{shift_str} + {offset_dict[axis.lower()]}"
+                iteration_symbol = (
+                    tir.k_symbol(ctx.current_scope)
+                    if axis == tir.Axis.K
+                    else axis.iteration_symbol()
                 )
+                indices.append(f"{iteration_symbol}{shift_str} + {offset_dict[axis.lower()]}")
 
         return ", ".join(indices)
 
@@ -416,7 +430,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         return (
             f"{tir.Axis.I.iteration_symbol()}{i_shift}, "
             f"{tir.Axis.J.iteration_symbol()}{j_shift}, "
-            f"{tir.Axis.K.iteration_symbol()}{k_shift} + {self.visit(node.k, ctx=ctx, **kwargs)}"
+            f"{tir.k_symbol(ctx.current_scope)}{k_shift} + {self.visit(node.k, ctx=ctx, **kwargs)}"
         )
 
     def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs: Any) -> str:
@@ -492,7 +506,6 @@ def get_dace_shape(
     for index, axis in enumerate(tir.Axis.dims_3d()):
         if field.dimensions[index]:
             symbol = axis.domain_dace_symbol()
-            symbols[axis.domain_symbol()] = dtypes.int32
 
             if axis == tir.Axis.I:
                 i_padding = extent[0][1] - extent[0][0]

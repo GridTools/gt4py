@@ -105,7 +105,7 @@ def make_dace_backend(
     Returns:
         A custom dace backend object.
     """
-    return DaCeBackendFactory(
+    return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
         auto_optimize=auto_optimize,
         cached=cached,
@@ -155,7 +155,7 @@ run_dace_gpu = make_dace_backend(
     blocking_dim=None,
     async_sdfg_call=True,
     make_persistent=False,
-    use_memory_pool=True,
+    use_memory_pool=(core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.CUDA),
 )
 run_dace_gpu_noopt = make_dace_backend(
     auto_optimize=False,
@@ -164,7 +164,7 @@ run_dace_gpu_noopt = make_dace_backend(
     blocking_dim=None,
     async_sdfg_call=True,
     make_persistent=False,
-    use_memory_pool=True,
+    use_memory_pool=(core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.CUDA),
 )
 run_dace_gpu_cached = make_dace_backend(
     auto_optimize=True,
@@ -173,5 +173,5 @@ run_dace_gpu_cached = make_dace_backend(
     blocking_dim=None,
     async_sdfg_call=True,
     make_persistent=False,
-    use_memory_pool=True,
+    use_memory_pool=(core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.CUDA),
 )
