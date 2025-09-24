@@ -50,6 +50,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     JDim,
     Joff,
     KDim,
+    KHalfDim,
     Koff,
     V2EDim,
     Vertex,
@@ -566,7 +567,7 @@ def unstructured_case(
 def unstructured_case_3d(unstructured_case):
     return dataclasses.replace(
         unstructured_case,
-        default_sizes={**unstructured_case.default_sizes, KDim: 10},
+        default_sizes={**unstructured_case.default_sizes},
         offset_provider={**unstructured_case.offset_provider, "Koff": KDim},
     )
 
@@ -701,6 +702,7 @@ class Case:
                 IDim: grid_descriptor.sizes[0],
                 JDim: grid_descriptor.sizes[1],
                 KDim: grid_descriptor.sizes[2],
+                KHalfDim: grid_descriptor.sizes[3],
             },
             grid_type=common.GridType.CARTESIAN,
             allocator=allocator,
@@ -720,6 +722,7 @@ class Case:
                 Vertex: mesh_descriptor.num_vertices,
                 Edge: mesh_descriptor.num_edges,
                 Cell: mesh_descriptor.num_cells,
+                KDim: mesh_descriptor.num_levels,
             },
             grid_type=common.GridType.UNSTRUCTURED,
             allocator=allocator,
