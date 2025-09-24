@@ -153,17 +153,19 @@ def gt_simplify(
                 result["GT4PyDeadDataflowElimination"] += eliminate_dead_dataflow_res
 
         if "CopyChainRemover" not in skip:
-            copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
-                sdfg=sdfg,
-                validate=False,
-                validate_all=validate_all,
-            )
-            if copy_chain_remover_result is not None:
-                at_least_one_xtrans_run = True
-                result = result or {}
-                if "CopyChainRemover" not in result:
-                    result["CopyChainRemover"] = 0
-                result["CopyChainRemover"] += copy_chain_remover_result
+            for direction in "read", "write":
+                copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
+                    sdfg=sdfg,
+                    direction=direction,
+                    validate=False,
+                    validate_all=validate_all,
+                )
+                if copy_chain_remover_result is not None:
+                    at_least_one_xtrans_run = True
+                    result = result or {}
+                    if "CopyChainRemover" not in result:
+                        result["CopyChainRemover"] = 0
+                    result["CopyChainRemover"] += copy_chain_remover_result
 
         if "SingleStateGlobalDirectSelfCopyElimination" not in skip:
             direct_self_copy_removal_result = sdfg.apply_transformations_repeated(
