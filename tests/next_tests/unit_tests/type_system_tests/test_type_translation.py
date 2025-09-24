@@ -18,7 +18,7 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
-from next_tests.fixtures import python_containers as pc
+from tests.next_tests.artifacts import pycontainers as pc
 
 
 class CustomInt32DType:

@@ -33,7 +33,7 @@ class PyContainerDataclassABC(xtyping.DataclassABC):
     @classmethod
     def __subclasshook__(cls, subclass: type) -> bool:
         if dataclasses.is_dataclass(subclass) and not subclass.__module__.startswith("gt4py."):
-            fields = dataclasses.fields(subclass)
+            fields = subclass.__dataclass_fields__.values()
             return len(fields) > 0 and all(
                 f.init is True
                 and f.default is dataclasses.MISSING
@@ -76,6 +76,7 @@ def keys(container_type: type[PyContainer]) -> tuple[str, ...]:
 def make_container_extractor_from_type_spec(
     container_type_spec: ts.NamedTupleType,
 ) -> PyContainerExtractor:
+    """Create an extractor function for the given container type specification."""
     assert isinstance(container_type_spec, ts.NamedTupleType)
     return make_container_extractor(pkgutil.resolve_name(container_type_spec.original_python_type))
 
@@ -83,12 +84,14 @@ def make_container_extractor_from_type_spec(
 def make_container_constructor_from_type_spec(
     container_type_spec: ts.NamedTupleType,
 ) -> PyContainerConstructor:
+    """Create a constructor function for the given container type specification."""
     assert isinstance(container_type_spec, ts.NamedTupleType)
     return make_container_constructor(
         pkgutil.resolve_name(container_type_spec.original_python_type)
     )
 
 
+@functools.cache
 def make_container_extractor(container_type: type[PyContainer]) -> PyContainerExtractor:
     """
     Create an extractor function for the given container type.
@@ -104,6 +107,7 @@ def make_container_extractor(container_type: type[PyContainer]) -> PyContainerEx
 
 
 def make_extractor_expr(value_name: str, container_type: type[PyContainer]) -> str:
+    """Create an expression string that extracts values from a container."""
     children_hints = {
         key: xtyping.get_origin(value) or value
         for key, value in xtyping.get_type_hints(container_type).items()
@@ -183,6 +187,7 @@ def make_constructor_expr(
     *,
     global_ns: dict[str, Any],
 ) -> str:
+    """Create an expression string that constructs a container from a nested tuple of values."""
     # We reached the leaf of the nested container construction so we just return the argument as is
     if (
         container_type in NUMERIC_VALUE_TYPES
