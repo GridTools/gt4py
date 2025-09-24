@@ -121,6 +121,8 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         single_use_data: dict[dace.SDFG, set[str]],
         **kwargs: Any,
     ) -> None:
+        if direction not in {"read", "write"}:
+            raise ValueError("Direction must be either 'read' or 'write'.")
         super().__init__(*args, **kwargs)
         self._direction = direction
         self._single_use_data = single_use_data
