@@ -100,10 +100,10 @@ def test_ij_field(decorator, backend):
     value = 42.0
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
-    def call_stencil_object(stencil_out, stencil_scalar):
+    def call_stencil_object_2(stencil_out, stencil_scalar):
         fill_2d(stencil_out, stencil_scalar)
 
-    call_stencil_object(stencil_out=field, stencil_scalar=value)
+    call_stencil_object_2(stencil_out=field, stencil_scalar=value)
 
     # Download the data from the wrapper cupy array to be compared on cpu
     field = storage_utils.cpu_copy(field.array)
@@ -132,10 +132,10 @@ def test_k_field(decorator, backend):
     )
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
-    def call_stencil_object(stencil_out, stencil_k):
+    def call_stencil_object_3(stencil_out, stencil_k):
         fill_3d_from_k(stencil_out, stencil_k)
 
-    call_stencil_object(stencil_out=field, stencil_k=k_field)
+    call_stencil_object_3(stencil_out=field, stencil_k=k_field)
 
     # Download the data from the wrapper cupy array to be compared on cpu
     field = storage_utils.cpu_copy(field.array)
@@ -168,10 +168,10 @@ def test_k_field_with_data_dimension(decorator, backend):
     )
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
-    def call_stencil_object(stencil_out, stencil_k):
+    def call_stencil_object_4(stencil_out, stencil_k):
         fill_3d_from_k_with_extra_dim(stencil_out, stencil_k)
 
-    call_stencil_object(stencil_out=field, stencil_k=k_field)
+    call_stencil_object_4(stencil_out=field, stencil_k=k_field)
 
     # Download the data from the wrapper cupy array to be compared on cpu
     field = storage_utils.cpu_copy(field.array)
@@ -259,10 +259,10 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
     origin = {"inp": (0, 0, 0), "outp": outp_origin}
 
     @dace.program
-    def call_stencil_object():
+    def call_stencil_object_5():
         copy_3d_2(inp=inp, outp=outp, domain=domain, origin=origin)
 
-    call_stencil_object()
+    call_stencil_object_5()
 
     assert np.allclose(np.asarray(inp), 7.0)
 
@@ -305,10 +305,10 @@ def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
     )
 
     @dace.program
-    def call_stencil_object(locinp, locoutp):
+    def call_stencil_object_6(locinp, locoutp):
         copy_3d_3(inp=locinp, outp=locoutp, domain=domain)
 
-    call_stencil_object(locinp=inp, locoutp=outp)
+    call_stencil_object_6(locinp=inp, locoutp=outp)
 
     assert np.allclose(np.asarray(inp), 7.0)
     assert np.allclose(
@@ -357,10 +357,10 @@ def test_optional_arg_noprovide():
     )
 
     @dace.program
-    def call_frozen_stencil():
+    def call_frozen_stencil_2():
         frozen_stencil(inp=inp, outp=outp)
 
-    call_frozen_stencil()
+    call_frozen_stencil_2()
 
     assert np.allclose(np.asarray(inp), 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
@@ -458,7 +458,7 @@ def test_optional_arg_provide_aot(decorator):
     )
 
     @dace.program
-    def call_stencil(
+    def call_stencil_2(
         inp: dace.data.create_datadescriptor(inp),
         outp: dace.data.create_datadescriptor(outp),
         unused_field: dace.data.create_datadescriptor(unused_field),
@@ -473,7 +473,7 @@ def test_optional_arg_provide_aot(decorator):
             origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
         )
 
-    csdfg = call_stencil.compile()
+    csdfg = call_stencil_2.compile()
     csdfg(inp=inp, outp=outp, unused_field=unused_field, unused_par=7.0)
 
     assert np.allclose(np.asarray(inp), 7.0)
@@ -505,7 +505,7 @@ def test_nondace_raises(decorator):
     )
 
     @dace.program
-    def call_stencil():
+    def call_stencil_3():
         numpy_stencil(
             inp=inp, outp=outp, domain=(3, 3, 3), origin={"inp": (0, 0, 0), "outp": (0, 0, 0)}
         )
@@ -516,7 +516,7 @@ def test_nondace_raises(decorator):
             'Only dace backends are supported in DaCe-orchestrated programs. (found "numpy")'
         ),
     ):
-        call_stencil()
+        call_stencil_3()
 
 
 @typing.no_type_check
