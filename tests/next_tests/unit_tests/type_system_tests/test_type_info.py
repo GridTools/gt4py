@@ -405,3 +405,62 @@ def test_return_type(
     accepts_args = type_info.accepts_args(func_type, with_args=args, with_kwargs=kwargs)
     if accepts_args:
         assert type_info.return_type(func_type, with_args=args, with_kwargs=kwargs) == return_type
+
+
+@pytest.mark.parametrize(
+    "type_spec,expected",
+    [
+        (ts.ScalarType(kind=ts.ScalarKind.INT64), False),
+        (
+            ts.FieldType(dims=[Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+            False,
+        ),
+        (
+            ts.TupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.INT64),
+                    ts.FieldType(
+                        dims=[Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+                    ),
+                ]
+            ),
+            False,
+        ),
+        (
+            ts.NamedTupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.INT64),
+                    ts.FieldType(
+                        dims=[Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+                    ),
+                ],
+                keys=["a", "b"],
+                original_python_type="some.module:SomeClass"
+            ),
+            True,
+        ),
+        (
+            ts.TupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.INT64),
+                    ts.NamedTupleType(
+                        types=[
+                            ts.ScalarType(kind=ts.ScalarKind.INT64),
+                            ts.FieldType(
+                                dims=[Dimension("I")],
+                                dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+                            ),
+                        ],
+                        keys=["x", "y"],
+                        original_python_type="some.module:SomeClass"
+
+                    ),
+                ]
+            ),
+            True,
+        ),
+    ],
+)
+def test_needs_value_extraction(type_spec: ts.TypeSpec, expected: bool):
+    assert type_info.needs_value_extraction(type_spec) is expected
+
