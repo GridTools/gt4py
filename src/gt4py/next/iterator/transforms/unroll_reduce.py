@@ -41,24 +41,6 @@ def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCa
     return filter(_is_neighbors_or_lifted_and_neighbors, flat_reduce_args)
 
 
-def _is_list_of_funcalls(lst: list) -> TypeGuard[list[itir.FunCall]]:
-    return all(isinstance(f, itir.FunCall) for f in lst)
-
-
-def _get_partial_offset_tag(arg: itir.FunCall) -> str:
-    if _is_neighbors(arg):
-        offset = arg.args[0]
-        assert isinstance(offset, itir.OffsetLiteral)
-        assert isinstance(offset.value, str)
-        return offset.value
-    else:
-        assert is_applied_lift(arg)
-        assert _is_list_of_funcalls(arg.args)
-        partial_offsets = [_get_partial_offset_tag(arg) for arg in arg.args]
-        assert all(o == partial_offsets[0] for o in partial_offsets)
-        return partial_offsets[0]
-
-
 def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
     return [
         arg.type.offset_type.value
