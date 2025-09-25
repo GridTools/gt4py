@@ -72,8 +72,8 @@ class PastProgramDefinition:
     debug: bool = False
 
 
-PRG: typing.TypeAlias = PastProgramDefinition
-AOT_PRG: typing.TypeAlias = toolchain.CompilableProgram[PRG, arguments.CompileTimeArgs]
+PAST_PRG: typing.TypeAlias = PastProgramDefinition
+AOT_PRG: typing.TypeAlias = toolchain.CompilableProgram[PAST_PRG, arguments.CompileTimeArgs]
 
 
 def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:

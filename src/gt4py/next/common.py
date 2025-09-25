@@ -788,6 +788,11 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
+NumericValue: TypeAlias = core_defs.Scalar | Field
+
+NUMERIC_VALUE_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], NumericValue.__args__)
+
+
 class ConnectivityKind(enum.Flag):
     """
     Describes the kind of connectivity field.

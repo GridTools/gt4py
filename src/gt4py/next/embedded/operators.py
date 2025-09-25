@@ -14,6 +14,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, errors, field_utils, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 from gt4py.next.field_utils import get_array_ns
+from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -108,17 +109,22 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         domain = kwargs.pop("domain", None)
 
-        out_domain = common.domain(domain) if domain is not None else _get_out_domain(out)
+        # TODO(havogt): To do the assignment of the resulting fields we extract containers and act on plain tuples.
+        # We currently apply the extract on both the rhs (`res`) computed by the operator and the lhs (`out`, provided by the user)
+        # without checking if the types are consistent. However, these errors are caught in linting if enabled.
+        container_extracted_out = arguments.extract(out)
+        out_domain = (
+            common.domain(domain)
+            if domain is not None
+            else _get_out_domain(container_extracted_out)
+        )
 
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
 
         with embedded_context.update(**new_context_kwargs):
             res = op(*args, **kwargs)
-        _tuple_assign_field(
-            out,
-            res,  # type: ignore[arg-type] # maybe can't be inferred properly because decorator.py is not properly typed yet
-            domain=out_domain,
-        )
+        container_extracted_res = arguments.extract(res)  # TODO(havogt): see notes above
+        _tuple_assign_field(container_extracted_out, container_extracted_res, domain=out_domain)
         return None
     else:
         # called from other field_operator or missing `out` argument
