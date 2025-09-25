@@ -42,11 +42,10 @@ def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCa
 
 
 def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
-    return [
-        arg.type.offset_type.value
-        for arg in reduce_args
-        if isinstance(arg.type, ts.ListType) and arg.type.offset_type is not None
-    ]
+    assert all(isinstance(arg.type, ts.ListType) for arg in reduce_args)
+    assert all(arg.type.offset_type is not None for arg in reduce_args)  # type: ignore[union-attr] # checked in previous line
+
+    return [arg.type.offset_type.value for arg in reduce_args]  # type: ignore[union-attr] # checked in previous lines
 
 
 def _get_connectivity(
