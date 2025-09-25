@@ -36,8 +36,11 @@ ArgumentDescriptors: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
 ArgumentDescriptorContext: TypeAlias = dict[
+    str, extended_typing.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]
+]
+ArgumentDescriptorContexts: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor],
-    dict[str, extended_typing.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]],
+    ArgumentDescriptorContext,
 ]
 
 
@@ -106,6 +109,61 @@ def _make_argument_descriptors(
             descriptors[descriptor_cls][expr] = descriptor_cls.from_value(argument)
     _validate_argument_descriptors(program_type, descriptors)
     return descriptors
+
+
+def _convert_to_argument_descriptor_context(
+    func_type: ts.FunctionType, argument_descriptors: ArgumentDescriptors
+) -> ArgumentDescriptorContexts:
+    """
+    Given argument descriptors, i.e., a mapping from an expr to a descriptor, transform them into a
+    context of argument descriptors in which we can evaluate expressions.
+
+    >>> int32_t, int64_t = (
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT32),
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
+    ... )
+    >>> type_ = ts.FunctionType(
+    ...     pos_only_args=[],
+    ...     pos_or_kw_args={"inp1": ts.TupleType(types=[int32_t, int64_t])},
+    ...     kw_only_args={"inp2": int64_t},
+    ...     returns=int64_t,
+    ... )
+    >>> argument_descriptors = {arguments.StaticArg: {"inp1[1]": arguments.StaticArg(value=1)}}
+    >>> contexts = _convert_to_argument_descriptor_context(type_, argument_descriptors)
+    >>> contexts[arguments.StaticArg]
+    {'inp1': (None, StaticArg(value=1)), 'inp2': None}
+    """
+    descriptor_contexts: ArgumentDescriptorContexts = {}
+    for descriptor_cls, descriptor_expr_mapping in argument_descriptors.items():
+        context: ArgumentDescriptorContext = _make_param_context_from_func_type(
+            func_type, lambda x: None
+        )
+        # convert tuples to list such that we can alter the context easily
+        context = {
+            k: gtx_utils.tree_map(
+                lambda v: v, collection_type=tuple, result_collection_constructor=list
+            )(v)
+            for k, v in context.items()
+        }
+        assert "__descriptor" not in context
+        for expr, descriptor in descriptor_expr_mapping.items():
+            # note: we don't need to handle any errors here since the `expr` has been validated
+            #  in `_validate_argument_descriptor_mapping`
+            exec(
+                f"{expr} = __descriptor",
+                {"__descriptor": descriptor},
+                context,
+            )
+        # convert lists back to tuples
+        context = {
+            k: gtx_utils.tree_map(
+                lambda v: v, collection_type=list, result_collection_constructor=tuple
+            )(v)
+            for k, v in context.items()
+        }
+        descriptor_contexts[descriptor_cls] = context
+
+    return descriptor_contexts
 
 
 def _validate_argument_descriptors(
@@ -215,7 +273,7 @@ class CompiledProgramsPool:
 
     def _argument_descriptor_cache_key_from_descriptors(
         self,
-        argument_descriptors: ArgumentDescriptors,
+        argument_descriptor_contexts: ArgumentDescriptorContexts,
     ) -> tuple:
         """
         Given a set of argument descriptors deduce the cache key used to retrieve the instance
@@ -224,22 +282,6 @@ class CompiledProgramsPool:
         This function is not performance critical as it is only called once when compiling a
         variant.
         """
-        # first build a context that we can evaluate parameter expressions on descriptors in
-        descriptor_context: ArgumentDescriptorContext = {}
-        for descriptor_cls, descriptor_expr_mapping in argument_descriptors.items():
-            descriptor_context[descriptor_cls] = _make_param_context_from_func_type(
-                self.program_type.definition, lambda x: None
-            )
-            assert "__descriptor" not in descriptor_context[descriptor_cls]
-            for expr, descriptor in descriptor_expr_mapping.items():
-                # note: we don't need to handle any errors here since the `expr` has been validated
-                #  in `_validate_argument_descriptor_mapping`
-                exec(
-                    f"{expr} = __descriptor",
-                    {"__descriptor": descriptor},
-                    descriptor_context[descriptor_cls],
-                )
-
         elements = []
         for descriptor_cls, arg_exprs in self.argument_descriptor_mapping.items():  # type: ignore[union-attr]  # can never be `None` at this point
             for arg_expr in arg_exprs:
@@ -247,7 +289,10 @@ class CompiledProgramsPool:
                 attrs = attr_extractor.keys()
                 for attr in attrs:
                     elements.append(
-                        getattr(eval(f"{arg_expr}", descriptor_context[descriptor_cls]), attr)
+                        getattr(
+                            eval(f"{arg_expr}", {}, argument_descriptor_contexts[descriptor_cls]),
+                            attr,
+                        )
                     )
         return tuple(elements)
 
@@ -297,8 +342,11 @@ class CompiledProgramsPool:
         self._initialize_argument_descriptor_mapping(argument_descriptors)
         _validate_argument_descriptors(self.program_type, argument_descriptors)
 
+        argument_descriptor_contexts = _convert_to_argument_descriptor_context(
+            self.program_type.definition, argument_descriptors
+        )
         key = (
-            self._argument_descriptor_cache_key_from_descriptors(argument_descriptors),
+            self._argument_descriptor_cache_key_from_descriptors(argument_descriptor_contexts),
             self._offset_provider_to_type_unsafe(offset_provider),
         )
         if key in self._compiled_programs:
@@ -310,7 +358,7 @@ class CompiledProgramsPool:
             args=tuple(self.program_type.definition.pos_only_args)
             + tuple(self.program_type.definition.pos_or_kw_args.values()),
             kwargs=self.program_type.definition.kw_only_args,
-            argument_descriptors=argument_descriptors,
+            argument_descriptor_contexts=argument_descriptor_contexts,
         )
         self._compiled_programs[key] = _async_compilation_pool.submit(
             self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
