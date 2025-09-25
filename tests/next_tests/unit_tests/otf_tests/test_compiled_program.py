@@ -79,7 +79,7 @@ def test_inlining_of_scalars_works():
             kwargs={},
             offset_provider={},
             column_axis=None,
-            argument_descriptors={arguments.StaticArg: {"cond": arguments.StaticArg(value=True)}},
+            argument_descriptor_contexts={arguments.StaticArg: {"cond": arguments.StaticArg(value=True)}},
         ),
     )
 
