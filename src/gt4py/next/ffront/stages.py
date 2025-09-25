@@ -132,10 +132,10 @@ def add_dict_to_fingerprint(obj: dict, hasher: xtyping.HashlibAlgorithm) -> None
     # just a small helper to additionally allow sorting types (by just using their name)
     def key_function(key: Any) -> Any:
         if isinstance(key, type):
-            return key
+            return key.__module__, key.__qualname__
         return key
 
-    for key in sorted(obj, key=key_function):
+    for key in sorted(obj.keys(), key=key_function):
         add_content_to_fingerprint(key, hasher)
         add_content_to_fingerprint(obj[key], hasher)
 

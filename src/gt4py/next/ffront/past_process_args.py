@@ -34,7 +34,7 @@ def transform_program_args(inp: AOT_PRG) -> AOT_PRG:
             kwargs=rewritten_kwargs,
             offset_provider=inp.args.offset_provider,
             column_axis=inp.args.column_axis,
-            argument_descriptors=inp.args.argument_descriptors,
+            argument_descriptor_contexts=inp.args.argument_descriptor_contexts,
         ),
     )
 

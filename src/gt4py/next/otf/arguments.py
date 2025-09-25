@@ -17,7 +17,7 @@ from typing import Any, Generic, Mapping, Optional, final
 from typing_extensions import Self
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common, errors
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
@@ -75,7 +75,7 @@ class ArgStaticDescriptor(abc.ABC):
 
 @dataclasses.dataclass(frozen=True)
 class StaticArg(ArgStaticDescriptor, Generic[core_defs.ScalarT]):
-    value: extended_typing.MaybeNestedInTuple[core_defs.ScalarT]
+    value: MaybeNestedInTuple[core_defs.ScalarT]
 
     def __post_init__(self) -> None:
         # transform enum value into the actual value
@@ -121,9 +121,13 @@ class CompileTimeArgs:
     kwargs: dict[str, ts.TypeSpec]
     offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     column_axis: Optional[common.Dimension]
-    argument_descriptors: Mapping[
+    #: A mapping from an argument descriptor type to a context containing the actual descriptors.
+    #: If an argument or element of an argument has no descriptor, the respective value is `None`.
+    #: E.g., for a tuple argument `a` with type `ts.TupleTupe(types=[field_t, int32_t])` a possible
+    #  context would be `{"a": (FieldDomainDescriptor(...), None)}`.
+    argument_descriptor_contexts: Mapping[
         type[ArgStaticDescriptor],
-        dict[str, ArgStaticDescriptor],
+        dict[str, MaybeNestedInTuple[ArgStaticDescriptor | None]],
     ]
 
     @property
@@ -141,7 +145,7 @@ class CompileTimeArgs:
             kwargs={
                 k: type_translation.from_value(v) for k, v in kwargs_copy.items() if v is not None
             },
-            argument_descriptors={},
+            argument_descriptor_contexts={},
         )
 
     @classmethod

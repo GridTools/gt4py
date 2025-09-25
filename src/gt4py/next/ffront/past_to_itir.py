@@ -96,16 +96,18 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         inp.data.past_node, function_definitions=lowered_funcs, grid_type=grid_type
     )
 
-    if arguments.StaticArg in inp.args.argument_descriptors:
-        static_arg_descriptors = inp.args.argument_descriptors[arguments.StaticArg]
+    # TODO(tehrengruber): Put this in a dedicated transformation step.
+    if arguments.StaticArg in inp.args.argument_descriptor_contexts:
+        static_arg_descriptors = inp.args.argument_descriptor_contexts[arguments.StaticArg]
         if not all(
-            isinstance(arg_descriptor, arguments.StaticArg)
+            isinstance(arg_descriptor, arguments.StaticArg) or arg_descriptor is None
             for arg_descriptor in static_arg_descriptors.values()
         ):
             raise NotImplementedError("Only top-level arguments can be static.")
         static_args = {
-            name: im.literal_from_tuple_value(descr.value)  # type: ignore[attr-defined]  # type checked above
+            name: im.literal_from_tuple_value(descr.value)  # type: ignore[union-attr]  # type checked above
             for name, descr in static_arg_descriptors.items()
+            if descr
         }
         body = remap_symbols.RemapSymbolRefs().visit(itir_program.body, symbol_map=static_args)
         itir_program = itir.Program(
