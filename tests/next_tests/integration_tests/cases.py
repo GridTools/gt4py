@@ -34,6 +34,7 @@ from gt4py.next import (
 )
 from gt4py.next.ffront import decorator
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.otf import arguments
 
 from next_tests import definitions as test_definitions
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 [unused-import]
@@ -476,9 +477,9 @@ def verify(
 
     out_comp = out or inout
     assert out_comp is not None
-    out_comp = containers.extract(out_comp)
+    out_comp = arguments.extract(out_comp)
     out_comp_ndarray = field_utils.asnumpy(out_comp)
-    ref = containers.extract(ref)
+    ref = arguments.extract(ref)
     ref_ndarray = field_utils.asnumpy(ref)
 
     assert comparison(ref_ndarray, out_comp_ndarray), (

@@ -24,7 +24,7 @@ from typing import (
 
 import numpy as np
 
-from gt4py.eve.utils import XIterable, xiter
+from gt4py.eve import extended_typing as xtyping, utils
 from gt4py.next import common
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
@@ -96,18 +96,18 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
 @overload
 def primitive_constituents(
     symbol_type: ts.TypeSpec, with_path_arg: Literal[False] = False
-) -> XIterable[ts.TypeSpec]: ...
+) -> utils.XIterable[ts.TypeSpec]: ...
 
 
 @overload
 def primitive_constituents(
     symbol_type: ts.TypeSpec, with_path_arg: Literal[True]
-) -> XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]: ...
+) -> utils.XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]: ...
 
 
 def primitive_constituents(
     symbol_type: ts.TypeSpec, with_path_arg: bool = False
-) -> XIterable[ts.TypeSpec] | XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]:
+) -> utils.XIterable[ts.TypeSpec] | utils.XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]:
     """
     Return the primitive types contained in a composite type.
 
@@ -137,7 +137,7 @@ def primitive_constituents(
             else:
                 yield symbol_type
 
-    return xiter(constituents_yielder(symbol_type, ()))  # type: ignore[return-value] # why resolved to XIterable[object]?
+    return utils.xiter(constituents_yielder(symbol_type, ()))  # type: ignore[return-value] # why resolved to XIterable[object]?
 
 
 _R = TypeVar("_R", covariant=True)
@@ -931,3 +931,12 @@ def accepts_args(
         return True
 
     return next(errors, None) is None
+
+
+def needs_value_extraction(
+    type_spec: ts.TypeSpec,
+) -> xtyping.TypeIs[ts.NamedTupleType | ts.TupleType]:
+    return isinstance(type_spec, ts.NamedTupleType) or (
+        isinstance(type_spec, ts.TupleType)
+        and any(needs_value_extraction(t) for t in type_spec.types)
+    )

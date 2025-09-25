@@ -145,7 +145,7 @@ class TupleType(DataType):
 
 class NamedTupleType(TupleType):
     keys: list[str]
-    original_python_type: str  # pkgutil.resolve_name() format: 'pkg.module:symbol.attr'
+    original_python_type: str  # Format: '__module__:__qualname__' (used by pkgutil.resolve_name())
 
     def __getattr__(self, name: str) -> DataType | DimensionType | DeferredType:
         keys = object.__getattribute__(self, "keys")

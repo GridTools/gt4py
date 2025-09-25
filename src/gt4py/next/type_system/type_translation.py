@@ -111,7 +111,7 @@ def make_type(type_: type) -> ts.TypeSpec:
                 " functions, 'InitVar's or default arguments."
             )
 
-        keys = [*containers.get_keys_of(type_)]
+        keys = [*containers.keys(type_)]
         hints = get_type_hints(type_)
         types = [
             from_type_hint(hints[key], globalns=sys.modules[type_.__module__].__dict__)
@@ -271,7 +271,15 @@ class UnknownPythonObject(ts.TypeSpec):
 
 
 def from_value(value: Any) -> ts.TypeSpec:
-    """Make a symbol node from a Python value."""
+    """
+    Make a typespec from a Python value.
+
+    In principle, this function is conceptually equivalent to
+    `from_type_hint(type(value))`, but it also handles some special cases
+    which cannot be handled directly by `from_type_hint`
+    (like `int` values, which could be either `int32` or `int64`
+    depending on their value).
+    """
     # TODO(tehrengruber): use protocol from gt4py.next.common when available
     #  instead of importing from the embedded implementation
     # TODO(tehrengruber): What we expect here currently is a GTCallable. Maybe
@@ -300,14 +308,13 @@ def from_value(value: Any) -> ts.TypeSpec:
         dtype = from_type_hint(value.dtype.scalar_type)
         assert isinstance(dtype, ts.ScalarType)
         symbol_type = ts.FieldType(dims=dims, dtype=dtype)
-    # TODO: figure out how to handle containers
-    elif isinstance(value, containers.PyContainer):
-        return make_type(value.__class__)
-    elif isinstance(value, tuple):
+    elif isinstance(value, tuple) and not isinstance(value, xtyping.TypedNamedTupleABC):
         # Since the elements of the tuple might be one of the special cases
         # above, we can not resort to generic `infer_type` but need to do it
         # manually here. If we get rid of all the special cases this is
         # not needed anymore.
+        # Note that we explicitly do not want to match namedtuples here,
+        # since those should be handled as general custom types.
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)

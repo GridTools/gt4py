@@ -11,9 +11,10 @@ from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVa
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, containers, errors, field_utils, utils
+from gt4py.next import common, errors, field_utils, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 from gt4py.next.field_utils import get_array_ns
+from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -108,7 +109,7 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         domain = kwargs.pop("domain", None)
 
-        container_extracted_out = containers.extract(
+        container_extracted_out = arguments.extract(
             out
         )  # TODO alternatively we could make all functions work on named tuples directly
         out_domain = (
@@ -121,7 +122,7 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         with embedded_context.update(**new_context_kwargs):
             res = op(*args, **kwargs)
-        container_extracted_res = containers.extract(res)  # TODO
+        container_extracted_res = arguments.extract(res)  # TODO
         _tuple_assign_field(container_extracted_out, container_extracted_res, domain=out_domain)
         return None
     else:

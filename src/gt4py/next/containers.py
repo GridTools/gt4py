@@ -14,10 +14,9 @@ import inspect
 import pkgutil
 import typing
 from collections.abc import Callable
-from typing import Any, Final, TypeAlias, TypeVar
 
 from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import NestedTuple
+from gt4py.eve.extended_typing import Any, Final, NestedTuple, TypeAlias, TypeVar
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 
@@ -34,7 +33,7 @@ class PyContainerDataclassABC(xtyping.DataclassABC):
     @classmethod
     def __subclasshook__(cls, subclass: type) -> bool:
         if dataclasses.is_dataclass(subclass) and not subclass.__module__.startswith("gt4py."):
-            fields = dataclasses.fields(subclass)
+            fields = subclass.__dataclass_fields__.values()
             return len(fields) > 0 and all(
                 f.init is True
                 and f.default is dataclasses.MISSING
@@ -49,6 +48,7 @@ class PyContainerDataclassABC(xtyping.DataclassABC):
 PyContainer: TypeAlias = xtyping.TypedNamedTupleABC | PyContainerDataclassABC
 PyContainerT = TypeVar("PyContainerT", bound=PyContainer)
 
+
 PyContainerExtractor: TypeAlias = Callable[[Any], NestedTuple[common.NumericValue]]
 
 PyContainerConstructor: TypeAlias = Callable[[NestedTuple[common.NumericValue]], PyContainerT]
@@ -61,7 +61,7 @@ PY_CONTAINER_TYPES: Final[tuple[type, ...]] = typing.cast(
 
 
 @functools.cache
-def get_keys_of(container_type: type[PyContainer]) -> tuple[str, ...]:
+def keys(container_type: type[PyContainer]) -> tuple[str, ...]:
     """Get the keys of the container type."""
     assert issubclass(container_type, PyContainer)
 
@@ -76,6 +76,7 @@ def get_keys_of(container_type: type[PyContainer]) -> tuple[str, ...]:
 def make_container_extractor_from_type_spec(
     container_type_spec: ts.NamedTupleType,
 ) -> PyContainerExtractor:
+    """Create an extractor function for the given container type specification."""
     assert isinstance(container_type_spec, ts.NamedTupleType)
     return make_container_extractor(pkgutil.resolve_name(container_type_spec.original_python_type))
 
@@ -83,6 +84,7 @@ def make_container_extractor_from_type_spec(
 def make_container_constructor_from_type_spec(
     container_type_spec: ts.NamedTupleType,
 ) -> PyContainerConstructor:
+    """Create a constructor function for the given container type specification."""
     assert isinstance(container_type_spec, ts.NamedTupleType)
     return make_container_constructor(
         pkgutil.resolve_name(container_type_spec.original_python_type)
@@ -100,27 +102,29 @@ def make_container_extractor(container_type: type[PyContainer]) -> PyContainerEx
     """
     assert issubclass(container_type, PyContainer)
 
-    def make_extractor_expr(in_arg: str, container_type: type[PyContainer]) -> str:
-        children_hints = {
-            key: xtyping.get_origin(value) or value
-            for key, value in xtyping.get_type_hints(container_type).items()
-        }
-        args = {
-            key: make_extractor_expr(f"{in_arg}.{key}", children_hints[key])
-            if issubclass(children_hints[key], PY_CONTAINER_TYPES)
-            else f"{in_arg}.{key}"
-            for key in get_keys_of(container_type)
-        }
-        if issubclass(container_type, tuple) and all(
-            value.endswith(f".{key}") for key, value in args.items()
-        ):
-            # Fast path: input argument is already a pure nested tuple
-            return f"{in_arg}"
-        else:
-            return f"({', '.join(args.values())})"
-
     extractor_func_src = f"lambda x: {make_extractor_expr('x', container_type)}"
     return eval(extractor_func_src)
+
+
+def make_extractor_expr(value_name: str, container_type: type[PyContainer]) -> str:
+    """Create an expression string that extracts values from a container."""
+    children_hints = {
+        key: xtyping.get_origin(value) or value
+        for key, value in xtyping.get_type_hints(container_type).items()
+    }
+    args = {
+        key: make_extractor_expr(f"{value_name}.{key}", children_hints[key])
+        if issubclass(children_hints[key], PY_CONTAINER_TYPES)
+        else f"{value_name}.{key}"
+        for key in keys(container_type)
+    }
+    if issubclass(container_type, tuple) and all(
+        value.endswith(f".{key}") for key, value in args.items()
+    ):
+        # Fast path: input argument is already a pure nested tuple
+        return f"{value_name}"
+    else:
+        return f"({', '.join(args.values())})"
 
 
 def _get_args_info(container_type: type[PyContainer]) -> tuple[int, list[str]]:
@@ -168,72 +172,65 @@ def make_container_constructor(
 
     global_ns = {}
 
-    def make_constructor_expr(
-        in_arg: str, container_type: type[PyContainer], container_type_alias: str
-    ) -> str:
-        # We reached the leaf of the nested container construction so we just return the argument as is
-        if (
-            container_type in NUMERIC_VALUE_TYPES
-            or xtyping.get_origin(container_type) in NUMERIC_VALUE_TYPES
-        ):
-            return in_arg
-
-        assert issubclass(container_type, PyContainer)
-
-        # Store the container type alias in the global namespace for eval
-        global_ns[container_type_alias] = container_type
-
-        # Recursively generate the constructor call
-        children_hints = {
-            key: xtyping.get_origin(value) or value
-            for key, value in xtyping.get_type_hints(container_type).items()
-        }
-        args_count, kwargs_keys = _get_args_info(container_type)
-
-        if {children_hints[key] for key in get_keys_of(container_type)} <= {*NUMERIC_VALUE_TYPES}:
-            # Fast path: all children are values, so we can just use argument unpacking
-            call_args = (
-                f"*{in_arg}[:{args_count}], {', '.join(f'{k}={in_arg}[{args_count + i}]' for i, k in enumerate(kwargs_keys))}"
-                if kwargs_keys
-                else f"*{in_arg}"
-            )
-        else:
-            # General path: we need to recursively construct children containers
-            call_args_items = []
-            for i, key in enumerate(get_keys_of(container_type)):
-                if children_hints[key] in NUMERIC_VALUE_TYPES:
-                    call_args_items.append(f"{in_arg}[{i}]")
-                else:
-                    *path_keys, _ = container_type_alias[2:].split("__")
-                    children_container = children_hints[key].__name__
-                    children_container_alias = (
-                        f"{'__'.join(path_keys)}__{key}__{children_container}"
-                    )
-                    value = make_constructor_expr(
-                        f"{in_arg}[{i}]", children_hints[key], children_container_alias
-                    )
-                    call_args_items.append(f"{key}={value}")
-            call_args = ", ".join(call_args_items)
-
-        return f"{container_type_alias}({call_args})"
-
-    constructor_func_src = (
-        f"lambda x: {make_constructor_expr('x', container_type, f'{container_type.__name__}')}"
+    constructor_func_body = make_constructor_expr(
+        "x", container_type, f"{container_type.__name__}", global_ns=global_ns
     )
+    constructor_func_src = f"lambda x: {constructor_func_body}"
 
     return eval(constructor_func_src, global_ns)
 
 
-# TODO added by havogt
-def extract(
-    container,
-) -> NestedTuple[
-    common.NumericValue
-]:  # TODO the input is NestedAnyContainer[PythonContainerValue], to be defined
-    """Extract the values from a container into a nested tuple."""
-    # TODO recurse into tuples or handle in make_container_extractor?
-    # if isinstance(container, tuple):
-    #     return tuple(extract(c) for c in container)
-    if isinstance(container, PyContainer):
-        return make_container_extractor(type(container))(container)
-    return container
+def make_constructor_expr(
+    in_arg: str,
+    container_type: type[PyContainer],
+    container_type_alias: str,
+    *,
+    global_ns: dict[str, Any],
+) -> str:
+    """Create an expression string that constructs a container from a nested tuple of values."""
+    # We reached the leaf of the nested container construction so we just return the argument as is
+    if (
+        container_type in NUMERIC_VALUE_TYPES
+        or xtyping.get_origin(container_type) in NUMERIC_VALUE_TYPES
+    ):
+        return in_arg
+
+    assert issubclass(container_type, PyContainer)
+
+    # Store the container type alias in the global namespace for eval()
+    global_ns[container_type_alias] = container_type
+
+    # Recursively generate the constructor call
+    children_hints = {
+        key: xtyping.get_origin(value) or value
+        for key, value in xtyping.get_type_hints(container_type).items()
+    }
+    args_count, kwargs_keys = _get_args_info(container_type)
+
+    if {children_hints[key] for key in keys(container_type)} <= {*NUMERIC_VALUE_TYPES}:
+        # Fast path: all children are values, so we can just use argument unpacking
+        call_args = (
+            f"*{in_arg}[:{args_count}], {', '.join(f'{k}={in_arg}[{args_count + i}]' for i, k in enumerate(kwargs_keys))}"
+            if kwargs_keys
+            else f"*{in_arg}"
+        )
+    else:
+        # General path: we need to recursively construct children containers
+        call_args_items = []
+        for i, key in enumerate(keys(container_type)):
+            if children_hints[key] in NUMERIC_VALUE_TYPES:
+                call_args_items.append(f"{in_arg}[{i}]")
+            else:
+                *path_keys, _ = container_type_alias[2:].split("__")
+                children_container = children_hints[key].__name__
+                children_container_alias = f"{'__'.join(path_keys)}__{key}__{children_container}"
+                value = make_constructor_expr(
+                    f"{in_arg}[{i}]",
+                    children_hints[key],
+                    children_container_alias,
+                    global_ns=global_ns,
+                )
+                call_args_items.append(f"{key}={value}")
+        call_args = ", ".join(call_args_items)
+
+    return f"{container_type_alias}({call_args})"
