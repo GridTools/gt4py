@@ -838,7 +838,9 @@ def test_compile_variants_decorator_static_domains(compile_variants_field_operat
     # the float argument here is merely to test that static domains work for tuple arguments
     # of inhomogeneous types
     @gtx.program(backend=CaptureCompileTimeArgsBackend(), static_domains=True)
-    def testee(inp: tuple[cases.IField, cases.IField, float], out: tuple[cases.IField, cases.IField]):
+    def testee(
+        inp: tuple[cases.IField, cases.IField, float], out: tuple[cases.IField, cases.IField]
+    ):
         identity_like(inp, out=out)
 
     inp = cases.allocate(cartesian_case, testee, "inp")()
@@ -854,7 +856,7 @@ def test_compile_variants_decorator_static_domains(compile_variants_field_operat
         "inp": (
             arguments.FieldDomainDescriptor(inp[0].domain),
             arguments.FieldDomainDescriptor(inp[1].domain),
-            None
+            None,
         ),
         "out": (
             arguments.FieldDomainDescriptor(out[0].domain),
