@@ -119,10 +119,10 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         )
 
     # TODO(tehrengruber): Put this in a dedicated transformation step.
-    if arguments.FieldDomainDescriptor in inp.args.argument_descriptors:
+    if arguments.FieldDomainDescriptor in inp.args.argument_descriptor_contexts:
+        context = inp.args.argument_descriptor_contexts[arguments.FieldDomainDescriptor]
         field_domains = {
-            param: utils.tree_map(lambda x: x.domain)(v)
-            for param, v in inp.args.argument_descriptors[arguments.FieldDomainDescriptor].items()
+            param: utils.tree_map(lambda x: x.domain if x else x)(v) for param, v in context.items()
         }
         itir_program = transform_get_domain_range.TransformGetDomainRange.apply(
             itir_program, sizes=field_domains

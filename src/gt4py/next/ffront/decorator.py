@@ -286,8 +286,9 @@ class Program:
             func_type = self.past_stage.past_node.type.definition  # type: ignore[union-attr] # type inference done at this point
             param_types = func_type.pos_or_kw_args | func_type.kw_only_args
             for name, type_ in param_types.items():
-                for _, path in type_info.primitive_constituents(type_, with_path_arg=True):
-                    static_domain_args.append(f"{name}{path_to_expr(path)}")
+                for type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
+                    if isinstance(type_, ts.FieldType):
+                        static_domain_args.append(f"{name}{path_to_expr(path)}")
             argument_descriptor_mapping[arguments.FieldDomainDescriptor] = static_domain_args
 
         program_type = self.past_stage.past_node.type

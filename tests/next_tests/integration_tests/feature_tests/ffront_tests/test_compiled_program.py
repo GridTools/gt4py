@@ -832,23 +832,32 @@ def test_compile_variants_decorator_static_domains(compile_variants_field_operat
             return cartesian_case.backend.compile(program, compile_time_args)
 
     @gtx.field_operator
-    def identity(inp: cases.IField):
-        return inp
+    def identity_like(inp: tuple[cases.IField, cases.IField, float]):
+        return inp[0], inp[1]
 
+    # the float argument here is merely to test that static domains work for tuple arguments
+    # of inhomogeneous types
     @gtx.program(backend=CaptureCompileTimeArgsBackend(), static_domains=True)
-    def testee(inp: tuple[cases.IField, cases.IField], out: cases.IField):
-        identity(inp, out=out)
+    def testee(inp: tuple[cases.IField, cases.IField, float], out: tuple[cases.IField, cases.IField]):
+        identity_like(inp, out=out)
 
     inp = cases.allocate(cartesian_case, testee, "inp")()
     out = cases.allocate(cartesian_case, testee, "out")()
 
     testee(inp, out, offset_provider={})
-    assert np.allclose(out.ndarray, inp.ndarray)
+    assert np.allclose((inp[0].ndarray, inp[1].ndarray), (out[0].ndarray, out[1].ndarray))
 
     assert testee._compiled_programs.argument_descriptor_mapping[
         arguments.FieldDomainDescriptor
-    ] == ["inp", "out"]
-    assert captured_cargs.argument_descriptors[arguments.FieldDomainDescriptor] == {
-        "inp": arguments.FieldDomainDescriptor(inp.domain),
-        "out": arguments.FieldDomainDescriptor(out.domain),
+    ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
+    assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
+        "inp": (
+            arguments.FieldDomainDescriptor(inp[0].domain),
+            arguments.FieldDomainDescriptor(inp[1].domain),
+            None
+        ),
+        "out": (
+            arguments.FieldDomainDescriptor(out[0].domain),
+            arguments.FieldDomainDescriptor(out[1].domain),
+        ),
     }
