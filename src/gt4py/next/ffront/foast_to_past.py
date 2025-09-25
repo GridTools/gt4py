@@ -75,7 +75,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         ...     kwargs={},
         ...     offset_provider={"I", IDim},
         ...     column_axis=None,
-        ...     argument_descriptors={},
+        ...     argument_descriptor_contexts={},
         ... )
 
         >>> copy_program = op_to_prog(
