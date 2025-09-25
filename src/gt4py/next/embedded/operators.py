@@ -109,9 +109,10 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         domain = kwargs.pop("domain", None)
 
-        container_extracted_out = arguments.extract(
-            out
-        )  # TODO alternatively we could make all functions work on named tuples directly
+        # TODO(havogt): To do the assignment of the resulting fields we extract containers and act on plain tuples.
+        # We currently apply the extract on both the rhs (`res`) computed by the operator and the lhs (`out`, provided by the user)
+        # without checking if the types are consistent. However, these errors are caught in linting if enabled.
+        container_extracted_out = arguments.extract(out)
         out_domain = (
             common.domain(domain)
             if domain is not None
@@ -122,7 +123,7 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         with embedded_context.update(**new_context_kwargs):
             res = op(*args, **kwargs)
-        container_extracted_res = arguments.extract(res)  # TODO
+        container_extracted_res = arguments.extract(res)  # TODO(havogt): see notes above
         _tuple_assign_field(container_extracted_out, container_extracted_res, domain=out_domain)
         return None
     else:
