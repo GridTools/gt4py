@@ -17,6 +17,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next import constructors
 
 from ...artifacts import pycontainers as pc
 
@@ -266,6 +267,116 @@ def test_generic_variadic_dims(value, expected_dims):
 )
 def test_as_from_dtype(dtype):
     assert type_translation.as_dtype(type_translation.from_dtype(dtype)) == dtype
+
+
+_FIELD = constructors.empty({pc.TDim: 1}, gtx.float32)
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        # Python container types
+        (
+            pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
+            NamedTupleContainerTypeSpec := ts.NamedTupleType(
+                types=[
+                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                ],
+                keys=["x", "y"],
+                original_python_type=_make_type_string_for_container(pc.NamedTupleContainer),
+            ),
+        ),
+        (
+            pc.DataclassContainer(x=_FIELD, y=_FIELD),
+            DataclassContainerTypeSpec := ts.NamedTupleType(
+                types=[
+                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                ],
+                keys=["x", "y"],
+                original_python_type=_make_type_string_for_container(pc.DataclassContainer),
+            ),
+        ),
+        (
+            pc.NestedDataclassContainer(
+                a=pc.DataclassContainer(x=_FIELD, y=_FIELD),
+                b=pc.DataclassContainer(x=_FIELD, y=_FIELD),
+                c=pc.DataclassContainer(x=_FIELD, y=_FIELD),
+            ),
+            ts.NamedTupleType(
+                types=[
+                    DataclassContainerTypeSpec,
+                    DataclassContainerTypeSpec,
+                    DataclassContainerTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(pc.NestedDataclassContainer),
+            ),
+        ),
+        (
+            pc.NestedNamedTupleDataclassContainer(
+                a=pc.DataclassContainer(x=_FIELD, y=_FIELD),
+                b=pc.DataclassContainer(x=_FIELD, y=_FIELD),
+                c=pc.DataclassContainer(x=_FIELD, y=_FIELD),
+            ),
+            ts.NamedTupleType(
+                types=[
+                    DataclassContainerTypeSpec,
+                    DataclassContainerTypeSpec,
+                    DataclassContainerTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    pc.NestedNamedTupleDataclassContainer
+                ),
+            ),
+        ),
+        (
+            pc.NestedDataclassNamedTupleContainer(
+                a=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
+                b=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
+                c=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
+            ),
+            ts.NamedTupleType(
+                types=[
+                    NamedTupleContainerTypeSpec,
+                    NamedTupleContainerTypeSpec,
+                    NamedTupleContainerTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    pc.NestedDataclassNamedTupleContainer
+                ),
+            ),
+        ),
+        (
+            pc.NestedMixedTupleContainer(
+                a=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
+                b=pc.DataclassContainer(x=_FIELD, y=_FIELD),
+                c=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
+            ),
+            ts.NamedTupleType(
+                types=[
+                    NamedTupleContainerTypeSpec,
+                    DataclassContainerTypeSpec,
+                    NamedTupleContainerTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(pc.NestedMixedTupleContainer),
+            ),
+        ),
+        (
+            (
+                pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
+                pc.DataclassContainer(x=_FIELD, y=_FIELD),
+            ),
+            ts.TupleType(types=[NamedTupleContainerTypeSpec, DataclassContainerTypeSpec]),
+        ),
+    ],
+)
+def test_from_value(value, expected):
+    assert type_translation.from_value(value) == expected
 
 
 def test_from_value_module():
