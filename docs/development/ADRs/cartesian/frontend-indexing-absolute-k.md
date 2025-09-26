@@ -1,6 +1,6 @@
-# Absolute K indexing
+# ⚠️ Absolute K indexing
 
-In the context of porting physics parametrizations, some field accesses were at absolute indices in the K-axis. We thus decided to expand the DLS be able to port these stencils. We accept the increase in DSL surface.
+In the context of porting physics parametrizations, some field accesses were at absolute indices in the K-axis. We thus decided to expand the DLS be able to port these stencils. We accept the increase in DSL surface and test it as an [experimental feature](./general-experimental-features.md).
 
 ## Context
 
@@ -26,11 +26,11 @@ do L = 1, LM
       ...
 ```
 
-which can't be ported to GT4Py stencils.
+In some cases, porting these codes might be possible by using temporary helper fields and by breaking loop apart. In other cases (e.g. looping over previous levels) that might not be possible and the code can't be expressed as a GT4Py stencil.
 
 ## Decision
 
-We decided to allow absolute indexing in the K axis with the following syntax:
+We decided to allow absolute indexing on the K axis in certain circumstances with the following syntax:
 
 ```py
 @stencil(backend="dace:cpu", externals={K4: "4"})
@@ -51,12 +51,12 @@ def absolute_k_indexing(in_field: Field[np.float64], k_field: Field[IJ, np.int64
         out_field = in_field.at(K=k_field)
 ```
 
-and the following two restrictions:
+The following two restrictions apply to absolute indexing in the `K` dimension:
 
-1. read only
-2. reads are "centered" in I and J, i.e., no (relative) offset in the I and J dimensions
+1. read-only access
+2. reads are "centered" in `I` and `J`, i.e., no (relative) offset in the `I` and `J` dimension
 
-Both rules are enforced by syntax `field.at(K=...)`, which
+Both rules are enforced by the syntax `field.at(K=...)`, which
 
 1. can't be written to and
 2. errors if users try to write something like `field.at(K=42, I=-1)`.
@@ -65,6 +65,6 @@ Both rules are enforced by syntax `field.at(K=...)`, which
 
 Users of GT4Py can now succinctly write the patterns shown above in the context section.
 
-One major drawback of absolute indexing is that we loose the opportunity to warn users at compile time if they read out fo bounds. Since we allow absolute K indices that aren't know at compile time, we extent analysis can't warn us anymore. We plan to mitigate that by supporting an option to check every absolute read (at runtime) in debug mode.
+One major drawback of absolute indexing is that we loose the opportunity to warn users at compile time if they read out fo bounds. Since we allow absolute K indices that aren't know at compile time, the extent analysis can't warn us anymore. We plan to mitigate that by supporting an option to check every absolute read (at runtime) in debug mode.
 
-As a starting point, absolute indexing in K will only be available in the `dace:*` backends.
+We ship absolute K indexing as an [experimental features](./general-experimental-features.md). The feature is only available in `debug` and `dace:*` backends. Other backends raise an error at compile time when transpiling from `oir` into the respective backend IR.
