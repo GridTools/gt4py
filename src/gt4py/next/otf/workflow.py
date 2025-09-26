@@ -12,10 +12,11 @@ import abc
 import dataclasses
 import functools
 import typing
-from collections.abc import MutableMapping
 from typing import Any, Callable, Generic, Protocol, TypeVar
 
 from typing_extensions import Self
+
+from gt4py.eve.extended_typing import OpaqueMutableMapping
 
 
 StartT = TypeVar("StartT")
@@ -254,7 +255,7 @@ class CachedStep(
 
     step: Workflow[StartT, EndT]
     hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
-    cache: MutableMapping[HashT, EndT] = dataclasses.field(repr=False, default_factory=dict)
+    cache: OpaqueMutableMapping[HashT, EndT] = dataclasses.field(repr=False, default_factory=dict)
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""

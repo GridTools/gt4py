@@ -8,7 +8,7 @@
 
 import copy
 
-import diskcache
+from gt4py._core import filecache
 import numpy as np
 import pytest
 
@@ -93,15 +93,15 @@ def test_hash_and_diskcache(program_example, tmp_path):
     )
     hash = stages.fingerprint_compilable_program(compilable_program)
 
-    with diskcache.Cache(tmp_path) as cache:
-        cache[hash] = compilable_program
+    cache = filecache.FileCache(tmp_path)
+    cache[hash] = compilable_program
 
     # check content of cash file
-    with diskcache.Cache(tmp_path) as reopened_cache:
-        assert hash in reopened_cache
-        compilable_program_from_cache = reopened_cache[hash]
-        assert compilable_program == compilable_program_from_cache
-        del reopened_cache[hash]  # delete data
+    reopened_cache = filecache.FileCache(tmp_path)
+    assert hash in reopened_cache
+    compilable_program_from_cache = reopened_cache[hash]
+    assert compilable_program == compilable_program_from_cache
+    del reopened_cache[hash]  # delete data
 
     # hash creation is deterministic
     assert hash == stages.fingerprint_compilable_program(compilable_program)
