@@ -15,7 +15,7 @@ from typing import Any, Optional, cast
 import devtools
 
 from gt4py.eve import NodeTranslator, concepts, traits, utils as eve_utils
-from gt4py.next import common, config, errors
+from gt4py.next import common, config, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     fbuiltins,
     gtcallable,
@@ -100,14 +100,15 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
     if arguments.StaticArg in inp.args.argument_descriptor_contexts:
         static_arg_descriptors = inp.args.argument_descriptor_contexts[arguments.StaticArg]
         if not all(
-            isinstance(arg_descriptor, arguments.StaticArg) or arg_descriptor is None
+            isinstance(arg_descriptor, arguments.StaticArg)
+            or all(el is None for el in gtx_utils.flatten_nested_tuple(arg_descriptor))  # type: ignore[arg-type]
             for arg_descriptor in static_arg_descriptors.values()
         ):
             raise NotImplementedError("Only top-level arguments can be static.")
         static_args = {
             name: im.literal_from_tuple_value(descr.value)  # type: ignore[union-attr]  # type checked above
             for name, descr in static_arg_descriptors.items()
-            if descr
+            if not any(el is None for el in gtx_utils.flatten_nested_tuple(descr))  # type: ignore[arg-type]
         }
         body = remap_symbols.RemapSymbolRefs().visit(itir_program.body, symbol_map=static_args)
         itir_program = itir.Program(
