@@ -191,6 +191,7 @@ class DaCeTranslator(
     async_sdfg_call: bool = False
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
+    use_max_domain_range_on_unstructured_shift: Optional[bool] = None
 
     # auto-optimize arguments
     gpu_block_size: tuple[int, int, int] = (32, 8, 1)
@@ -216,7 +217,11 @@ class DaCeTranslator(
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
-            ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+            ir = itir_transforms.apply_fieldview_transforms(
+                ir,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                offset_provider=offset_provider,
+            )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 

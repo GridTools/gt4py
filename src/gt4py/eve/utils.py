@@ -910,7 +910,7 @@ class UIDGenerator:
         if warn_unsafe is None:
             warn_unsafe = self.warn_unsafe
         if warn_unsafe and start < next(self._counter):
-            warnings.warn("Unsafe reset of UIDGenerator ({self})", stacklevel=2)
+            warnings.warn(f"Unsafe reset of UIDGenerator ({self})", stacklevel=2)
         self._counter = itertools.count(start)
 
         return self

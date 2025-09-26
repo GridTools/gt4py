@@ -5,6 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import warnings
 from typing import Any, Mapping, Optional, Protocol
 
 from gt4py.eve import utils as eve_utils
@@ -67,7 +68,7 @@ def _max_domain_range_sizes(offset_provider: Mapping[str, Any]) -> dict[str, iti
 
 def _has_dynamic_domains(ir: itir.Program) -> bool:
     # note: this function does not respect symbol collisions with builtins. As it is a temporary
-    # workaround we don't care about this corner cases.
+    # workaround we don't care about this corner case.
     domains = set()
     domains |= ir.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
     for as_fop in (
@@ -77,6 +78,30 @@ def _has_dynamic_domains(ir: itir.Program) -> bool:
     ):
         domains.add(as_fop.args[1])
     return len(symbol_ref_utils.collect_symbol_refs(domains)) > 0
+
+
+def _process_symbolic_domains_option(
+    ir: itir.Program,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]],
+    use_max_domain_range_on_unstructured_shift: Optional[bool],
+) -> Optional[dict[str, str | itir.Expr]]:
+    has_dynamic_domains = _has_dynamic_domains(ir)
+    if has_dynamic_domains and use_max_domain_range_on_unstructured_shift is None:
+        use_max_domain_range_on_unstructured_shift = True
+    else:
+        use_max_domain_range_on_unstructured_shift = False
+    if use_max_domain_range_on_unstructured_shift:
+        if not has_dynamic_domains:
+            warnings.warn(
+                "You are using static domains together with "
+                "'use_max_domain_range_on_unstructured_shift'. This is"
+                "likely not what you wanted.",
+                stacklevel=2,
+            )
+        assert not symbolic_domain_sizes, "Options are mutually exclusive."
+        symbolic_domain_sizes = _max_domain_range_sizes(offset_provider)  # type: ignore[assignment]
+    return symbolic_domain_sizes
 
 
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
@@ -94,16 +119,17 @@ def apply_common_transforms(
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]] = None,
+    # TODO(tehrengruber): Remove this option again as soon as we have the necessary builtins
+    #  to work with / translate domains.
+    use_max_domain_range_on_unstructured_shift: Optional[bool] = None,
 ) -> itir.Program:
     assert isinstance(ir, itir.Program)
 
     offset_provider_type = common.offset_provider_to_type(offset_provider)
 
-    # TODO(tehrengruber): Remove this option again as soon as we have the necessary builtins
-    #  to work with / translate domains.
-    if _has_dynamic_domains(ir):
-        assert not symbolic_domain_sizes, "Options are mutually exclusive."
-        symbolic_domain_sizes = _max_domain_range_sizes(offset_provider)  # type: ignore[assignment]
+    symbolic_domain_sizes = _process_symbolic_domains_option(
+        ir, offset_provider, symbolic_domain_sizes, use_max_domain_range_on_unstructured_shift
+    )
 
     tmp_uids = eve_utils.UIDGenerator(prefix="__tmp")
     mergeasfop_uids = eve_utils.UIDGenerator()
@@ -211,16 +237,18 @@ def apply_common_transforms(
 
 
 def apply_fieldview_transforms(
-    ir: itir.Program, *, offset_provider: common.OffsetProvider
+    ir: itir.Program,
+    *,
+    offset_provider: common.OffsetProvider,
+    # TODO(tehrengruber): Remove this option again as soon as we have the necessary builtins
+    #  to work with / translate domains.
+    use_max_domain_range_on_unstructured_shift: Optional[bool] = None,
 ) -> itir.Program:
     offset_provider_type = common.offset_provider_to_type(offset_provider)
 
-    # TODO(tehrengruber): Remove this option again as soon as we have the necessary builtins
-    #  to work with / translate domains.
-    if _has_dynamic_domains(ir):
-        symbolic_domain_sizes = _max_domain_range_sizes(offset_provider)
-    else:
-        symbolic_domain_sizes = None
+    symbolic_domain_sizes = _process_symbolic_domains_option(
+        ir, offset_provider, None, use_max_domain_range_on_unstructured_shift
+    )
 
     ir = inline_fundefs.InlineFundefs().visit(ir)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
@@ -235,7 +263,7 @@ def apply_fieldview_transforms(
 
     ir = infer_domain.infer_program(
         ir,
-        symbolic_domain_sizes=symbolic_domain_sizes,  # type: ignore[arg-type]
+        symbolic_domain_sizes=symbolic_domain_sizes,
         offset_provider=offset_provider,
     )
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
