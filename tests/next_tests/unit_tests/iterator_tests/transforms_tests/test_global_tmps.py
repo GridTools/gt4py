@@ -11,10 +11,13 @@ import pytest
 import functools
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import global_tmps, infer_domain, collapse_tuple
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.iterator.ir_utils import (
+    ir_makers as im,
+    misc as ir_utils_misc,
+)
 
 
 IDim = common.Dimension(value="IDim")
@@ -535,3 +538,28 @@ def test_domain_preservation():
 
     actual = global_tmps.create_global_tmps(testee, offset_provider)
     assert actual == expected
+
+
+def test_non_scan_projector():
+    domain = im.domain("cartesian_domain", {IDim: (0, 2)})
+    offset_provider = {}
+    stmt = itir.SetAt(
+        target=im.ref("out"),
+        expr=im.make_tuple(im.tuple_get(0, "inp")),
+        domain=domain,
+    )
+    testee = program_factory(
+        params=[
+            im.sym("inp", ts.TupleType(types=[i_field_type, float_type])),
+            im.sym("out", ts.TupleType(types=[i_field_type])),
+        ],
+        body=[stmt],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+
+    # make sure the statement actually has a projector
+    projector, expr = ir_utils_misc.extract_projector(stmt.expr)
+    assert projector is not None
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider)
+    assert actual == testee
