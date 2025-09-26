@@ -74,6 +74,12 @@ def set_dace_config(
         value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
     )
 
+    # By design, we do not allow converting Memlets to Maps during code generation.
+    #  If needed, Memles are converted to Maps explicitly by gt4py in the `gt_auto_optimize`
+    #  pipeline, so that the iteration order is configured correctly for the GPU device.
+    #  This setting allows to throw an exception if any implicit Copy-Map slips thorugh.
+    dace.Config.set("compiler.cuda.allow_implicit_memlet_to_map", value=False)
+
     # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
     #  up with the cuda streams, i.e. it allocates N streams but uses N+1. The first
     #  idea was to use just one stream. However, even in that case the generator

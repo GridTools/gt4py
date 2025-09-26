@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 else:
     dace = pytest.importorskip("dace")
 
-import hypothesis.strategies as hyp_st
 import numpy as np
 import pathlib
 import re
@@ -57,27 +56,17 @@ def decorator(request):
     return request.param
 
 
-def tuple_st(min_value, max_value):
-    return hyp_st.tuples(
-        hyp_st.integers(min_value=min_value, max_value=max_value),
-        hyp_st.integers(min_value=min_value, max_value=max_value),
-        hyp_st.integers(min_value=min_value, max_value=max_value),
-    )
-
-
 @pytest.mark.parametrize(
     "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
 )
 def test_basic(decorator, backend):
     @decorator(backend=backend)
-    def stencil_definition(out_field: gtscript.Field[np.float64], scalar: np.float64):
+    def fill_3d(out_field: gtscript.Field[np.float64], scalar: np.float64):
         with computation(PARALLEL), interval(...):
             out_field[0, 0, 0] = scalar
 
     output = OriginWrapper(
-        array=gt_storage.zeros(
-            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
-        ),
+        array=gt_storage.zeros(dtype=np.float64, shape=(10, 10, 10), backend=backend),
         origin=(0, 0, 0),
     )
 
@@ -85,7 +74,7 @@ def test_basic(decorator, backend):
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_stencil_object(locoutp, locinp):
-        stencil_definition(locoutp, scalar=locinp)
+        fill_3d(locoutp, scalar=locinp)
 
     call_stencil_object(locoutp=output, locinp=fill_value)
 
@@ -94,13 +83,14 @@ def test_basic(decorator, backend):
     assert np.allclose(output, fill_value)
 
 
-def test_ij_field(decorator):
-    backend = "dace:cpu"
-
+@pytest.mark.parametrize(
+    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
+)
+def test_ij_field(decorator, backend):
     @decorator(backend=backend)
-    def defn(out_field: gtscript.Field[gtscript.IJ, np.float32], scalar: np.float32):
+    def fill_2d(out_field: gtscript.Field[gtscript.IJ, np.float32], scalar: np.float32):
         with computation(FORWARD), interval(...):
-            out_field = scalar  # noqa: F841 [unused-variable]
+            out_field[0, 0] = scalar
 
     field = OriginWrapper(
         array=gt_storage.zeros(dtype=np.float32, shape=(5, 8), backend=backend),
@@ -109,24 +99,29 @@ def test_ij_field(decorator):
 
     value = 42.0
 
-    @dace.program()
-    def call_stencil_object(stencil_out, stencil_scalar):
-        defn(stencil_out, stencil_scalar)
+    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    def call_stencil_object_2(stencil_out, stencil_scalar):
+        fill_2d(stencil_out, stencil_scalar)
 
-    call_stencil_object(stencil_out=field, stencil_scalar=value)
+    call_stencil_object_2(stencil_out=field, stencil_scalar=value)
 
+    # Download the data from the wrapper cupy array to be compared on cpu
+    field = storage_utils.cpu_copy(field.array)
     assert np.allclose(field, value)
 
 
-def test_k_field(decorator):
-    backend = "dace:cpu"
-
+@pytest.mark.parametrize(
+    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
+)
+def test_k_field(decorator, backend):
     @decorator(backend=backend)
-    def defn(out_field: gtscript.Field[np.int32], k_field: gtscript.Field[gtscript.K, np.int32]):
+    def fill_3d_from_k(
+        out_field: gtscript.Field[np.int32], k_field: gtscript.Field[gtscript.K, np.int32]
+    ):
         with computation(FORWARD), interval(0, 1):
-            out_field = k_field  # noqa: F841 [unused-variable]
+            out_field[0, 0, 0] = k_field
         with computation(FORWARD), interval(1, None):
-            out_field = out_field[0, 0, -1] + k_field
+            out_field[0, 0, 0] = out_field[0, 0, -1] + k_field
 
     field = OriginWrapper(
         array=gt_storage.zeros(dtype=np.int32, shape=(5, 8, 3), backend=backend),
@@ -136,27 +131,33 @@ def test_k_field(decorator):
         array=gt_storage.ones(dtype=np.int32, shape=(3,), backend=backend), origin=(0,)
     )
 
-    @dace.program()
-    def call_stencil_object(stencil_out, stencil_k):
-        defn(stencil_out, stencil_k)
+    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    def call_stencil_object_3(stencil_out, stencil_k):
+        fill_3d_from_k(stencil_out, stencil_k)
 
-    call_stencil_object(stencil_out=field, stencil_k=k_field)
+    call_stencil_object_3(stencil_out=field, stencil_k=k_field)
 
-    assert np.allclose(field.array[:, :, 0], 1)
-    assert np.allclose(field.array[:, :, 1], 2)
-    assert np.allclose(field.array[:, :, 2], 3)
+    # Download the data from the wrapper cupy array to be compared on cpu
+    field = storage_utils.cpu_copy(field.array)
+    assert np.allclose(field[:, :, 0], 1)
+    assert np.allclose(field[:, :, 1], 2)
+    assert np.allclose(field[:, :, 2], 3)
 
 
-def test_k_field_with_data_dimension(decorator):
-    backend = "dace:cpu"
+@pytest.mark.parametrize(
+    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
+)
+def test_k_field_with_data_dimension(decorator, backend):
     FloatField_Extra_Dim = gtscript.Field[gtscript.K, (np.float32, (12,))]
 
     @decorator(backend=backend)
-    def defn(out_field: gtscript.Field[np.int32], k_field: FloatField_Extra_Dim):
+    def fill_3d_from_k_with_extra_dim(
+        out_field: gtscript.Field[np.int32], k_field: FloatField_Extra_Dim
+    ):
         with computation(FORWARD), interval(0, 1):
-            out_field = k_field[0][9]  # noqa: F841 [unused-variable]
+            out_field[0, 0, 0] = k_field[0][9]
         with computation(FORWARD), interval(1, None):
-            out_field = out_field[0, 0, -1] + k_field[0][10] + k_field[0][11]
+            out_field[0, 0, 0] = out_field[0, 0, -1] + k_field[0][10] + k_field[0][11]
 
     field = OriginWrapper(
         array=gt_storage.zeros(dtype=np.int32, shape=(5, 8, 3), backend=backend),
@@ -166,15 +167,17 @@ def test_k_field_with_data_dimension(decorator):
         array=gt_storage.ones(dtype=np.float32, shape=(3, 12), backend=backend), origin=(0, 0)
     )
 
-    @dace.program()
-    def call_stencil_object(stencil_out, stencil_k):
-        defn(stencil_out, stencil_k)
+    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    def call_stencil_object_4(stencil_out, stencil_k):
+        fill_3d_from_k_with_extra_dim(stencil_out, stencil_k)
 
-    call_stencil_object(stencil_out=field, stencil_k=k_field)
+    call_stencil_object_4(stencil_out=field, stencil_k=k_field)
 
-    assert np.allclose(field.array[:, :, 0], 1)
-    assert np.allclose(field.array[:, :, 1], 3)
-    assert np.allclose(field.array[:, :, 2], 5)
+    # Download the data from the wrapper cupy array to be compared on cpu
+    field = storage_utils.cpu_copy(field.array)
+    assert np.allclose(field[:, :, 0], 1)
+    assert np.allclose(field[:, :, 1], 3)
+    assert np.allclose(field[:, :, 2], 5)
 
 
 def test_ij_field(decorator):
@@ -267,13 +270,11 @@ def test_origin_offsetting_frozen(domain, outp_origin):
     backend = "dace:cpu"
 
     @gtscript.stencil(backend=backend)
-    def dace_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
+    def copy_3d(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa: F841 [unused-variable]
+            outp[0, 0, 0] = inp
 
-    frozen_stencil = dace_stencil.freeze(
-        domain=domain, origin={"inp": (0, 0, 0), "outp": outp_origin}
-    )
+    frozen_stencil = copy_3d.freeze(domain=domain, origin={"inp": (0, 0, 0), "outp": outp_origin})
 
     inp = OriginWrapper(
         array=gt_storage.full(
@@ -298,7 +299,7 @@ def test_origin_offsetting_frozen(domain, outp_origin):
 
     call_frozen_stencil()
 
-    assert np.allclose(inp, 7.0)
+    assert np.allclose(np.asarray(inp), 7.0)
 
     assert np.allclose(
         np.asarray(outp)[
@@ -319,9 +320,9 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
     backend = "dace:cpu"
 
     @gtscript.stencil(backend=backend)
-    def dace_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
+    def copy_3d_2(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa: F841 [unused-variable]
+            outp[0, 0, 0] = inp
 
     inp = OriginWrapper(
         array=gt_storage.full(
@@ -343,12 +344,12 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
     origin = {"inp": (0, 0, 0), "outp": outp_origin}
 
     @dace.program
-    def call_stencil_object():
-        dace_stencil(inp=inp, outp=outp, domain=domain, origin=origin)
+    def call_stencil_object_5():
+        copy_3d_2(inp=inp, outp=outp, domain=domain, origin=origin)
 
-    call_stencil_object()
+    call_stencil_object_5()
 
-    assert np.allclose(inp, 7.0)
+    assert np.allclose(np.asarray(inp), 7.0)
 
     assert np.allclose(
         np.asarray(outp)[
@@ -368,9 +369,9 @@ def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
     backend = "dace:cpu"
 
     @gtscript.stencil(backend=backend)
-    def dace_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
+    def copy_3d_3(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa: F841 [unused-variable]
+            outp[0, 0, 0] = inp
 
     inp = OriginWrapper(
         array=gt_storage.full(
@@ -390,10 +391,10 @@ def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
     )
 
     @dace.program
-    def call_stencil_object(locinp, locoutp):
-        dace_stencil(inp=locinp, outp=locoutp, domain=domain)
+    def call_stencil_object_6(locinp, locoutp):
+        copy_3d_3(inp=locinp, outp=locoutp, domain=domain)
 
-    call_stencil_object(locinp=inp, locoutp=outp)
+    call_stencil_object_6(locinp=inp, locoutp=outp)
 
     assert np.allclose(np.asarray(inp), 7.0)
     assert np.allclose(
@@ -411,16 +412,16 @@ def test_optional_arg_noprovide():
     backend = "dace:cpu"
 
     @gtscript.stencil(backend=backend)
-    def stencil(
+    def copy_3d_4(
         inp: gtscript.Field[np.float64],
         outp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
         unused_par: float,
     ):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa: F841 [unused-variable]
+            outp[0, 0, 0] = inp
 
-    frozen_stencil = stencil.freeze(
+    frozen_stencil = copy_3d_4.freeze(
         domain=(3, 3, 10), origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)}
     )
 
@@ -442,12 +443,12 @@ def test_optional_arg_noprovide():
     )
 
     @dace.program
-    def call_frozen_stencil():
+    def call_frozen_stencil_2():
         frozen_stencil(inp=inp, outp=outp)
 
-    call_frozen_stencil()
+    call_frozen_stencil_2()
 
-    assert np.allclose(inp, 7.0)
+    assert np.allclose(np.asarray(inp), 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
@@ -456,14 +457,14 @@ def test_optional_arg_provide(decorator):
     backend = "dace:cpu"
 
     @decorator(backend=backend)
-    def stencil(
+    def copy_3d_5(
         inp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
         outp: gtscript.Field[np.float64],
         unused_par: float,
     ):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa: F841 [unused-variable]
+            outp[0, 0, 0] = inp
 
     inp = OriginWrapper(
         array=gt_storage.full(
@@ -490,7 +491,7 @@ def test_optional_arg_provide(decorator):
 
     # @dace.program
     def call_stencil():
-        stencil(
+        copy_3d_5(
             inp=inp,
             unused_field=unused_field,
             outp=outp,
@@ -501,7 +502,7 @@ def test_optional_arg_provide(decorator):
 
     call_stencil()
 
-    assert np.allclose(inp, 7.0)
+    assert np.allclose(np.asarray(inp), 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
@@ -510,14 +511,14 @@ def test_optional_arg_provide_aot(decorator):
     backend = "dace:cpu"
 
     @decorator(backend=backend)
-    def stencil(
+    def copy_3d_6(
         inp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
         outp: gtscript.Field[np.float64],
         unused_par: float,
     ):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa: F841 [unused-variable]
+            outp[0, 0, 0] = inp
 
     inp = OriginWrapper(
         array=gt_storage.full(
@@ -543,13 +544,13 @@ def test_optional_arg_provide_aot(decorator):
     )
 
     @dace.program
-    def call_stencil(
+    def call_stencil_2(
         inp: dace.data.create_datadescriptor(inp),
         outp: dace.data.create_datadescriptor(outp),
         unused_field: dace.data.create_datadescriptor(unused_field),
         unused_par: dace.float64,  # type: ignore
     ):
-        stencil(
+        copy_3d_6(
             inp=inp,
             unused_field=unused_field,
             outp=outp,
@@ -558,10 +559,10 @@ def test_optional_arg_provide_aot(decorator):
             origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
         )
 
-    csdfg = call_stencil.compile()
+    csdfg = call_stencil_2.compile()
     csdfg(inp=inp, outp=outp, unused_field=unused_field, unused_par=7.0)
 
-    assert np.allclose(inp, 7.0)
+    assert np.allclose(np.asarray(inp), 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
@@ -570,7 +571,7 @@ def test_nondace_raises(decorator):
     @decorator(backend="numpy")
     def numpy_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
-            outp = inp  # noqa: F841 [unused-variable]
+            outp[0, 0, 0] = inp
 
     inp = OriginWrapper(
         array=gt_storage.full(
@@ -590,7 +591,7 @@ def test_nondace_raises(decorator):
     )
 
     @dace.program
-    def call_stencil():
+    def call_stencil_3():
         numpy_stencil(
             inp=inp, outp=outp, domain=(3, 3, 3), origin={"inp": (0, 0, 0), "outp": (0, 0, 0)}
         )
@@ -601,13 +602,13 @@ def test_nondace_raises(decorator):
             'Only dace backends are supported in DaCe-orchestrated programs. (found "numpy")'
         ),
     ):
-        call_stencil()
+        call_stencil_3()
 
 
 @typing.no_type_check
 def simple_stencil_defn(outp: gtscript.Field[np.float64], par: np.float64):
     with computation(PARALLEL), interval(...):
-        outp = par  # noqa: F841 [unused-variable]
+        outp[0, 0, 0] = par
 
 
 def test_lazy_sdfg():
