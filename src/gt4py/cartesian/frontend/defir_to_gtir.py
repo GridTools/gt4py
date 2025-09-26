@@ -576,8 +576,7 @@ class DefIRToGTIR(IRNodeVisitor):
         self, offset: dict[str, int | Expr | AbsoluteKIndex], **kwargs: Any
     ) -> common.CartesianOffset | gtir.VariableKOffset | gtir.AbsoluteKIndex:
         if isinstance(offset, AbsoluteKIndex):
-            k_to_gtir = self.visit(offset.k)
-            return gtir.AbsoluteKIndex(k=k_to_gtir)
+            return gtir.AbsoluteKIndex(k=self.visit(offset.k, **kwargs))
 
         k_val = offset.get("K", 0)
         if isinstance(k_val, numbers.Integral):

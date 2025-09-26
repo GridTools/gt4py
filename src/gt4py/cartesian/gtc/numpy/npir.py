@@ -115,17 +115,11 @@ class VarKOffset(common.VariableKOffset[Expr]):
     pass
 
 
-class AbsoluteKIndex(common.AbsoluteKIndex[Expr]):
-    """See gtc.common.AbsoluteKIndex"""
-
-    pass
-
-
 class FieldSlice(VectorLValue):
     name: eve.Coerced[eve.SymbolRef]
     i_offset: int
     j_offset: int
-    k_offset: int | VarKOffset | AbsoluteKIndex
+    k_offset: Union[int, VarKOffset]
     data_index: List[Expr] = eve.field(default_factory=list)
     kind: common.ExprKind = common.ExprKind.FIELD
 

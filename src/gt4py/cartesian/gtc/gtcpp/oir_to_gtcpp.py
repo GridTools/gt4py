@@ -11,7 +11,7 @@ from __future__ import annotations
 import functools
 import itertools
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Set, Tuple, Union, cast
+from typing import Any, Callable, Dict, List, Set, Union, cast
 
 from devtools import debug  # noqa: F401 [unused-import]
 from typing_extensions import Protocol
@@ -182,9 +182,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> gtcpp.VariableKOffset:
         return gtcpp.VariableKOffset(k=self.visit(node.k, **kwargs))
 
-    def visit_AbsoluteKIndex(
-        self, node: oir.AbsoluteKIndex, **kwargs: Any
-    ) -> Tuple[int, int, Union[int, eve.Node]]:
+    def visit_AbsoluteKIndex(self, node: oir.AbsoluteKIndex, **kwargs: Any) -> None:
         raise NotImplementedError(
             "Absolute K indexation (e.g. `field.at(...)`) is an experimental feature and not yet implemented for the `gt:X` backends."
         )

@@ -1443,16 +1443,19 @@ class IRMaker(ast.NodeVisitor):
                 " where the `ddim` argument is optional.",
                 loc=nodes.Location.from_ast_node(node),
             )
+
         if node.keywords[0].arg != "K":
             raise GTScriptSyntaxError(
                 message="Absolute K index: Bad syntax. First argument must be `K`, e.g. `.at(K=...)`.",
                 loc=nodes.Location.from_ast_node(node),
             )
+
         if len(node.keywords) > 1 and node.keywords[1].arg != "ddim":
             raise GTScriptSyntaxError(
                 message="Absolute K index: Bad syntax. Second argument (optional) must be `ddim`, e.g. `.at(K=..., ddim=[...])`.",
                 loc=nodes.Location.from_ast_node(node),
             )
+
         if (
             len(node.keywords) > 1
             and node.keywords[1].arg == "ddim"
@@ -1463,20 +1466,9 @@ class IRMaker(ast.NodeVisitor):
                 "a list of values, e.g. `.at(K=..., ddim=[...])`.",
                 loc=nodes.Location.from_ast_node(node),
             )
+
         k_offset_value = self.visit(node.keywords[0].value)
-        if isinstance(k_offset_value, nodes.IteratorAccess) and k_offset_value.name == "K":
-            raise GTScriptSyntaxError(
-                message="Absolute K index: bad syntax, you cannot write `.at(K=K)` since `.at` denotes "
-                "an absolute index, this is equivalent to `field[0, 0, 0]` or simply `field`.",
-                loc=nodes.Location.from_ast_node(node),
-            )
-        if isinstance(k_offset_value, nodes.IteratorAccess):
-            raise GTScriptSyntaxError(
-                message="Absolute K index: bad syntax, you cannot use parallel axis in absolute, "
-                f"e.g. no `.at(K={k_offset_value.name})`",
-                loc=nodes.Location.from_ast_node(node),
-            )
-        field: nodes.FieldRef = self.visit(node.func.value)
+        field = self.visit(node.func.value)
         assert isinstance(field, nodes.FieldRef)
         field.offset = nodes.AbsoluteKIndex(k=k_offset_value)
         if len(node.keywords) == 2:
