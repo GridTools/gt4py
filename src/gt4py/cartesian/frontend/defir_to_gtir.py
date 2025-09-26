@@ -20,6 +20,7 @@ from gt4py.cartesian.frontend.node_util import (
     location_to_source_location,
 )
 from gt4py.cartesian.frontend.nodes import (
+    AbsoluteKIndex,
     ArgumentInfo,
     Assign,
     AxisBound,
@@ -39,6 +40,7 @@ from gt4py.cartesian.frontend.nodes import (
     HorizontalIf,
     If,
     IterationOrder,
+    IteratorAccess,
     LevelMarker,
     NativeFuncCall,
     NativeFunction,
@@ -414,6 +416,9 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
+    def visit_IteratorAccess(self, iterator_access: IteratorAccess) -> gtir.IteratorAccess:
+        return gtir.IteratorAccess(name=gtir.IteratorAccess.AxisName(iterator_access.name))
+
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
         return [self.visit(s) for s in node.stmts]
 
@@ -572,12 +577,17 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def transform_offset(
-        self, offset: Dict[str, Union[int, Expr]], **kwargs: Any
-    ) -> Union[common.CartesianOffset, gtir.VariableKOffset]:
+        self, offset: dict[str, int | Expr | AbsoluteKIndex], **kwargs: Any
+    ) -> common.CartesianOffset | gtir.VariableKOffset | AbsoluteKIndex:
+        if isinstance(offset, AbsoluteKIndex):
+            k_to_gtir = self.visit(offset.k)
+            return gtir.AbsoluteKIndex(k=k_to_gtir)
+
         k_val = offset.get("K", 0)
         if isinstance(k_val, numbers.Integral):
             return common.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)
+
         if isinstance(k_val, Expr):
             return gtir.VariableKOffset(k=self.visit(k_val, **kwargs))
 
-        raise TypeError("Unrecognized vertical offset type")
+        raise TypeError("Unrecognized vertical indexing type")
