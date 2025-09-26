@@ -257,12 +257,6 @@ class OIRToTasklet(eve.NodeVisitor):
 
         return f"{function_name}({arguments})"
 
-    def visit_IteratorAccess(self, node: oir.IteratorAccess, ctx: Context, **kwargs: Any) -> str:
-        if node.name == "K":
-            return tir.k_symbol(ctx.scope)
-
-        return tir.Axis(node.name).iteration_symbol()
-
     # Not (yet) supported section
     def visit_CacheDesc(self, node: oir.CacheDesc, **kwargs: Any) -> None:
         raise NotImplementedError("To be implemented: Caches")
@@ -275,13 +269,13 @@ class OIRToTasklet(eve.NodeVisitor):
 
     # Should _not_ be called
     def visit_CartesianOffset(self, node: common.CartesianOffset, **kwargs: Any) -> None:
-        raise RuntimeError("Cartesian Offset should be dealt in Access IRs.")
+        raise RuntimeError("Cartesian Offset should be dealt with in Access IRs.")
 
     def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs: Any) -> None:
-        raise RuntimeError("Variable K Offset should be dealt in Access IRs.")
+        raise RuntimeError("Variable K Offset should be dealt with in Access IRs.")
 
     def visit_AbsoluteKIndex(self, node: oir.AbsoluteKIndex, **kwargs: Any) -> None:
-        raise RuntimeError("Absolute K Offset should be dealt in Access IRs.")
+        raise RuntimeError("Absolute K Index should be dealt with in Access IRs.")
 
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
         raise RuntimeError("visit_MaskStmt should not be called")
@@ -290,7 +284,7 @@ class OIRToTasklet(eve.NodeVisitor):
         raise RuntimeError("visit_While should not be called")
 
     def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs: Any) -> None:
-        raise RuntimeError("visit_HorizontalRestriction: should be dealt in TreeIR")
+        raise RuntimeError("visit_HorizontalRestriction: should be dealt with in TreeIR")
 
     def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> None:
         raise RuntimeError("visit_LocalScalar should not be called")
@@ -398,7 +392,7 @@ def _memlet_subset_variable_offset(
     node: oir.FieldAccess, data_domains: list[int], ctx: Context
 ) -> subsets.Subset:
     """
-    Generates the memlet subset for a field access with a variable/absolute K offset.
+    Generates the memlet subset for a field access with a variable K offset or an absolute K index.
 
     While we know that we are reading at one specific i/j/k access, the K-access point is only
     determined at runtime. We thus pass the K-axis as array into the Tasklet.

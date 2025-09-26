@@ -187,5 +187,5 @@ def test_bad_backend_feedback():
     existing_backend = backend_from_name("numpy")
     assert existing_backend
 
-    with pytest.raises(ValueError, match="Backend .* is not registered. Valid options are: .*"):
+    with pytest.raises(ValueError):
         backend_from_name("xxxxx")

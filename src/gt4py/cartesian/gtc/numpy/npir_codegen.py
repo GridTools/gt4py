@@ -103,7 +103,9 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
         if isinstance(node.k_offset, npir.AbsoluteKIndex):
-            raise NotImplementedError("Absolute K indexing not yet implemented in numpy backend.")
+            raise NotImplementedError(
+                "Absolute K indexation (e.g. `field.at(...)`) is an experimental feature and not yet implemented for the `numpy` backend."
+            )
 
         k_offset = (
             self.visit(node.k_offset, **kwargs)

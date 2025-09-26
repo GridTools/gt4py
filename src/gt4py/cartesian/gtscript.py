@@ -693,8 +693,7 @@ class _FieldDescriptor:
         )
 
     def at(self, *, K):
-        """Stub function used to implement absolute
-        K indexing"""
+        """Stub function used to implement absolute K indexing"""
         raise RuntimeError(
             "`at(K=...)` stub function only, do not call outside of stencil field indexation."
         )
