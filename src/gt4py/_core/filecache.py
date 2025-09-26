@@ -17,6 +17,9 @@ from gt4py.eve import utils as eve_utils
 
 
 class FileCache:
+    """
+    Dictionary-like object for persistently caching objects on disk.
+    """
     path: pathlib.Path
 
     def __init__(self, path: str | os.PathLike):
