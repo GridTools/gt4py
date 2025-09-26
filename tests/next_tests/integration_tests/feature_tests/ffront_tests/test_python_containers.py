@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import pytest
+import numpy as np
 from typing import NamedTuple
 
 import gt4py.next as gtx
@@ -16,7 +17,7 @@ from gt4py.next.ffront import decorator
 import dataclasses
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, JDim, cartesian_case
+from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
 )
@@ -197,6 +198,62 @@ def test_nested_mixed_containers(cartesian_case):
                 b=(DataclassContainer(u=inp[0].a[1].u, v=inp[0].a[1].v), inp[0].a[0]),
             ),
         ),
+    )
+
+
+@dataclasses.dataclass
+class StateDataclass:
+    value: gtx.float32
+
+
+class StateNamedTuple(NamedTuple):
+    value: gtx.float32
+
+
+@gtx.scan_operator(axis=cases.KDim, forward=True, init=StateDataclass(value=0.0))
+def scan_dataclass(
+    state: StateDataclass,
+    inp: gtx.float32,
+) -> StateDataclass:
+    return StateDataclass(value=inp + state.value)
+
+
+@gtx.field_operator
+def scan_dataclass_wrapper(inp: gtx.Field[[KDim], gtx.float32]) -> gtx.Field[[KDim], gtx.float32]:
+    (res,) = scan_dataclass(inp)  # TODO(havogt): won't work as the result is not a tuple
+    return res
+
+
+@gtx.scan_operator(axis=cases.KDim, forward=True, init=StateNamedTuple(value=0.0))
+def scan_named_tuple(
+    state: StateNamedTuple,
+    inp: gtx.float32,
+) -> StateNamedTuple:
+    return StateNamedTuple(value=inp + state.value)
+
+
+@gtx.field_operator
+def scan_named_tuple_wrapper(inp: gtx.Field[[KDim], gtx.float32]) -> gtx.Field[[KDim], gtx.float32]:
+    (res,) = scan_named_tuple(
+        inp
+    )  # unpacking works around the problem that the result is a StateNamedTuple of Fields
+    return res
+
+
+@pytest.mark.parametrize(
+    "testee",
+    [scan_named_tuple_wrapper, scan_dataclass_wrapper],
+)
+def test_scan(cartesian_case, testee):
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        inp,
+        out=out,
+        ref=np.cumsum(inp, axis=0),
     )
 
 
