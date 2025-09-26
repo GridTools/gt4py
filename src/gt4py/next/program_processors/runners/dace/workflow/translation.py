@@ -17,7 +17,7 @@ import factory
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config, metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import arguments, languages, stages, step_types, workflow
+from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
@@ -191,6 +191,7 @@ class DaCeTranslator(
     async_sdfg_call: bool = False
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
+    use_max_domain_range_on_unstructured_shift: Optional[bool] = None
 
     # auto-optimize arguments
     gpu_block_size: tuple[int, int, int] = (32, 8, 1)
@@ -216,7 +217,11 @@ class DaCeTranslator(
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
-            ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+            ir = itir_transforms.apply_fieldview_transforms(
+                ir,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                offset_provider=offset_provider,
+            )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
@@ -289,9 +294,7 @@ class DaCeTranslator(
             inp.args.column_axis,
         )
 
-        arg_types = tuple(
-            arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
-        )
+        arg_types = inp.args.args
 
         program_parameters = tuple(
             interface.Parameter(param.id, arg_type)

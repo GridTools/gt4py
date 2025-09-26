@@ -34,6 +34,7 @@ def transform_program_args(inp: AOT_PRG) -> AOT_PRG:
             kwargs=rewritten_kwargs,
             offset_provider=inp.args.offset_provider,
             column_axis=inp.args.column_axis,
+            argument_descriptor_contexts=inp.args.argument_descriptor_contexts,
         ),
     )
 
@@ -63,20 +64,14 @@ def _validate_args(
 
 def _process_args(
     past_node: past.Program,
-    args: Sequence[ts.TypeSpec | arguments.StaticArg],
-    kwargs: dict[str, ts.TypeSpec | arguments.StaticArg],
-) -> tuple[tuple, dict[str, Any]]:
+    args: Sequence[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
+) -> tuple[tuple[ts.TypeSpec], dict[str, ts.TypeSpec]]:
     if not isinstance(past_node.type, ts_ffront.ProgramType):
         raise TypeError("Can not process arguments for PAST programs prior to type inference.")
 
     args, kwargs = type_info.canonicalize_arguments(past_node.type, args, kwargs)
-
-    # validate arguments
-    arg_types = tuple(arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in args)
-    kwarg_types = {
-        k: (v.type_ if isinstance(v, arguments.StaticArg) else v) for k, v in kwargs.items()
-    }
-    _validate_args(past_node=past_node, arg_types=arg_types, kwarg_types=kwarg_types)
+    _validate_args(past_node=past_node, arg_types=args, kwarg_types=kwargs)
 
     return args, kwargs
 

@@ -70,7 +70,7 @@ def test_find_constant_symbols(has_unit_stride):
                 )("x"),
                 domain=im.domain(
                     gtx_common.GridType.UNSTRUCTURED,
-                    ranges={Vertex: (0, "h_size"), KDim: (0, "v_size")},
+                    {Vertex: (0, "h_size"), KDim: (0, "v_size")},
                 ),
                 target=itir.SymRef(id="y"),
             )
@@ -210,7 +210,7 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
         body=[
             itir.SetAt(
                 expr=im.op_as_fieldop("plus")("x", 1.0),
-                domain=im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "N")}),
+                domain=im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, "N")}),
                 target=itir.SymRef(id="y"),
             ),
         ],
@@ -247,7 +247,7 @@ def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
         body=[
             itir.SetAt(
                 expr=itir.SymRef(id="x"),
-                domain=im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "N")}),
+                domain=im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, "N")}),
                 target=itir.SymRef(id="y"),
             ),
         ],

@@ -15,7 +15,7 @@ from typing import Any, Optional, cast
 import devtools
 
 from gt4py.eve import NodeTranslator, concepts, traits, utils as eve_utils
-from gt4py.next import common, config, errors
+from gt4py.next import common, config, errors, utils
 from gt4py.next.ffront import (
     fbuiltins,
     gtcallable,
@@ -27,7 +27,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.stages import AOT_PRG
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms import remap_symbols
+from gt4py.next.iterator.transforms import remap_symbols, transform_get_domain_range
 from gt4py.next.otf import arguments, stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -58,6 +58,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         ...     kwargs={},
         ...     offset_provider={"I": IDim},
         ...     column_axis=None,
+        ...     argument_descriptor_contexts={},
         ... )
 
         >>> itir_copy = past_to_gtir(
@@ -95,21 +96,37 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         inp.data.past_node, function_definitions=lowered_funcs, grid_type=grid_type
     )
 
-    static_args_index = {
-        i: arg.value for i, arg in enumerate(inp.args.args) if isinstance(arg, arguments.StaticArg)
-    }
-    static_args = {
-        itir_program.params[i].id: im.literal_from_tuple_value(value)
-        for i, value in static_args_index.items()
-    }
-    body = remap_symbols.RemapSymbolRefs().visit(itir_program.body, symbol_map=static_args)
-    itir_program = itir.Program(
-        id=itir_program.id,
-        function_definitions=itir_program.function_definitions,
-        params=itir_program.params,
-        declarations=itir_program.declarations,
-        body=body,
-    )
+    # TODO(tehrengruber): Put this in a dedicated transformation step.
+    if arguments.StaticArg in inp.args.argument_descriptor_contexts:
+        static_arg_descriptors = inp.args.argument_descriptor_contexts[arguments.StaticArg]
+        if not all(
+            isinstance(arg_descriptor, arguments.StaticArg) or arg_descriptor is None
+            for arg_descriptor in static_arg_descriptors.values()
+        ):
+            raise NotImplementedError("Only top-level arguments can be static.")
+        static_args = {
+            name: im.literal_from_tuple_value(descr.value)  # type: ignore[union-attr]  # type checked above
+            for name, descr in static_arg_descriptors.items()
+            if descr
+        }
+        body = remap_symbols.RemapSymbolRefs().visit(itir_program.body, symbol_map=static_args)
+        itir_program = itir.Program(
+            id=itir_program.id,
+            function_definitions=itir_program.function_definitions,
+            params=itir_program.params,
+            declarations=itir_program.declarations,
+            body=body,
+        )
+
+    # TODO(tehrengruber): Put this in a dedicated transformation step.
+    if arguments.FieldDomainDescriptor in inp.args.argument_descriptor_contexts:
+        context = inp.args.argument_descriptor_contexts[arguments.FieldDomainDescriptor]
+        field_domains = {
+            param: utils.tree_map(lambda x: x.domain if x else x)(v) for param, v in context.items()
+        }
+        itir_program = transform_get_domain_range.TransformGetDomainRange.apply(
+            itir_program, sizes=field_domains
+        )
 
     if config.DEBUG or inp.data.debug:
         devtools.debug(itir_program)
