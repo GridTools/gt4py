@@ -269,6 +269,9 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
             return f"{field_access.name}[{offset_str},{data_index_access}]"
         return f"{field_access.name}[{offset_str}]"
 
+    def visit_AbsoluteKIndex(self, absolute_k_index: oir.AbsoluteKIndex, **kwargs) -> str:
+        return f"i, j, int({self.visit(absolute_k_index.k, **kwargs)})"
+
     def visit_BinaryOp(self, binary: oir.BinaryOp, **kwargs) -> str:
         return f"( {self.visit(binary.left, **kwargs)} {binary.op} {self.visit(binary.right, **kwargs)} )"
 
