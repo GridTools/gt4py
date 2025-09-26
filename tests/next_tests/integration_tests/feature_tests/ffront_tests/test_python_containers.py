@@ -9,8 +9,10 @@
 from __future__ import annotations
 
 import pytest
+from typing import NamedTuple
 
 import gt4py.next as gtx
+from gt4py.next.ffront import decorator
 import dataclasses
 
 from next_tests.integration_tests import cases
@@ -19,56 +21,158 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
 )
 
-# TODO: as long as direct fieldoperator calls and program calls follow a different code path we should probably repeat all tests for both
+# TODO(havogt): Since currently direct field_operator calls and program calls take different code paths the tests are duplicated.
+# Remove the program calls, once field_operator calls go via `compiled_program` path.
 
 
 @dataclasses.dataclass
-class Velocity:
+class DataclassContainer:
     u: gtx.Field[[IDim, JDim], gtx.float32]
     v: gtx.Field[[IDim, JDim], gtx.float32]
 
 
-def test_named_tuple_like_constructed_outside(cartesian_case):
-    @gtx.field_operator
-    def fop(
-        vel: Velocity,
-    ) -> gtx.Field[[IDim, JDim], gtx.float32]:
-        return vel.u + vel.v
+class NamedTupleContainer(NamedTuple):
+    u: gtx.Field[[IDim, JDim], gtx.float32]
+    v: gtx.Field[[IDim, JDim], gtx.float32]
 
-    @gtx.program
-    def testee(
-        vel: Velocity,
-        out: gtx.Field[[IDim, JDim], gtx.float32],
-    ) -> gtx.Field[[IDim, JDim], gtx.float32]:
-        fop(vel, out=out)
 
+@gtx.field_operator
+def constructed_outside_named_tuple(
+    vel: NamedTupleContainer,
+) -> gtx.Field[[IDim, JDim], gtx.float32]:
+    return vel.u + vel.v
+
+
+@gtx.program
+def constructed_outside_named_tuple_program(
+    vel: NamedTupleContainer,
+    out: gtx.Field[[IDim, JDim], gtx.float32],
+) -> None:
+    constructed_outside_named_tuple(vel, out=out)
+
+
+@gtx.field_operator
+def constructed_outside_dataclass(
+    vel: DataclassContainer,
+) -> gtx.Field[[IDim, JDim], gtx.float32]:
+    return vel.u + vel.v
+
+
+@gtx.program
+def constructed_outside_dataclass_program(
+    vel: DataclassContainer,
+    out: gtx.Field[[IDim, JDim], gtx.float32],
+) -> None:
+    constructed_outside_dataclass(vel, out=out)
+
+
+@pytest.mark.parametrize(
+    "testee",
+    [
+        constructed_outside_named_tuple,
+        constructed_outside_named_tuple_program,
+        constructed_outside_dataclass,
+        constructed_outside_dataclass_program,
+    ],
+)
+def test_named_tuple_like_constructed_outside(cartesian_case, testee):
     vel = cases.allocate(cartesian_case, testee, "vel")()
-    out = cases.allocate(cartesian_case, testee, "out")()
-
-    cases.verify(
-        cartesian_case,
-        testee,
-        vel,
-        out,
-        inout=out,
-        ref=(vel.u + vel.v),
-    )
-
-
-def test_named_tuple_like_constructed_inside(cartesian_case):
-    @gtx.field_operator
-    def testee(
-        vel: Velocity,
-    ) -> Velocity:
-        return Velocity(v=vel.u - vel.v, u=vel.u + vel.v)  # order swapped to show kwargs work
-
-    vel = cases.allocate(cartesian_case, testee, "vel")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    out = cases.allocate(
+        cartesian_case, testee, "out" if isinstance(testee, decorator.Program) else cases.RETURN
+    )()
 
     cases.verify(
         cartesian_case,
         testee,
         vel,
         out=out,
-        ref=Velocity(u=vel.u + vel.v, v=vel.u - vel.v),
+        ref=(vel.u + vel.v),
+    )
+
+
+@gtx.field_operator
+def constructed_inside_named_tuple(
+    vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
+) -> NamedTupleContainer:
+    return NamedTupleContainer(
+        v=vel[0] - vel[1], u=vel[0] + vel[1]
+    )  # order swapped to show kwargs work
+
+
+@gtx.program
+def constructed_inside_named_tuple_program(
+    vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
+    out: NamedTupleContainer,
+):
+    constructed_inside_named_tuple(vel, out=out)
+
+
+@gtx.field_operator
+def constructed_inside_dataclass(
+    vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
+) -> DataclassContainer:
+    return DataclassContainer(
+        v=vel[0] - vel[1], u=vel[0] + vel[1]
+    )  # order swapped to show kwargs work
+
+
+@gtx.program
+def constructed_inside_dataclass_program(
+    vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
+    out: DataclassContainer,
+):
+    constructed_inside_dataclass(vel, out=out)
+
+
+@pytest.mark.parametrize(
+    "testee",
+    [
+        constructed_inside_named_tuple,
+        constructed_inside_named_tuple_program,
+        constructed_inside_dataclass,
+        constructed_inside_dataclass_program,
+    ],
+)
+def test_named_tuple_like_constructed_inside(cartesian_case, testee):
+    vel = cases.allocate(cartesian_case, testee, "vel")()
+    out = cases.allocate(
+        cartesian_case, testee, "out" if isinstance(testee, decorator.Program) else cases.RETURN
+    )()
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        vel,
+        out=out,
+        ref=out.__class__(u=vel[0] + vel[1], v=vel[0] - vel[1]),
+    )
+
+
+@pytest.mark.xfail(
+    reason="We store the qualified name to the actual Python type in the `NamedTupleType`."
+)
+def test_locally_defined_container(cartesian_case):
+    # We could fix this pattern by storing the actual type (instead of a the qualified name).
+    @dataclasses.dataclass
+    class LocalContainer:  # not at global scope!
+        u: gtx.Field[[IDim, JDim], gtx.float32]
+        v: gtx.Field[[IDim, JDim], gtx.float32]
+
+    @gtx.field_operator
+    def testee(
+        vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
+    ) -> DataclassContainer:
+        return LocalContainer(v=vel[0] - vel[1], u=vel[0] + vel[1])
+
+    vel = cases.allocate(cartesian_case, testee, "vel")()
+    out = cases.allocate(
+        cartesian_case, testee, "out" if isinstance(testee, decorator.Program) else cases.RETURN
+    )()
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        vel,
+        out=out,
+        ref=DataclassContainer(u=vel[0] + vel[1], v=vel[0] - vel[1]),
     )
