@@ -108,34 +108,39 @@ def make_container_extractor(container_type: xtyping.TypeAnnotation) -> PyContai
 def make_extractor_expr(type_: xtyping.TypeAnnotation, value_expr: str) -> str:
     """Make an expression from a type description to extract numeric values out of its instances."""
 
+    children_type_hints: dict[str, xtyping.TypeAnnotation] = {}
     expr_parts: list[str] = []
     actual_type = xtyping.get_origin(type_) or type_
 
-    if isinstance(actual_type, type) and issubclass(actual_type, PY_CONTAINER_TYPES):
-        if children_type_hints := xtyping.get_type_hints(type_):
+    if isinstance(actual_type, type):
+        if issubclass(actual_type, PY_CONTAINER_TYPES):
+            children_type_hints = xtyping.get_type_hints(type_)
+            assert len(children_type_hints)
             expr_parts = [
                 make_extractor_expr(value, f"{value_expr}.{key}")
                 for key, value in children_type_hints.items()
             ]
-            # Check if we can just skip extraction if the input type
-            # is already a pure nested tuple and we just return it as is.
-            actual_type = xtyping.get_origin(type_) or type_
-            if (
-                isinstance(actual_type, type)
-                and issubclass(actual_type, tuple)
-                and all(
-                    value == f"{value_expr}.{key}"
-                    for key, value in zip(children_type_hints, expr_parts, strict=True)
-                )
-            ):
-                return f"{value_expr}"
-
-        elif xtyping.get_origin(type_) is tuple:
+        elif issubclass(actual_type, tuple) and (tuple_arg_hints := xtyping.get_args(type_)):
             # This is a `tuple` with type arguments
             expr_parts = [
-                make_extractor_expr(f"{value_expr}[{i}]", value)
-                for i, value in enumerate(xtyping.get_args(type_))
+                make_extractor_expr(value, f"{value_expr}[{i}]")
+                for i, value in enumerate(tuple_arg_hints)
             ]
+
+    # Check if we can just skip extraction if the input type
+    # is already a pure nested tuple and we just return it as is.
+    if isinstance(actual_type, type) and issubclass(actual_type, tuple):
+        if (
+            children_type_hints
+            and all(
+                value == f"{value_expr}.{key}"
+                for key, value in zip(children_type_hints, expr_parts, strict=True)
+            )
+        ) or (
+            not children_type_hints
+            and all(value == f"{value_expr}[{i}]" for i, value in enumerate(expr_parts))
+        ):
+            return f"{value_expr}"
 
     # If we don't have information about the inner structure of the type,
     # assume it doesn't need extraction and just return it as is.
@@ -236,43 +241,57 @@ def make_constructor_expr(
         global_ns: The global namespace where the unique container type aliases are
             stored for final evaluation of the constructor expression.
     """
-    if not (isinstance(container_type, type) and issubclass(container_type, PY_CONTAINER_TYPES)):
-        # We don't need to construct anything, just return the argument as is
-        return value_expr
+    actual_type = xtyping.get_origin(container_type) or container_type
+    if isinstance(actual_type, type):
+        nested_types: dict[int | str, xtyping.TypeAnnotation] = {}
 
-    # Store the container type alias in the global namespace for eval()
-    container_type_alias = f"__{item_path}__{container_type.__name__}"
-    global_ns[container_type_alias] = container_type
+        if issubclass(actual_type, PY_CONTAINER_TYPES):
+            # Store the container type alias in the global namespace for eval()
+            container_type_alias = f"__{item_path}__{container_type.__name__}"
+            global_ns[container_type_alias] = container_type
 
-    # Get the type hints of the container's members
-    container_keys = keys(container_type)
-    type_hints = xtyping.get_type_hints(container_type)
-    container_keys_hints = {
-        key: xtyping.get_origin(value := type_hints.get(key)) or value for key in container_keys
-    }
+            # Get the type hints of the container's members
+            container_keys = keys(container_type)
+            type_hints = xtyping.get_type_hints(container_type)
+            assert {*container_keys} <= type_hints.keys(), "Mismatch between keys and type hints"
+            nested_types = {key: type_hints[key] for key in container_keys}
 
-    call_args = [
-        make_constructor_expr(
-            container_keys_hints[key],
-            f"{value_expr}[{i}]",
-            item_path=f"{item_path}__{key}",
-            global_ns=global_ns,
-        )
-        for i, key in enumerate(container_keys)
-    ]
+        elif issubclass(actual_type, tuple) and (
+            tuple_args_hint := xtyping.get_args(container_type)
+        ):
+            container_type_alias = "tuple"
+            nested_types = {i: type_hint for i, type_hint in enumerate(tuple_args_hint)}
 
-    # Optimize the call expression if none of the children needs further construction
-    # use argument unpacking to pass them to the constructor
-    if all(arg == f"{value_expr}[{i}]" for i, arg in enumerate(call_args)):
-        # Fast path: none of the children needs construction, so we can just use argument
-        # unpacking to pass them to the constructor
-        args_count, kwargs_keys = _get_pycontainer_constructor_args_info(container_type)
-        if not kwargs_keys:
-            call_args = [f"*{value_expr}"]
-        else:
-            call_args = [
-                f"*{value_expr}[:{args_count}]",
-                *(f"{k}={value_expr}[{args_count + i}]" for i, k in enumerate(kwargs_keys)),
-            ]
+    if nested_types:
+        call_args = [
+            make_constructor_expr(
+                type_hint,
+                f"{value_expr}[{i}]",
+                item_path=f"{item_path}__{key}",
+                global_ns=global_ns,
+            )
+            for i, (key, type_hint) in enumerate(nested_types.items())
+        ]
 
-    return f"{container_type_alias}({', '.join(call_args)})"
+        # use_args_unpacking = all(
+        #     arg == f"{value_expr}[{i}]" for i, arg in enumerate(call_args))
+
+
+        # Optimize the call expression if none of the children needs further construction
+        # use argument unpacking to pass them to the constructor
+        if all(arg == f"{value_expr}[{i}]" for i, arg in enumerate(call_args)):
+            # Fast path: none of the children needs construction, so we can just use argument
+            # unpacking to pass them to the constructor
+            args_count, kwargs_keys = _get_pycontainer_constructor_args_info(container_type)
+            if not kwargs_keys:
+                call_args = [f"*{value_expr}"]
+            else:
+                call_args = [
+                    f"*{value_expr}[:{args_count}]",
+                    *(f"{k}={value_expr}[{args_count + i}]" for i, k in enumerate(kwargs_keys)),
+                ]
+
+        return f"{container_type_alias}({', '.join(call_args)})"
+    
+    # We don't need to construct anything, just return the argument as is
+    return value_expr

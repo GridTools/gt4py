@@ -28,10 +28,16 @@ class NamedTupleContainer(NamedTuple):
     y: Field[Dims[TDim], float32]
 
 
+print(NamedTupleContainer.__match_args__)
+
+
 @dataclasses.dataclass
 class DataclassContainer:
     x: Field[Dims[TDim], float32]
     y: Field[Dims[TDim], float32]
+
+
+print(DataclassContainer.__match_args__)
 
 
 @dataclasses.dataclass
@@ -70,9 +76,8 @@ class ScalarsContainer:
 @dataclasses.dataclass
 class DeeplyNestedContainer:
     a: tuple[float32, float32]
-    b: DataclassContainer
-    c: ScalarsContainer
-    d: tuple[tuple[NamedTupleContainer, DataclassContainer], int]
+    b: ScalarsContainer
+    c: tuple[tuple[NamedTupleContainer, DataclassContainer], int]
 
 
 CONTAINERS_AND_VALUES: Final[
@@ -177,25 +182,31 @@ CONTAINERS_AND_VALUES: Final[
         ),
     ),
     (
-        (a := ((1.0, 2.0), b := ((3.0, 4.0), (5.0, 6.0)))),
+        (a := (1.0, 2.0), b := ((3.0, 4.0), (5.0, 6.0))),
         ScalarsContainer(a, b),
     ),
     (
         (
             a := (1.0, 2.0),
-            (
-                b_x := gtx.constructors.full({TDim: 5}, 2.0),
-                b_y := gtx.constructors.full({TDim: 5}, 3.0),
-            ),
-            (c_a := ((1.0, 2.0), c_b := ((3.0, 4.0), (5.0, 6.0)))),
+            (b_a := (-1.0, -2.0), b_b := ((3.0, 4.0), (5.0, 6.0))),
             (
                 (
-                    d_0_x := gtx.constructors.full({TDim: 5}, 2.0),
-                    d_0_y := gtx.constructors.full({TDim: 5}, 3.0),
+                    (
+                        c_0_0_x := gtx.constructors.full({TDim: 5}, 12.0),
+                        c_0_0_y := gtx.constructors.full({TDim: 5}, 13.0),
+                    ),
+                    (
+                        c_0_1_x := gtx.constructors.full({TDim: 5}, 22.0),
+                        c_0_1_y := gtx.constructors.full({TDim: 5}, 33.0),
+                    ),
                 ),
-                d_1 := 3,
+                c_1 := 3,
             ),
         ),
-        DeeplyNestedContainer((NamedTupleContainer(d_0_x), DataclassContainer(d_0_y)), d_1),
+        DeeplyNestedContainer(
+            a,
+            ScalarsContainer(b_a, b_b),
+            ((NamedTupleContainer(c_0_0_x, c_0_0_y), DataclassContainer(c_0_1_x, c_0_1_y)), c_1),
+        ),
     ),
 ]

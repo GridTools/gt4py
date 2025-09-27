@@ -532,7 +532,7 @@ class FrozenDataclass(DataclassABC):
     def __subclasshook__(cls, subclass: type) -> bool:
         try:
             return _dataclasses.is_dataclass(subclass) and (
-                subclass.__dataclass_params__.frozen is not None  # type: ignore[attr-defined]  # subclass.__dataclass_params__ is ok after check
+                subclass.__dataclass_params__.frozen is True  # type: ignore[attr-defined]  # subclass.__dataclass_params__ is ok after check
             )
         except AttributeError:
             return False
