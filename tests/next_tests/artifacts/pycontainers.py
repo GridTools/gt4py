@@ -8,16 +8,13 @@
 
 from __future__ import annotations
 
-import typing
-
 from typing import NamedTuple, Final, Protocol
 
 import dataclasses
-import pytest
 
 from gt4py import next as gtx
 from gt4py.eve.extended_typing import NestedTuple
-from gt4py.next import Dimension, Field, float32, Dims, containers
+from gt4py.next import Dimension, Field, float32, float64, Dims, containers
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -62,6 +59,20 @@ class NestedMixedTupleContainer:
     a: NamedTupleContainer
     b: DataclassContainer
     c: NamedTupleContainer
+
+
+@dataclasses.dataclass
+class ScalarsContainer:
+    a: tuple[float32, float32]
+    b: tuple[tuple[float32, float32], tuple[float64, float64]]
+
+
+@dataclasses.dataclass
+class DeeplyNestedContainer:
+    a: tuple[float32, float32]
+    b: DataclassContainer
+    c: ScalarsContainer
+    d: tuple[tuple[NamedTupleContainer, DataclassContainer], int]
 
 
 CONTAINERS_AND_VALUES: Final[
@@ -164,5 +175,27 @@ CONTAINERS_AND_VALUES: Final[
             DataclassContainer(b_x, b_y),
             NamedTupleContainer(c_x, c_y),
         ),
+    ),
+    (
+        (a := ((1.0, 2.0), b := ((3.0, 4.0), (5.0, 6.0)))),
+        ScalarsContainer(a, b),
+    ),
+    (
+        (
+            a := (1.0, 2.0),
+            (
+                b_x := gtx.constructors.full({TDim: 5}, 2.0),
+                b_y := gtx.constructors.full({TDim: 5}, 3.0),
+            ),
+            (c_a := ((1.0, 2.0), c_b := ((3.0, 4.0), (5.0, 6.0)))),
+            (
+                (
+                    d_0_x := gtx.constructors.full({TDim: 5}, 2.0),
+                    d_0_y := gtx.constructors.full({TDim: 5}, 3.0),
+                ),
+                d_1 := 3,
+            ),
+        ),
+        DeeplyNestedContainer((NamedTupleContainer(d_0_x), DataclassContainer(d_0_y)), d_1),
     ),
 ]

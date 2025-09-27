@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Final
 
 import pytest
 
@@ -34,9 +33,6 @@ class DataclassWithDefaultFactory:
 class DataclassWithInitVar:
     b: dataclasses.InitVar[int]
     a: int
-
-
-print(DataclassWithInitVar.__dataclass_fields__)
 
 
 @pytest.mark.parametrize(

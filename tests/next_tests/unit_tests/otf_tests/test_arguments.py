@@ -12,6 +12,7 @@ import pytest
 from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common
 from gt4py.next import containers
+from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 from gt4py.next.otf import arguments
 
 from ...artifacts import pycontainers as pc
@@ -67,3 +68,130 @@ def test_extract_with_container(
     """Test extract with a container argument."""
     assert arguments.extract(container) == expected_nested_tuple
     assert arguments.extract(container, pass_through_values=False) == expected_nested_tuple
+
+
+def test_make_numeric_value_args_extractor_no_extraction_needed():
+    """Test make_numeric_value_args_extractor when no arguments need extraction."""
+
+    function_type = ts.FunctionType(
+        pos_only_args=[ts.ScalarType(kind=ts.ScalarKind.INT32)],
+        pos_or_kw_args={"b": ts.ScalarType(kind=ts.ScalarKind.FLOAT64)},
+        kw_only_args={"c": ts.ScalarType(kind=ts.ScalarKind.BOOL)},
+        returns=ts.VoidType(),
+    )
+
+    extractor = arguments.make_numeric_value_args_extractor(function_type)
+    assert extractor is None
+
+
+@pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
+def test_make_numeric_value_args_extractor_with_pos_args(
+    pycontainer_type: type[containers.PyContainer],
+):
+    """Test make_numeric_value_args_extractor with positional arguments needing extraction."""
+
+    container_type = tt.from_type_hint(pycontainer_type)
+
+    function_type_pos_only = ts.FunctionType(
+        pos_only_args=[container_type],
+        pos_or_kw_args={"b": ts.ScalarType(kind=ts.ScalarKind.FLOAT64)},
+        kw_only_args={},
+        returns=ts.VoidType(),
+    )
+
+    function_type_pos_or_kw = ts.FunctionType(
+        pos_only_args=[container_type],
+        pos_or_kw_args={"b": ts.ScalarType(kind=ts.ScalarKind.FLOAT64)},
+        kw_only_args={},
+        returns=ts.VoidType(),
+    )
+
+    for function_type in [func]:
+        extractor = arguments.make_numeric_value_args_extractor(function_type)
+        assert extractor is not None
+
+        # Test the generated extractor
+        container = pycontainer_type(x=1, y=2)
+        args, kwargs = extractor(container, 3.14)
+        assert args == ((1, 2), 3.14)
+        assert kwargs == {}
+
+
+@pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
+def test_make_numeric_value_args_extractor_with_kw_args(
+    pycontainer_type: type[containers.PyContainer],
+):
+    """Test make_numeric_value_args_extractor with keyword arguments needing extraction."""
+
+    container_type = tt.from_type_hint(pycontainer_type)
+    function_type = ts.FunctionType(
+        pos_only_args=[],
+        pos_or_kw_args={"a": ts.ScalarType(kind=ts.ScalarKind.INT32)},
+        kw_only_args={"container_arg": container_type},
+        returns=ts.VoidType(),
+    )
+
+    extractor = arguments.make_numeric_value_args_extractor(function_type)
+    assert extractor is not None
+
+    # Test the generated extractor
+    container = pycontainer_type(x=1, y=2)
+    args, kwargs = extractor(42, container_arg=container)
+    assert args == (42,)
+    assert kwargs == {"container_arg": (1, 2)}
+
+
+# def test_make_numeric_value_args_extractor_with_tuple_args():
+#     """Test make_numeric_value_args_extractor with tuple arguments containing containers."""
+
+#     container_type = ts.NamedTupleType(
+#         original_python_type="tests.next_tests.artifacts.pycontainers.NamedTupleContainer",
+#         types={
+#             "x": ts.ScalarType(kind=ts.ScalarKind.INT32),
+#             "y": ts.ScalarType(kind=ts.ScalarKind.INT32),
+#         },
+#     )
+
+#     tuple_type = ts.TupleType(types=[ts.ScalarType(kind=ts.ScalarKind.INT32), container_type])
+
+#     function_type = ts.FunctionType(
+#         pos_only_args=[tuple_type], pos_or_kw_args={}, kw_only_args={}, returns=ts.VoidType()
+#     )
+
+#     extractor = arguments.make_numeric_value_args_extractor(function_type)
+#     assert extractor is not None
+
+#     # Test the generated extractor
+#     container = pc.NamedTupleContainer(x=1, y=2)
+#     args, kwargs = extractor((42, container))
+#     assert args == ((42, (1, 2)),)
+#     assert kwargs == {}
+
+
+# def test_make_numeric_value_args_extractor_mixed_args():
+#     """Test make_numeric_value_args_extractor with mixed positional and keyword arguments."""
+
+#     container_type = ts.NamedTupleType(
+#         original_python_type="tests.next_tests.artifacts.pycontainers.NamedTupleContainer",
+#         types={
+#             "x": ts.ScalarType(kind=ts.ScalarKind.INT32),
+#             "y": ts.ScalarType(kind=ts.ScalarKind.INT32),
+#         },
+#     )
+
+#     function_type = ts.FunctionType(
+#         pos_only_args=[container_type],
+#         pos_or_kw_args={"b": ts.ScalarType(kind=ts.ScalarKind.FLOAT64)},
+#         kw_only_args={"c": container_type},
+#         returns=ts.VoidType(),
+#     )
+
+#     extractor = arguments.make_numeric_value_args_extractor(function_type)
+#     assert extractor is not None
+
+#     # Test the generated extractor
+#     container1 = pc.NamedTupleContainer(x=1, y=2)
+#     container2 = pc.NamedTupleContainer(x=3, y=4)
+#     args, kwargs = extractor(container1, 3.14, c=container2)
+#     assert args == ((1, 2), 3.14)
+#     assert kwargs == {"c": (3, 4)}

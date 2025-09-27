@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import dataclasses
-import pkgutil
 import typing
 from collections.abc import Callable
 
@@ -123,7 +122,7 @@ NeedsValueExtraction: TypeAlias = (
 
 
 def needs_value_extraction(value: object) -> TypeIs[NeedsValueExtraction]:
-    return isinstance(value, containers.PyContainer) or (
+    return isinstance(value, containers.PY_CONTAINER_TYPES) or (
         isinstance(value, tuple) and any(needs_value_extraction(v) for v in value)
     )
 
@@ -151,10 +150,11 @@ def extract(
     value: Any, pass_through_values: bool = True
 ) -> MaybeNestedInTuple[common.NumericValue]:
     """
-    Extract the values from a container into a nested tuple.
+    Extract the values from a run-time value into a digestable numeric value form.
 
-    For non-container values, return them as-is if `pass_through_values` is `True`,
-    otherwise raise a `TypeError`.
+    This functions is useful to do the extraction from run-time values
+    when the full type information is not available. For non-container values,
+    return them as-is if `pass_through_values` is `True`, otherwise raise a `TypeError`.
     """
     if isinstance(value, common.NUMERIC_VALUE_TYPES):
         return typing.cast(common.NumericValue, value)
@@ -165,30 +165,22 @@ def extract(
     if pass_through_values:
         return value
 
-    raise TypeError(f"Cannot extract value from {type(value)}.")
-
-
-def _make_arg_extractor_expr(arg_name: str, type_spec: ts.TypeSpec) -> str:
-    match type_spec:
-        case ts.NamedTupleType():
-            return containers.make_extractor_expr(
-                arg_name, pkgutil.resolve_name(type_spec.original_python_type)
-            )
-        case ts.TupleType():
-            return ", ".join(
-                _make_arg_extractor_expr(f"{arg_name}[{i}]", t)
-                if type_info.needs_value_extraction(t)
-                else f"{arg_name}[{i}]"
-                for i, t in enumerate(type_spec.types)
-            )
-        case _:
-            return arg_name
+    raise TypeError(f"Cannot extract numeric value from {type(value)}.")
 
 
 # TODO(egparedes): memoize this function (and/or the one above) if TypeSpecs become hashable
 def make_numeric_value_args_extractor(
     function: ts.FunctionType,
 ) -> Callable[..., tuple[tuple, dict[str, Any]]] | None:
+    """
+    Make a function to extract numeric values from arguments that need it.
+
+    If no arguments need extraction, return `None`.
+
+    The returned function has the signature `(*args, **kwargs) -> (args, kwargs)`,
+    where `args` is a tuple of positional arguments and `kwargs` is a dictionary of
+    keyword arguments containing the extracted numeric values where needed.
+    """
     args_param = "args"
     kwargs_param = "kwargs"
     num_args_to_extract = 0
@@ -203,14 +195,18 @@ def make_numeric_value_args_extractor(
     ):
         if type_info.needs_value_extraction(type_spec):
             num_args_to_extract += 1
-            extractor_exprs[i] = _make_arg_extractor_expr(f"{args_param}[{i}]", type_spec)
+            extractor_exprs[i] = containers.make_extractor_expr(type_spec, f"{args_param}[{i}]")
         else:
             extractor_exprs[i] = f"{args_param}[{i}]"
 
     for name, type_spec in function.kw_only_args.items():
         if type_info.needs_value_extraction(type_spec):
             num_kwargs_to_extract += 1
-            extractor_exprs[name] = _make_arg_extractor_expr(f"{args_param}[{name}]", type_spec)
+            extractor_exprs[name] = containers.make_extractor_expr(
+                type_spec, f"{kwargs_param}[{name}]"
+            )
+        else:
+            extractor_exprs[name] = f"{kwargs_param}[{name}]"
 
     if num_args_to_extract + num_kwargs_to_extract:
         args_expr = (
@@ -219,7 +215,7 @@ def make_numeric_value_args_extractor(
             else args_param
         )
         kwargs_expr = (
-            f"{{ {str.join(', ', (f'{k}={extractor_exprs[k]}' for k in function.kw_only_args))} }}"
+            f"{{ {str.join(', ', (f'{k}: {extractor_exprs[k]}' for k in function.kw_only_args))} }}"
             if num_kwargs_to_extract
             else kwargs_param
         )
