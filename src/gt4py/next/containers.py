@@ -165,6 +165,11 @@ def make_extractor_expr_from_type_spec(type_: ts.TypeSpec, value_expr: str) -> s
 def _get_pycontainer_constructor_args_info(
     container_type: type[PyContainer],
 ) -> tuple[int, list[str]]:
+    if xtyping.get_origin(container_type) is tuple:
+        # For plain tuples, we assume all arguments are positional
+        args_count = len(xtyping.get_args(container_type))
+        return args_count, []
+    
     assert issubclass(container_type, PY_CONTAINER_TYPES)
 
     # Use a constructor signature without variadic parameters
@@ -259,7 +264,7 @@ def make_constructor_expr(
         elif issubclass(actual_type, tuple) and (
             tuple_args_hint := xtyping.get_args(container_type)
         ):
-            container_type_alias = "tuple"
+            container_type_alias = ""
             nested_types = {i: type_hint for i, type_hint in enumerate(tuple_args_hint)}
 
     if nested_types:
@@ -280,6 +285,11 @@ def make_constructor_expr(
         # Optimize the call expression if none of the children needs further construction
         # use argument unpacking to pass them to the constructor
         if all(arg == f"{value_expr}[{i}]" for i, arg in enumerate(call_args)):
+            if not container_type_alias:
+                # Fast path for plain tuples: none of the children needs construction, so we can just
+                # return the value expression as is
+                return value_expr
+
             # Fast path: none of the children needs construction, so we can just use argument
             # unpacking to pass them to the constructor
             args_count, kwargs_keys = _get_pycontainer_constructor_args_info(container_type)

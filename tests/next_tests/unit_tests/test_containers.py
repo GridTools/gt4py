@@ -84,11 +84,5 @@ def test_make_container_constructor(
     constructor = containers.make_container_constructor(container_type)
     constructed_container = constructor(nested_tuple)
 
-    import pprint
-    print("== expected_container ==")
-    pprint.pprint(expected_container)
-    print("== constructed_container ==")
-    pprint.pprint(constructed_container)
-
     assert isinstance(constructed_container, container_type)
     assert constructed_container == expected_container
