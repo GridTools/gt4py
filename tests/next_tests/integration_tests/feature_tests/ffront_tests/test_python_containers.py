@@ -204,24 +204,26 @@ def test_nested_mixed_containers(cartesian_case):
 @dataclasses.dataclass
 class StateDataclass:
     value: gtx.float32
+    other: gtx.float32  # TODO: remove after single value dataclass containers work
 
 
 class StateNamedTuple(NamedTuple):
     value: gtx.float32
 
 
-@gtx.scan_operator(axis=cases.KDim, forward=True, init=StateDataclass(value=0.0))
+@gtx.scan_operator(axis=cases.KDim, forward=True, init=StateDataclass(value=0.0, other=0.0))
 def scan_dataclass(
     state: StateDataclass,
     inp: gtx.float32,
 ) -> StateDataclass:
-    return StateDataclass(value=inp + state.value)
+    return StateDataclass(value=inp + state.value, other=state.other)
 
 
 @gtx.field_operator
 def scan_dataclass_wrapper(inp: gtx.Field[[KDim], gtx.float32]) -> gtx.Field[[KDim], gtx.float32]:
-    (res,) = scan_dataclass(inp)  # TODO(havogt): won't work as the result is not a tuple
-    return res
+    # Note: `scan_dataclass(inp)` is of a (implicit) type `StateDataclass` with `gtx.float32` replaced by `gtx.Field[[...], gtx.float32]`.
+    # Consequently, we need to extract the `value` field as we cannot properly annotate the return type.
+    return scan_dataclass(inp).value
 
 
 @gtx.scan_operator(axis=cases.KDim, forward=True, init=StateNamedTuple(value=0.0))
@@ -234,10 +236,9 @@ def scan_named_tuple(
 
 @gtx.field_operator
 def scan_named_tuple_wrapper(inp: gtx.Field[[KDim], gtx.float32]) -> gtx.Field[[KDim], gtx.float32]:
-    (res,) = scan_named_tuple(
-        inp
-    )  # unpacking works around the problem that the result is a StateNamedTuple of Fields
-    return res
+    # Note: `scan_named_tuple(inp)` is of a (implicit) type `StateNamedTuple` with `gtx.float32` replaced by `gtx.Field[[...], gtx.float32]`.
+    # Consequently, we need to extract the `value` field as we cannot properly annotate the return type.
+    return scan_named_tuple(inp).value
 
 
 @pytest.mark.parametrize(

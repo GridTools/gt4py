@@ -304,6 +304,7 @@ def return_type_scanop(
         #  field
         [callable_type.axis],
     )
+    # Note: the following line implicitly promotes custom containers of scalars to containers of fields.
     return type_info.apply_to_primitive_constituents(
         lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)), carry_dtype
     )
