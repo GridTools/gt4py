@@ -30,7 +30,7 @@ from gt4py.eve.extended_typing import (
     TypeVarTuple,
     Unpack,
 )
-from gt4py.next import common, errors
+from gt4py.next import common, containers, errors
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 

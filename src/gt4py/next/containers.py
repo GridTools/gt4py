@@ -169,7 +169,7 @@ def _get_pycontainer_constructor_args_info(
         # For plain tuples, we assume all arguments are positional
         args_count = len(xtyping.get_args(container_type))
         return args_count, []
-    
+
     assert issubclass(container_type, PY_CONTAINER_TYPES)
 
     # Use a constructor signature without variadic parameters
@@ -281,7 +281,6 @@ def make_constructor_expr(
         # use_args_unpacking = all(
         #     arg == f"{value_expr}[{i}]" for i, arg in enumerate(call_args))
 
-
         # Optimize the call expression if none of the children needs further construction
         # use argument unpacking to pass them to the constructor
         if all(arg == f"{value_expr}[{i}]" for i, arg in enumerate(call_args)):
@@ -302,6 +301,6 @@ def make_constructor_expr(
                 ]
 
         return f"{container_type_alias}({', '.join(call_args)})"
-    
+
     # We don't need to construct anything, just return the argument as is
     return value_expr
