@@ -65,6 +65,10 @@ Both rules are enforced by the syntax `field.at(K=...)`, which
 
 Users of GT4Py can now succinctly write the patterns shown above in the context section.
 
-One major drawback of absolute indexing is that we loose the opportunity to warn users at compile time if they read out fo bounds. Since we allow absolute K indices that aren't know at compile time, the extent analysis can't warn us anymore. We plan to mitigate that by supporting an option to check every absolute read (at runtime) in debug mode.
+One major drawback of absolute indexing is that we loose the opportunity to warn users at compile time if they read out fo bounds. Since we allow absolute K indices that aren't know at compile time, the extent analysis can't warn us anymore. We plan to mitigate that by supporting an option to check every absolute read (at runtime) in debug mode, see references below.
 
 We ship absolute K indexing as an [experimental features](./general-experimental-features.md). The feature is only available in `debug` and `dace:*` backends. Other backends raise an error at compile time when transpiling from `oir` into the respective backend IR.
+
+## References
+
+- [Issue](https://github.com/GridTools/gt4py/issues/1684) to add an out of bounds check at runtime. The issue is old because already now, with `VariableKOffset`, we can't catch every out of bounds access at compile time.
