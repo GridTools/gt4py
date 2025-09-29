@@ -157,11 +157,6 @@ def _transform_by_pattern(
     # hide projector from extraction
     projector, expr = ir_utils_misc.extract_projector(stmt.expr)
 
-    # If we extracted a projector and the expression is not an as_fieldop of a scan,
-    # collapse tuple did not work as expected. We would expect that collapse
-    # tuple eleminated all top-level tuple expressions for non-scans.
-    assert projector is None or _is_as_fieldop_of_scan(expr)
-
     new_expr, extracted_fields, _ = cse.extract_subexpression(
         expr,
         predicate=predicate,
