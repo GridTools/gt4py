@@ -57,13 +57,13 @@ def test_extract_with_non_container():
 
 
 @pytest.mark.parametrize(
-    "expected_nested_tuple, container",
-    pc.CONTAINERS_AND_VALUES,
+    ["container", "expected_nested_tuple"],
+    [(pc.from_nested_tuple(cls, value), value) for cls, value in pc.PYCONTAINERS_SAMPLES.items()],
     ids=lambda val: val.__class__.__name__,
 )
 def test_extract_with_container(
-    expected_nested_tuple: NestedTuple[common.NumericValue],
     container: containers.PyContainer,
+    expected_nested_tuple: NestedTuple[common.NumericValue],
 ):
     """Test extract with a container argument."""
     assert arguments.extract(container) == expected_nested_tuple
@@ -90,30 +90,30 @@ def test_make_numeric_value_args_extractor_with_pos_args(
 ):
     """Test make_numeric_value_args_extractor with positional arguments needing extraction."""
 
-    container_type = tt.from_type_hint(pycontainer_type)
+    container_type_spec = tt.from_type_hint(pycontainer_type)
 
     function_type_pos_only = ts.FunctionType(
-        pos_only_args=[container_type],
+        pos_only_args=[container_type_spec],
         pos_or_kw_args={"b": ts.ScalarType(kind=ts.ScalarKind.FLOAT64)},
         kw_only_args={},
         returns=ts.VoidType(),
     )
 
     function_type_pos_or_kw = ts.FunctionType(
-        pos_only_args=[container_type],
+        pos_only_args=[container_type_spec],
         pos_or_kw_args={"b": ts.ScalarType(kind=ts.ScalarKind.FLOAT64)},
         kw_only_args={},
         returns=ts.VoidType(),
     )
 
-    for function_type in [func]:
+    for function_type in [function_type_pos_only, function_type_pos_or_kw]:
         extractor = arguments.make_numeric_value_args_extractor(function_type)
         assert extractor is not None
 
         # Test the generated extractor
-        container = pycontainer_type(x=1, y=2)
+        container = pycontainer_type(x=1.0, y=2.0)
         args, kwargs = extractor(container, 3.14)
-        assert args == ((1, 2), 3.14)
+        assert args == ((1.0, 2.0), 3.14)
         assert kwargs == {}
 
 

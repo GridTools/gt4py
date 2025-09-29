@@ -261,14 +261,14 @@ def make_numeric_value_args_extractor(
     ):
         if type_info.needs_value_extraction(type_spec):
             num_args_to_extract += 1
-            extractor_exprs[i] = containers.make_extractor_expr(type_spec, f"{args_param}[{i}]")
+            extractor_exprs[i] = containers.make_extractor_expr_from_type_spec(type_spec, f"{args_param}[{i}]")
         else:
             extractor_exprs[i] = f"{args_param}[{i}]"
 
     for name, type_spec in function.kw_only_args.items():
         if type_info.needs_value_extraction(type_spec):
             num_kwargs_to_extract += 1
-            extractor_exprs[name] = containers.make_extractor_expr(
+            extractor_exprs[name] = containers.make_extractor_expr_from_type_spec(
                 type_spec, f"{kwargs_param}[{name}]"
             )
         else:

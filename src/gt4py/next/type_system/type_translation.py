@@ -111,7 +111,7 @@ def make_type(type_: type) -> ts.TypeSpec:
                 " functions, 'InitVar's or default arguments."
             )
 
-        keys = [*containers.keys(type_)]
+        keys = [*containers.elements_keys(type_)]
         hints = get_type_hints(type_)
         types = [
             from_type_hint(hints[key], globalns=sys.modules[type_.__module__].__dict__)

@@ -58,17 +58,45 @@ PY_CONTAINER_TYPES: Final[tuple[type, ...]] = typing.cast(
 ANY_CONTAINER_TYPES: Final[tuple[type, ...]] = typing.cast(tuple[type, ...], AnyContainer.__args__)
 
 
+
+def container_type(type_hint: Any) -> type[PyContainer] | None:
+    """Get the container type if the given type hint is a supported Python container."""
+    class_ = xtyping.get_origin(type_hint) or type_hint
+    if class_ is tuple or (isinstance(class_, type) and issubclass(class_, PY_CONTAINER_TYPES)):
+        return typing.cast(type[PyContainer], class_)
+    return None
+
+
+def is_container_type(type_hint: Any) -> bool:
+    """Check if a value is a supported Python container."""
+    return container_type(type_hint) is not None
+
+
 @functools.cache
-def keys(container_type: type[PyContainer]) -> tuple[str, ...]:
+def elements_keys(type_hint: type[PyContainer]) -> tuple[str, ...]:
     """Get the keys of the container type."""
-    assert issubclass(container_type, PY_CONTAINER_TYPES)
+    class_ = xtyping.get_origin(type_hint) or type_hint
+    if class_ is tuple:
+        return tuple(range(len(xtyping.get_args(type_hint))))
 
-    if issubclass(container_type, xtyping.TypedNamedTupleABC):
-        return container_type._fields
-    if issubclass(container_type, xtyping.DataclassABC):
-        return tuple(container_type.__dataclass_fields__.keys())
+    return getattr(class_, "__match_args__", ()) if isinstance(class_, type) else ()
 
-    return ()
+
+def elements_types(type_hint: type[PyContainer]) -> Mapping[str | int, type]:
+    """Get the types of the elements of a container type."""
+
+    if xtyping.get_origin(type_hint) is tuple:
+        return {i: value for i, value in enumerate(xtyping.get_args(type_hint))}
+
+    if isinstance(type_hint, type):
+        keys = elements_keys(type_hint)
+        all_hints = xtyping.get_type_hints(type_hint)
+        if not {*keys} <= all_hints.keys():
+            raise TypeError(f"Missing type hints for container elements: {keys - all_hints.keys()}")
+        assert all(isinstance(k, str) for k in keys)
+        return {key: all_hints[key] for key in keys}
+
+    return {}
 
 
 def make_container_extractor_from_type_spec(
@@ -256,7 +284,7 @@ def make_constructor_expr(
             global_ns[container_type_alias] = container_type
 
             # Get the type hints of the container's members
-            container_keys = keys(container_type)
+            container_keys = elements_keys(container_type)
             type_hints = xtyping.get_type_hints(container_type)
             assert {*container_keys} <= type_hints.keys(), "Mismatch between keys and type hints"
             nested_types = {key: type_hints[key] for key in container_keys}
@@ -277,9 +305,6 @@ def make_constructor_expr(
             )
             for i, (key, type_hint) in enumerate(nested_types.items())
         ]
-
-        # use_args_unpacking = all(
-        #     arg == f"{value_expr}[{i}]" for i, arg in enumerate(call_args))
 
         # Optimize the call expression if none of the children needs further construction
         # use argument unpacking to pass them to the constructor

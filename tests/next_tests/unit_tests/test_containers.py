@@ -51,13 +51,13 @@ def test_is_dataclass_container_(type_: type, is_container: bool):
 
 
 @pytest.mark.parametrize(
-    "expected_nested_tuple, container",
-    pc.CONTAINERS_AND_VALUES,
+    ["container", "expected_nested_tuple"],
+    [(pc.from_nested_tuple(cls, value), value) for cls, value in pc.PYCONTAINERS_SAMPLES.items()],
     ids=lambda val: val.__class__.__name__,
 )
 def test_make_container_extractor(
-    expected_nested_tuple: NestedTuple[common.NumericValue],
     container: containers.PyContainer,
+    expected_nested_tuple: NestedTuple[common.NumericValue],
 ):
     container_type = type(container)
     extractor = containers.make_container_extractor(container_type)
@@ -73,8 +73,11 @@ def test_make_container_extractor(
 
 
 @pytest.mark.parametrize(
-    "nested_tuple, expected_container",
-    pc.CONTAINERS_AND_VALUES,
+    ["nested_tuple", "expected_container"],
+    [
+        (value, pc.from_nested_tuple(cls, value))
+        for cls, value in pc.PYCONTAINERS_SAMPLES.items()
+    ],
     ids=lambda val: val.__class__.__name__,
 )
 def test_make_container_constructor(
