@@ -1,6 +1,6 @@
 # Experimental features
 
-In the context of DSL development, facing long times from initial idea to fully-fledge feature, we decided to allow experimental features to gather early feedback from users on real-world codes. We considered only releasing fully-fledge features and accept that experimental features might change, be replaced or never make it to fully-fledge features.
+In the context of DSL development, facing long times from initial idea to fully-fledge feature, we decided to allow experimental features to gather early feedback from users on real-world codes. We considered keeping experimental features on branches and accept that experimental features might change, be replaced or never make it to fully-fledge features.
 
 ## Context
 
