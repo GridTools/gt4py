@@ -261,7 +261,9 @@ def make_numeric_value_args_extractor(
     ):
         if type_info.needs_value_extraction(type_spec):
             num_args_to_extract += 1
-            extractor_exprs[i] = containers.make_extractor_expr_from_type_spec(type_spec, f"{args_param}[{i}]")
+            extractor_exprs[i] = containers.make_extractor_expr_from_type_spec(
+                type_spec, f"{args_param}[{i}]"
+            )
         else:
             extractor_exprs[i] = f"{args_param}[{i}]"
 

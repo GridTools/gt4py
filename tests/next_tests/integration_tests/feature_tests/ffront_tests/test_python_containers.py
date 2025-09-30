@@ -48,7 +48,7 @@ def constructed_outside_named_tuple(
 def constructed_outside_named_tuple_program(
     vel: NamedTupleContainer,
     out: gtx.Field[[IDim, JDim], gtx.float32],
-) -> None:
+):
     constructed_outside_named_tuple(vel, out=out)
 
 
@@ -63,7 +63,7 @@ def constructed_outside_dataclass(
 def constructed_outside_dataclass_program(
     vel: DataclassContainer,
     out: gtx.Field[[IDim, JDim], gtx.float32],
-) -> None:
+):
     constructed_outside_dataclass(vel, out=out)
 
 
@@ -174,17 +174,13 @@ def nested_mixed_containers(
 def nested_mixed_containers_program(
     inp: tuple[NestedContainer, gtx.Field[[IDim, JDim], gtx.float32]],
     out: tuple[gtx.Field[[IDim, JDim], gtx.float32], NestedContainer],
-) -> None:
+):
     nested_mixed_containers(inp, out=out)
 
 
 def test_nested_mixed_containers(cartesian_case):
-    inp = cases.allocate(cartesian_case, nested_mixed_containers, "inp")()
-    out = cases.allocate(
-        cartesian_case,
-        nested_mixed_containers,
-        "out",
-    )()
+    inp = cases.allocate(cartesian_case, nested_mixed_containers_program, "inp")()
+    out = cases.allocate(cartesian_case, nested_mixed_containers_program, "out")()
 
     cases.verify(
         cartesian_case,
