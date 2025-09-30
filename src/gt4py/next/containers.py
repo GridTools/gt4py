@@ -58,7 +58,6 @@ PY_CONTAINER_TYPES: Final[tuple[type, ...]] = typing.cast(
 ANY_CONTAINER_TYPES: Final[tuple[type, ...]] = typing.cast(tuple[type, ...], AnyContainer.__args__)
 
 
-
 def container_type(type_hint: Any) -> type[PyContainer] | None:
     """Get the container type if the given type hint is a supported Python container."""
     class_ = xtyping.get_origin(type_hint) or type_hint
@@ -110,11 +109,12 @@ def make_container_extractor_from_type_spec(
 
 def make_container_constructor_from_type_spec(
     container_type_spec: ts.NamedTupleType,
+    nested: bool = True,
 ) -> PyContainerConstructor:
     """Create a constructor function for the given container type specification."""
     assert isinstance(container_type_spec, ts.NamedTupleType)
     return make_container_constructor(
-        pkgutil.resolve_name(container_type_spec.original_python_type)
+        pkgutil.resolve_name(container_type_spec.original_python_type), nested=nested
     )
 
 
@@ -231,6 +231,8 @@ def _get_pycontainer_constructor_args_info(
 @functools.cache
 def make_container_constructor(
     container_type: type[PyContainerT],
+    *,
+    nested: bool = True,
 ) -> PyContainerConstructor[PyContainerT]:
     """
     Create a constructor function for the given container type.
@@ -243,7 +245,7 @@ def make_container_constructor(
     global_ns = {}
 
     constructor_func_body = make_constructor_expr(
-        container_type, "x", item_path="", global_ns=global_ns
+        container_type, "x", item_path="", global_ns=global_ns, nested=nested
     )
     constructor_func_src = f"lambda x: {constructor_func_body}"
 
@@ -256,6 +258,7 @@ def make_constructor_expr(
     *,
     item_path: str,
     global_ns: dict[str, Any],
+    nested: bool = True,  # TODO: consider splitting into separate function
 ) -> str:
     """
     Create an expression string that constructs a container from a nested tuple of values.
@@ -275,9 +278,8 @@ def make_constructor_expr(
             stored for final evaluation of the constructor expression.
     """
     actual_type = xtyping.get_origin(container_type) or container_type
+    nested_types: dict[int | str, xtyping.TypeAnnotation] = {}
     if isinstance(actual_type, type):
-        nested_types: dict[int | str, xtyping.TypeAnnotation] = {}
-
         if issubclass(actual_type, PY_CONTAINER_TYPES):
             # Store the container type alias in the global namespace for eval()
             container_type_alias = f"__{item_path}__{container_type.__name__}"
@@ -296,15 +298,18 @@ def make_constructor_expr(
             nested_types = {i: type_hint for i, type_hint in enumerate(tuple_args_hint)}
 
     if nested_types:
-        call_args = [
-            make_constructor_expr(
-                type_hint,
-                f"{value_expr}[{i}]",
-                item_path=f"{item_path}__{key}",
-                global_ns=global_ns,
-            )
-            for i, (key, type_hint) in enumerate(nested_types.items())
-        ]
+        if nested:
+            call_args = [
+                make_constructor_expr(
+                    type_hint,
+                    f"{value_expr}[{i}]",
+                    item_path=f"{item_path}__{key}",
+                    global_ns=global_ns,
+                )
+                for i, (key, type_hint) in enumerate(nested_types.items())
+            ]
+        else:
+            call_args = [f"{value_expr}[{i}]" for i in range(len(nested_types))]
 
         # Optimize the call expression if none of the children needs further construction
         # use argument unpacking to pass them to the constructor

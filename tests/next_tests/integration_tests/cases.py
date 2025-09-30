@@ -604,7 +604,7 @@ def _allocate_from_type(
             )
             if isinstance(arg_tuple_type_spec, ts.NamedTupleType):
                 container_constructor = containers.make_container_constructor_from_type_spec(
-                    arg_tuple_type_spec
+                    arg_tuple_type_spec, nested=False
                 )
                 allocated_tuple = container_constructor(allocated_tuple)
             return allocated_tuple
