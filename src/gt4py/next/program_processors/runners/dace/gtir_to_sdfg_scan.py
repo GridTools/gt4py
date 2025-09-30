@@ -425,7 +425,7 @@ def _lower_lambda_to_nested_sdfg(
             update_expr=f"{scan_loop_var} = {scan_loop_var} - 1",
             inverted=False,
         )
-    lambda_ctx.sdfg.add_node(scan_loop)
+    lambda_ctx.sdfg.add_node(scan_loop, ensure_unique_name=True)
     lambda_ctx.sdfg.add_edge(init_state, scan_loop, dace.InterstateEdge())
 
     # Inside the loop region, create a 'compute' and an 'update' state.
