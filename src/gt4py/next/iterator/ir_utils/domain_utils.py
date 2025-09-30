@@ -157,10 +157,10 @@ class SymbolicDomain:
 
                     accessed = connectivity.ndarray[start:stop, nb_index]
 
-                    if np.any(accessed == skip_value):
-                        raise NotImplementedError(
-                            f"Translating '{self.as_expr()}' using '{shift[0].value}' contains "
-                            f"skipped values. This is not supported."
+                    if isinstance(val, itir.OffsetLiteral) and np.any(accessed == skip_value):
+                        raise ValueError(
+                            f"Translating '{self.as_expr()}' using '{shift[0].value}' has "
+                            f"an out-of-bounds access."
                         )
 
                     new_start, new_stop = accessed.min(), accessed.max() + 1  # type: ignore[attr-defined]  # TODO(havogt): improve typing for NDArrayObject

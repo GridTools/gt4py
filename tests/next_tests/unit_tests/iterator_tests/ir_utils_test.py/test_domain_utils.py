@@ -264,7 +264,7 @@ def test_non_contiguous_domain_warning():
         domain.translate(shift_chain, offset_provider).as_expr()
 
 
-def test_contains_skip_values_error():
+def test_oob_error():
     offset_provider = {
         "V2V": constructors.as_connectivity(
             domain={Vertex: (0, 3), V2VDim: 1},
@@ -277,5 +277,5 @@ def test_contains_skip_values_error():
     domain = domain_utils.SymbolicDomain.from_expr(
         im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 3)})
     )
-    with pytest.raises(NotImplementedError, match=r"contains skipped values"):
+    with pytest.raises(ValueError, match=r"out-of-bounds"):
         domain.translate(shift_chain, offset_provider).as_expr()
