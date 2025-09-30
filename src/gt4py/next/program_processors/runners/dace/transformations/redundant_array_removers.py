@@ -59,7 +59,7 @@ def gt_remove_copy_chain(
     return result if result != 0 else None
 
 
-class _CopyChainRemoverMode(Enum):
+class CopyChainRemoverMode(Enum):
     """Switch for `CopyChainRemover` mode.
 
     The `NONE` mode is invalid, it is there for signaling that the transformation
@@ -96,7 +96,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
     - `A1` is a transient and must have the same dimensionality as `A2`.
     - `A1` is fully read by `A2`.
 
-    This transformation corresponds to the `PULL` mode of `_CopyChainRemoverMode`.
+    This transformation corresponds to the `PULL` mode of `CopyChainRemoverMode`.
     In a second iteraton, the transformation was extended to support the mirror
     case (`PUSH`), where A2 is removed if the following requirements are satisfied:
     - Through the merging of `A1` and `A2` no cycles are created.
@@ -205,7 +205,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         if dst_subset is None:
             return False
 
-        if self._get_copy_chain_mode(sdfg, graph) == _CopyChainRemoverMode.NONE:
+        if self._get_copy_chain_mode(sdfg, graph) == CopyChainRemoverMode.NONE:
             return False
 
         # We have to ensure that no cycle is created through the removal of one node.
@@ -265,7 +265,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         old_node: dace_nodes.AccessNode
         new_node_offsets: Sequence[dace_sym.SymbolicType]
         copy_chain_mode = self._get_copy_chain_mode(sdfg, graph)
-        if copy_chain_mode == _CopyChainRemoverMode.PULL:
+        if copy_chain_mode == CopyChainRemoverMode.PULL:
             old_node = a1
             new_node = a2
             # Now we compose the new subset.
@@ -282,7 +282,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             #   have to modify this computation slightly.
             new_node_offsets = a1_to_a2_dst_subset.min_element()
         else:
-            assert copy_chain_mode == _CopyChainRemoverMode.PUSH
+            assert copy_chain_mode == CopyChainRemoverMode.PUSH
             old_node = a2
             new_node = a1
             # We compose the new subset in a similar way, but using the index where
@@ -293,8 +293,9 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         for producer_edge in list(graph.in_edges(old_node)):
             producer: dace_nodes.Node = producer_edge.src
             producer_conn = producer_edge.src_conn
-            if old_node == a2 and producer is new_node:
+            if producer is new_node:
                 assert producer_edge is a1_to_a2_edge
+                assert copy_chain_mode == CopyChainRemoverMode.PUSH
                 continue
             new_producer_edge = gtx_transformations.utils.reroute_edge(
                 is_producer_edge=True,
@@ -322,8 +323,9 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         for consumer_edge in list(graph.out_edges(old_node)):
             consumer: dace_nodes.Node = consumer_edge.dst
             consumer_conn = consumer_edge.dst_conn
-            if old_node == a1 and consumer is new_node:
+            if consumer is new_node:
                 assert consumer_edge is a1_to_a2_edge
+                assert copy_chain_mode == CopyChainRemoverMode.PULL
                 continue
             new_consumer_edge = gtx_transformations.utils.reroute_edge(
                 is_producer_edge=False,
@@ -361,10 +363,10 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             outer_node=new_node,
         )
 
-    def _get_copy_chain_mode(self, sdfg: dace.SDFG, state: dace.SDFG) -> _CopyChainRemoverMode:
+    def _get_copy_chain_mode(self, sdfg: dace.SDFG, state: dace.SDFG) -> CopyChainRemoverMode:
         """
         Helper function to detect whether the `CopyChainRemover` tranbsformation
-        should be applied in `PULL` or `PUSH` mode, for details see `_CopyChainRemoverMode`.
+        should be applied in `PULL` or `PUSH` mode, for details see `CopyChainRemoverMode`.
         """
         a1: dace_nodes.AccessNode = self.node_a1
         a2: dace_nodes.AccessNode = self.node_a2
@@ -408,10 +410,10 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         #   so complex that without information about relations, such as
         #   `vertical_start <= vertical_end` it is not possible to prove this check.
         if a1_desc.transient and self.is_single_use_data(sdfg, a1) and src_subset.covers(a1_range):
-            return _CopyChainRemoverMode.PULL
+            return CopyChainRemoverMode.PULL
 
         # Checking if the whole array is written.
         if a2_desc.transient and self.is_single_use_data(sdfg, a2) and dst_subset.covers(a2_range):
-            return _CopyChainRemoverMode.PUSH
+            return CopyChainRemoverMode.PUSH
 
-        return _CopyChainRemoverMode.NONE
+        return CopyChainRemoverMode.NONE
