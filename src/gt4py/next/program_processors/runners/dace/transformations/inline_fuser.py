@@ -132,7 +132,7 @@ def _insert_nested_sdfg(
         output_name,
         outer_output_node,
         None,
-        dace.Memlet.from_array(sdfg.arrays[outer_output_name]),
+        dace.Memlet.from_array(outer_output_name, sdfg.arrays[outer_output_name]),
     )
 
     # Now adapt the range from where we read.
@@ -270,7 +270,7 @@ def _populate_nested_sdfg(
                 assert output_name is None
 
                 output_name, output_desc = nsdfg.add_array(
-                    "__inline_fuser_default_output_name",
+                    "__inline_fuser_replacing_{intermediate_node.data}",
                     shape=tuple(exchange_subset),
                     dtype=intermediate_node.desc(sdfg).dtype,
                     find_new_name=True,
