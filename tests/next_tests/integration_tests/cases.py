@@ -567,7 +567,7 @@ def unstructured_case(
 def unstructured_case_3d(unstructured_case):
     return dataclasses.replace(
         unstructured_case,
-        default_sizes={**unstructured_case.default_sizes},
+        default_sizes={**unstructured_case.default_sizes, KDim: 10},
         offset_provider={**unstructured_case.offset_provider, "Koff": KDim},
     )
 
@@ -722,7 +722,6 @@ class Case:
                 Vertex: mesh_descriptor.num_vertices,
                 Edge: mesh_descriptor.num_edges,
                 Cell: mesh_descriptor.num_cells,
-                KDim: mesh_descriptor.num_levels,
             },
             grid_type=common.GridType.UNSTRUCTURED,
             allocator=allocator,

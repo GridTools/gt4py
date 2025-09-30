@@ -14,7 +14,7 @@ from typing import Any, Optional, cast
 
 import devtools
 
-from gt4py.eve import NodeTranslator,  traits
+from gt4py.eve import NodeTranslator, traits
 from gt4py.next import common, config, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     fbuiltins,
@@ -463,6 +463,7 @@ class ProgramLowering(
         elif isinstance(out_arg, past.TupleExpr) or (
             isinstance(out_arg, past.Name) and isinstance(out_arg.type, ts.TupleType)
         ):
+
             def get_field_and_slice(field_expr, path):
                 """Extract field and its slice for a given path through the tuple structure."""
                 current_field = functools.reduce(lambda e, i: e.elts[i], path, out_arg)

@@ -155,9 +155,7 @@ def _tuple_assign_field(
             assert core_defs.is_scalar_type(source)
             target[domain] = source
 
-    if not isinstance(
-        domain, tuple
-    ):
+    if not isinstance(domain, tuple):
         domain = utils.tree_map(lambda _: domain)(target)
     impl(target, source, domain)
 

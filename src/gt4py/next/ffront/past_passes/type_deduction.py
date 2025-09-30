@@ -56,8 +56,11 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
     if "domain" in new_kwargs:
         _ensure_no_sliced_field(new_kwargs["out"])
 
-        def validate_domain_out(dom: past.Dict | past.TupleExpr, out: past.TupleExpr | past.Name,
-                                is_nested: bool = False) -> None:
+        def validate_domain_out(
+            dom: past.Dict | past.TupleExpr,
+            out: past.TupleExpr | past.Name,
+            is_nested: bool = False,
+        ) -> None:
             if isinstance(dom, past.Dict):
                 # Only reject tuple outputs if nested
                 if is_nested and (isinstance(out, past.TupleExpr) or isinstance(out, ts.TupleType)):
@@ -77,7 +80,9 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
                         raise ValueError(
                             f"Only 2 values allowed in domain range, got {len(domain_values.elts)}."
                         )
-                    if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(domain_values.elts[1]):
+                    if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
+                        domain_values.elts[1]
+                    ):
                         raise ValueError(
                             f"Only integer values allowed in domain range, got '{domain_values.elts[0].type}' and '{domain_values.elts[1].type}'."
                         )

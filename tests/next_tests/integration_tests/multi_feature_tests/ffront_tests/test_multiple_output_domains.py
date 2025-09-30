@@ -25,7 +25,6 @@ from next_tests.integration_tests.cases import (
     CField,
     VField,
     Cell,
-    Vertex,
     cartesian_case,
     unstructured_case,
     Case,
@@ -208,6 +207,7 @@ def test_program(cartesian_case):
         ref=(b, a),
     )
 
+
 @gtx.program
 def prog_slicing(
     a: IField,
@@ -229,8 +229,8 @@ def test_program_slicing(cartesian_case):
     b = cases.allocate(cartesian_case, prog, "b")()
     out_a = cases.allocate(cartesian_case, prog, "out_a")()
     out_b = cases.allocate(cartesian_case, prog, "out_b")()
-    out_a_ =copy.deepcopy(out_a)
-    out_b_ =copy.deepcopy(out_b)
+    out_a_ = copy.deepcopy(out_a)
+    out_b_ = copy.deepcopy(out_b)
     cases.verify(
         cartesian_case,
         prog_slicing,
@@ -241,7 +241,10 @@ def test_program_slicing(cartesian_case):
         cartesian_case.default_sizes[IDim],
         cartesian_case.default_sizes[JDim],
         inout=(out_b, out_a),
-        ref=(np.concatenate([out_b_.ndarray[0:2], b.ndarray[2:-2], out_b_.ndarray[-2:]]), np.concatenate([out_a_.ndarray[0:1], a.ndarray[1:-1], out_a_.ndarray[-1:]])),
+        ref=(
+            np.concatenate([out_b_.ndarray[0:2], b.ndarray[2:-2], out_b_.ndarray[-2:]]),
+            np.concatenate([out_a_.ndarray[0:1], a.ndarray[1:-1], out_a_.ndarray[-1:]]),
+        ),
     )
 
 
