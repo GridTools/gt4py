@@ -54,7 +54,7 @@ def _create_simple_fusable_sdfg() -> tuple[
         output_nodes={b},
         external_edges=True,
     )
-    me, _, _ = state.add_mapped_tasklet(
+    _, me, _ = state.add_mapped_tasklet(
         "map2",
         map_ranges={
             "i2": "0:10",

@@ -372,12 +372,13 @@ def _extract_generating_dataflow_for_inlining(
         )
     ]
     if len(writing_edges) != 1:
+        breakpoint()
         return None
 
     first_map_param_mapping = _get_first_map_parameter_to_second_map_mapping(
         first_map=first_map_exit.map,
         write_edge=writing_edges[0],
-        second_map=edge.src,
+        second_map=edge.src.map,
         read_edge=edge,
     )
 
@@ -436,7 +437,7 @@ def _get_first_map_parameter_to_second_map_mapping(
     """Expresses the values of the first Map's parameter name in terms of the second map."""
     assert first_map.get_param_num() == second_map.get_param_num()
     assert isinstance(write_edge.dst, dace_nodes.MapExit)
-    assert write_edge.data.src_subset is not None
+    assert write_edge.data.dst_subset is not None
     assert isinstance(read_edge.src, dace_nodes.MapEntry)
     assert read_edge.data.src_subset is not None
 
@@ -444,7 +445,7 @@ def _get_first_map_parameter_to_second_map_mapping(
 
     # Currently we only consider the lower bound and nothing else, which is probably
     #  okay for the GT4Py setting.
-    write_accesses = write_edge.data.src_subset.min_element()
+    write_accesses = write_edge.data.dst_subset.min_element()
     read_accesses = read_edge.data.src_subset.min_element()
 
     # We assume that the different dimensions are independent, i.e. each parameter is
