@@ -215,7 +215,7 @@ def _populate_nested_sdfg(
 
             # If we are here then we have a connection from the MapEntry node. Thus
             #  we have to read from outside data.
-            outside_input_node: dace_nodes.AccessNode = state.memlet_path(iedge)[0]
+            outside_input_node: dace_nodes.AccessNode = state.memlet_path(iedge)[0].src
             assert isinstance(outside_input_node, dace_nodes.AccessNode)
 
             # If we have not seen this node yet we have to map it into the nested SDFG.
@@ -271,7 +271,7 @@ def _populate_nested_sdfg(
 
                 output_name, output_desc = nsdfg.add_array(
                     output_name,
-                    shape=exchange_subset.size(),
+                    shape=tuple(exchange_subset),
                     dtype=intermediate_node.dtype,
                     debuginfo=intermediate_node.debuginfo,
                     find_new_name=True,
@@ -372,7 +372,6 @@ def _extract_generating_dataflow_for_inlining(
         )
     ]
     if len(writing_edges) != 1:
-        breakpoint()
         return None
 
     first_map_param_mapping = _get_first_map_parameter_to_second_map_mapping(
@@ -445,30 +444,34 @@ def _get_first_map_parameter_to_second_map_mapping(
 
     # Currently we only consider the lower bound and nothing else, which is probably
     #  okay for the GT4Py setting.
-    write_accesses = write_edge.data.dst_subset.min_element()
-    read_accesses = read_edge.data.src_subset.min_element()
+    #  NOTE: This assumes that all the magic happens in the lower bound.
+    first_map_accesses = write_edge.data.dst_subset.min_element()
+    second_map_accesses = read_edge.data.src_subset.min_element()
 
     # We assume that the different dimensions are independent, i.e. each parameter is
     #  used to access exactly one dimension, this rules out accesses such as
     #  `a[i + j, i - j]`. This is okay for GT4Py. However, we have now to find out
     #  which parameter acts in which dimensions.
-    first_mapping = _find_dimensions_access(first_map.params, write_accesses)
-    second_mapping = _find_dimensions_access(second_map.params, read_accesses)
+    first_map_param_mapping = _find_dimensions_access(first_map.params, first_map_accesses)
 
     # If we read the data then we use the parameters of the second Map. However, we
     #  must now figuring out to which value of the first map this corresponds to.
-    for i in range(first_map.get_param_num()):
-        write_param = first_map.params[first_mapping[i]]
-        write_access = write_accesses[first_mapping[i]]
-        read_access = read_accesses[second_mapping[i]]
+    for dim in range(first_map.get_param_num()):
+        first_map_param = first_map_param_mapping[dim]
+        first_map_access = first_map_accesses[dim]
+        second_map_access = second_map_accesses[dim]
 
-        write_param_uniq = dace_sym.pystr_to_symbolic(f"__unique_param_{i}_{write_param!s}")
-        write_access_uniq = write_access.subs({write_param: write_param_uniq})
+        first_map_param_uniq = dace_sym.pystr_to_symbolic(
+            f"__unique_param_{dim}_{first_map_param!s}_{id(second_map_access)}"
+        )
+        first_map_access_uniq = first_map_access.subs({first_map_param: first_map_param_uniq})
 
-        res = sympy.solve(sympy.Eq(write_access_uniq, read_access), write_access_uniq)
+        res = sympy.solve(sympy.Eq(first_map_access_uniq, second_map_access), first_map_param_uniq)
         if len(res) != 1:
-            raise ValueError(f"Could not solve '{read_access} == {write_access}'")
-        parameter_mapping[write_param] = res[0]
+            raise ValueError(
+                f"Could not solve access in dimension {dim}: '{first_map_access} == {second_map_access}'"
+            )
+        parameter_mapping[first_map_param] = res[0]
 
     return parameter_mapping
 
@@ -476,6 +479,7 @@ def _get_first_map_parameter_to_second_map_mapping(
 def _find_dimensions_access(
     params: Sequence[str], accesses: Iterable[dace_sym.SymbolicType]
 ) -> dict[int, str]:
+    """Determine in which dimension a parameter is used inside `accesses`."""
     result_mapping: dict[int, str] = {}
     aparams: set[str] = set(params)
 
