@@ -270,10 +270,9 @@ def _populate_nested_sdfg(
                 assert output_name is None
 
                 output_name, output_desc = nsdfg.add_array(
-                    output_name,
+                    "__inline_fuser_default_output_name",
                     shape=tuple(exchange_subset),
-                    dtype=intermediate_node.dtype,
-                    debuginfo=intermediate_node.debuginfo,
+                    dtype=intermediate_node.desc(sdfg).dtype,
                     find_new_name=True,
                     transient=False,
                 )
