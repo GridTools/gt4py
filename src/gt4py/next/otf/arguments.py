@@ -40,7 +40,8 @@ T = typing.TypeVar("T")
 
 
 def _make_dict_expr(exprs: dict[str, str]) -> str:
-    return "{" + ",".join((f"'{k}': {v}" for k, v in exprs.items())) + "}"
+    items = str.join(",", (f"'{k}': {v}" for k, v in exprs.items()))
+    return f"{{{items}}}"
 
 
 class ArgStaticDescriptor(abc.ABC):
@@ -271,19 +272,19 @@ def make_numeric_value_args_extractor(
         if type_info.needs_value_extraction(type_spec):
             num_kwargs_to_extract += 1
             extractor_exprs[name] = containers.make_extractor_expr_from_type_spec(
-                type_spec, f"{kwargs_param}[{name}]"
+                type_spec, f"{kwargs_param}['{name}']"
             )
         else:
-            extractor_exprs[name] = f"{kwargs_param}[{name}]"
+            extractor_exprs[name] = f"{kwargs_param}['{name}']"
 
     if num_args_to_extract + num_kwargs_to_extract:
         args_expr = (
-            f"({str.join(', ', (extractor_exprs[i] for i, _ in enumerate(pos_args)))})"
+            f"({str.join(', ', (extractor_exprs[i] for i, _ in enumerate(pos_args)))}, )"
             if num_args_to_extract
             else args_param
         )
         kwargs_expr = (
-            f"{{ {str.join(', ', (f'{k}: {extractor_exprs[k]}' for k in function.kw_only_args))} }}"
+            _make_dict_expr({k: extractor_exprs[k] for k in function.kw_only_args})
             if num_kwargs_to_extract
             else kwargs_param
         )

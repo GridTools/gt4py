@@ -135,63 +135,55 @@ def test_make_numeric_value_args_extractor_with_kw_args(
     assert extractor is not None
 
     # Test the generated extractor
-    container = pycontainer_type(x=1, y=2)
+    container = pycontainer_type(x=1.0, y=2.0)
     args, kwargs = extractor(42, container_arg=container)
     assert args == (42,)
-    assert kwargs == {"container_arg": (1, 2)}
+    assert kwargs == {"container_arg": (1.0, 2.0)}
 
 
-# def test_make_numeric_value_args_extractor_with_tuple_args():
-#     """Test make_numeric_value_args_extractor with tuple arguments containing containers."""
+@pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
+def test_make_numeric_value_args_extractor_with_tuple_args(
+    pycontainer_type: type[containers.PyContainer],
+):
+    """Test make_numeric_value_args_extractor with tuple arguments containing containers."""
 
-#     container_type = ts.NamedTupleType(
-#         original_python_type="tests.next_tests.artifacts.pycontainers.NamedTupleContainer",
-#         types={
-#             "x": ts.ScalarType(kind=ts.ScalarKind.INT32),
-#             "y": ts.ScalarType(kind=ts.ScalarKind.INT32),
-#         },
-#     )
+    container_type = tt.from_type_hint(pycontainer_type)
+    tuple_type = ts.TupleType(types=[ts.ScalarType(kind=ts.ScalarKind.INT32), container_type])
+    function_type = ts.FunctionType(
+        pos_only_args=[tuple_type], pos_or_kw_args={}, kw_only_args={}, returns=ts.VoidType()
+    )
 
-#     tuple_type = ts.TupleType(types=[ts.ScalarType(kind=ts.ScalarKind.INT32), container_type])
+    extractor = arguments.make_numeric_value_args_extractor(function_type)
+    assert extractor is not None
 
-#     function_type = ts.FunctionType(
-#         pos_only_args=[tuple_type], pos_or_kw_args={}, kw_only_args={}, returns=ts.VoidType()
-#     )
-
-#     extractor = arguments.make_numeric_value_args_extractor(function_type)
-#     assert extractor is not None
-
-#     # Test the generated extractor
-#     container = pc.NamedTupleContainer(x=1, y=2)
-#     args, kwargs = extractor((42, container))
-#     assert args == ((42, (1, 2)),)
-#     assert kwargs == {}
+    # Test the generated extractor
+    container = pycontainer_type(x=1.0, y=2.0)
+    args, kwargs = extractor((42, container))
+    print(f"{args = }, {kwargs = }")
+    assert args == ((42, (1.0, 2.0)),)
+    assert kwargs == {}
 
 
-# def test_make_numeric_value_args_extractor_mixed_args():
-#     """Test make_numeric_value_args_extractor with mixed positional and keyword arguments."""
+@pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
+def test_make_numeric_value_args_extractor_mixed_args(
+    pycontainer_type: type[containers.PyContainer],
+):
+    """Test make_numeric_value_args_extractor with mixed positional and keyword arguments."""
 
-#     container_type = ts.NamedTupleType(
-#         original_python_type="tests.next_tests.artifacts.pycontainers.NamedTupleContainer",
-#         types={
-#             "x": ts.ScalarType(kind=ts.ScalarKind.INT32),
-#             "y": ts.ScalarType(kind=ts.ScalarKind.INT32),
-#         },
-#     )
+    container_type = tt.from_type_hint(pycontainer_type)
+    function_type = ts.FunctionType(
+        pos_only_args=[container_type],
+        pos_or_kw_args={"b": ts.ScalarType(kind=ts.ScalarKind.FLOAT64)},
+        kw_only_args={"c": container_type},
+        returns=ts.VoidType(),
+    )
 
-#     function_type = ts.FunctionType(
-#         pos_only_args=[container_type],
-#         pos_or_kw_args={"b": ts.ScalarType(kind=ts.ScalarKind.FLOAT64)},
-#         kw_only_args={"c": container_type},
-#         returns=ts.VoidType(),
-#     )
+    extractor = arguments.make_numeric_value_args_extractor(function_type)
+    assert extractor is not None
 
-#     extractor = arguments.make_numeric_value_args_extractor(function_type)
-#     assert extractor is not None
-
-#     # Test the generated extractor
-#     container1 = pc.NamedTupleContainer(x=1, y=2)
-#     container2 = pc.NamedTupleContainer(x=3, y=4)
-#     args, kwargs = extractor(container1, 3.14, c=container2)
-#     assert args == ((1, 2), 3.14)
-#     assert kwargs == {"c": (3, 4)}
+    # Test the generated extractor
+    container1 = pycontainer_type(x=1.0, y=2.0)
+    container2 = pycontainer_type(x=3.0, y=4.0)
+    args, kwargs = extractor(container1, 3.14, c=container2)
+    assert args == ((1.0, 2.0), 3.14)
+    assert kwargs == {"c": (3.0, 4.0)}

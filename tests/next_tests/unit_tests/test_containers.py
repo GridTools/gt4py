@@ -74,10 +74,7 @@ def test_make_container_extractor(
 
 @pytest.mark.parametrize(
     ["nested_tuple", "expected_container"],
-    [
-        (value, pc.from_nested_tuple(cls, value))
-        for cls, value in pc.PYCONTAINERS_SAMPLES.items()
-    ],
+    [(value, pc.from_nested_tuple(cls, value)) for cls, value in pc.PYCONTAINERS_SAMPLES.items()],
     ids=lambda val: val.__class__.__name__,
 )
 def test_make_container_constructor(
