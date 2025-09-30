@@ -152,6 +152,11 @@ def _insert_nested_sdfg(
         ),
     )
 
+    # Now removing the edge that we just replaced. We will only replace at most the
+    #  Memlet path, the actual source, i.e. the first Map, will still be there.
+    #  To remove it, one should call a dead dataflow elimination.
+    state.remove_memlet_path(edge_to_replace)
+
     return nsdfg_node, outer_output_node
 
 
