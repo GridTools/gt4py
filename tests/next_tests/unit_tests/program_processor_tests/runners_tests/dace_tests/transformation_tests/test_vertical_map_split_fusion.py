@@ -21,12 +21,15 @@ from gt4py.next.program_processors.runners.dace import (
 from . import util
 
 
-def test_vertical_map_fusion():
-    N = 80
-    sdfg = dace.SDFG(util.unique_name("simple"))
+def serial_map_sdfg(N, extra_intermediate_edge=False):
+    sdfg = dace.SDFG(
+        util.unique_name("serial_map" if extra_intermediate_edge else "serial_map_extra_edge")
+    )
     A, _ = sdfg.add_array("A", [N], dtype=dace.float64)
     B, _ = sdfg.add_array("B", [N], dtype=dace.float64)
     C, _ = sdfg.add_scalar("C", dace.float64)
+    if extra_intermediate_edge:
+        D, _ = sdfg.add_array("D", [2], dtype=dace.float64)
     tmp, _ = sdfg.add_temp_transient([N], dtype=dace.float64)
 
     st = sdfg.add_state()
@@ -67,7 +70,18 @@ def test_vertical_map_fusion():
 
     st.add_nedge(C_node, B_node, dace.Memlet(data=C, subset="0", other_subset="0"))
 
+    if extra_intermediate_edge:
+        D_node = st.add_access(D)
+        st.add_nedge(tmp_node, D_node, dace.Memlet(data=tmp, subset="78:80", other_subset="0:2"))
+
     sdfg.validate()
+
+    return sdfg, A_node, B_node, C_node
+
+
+def test_vertical_map_fusion():
+    N = 80
+    sdfg, A_node, B_node, C_node = serial_map_sdfg(N, extra_intermediate_edge=False)
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
 
     res, ref = util.make_sdfg_args(sdfg)
@@ -85,9 +99,12 @@ def test_vertical_map_fusion():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
     # It will apply `VerticalSplitMapRange` on the first Map, then run
-    #  `SplitAccessNode`  and finally call MapFusion.
+    # `SplitAccessNode` and finally call MapFusion.
     assert ret == 3
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
+
+    assert len(sdfg.states()) == 1
+    st = next(iter(sdfg.states()))
 
     map_entry = next(node for node in st.nodes() if isinstance(node, dace_nodes.MapEntry))
     assert map_entry.map.range == dace_subsets.Range.from_string(f"1:{N}")
@@ -98,6 +115,31 @@ def test_vertical_map_fusion():
     assert all(g_node in ac_nodes for g_node in [A_node, B_node, C_node])
     transient_node = next(iter(ac for ac in ac_nodes if ac.desc(sdfg).transient))
     assert st.scope_dict()[transient_node] is map_entry
+
+
+def test_vertical_map_fusion_disabled():
+    N = 80
+    sdfg, A_node, B_node, C_node = serial_map_sdfg(N, extra_intermediate_edge=True)
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    ret = gtx_transformations.gt_vertical_map_split_fusion(
+        sdfg=sdfg,
+        run_simplify=True,
+        consolidate_edges_only_if_not_extending=False,
+        validate=True,
+        validate_all=True,
+    )
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+    # Check that vertical map split doesn't happen if part of the intermediate
+    # access node is used outside the maps.
+    assert ret == 0
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
 
 
 def test_vertical_map_fusion_with_neighbor_access():
