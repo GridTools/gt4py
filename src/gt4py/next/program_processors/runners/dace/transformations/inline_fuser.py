@@ -480,7 +480,7 @@ def _find_dimensions_access(
     aparams: set[str] = set(params)
 
     for i, access in enumerate(accesses):
-        free_symbs = access.free_symbols
+        free_symbs = {str(fs) for fs in access.free_symbols}
         for aparam in aparams:
             if aparam in free_symbs:
                 break
