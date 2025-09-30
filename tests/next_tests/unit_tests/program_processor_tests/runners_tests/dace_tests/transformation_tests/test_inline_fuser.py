@@ -25,7 +25,13 @@ import dace
 
 
 def _create_simple_fusable_sdfg() -> tuple[
-    dace.SDFG, dace.SDFGState, dace_graph.MultiConnectorEdge[dace.Memlet]
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.MapEntry,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_graph.MultiConnectorEdge[dace.Memlet],
 ]:
     sdfg = dace.SDFG(util.unique_name(f"simple_fusable_sdfg"))
     state = sdfg.add_state(is_start_block=True)
@@ -54,7 +60,7 @@ def _create_simple_fusable_sdfg() -> tuple[
         output_nodes={b},
         external_edges=True,
     )
-    _, me, _ = state.add_mapped_tasklet(
+    _, me2, _ = state.add_mapped_tasklet(
         "map2",
         map_ranges={
             "i2": "0:10",
@@ -67,15 +73,20 @@ def _create_simple_fusable_sdfg() -> tuple[
         output_nodes={c},
         external_edges=True,
     )
+    sdfg.validate()
 
-    return sdfg, state, next(iter(state.out_edges(me)))
+    return sdfg, state, me2, a, b, c, next(iter(state.out_edges(me2)))
 
 
 def test_inline_fuse_simple_case():
-    sdfg, state, edge_to_replace = _create_simple_fusable_sdfg()
+    sdfg, state, second_map_entry, a, b, c, edge_to_replace = _create_simple_fusable_sdfg()
 
     nsdfg, intermediate_node = gtx_transformations.inline_dataflow_into_map(
         sdfg=sdfg,
         state=state,
         edge=edge_to_replace,
     )
+    sdfg.validate()
+
+    assert all(oedge.dst is nsdfg for oedge in state.out_edges(second_map_entry))
+    assert state.out_degree(b) == 0

@@ -275,7 +275,7 @@ def _populate_nested_sdfg(
                 assert output_name is None
 
                 output_name, output_desc = nsdfg.add_array(
-                    "__inline_fuser_replacing_{intermediate_node.data}",
+                    f"__inline_fuser_replacing_{intermediate_node.data}",
                     shape=tuple(exchange_subset),
                     dtype=intermediate_node.desc(sdfg).dtype,
                     find_new_name=True,
