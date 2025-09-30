@@ -172,7 +172,7 @@ def make_extractor_expr(type_: xtyping.TypeAnnotation, value_expr: str) -> str:
 
     # If we don't have information about the inner structure of the type,
     # assume it doesn't need extraction and just return it as is.
-    return f"({', '.join(expr_parts)})" if expr_parts else value_expr
+    return f"({', '.join(expr_parts)},)" if expr_parts else value_expr
 
 
 def make_extractor_expr_from_type_spec(type_: ts.TypeSpec, value_expr: str) -> str:

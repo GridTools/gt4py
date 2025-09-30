@@ -22,6 +22,15 @@ from gt4py.next.type_system import type_specifications as ts
 TDim = Dimension("TDim")  # Meaningless dimension just for tests
 
 
+class SingleElementNamedTupleContainer(NamedTuple):
+    x: Field[Dims[TDim], float32]
+
+
+@dataclasses.dataclass
+class SingleElementDataclassContainer:
+    x: Field[Dims[TDim], float32]
+
+
 class NamedTupleContainer(NamedTuple):
     x: Field[Dims[TDim], float32]
     y: Field[Dims[TDim], float32]
@@ -76,6 +85,8 @@ class DeeplyNestedContainer:
 PYCONTAINERS_SAMPLES: Final[
     dict[type[containers.PyContainer], NestedTuple[common.NumericValue]]
 ] = {
+    SingleElementNamedTupleContainer: (gtx.constructors.full({TDim: 5}, 2.0),),
+    SingleElementDataclassContainer: (gtx.constructors.full({TDim: 5}, 2.0),),
     NamedTupleContainer: (
         gtx.constructors.full({TDim: 5}, 2.0),
         gtx.constructors.full({TDim: 5}, 3.0),

@@ -200,19 +200,18 @@ def test_nested_mixed_containers(cartesian_case):
 @dataclasses.dataclass
 class StateDataclass:
     value: gtx.float32
-    other: gtx.float32  # TODO: remove after single value dataclass containers work
 
 
 class StateNamedTuple(NamedTuple):
     value: gtx.float32
 
 
-@gtx.scan_operator(axis=cases.KDim, forward=True, init=StateDataclass(value=0.0, other=0.0))
+@gtx.scan_operator(axis=cases.KDim, forward=True, init=StateDataclass(value=0.0))
 def scan_dataclass(
     state: StateDataclass,
     inp: gtx.float32,
 ) -> StateDataclass:
-    return StateDataclass(value=inp + state.value, other=state.other)
+    return StateDataclass(value=inp + state.value)
 
 
 @gtx.field_operator
