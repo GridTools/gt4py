@@ -465,19 +465,20 @@ class VerticalSplitMapRange(SplitMapRange):
         access_node_out_edges = graph.out_edges(self.access_node)
         access_node_out_edges_data = [edge.data.data for edge in access_node_out_edges]
         second_map_in_edges = graph.in_edges(self.second_map_entry)
-        matching_data_subsets = {second_map_edge.data.data: second_map_edge.data.subset for second_map_edge in second_map_in_edges if second_map_edge.data.data in access_node_out_edges_data}
+        matching_data_subsets = {
+            second_map_edge.data.data: second_map_edge.data.subset
+            for second_map_edge in second_map_in_edges
+            if second_map_edge.data.data in access_node_out_edges_data
+        }
         for out_edge in access_node_out_edges:
             if out_edge.dst == self.second_map_entry:
                 continue
-            # if out_edge.data.data in matching_data_subsets.keys() and any(
-            #     gtx_dace_split.are_intersecting(out_edge.data.subset, map_edge.data.subset) for map_edge in second_map_in_edges if 
-            # ):
-            #     return False
             for matching_data, matching_subset in matching_data_subsets.items():
                 if out_edge.data.data != matching_data:
                     continue
-                # import pdb; pdb.set_trace()
-                if gtx_dace_split.are_intersecting(out_edge.data.subset, matching_subset) and isinstance(out_edge.dst, dace_nodes.AccessNode):
+                if gtx_dace_split.are_intersecting(
+                    out_edge.data.subset, matching_subset
+                ) and isinstance(out_edge.dst, dace_nodes.AccessNode):
                     return False
 
         # Avoid spliting maps for fusion that if the second map has a nested map which is a neighbor reduction which
