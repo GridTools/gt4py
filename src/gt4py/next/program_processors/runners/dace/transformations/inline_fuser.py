@@ -143,7 +143,9 @@ def _insert_nested_sdfg(
     # NOTE: This is currently done in a sub optimal way, and only allows for the
     #   transmission of one element that is immediately consumed. This is currently
     #   guaranteed by the `_extract_generating_dataflow_for_inlining()` function.
-    # TODO(phimuell): Lift this requirement and handle subsets and strides.
+    # TODO(phimuell): Lift this requirement and handle subsets and strides. Maybe copy
+    #   the idea from MapFusion and create an intermediate here and then use the
+    #   correction logic.
     state.add_edge(
         outer_output_node,
         None,
@@ -422,7 +424,8 @@ def _extract_generating_dataflow_for_inlining(
     # TODO(phimuell): Improve that.
     consumer_subset = edge.data.src_subset
     consumer_shape = consumer_subset.size()
-    producer_shape = writing_edges[0].data.get_dst_subset(writing_edges[0], state).size()
+    producer_subset = writing_edges[0].data.get_dst_subset(writing_edges[0], state)
+    producer_shape = producer_subset.size()
     for cshp, pshp in zip(consumer_shape, producer_shape, strict=True):
         if (cshp == pshp) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             continue
@@ -430,10 +433,10 @@ def _extract_generating_dataflow_for_inlining(
             continue
         return None
 
-    # Due to a restriction in `_insert_nested_sdfg()` we can only handle scalars
-    #  that are immediately consumed.
+    # Due to a restriction in `_insert_nested_sdfg()` we can only handle scalars that
+    #  are exchanged.
     # TODO(phimuell): Remove as soon as possible.
-    if (consumer_subset.num_elements() == 1) == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+    if (producer_subset.num_elements() == 1) == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
         return None
     if not isinstance(edge.dst, (dace_nodes.AccessNode, dace_nodes.Tasklet)):
         return None
