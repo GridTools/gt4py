@@ -262,7 +262,7 @@ def make_container_constructor(
 
 
 def make_container_constructor_from_type_spec(
-    container_type_spec: ts.NamedTupleType, nested: bool = True,
+    container_type_spec: ts.NamedTupleType, nested: bool = True
 ) -> ContainerConstructor:
     """Create a constructor function for the given container type specification."""
     assert isinstance(container_type_spec, ts.NamedTupleType)
