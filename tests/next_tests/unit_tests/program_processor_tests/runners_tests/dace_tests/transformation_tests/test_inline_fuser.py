@@ -110,7 +110,7 @@ def test_inline_fuse_simple_case():
     assert util.compare_sdfg_res(ref, res)
 
 
-def _make_laplap_sdfg_1() -> tuple[
+def _make_laplap_sdfg() -> tuple[
     dace.SDFG,
     dace.SDFGState,
     dace_nodes.AccessNode,
@@ -173,8 +173,8 @@ def _make_laplap_sdfg_1() -> tuple[
     return sdfg, state, lap, laplap_me, edge_m1, edge_p1, laplap_tlet
 
 
-def test_laplap1():
-    sdfg, state, lap, laplap_me, edge_m1, edge_p1, laplap_tlet = _make_laplap_sdfg_1()
+def test_laplap():
+    sdfg, state, lap, laplap_me, edge_m1, edge_p1, laplap_tlet = _make_laplap_sdfg()
 
     ref, res = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
@@ -204,3 +204,91 @@ def test_laplap1():
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_multiple_value_read_sdfg() -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.MapEntry,
+    dace_graph.MultiConnectorEdge[dace.Memlet],
+]:
+    sdfg = dace.SDFG(util.unique_name(f"multiple_value_generator"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array(
+        "a",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "b",
+        shape=(10, 3),
+        dtype=dace.float64,
+        transient=True,
+    )
+    sdfg.add_array(
+        "c",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "z",
+        shape=(3,),
+        dtype=dace.float64,
+        transient=True,
+    )
+
+    a, b, z = (state.add_access(name) for name in "abz")
+    me1, mx1 = state.add_map("first_map", ndrange={"__i": "0:10"})
+    me1_inner, mx1_inner = state.add_map(
+        "first_map", ndrange={"__k": "0:10"}, schedule=dace.dtypes.ScheduleType.Sequential
+    )
+    tlet1_inner = state.add_tasklet(
+        "inner_tasklet1",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in + __k * 1.5",
+    )
+
+    state.add_edge(a, None, me1, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(me1, "OUT_a", me1_inner, "IN_a", dace.Memlet("a[__i]"))
+    state.add_edge(me1_inner, "OUT_a", tlet1_inner, "__in", dace.Memlet("a[__i]"))
+    state.add_edge(tlet1_inner, "__out", mx1_inner, "IN_z", dace.Memlet("z[__k]"))
+    state.add_edge(mx1_inner, "OUT_z", z, None, dace.Memlet("z[0:3]"))
+    state.add_edge(z, None, mx1, "IN_b", dace.Memlet("b[__i, 0:3] -> [0:3]"))
+    state.add_edge(mx1, "OUT_b", b, None, dace.Memlet("b[0:10, 0:3]"))
+    me1.add_scope_connectors("a")
+    me1_inner.add_scope_connectors("a")
+    mx1_inner.add_scope_connectors("z")
+    mx1.add_scope_connectors("b")
+
+    _, me2, _ = state.add_mapped_tasklet(
+        "map2",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("b[__i, 1]")},
+        code="__out = __in + 0.7",
+        outputs={"__out": dace.Memlet("c[__i]")},
+        input_nodes={b},
+        external_edges=True,
+    )
+    edge_to_replace = next(iter(state.out_edges(me2)))
+
+    sdfg.validate()
+
+    return sdfg, state, z, b, me2, edge_to_replace
+
+
+def test_multiple_value_exchange():
+    # This case is currently not implemented but it should be handled.
+    sdfg, state, z, b, second_map_entry, edge_to_replace = _make_multiple_value_read_sdfg()
+
+    case_not_handled_and_thus_None = gtx_transformations.inline_dataflow_into_map(
+        sdfg=sdfg,
+        state=state,
+        edge=edge_to_replace,
+    )
+    assert case_not_handled_and_thus_None is None
