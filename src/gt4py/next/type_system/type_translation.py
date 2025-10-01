@@ -18,7 +18,7 @@ import pkgutil
 import sys
 import types
 import typing
-from typing import Any, ForwardRef, Optional, get_type_hints
+from typing import Any, ForwardRef, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -101,9 +101,9 @@ def make_type(type_: type) -> ts.TypeSpec:
     if issubclass(type_, (*core_defs.SCALAR_TYPES, str)):
         return ts.ScalarType(kind=get_scalar_kind(type_))
 
-    if issubclass(type_, containers.PY_CONTAINER_TYPES):
+    if issubclass(type_, containers.CUSTOM_CONTAINER_TYPES):
         if issubclass(type_, xtyping.DataclassABC) and not issubclass(
-            type_, containers.PyContainerDataclassABC
+            type_, containers.CustomDataclassContainerABC
         ):
             raise ValueError(
                 f"Dataclass {type_} is not a valid field container. Supported dataclasses"
@@ -112,11 +112,8 @@ def make_type(type_: type) -> ts.TypeSpec:
             )
 
         keys = [*containers.elements_keys(type_)]
-        hints = get_type_hints(type_)
-        types = [
-            from_type_hint(hints[key], globalns=sys.modules[type_.__module__].__dict__)
-            for key in keys
-        ]
+        hints = containers.elements_types(type_, globalns=sys.modules[type_.__module__].__dict__)
+        types = [from_type_hint(hint) for hint in hints.values()]
         return ts.NamedTupleType(
             types=types, keys=keys, original_python_type=f"{type_.__module__}:{type_.__qualname__}"
         )

@@ -12,15 +12,14 @@ import abc
 import dataclasses
 import enum
 import typing
-from typing import Any, Generic, Mapping, Optional, final
-
-from typing_extensions import Self
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import (
     Any,
+    Callable,
     Generic,
     Literal,
+    Mapping,
     MaybeNestedInTuple,
     Optional,
     Self,
@@ -29,6 +28,7 @@ from gt4py.eve.extended_typing import (
     TypeVar,
     TypeVarTuple,
     Unpack,
+    final,
 )
 from gt4py.next import common, containers, errors
 from gt4py.next.otf import toolchain, workflow
@@ -182,14 +182,14 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
 
 Ts = TypeVarTuple("Ts")
 NeedsValueExtraction: TypeAlias = (
-    containers.PyContainer
+    containers.CustomContainer
     | tuple[Unpack[Ts], "NeedsValueExtraction"]
     | tuple["NeedsValueExtraction", Unpack[Ts]]
 )
 
 
 def needs_value_extraction(value: object) -> TypeIs[NeedsValueExtraction]:
-    return isinstance(value, containers.PY_CONTAINER_TYPES) or (
+    return isinstance(value, containers.CUSTOM_CONTAINER_TYPES) or (
         isinstance(value, tuple) and any(needs_value_extraction(v) for v in value)
     )
 
@@ -225,7 +225,7 @@ def extract(
     """
     if isinstance(value, common.NUMERIC_VALUE_TYPES):
         return typing.cast(common.NumericValue, value)
-    if isinstance(value, containers.PY_CONTAINER_TYPES):
+    if isinstance(value, containers.CUSTOM_CONTAINER_TYPES):
         return containers.make_container_extractor(type(value))(value)
     if isinstance(value, tuple):
         return tuple(extract(v, pass_through_values=pass_through_values) for v in value)
@@ -236,17 +236,17 @@ def extract(
 
 
 # TODO(egparedes): memoize this function (and/or the one above) if TypeSpecs become hashable
-def make_numeric_value_args_extractor(
+def make_primitive_value_args_extractor(
     function: ts.FunctionType,
 ) -> Callable[..., tuple[tuple, dict[str, Any]]] | None:
     """
-    Make a function to extract numeric values from arguments that need it.
+    Make a function to extract primitive values from arguments that need it.
 
     If no arguments need extraction, return `None`.
 
     The returned function has the signature `(*args, **kwargs) -> (args, kwargs)`,
     where `args` is a tuple of positional arguments and `kwargs` is a dictionary of
-    keyword arguments containing the extracted numeric values where needed.
+    keyword arguments containing the extracted primitive values where needed.
     """
     args_param = "args"
     kwargs_param = "kwargs"

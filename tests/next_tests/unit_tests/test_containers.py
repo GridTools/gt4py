@@ -47,7 +47,7 @@ class DataclassWithInitVar:
     ],
 )
 def test_is_dataclass_container_(type_: type, is_container: bool):
-    assert issubclass(type_, containers.PyContainerDataclassABC) is is_container
+    assert issubclass(type_, containers.CustomDataclassContainerABC) is is_container
 
 
 @pytest.mark.parametrize(
@@ -56,7 +56,7 @@ def test_is_dataclass_container_(type_: type, is_container: bool):
     ids=lambda val: val.__class__.__name__,
 )
 def test_make_container_extractor(
-    container: containers.PyContainer,
+    container: containers.CustomContainer,
     expected_nested_tuple: NestedTuple[common.NumericValue],
 ):
     container_type = type(container)
@@ -78,7 +78,7 @@ def test_make_container_extractor(
     ids=lambda val: val.__class__.__name__,
 )
 def test_make_container_constructor(
-    nested_tuple: NestedTuple[common.NumericValue], expected_container: containers.PyContainer
+    nested_tuple: NestedTuple[common.NumericValue], expected_container: containers.CustomContainer
 ):
     container_type = type(expected_container)
     constructor = containers.make_container_constructor(container_type)

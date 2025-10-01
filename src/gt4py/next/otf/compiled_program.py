@@ -211,7 +211,7 @@ class CompiledProgramsPool:
 
     @functools.cached_property
     def _numeric_values_extractor(self) -> Callable | None:
-        return arguments.make_numeric_value_args_extractor(self.program_type.definition)
+        return arguments.make_primitive_value_args_extractor(self.program_type.definition)
 
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.

@@ -141,12 +141,13 @@ MaybeNestedInList = Union[_T_co, NestedList[_T_co]]
 MaybeNestedInTuple = Union[_T_co, NestedTuple[_T_co]]
 
 # -- Typing annotations --
-SolvedTypeAnnotation = Union[
+SingleTypeAnnotation = Union[
     Type,
-    _typing._SpecialForm,
     _types.GenericAlias,
     _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
 ]
+
+SolvedTypeAnnotation = Union[SingleTypeAnnotation, _typing._SpecialForm]
 
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
@@ -372,6 +373,49 @@ def get_actual_type(obj: _T) -> Type[_T]:
     return StdGenericAliasType if isinstance(obj, StdGenericAliasType) else type(obj)
 
 
+def get_represented_types(
+    type_annotation: TypeAnnotation,
+    *,
+    globalns: Optional[Dict[str, Any]] = None,
+    localns: Optional[Dict[str, Any]] = None,
+) -> tuple[type, ...]:
+    """Return a tuple with all the actual types contained in a type annotation."""
+
+    def recurse_all(annotations: Iterable[TypeAnnotation]) -> tuple[type, ...]:
+        return _functools.reduce(lambda acc, c: acc + get_represented_types(c), annotations, ())
+
+    if type_annotation is Ellipsis:
+        return ()
+
+    if is_actual_type(type_annotation):
+        return (type_annotation,)
+
+    if isinstance(type_annotation, TypeVar):
+        if type_annotation.__bound__:
+            return get_represented_types(type_annotation.__bound__)
+        if type_annotation.__constraints__:
+            return recurse_all(type_annotation.__constraints__)
+        if typevar_default := getattr(type_annotation, "__default__", None):
+            return get_represented_types(typevar_default)
+
+    if isinstance(type_annotation, ForwardRef):
+        return get_represented_types(
+            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
+        )
+
+    # Generic types
+    origin_type = get_origin(type_annotation)
+    type_args = get_args(type_annotation)
+
+    if origin_type in [Literal, Union, _types.UnionType]:
+        return recurse_all(t for t in type_args)
+
+    if origin_type is not None:
+        return (origin_type,)
+
+    return ()
+
+
 def is_type_with_custom_hash(type_: Type) -> bool:
     return type_.__hash__ not in (None, object.__hash__)
 
@@ -385,7 +429,7 @@ class HasCustomHash(Hashable):
 
 
 def is_value_hashable(obj: Any) -> TypeGuard[HasCustomHash]:
-    return isinstance(obj, type) or obj is None or is_type_with_custom_hash(type(obj))
+    return isinstance(obj, type) or obj is None or isinstance(type(obj), HasCustomHash)
 
 
 def is_value_hashable_typing(
@@ -395,43 +439,8 @@ def is_value_hashable_typing(
     localns: Optional[Dict[str, Any]] = None,
 ) -> bool:
     """Check if a type annotation describes a type hashable by value."""
-    if is_actual_type(type_annotation):
-        assert not get_args(type_annotation)
-        return (
-            True
-            if type_annotation in (type, type(None))
-            else is_type_with_custom_hash(type_annotation)
-        )
-
-    if isinstance(type_annotation, TypeVar):
-        if type_annotation.__bound__:
-            return is_value_hashable_typing(type_annotation.__bound__)
-        if type_annotation.__constraints__:
-            return all(is_value_hashable_typing(c) for c in type_annotation.__constraints__)
-        return False
-
-    if isinstance(type_annotation, ForwardRef):
-        return is_value_hashable_typing(
-            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
-        )
-
-    if type_annotation is Any:
-        return False
-
-    # Generic types
-    origin_type = get_origin(type_annotation)
-    type_args = get_args(type_annotation)
-
-    if origin_type is Literal:
-        return True
-
-    if origin_type is Union:
-        return all(is_value_hashable_typing(t) for t in type_args)
-
-    if isinstance(origin_type, type) and is_value_hashable_typing(origin_type):
-        return all(is_value_hashable_typing(t) for t in type_args if t != Ellipsis)
-
-    return type_annotation is None
+    types = get_represented_types(type_annotation, globalns=globalns, localns=localns)
+    return all(is_value_hashable(t) for t in types)
 
 
 class TypedNamedTupleABC(_abc.ABC, Generic[_T_co]):

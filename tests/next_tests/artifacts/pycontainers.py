@@ -83,7 +83,7 @@ class DeeplyNestedContainer:
 
 
 PYCONTAINERS_SAMPLES: Final[
-    dict[type[containers.PyContainer], NestedTuple[common.NumericValue]]
+    dict[type[containers.CustomContainer], NestedTuple[common.NumericValue]]
 ] = {
     SingleElementNamedTupleContainer: (gtx.constructors.full({TDim: 5}, 2.0),),
     SingleElementDataclassContainer: (gtx.constructors.full({TDim: 5}, 2.0),),
@@ -142,7 +142,7 @@ PYCONTAINERS_SAMPLES: Final[
 }
 
 
-PC = TypeVar("PC", bound=containers.PyContainer)
+PC = TypeVar("PC", bound=containers.CustomContainer)
 
 
 def from_nested_tuple(container_type_hint: type[PC], data: NestedTuple) -> PC:
@@ -170,11 +170,11 @@ def from_nested_tuple(container_type_hint: type[PC], data: NestedTuple) -> PC:
         return container_type(**nested_values)
 
 
-def to_nested_tuple(container: containers.PyContainer) -> NestedTuple:
+def to_nested_tuple(container: containers.CustomContainer) -> NestedTuple:
     """Convert a container into a nested tuple."""
     return tuple(
         to_nested_tuple(value)
-        if isinstance(value := getattr(container, key), containers.ANY_CONTAINER_TYPES)
+        if isinstance(value := getattr(container, key), containers.CONTAINER_TYPES)
         else value
         for key in containers.elements_keys(container.__class__)
     )

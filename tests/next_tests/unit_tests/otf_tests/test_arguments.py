@@ -62,7 +62,7 @@ def test_extract_with_non_container():
     ids=lambda val: val.__class__.__name__,
 )
 def test_extract_with_container(
-    container: containers.PyContainer,
+    container: containers.CustomContainer,
     expected_nested_tuple: NestedTuple[common.NumericValue],
 ):
     """Test extract with a container argument."""
@@ -80,13 +80,13 @@ def test_make_numeric_value_args_extractor_no_extraction_needed():
         returns=ts.VoidType(),
     )
 
-    extractor = arguments.make_numeric_value_args_extractor(function_type)
+    extractor = arguments.make_primitive_value_args_extractor(function_type)
     assert extractor is None
 
 
 @pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
 def test_make_numeric_value_args_extractor_with_pos_args(
-    pycontainer_type: type[containers.PyContainer],
+    pycontainer_type: type[containers.CustomContainer],
 ):
     """Test make_numeric_value_args_extractor with positional arguments needing extraction."""
 
@@ -107,7 +107,7 @@ def test_make_numeric_value_args_extractor_with_pos_args(
     )
 
     for function_type in [function_type_pos_only, function_type_pos_or_kw]:
-        extractor = arguments.make_numeric_value_args_extractor(function_type)
+        extractor = arguments.make_primitive_value_args_extractor(function_type)
         assert extractor is not None
 
         # Test the generated extractor
@@ -119,7 +119,7 @@ def test_make_numeric_value_args_extractor_with_pos_args(
 
 @pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
 def test_make_numeric_value_args_extractor_with_kw_args(
-    pycontainer_type: type[containers.PyContainer],
+    pycontainer_type: type[containers.CustomContainer],
 ):
     """Test make_numeric_value_args_extractor with keyword arguments needing extraction."""
 
@@ -131,7 +131,7 @@ def test_make_numeric_value_args_extractor_with_kw_args(
         returns=ts.VoidType(),
     )
 
-    extractor = arguments.make_numeric_value_args_extractor(function_type)
+    extractor = arguments.make_primitive_value_args_extractor(function_type)
     assert extractor is not None
 
     # Test the generated extractor
@@ -143,7 +143,7 @@ def test_make_numeric_value_args_extractor_with_kw_args(
 
 @pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
 def test_make_numeric_value_args_extractor_with_tuple_args(
-    pycontainer_type: type[containers.PyContainer],
+    pycontainer_type: type[containers.CustomContainer],
 ):
     """Test make_numeric_value_args_extractor with tuple arguments containing containers."""
 
@@ -153,7 +153,7 @@ def test_make_numeric_value_args_extractor_with_tuple_args(
         pos_only_args=[tuple_type], pos_or_kw_args={}, kw_only_args={}, returns=ts.VoidType()
     )
 
-    extractor = arguments.make_numeric_value_args_extractor(function_type)
+    extractor = arguments.make_primitive_value_args_extractor(function_type)
     assert extractor is not None
 
     # Test the generated extractor
@@ -166,7 +166,7 @@ def test_make_numeric_value_args_extractor_with_tuple_args(
 
 @pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
 def test_make_numeric_value_args_extractor_mixed_args(
-    pycontainer_type: type[containers.PyContainer],
+    pycontainer_type: type[containers.CustomContainer],
 ):
     """Test make_numeric_value_args_extractor with mixed positional and keyword arguments."""
 
@@ -178,7 +178,7 @@ def test_make_numeric_value_args_extractor_mixed_args(
         returns=ts.VoidType(),
     )
 
-    extractor = arguments.make_numeric_value_args_extractor(function_type)
+    extractor = arguments.make_primitive_value_args_extractor(function_type)
     assert extractor is not None
 
     # Test the generated extractor
