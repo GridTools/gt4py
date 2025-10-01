@@ -108,3 +108,99 @@ def test_inline_fuse_simple_case():
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref, res)
+
+
+def _make_laplap_sdfg_1() -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.MapEntry,
+    dace_graph.MultiConnectorEdge[dace.Memlet],
+    dace_graph.MultiConnectorEdge[dace.Memlet],
+    dace_nodes.Tasklet,
+]:
+    sdfg = dace.SDFG(util.unique_name(f"laplap1"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array(
+        "a",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "lap",
+        shape=(8,),
+        dtype=dace.float64,
+        transient=True,
+    )
+    sdfg.add_array(
+        "laplap",
+        shape=(6,),
+        dtype=dace.float64,
+        transient=False,
+    )
+    lap = state.add_access("lap")
+
+    state.add_mapped_tasklet(
+        "lap",
+        map_ranges={"__i": "0:8"},
+        inputs={
+            "__in1": dace.Memlet("a[__i]"),
+            "__in2": dace.Memlet("a[__i + 2]"),
+        },
+        code="__out = __in2 - __in1",
+        outputs={"__out": dace.Memlet("lap[__i]")},
+        output_nodes={lap},
+        external_edges=True,
+    )
+    laplap_tlet, laplap_me, _ = state.add_mapped_tasklet(
+        "laplap",
+        map_ranges={"__i": "0:6"},
+        inputs={
+            "__in1": dace.Memlet("lap[__i]"),
+            "__in2": dace.Memlet("lap[__i + 2]"),
+        },
+        code="__out = __in2 - __in1",
+        outputs={"__out": dace.Memlet("laplap[__i]")},
+        input_nodes={lap},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    edge_m1 = next(iter(oedge for oedge in state.out_edges(laplap_me) if oedge.dst_conn == "__in1"))
+    edge_p1 = next(iter(oedge for oedge in state.out_edges(laplap_me) if oedge.dst_conn == "__in2"))
+    return sdfg, state, lap, laplap_me, edge_m1, edge_p1, laplap_tlet
+
+
+def test_laplap1():
+    sdfg, state, lap, laplap_me, edge_m1, edge_p1, laplap_tlet = _make_laplap_sdfg_1()
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    nsdfg_m1, output_node_m1 = gtx_transformations.inline_dataflow_into_map(
+        sdfg=sdfg,
+        state=state,
+        edge=edge_m1,
+    )
+    sdfg.validate()
+    nsdfg_p1, output_node_p1 = gtx_transformations.inline_dataflow_into_map(
+        sdfg=sdfg,
+        state=state,
+        edge=edge_p1,
+    )
+
+    assert state.out_degree(lap) == 0
+    assert state.in_degree(laplap_tlet) == 2
+
+    assert state.out_degree(output_node_m1) == 1
+    assert next(iter(state.in_edges_by_connector(laplap_tlet, "__in1"))).src is output_node_m1
+    assert str(nsdfg_m1.symbol_mapping["__i"]) == "__i"
+
+    assert state.out_degree(output_node_p1) == 1
+    assert next(iter(state.in_edges_by_connector(laplap_tlet, "__in2"))).src is output_node_p1
+    assert str(nsdfg_p1.symbol_mapping["__i"]) == "__i + 2"
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
