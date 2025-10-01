@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+import warnings
 from typing import Final, Iterable, Optional, Sequence
 
 import dace
@@ -288,10 +289,28 @@ def _populate_nested_sdfg(
                     oedge.dst_conn,
                     memlet=dace.Memlet.from_array(output_name, output_desc),
                 )
+
+            elif oedge.src not in nodes_to_replicate:
+                # This connection leads to a node that has not been replicated into the
+                #  nested SDFG. This is only allowed if `oedge.src` is an AccessNode in
+                #  that case we simply do not generate this edge. All other cases
+                #  are harder to handle.
+                # NOTE: In some cases it would be possible to handle views.
+                if (
+                    not isinstance(oedge.src, dace_nodes.AccessNode)
+                ) or gtx_transformations.utils.is_view(oedge.src, sdfg):
+                    raise NotImplementedError(
+                        "Connections to a non replicated node are only allowed if the source node is an AccessNode"
+                    )
+
+                warnings.warn(
+                    "Detected computation of data that might not be needed in inline fuser.",
+                    stacklevel=0,
+                )
+
             else:
                 # A normal connection to a node that is also mapped into the nested
                 #  SDFG. We just replicate it.
-                assert dst_node in nodes_to_replicate
                 nstate.add_edge(
                     replicated_node_map[iedge.src],
                     iedge.src_conn,
@@ -420,6 +439,22 @@ def _extract_generating_dataflow_for_inlining(
     assert first_map_exit not in generating_nodes
     assert state.entry_node(first_map_exit) not in generating_nodes
     assert len(generating_nodes) >= 1
+
+    # Fore syntactical reasons we require that all outgoing edges of the nodes in
+    #  `generating_nodes` must lead to nodes that are also in that set, or go to
+    #  the MapExit node (in which case the outgoing edge must be `edge`). The only
+    #  exceptions are AccessNode. Technically we could also handle Tasklets, but
+    #  they would require a little bit more work in `_populated_nsdfg()`.
+    for generating_node in generating_nodes:
+        for oedge in state.out_edges(generating_node):
+            if oedge.dst is first_map_exit:
+                assert oedge is writing_edges[0]
+            elif oedge.dst not in generating_nodes:
+                if isinstance(oedge.src, dace_nodes.AccessNode) and (
+                    not gtx_transformations.utils.is_view(oedge.src, sdfg)
+                ):
+                    continue
+                return None
 
     return (
         generating_nodes,
