@@ -1632,9 +1632,10 @@ def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProvider
 @runtime.set_at.register(EMBEDDED)
 def set_at(
     expr: common.Field,
-    domain: common.DomainLike | tuple[common.DomainLike | tuple, ...],
+    domain: xtyping.MaybeNestedInTuple[common.DomainLike],
     target: common.MutableField,
 ) -> None:
+    domain = common.normalize_domains(domain)
     operators._tuple_assign_field(target, expr, domain)
 
 

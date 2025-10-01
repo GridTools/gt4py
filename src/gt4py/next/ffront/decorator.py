@@ -630,15 +630,15 @@ OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
 
 
 def _slice_outs(
-    outs: common.Field | tuple[common.Field | tuple, ...],
-    domains: common.Domain | tuple[common.Domain | tuple, ...],
+    outs: xtyping.MaybeNestedInTuple[common.Field],
+    domains: xtyping.MaybeNestedInTuple[common.Domain],
 ) -> common.Field | tuple[common.Field | tuple, ...]:
     if isinstance(outs, tuple):
         if not isinstance(domains, tuple):
             domains = tuple([domains] * len(outs))
         return tuple(_slice_outs(out, domain) for out, domain in zip(outs, domains, strict=True))
     else:
-        return outs[common.domain(domains)]
+        return outs[domains]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -782,7 +782,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
             if "domain" in kwargs:
-                out = _slice_outs(out, kwargs.pop("domain"))
+                dom = common.normalize_domains(kwargs.pop("domain"))
+                out = _slice_outs(out, dom)
 
             args, kwargs = type_info.canonicalize_arguments(
                 self.foast_stage.foast_node.type, args, kwargs
