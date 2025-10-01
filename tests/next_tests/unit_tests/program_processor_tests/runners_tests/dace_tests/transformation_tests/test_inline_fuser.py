@@ -80,8 +80,9 @@ def _create_simple_fusable_sdfg() -> tuple[
 
 def test_inline_fuse_simple_case():
     sdfg, state, second_map_entry, a, b, c, edge_to_replace = _create_simple_fusable_sdfg()
+    assert util.count_nodes(sdfg, dace_nodes.NestedSDFG) == 0
 
-    nsdfg, intermediate_node = gtx_transformations.inline_dataflow_into_map(
+    nsdfg, output_node = gtx_transformations.inline_dataflow_into_map(
         sdfg=sdfg,
         state=state,
         edge=edge_to_replace,
@@ -90,3 +91,20 @@ def test_inline_fuse_simple_case():
 
     assert all(oedge.dst is nsdfg for oedge in state.out_edges(second_map_entry))
     assert state.out_degree(b) == 0
+    assert str(nsdfg.symbol_mapping["i1"]) == "i2"
+    assert str(nsdfg.symbol_mapping["j1"]) == "j2"
+    assert util.count_nodes(sdfg, dace_nodes.NestedSDFG) == 1
+
+    nested_ac = util.count_nodes(nsdfg.sdfg, dace_nodes.AccessNode, True)
+    assert len(nested_ac) == 2
+    assert {a.data, output_node.data} == {ac.data for ac in nested_ac}
+
+    nested_tlet = util.count_nodes(nsdfg.sdfg, dace_nodes.Tasklet, True)
+    assert len(nested_tlet) == 1
+    assert nested_tlet[0].code.as_string == "__out = (__in + 1.0)"
+
+    ref, res = util.make_sdfg_args(sdfg)
+    ref["c"] = ref["a"] + 2.1
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref, res)
