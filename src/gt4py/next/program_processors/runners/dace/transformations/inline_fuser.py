@@ -92,6 +92,9 @@ def _insert_nested_sdfg(
                 next(iter(state.in_edges_by_connector(second_map_entry, "IN_" + conn_to_use[4:])))
             )
             for edge in memlet_path_to_widen:
+                edge.data.try_initialize(
+                    sdfg, state, edge
+                )  # There is not `Memlet::set_src_subset()`.
                 edge.data.src_subset = dace_sbs.Range.from_array(sdfg.arrays[requiered_node.data])
                 if edge.dst is second_map_entry:
                     break
@@ -149,7 +152,7 @@ def _insert_nested_sdfg(
         dace.Memlet(
             data=outer_output_name,
             subset=dace_sbs.Range.from_array(sdfg.arrays[outer_output_name]),
-            other_subset=edge_to_replace.data.dst_subset,
+            other_subset=edge_to_replace.data.get_dst_subset(edge_to_replace, state),
         ),
     )
 
@@ -312,11 +315,11 @@ def _populate_nested_sdfg(
                 # A normal connection to a node that is also mapped into the nested
                 #  SDFG. We just replicate it.
                 nstate.add_edge(
-                    replicated_node_map[iedge.src],
-                    iedge.src_conn,
-                    replicated_node_map[iedge.dst],
-                    iedge.dst_conn,
-                    dace.Memlet.from_memlet(iedge.data),
+                    replicated_node_map[oedge.src],
+                    oedge.src_conn,
+                    replicated_node_map[oedge.dst],
+                    oedge.dst_conn,
+                    dace.Memlet.from_memlet(oedge.data),
                 )
 
     assert len(input_node_map) == len(set(input_node_map.values()))
@@ -361,7 +364,7 @@ def _extract_generating_dataflow_for_inlining(
         return None
 
     # Check the Memlet.
-    if edge.data.src_subset is None:
+    if edge.data.get_src_subset(edge, state) is None:
         return None
     if any((step != 1) == True for _, _, step in edge.data.src_subset):  # noqa: E712 [true-false-comparison]  # SymPy comparison
         return None
@@ -398,6 +401,7 @@ def _extract_generating_dataflow_for_inlining(
         return None
 
     first_map_param_mapping = _get_first_map_parameter_to_second_map_mapping(
+        state=state,
         first_map=first_map_exit.map,
         write_edge=writing_edges[0],
         second_map=edge.src.map,
@@ -413,7 +417,7 @@ def _extract_generating_dataflow_for_inlining(
     # TODO(phimuell): Improve that.
     consumer_subset = edge.data.src_subset
     consumer_shape = consumer_subset.size()
-    producer_shape = writing_edges[0].data.dst_subset.size()
+    producer_shape = writing_edges[0].data.get_dst_subset(writing_edges[0], state).size()
     for cshp, pshp in zip(consumer_shape, producer_shape, strict=True):
         if (cshp == pshp) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             continue
@@ -467,6 +471,7 @@ def _extract_generating_dataflow_for_inlining(
 
 
 def _get_first_map_parameter_to_second_map_mapping(
+    state: dace.SDFGState,
     first_map: dace_nodes.Map,
     write_edge: dace_graph.MultiConnectorEdge[dace.Memlet],
     second_map: dace_nodes.Map,
@@ -475,17 +480,17 @@ def _get_first_map_parameter_to_second_map_mapping(
     """Expresses the values of the first Map's parameter name in terms of the second map."""
     assert first_map.get_param_num() == second_map.get_param_num()
     assert isinstance(write_edge.dst, dace_nodes.MapExit)
-    assert write_edge.data.dst_subset is not None
+    assert write_edge.data.get_dst_subset(write_edge, state) is not None
     assert isinstance(read_edge.src, dace_nodes.MapEntry)
-    assert read_edge.data.src_subset is not None
+    assert read_edge.data.get_src_subset(read_edge, state) is not None
 
     parameter_mapping: dict[str, str] = {}
 
     # Currently we only consider the lower bound and nothing else, which is probably
     #  okay for the GT4Py setting.
     #  NOTE: This assumes that all the magic happens in the lower bound.
-    first_map_accesses = write_edge.data.dst_subset.min_element()
-    second_map_accesses = read_edge.data.src_subset.min_element()
+    first_map_accesses = write_edge.data.get_dst_subset(write_edge, state).min_element()
+    second_map_accesses = read_edge.data.get_src_subset(read_edge, state).min_element()
 
     # We assume that the different dimensions are independent, i.e. each parameter is
     #  used to access exactly one dimension, this rules out accesses such as
@@ -524,6 +529,12 @@ def _find_dimensions_access(
 
     for i, access in enumerate(accesses):
         free_symbs = {str(fs) for fs in access.free_symbols}
+
+        if len(free_symbs) == 0:
+            # This is the case for an access `a[_i, 1]`, so there is no dimension
+            #  to associate it with.
+            continue
+
         for aparam in aparams:
             if aparam in free_symbs:
                 break
