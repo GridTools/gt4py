@@ -11,23 +11,23 @@ from __future__ import annotations
 import abc
 import dataclasses
 import enum
-import typing
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import (
     Any,
     Callable,
     Generic,
-    Literal,
+    Hashable,
     Mapping,
     MaybeNestedInTuple,
     Optional,
     Self,
     TypeAlias,
-    TypeIs,
+    TypeGuard,
     TypeVar,
     TypeVarTuple,
     Unpack,
+    cast,
     final,
 )
 from gt4py.next import common, containers, errors
@@ -35,8 +35,7 @@ from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-DATA_T = typing.TypeVar("DATA_T")
-T = typing.TypeVar("T")
+DATA_T = TypeVar("DATA_T")
 
 
 def _make_dict_expr(exprs: dict[str, str]) -> str:
@@ -181,14 +180,14 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
 
 
 Ts = TypeVarTuple("Ts")
-NeedsValueExtraction: TypeAlias = (
+NeedsValueExtraction: TypeAlias = (  # This is not really accurate, just an approximation
     containers.CustomContainer
     | tuple[Unpack[Ts], "NeedsValueExtraction"]
     | tuple["NeedsValueExtraction", Unpack[Ts]]
 )
 
 
-def needs_value_extraction(value: object) -> TypeIs[NeedsValueExtraction]:
+def needs_value_extraction(value: object) -> TypeGuard[NeedsValueExtraction]:
     return isinstance(value, containers.CUSTOM_CONTAINER_TYPES) or (
         isinstance(value, tuple) and any(needs_value_extraction(v) for v in value)
     )
@@ -197,48 +196,39 @@ def needs_value_extraction(value: object) -> TypeIs[NeedsValueExtraction]:
 T = TypeVar("T")
 
 
-@typing.overload
 def extract(
-    value: T,
-    *,
-    pass_through_values: Literal[True],
-) -> T | MaybeNestedInTuple[common.NumericValue]: ...
-
-
-@typing.overload
-def extract(
-    value: common.NumericValue | NeedsValueExtraction,
-    *,
-    pass_through_values: Literal[False],
-) -> MaybeNestedInTuple[common.NumericValue]: ...
-
-
-def extract(
-    value: Any, pass_through_values: bool = True
-) -> MaybeNestedInTuple[common.NumericValue]:
+    value: T, pass_through_values: bool = True
+) -> MaybeNestedInTuple[T | common.PrimitiveValue]:
     """
-    Extract the values from a run-time value into a digestable numeric value form.
+    Extract the values from a run-time argument into a digestible value form.
 
     This functions is useful to do the extraction from run-time values
-    when the full type information is not available. For non-container values,
+    when the full type information is not available. For primitive values,
     return them as-is if `pass_through_values` is `True`, otherwise raise a `TypeError`.
     """
     if isinstance(value, common.NUMERIC_VALUE_TYPES):
-        return typing.cast(common.NumericValue, value)
+        return value
     if isinstance(value, containers.CUSTOM_CONTAINER_TYPES):
-        return containers.make_container_extractor(type(value))(value)
+        return containers.make_container_extractor(cast(Hashable, type(value)))(value)
     if isinstance(value, tuple):
-        return tuple(extract(v, pass_through_values=pass_through_values) for v in value)
+        if needs_value_extraction(value):
+            return tuple(extract(v, pass_through_values=pass_through_values) for v in value)
+        else:
+            return value
     if pass_through_values:
         return value
 
     raise TypeError(f"Cannot extract numeric value from {type(value)}.")
 
 
+ExtractedArgs: TypeAlias = tuple[MaybeNestedInTuple[common.PrimitiveValue]]
+ExtractedKwargs: TypeAlias = dict[str, MaybeNestedInTuple[common.PrimitiveValue]]
+
+
 # TODO(egparedes): memoize this function (and/or the one above) if TypeSpecs become hashable
 def make_primitive_value_args_extractor(
     function: ts.FunctionType,
-) -> Callable[..., tuple[tuple, dict[str, Any]]] | None:
+) -> Callable[..., tuple[ExtractedArgs, ExtractedKwargs]] | None:
     """
     Make a function to extract primitive values from arguments that need it.
 

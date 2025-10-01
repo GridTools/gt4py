@@ -79,14 +79,14 @@ def is_container_type(type_hint: xtyping.TypeAnnotation) -> TypeGuard[type[Conta
     return container_type(type_hint) is not None
 
 
-@functools.cache
 def elements_keys(container_type_hint: xtyping.SingleTypeAnnotation) -> tuple[ContainerKey, ...]:
     """Get the keys of the elements in a container type."""
     class_ = xtyping.get_origin(container_type_hint) or container_type_hint
     if class_ is tuple:
         return tuple(range(len(xtyping.get_args(container_type_hint))))
 
-    return getattr(class_, "__match_args__", ()) if isinstance(class_, type) else ()
+    # TODO(egparedes): consider using "__match_args__" as general custom container marker
+    return tuple(getattr(class_, "__annotations__", {}).keys()) if isinstance(class_, type) else ()
 
 
 def elements_types(
