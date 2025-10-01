@@ -37,8 +37,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     mesh_descriptor,
 )
 
-from gt4py.next import common
-
 KHalfDim = gtx.Dimension("KHalf", kind=gtx.DimensionKind.VERTICAL)
 pytestmark = pytest.mark.uses_cartesian_shift
 
@@ -53,7 +51,6 @@ def prog_no_tuple(
     a: IField,
     b: JField,
     out_a: IField,
-    out_b: IField,
     i_size: gtx.int32,
 ):
     testee_no_tuple(a, b, out=out_a, domain={IDim: (0, i_size)})
@@ -63,7 +60,6 @@ def test_program_no_tuple(cartesian_case):
     a = cases.allocate(cartesian_case, prog_no_tuple, "a")()
     b = cases.allocate(cartesian_case, prog_no_tuple, "b")()
     out_a = cases.allocate(cartesian_case, prog_no_tuple, "out_a")()
-    out_b = cases.allocate(cartesian_case, prog_no_tuple, "out_b")()
 
     cases.verify(
         cartesian_case,
@@ -71,7 +67,6 @@ def test_program_no_tuple(cartesian_case):
         a,
         b,
         out_a,
-        out_b,
         cartesian_case.default_sizes[IDim],
         inout=out_a,
         ref=a,
@@ -214,8 +209,6 @@ def prog_slicing(
     b: JField,
     out_a: IField,
     out_b: JField,
-    i_size: gtx.int32,
-    j_size: gtx.int32,
 ):
     testee(
         a,
@@ -238,8 +231,6 @@ def test_program_slicing(cartesian_case):
         b,
         out_a,
         out_b,
-        cartesian_case.default_sizes[IDim],
-        cartesian_case.default_sizes[JDim],
         inout=(out_b, out_a),
         ref=(
             np.concatenate([out_b_.ndarray[0:2], b.ndarray[2:-2], out_b_.ndarray[-2:]]),
@@ -660,7 +651,3 @@ def test_direct_fo_no_domain(cartesian_case):
         out=out,
         ref=(b, a),
     )
-
-
-# TODO:
-#  - vertical staggering with dependency
