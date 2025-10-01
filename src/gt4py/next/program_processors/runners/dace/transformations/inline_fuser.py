@@ -198,6 +198,9 @@ def _populate_nested_sdfg(
         replicated_node_map[node_to_replicate] = replicated_node
         nstate.add_node(replicated_node)
 
+    # This is the name used to store the output.
+    output_name: Optional[str] = None
+
     # Create the connections between the nodes in the nested SDFG.
     #  This also involves adding the outside data into the nested container and
     #  create the output.
@@ -266,8 +269,10 @@ def _populate_nested_sdfg(
                 dace.Memlet.from_memlet(iedge.data),
             )
 
-        # Now handle the output of the node.
-        output_name: Optional[str] = None
+        # Recreate the connections between the nodes that we have replicated.
+        #  It is important that above we only handled the connections that were now
+        #  because they were coming from the MapEntry node of the first Map.
+        #  Furthermore, we also handle the output.
         for oedge in state.out_edges(node_to_replicate):
             dst_node = oedge.dst
 
