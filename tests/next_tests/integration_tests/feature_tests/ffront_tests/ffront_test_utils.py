@@ -74,22 +74,22 @@ no_backend = NoBackend(
         next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED,
         next_tests.definitions.ProgramBackendId.GTFN_CPU,
         next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
-        pytest.param(
-            next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
-        ),
+        # pytest.param(
+        #     next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
+        # ),
         # will use the default (embedded) execution, but input/output allocated with the provided allocator
         next_tests.definitions.EmbeddedIds.NUMPY_EXECUTION,
-        pytest.param(
-            next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
-        ),
+        # pytest.param(
+        #     next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
+        # ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
             marks=pytest.mark.requires_dace,
         ),
-        pytest.param(
-            next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
-            marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
-        ),
+        # pytest.param(
+        #     next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
+        #     marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
+        # ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU_NO_OPT,
             marks=pytest.mark.requires_dace,

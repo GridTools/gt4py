@@ -164,8 +164,9 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
             def infer_type(elt: past.Dict | past.TupleExpr) -> ts.DomainType | ts.TupleType:
                 if isinstance(elt, past.Dict):
-                    # TODO: add check that Dict is DomainLike
-                    return ts.DomainType(dims=[common.Dimension(elt.keys_[0].id)])
+                    assert all(isinstance(key, past.Name) for key in elt.keys_)
+                    assert all(isinstance(key.type, ts.DimensionType) for key in elt.keys_)
+                    return ts.DomainType(dims=[common.Dimension(key.id) for key in elt.keys_])
                 elif isinstance(elt, past.TupleExpr):
                     return ts.TupleType(types=[infer_type(elt) for elt in elt.elts])
                 else:
