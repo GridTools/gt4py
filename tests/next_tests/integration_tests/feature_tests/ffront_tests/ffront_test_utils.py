@@ -212,9 +212,6 @@ class MeshDescriptor(Protocol):
     def num_edges(self) -> int: ...
 
     @property
-    def num_levels(self) -> int: ...
-
-    @property
     def offset_provider(self) -> common.OffsetProvider: ...
 
     @property

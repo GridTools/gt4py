@@ -51,7 +51,6 @@ def unstructured(request, exec_alloc_descriptor, mesh_descriptor):  # noqa: F811
             Vertex: mesh_descriptor.num_vertices,
             Edge: mesh_descriptor.num_edges,
             Cell: mesh_descriptor.num_cells,
-            KDim: mesh_descriptor.num_levels,
         },
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=exec_alloc_descriptor.allocator,
