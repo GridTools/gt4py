@@ -187,8 +187,8 @@ def make_sdfg_timer(sdfg: dace.SDFG) -> None:
     SDFG with a cpp timer (std::chrono). This timer measures only the computation
     time, it does not include the overhead of calling the SDFG from Python.
 
-    The execution time is measured in seconds and repsented as a 'float64' value.
-    It is returned from the SDFG as a single element array in the '__return' data node.
+    The execution time is measured in seconds and represented as a 'float64' value.
+    It is returned from the SDFG as a one-element array in the '__return' data node.
     """
     output, _ = sdfg.add_array("__return", [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.float64, transient=True)
@@ -348,14 +348,13 @@ class DaCeTranslator(
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
         # We have to wait for SDFG completion if we need to collect metrics.
-        async_sdfg_call = (
-            self.async_sdfg_call if config.COLLECT_METRICS_LEVEL == metrics.DISABLED else False
-        )
-        if async_sdfg_call:
+        if config.COLLECT_METRICS_LEVEL != metrics.DISABLED:
+            make_sdfg_call_sync(sdfg, on_gpu)
+            make_sdfg_timer(sdfg)
+        elif self.async_sdfg_call:
             make_sdfg_call_async(sdfg, on_gpu)
         else:
             make_sdfg_call_sync(sdfg, on_gpu)
-            make_sdfg_timer(sdfg)
 
         return sdfg
 

@@ -14,10 +14,9 @@ from typing import Any, Callable, Sequence
 
 import dace
 import factory
-import numpy as np
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import config, metrics
+from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
@@ -49,23 +48,6 @@ def _get_sdfg_ctype_arglist_callback(
     assert bind_func_name in global_namespace
     global_namespace[bind_func_name].__module__ = module_name
     return global_namespace[bind_func_name]
-
-
-def _collect_compute_time(fun: Callable[..., Any]) -> Callable[..., None]:
-    collect_time = config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
-
-    def inner(*args: Any, **kwargs: Any) -> None:
-        result = fun(*args, **kwargs)
-        if collect_time:
-            assert len(result) == 1
-            assert isinstance(result[0], np.float64)
-            metric_collection = metrics.get_active_metric_collection()
-            if metric_collection is not None:
-                metric_collection.add_sample(metrics.COMPUTE_METRIC, result[0].item())
-        else:
-            assert (result is None) or (config.COLLECT_METRICS_LEVEL != metrics.DISABLED)
-
-    return inner
 
 
 class CompiledDaceProgram(stages.CompiledProgram):
@@ -103,11 +85,9 @@ class CompiledDaceProgram(stages.CompiledProgram):
             binding_module_name, bind_func_name, binding_source.source_code
         )
 
-    @_collect_compute_time
     def __call__(self, **kwargs: Any) -> Any:
         return self.sdfg_program(**kwargs)
 
-    @_collect_compute_time
     def fast_call(self) -> Any:
         return self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
 

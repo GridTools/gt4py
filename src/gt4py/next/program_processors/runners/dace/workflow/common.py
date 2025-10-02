@@ -16,7 +16,7 @@ from gt4py.next import config
 
 
 SDFG_ARG_METRIC_LEVEL: Final[str] = "gt_metrics_level"
-"""Name of SDFG argument to retrive the GT4Py metrics level to collect."""
+"""Name of SDFG argument to retrive the GT4Py metrics level."""
 
 
 def set_dace_config(

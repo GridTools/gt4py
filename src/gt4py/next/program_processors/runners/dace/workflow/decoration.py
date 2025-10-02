@@ -9,18 +9,41 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import dace
+import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common, config, utils as gtx_utils
+from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
 from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     compilation as gtx_wfdcompilation,
 )
+
+
+def _collect_compute_time(fun: Callable[..., Any]) -> Callable[..., None]:
+    collect_time = config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
+
+    def inner(*args: Any, **kwargs: Any) -> None:
+        result = fun(*args, **kwargs)
+        if not collect_time:
+            return
+        if result is None:
+            raise RuntimeError(
+                "Config 'COLLECT_METRICS_LEVEL' is set but the SDFG did not return"
+                " the compute time as expected. This might indicate that the backend"
+                " is using a precompiled SDFG from persistent cache without instrumentation."
+            )
+        assert len(result) == 1
+        assert isinstance(result[0], np.float64)
+        metric_collection = metrics.get_active_metric_collection()
+        if metric_collection is not None:
+            metric_collection.add_sample(metrics.COMPUTE_METRIC, result[0].item())
+
+    return inner
 
 
 def convert_args(
@@ -32,11 +55,12 @@ def convert_args(
         fun.update_sdfg_ctype_arglist, device, fun.sdfg_argtypes
     )
 
+    @_collect_compute_time
     def decorated_program(
         *args: Any,
         offset_provider: gtx_common.OffsetProvider,
         out: Any = None,
-    ) -> None:
+    ) -> Any:
         if out is not None:
             args = (*args, out)
 
@@ -53,12 +77,12 @@ def convert_args(
             )
             this_call_args[gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL] = config.COLLECT_METRICS_LEVEL
             with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
-                fun(**this_call_args)
+                return fun(**this_call_args)
 
         else:
             # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
             #  so we just update it with the current call arguments.
             update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
-            fun.fast_call()
+            return fun.fast_call()
 
     return decorated_program
