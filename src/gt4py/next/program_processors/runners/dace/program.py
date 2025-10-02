@@ -15,13 +15,12 @@ from typing import Any, ClassVar, Optional, Sequence
 import dace
 import numpy as np
 
-from gt4py.next import backend as next_backend, common, config
+from gt4py.next import backend as next_backend, common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
 from gt4py.next.otf import arguments, recipes, toolchain
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
-from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -97,10 +96,11 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         # the other parts of the workaround when possible.
         sdfg = dace.SDFG.from_json(
             compile_workflow_translation.replace(
-                disable_itir_transforms=True, disable_field_origin_on_program_arguments=True
+                disable_itir_transforms=True,
+                disable_field_origin_on_program_arguments=True,
+                use_metrics=False,
             )(gtir_stage).source_code
         )
-        sdfg.add_constant(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, config.COLLECT_METRICS_LEVEL)
 
         self.sdfg_closure_cache["arrays"] = sdfg.arrays
 

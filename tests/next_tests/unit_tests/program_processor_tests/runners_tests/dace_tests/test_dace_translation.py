@@ -144,15 +144,19 @@ def _check_sdfg_with_async_call(sdfg: dace.SDFG) -> None:
     #   edge. However, we do not have that case.
 
     # The synchronization calls are in the CPU not the GPU code.
-    cpu_code = sdfg.generate_code()[0].clean_code
-    assert re.match(r"\b(cuda|hip)StreamSynchronize\b", cpu_code) is None
+    assert all(
+        re.match(r"\b(cuda|hip)StreamSynchronize\b", codeobj.clean_code) is None
+        for codeobj in sdfg.generate_code()
+    )
     assert _are_streams_set_to_default_stream(sdfg)
 
 
 def _check_cpu_sdfg_call(sdfg: dace.SDFG) -> None:
     # Make sure that there are no CUDA synchronization calls in the generated code.
-    cpu_code = sdfg.generate_code()[0].clean_code
-    assert re.match(r"\b(cuda|hip)StreamSynchronize\b", cpu_code) is None
+    assert all(
+        re.match(r"\b(cuda|hip)StreamSynchronize\b", codeobj.clean_code) is None
+        for codeobj in sdfg.generate_code()
+    )
 
 
 def test_generate_sdfg_async_call(device_type: core_defs.DeviceType):
