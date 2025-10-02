@@ -67,14 +67,6 @@ def find_constant_symbols(
     return constant_symbols
 
 
-def _has_gpu_schedule(sdfg: dace.SDFG) -> bool:
-    """Check if any node (e.g. maps) of the given SDFG is scheduled on GPU."""
-    return any(
-        getattr(node, "schedule", dace.dtypes.ScheduleType.Default) in dace.dtypes.GPU_SCHEDULES
-        for node, _ in sdfg.all_nodes_recursive()
-    )
-
-
 def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
     """Configure an SDFG to immediately return once all work has been scheduled.
 
@@ -110,6 +102,14 @@ def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
     sdfg.append_init_code(
         f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
         location="cuda",
+    )
+
+
+def _has_gpu_schedule(sdfg: dace.SDFG) -> bool:
+    """Check if any node (e.g. maps) of the given SDFG is scheduled on GPU."""
+    return any(
+        getattr(node, "schedule", dace.dtypes.ScheduleType.Default) in dace.dtypes.GPU_SCHEDULES
+        for node, _ in sdfg.all_nodes_recursive()
     )
 
 
