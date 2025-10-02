@@ -212,18 +212,13 @@ time = static_cast<double>(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
         outputs={"duration"},
-        code="\n".join(
-            [
-                sync_code,
-                """\
+        code=sync_code + """
 double run_cpp_end_time = static_cast<double>(
     std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count()
 ) / 1e9;
 duration = run_cpp_end_time - run_cpp_start_time;
         """,
-            ]
-        ),
         language=dace.dtypes.Language.CPP,
         side_effects=has_side_effcts,
     )
