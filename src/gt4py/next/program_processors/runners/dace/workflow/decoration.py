@@ -29,16 +29,10 @@ def _collect_compute_time(fun: Callable[..., Any]) -> Callable[..., None]:
 
     def inner(*args: Any, **kwargs: Any) -> None:
         result = fun(*args, **kwargs)
-        if not collect_time:
-            return
-        if result is None:
-            raise RuntimeError(
-                "Config 'COLLECT_METRICS_LEVEL' is set but the SDFG did not return"
-                " the compute time as expected. This might indicate that the backend"
-                " is using a precompiled SDFG from persistent cache without instrumentation."
-            )
         assert len(result) == 1
         assert isinstance(result[0], np.float64)
+        if not collect_time:
+            return
         metric_collection = metrics.get_active_metric_collection()
         if metric_collection is not None:
             metric_collection.add_sample(metrics.COMPUTE_METRIC, result[0].item())
