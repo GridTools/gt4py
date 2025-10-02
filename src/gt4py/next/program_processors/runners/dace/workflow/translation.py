@@ -179,7 +179,7 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     )
 
 
-def make_sdfg_timer(sdfg: dace.SDFG) -> None:
+def make_sdfg_timer(sdfg: dace.SDFG, gpu: bool) -> None:
     """
     Instrument SDFG with measurement of total execution time.
 
@@ -194,6 +194,7 @@ def make_sdfg_timer(sdfg: dace.SDFG) -> None:
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.float64, transient=True)
     metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
 
+    #### 1. Timestamp the SDFG entry point.
     entry_state = sdfg.add_state("gt_timer_entry")
     begin_state = sdfg.add_state_after(
         entry_state, "gt_timer_begin", condition=f"{metrics_level} >= {metrics.PERFORMANCE}"
@@ -231,6 +232,44 @@ time = static_cast<double>(
         dace.Memlet(f"{start_time}[0]"),
     )
 
+    #### 2. Add CUDA stram synchronization for GPU target.
+    # Even when the target device is GPU, it can happen that dace emits code without
+    # GPU kernels. In this case, the cuda headers are not imported and the SDFG is
+    # compiled as plain C++. Therefore, we also check here the schedule of SDFG maps.
+    if gpu and _has_gpu_schedule(sdfg):
+        # If we are using the default stream, things are a bit simpler/harder. For some
+        #  reasons when using the default stream, DaCe seems to skip _all_ synchronization,
+        #  for more see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120).
+        #  Thus the `CompiledSDFG.fast_call()` call is truly asynchronous, i.e. just
+        #  launches the kernels and then exits. Thus we have to add a synchronization
+        #  at the end to have a synchronous call. We cannot use `SDFG.append_exit_code()`
+        #  because that code is only run at the `exit()` stage, not after a call. Thus we
+        #  will generate an SDFGState that contains a Tasklet with the sync call.
+        assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1, (
+            f"Expected `max_concurrent_streams == -1` but it was `{dace.Config.get('compiler.cuda.max_concurrent_streams')}`."
+        )
+
+        dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
+        assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
+        # DaCe [still generates a stream](https://github.com/spcl/dace/blob/54c935cfe74a52c5107dc91680e6201ddbf86821/dace/codegen/targets/cuda.py#L467)
+        #  despite not using it. Thus to be absolutely sure, we will now set that stream
+        #  to the default stream.
+        sdfg.append_init_code(
+            f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
+            location="cuda",
+        )
+
+        # NOTE: We should actually wrap the `StreamSynchronize` function inside a
+        #   `DACE_GPU_CHECK()` macro. However, this only works in GPU context, but
+        #   here we are in CPU context. Thus we cannot do it.
+        sync_code = f"{dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault);"
+        has_side_effcts = True
+
+    else:
+        sync_code = ""
+        has_side_effcts = False
+
+    #### Collect the SDFG end timestamp and produce the compute metric.
     end_state = sdfg.add_state("gt_timer_end")
     for sink_state in sdfg.sink_nodes():
         if sink_state is end_state:
@@ -246,14 +285,20 @@ time = static_cast<double>(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
         outputs={"duration"},
-        code="""\
+        code="\n".join(
+            [
+                sync_code,
+                """\
 double run_cpp_end_time = static_cast<double>(
     std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count()
 ) / 1e9;
 duration = run_cpp_end_time - run_cpp_start_time;
         """,
+            ]
+        ),
         language=dace.dtypes.Language.CPP,
+        side_effects=has_side_effcts,
     )
     end_state.add_edge(
         end_state.add_access(start_time),
@@ -347,10 +392,10 @@ class DaCeTranslator(
             gtx_transformations.gt_simplify(sdfg)
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
-        # We have to wait for SDFG completion if we need to collect metrics.
+        # We have to wait for SDFG completion in any case, if we need to collect
+        #  metrics, therefore we ignore the `async_sdfg_call` backend parameter.
         if config.COLLECT_METRICS_LEVEL != metrics.DISABLED:
-            make_sdfg_call_sync(sdfg, on_gpu)
-            make_sdfg_timer(sdfg)
+            make_sdfg_timer(sdfg, on_gpu)
         elif self.async_sdfg_call:
             make_sdfg_call_async(sdfg, on_gpu)
         else:
