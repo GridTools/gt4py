@@ -248,7 +248,7 @@ class DaCeTranslator(
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
-    async_sdfg_call: bool = False
+    use_metrics: bool = True
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
 
@@ -322,7 +322,8 @@ class DaCeTranslator(
         make_sdfg_call_async(sdfg, on_gpu)
 
         # Add instrumentation to collect time metrics, enabled thorugh GT4Py config.
-        add_instrumentation(sdfg, on_gpu)
+        if self.use_metrics:
+            add_instrumentation(sdfg, on_gpu)
 
         return sdfg
 
