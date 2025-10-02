@@ -464,7 +464,7 @@ class ProgramLowering(
             isinstance(out_arg, past.Name) and isinstance(out_arg.type, ts.TupleType)
         ):
 
-            def get_field_and_slice(field_expr, path):
+            def get_field_and_slice(path: tuple[int, ...]):
                 """Extract field and its slice for a given path through the tuple structure."""
                 current_field = functools.reduce(lambda e, i: e.elts[i], path, out_arg)
 
@@ -482,7 +482,7 @@ class ProgramLowering(
                         else domain_arg,
                         slice_info,
                     )
-                )(*get_field_and_slice(None, path))
+                )(*get_field_and_slice(path))
                 if isinstance(out_arg, past.TupleExpr)
                 else self._construct_itir_domain_arg(
                     # Create a temporary past.Name-like object that carries the indexed information
