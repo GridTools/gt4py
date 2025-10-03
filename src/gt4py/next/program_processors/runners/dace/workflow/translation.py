@@ -298,8 +298,8 @@ class DaCeTranslator(
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
-    async_sdfg_call: bool = False
-    use_metrics: bool = True
+    async_sdfg_call: bool
+    use_metrics: bool
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
 
@@ -370,12 +370,13 @@ class DaCeTranslator(
             gtx_transformations.gt_simplify(sdfg)
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
-        if self.use_metrics:
-            add_instrumentation(sdfg, on_gpu)
-        elif self.async_sdfg_call:
+        if self.async_sdfg_call:
             make_sdfg_call_async(sdfg, on_gpu)
         else:
             make_sdfg_call_sync(sdfg, on_gpu)
+
+        if self.use_metrics:
+            add_instrumentation(sdfg, on_gpu)
 
         return sdfg
 
