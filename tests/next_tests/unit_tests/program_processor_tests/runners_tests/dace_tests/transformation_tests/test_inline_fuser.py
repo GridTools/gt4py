@@ -12,7 +12,7 @@ import copy
 
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes, graph as dace_graph
-from dace import data as dace_data
+from dace import data as dace_data, subsets as dace_sbs
 from dace.transformation import dataflow as dace_dftrafo
 
 from gt4py.next.program_processors.runners.dace import (
@@ -245,7 +245,7 @@ def _make_multiple_value_read_sdfg() -> tuple[
     a, b, z = (state.add_access(name) for name in "abz")
     me1, mx1 = state.add_map("first_map", ndrange={"__i": "0:10"})
     me1_inner, mx1_inner = state.add_map(
-        "first_map", ndrange={"__k": "0:10"}, schedule=dace.dtypes.ScheduleType.Sequential
+        "first_map", ndrange={"__k": "0:3"}, schedule=dace.dtypes.ScheduleType.Sequential
     )
     tlet1_inner = state.add_tasklet(
         "inner_tasklet1",
@@ -283,12 +283,47 @@ def _make_multiple_value_read_sdfg() -> tuple[
 
 
 def test_multiple_value_exchange():
-    # This case is currently not implemented but it should be handled.
     sdfg, state, z, b, second_map_entry, edge_to_replace = _make_multiple_value_read_sdfg()
 
-    case_not_handled_and_thus_None = gtx_transformations.inline_dataflow_into_map(
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    nsdfg_node, output_node = gtx_transformations.inline_dataflow_into_map(
         sdfg=sdfg,
         state=state,
         edge=edge_to_replace,
     )
-    assert case_not_handled_and_thus_None is None
+
+    sdfg.validate()
+
+    assert state.out_degree(b) == 0
+    assert sdfg.arrays[output_node.data].shape == (1, 3)
+    assert sdfg.arrays[output_node.data].transient
+
+    nsdfg = nsdfg_node.sdfg
+    nstate = nsdfg.start_block
+    inner_z = next(iter(dnode for dnode in nstate.data_nodes() if dnode.data == "z"))
+    inner_output_name = next(iter(nsdfg_node.out_connectors))
+    inner_output_node = next(
+        iter(dnode for dnode in nstate.data_nodes() if dnode.data == inner_output_name)
+    )
+    inner_output_edge = next(iter(nstate.in_edges(inner_output_node)))
+
+    assert nstate.out_degree(inner_output_node) == 0
+    assert nstate.in_degree(inner_output_node) == 1
+    assert not inner_output_node.desc(nsdfg).transient
+    assert inner_output_node.desc(nsdfg).shape == (1, 3)
+    assert inner_output_edge.data.dst_subset == dace_sbs.Range.from_string("0, 0:3")
+
+    outer_output_edge = next(iter(state.in_edges(output_node)))
+    outer_read_edge = next(iter(state.out_edges(output_node)))
+
+    assert state.in_degree(output_node) == 1
+    assert state.in_degree(output_node) == 1
+    assert outer_output_edge.data.dst_subset == dace_sbs.Range.from_string("0, 0:3")
+    assert outer_read_edge.data.src_subset == dace_sbs.Range.from_string("0, 1")
+
+    sdfg.view()
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
