@@ -298,7 +298,11 @@ def _populate_nested_sdfg(
                     oedge.src_conn,
                     nstate.add_access(output_name),
                     oedge.dst_conn,
-                    memlet=dace.Memlet.from_array(output_name, output_desc),
+                    memlet=dace.Memlet(
+                        data=output_name,
+                        subset=dace_sbs.Range.from_array(output_desc),
+                        other_subset=oedge.data.get_src_subset(oedge, state),
+                    ),
                 )
 
             elif oedge.src not in nodes_to_replicate:
