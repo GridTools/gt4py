@@ -54,6 +54,7 @@ def inline_dataflow_into_map(
         input_node_map=input_node_map,
         output_name=output_name,
         first_map_param_mapping=first_map_param_mapping,
+        intermediate_node=intermediate_node,
     )
 
 
@@ -66,6 +67,7 @@ def _insert_nested_sdfg(
     input_node_map: dict[str, dace_nodes.Node],
     output_name: str,
     first_map_param_mapping: dict[str, dace_sym.SymbolicType],
+    intermediate_node: dace_nodes.AccessNode,
 ) -> tuple[dace_nodes.NestedSDFG, dace_nodes.AccessNode]:
     # Find all data that is already inside Map.
     nodes_available_in_second_map: Final[dict[dace_nodes.AccessNode, str]] = {
@@ -122,16 +124,17 @@ def _insert_nested_sdfg(
             dace.Memlet.from_array(requiered_node.data, requiered_node.desc(sdfg)),
         )
 
-    # Now connect to the output.
-    # TODO(phimuell): Update this.
+    # Now rewire the output.
+    #  Instead of reading from the intermediate, we will now read from the output of the
+    #  nested SDFG. For which we create a dedicated output.
     outer_output_name = sdfg.add_datadesc(
         output_name,
         nsdfg.arrays[output_name].clone(),
         find_new_name=True,
     )
     sdfg.arrays[outer_output_name].transient = True
-
     outer_output_node = state.add_access(outer_output_name)
+
     state.add_edge(
         nsdfg_node,
         output_name,
@@ -140,23 +143,28 @@ def _insert_nested_sdfg(
         dace.Memlet.from_array(outer_output_name, sdfg.arrays[outer_output_name]),
     )
 
-    # Now adapt the range from where we read.
-    # NOTE: This is currently done in a sub optimal way, and only allows for the
-    #   transmission of one element that is immediately consumed. This is currently
-    #   guaranteed by the `_extract_generating_dataflow_for_inlining()` function.
-    # TODO(phimuell): Lift this requirement and handle subsets and strides. Maybe copy
-    #   the idea from MapFusion and create an intermediate here and then use the
-    #   correction logic.
-    state.add_edge(
+    offset = _compute_offset(edge_to_replace, second_map_entry.map.params)
+    replaced_edge = state.add_edge(
         outer_output_node,
         None,
         edge_to_replace.dst,
         edge_to_replace.dst_conn,
         dace.Memlet(
             data=outer_output_name,
-            subset=dace_sbs.Range.from_array(sdfg.arrays[outer_output_name]),
+            subset=edge_to_replace.data.src_subset.offset_new(offset, negative=True),
             other_subset=edge_to_replace.data.get_dst_subset(edge_to_replace, state),
         ),
+    )
+
+    # Readjust all accesses.
+    gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
+        is_producer_edge=False,
+        new_edge=replaced_edge,
+        ss_offset=offset,
+        state=state,
+        sdfg=sdfg,
+        old_node=intermediate_node,
+        new_node=outer_output_node,
     )
 
     # Now removing the edge that we just replaced. We will only replace at most the
@@ -611,3 +619,27 @@ def _find_dimensions_access(
         raise ValueError(f"Could not associate parameters: {aparams}")
 
     return result_mapping
+
+
+def _compute_offset(
+    edge_to_replace: dace_graph.MultiConnectorEdge[dace.Memlet],
+    second_map_params: Sequence[str],
+) -> list[dace_sym.SymbolicType]:
+    """The offset needed to adjust the reading subsets in the second Map."""
+    offset: list[dace_sym.SymbolicType] = []
+    avial_second_map_params = set(second_map_params)
+    for start, _, _ in edge_to_replace.data.src_subset:
+        if str(start).isdigit():
+            offset.append(dace_sym.pystr_to_symbolic("0"))
+        else:
+            start_symbols = {str(sym) for sym in start.free_symbols}
+            used_param_symbols = start_symbols.intersection(avial_second_map_params)
+            assert len(used_param_symbols) == 1
+
+            # We do not have to use `used_param_symbols[0]` as one might suspect.
+            #  Because of the additional offset has been taken care of by
+            #  `_get_first_map_parameter_to_second_map_mapping()`.
+            offset.append(start)
+            avial_second_map_params.discard(next(iter(used_param_symbols)))
+
+    return offset
