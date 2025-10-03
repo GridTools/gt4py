@@ -206,7 +206,9 @@ def test_laplap():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
-def _make_multiple_value_read_sdfg() -> tuple[
+def _make_multiple_value_read_sdfg(
+    transmit_all: bool,
+) -> tuple[
     dace.SDFG,
     dace.SDFGState,
     dace_nodes.AccessNode,
@@ -242,10 +244,14 @@ def _make_multiple_value_read_sdfg() -> tuple[
         transient=True,
     )
 
+    z_writeback_lower_bound = 0 if transmit_all else 1
+
     a, b, z = (state.add_access(name) for name in "abz")
     me1, mx1 = state.add_map("first_map", ndrange={"__i": "0:10"})
     me1_inner, mx1_inner = state.add_map(
-        "first_map", ndrange={"__k": "0:3"}, schedule=dace.dtypes.ScheduleType.Sequential
+        "first_map_inner",
+        ndrange={"__k": f"{z_writeback_lower_bound}:3"},
+        schedule=dace.dtypes.ScheduleType.Sequential,
     )
     tlet1_inner = state.add_tasklet(
         "inner_tasklet1",
@@ -258,9 +264,15 @@ def _make_multiple_value_read_sdfg() -> tuple[
     state.add_edge(me1, "OUT_a", me1_inner, "IN_a", dace.Memlet("a[__i]"))
     state.add_edge(me1_inner, "OUT_a", tlet1_inner, "__in", dace.Memlet("a[__i]"))
     state.add_edge(tlet1_inner, "__out", mx1_inner, "IN_z", dace.Memlet("z[__k]"))
-    state.add_edge(mx1_inner, "OUT_z", z, None, dace.Memlet("z[0:3]"))
-    state.add_edge(z, None, mx1, "IN_b", dace.Memlet("b[__i, 0:3] -> [0:3]"))
-    state.add_edge(mx1, "OUT_b", b, None, dace.Memlet("b[0:10, 0:3]"))
+    state.add_edge(mx1_inner, "OUT_z", z, None, dace.Memlet(f"z[{z_writeback_lower_bound}:3]"))
+    state.add_edge(
+        z,
+        None,
+        mx1,
+        "IN_b",
+        dace.Memlet(f"b[__i, {z_writeback_lower_bound}:3] -> [{z_writeback_lower_bound}:3]"),
+    )
+    state.add_edge(mx1, "OUT_b", b, None, dace.Memlet(f"b[0:10, {z_writeback_lower_bound}:3]"))
     me1.add_scope_connectors("a")
     me1_inner.add_scope_connectors("a")
     mx1_inner.add_scope_connectors("z")
@@ -283,7 +295,9 @@ def _make_multiple_value_read_sdfg() -> tuple[
 
 
 def test_multiple_value_exchange():
-    sdfg, state, z, b, second_map_entry, edge_to_replace = _make_multiple_value_read_sdfg()
+    sdfg, state, z, b, second_map_entry, edge_to_replace = _make_multiple_value_read_sdfg(
+        transmit_all=True
+    )
 
     ref, res = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
@@ -327,3 +341,21 @@ def test_multiple_value_exchange():
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def test_multiple_value_exchange_partial():
+    """
+    This test is similar to `test_multiple_value_exchange()` with the difference that
+    only `z[1:3]` contains meaningful value. The transformation can not apply because
+    of that. Note that it could apply, but we do not handle that case in the transformation.
+    """
+    sdfg, state, z, b, second_map_entry, edge_to_replace = _make_multiple_value_read_sdfg(
+        transmit_all=False
+    )
+
+    case_not_supported_and_thus_none = gtx_transformations.inline_dataflow_into_map(
+        sdfg=sdfg,
+        state=state,
+        edge=edge_to_replace,
+    )
+    assert case_not_supported_and_thus_none is None
