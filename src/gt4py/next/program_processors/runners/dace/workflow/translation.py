@@ -128,7 +128,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.float64, transient=True)
     metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
 
-    #### 1. Set CUDA stram to default and create synchronization code for GPU target.
+    #### 1. Synchronize the CUDA device, in order to wait for kernels completion.
     # Even when the target device is GPU, it can happen that dace emits code without
     # GPU kernels. In this case, the cuda headers are not imported and the SDFG is
     # compiled as plain C++. Therefore, we also check here the schedule of SDFG maps.
