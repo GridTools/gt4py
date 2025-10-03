@@ -274,7 +274,7 @@ def _populate_nested_sdfg(
             # We will use the "last level Memlet" to read from it.
             nstate.add_edge(
                 replicated_node_map[outside_input_node],
-                iedge.src_conn,
+                None,
                 replicated_node_map[iedge.dst],
                 iedge.dst_conn,
                 dace.Memlet.from_memlet(iedge.data),
@@ -400,7 +400,8 @@ def _extract_generating_dataflow_for_inlining(
     #  dependencies of the second Map.
     avial_second_map_param = {param for param in second_map_entry.map.params}
     full_symbolic_access = True
-    for start, stop, step in edge.data.src_subset:
+    full_symbolic_access_dims: list[int] = []
+    for dim, (start, stop, step) in enumerate(edge.data.src_subset):
         if (step != 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             return None
 
@@ -411,6 +412,7 @@ def _extract_generating_dataflow_for_inlining(
 
             # There is not a full symbolic access.
             full_symbolic_access = False
+            full_symbolic_access_dims.append(dim)
 
         else:
             # The start index is a symbol. We require that it is an unused parameter
@@ -495,13 +497,13 @@ def _extract_generating_dataflow_for_inlining(
             continue
         return None
 
-    # Due to a restriction in `_insert_nested_sdfg()` we can only handle scalars that
-    #  are exchanged.
-    # TODO(phimuell): Remove as soon as possible.
-    if (producer_subset.num_elements() == 1) == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-        return None
-    if not isinstance(edge.dst, (dace_nodes.AccessNode, dace_nodes.Tasklet)):
-        return None
+    # If a dimension of the intermediate is accessed not by a Map parameter, we require
+    #  that that range is known at generation time, see above. In addition to that we
+    #  require that the range start at zero. The only reason for that is that it makes
+    #  computing the correction offset much simpler.
+    for full_symbolic_access_dim in full_symbolic_access_dims:
+        if producer_subset[full_symbolic_access_dim][0] != 0:
+            return None
 
     # Collect all the nodes that give rise to the data.
     generating_nodes = gtx_transformations.utils.find_upstream_nodes(
@@ -535,7 +537,7 @@ def _extract_generating_dataflow_for_inlining(
         first_map_exit,
         intermediate_node,
         edge.src,
-        consumer_shape,
+        producer_shape,
         first_map_param_mapping,
     )
 
