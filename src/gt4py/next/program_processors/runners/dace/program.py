@@ -55,6 +55,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                     kwargs={},
                     column_axis=column_axis,
                     offset_provider=offset_provider,
+                    argument_descriptor_contexts={},
                 ),
             )
         )

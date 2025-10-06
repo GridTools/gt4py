@@ -161,10 +161,8 @@ test_cscs_amd_rocm:
     SLURM_PARTITION: mi300
     CMAKE_PREFIX_PATH: /opt/rocm # for next
     CUDA_HOME: /opt/rocm # for cartesian
-    SLURM_TIMELIMIT: 20 # relaxed relative to santis as there is no pressure on the queue
+    SLURM_TIMELIMIT: 20 # relaxed relative to gh200 as there is no pressure on the queue
   rules:
-    - if: $VARIANT == 'dace' && $SUBVARIANT == 'rocm6_0'
-      when: never
     - *exclude_variants_rules
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'internal' && $SUBVARIANT == 'cpu'
       variables:

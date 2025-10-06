@@ -888,7 +888,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # create states inside the nested SDFG for the if-branches
         if_region = dace.sdfg.state.ConditionalBlock("if")
-        nsdfg.add_node(if_region)
+        nsdfg.add_node(if_region, ensure_unique_name=True)
         entry_state = nsdfg.add_state("entry", is_start_block=True)
         nsdfg.add_edge(entry_state, if_region, dace.InterstateEdge())
 
