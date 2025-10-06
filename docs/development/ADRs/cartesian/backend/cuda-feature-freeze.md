@@ -4,7 +4,7 @@ In the context of (backend) feature development, facing maintainability/duplicat
 
 ## Context
 
-The introduction of the [`dace:*`](./backend-dace.md) backends brought up the question of backend redundancy. In particular, it seems that `cuda` and `dace:gpu` backends serve similar purposes.
+The introduction of the [`dace:*`](./dace.md) backends brought up the question of backend redundancy. In particular, it seems that `cuda` and `dace:gpu` backends serve similar purposes.
 
 `dace:gpu` backends not only generate code for different graphics cards, they also share substantial code paths with the `dace:cpu` backend. This simplifies (backend) feature development.
 

@@ -86,7 +86,7 @@ def _make_param_context_from_func_type(
 def _get_type_of_param_expr(program_type: ts_ffront.ProgramType, expr: str) -> ts.TypeSpec:
     structured_type_ = eval(expr, _make_param_context_from_func_type(program_type.definition))
     type_ = tree_map(
-        lambda v: v, result_collection_constructor=lambda elts: ts.TupleType(types=list(elts))
+        lambda v: v, result_constructor_maker=lambda _: lambda elts: ts.TupleType(types=list(elts))
     )(structured_type_)
     assert isinstance(type_, ts.TypeSpec)
     return type_
@@ -141,7 +141,7 @@ def _convert_to_argument_descriptor_context(
         # convert tuples to list such that we can alter the context easily
         context = {
             k: gtx_utils.tree_map(
-                lambda v: v, collection_type=tuple, result_collection_constructor=list
+                lambda v: v, collection_type=tuple, result_constructor_maker=lambda _: list
             )(v)
             for k, v in context.items()
         }
@@ -157,7 +157,7 @@ def _convert_to_argument_descriptor_context(
         # convert lists back to tuples
         context = {
             k: gtx_utils.tree_map(
-                lambda v: v, collection_type=list, result_collection_constructor=tuple
+                lambda v: v, collection_type=list, result_constructor_maker=lambda _: tuple
             )(v)
             for k, v in context.items()
         }
