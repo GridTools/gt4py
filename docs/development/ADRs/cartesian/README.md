@@ -8,26 +8,36 @@ Writing and reading ADRs should be as simple as possible. Use the [template](../
 
 ## Organization
 
-In general, ADRs in this folder are prefixed with either
+ADRs about frontend and backend are separated in respective folders. General (e.g. experimental features go in this folder).
 
-- `general-` for general topics / concepts,
-- `frontend-` for user-facing features (in `gtscript`),
-- `backend-` for backend descriptions or details within a particular backend.
+```none
+.
+├── archived/
+│   # old ADRs for reference
+├── backend/
+│   # backend descriptions or details within a particular backend
+├── experimental/
+│   # experimental features (mostly frontend)
+├── frontend/
+│   # user-facing features, i.e. `gtscript`
+│
+└ # ADRs related to general concepts
+```
 
 ### General topics / concepts
 
-- [Experimental features](./general-experimental-features.md): what you can (and can't) expect from experimental features.
+- [Experimental features](./experimental-features.md): what you can (and can't) expect from experimental features.
 
 ### Frontend
 
-- [Literal precision](./frontend-literal-precision.md): How to control literal precision if needed
-- [Round functions](./frontend-round-functions.md): How `round()` and `round_away_from_zero()` came to be in `gtscript`
+- [Literal precision](./frontend/literal-precision.md): How to control literal precision if needed
+- [Round functions](./frontend/round-functions.md): How `round()` and `round_away_from_zero()` came to be in `gtscript`
 
 #### ⚠️ Experimental features
 
-Remember: [Experimental features](./general-experimental-features.md) might change at any time without prior warning and generally might not be available in all backends.
+Remember: [Experimental features](./experimental-features.md) might change at any time without prior warning and generally might not be available in all backends.
 
-- [Absolute indexing in `K`](./frontend-indexing-absolute-k.md): Tradeoffs behind absolute indexation vs. relative offsets
+- [Absolute indexing in `K`](./frontend/indexing-absolute-k.md): Tradeoffs behind absolute indexation vs. relative offsets
 
 ### Backend
 
@@ -35,8 +45,8 @@ Backend ADRs are sorted per backend in the following table:
 
 | Backend name | ADRs                                                                                                                                                                                               |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug`      | [Debug backend](./backend-debug.md)                                                                                                                                                                |
-| `dace:*`     | [`dace:*` backends](./backend-dace.md) \| [`dace:cpu_kfirst`](./backend-dace-cpu-kfirst.md) <br/> [Schedule tree](./backend-dace-schedule-tree.md) <br/> [DaCe version](./backend-dace-version.md) |
-| `cuda`       | [Feature freeze](./backend-cuda-feature-freeze.md)                                                                                                                                                 |
+| `debug`      | [Debug backend](./backend/debug.md)                                                                                                                                                                |
+| `dace:*`     | [`dace:*` backends](./backend/dace.md) \| [`dace:cpu_kfirst`](./backend/dace-cpu-kfirst.md) <br/> [Schedule tree](./backend/dace-schedule-tree.md) <br/> [DaCe version](./backend/dace-version.md) |
+| `cuda`       | [Feature freeze](./backend/cuda-feature-freeze.md)                                                                                                                                                 |
 | `numpy`      | (none so far)                                                                                                                                                                                      |
 | `gt:*`       | (none so far)                                                                                                                                                                                      |

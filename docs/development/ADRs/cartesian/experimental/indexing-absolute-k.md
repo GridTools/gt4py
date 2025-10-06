@@ -1,6 +1,6 @@
 # ⚠️ Absolute K indexing
 
-In the context of porting physics parametrizations, some field accesses were at absolute indices in the K-axis. We thus decided to expand the DLS be able to port these stencils. We accept the increase in DSL surface and test it as an [experimental feature](./general-experimental-features.md).
+In the context of porting physics parametrizations, some field accesses were at absolute indices in the K-axis. We thus decided to expand the DLS be able to port these stencils. We accept the increase in DSL surface and test it as an [experimental feature](../experimental-features.md).
 
 ## Context
 
@@ -71,7 +71,7 @@ Users of GT4Py can now succinctly write the patterns shown above in the context 
 
 One major drawback of absolute indexing is that we loose the opportunity to warn users at compile time if they read out fo bounds. Since we allow absolute K indices that aren't know at compile time, the extent analysis can't warn us anymore. We plan to mitigate that by supporting an option to check every absolute read (at runtime) in debug mode, see references below.
 
-We ship absolute K indexing as an [experimental features](./general-experimental-features.md). The feature is only available in `debug` and `dace:*` backends. Other backends raise an error at compile time when transpiling from `oir` into the respective backend IR.
+We ship absolute K indexing as an [experimental features](../experimental-features.md). The feature is only available in `debug` and `dace:*` backends. Other backends raise an error at compile time when transpiling from `oir` into the respective backend IR.
 
 ## References
 

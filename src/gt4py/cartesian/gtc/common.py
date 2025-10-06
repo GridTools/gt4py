@@ -369,7 +369,7 @@ class AbsoluteKIndex(eve.GenericNode, Generic[ExprT]):
     def offset_expr_is_int(self, _attribute: datamodels.Attribute, value: Any) -> None:
         warnings.warn(
             "Absolute indexing in `K` is an experimental feature. Please read "
-            "<https://github.com/GridTools/gt4py/blob/main/docs/development/ADRs/cartesian/general-experimental-features.md> "
+            "<https://github.com/GridTools/gt4py/blob/main/docs/development/ADRs/cartesian/experimental-features.md> "
             "to understand the consequences.",
             category=UserWarning,
             stacklevel=2,

@@ -16,7 +16,7 @@ Experimental features have to follow a set of rules to ensure they don't disturb
 2. Usage of experimental features must be strictly optional and on an opt-in basis.
 3. Experimental features must log a one-time warning on first usage/occurrence.
 4. We reserve the right to modify, replace, and/or remove experimental features without prior notice (e.g. no deprecation periods even for breaking changes) at any point in time.
-5. Experimental features need to work in the [`debug` backend](./backend-debug.md) - after all, this is what we built it for.
+5. Experimental features need to work in the [`debug` backend](./backend/debug.md) - after all, this is what we built it for.
 
 ## Consequences
 
@@ -45,4 +45,4 @@ One could argue that shipping fully-fledged features is only expensive / time-co
 
 ## References
 
-ADR / motivation for the [debug backend](./backend-debug.md) as a playground for new/experimental DSL features.
+ADR / motivation for the [debug backend](../backend/debug.md) as a playground for new/experimental DSL features.
