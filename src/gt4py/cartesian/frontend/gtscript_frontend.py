@@ -1040,14 +1040,14 @@ class IRMaker(ast.NodeVisitor):
         value = node.value
         if value is None:
             return nodes.BuiltinLiteral(value=nodes.Builtin.from_value(value))
-        
+
         if isinstance(value, bool):
             return nodes.Cast(
                 data_type=nodes.DataType.BOOL,
                 expr=nodes.BuiltinLiteral(value=nodes.Builtin.from_value(value)),
                 loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
             )
-        
+
         if isinstance(value, numbers.Number):
             if self.dtypes and type(value) in self.dtypes.keys():
                 value_type = self.dtypes[type(value)]
