@@ -337,8 +337,6 @@ def test_multiple_value_exchange():
     assert outer_output_edge.data.dst_subset == dace_sbs.Range.from_string("0, 0:3")
     assert outer_read_edge.data.src_subset == dace_sbs.Range.from_string("0, 1")
 
-    sdfg.view()
-
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
 

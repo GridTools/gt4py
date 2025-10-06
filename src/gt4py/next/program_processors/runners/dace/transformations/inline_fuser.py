@@ -8,7 +8,7 @@
 
 import copy
 import warnings
-from typing import Final, Iterable, Optional, Sequence
+from typing import Final, Iterable, Optional, Sequence, TypeAlias
 
 import dace
 import sympy
@@ -18,28 +18,100 @@ from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
+InlineSpec: TypeAlias = tuple[
+    dace_nodes.MapExit,
+    dace_nodes.AccessNode,
+    dace_nodes.MapEntry,
+    dace_sbs.Range,
+    dict[str, dace_sym.SymbolicType],
+]
+"""Specify how the inlining has to be performed.
+
+The information is computed by the `find_nodes_to_inline()` function and returned as
+its second return value (the first return value is the set of nodes that must be
+inlined). The user should see it as an opaque structure.
+"""
+
+
 def inline_dataflow_into_map(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     edge: dace_graph.MultiConnectorEdge[dace.Memlet],
 ) -> Optional[tuple[dace_nodes.NestedSDFG, dace_nodes.AccessNode]]:
-    extracted_information = _extract_generating_dataflow_for_inlining(sdfg, state, edge)
+    """Tries to perform the inlining of `edge`.
+
+    The function replaces the transmission, i.e. reading, of data through `edge`
+    with an on-the-fly computation of the same data. The term inlining is used
+    because the dataflow, that computes the transmitted data is embedded/inlined
+    into the scope of `edge`.
+
+    This function performs inlining in a single step or returns `None` if that
+    is not possible. It is also possible the perform these two steps, determining
+    if and how inlining is possible, see `find_nodes_to_inline()` and perform the
+    actual inlining accordingly, see `perform_dataflow_inlining()`, separately.
+    For more information please consult the documentation of these two functions.
+
+    Args:
+        sdfg: The SDFG on which we operate.
+        state: The state in which `edge` is located.
+        edge: The `edge` whose dataflow should be inlined.
+    """
+    extracted_information = find_nodes_to_inline(sdfg, state, edge)
     if extracted_information is None:
         return None
 
+    return perform_dataflow_inlining(
+        sdfg=sdfg,
+        state=state,
+        edge=edge,
+        nodes_to_inline=extracted_information[0],
+        inline_spec=extracted_information[1],
+    )
+
+
+def perform_dataflow_inlining(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    edge: dace_graph.MultiConnectorEdge[dace.Memlet],
+    nodes_to_inline: set[dace_nodes.Node],
+    inline_spec: InlineSpec,
+) -> Optional[tuple[dace_nodes.NestedSDFG, dace_nodes.AccessNode]]:
+    """Performs the second step, i.e. the actual inlining, of the dataflow.
+
+    The function will use the information of `nodes_to_inline` and `inline_spec`,
+    which was computed my `find_nodes_to_inline()`, to perform the inlining. The
+    inlining essentially works by created a nested SDFG inside the Map, where `edge`
+    is located and replicate the dataflow into it. The function will also create an
+    AccessNode that is used as output of the nested SDFG. Furthermore, the function
+    will adjust all dataflow, that was going through `edge` such that it will pass
+    through that AccessNode. As a final step the Memlet path of `edge` will be removed.
+
+    Returns:
+        The function returns two values. First it will return the nested SDFG that
+        contains the dataflow needed for the computation. The second value is an
+        AccessNode that is used as output of the nested SDFG.
+
+    Args:
+        sdfg: The SDFG on which we operate.
+        state: The state in which `edge` is located.
+        edge: The `edge` whose dataflow should be inlined.
+        nodes_to_inline: The set of nodes that create the dataflow that is needed.
+            This is the first return value of `find_nodes_to_inline()`.
+        inline_spec: Auxiliary information how the inlining has to happen. This is
+            the second return value of `find_nodes_to_inline()`.
+    """
     (
-        nodes_to_replicate,
         first_map_exit,
         intermediate_node,
         second_map_entry,
         exchange_subset,
         first_map_param_mapping,
-    ) = extracted_information
-    assert len(nodes_to_replicate) > 0
+    ) = inline_spec
+    assert len(nodes_to_inline) > 0
     nsdfg, input_node_map, output_name = _populate_nested_sdfg(
         sdfg=sdfg,
         state=state,
-        nodes_to_replicate=nodes_to_replicate,
+        nodes_to_replicate=nodes_to_inline,
         first_map_exit=first_map_exit,
         exchange_subset=exchange_subset,
         intermediate_node=intermediate_node,
@@ -58,6 +130,210 @@ def inline_dataflow_into_map(
     )
 
 
+def find_nodes_to_inline(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    edge: dace_graph.MultiConnectorEdge[dace.Memlet],
+) -> Optional[tuple[set[dace_nodes.Node], InlineSpec]]:
+    """First step of dataflow inlining, computing the inline specification.
+
+    The inline specification describes how the inlining of dataflow has to be done.
+    The values computed by this function must be passed to `perform_dataflow_inlining()`
+    for actually inlining dataflow.
+    The function will analyze how a read through `edge` can be replaced by direct
+    computations. If this is not possible then the function return `None`.
+
+    Currently the following restriction (not exhaustive) are imposed on the dataflow:
+    - `edge` must be an outgoing edge of a top level MapEntry.
+    - The generating dataflow, i.e. the one that is inlined, must be inside a Map.
+    - The intermediate between the two Maps can only have one producer, i.e. it must
+        be single use data (not checked) and can only have an incoming degree of 1.
+    - All data dependencies must be met. This means that `edge` can only consume data
+        that is generated by a single iteration of the first data.
+
+    Return:
+        The function returns two values. The first is a `set` that contains all nodes
+        that have to be inlined (the two Map nodes of the generating Map are not
+        included). The second value are auxiliary data for the inlining in an
+        unspecified format.
+
+    Args:
+        sdfg: The SDFG on which we operate.
+        state: The state in which `edge` is located.
+        edge: The `edge` whose dataflow should be inlined.
+    """
+    scope_dict = state.scope_dict()
+
+    # Must be connected to a top level MapEntry.
+    if not isinstance(edge.src, dace_nodes.MapEntry):
+        return None
+    second_map_entry: dace_nodes.MapEntry = edge.src
+    if scope_dict[edge.src] is not None:
+        return None
+
+    # Check the Memlet.
+    if edge.data.get_src_subset(edge, state) is None:
+        return None
+    if edge.data.wcr is not None:
+        return None
+
+    # We require that every access in the edge is either a literal digit, such as
+    #  `1` but also `1:3` or that exactly one symbol that is also map parameter is
+    #  used to do the index. Note that this does allow accesses such as
+    #  `a[map_index:(map_index + 4)]` but not accesses such as `a[map_index:(map_index + symb)]`
+    #  or `a[some_other_symbol]`. Furthermore, we require that all parameters of the
+    #  second Map are used for the access (exception see bellow). These rule are used
+    #  to ensure that one iteration of the first Map are enough to satisfy all data
+    #  dependencies of the second Map.
+    avial_second_map_param = {param for param in second_map_entry.map.params}
+    full_symbolic_access = True
+    full_symbolic_access_dims: list[int] = []
+    for dim, (start, stop, step) in enumerate(edge.data.src_subset):
+        if (step != 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            return None
+
+        if str(start).isdigit():
+            # The start index is a digit, we require that the end is also a digit.
+            if not str(stop).isdigit():
+                return None
+
+            # There is not a full symbolic access.
+            full_symbolic_access = False
+            full_symbolic_access_dims.append(dim)
+
+        else:
+            # The start index is a symbol. We require that it is an unused parameter
+            #  and that the stop is also that parameter.
+            start_symbols = {str(sym) for sym in start.free_symbols}
+            if len(start_symbols) != 1:
+                return None
+            elif start_symbols.issubset(avial_second_map_param):
+                stop_symbols = {str(sym) for sym in stop.free_symbols}
+                if start_symbols != stop_symbols:
+                    return None
+                avial_second_map_param.remove(next(iter(start_symbols)))
+
+    # Usually we require that all parameters of the second Map are used for the
+    #  access. The main reason is to prevent some slicing, i.e. to ensure that
+    #  the access is not done later. However, this prevents the second Map to read
+    #  from a Map that has one dimension less. Thus as an exception we allow that
+    #  in case all accesses are done using parameters, then not all of them have
+    #  to be used.
+    if (not full_symbolic_access) and (len(avial_second_map_param) != 0):
+        return None
+
+    # We restrict us to them because these node types are kind of simple to modify.
+    #  However, even the Tasklet could be hard to handle. The hardest is possible
+    #  the nested SDFG. Which is possible to handle in some cases but not in all
+    #  cases.
+    # TODO(phimuell): Allow more and allow NestedSDFGs in certain cases.
+    for leave_edge in state.memlet_tree(edge).leaves():
+        if not isinstance(leave_edge.dst, (dace_nodes.AccessNode, dace_nodes.Tasklet)):
+            return None
+
+    # There must be an intermediate that is only generated by a single source.
+    #  NOTE: We omit the check that the intermediate is single use data here.
+    intermediate_node: dace_nodes.Node = next(
+        iter(state.in_edges_by_connector(edge.src, "IN_" + edge.src_conn[4:]))
+    ).src
+    if not isinstance(intermediate_node, dace_nodes.AccessNode):
+        return None
+    if state.in_degree(intermediate_node) != 1:
+        return None
+
+    # The producer must be a Map.
+    producing_edge = next(iter(state.in_edges(intermediate_node)))
+    if not isinstance(producing_edge.src, dace_nodes.MapExit):
+        return None
+    first_map_exit: dace_nodes.MapExit = producing_edge.src
+
+    # NOTE: On an `OUT_` connector of a MapExit node multiple edges can converge,
+    #   we can not handle that thus we have to restrict that case.
+    writing_edges = [
+        iedge
+        for iedge in state.in_edges_by_connector(
+            first_map_exit, "IN_" + producing_edge.src_conn[4:]
+        )
+    ]
+    if len(writing_edges) != 1:
+        return None
+
+    first_map_param_mapping = _get_first_map_parameter_to_second_map_mapping(
+        state=state,
+        first_map=first_map_exit.map,
+        write_edge=writing_edges[0],
+        second_map=edge.src.map,
+        read_edge=edge,
+    )
+
+    # Check the data dependencies. It is a little bit different compared to classical
+    #  MapFusionVertical, where the two iterations are coupled. Here the restriction
+    #  is that there exists _one_ iteration of the first Map that, generates the data
+    #  that _another_ iteration of the second Map needs. This is a much weaker restriction
+    #  but also harder to check. As a first approximation we look at the shape of the
+    #  data that is generated and consumed.
+    #  To avoid dynamic allocation we require that the exchange set has a constant size.
+    # TODO(phimuell): Improve that.
+    consumer_subset = edge.data.src_subset
+    consumer_shape = consumer_subset.size()
+    producer_subset = writing_edges[0].data.get_dst_subset(writing_edges[0], state)
+    producer_shape = producer_subset.size()
+    for cshp, pshp in zip(consumer_shape, producer_shape, strict=True):
+        if not str(pshp).isdigit():
+            return None
+        if (cshp == pshp) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            continue
+        if (cshp < pshp) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            continue
+        return None
+
+    # If a dimension of the intermediate is accessed not by a Map parameter, we require
+    #  that that range is known at generation time, see above. In addition to that we
+    #  require that the range start at zero. The only reason for that is that it makes
+    #  computing the correction offset much simpler.
+    for full_symbolic_access_dim in full_symbolic_access_dims:
+        if producer_subset[full_symbolic_access_dim][0] != 0:
+            return None
+
+    # Collect all the nodes that give rise to the data.
+    generating_nodes = gtx_transformations.utils.find_upstream_nodes(
+        start=first_map_exit,
+        state=state,
+        start_connector="IN_" + producing_edge.src_conn[4:],
+        limit_node=state.entry_node(first_map_exit),
+    )
+    assert first_map_exit not in generating_nodes
+    assert state.entry_node(first_map_exit) not in generating_nodes
+    assert len(generating_nodes) >= 1
+
+    # Fore syntactical reasons we require that all outgoing edges of the nodes in
+    #  `generating_nodes` must lead to nodes that are also in that set, or go to
+    #  the MapExit node (in which case the outgoing edge must be `edge`). The only
+    #  exceptions are AccessNode. Technically we could also handle Tasklets, but
+    #  they would require a little bit more work in `_populated_nsdfg()`.
+    for generating_node in generating_nodes:
+        for oedge in state.out_edges(generating_node):
+            if oedge.dst is first_map_exit:
+                assert oedge is writing_edges[0]
+            elif oedge.dst not in generating_nodes:
+                if isinstance(oedge.src, dace_nodes.AccessNode) and (
+                    not gtx_transformations.utils.is_view(oedge.src, sdfg)
+                ):
+                    continue
+                return None
+
+    return (
+        generating_nodes,
+        (
+            first_map_exit,
+            intermediate_node,
+            edge.src,
+            producer_shape,
+            first_map_param_mapping,
+        ),
+    )
+
+
 def _insert_nested_sdfg(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -69,6 +345,14 @@ def _insert_nested_sdfg(
     first_map_param_mapping: dict[str, dace_sym.SymbolicType],
     intermediate_node: dace_nodes.AccessNode,
 ) -> tuple[dace_nodes.NestedSDFG, dace_nodes.AccessNode]:
+    """Helper function for the `perform_dataflow_inlining()` step.
+
+    After `_populate_nested_sdfg()` has prepared the nested SDFG, this function
+    is used to insert it into the second Map scope and to rewire the internal
+    dataflow to actually use it. It will also remove the Memlet path of
+    `edge_to_replace`.
+    """
+
     # Find all data that is already inside Map.
     nodes_available_in_second_map: Final[dict[dace_nodes.AccessNode, str]] = {
         iedge.src: "OUT_" + iedge.dst_conn[3:]
@@ -122,6 +406,16 @@ def _insert_nested_sdfg(
             nsdfg_node,
             input_name,
             dace.Memlet.from_array(requiered_node.data, requiered_node.desc(sdfg)),
+        )
+
+    # In case there is no input use an empty edge to bind the nested SDFG into the scope.
+    if len(input_node_map) == 0:
+        state.add_edge(
+            second_map_entry,
+            None,
+            nsdfg_node,
+            None,
+            dace.Memlet(),
         )
 
     # Now rewire the output.
@@ -183,12 +477,12 @@ def _populate_nested_sdfg(
     exchange_subset: dace_sbs.Range,
     intermediate_node: dace_nodes.AccessNode,
 ) -> tuple[dace.SDFG, dict[str, dace_nodes.Node], str]:
-    """Populate the SDFG.
+    """Helper function for the `perform_dataflow_inlining()` step.
 
-    The function returns the SDFG which should become the nested SDFG. It will also
-    return the set of names that are used/needed as input and the single output name.
+    This is the first step of the inlining. The function will generate an SDFG
+    and replicate the dataflow described by `nodes_to_replicate`. It will also
+    prepare the mapping of all external data into the nested SDFG.
     """
-
     nsdfg = dace.SDFG(f"_inline_fused_nested_sdfg_{sdfg.name}_{first_map_exit.map.label}")
     nstate = nsdfg.add_state(is_start_block=True)
 
@@ -346,200 +640,6 @@ def _populate_nested_sdfg(
     assert output_name is not None
 
     return nsdfg, input_node_map, output_name
-
-
-def _extract_generating_dataflow_for_inlining(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
-    edge: dace_graph.MultiConnectorEdge[dace.Memlet],
-) -> Optional[
-    tuple[
-        set[dace_nodes.Node],
-        dace_nodes.MapExit,
-        dace_nodes.AccessNode,
-        dace_nodes.MapEntry,
-        dace_sbs.Range,
-        dict[str, dace_sym.SymbolicType],
-    ]
-]:
-    """Finds the "generating subgraph" of `edge`.
-
-    The function will trace the dataflow back and find all nodes that contribute to
-    this single edge. This means all of these nodes are needed to generate the data
-    that is transmitted by `edge`. Currently there are the following restrictions:
-    - `edge` must be an outgoing edge of a top level MapEntry node.
-    - The data of `edge` must come from an intermediate AccessNode, which is
-        generated by a Map. Thus the data, that is consumed by `edge` must be generated
-        by another Map.
-    - The returned subgraph only contains the nodes inside the top Map.
-
-    If any of these requirements are not met the function returns `None`.
-    """
-    scope_dict = state.scope_dict()
-
-    # Must be connected to a top level MapEntry.
-    if not isinstance(edge.src, dace_nodes.MapEntry):
-        return None
-    second_map_entry: dace_nodes.MapEntry = edge.src
-    if scope_dict[edge.src] is not None:
-        return None
-
-    # Check the Memlet.
-    if edge.data.get_src_subset(edge, state) is None:
-        return None
-    if edge.data.wcr is not None:
-        return None
-
-    # We require that every access in the edge is either a literal digit, such as
-    #  `1` but also `1:3` or that exactly one symbol that is also map parameter is
-    #  used to do the index. Note that this does allow accesses such as
-    #  `a[map_index:(map_index + 4)]` but not accesses such as `a[map_index:(map_index + symb)]`
-    #  or `a[some_other_symbol]`. Furthermore, we require that all parameters of the
-    #  second Map are used for the access (exception see bellow). These rule are used
-    #  to ensure that one iteration of the first Map are enough to satisfy all data
-    #  dependencies of the second Map.
-    avial_second_map_param = {param for param in second_map_entry.map.params}
-    full_symbolic_access = True
-    full_symbolic_access_dims: list[int] = []
-    for dim, (start, stop, step) in enumerate(edge.data.src_subset):
-        if (step != 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            return None
-
-        if str(start).isdigit():
-            # The start index is a digit, we require that the end is also a digit.
-            if not str(stop).isdigit():
-                return None
-
-            # There is not a full symbolic access.
-            full_symbolic_access = False
-            full_symbolic_access_dims.append(dim)
-
-        else:
-            # The start index is a symbol. We require that it is an unused parameter
-            #  and that the stop is also that parameter.
-            start_symbols = {str(sym) for sym in start.free_symbols}
-            if len(start_symbols) != 1:
-                return None
-            elif start_symbols.issubset(avial_second_map_param):
-                stop_symbols = {str(sym) for sym in stop.free_symbols}
-                if start_symbols != stop_symbols:
-                    return None
-                avial_second_map_param.remove(next(iter(start_symbols)))
-
-    # Usually we require that all parameters of the second Map are used for the
-    #  access. The main reason is to prevent some slicing, i.e. to ensure that
-    #  the access is not done later. However, this prevents the second Map to read
-    #  from a Map that has one dimension less. Thus as an exception we allow that
-    #  in case all accesses are done using parameters, then not all of them have
-    #  to be used.
-    if (not full_symbolic_access) and (len(avial_second_map_param) != 0):
-        return None
-
-    # We restrict us to them because these node types are kind of simple to modify.
-    #  However, even the Tasklet could be hard to handle. The hardest is possible
-    #  the nested SDFG. Which is possible to handle in some cases but not in all
-    #  cases.
-    # TODO(phimuell): Allow more and allow NestedSDFGs in certain cases.
-    for leave_edge in state.memlet_tree(edge).leaves():
-        if not isinstance(leave_edge.dst, (dace_nodes.AccessNode, dace_nodes.Tasklet)):
-            return None
-
-    # There must be an intermediate that is only generated by a single source.
-    #  NOTE: We omit the check that the intermediate is single use data here.
-    intermediate_node: dace_nodes.Node = next(
-        iter(state.in_edges_by_connector(edge.src, "IN_" + edge.src_conn[4:]))
-    ).src
-    if not isinstance(intermediate_node, dace_nodes.AccessNode):
-        return None
-    if state.in_degree(intermediate_node) != 1:
-        return None
-
-    # The producer must be a Map.
-    producing_edge = next(iter(state.in_edges(intermediate_node)))
-    if not isinstance(producing_edge.src, dace_nodes.MapExit):
-        return None
-    first_map_exit: dace_nodes.MapExit = producing_edge.src
-
-    # NOTE: On an `OUT_` connector of a MapExit node multiple edges can converge,
-    #   we can not handle that thus we have to restrict that case.
-    writing_edges = [
-        iedge
-        for iedge in state.in_edges_by_connector(
-            first_map_exit, "IN_" + producing_edge.src_conn[4:]
-        )
-    ]
-    if len(writing_edges) != 1:
-        return None
-
-    first_map_param_mapping = _get_first_map_parameter_to_second_map_mapping(
-        state=state,
-        first_map=first_map_exit.map,
-        write_edge=writing_edges[0],
-        second_map=edge.src.map,
-        read_edge=edge,
-    )
-
-    # Check the data dependencies. It is a little bit different compared to classical
-    #  MapFusionVertical, where the two iterations are coupled. Here the restriction
-    #  is that there exists _one_ iteration of the first Map that, generates the data
-    #  that _another_ iteration of the second Map needs. This is a much weaker restriction
-    #  but also harder to check. As a first approximation we look at the shape of the
-    #  data that is generated and consumed.
-    # TODO(phimuell): Improve that.
-    consumer_subset = edge.data.src_subset
-    consumer_shape = consumer_subset.size()
-    producer_subset = writing_edges[0].data.get_dst_subset(writing_edges[0], state)
-    producer_shape = producer_subset.size()
-    for cshp, pshp in zip(consumer_shape, producer_shape, strict=True):
-        if (cshp == pshp) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            continue
-        if (cshp < pshp) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            continue
-        return None
-
-    # If a dimension of the intermediate is accessed not by a Map parameter, we require
-    #  that that range is known at generation time, see above. In addition to that we
-    #  require that the range start at zero. The only reason for that is that it makes
-    #  computing the correction offset much simpler.
-    for full_symbolic_access_dim in full_symbolic_access_dims:
-        if producer_subset[full_symbolic_access_dim][0] != 0:
-            return None
-
-    # Collect all the nodes that give rise to the data.
-    generating_nodes = gtx_transformations.utils.find_upstream_nodes(
-        start=first_map_exit,
-        state=state,
-        start_connector="IN_" + producing_edge.src_conn[4:],
-        limit_node=state.entry_node(first_map_exit),
-    )
-    assert first_map_exit not in generating_nodes
-    assert state.entry_node(first_map_exit) not in generating_nodes
-    assert len(generating_nodes) >= 1
-
-    # Fore syntactical reasons we require that all outgoing edges of the nodes in
-    #  `generating_nodes` must lead to nodes that are also in that set, or go to
-    #  the MapExit node (in which case the outgoing edge must be `edge`). The only
-    #  exceptions are AccessNode. Technically we could also handle Tasklets, but
-    #  they would require a little bit more work in `_populated_nsdfg()`.
-    for generating_node in generating_nodes:
-        for oedge in state.out_edges(generating_node):
-            if oedge.dst is first_map_exit:
-                assert oedge is writing_edges[0]
-            elif oedge.dst not in generating_nodes:
-                if isinstance(oedge.src, dace_nodes.AccessNode) and (
-                    not gtx_transformations.utils.is_view(oedge.src, sdfg)
-                ):
-                    continue
-                return None
-
-    return (
-        generating_nodes,
-        first_map_exit,
-        intermediate_node,
-        edge.src,
-        producer_shape,
-        first_map_param_mapping,
-    )
 
 
 def _get_first_map_parameter_to_second_map_mapping(
