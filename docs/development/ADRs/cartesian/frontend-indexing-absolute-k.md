@@ -76,4 +76,4 @@ We ship absolute K indexing as an [experimental features](./general-experimental
 ## References
 
 - [Issue](https://github.com/GridTools/gt4py/issues/1684) to add an out of bounds check at runtime. The issue is old because already now, with `VariableKOffset`, we can't catch every out of bounds access at compile time.
-- TODO [Issue](<>) about unifying access patterns with global tables.
+- [Issue](https://github.com/GridTools/gt4py/issues/2282) about unifying access patterns with global tables.
