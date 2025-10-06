@@ -257,6 +257,7 @@ def _gt_auto_process_top_level_maps(
     #  We use the hash instead of the return values of the transformation, because
     #  computing the hash invalidates some caches that are not properly updated in Dace.
     # TODO(phimuell): Remove this hack as soon as DaCe is fixed.
+    # TODO(phimuell): Maybe switch to `reset_cfg_list()`?
     sdfg_hash = sdfg.hash_sdfg()
 
     while True:
@@ -275,23 +276,8 @@ def _gt_auto_process_top_level_maps(
         #   has been solved.
         vertical_map_fusion._single_use_data = single_use_data
 
-        horizontal_map_fusion = gtx_transformations.MapFusionHorizontal(
-            only_toplevel_maps=True,
-            consolidate_edges_only_if_not_extending=True,
-            # TODO(phimuell): Should we enable this flag?
-            only_if_common_ancestor=False,
-        )
-
-        # NOTE: Since horizontal Map fusion matches _any_ two Maps, running it on large
-        #  SDFGs is expensive. Thus we run vertical Map fusion first to reduce the search
-        #  space.
         sdfg.apply_transformations_repeated(
             vertical_map_fusion,
-            validate=False,
-            validate_all=validate_all,
-        )
-        sdfg.apply_transformations_repeated(
-            [horizontal_map_fusion, vertical_map_fusion],
             validate=False,
             validate_all=validate_all,
         )
@@ -384,6 +370,23 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
             skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
+
+    # Reduce the number of kernel launches, by combining multiple, unrelated kernels,
+    #  together. This only works if the Maps have the same parameter space.
+    # NOTE: Before MapFusionHorizontal was used inside the loop above, but this created
+    #   some problems, because it coupled some otherwise unrelated Maps together.
+    #   Probably the most sever issue was that it also interfered with MapPromotion,
+    #   see [PR#2284](https://github.com/GridTools/gt4py/pull/2284).
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.MapFusionHorizontal(
+            only_toplevel_maps=True,
+            consolidate_edges_only_if_not_extending=False,
+            never_consolidate_edges=False,
+            only_if_common_ancestor=False,
+        ),
+        validate=False,
+        validate_all=validate_all,
+    )
 
     return sdfg
 
