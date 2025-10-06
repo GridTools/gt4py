@@ -10,9 +10,12 @@ from unittest import mock
 
 import numpy as np
 import pytest
+import time
+import contextlib
 
 from gt4py import next as gtx
 from gt4py.next import errors, config
+from gt4py.next.otf import compiled_program
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
@@ -812,3 +815,45 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
         offset_provider=cartesian_case.offset_provider,
     )
     assert np.allclose(out.asnumpy(), field_a.asnumpy() * 3 + field_b.asnumpy() * 4)
+
+
+def test_synchronous_compilation(cartesian_case, compile_testee):
+    # This test is not perfect: only tests that compilation works if '_async_compilation_pool' is not initialized.
+    with mock.patch.object(compiled_program, "_async_compilation_pool", None):
+        a = cases.allocate(cartesian_case, compile_testee, "a")()
+        b = cases.allocate(cartesian_case, compile_testee, "b")()
+
+        out = cases.allocate(cartesian_case, compile_testee, "out")()
+        compile_testee(
+            a,
+            b,
+            out=out,
+            offset_provider=cartesian_case.offset_provider,
+        )
+        assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
+
+
+@pytest.mark.parametrize("synchronous", [True, False], ids=["synchronous", "asynchronous"])
+def test_wait_for_compilation(cartesian_case, compile_testee, synchronous):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    with (
+        mock.patch.object(compiled_program, "_async_compilation_pool", None)
+        if synchronous
+        else contextlib.nullcontext()
+    ):
+        start_compile = time.time()
+        compile_testee.compile(offset_provider=cartesian_case.offset_provider)
+        end_compile = time.time()
+        compile_call_time = end_compile - start_compile
+
+        start_wait = time.time()
+        gtx.wait_for_compilation()
+        end_wait = time.time()
+        wait_time = end_wait - start_wait
+
+        if synchronous:
+            assert compile_call_time > wait_time
+        else:
+            assert wait_time > compile_call_time
