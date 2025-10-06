@@ -23,6 +23,8 @@ def _filter_domain(domain: domain_utils.SymbolicDomain, dims: KeysView[common.Di
 
 @dataclasses.dataclass
 class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
+    """ """
+
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
     @classmethod
