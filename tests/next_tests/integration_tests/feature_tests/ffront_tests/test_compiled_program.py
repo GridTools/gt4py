@@ -853,6 +853,11 @@ def test_wait_for_compilation(cartesian_case, compile_testee, synchronous):
         end_wait = time.time()
         wait_time = end_wait - start_wait
 
+        # The assumption is that in synchronous compilation the time is spent in the
+        # call to compile (`wait_for_compilation` is a no-op),
+        # in asynchronous execution `compile` is fast as it only kicks off compilation
+        # while compilation happens while waiting in `wait_for_compilation`.
+        # If this gets flaky, we need to find a better way to test this functionality.
         if synchronous:
             assert compile_call_time > wait_time
         else:
