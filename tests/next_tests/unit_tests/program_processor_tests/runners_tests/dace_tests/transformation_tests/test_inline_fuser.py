@@ -357,3 +357,61 @@ def test_multiple_value_exchange_partial():
         edge=edge_to_replace,
     )
     assert case_not_supported_and_thus_none is None
+
+
+def _make_sdfg_with_dref_tasklet():
+    sdfg = dace.SDFG(util.unique_name(f"sdfg_with_dref_target"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "abc":
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=name == "b",
+        )
+    sdfg.add_array(
+        "idx",
+        shape=(10,),
+        dtype=dace.int32,
+        transient=False,
+    )
+
+    b = state.add_access("b")
+    state.add_mapped_tasklet(
+        "first_map",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i]")},
+        outputs={"__out": dace.Memlet("b[__i]")},
+        code="__out = math.sin(__in) + 1.0",
+        output_nodes={b},
+        external_edges=True,
+    )
+    _, me2, _ = state.add_mapped_tasklet(
+        "dref",
+        map_ranges={"__in": "0:10"},
+        inputs={
+            "__field": dace.Memlet("b[0:10]"),
+            "__idx": dace.Memlet("idx[__i]"),
+        },
+        outputs={"__out": dace.Memlet("c[__i]")},
+        code="__out = __field[__idx] + 1.0",
+        input_nodes={b},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    edge_to_replace = next(
+        iter(oedge for oedge in state.out_edges(me2) if oedge.dst_conn == "__field")
+    )
+
+    return sdfg, state, edge_to_replace
+
+
+def test_deref_tasklet():
+    sdfg, state, edge_to_replace = _make_sdfg_with_dref_tasklet()
+
+    case_not_supported_and_thus_none = gtx_transformations.inline_fuser.find_nodes_to_inline(
+        sdfg, state, edge_to_replace
+    )
+    assert case_not_supported_and_thus_none is None
