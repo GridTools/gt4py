@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import enum
 import functools
+import numbers
 import typing
+import warnings
 from typing import (
     Any,
     ClassVar,
@@ -349,6 +351,38 @@ class VariableKOffset(eve.GenericNode, Generic[ExprT]):
             raise ValueError("Variable vertical index must be an integer expression")
 
 
+class AbsoluteKIndex(eve.GenericNode, Generic[ExprT]):
+    """Access a field with absolute K
+
+    Restrictions:
+    - Centered I/J
+    - No data dimensions
+    - Read-only
+    """
+
+    k: Union[int, ExprT]
+
+    def to_dict(self) -> Dict[str, Optional[int]]:
+        return {"i": 0, "j": 0, "k": None}
+
+    @datamodels.validator("k")
+    def offset_expr_is_int(self, _attribute: datamodels.Attribute, value: Any) -> None:
+        warnings.warn(
+            "Absolute indexing in `K` is an experimental feature. Please read "
+            "<https://github.com/GridTools/gt4py/blob/main/docs/development/ADRs/cartesian/experimental-features.md> "
+            "to understand the consequences.",
+            category=UserWarning,
+            stacklevel=2,
+        )
+        if isinstance(value, numbers.Real):
+            if not isinstance(value, int):
+                raise ValueError("Absolute vertical index literal must be an integer")
+        else:
+            value = typing.cast(Expr, value)
+            if value.dtype is not DataType.AUTO and not value.dtype.isinteger():
+                raise ValueError("Absolute vertical index must be an integer expression")
+
+
 class ScalarAccess(LocNode):
     name: eve.Coerced[eve.SymbolRef]
     kind: ExprKind = ExprKind.SCALAR
@@ -356,7 +390,7 @@ class ScalarAccess(LocNode):
 
 class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
     name: eve.Coerced[eve.SymbolRef]
-    offset: Union[CartesianOffset, VariableKOffsetT]
+    offset: CartesianOffset | VariableKOffsetT | AbsoluteKIndex
     data_index: List[ExprT] = eve.field(default_factory=list)
     kind: ExprKind = ExprKind.FIELD
 

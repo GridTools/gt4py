@@ -692,6 +692,12 @@ class _FieldDescriptor:
             f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
         )
 
+    def at(self, *, K):
+        """Stub function used to implement absolute K indexing"""
+        raise RuntimeError(
+            "`at(K=...)` stub function only, do not call outside of stencil field indexation."
+        )
+
 
 class _FieldDescriptorMaker:
     @staticmethod
