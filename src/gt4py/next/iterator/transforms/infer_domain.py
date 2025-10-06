@@ -477,7 +477,7 @@ def infer_expr(
         expr, offset_provider_type=common.offset_provider_to_type(offset_provider)
     )
     el_types, domain = gtx_utils.equalize_tuple_structure(
-        gtx_utils.tree_map(collection_type=ts.TupleType, result_collection_constructor=tuple)(
+        gtx_utils.tree_map(collection_type=ts.TupleType, result_constructor_maker=lambda _: tuple)(
             lambda x: x
         )(expr.type),
         domain,
