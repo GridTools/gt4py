@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 # TODO(dropd): Remove as soon as `gt4py.next.ffront.decorator` is type checked.
+import collections
 import unittest.mock as mock
 
 import pytest
@@ -89,18 +90,22 @@ def test_collect_metrics(cartesian_case, metrics_level, expected_names):
     def testee(a: cases.IField, out: cases.IField):
         testee_op(a, a, out=out)
 
-    try:
-        with mock.patch("gt4py.next.config.COLLECT_METRICS_LEVEL", metrics_level):
-            testee = testee.with_backend(cartesian_case.backend).with_grid_type(
-                cartesian_case.grid_type
-            )
-            args, kwargs = cases.get_default_data(cartesian_case, testee)
-            testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+    with (
+        mock.patch("gt4py.next.config.COLLECT_METRICS_LEVEL", metrics_level),
+        mock.patch("gt4py.next.metrics.sources", collections.defaultdict(metrics.Source)),
+    ):
+        testee = testee.with_backend(cartesian_case.backend).with_grid_type(
+            cartesian_case.grid_type
+        )
+        args, kwargs = cases.get_default_data(cartesian_case, testee)
+        testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
 
-        assert set(metrics.program_metrics.metric_names) == set(expected_names)
-
-    finally:
-        metrics.program_metrics.clear()
+        if metrics_level == metrics.DISABLED:
+            assert len(metrics.sources) == 0
+        else:
+            assert len(metrics.sources) == 1
+            source = next(iter(metrics.sources.values()))
+            assert set(source.metrics.keys()) == set(expected_names)
 
 
 def test_offset_provider_cache(cartesian_case):

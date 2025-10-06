@@ -16,7 +16,7 @@ from typing import Any, Callable, Sequence, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing, utils as eve_utils
-from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
+from gt4py.next import backend as gtx_backend, common, config, errors, metrics, utils as gtx_utils
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -232,6 +232,13 @@ class CompiledProgramsPool:
         # TODO(tehrengruber): Dispatching over offset provider type is wrong, especially when we
         #  use compile time domains.
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
+
+        if (
+            config.COLLECT_METRICS_LEVEL
+            and not (metrics_source := metrics.get_current_source()).is_finalized()
+        ):
+            metrics_source.append_to_key(self._compiled_programs.internal_key(key))
+
         try:
             self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)
         except TypeError:  # 'Future' object is not callable
@@ -253,7 +260,9 @@ class CompiledProgramsPool:
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 
     @functools.cached_property
-    def _argument_descriptor_cache_key_from_args(self) -> Callable:
+    def _argument_descriptor_cache_key_from_args(
+        self,
+    ) -> Callable[..., tuple[ScalarOrTupleOfScalars, ...]]:
         """
         Given the entire set of runtime arguments compute the cache key used to retrieve the
         instance of the compiled program which is compiled for the argument descriptors from
@@ -351,6 +360,16 @@ class CompiledProgramsPool:
         )
         if key in self._compiled_programs:
             raise ValueError(f"Program with key {key} already exists.")
+
+        # If we are collecting metrics, create a new metrics entity for this compiled program
+        if config.COLLECT_METRICS_LEVEL:
+            assert metrics.in_collection_mode()
+            metric_source = metrics.get_current_source()
+            metric_source.metadata |= dict(
+                name=self.definition_stage.definition.__name__,
+                argument_descriptor_contexts=argument_descriptor_contexts,
+                compiled_program_pool_key=key,
+            )
 
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider

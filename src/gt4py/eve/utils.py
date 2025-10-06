@@ -351,6 +351,10 @@ class CustomMapping(collections.abc.MutableMapping[_K, _V]):
             + "}"
         )
 
+    def internal_key(self, key: _K) -> int:
+        """Return the internal key used to store the value associated with `key`."""
+        return self.key_func(key)
+
 
 class HashableBy(Generic[_T]):
     __slots__ = ("hashed_value", "value")

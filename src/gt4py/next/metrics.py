@@ -6,33 +6,34 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
+import collections
 import contextlib
 import contextvars
 import dataclasses
-import json
-import pathlib
+import functools
 import sys
-from collections.abc import Generator, MutableSequence, Sequence
+from collections.abc import Generator
 
 import numpy as np
 
-from gt4py.eve import utils
-from gt4py.eve.extended_typing import Final, TypeVar
+from gt4py.eve.extended_typing import Any, Final, Hashable
 from gt4py.next import config
 
 
 # Common metric names
-COMPUTE_METRIC: Final = sys.intern("compute")
-TOTAL_METRIC: Final = sys.intern("total")
+COMPUTE_METRIC: Final[str] = sys.intern("compute")
+TOTAL_METRIC: Final[str] = sys.intern("total")
 
 
 # Metric collection levels
-DISABLED: Final = 0
-MINIMAL: Final = 1
-PERFORMANCE: Final = 10
-INFO: Final = 30
-VERBOSE: Final = 50
-ALL: Final = 100
+DISABLED: Final[int] = 0
+MINIMAL: Final[int] = 1
+PERFORMANCE: Final[int] = 10
+INFO: Final[int] = 30
+VERBOSE: Final[int] = 50
+ALL: Final[int] = 100
 
 
 @dataclasses.dataclass(frozen=True)
@@ -51,7 +52,7 @@ class Metric:
     """
 
     name: str | None = None
-    samples: MutableSequence[float] = dataclasses.field(default_factory=list)
+    samples: list[float] = dataclasses.field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.name:
@@ -79,151 +80,150 @@ class Metric:
         self.samples.append(sample)
 
 
-class MetricCollection(utils.CustomDefaultDictBase[str, Metric]):
-    """
-    A collection of metrics, organized as a mapping from metric names to `Metric` objects.
+class MetricCollection(collections.defaultdict[str, Metric]):
+    def __init__(self) -> None:
+        super().__init__()
 
-    Empty `Metric` instances are created automatically when accessing keys
-    that do not exist.
-
-    Example:
-        >>> metrics = MetricCollection()
-        >>> metrics["execution_time"].add_sample(0.1)
-        >>> metrics["execution_time"].add_sample(0.2)
-        >>> metrics["execution_time"].samples
-        [0.1, 0.2]
-    """
-
-    def value_factory(self, key: str) -> Metric:
-        return Metric(name=key)
-
-    def add_sample(self, name: str, sample: float) -> None:
-        self[name].samples.append(sample)
+    def __missing__(self, key: str) -> Metric:
+        assert isinstance(key, str)
+        self[key] = metric = Metric(name=key)
+        return metric
 
 
-_KeyT = TypeVar("_KeyT", default=str)
+@dataclasses.dataclass(slots=True, init=False)
+class Source:
+    metadata: dict[str, Any]
+    metrics: MetricCollection
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.metadata = kwargs
+        self.metrics = MetricCollection()
 
 
-class MetricCollectionStore(utils.CustomDefaultDictBase[_KeyT, MetricCollection]):
-    """
-    A dictionary-like store for metric collections.
-
-    Empty `MetricCollection` instances are created automatically when accessing keys
-    that don't exist yet.
-
-    Example:
-        >>> store = MetricCollectionStore()
-        >>> store["program1"]["execution_time"].add_sample(0.1)
-        >>> store["program1"]["execution_time"].samples
-        [0.1]
-
-        >>> store["program2"]["execution_time"].add_sample(0.2)
-        >>> store["program2"]["foo_time"].add_sample(2.3)
-        >>> store.metric_names
-        ['execution_time', 'foo_time']
-    """
-
-    def value_factory(self, key: _KeyT) -> MetricCollection:
-        return MetricCollection()
-
-    @property
-    def metric_names(self) -> Sequence[str]:
-        """Returns a list of all metric names across all collections in the store."""
-
-        return list(
-            dict.fromkeys(
-                (name for collection in self.values() for name in collection.keys())
-            ).keys()
-        )
+#: Global store for all measurements.
+sources: collections.defaultdict[int, Source] = collections.defaultdict(Source)
 
 
-# Context variable storing the active metric collection of the current program.
-_active_metric_collection: contextvars.ContextVar[MetricCollection | None] = contextvars.ContextVar(
-    "active_metric_collection", default=None
+@dataclasses.dataclass
+class SourceHandle:
+    key_parts: tuple[Hashable, ...] = ()
+
+    def is_finalized(self) -> bool:
+        return "key" in self.__dict__
+
+    @functools.cached_property
+    def key(self) -> int:
+        if self.key_parts == ():
+            raise RuntimeError("Metrics collector has no key set.")
+        source_key = hash(self.key_parts)
+        if source_key not in sources:
+            sources[source_key] = Source()
+        return source_key
+
+    @functools.cached_property
+    def metrics(self) -> MetricCollection:
+        return sources[self.key].metrics
+
+    @functools.cached_property
+    def metadata(self) -> dict[str, Any]:
+        return sources[self.key].metadata
+
+    def append_to_key(self, *args: Hashable) -> None:
+        if "key" in self.__dict__:
+            raise RuntimeError("Metrics collector key is already finalized.")
+        self.key_parts += args
+
+
+# Context variable storing the active collection context.
+_source_cvar: contextvars.ContextVar[SourceHandle | None] = contextvars.ContextVar(
+    "source", default=None
 )
 
-#: Global metric collection store for the entire program.
-program_metrics: MetricCollectionStore[str] = MetricCollectionStore()
+
+def in_collection_mode() -> bool:
+    """Check if we are currently in a metrics collection context."""
+    return _source_cvar.get() is not None
 
 
-def get_active_metric_collection() -> MetricCollection | None:
-    """Retrieve the active metric collection for the current program."""
-    return _active_metric_collection.get()
+def get_current_source() -> SourceHandle:
+    """Retrieve the active measured entity state."""
+    state = _source_cvar.get()
+    assert state is not None
+    return state
 
 
 @contextlib.contextmanager
-def metrics_collection(key: str) -> Generator[MetricCollection | None, None, None]:
-    current_metrics: MetricCollection | None = None
-    reset_token: contextvars.Token | None = None
-    if config.COLLECT_METRICS_LEVEL:
-        current_metrics = program_metrics[key]
-        assert _active_metric_collection.get() in [None, current_metrics]
-        reset_token = _active_metric_collection.set(current_metrics)
+def collect(*args: Hashable) -> Generator[SourceHandle | None, None, None]:
+    if not config.COLLECT_METRICS_LEVEL:
+        yield None
+        return
+
+    assert _source_cvar.get() is None
+    source_handler = SourceHandle(key_parts=args)
+    previous_collector_token = _source_cvar.set(source_handler)
 
     try:
-        yield current_metrics
-
+        yield source_handler
     finally:
-        if reset_token is not None:
-            _active_metric_collection.reset(reset_token)
+        _source_cvar.reset(previous_collector_token)
 
 
-def dumps(metric_cs: MetricCollectionStore | None = None) -> str:
-    """
-    Format the metrics in the collection store as a string table.
+# def dumps(metric_cs: MetricCollectionStore | None = None) -> str:
+#     """
+#     Format the metrics in the collection store as a string table.
 
-    This function generates a formatted string representation of the metrics
-    in the collection store. Each row represents a program, and each column
-    represents a metric, showing both the mean value and standard deviation.
+#     This function generates a formatted string representation of the metrics
+#     in the collection store. Each row represents a program, and each column
+#     represents a metric, showing both the mean value and standard deviation.
 
-    If no explicit collection store is provided, uses the global `program_metrics`.
-    """
-    if metric_cs is None:
-        metric_cs = program_metrics
+#     If no explicit collection store is provided, uses the global `program_metrics`.
+#     """
+#     if metric_cs is None:
+#         metric_cs = program_metrics
 
-    title_program = "program"
-    title_cols = max(len(k) for k in (*metric_cs.keys(), title_program)) + 1
-    metric_names = metric_cs.metric_names
-    width = max(len(name) for name in (*metric_names, ""))
-    titles = (f"{name:<{width}}  {'+/-':<{width}}" for name in metric_names)
-    header = f"{title_program:{title_cols}} {'  '.join(titles)}"
+#     title_program = "program"
+#     title_cols = max(len(k) for k in (*metric_cs.keys(), title_program)) + 1
+#     metric_names = metric_cs.metric_names
+#     width = max(len(name) for name in (*metric_names, ""))
+#     titles = (f"{name:<{width}}  {'+/-':<{width}}" for name in metric_names)
+#     header = f"{title_program:{title_cols}} {'  '.join(titles)}"
 
-    rows = []
-    for program in metric_cs.keys():
-        cells = []
-        for metric_name in metric_names:
-            if metric_name in metric_cs[program]:
-                cells.append(
-                    f"{metric_cs[program][metric_name].mean:<{width}.5e}  "
-                    f"{metric_cs[program][metric_name].std:<{width}.5e}"
-                )
-            else:
-                cells.append(f"{'N/A':<{width}} {'N/A':<{width}}")
-        rows.append(f"{program:{title_cols}} {'  '.join(cells)}")
+#     rows = []
+#     for program in metric_cs.keys():
+#         cells = []
+#         for metric_name in metric_names:
+#             if metric_name in metric_cs[program]:
+#                 cells.append(
+#                     f"{metric_cs[program][metric_name].mean:<{width}.5e}  "
+#                     f"{metric_cs[program][metric_name].std:<{width}.5e}"
+#                 )
+#             else:
+#                 cells.append(f"{'N/A':<{width}} {'N/A':<{width}}")
+#         rows.append(f"{program:{title_cols}} {'  '.join(cells)}")
 
-    return "\n".join(["", header, *rows, ""])
-
-
-def dump(filename: str | pathlib.Path, metric_cs: MetricCollectionStore | None = None) -> None:
-    pathlib.Path(filename).write_text(dumps(metric_cs))
+#     return "\n".join(["", header, *rows, ""])
 
 
-def dumps_json(metric_cs: MetricCollectionStore | None = None) -> str:
-    """
-    Export metrics as a JSON string with structure: {program: {metric_name: [samples]}}
-
-    If no explicit collection store is provided, uses the global `program_metrics`.
-    """
-    if metric_cs is None:
-        metric_cs = program_metrics
-
-    return json.dumps(
-        {
-            program: {name: metric.samples for name, metric in collection.items()}
-            for program, collection in metric_cs.items()
-        },
-    )
+# def dump(filename: str | pathlib.Path, metric_cs: MetricCollectionStore | None = None) -> None:
+#     pathlib.Path(filename).write_text(dumps(metric_cs))
 
 
-def dump_json(filename: str | pathlib.Path, metric_cs: MetricCollectionStore | None = None) -> None:
-    pathlib.Path(filename).write_text(dumps_json(metric_cs))
+# def dumps_json(metric_cs: MetricCollectionStore | None = None) -> str:
+#     """
+#     Export metrics as a JSON string with structure: {program: {metric_name: [samples]}}
+
+#     If no explicit collection store is provided, uses the global `program_metrics`.
+#     """
+#     if metric_cs is None:
+#         metric_cs = program_metrics
+
+#     return json.dumps(
+#         {
+#             program: {name: metric.samples for name, metric in collection.items()}
+#             for program, collection in metric_cs.items()
+#         },
+#     )
+
+
+# def dump_json(filename: str | pathlib.Path, metric_cs: MetricCollectionStore | None = None) -> None:
+#     pathlib.Path(filename).write_text(dumps_json(metric_cs))
