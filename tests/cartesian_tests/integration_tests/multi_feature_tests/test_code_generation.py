@@ -1228,7 +1228,8 @@ def test_absolute_K_index(backend):
     domain = (5, 5, 5)
 
     in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
-    k_arr = gt_storage.zeros(backend=backend, shape=(domain[0], domain[1]), dtype=np.int64)
+    idx_arr = gt_storage.zeros(backend=backend, shape=(domain[0], domain[1]), dtype=np.int64)
+    k_arr = gt_storage.zeros(backend=backend, shape=(domain[2],), dtype=np.float64)
     out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
 
     @gtscript.stencil(backend=backend)
@@ -1271,17 +1272,31 @@ def test_absolute_K_index(backend):
     @gtscript.stencil(backend=backend)
     def test_field_access(
         in_field: Field[np.float64],
-        k_field: Field[IJ, np.int64],
+        index_field: Field[IJ, np.int64],
         out_field: Field[np.float64],
     ) -> None:
         with computation(PARALLEL), interval(...):
-            out_field = in_field.at(K=k_field)
+            out_field = in_field.at(K=index_field)
 
     in_arr[:, :, :] = 1
-    k_arr[:, :] = 1
+    idx_arr[:, :] = 1
     in_arr[:, :, 1] = 42.42
     out_arr[:, :, :] = 0
-    test_field_access(in_arr, k_arr, out_arr)
+    test_field_access(in_arr, idx_arr, out_arr)
+    assert (out_arr[:, :, :] == 42.42).all()
+
+    @gtscript.stencil(backend=backend)
+    def test_lower_dim_field(
+        k_field: Field[K, np.float64],
+        out_field: Field[np.float64],
+    ) -> None:
+        with computation(PARALLEL), interval(...):
+            out_field = k_field.at(K=2)
+
+    k_arr[:] = 0
+    k_arr[2] = 42.42
+    out_arr[:, :, :] = 0
+    test_lower_dim_field(k_arr, out_arr)
     assert (out_arr[:, :, :] == 42.42).all()
 
 
