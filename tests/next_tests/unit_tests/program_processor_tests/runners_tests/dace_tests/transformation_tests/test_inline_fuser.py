@@ -110,7 +110,9 @@ def test_inline_fuse_simple_case():
     assert util.compare_sdfg_res(ref, res)
 
 
-def _make_laplap_sdfg() -> tuple[
+def _make_laplap_sdfg(
+    zero_based_index: bool,
+) -> tuple[
     dace.SDFG,
     dace.SDFGState,
     dace_nodes.AccessNode,
@@ -144,25 +146,25 @@ def _make_laplap_sdfg() -> tuple[
 
     state.add_mapped_tasklet(
         "lap",
-        map_ranges={"__i": "0:8"},
+        map_ranges={"__i": "0:8" if zero_based_index else "1:9"},
         inputs={
-            "__in1": dace.Memlet("a[__i]"),
-            "__in2": dace.Memlet("a[__i + 2]"),
+            "__in1": dace.Memlet(f"a[{'__i' if zero_based_index else '__i - 1'}]"),
+            "__in2": dace.Memlet(f"a[{'__i + 2' if zero_based_index else '__i + 1'}]"),
         },
         code="__out = __in2 - __in1",
-        outputs={"__out": dace.Memlet("lap[__i]")},
+        outputs={"__out": dace.Memlet(f"lap[{'__i' if zero_based_index else '__i - 1'}]")},
         output_nodes={lap},
         external_edges=True,
     )
     laplap_tlet, laplap_me, _ = state.add_mapped_tasklet(
         "laplap",
-        map_ranges={"__i": "0:6"},
+        map_ranges={"__i": "0:6" if zero_based_index else "2:8"},
         inputs={
-            "__in1": dace.Memlet("lap[__i]"),
-            "__in2": dace.Memlet("lap[__i + 2]"),
+            "__in1": dace.Memlet(f"lap[{'__i' if zero_based_index else '__i - 1 - 1'}]"),
+            "__in2": dace.Memlet(f"lap[{'__i + 2' if zero_based_index else '__i + 1 - 1'}]"),
         },
         code="__out = __in2 - __in1",
-        outputs={"__out": dace.Memlet("laplap[__i]")},
+        outputs={"__out": dace.Memlet(f"laplap[{'__i' if zero_based_index else '__i - 2'}]")},
         input_nodes={lap},
         external_edges=True,
     )
@@ -173,8 +175,9 @@ def _make_laplap_sdfg() -> tuple[
     return sdfg, state, lap, laplap_me, edge_m1, edge_p1, laplap_tlet
 
 
-def test_laplap():
-    sdfg, state, lap, laplap_me, edge_m1, edge_p1, laplap_tlet = _make_laplap_sdfg()
+@pytest.mark.parametrize("zero_based_index", [True, False])
+def test_laplap(zero_based_index: bool):
+    sdfg, state, lap, laplap_me, edge_m1, edge_p1, laplap_tlet = _make_laplap_sdfg(zero_based_index)
 
     ref, res = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
@@ -196,11 +199,15 @@ def test_laplap():
 
     assert state.out_degree(output_node_m1) == 1
     assert next(iter(state.in_edges_by_connector(laplap_tlet, "__in1"))).src is output_node_m1
-    assert str(nsdfg_m1.symbol_mapping["__i"]) == "__i"
+    assert str(nsdfg_m1.symbol_mapping["__i"]).replace(" ", "") == (
+        "__i" if zero_based_index else "__i-1"
+    )
 
     assert state.out_degree(output_node_p1) == 1
     assert next(iter(state.in_edges_by_connector(laplap_tlet, "__in2"))).src is output_node_p1
-    assert str(nsdfg_p1.symbol_mapping["__i"]) == "__i + 2"
+    assert str(nsdfg_p1.symbol_mapping["__i"]).replace(" ", "") == (
+        "__i+2" if zero_based_index else "__i+1"
+    )
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
