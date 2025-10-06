@@ -385,15 +385,14 @@ class CompiledProgramsPool:
             kwargs=self.program_type.definition.kw_only_args,
             argument_descriptor_contexts=argument_descriptor_contexts,
         )
+        compile_call = functools.partial(
+            self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
+        )
         if _async_compilation_pool is None:
             # synchronous compilation
-            self._compiled_programs[key] = self.backend.compile(
-                self.definition_stage, compile_time_args=compile_time_args
-            )
+            self._compiled_programs[key] = compile_call()
         else:
-            self._compiled_programs[key] = _async_compilation_pool.submit(
-                self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
-            )
+            self._compiled_programs[key] = _async_compilation_pool.submit(compile_call)
 
     def _offset_provider_to_type_unsafe(
         self,
