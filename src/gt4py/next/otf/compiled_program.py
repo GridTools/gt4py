@@ -12,7 +12,8 @@ import concurrent.futures
 import dataclasses
 import functools
 import itertools
-from typing import Any, Callable, Sequence, TypeAlias, TypeVar
+from collections.abc import Callable, Hashable, Sequence
+from typing import Any, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing, utils as eve_utils
@@ -29,9 +30,7 @@ T = TypeVar("T")
 _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
 
 ScalarOrTupleOfScalars: TypeAlias = extended_typing.MaybeNestedInTuple[core_defs.Scalar]
-CompiledProgramsKey: TypeAlias = tuple[
-    tuple[ScalarOrTupleOfScalars, ...], common.OffsetProviderType
-]
+CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], common.OffsetProviderType]
 ArgumentDescriptors: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
@@ -264,7 +263,7 @@ class CompiledProgramsPool:
     @functools.cached_property
     def _argument_descriptor_cache_key_from_args(
         self,
-    ) -> Callable[..., tuple[ScalarOrTupleOfScalars, ...]]:
+    ) -> Callable[..., tuple[Hashable, ...]]:
         """
         Given the entire set of runtime arguments compute the cache key used to retrieve the
         instance of the compiled program which is compiled for the argument descriptors from

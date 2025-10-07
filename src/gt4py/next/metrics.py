@@ -104,7 +104,14 @@ sources: collections.defaultdict[str, Source] = collections.defaultdict(Source)
 
 
 class SourceHandler:
-    """A handler to manage addition to metrics sources to the global store."""
+    """
+    A handler to manage addition to metrics sources to the global store.
+
+    This object is used to collect metrics for a specific source (e.g., a program)
+    before a final key is assigned to it. The key is typically set when the program
+    is first executed or compiled, and it uniquely identifies the source in the
+    global metrics store.
+    """
 
     def __init__(self, source: Source | None = None) -> None:
         if source is not None:
@@ -116,6 +123,8 @@ class SourceHandler:
 
     @key.setter
     def key(self, value: str) -> None:
+        # The key can only be set once, and if it matches an existing source
+        # in the global store, it must be the same object.
         if "_key" in self.__dict__:
             raise RuntimeError("Metrics source key is already set.")
 

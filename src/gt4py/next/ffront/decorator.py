@@ -329,7 +329,9 @@ class Program:
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
             else:
-                # embedded
+                # Embedded execution.
+                # Metrics source key needs to be setup here, since embedded programs
+                # don't have variants and thus there's no other place we could do this.
                 if config.COLLECT_METRICS_LEVEL:
                     assert metrics_source is not None
                     metrics_source.key = (
