@@ -158,9 +158,17 @@ class SymbolicDomain:
                     accessed = connectivity.ndarray[start:stop, nb_index]
 
                     if isinstance(val, itir.OffsetLiteral) and np.any(accessed == skip_value):
-                        raise ValueError(
-                            f"Translating '{self.as_expr()}' using '{shift[0].value}' has "
-                            f"an out-of-bounds access."
+                        # TODO(tehrengruber): Turn this into a configurable error. This is currently
+                        #  not possible since some test cases starting from ITIR containing
+                        #  `can_deref` might lead here. The frontend never emits such IR and domain
+                        #  inference runs after we transform reductions into stmts containing
+                        #  `can_deref`.
+                        warnings.warn(
+                            UserWarning(
+                                f"Translating '{self.as_expr()}' using '{shift[0].value}' has "
+                                f"an out-of-bounds access."
+                            ),
+                            stacklevel=2,
                         )
 
                     new_start, new_stop = accessed.min(), accessed.max() + 1  # type: ignore[attr-defined]  # TODO(havogt): improve typing for NDArrayObject

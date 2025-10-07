@@ -86,6 +86,10 @@ def _process_symbolic_domains_option(
     symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]],
     use_max_domain_range_on_unstructured_shift: Optional[bool],
 ) -> Optional[dict[str, str | itir.Expr]]:
+    if symbolic_domain_sizes:
+        assert not use_max_domain_range_on_unstructured_shift, "Options are mutually exclusive."
+        return symbolic_domain_sizes
+
     has_dynamic_domains = _has_dynamic_domains(ir)
     if has_dynamic_domains and use_max_domain_range_on_unstructured_shift is None:
         use_max_domain_range_on_unstructured_shift = True
