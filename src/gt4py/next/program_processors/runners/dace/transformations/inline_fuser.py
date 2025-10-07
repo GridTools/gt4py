@@ -245,6 +245,15 @@ def find_nodes_to_inline(
         return None
     first_map_exit: dace_nodes.MapExit = producing_edge.src
 
+    # Dynamic Map ranges are not yet supported.
+    # TODO(phimuell): Lift this restriction.
+    first_map_entry: dace_nodes.MapEntry = state.entry_node(first_map_exit)
+    if any(
+        iedge.dst_conn is None or (not iedge.dst_conn.startswith("IN_"))
+        for iedge in state.in_edges(first_map_entry)
+    ):
+        return None
+
     # NOTE: On an `OUT_` connector of a MapExit node multiple edges can converge,
     #   we can not handle that thus we have to restrict that case.
     writing_edges = [
