@@ -269,6 +269,19 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
             return f"{field_access.name}[{offset_str},{data_index_access}]"
         return f"{field_access.name}[{offset_str}]"
 
+    def visit_AbsoluteKIndex(self, absolute_k_index: oir.AbsoluteKIndex, **kwargs) -> str:
+        access_pattern = []
+        if kwargs["dimensions"][2] is False:
+            raise ValueError(
+                "Tried accessing a field with no K-dimensions with an absolute K-index."
+            )
+        if kwargs["dimensions"][0]:
+            access_pattern.append("i")
+        if kwargs["dimensions"][1]:
+            access_pattern.append("j")
+        access_pattern.append(f"int({self.visit(absolute_k_index.k, **kwargs)})")
+        return ",".join(access_pattern)
+
     def visit_BinaryOp(self, binary: oir.BinaryOp, **kwargs) -> str:
         return f"( {self.visit(binary.left, **kwargs)} {binary.op} {self.visit(binary.right, **kwargs)} )"
 
