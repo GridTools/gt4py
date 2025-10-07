@@ -16,7 +16,7 @@ from collections.abc import Callable, Hashable, Sequence
 from typing import Any, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing, utils as eve_utils
+from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.next import backend as gtx_backend, common, config, errors, metrics, utils as gtx_utils
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
 from gt4py.next.otf import arguments, stages
@@ -40,13 +40,13 @@ def _init_async_compilation_pool() -> None:
 
 _init_async_compilation_pool()
 
-ScalarOrTupleOfScalars: TypeAlias = extended_typing.MaybeNestedInTuple[core_defs.Scalar]
+ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
 CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], common.OffsetProviderType]
 ArgumentDescriptors: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
 ArgumentDescriptorContext: TypeAlias = dict[
-    str, extended_typing.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]
+    str, xtyping.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]
 ]
 ArgumentDescriptorContexts: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor],
@@ -81,7 +81,7 @@ def _make_tuple_expr(el_exprs: list[str]) -> str:
 def _make_param_context_from_func_type(
     func_type: ts.FunctionType,
     type_map: Callable[[ts.TypeSpec], T] = lambda x: x,  # type: ignore[assignment, return-value]  # mypy not smart enough to narrow type for default
-) -> dict[str, extended_typing.MaybeNestedInTuple[T]]:
+) -> dict[str, xtyping.MaybeNestedInTuple[T]]:
     """
     Create a context to evaluate expressions in from a function type.
 
@@ -390,6 +390,8 @@ class CompiledProgramsPool:
         # If we are collecting metrics, create a new metrics entity for this compiled program
         if config.COLLECT_METRICS_LEVEL:
             metric_source: metrics.Source | metrics.SourceHandler
+            compiled_program_pool_key = self._compiled_programs.internal_key(key)
+
             if metrics.in_collection_mode():
                 # Jitting within a metrics collection context
                 metric_source = metrics.get_current_source()
@@ -397,12 +399,16 @@ class CompiledProgramsPool:
                 # Precompiling outside of a metrics collection context.
                 # The key is not yet in the sources and should be computed
                 # exactly as in __call__() and added to the global mapping.
-                metrics_key = f"{self.definition_stage.definition.__name__}[{self._compiled_programs.internal_key(key)}]"
+                metrics_key = (
+                    f"{self.definition_stage.definition.__name__}[{compiled_program_pool_key}]"
+                )
                 metric_source = metrics.sources[metrics_key]
+
             metric_source.metadata |= dict(
                 name=self.definition_stage.definition.__name__,
-                argument_descriptor_contexts=argument_descriptor_contexts,
-                compiled_program_pool_key=key,
+                backend=self.backend.name,
+                compiled_program_pool_key=compiled_program_pool_key,
+                **{key.__name__: value for key, value in argument_descriptors.items()},
             )
 
         compile_time_args = arguments.CompileTimeArgs(
