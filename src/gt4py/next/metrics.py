@@ -272,7 +272,7 @@ def dumps_json(metric_sources: Mapping[str, Source] | None = None) -> str:
         {
             f"{source_id}": {
                 "metadata": source.metadata,
-                "metrics": source.metrics,
+                "metrics": {name: metric.samples for name, metric in source.metrics.items()},
             }
             for source_id, source in metric_sources.items()
         },
