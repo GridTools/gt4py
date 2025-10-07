@@ -233,14 +233,16 @@ class CompiledProgramsPool:
         #  use compile time domains.
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
 
-        if (
-            config.COLLECT_METRICS_LEVEL
-            and not (metrics_source := metrics.get_current_source()).is_finalized()
-        ):
-            metrics_source.append_to_key(self._compiled_programs.internal_key(key))
-
         try:
-            self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)
+            program = self._compiled_programs[key]
+
+            if config.COLLECT_METRICS_LEVEL:
+                metrics_source = metrics.get_current_source()
+                # This key should be the same as in _compile_variant()
+                metrics_source.key = f"{self.definition_stage.definition.__name__}[{self._compiled_programs.internal_key(key)}]"
+
+            program(*args, **kwargs, offset_provider=offset_provider)
+
         except TypeError:  # 'Future' object is not callable
             # ... otherwise we resolve the future and call again
             program = self._resolve_future(key)
@@ -363,8 +365,15 @@ class CompiledProgramsPool:
 
         # If we are collecting metrics, create a new metrics entity for this compiled program
         if config.COLLECT_METRICS_LEVEL:
-            assert metrics.in_collection_mode()
-            metric_source = metrics.get_current_source()
+            if metrics.in_collection_mode():
+                # Jitting within a metrics collection context
+                metric_source = metrics.get_current_source()
+            else:
+                # Precompiling outside of a metrics collection context.
+                # The key is not yet in the sources and should be computed
+                # exactly as in __call__() and added to the global mapping.
+                key = f"{self.definition_stage.definition.__name__}[{self._compiled_programs.internal_key(key)}]"
+                metric_source = metrics.sources[key]
             metric_source.metadata |= dict(
                 name=self.definition_stage.definition.__name__,
                 argument_descriptor_contexts=argument_descriptor_contexts,

@@ -312,12 +312,6 @@ class Program:
             )
 
         with metrics.collect() as metrics_source:
-            if config.COLLECT_METRICS_LEVEL:
-                assert metrics_source is not None
-                metrics_source.append_to_key(
-                    self.__name__, getattr(self.backend, "name", "<embedded>")
-                )
-
             if collect_info_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.INFO):
                 start = time.time()
 
@@ -336,6 +330,11 @@ class Program:
                 )
             else:
                 # embedded
+                if config.COLLECT_METRICS_LEVEL:
+                    assert metrics_source is not None
+                    metrics_source.key = (
+                        f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
+                    )
                 warnings.warn(
                     UserWarning(
                         f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
