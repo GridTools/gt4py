@@ -33,6 +33,7 @@ from gt4py.next import (
     embedded as next_embedded,
     errors,
     metrics,
+    utils,
 )
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -629,18 +630,6 @@ def program(
 OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
 
 
-def _slice_outs(
-    outs: xtyping.MaybeNestedInTuple[common.Field],
-    domains: xtyping.MaybeNestedInTuple[common.Domain],
-) -> common.Field | tuple[common.Field | tuple, ...]:
-    if isinstance(outs, tuple):
-        if not isinstance(domains, tuple):
-            domains = tuple([domains] * len(outs))
-        return tuple(_slice_outs(out, domain) for out, domain in zip(outs, domains, strict=True))
-    else:
-        return outs[domains]
-
-
 @dataclasses.dataclass(frozen=True)
 class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     """
@@ -782,8 +771,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
             if "domain" in kwargs:
-                dom = common.normalize_domains(kwargs.pop("domain"))
-                out = _slice_outs(out, dom)
+                domain = common.normalize_domains(kwargs.pop("domain"))
+                if not isinstance(domain, tuple):
+                    domain = utils.tree_map(lambda _: domain)(out)
+                out = utils.tree_map(lambda f, dom: f[dom])(out, domain)
 
             args, kwargs = type_info.canonicalize_arguments(
                 self.foast_stage.foast_node.type, args, kwargs

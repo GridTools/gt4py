@@ -8,7 +8,7 @@
 
 import dataclasses
 from collections import ChainMap
-from typing import Callable, Iterable, TypeVar
+from typing import Callable, Iterable, TypeVar, cast
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -229,17 +229,20 @@ def grid_type_from_domain(domain: itir.FunCall) -> common.GridType:
         return common.GridType.UNSTRUCTURED
 
 
-def _flatten_tuple_expr(domain_expr: itir.Expr) -> tuple[itir.Expr]:
-    if cpm.is_call_to(domain_expr, "make_tuple"):
-        return sum((_flatten_tuple_expr(arg) for arg in domain_expr.args), start=())
+def _flatten_tuple_expr(expr: itir.Expr) -> tuple[itir.Expr]:
+    if cpm.is_call_to(expr, "make_tuple"):
+        return sum(
+            (_flatten_tuple_expr(arg) for arg in expr.args), start=cast(tuple[itir.Expr], ())
+        )
     else:
-        return (domain_expr,)
+        return (expr,)
 
 
 def grid_type_from_program(program: itir.Program) -> common.GridType:
     domain_exprs = program.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
     domains = sum((_flatten_tuple_expr(domain_expr) for domain_expr in domain_exprs), start=())
-    grid_types = {grid_type_from_domain(d) for d in domains}
+    assert all(isinstance(d, itir.FunCall) for d in domains)
+    grid_types = {grid_type_from_domain(d) for d in domains}  # type: ignore[arg-type] # checked above
     if len(grid_types) != 1:
         raise ValueError(
             f"Found 'set_at' with more than one 'GridType': '{grid_types}'. This is currently not supported."

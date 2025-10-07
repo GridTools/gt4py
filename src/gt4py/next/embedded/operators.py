@@ -131,17 +131,11 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
         return op(*args, **kwargs)
 
 
-def _get_vertical_range(
-    domain: xtyping.MaybeNestedInTuple[common.Domain],
-) -> common.NamedRange | eve.NothingType | tuple[common.NamedRange | eve.NothingType, ...]:
-    if isinstance(domain, tuple):
-        return tuple(_get_vertical_range(dom) for dom in domain)
-    else:
-        vertical_dim_filtered = [
-            nr for nr in domain if nr.dim.kind == common.DimensionKind.VERTICAL
-        ]
-        assert len(vertical_dim_filtered) <= 1
-        return vertical_dim_filtered[0] if vertical_dim_filtered else eve.NOTHING
+@utils.tree_map
+def _get_vertical_range(domain: common.Domain) -> common.NamedRange | eve.NothingType:
+    vertical_dim_filtered = [nr for nr in domain if nr.dim.kind == common.DimensionKind.VERTICAL]
+    assert len(vertical_dim_filtered) <= 1
+    return vertical_dim_filtered[0] if vertical_dim_filtered else eve.NOTHING
 
 
 def _tuple_assign_field(

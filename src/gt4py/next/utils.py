@@ -125,6 +125,7 @@ def tree_map(
 
     if result_collection_constructor is None:
         if isinstance(collection_type, tuple):
+            # Note: that doesn't mean `collection_type=tuple`, but e.g. `collection_type=(list, tuple)`
             raise TypeError(
                 "tree_map() requires `result_collection_constructor` when `collection_type` is a tuple of types."
             )
