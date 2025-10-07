@@ -142,7 +142,7 @@ def testee(a: IField, b: JField) -> tuple[JField, IField]:
 
 
 @gtx.program
-def prog_no_domain_differnet_fields(
+def prog_no_domain_different_fields(
     a: IField,
     b: JField,
     out_a: IField,
@@ -154,14 +154,14 @@ def prog_no_domain_differnet_fields(
 def test_program_no_domain_different_fields(
     cartesian_case,
 ):
-    a = cases.allocate(cartesian_case, prog_no_domain_differnet_fields, "a")()
-    b = cases.allocate(cartesian_case, prog_no_domain_differnet_fields, "b")()
-    out_a = cases.allocate(cartesian_case, prog_no_domain_differnet_fields, "out_a")()
-    out_b = cases.allocate(cartesian_case, prog_no_domain_differnet_fields, "out_b")()
+    a = cases.allocate(cartesian_case, prog_no_domain_different_fields, "a")()
+    b = cases.allocate(cartesian_case, prog_no_domain_different_fields, "b")()
+    out_a = cases.allocate(cartesian_case, prog_no_domain_different_fields, "out_a")()
+    out_b = cases.allocate(cartesian_case, prog_no_domain_different_fields, "out_b")()
 
     cases.verify(
         cartesian_case,
-        prog_no_domain_differnet_fields,
+        prog_no_domain_different_fields,
         a,
         b,
         out_a,
@@ -411,7 +411,8 @@ def prog_double_nested_tuples(
     c: KField,
     out_a: IField,
     out_b: JField,
-    out_c: KField,
+    out_c0: KField,
+    out_c1: KField,
     i_size: gtx.int32,
     j_size: gtx.int32,
     k_size: gtx.int32,
@@ -420,7 +421,7 @@ def prog_double_nested_tuples(
         a,
         b,
         c,
-        out=((out_a, (out_b, out_c)), out_c),
+        out=((out_a, (out_b, out_c0)), out_c1),
         domain=(
             ({IDim: (0, i_size)}, ({JDim: (0, j_size)}, {KDim: (0, k_size)})),
             {KDim: (0, k_size)},
@@ -436,7 +437,8 @@ def test_program_double_nested_tuples(
     c = cases.allocate(cartesian_case, prog_double_nested_tuples, "c")()
     out_a = cases.allocate(cartesian_case, prog_double_nested_tuples, "out_a")()
     out_b = cases.allocate(cartesian_case, prog_double_nested_tuples, "out_b")()
-    out_c = cases.allocate(cartesian_case, prog_double_nested_tuples, "out_c")()
+    out_c0 = cases.allocate(cartesian_case, prog_double_nested_tuples, "out_c0")()
+    out_c1 = cases.allocate(cartesian_case, prog_double_nested_tuples, "out_c1")()
 
     cases.verify(
         cartesian_case,
@@ -446,11 +448,12 @@ def test_program_double_nested_tuples(
         c,
         out_a,
         out_b,
-        out_c,
+        out_c0,
+        out_c1,
         cartesian_case.default_sizes[IDim],
         cartesian_case.default_sizes[JDim],
         cartesian_case.default_sizes[KDim],
-        inout=((out_a, (out_b, out_c)), out_c),
+        inout=((out_a, (out_b, out_c0)), out_c1),
         ref=((a, (b, c)), c),
     )
 
@@ -619,6 +622,30 @@ def test_direct_fo_orig(cartesian_case):
     )
 
 
+def test_direct_fo_nested(cartesian_case):
+    a = cases.allocate(cartesian_case, testee_nested_tuples, "a")()
+    b = cases.allocate(cartesian_case, testee_nested_tuples, "b")()
+    c = cases.allocate(cartesian_case, testee_nested_tuples, "c")()
+    out = cases.allocate(cartesian_case, testee_nested_tuples, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case,
+        testee_nested_tuples,
+        a,
+        b,
+        c,
+        out=out,
+        ref=((a, b), c),
+        domain=(
+            (
+                {IDim: (0, cartesian_case.default_sizes[IDim])},
+                {JDim: (0, cartesian_case.default_sizes[JDim])},
+            ),
+            {KDim: (0, cartesian_case.default_sizes[KDim])},
+        ),
+    )
+
+
 def test_direct_fo(cartesian_case):
     a = cases.allocate(cartesian_case, testee, "a")()
     b = cases.allocate(cartesian_case, testee, "b")()
@@ -638,16 +665,18 @@ def test_direct_fo(cartesian_case):
     )
 
 
-def test_direct_fo_no_domain(cartesian_case):
-    a = cases.allocate(cartesian_case, testee, "a")()
-    b = cases.allocate(cartesian_case, testee, "b")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+def test_direct_fo_nested_no_domain(cartesian_case):
+    a = cases.allocate(cartesian_case, testee_nested_tuples, "a")()
+    b = cases.allocate(cartesian_case, testee_nested_tuples, "b")()
+    c = cases.allocate(cartesian_case, testee_nested_tuples, "c")()
+    out = cases.allocate(cartesian_case, testee_nested_tuples, cases.RETURN)()
 
     cases.verify(
         cartesian_case,
-        testee,
+        testee_nested_tuples,
         a,
         b,
+        c,
         out=out,
-        ref=(b, a),
+        ref=((a, b), c),
     )
