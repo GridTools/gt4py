@@ -77,6 +77,7 @@ def make_dace_backend(
     use_memory_pool: bool,
     blocking_dim: common.Dimension | None,
     blocking_size: int = 10,
+    use_metrics: bool = True,
     use_zero_origin: bool = False,
 ) -> backend.Backend:
     """Helper function to create a dace cached backend with custom config for SDFG
@@ -98,6 +99,7 @@ def make_dace_backend(
             on this dimension.
         blocking_size: Block size to use in 'LoopBlocking' SDFG transformation,
             when enabled.
+        use_metrics: Add SDFG instrumention to collect the stencil compute time.
         use_zero_origin: Can be set to `True` when all fields passed as program
             arguments have zero-based origin. This setting will skip generation
             of range start-symbols `_range_0` since they can be assumed to be zero.
@@ -116,6 +118,7 @@ def make_dace_backend(
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
         otf_workflow__bare_translation__make_persistent=make_persistent,
         otf_workflow__bare_translation__use_memory_pool=use_memory_pool,
+        otf_workflow__bare_translation__use_metrics=use_metrics,
         otf_workflow__bindings__make_persistent=make_persistent,
     )
 
