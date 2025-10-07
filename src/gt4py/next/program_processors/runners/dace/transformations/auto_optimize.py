@@ -188,6 +188,14 @@ def gt_auto_optimize(
                 original_demoted_descriptors[field_to_demote] = field_desc.clone()
                 field_desc.transient = True
 
+            if len(original_demoted_descriptors) != 0:
+                gtx_transformations.gt_simplify(
+                    sdfg=sdfg,
+                    validate=False,
+                    skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
+                    validate_all=validate_all,
+                )
+
         gtx_transformations.gt_reduce_distributed_buffering(
             sdfg, validate=False, validate_all=validate_all
         )
