@@ -200,12 +200,6 @@ def _validate_argument_descriptors(
             descriptor.validate(expr, param_type)
 
 
-def _stringify(obj: dict) -> dict:
-    if isinstance(obj, dict):
-        return {str(k): _stringify(v) for k, v in obj.items()}
-    return str(obj)
-
-
 @dataclasses.dataclass
 class CompiledProgramsPool:
     """
@@ -414,7 +408,7 @@ class CompiledProgramsPool:
                 name=self.definition_stage.definition.__name__,
                 backend=self.backend.name,
                 compiled_program_pool_key=compiled_program_pool_key,
-                **{key.__name__: _stringify(value) for key, value in argument_descriptors.items()},
+                **{key.__name__: value for key, value in argument_descriptors.items()},
             )
 
         compile_time_args = arguments.CompileTimeArgs(
