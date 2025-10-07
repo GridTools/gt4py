@@ -113,7 +113,7 @@ def tree_map(
 
         >>> tree_map(
         ...     collection_type=(list, tuple),
-        ...     result_constructor_maker=lambda type_: tuple if type_ is list else list,
+        ...     result_constructor_maker=lambda value: tuple if isinstance(value, list) else list,
         ... )(lambda x: x + 1)([(1, 2), 3])
         ([2, 3], 4)
 

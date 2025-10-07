@@ -49,7 +49,7 @@ def test_tree_map_custom_output_type():
 def test_tree_map_multiple_input_types():
     @utils.tree_map(
         collection_type=(list, tuple),
-        result_constructor_maker=lambda type_: tuple if type_ is list else list,
+        result_constructor_maker=lambda value: tuple if isinstance(value, list) else list,
     )
     def testee(x):
         return x + 1
