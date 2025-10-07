@@ -9,7 +9,7 @@
 from typing import Annotated, Final, TypeAlias
 
 from gt4py._core.definitions import Scalar
-from gt4py.next import backend
+from gt4py.next import allocators, backend
 from gt4py.next.common import OffsetProvider
 from gt4py.next.ffront import decorator
 
@@ -20,10 +20,13 @@ _ONLY_FOR_TYPING: Final[str] = "only for typing"
 Program: TypeAlias = Annotated[decorator.Program, _ONLY_FOR_TYPING]
 FieldOperator: TypeAlias = Annotated[decorator.FieldOperator, _ONLY_FOR_TYPING]
 Backend: TypeAlias = Annotated[backend.Backend, _ONLY_FOR_TYPING]
-
+FieldBufferAllocationUtil: TypeAlias = Annotated[
+    allocators.FieldBufferAllocationUtil, _ONLY_FOR_TYPING
+]
 
 __all__ = [
     "Backend",
+    "FieldBufferAllocationUtil",
     "FieldOperator",
     "OffsetProvider",
     "Program",
