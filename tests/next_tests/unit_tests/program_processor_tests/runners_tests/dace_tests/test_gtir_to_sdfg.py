@@ -22,6 +22,7 @@ from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import infer_domain
+from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -123,7 +124,11 @@ def build_dace_sdfg(
 ) -> Callable[..., Any]:
     if not skip_domain_inference:
         # run domain inference in order to add the domain annex information to the IR nodes
-        ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+        ir = infer_domain.infer_program(
+            ir,
+            offset_provider=offset_provider,
+            symbolic_domain_sizes=pass_manager._max_domain_range_sizes(offset_provider),
+        )
     offset_provider_type = gtx_common.offset_provider_to_type(offset_provider)
     return dace_backend.build_sdfg_from_gtir(ir, offset_provider_type, column_axis=KDim)
 
@@ -2370,7 +2375,11 @@ def test_gtir_concat_where():
         )
 
         # run domain inference in order to add the domain annex information to the concat_where node.
-        testee = infer_domain.infer_program(testee, offset_provider=CARTESIAN_OFFSETS)
+        testee = infer_domain.infer_program(
+            testee,
+            offset_provider=CARTESIAN_OFFSETS,
+            symbolic_domain_sizes=pass_manager._max_domain_range_sizes(CARTESIAN_OFFSETS),
+        )
         sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
         c = np.empty_like(a)
 
@@ -2454,7 +2463,11 @@ def test_gtir_concat_where_two_dimensions():
     }
 
     # run domain inference in order to add the domain annex information to the concat_where node.
-    testee = infer_domain.infer_program(testee, offset_provider=CARTESIAN_OFFSETS)
+    testee = infer_domain.infer_program(
+        testee,
+        offset_provider=CARTESIAN_OFFSETS,
+        symbolic_domain_sizes=pass_manager._max_domain_range_sizes(CARTESIAN_OFFSETS),
+    )
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     sdfg(a, b, c, d, **field_symbols)
