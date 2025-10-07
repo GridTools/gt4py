@@ -86,6 +86,20 @@ class Metric:
 
 
 class MetricsCollection(utils.CustomDefaultDictBase[str, Metric]):
+    """
+    A collection of metrics, organized as a mapping from metric names to `Metric` objects.
+
+    Empty `Metric` instances are created automatically when accessing keys
+    that do not exist.
+
+    Example:
+        >>> metrics = MetricCollection()
+        >>> metrics["execution_time"].add_sample(0.1)
+        >>> metrics["execution_time"].add_sample(0.2)
+        >>> metrics["execution_time"].samples
+        [0.1, 0.2]
+    """
+
     def value_factory(self, key: str) -> Metric:
         assert isinstance(key, str)
         return Metric(name=key)
