@@ -1,12 +1,12 @@
 # DaCe backends: DaCe version
 
-In the context of the [DaCe backend](./backend-dace.md) and the [schedule tree](./backend-dace-schedule-tree.md), facing time pressure, we decided to stay at the `v1.x` branch of DaCe to minimize up-front cost and deliver CPU performance as fast as possible. We considered updating to the mainline version of DaCe and accept follow-up cost of partial rewrites once DaCe `v2` releases.
+In the context of the [DaCe backend](./dace.md) and the [schedule tree](./dace-schedule-tree.md), facing time pressure, we decided to stay at the `v1.x` branch of DaCe to minimize up-front cost and deliver CPU performance as fast as possible. We considered updating to the mainline version of DaCe and accept follow-up cost of partial rewrites once DaCe `v2` releases.
 
 ## Context
 
 The currently released version of DaCe is on the `v1.x` branch. However, the mainline branch moved on (with breaking changes) to what is supposed to be DaCe `v2`. All feature development is supposed to be merged against mainline. Only bug fixes are allowed on the `v1.x` branch.
 
-The [schedule tree](./backend-dace-schedule-tree.md) feature will need changes in DaCe, in particular to translate schedule trees into SDFG. We are unfamiliar with the breaking changes in DaCe.
+The [schedule tree](./dace-schedule-tree.md) feature will need changes in DaCe, in particular to translate schedule trees into SDFG. We are unfamiliar with the breaking changes in DaCe.
 
 ## Decision
 

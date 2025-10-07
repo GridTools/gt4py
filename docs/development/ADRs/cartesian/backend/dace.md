@@ -12,9 +12,9 @@ We chose to add DaCe backends,`dace:cpu` and `dace:gpu`, for CPU and GPU targets
 
 ## Consequences
 
-We will need to maintain the `dace:*` backends. If we keep adding more and more backends, maintainability will be a question down the road. We thus decided to put a [feature freeze](./backend-cuda-feature-freeze.md) on the `cuda` backend, focussing on `dace:*` backends instead.
+We will need to maintain the `dace:*` backends. If we keep adding more and more backends, maintainability will be a question down the road. We thus decided to put a [feature freeze](./cuda-feature-freeze.md) on the `cuda` backend, focussing on `dace:*` backends instead.
 
-Compared to the [`cuda` backend](./backend-cuda-feature-freeze.md), which only targets NVIDIA cards, we get support for both, NVIDIA and AMD cards, with the `dace:gpu` backends.
+Compared to the [`cuda` backend](./cuda-feature-freeze.md), which only targets NVIDIA cards, we get support for both, NVIDIA and AMD cards, with the `dace:gpu` backends.
 
 ## References
 

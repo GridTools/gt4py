@@ -101,20 +101,34 @@ class OIRToTasklet(eve.NodeVisitor):
         # Gather all parts of the variable name in this list
         name_parts = [tasklet_name]
 
-        # Variable K offset subscript
-        if isinstance(node.offset, oir.VariableKOffset):
-            symbol = tir.k_symbol(ctx.scope)
-            shift = ctx.tree.shift[node.name][tir.Axis.K]
-            offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
-            name_parts.append(f"[({symbol}) + ({shift}) + ({offset})]")
-
         # Data dimension subscript
         data_indices: list[str] = []
         for index in node.data_index:
             data_indices.append(self.visit(index, ctx=ctx, is_target=False))
 
-        if data_indices:
-            name_parts.append(f"[{', '.join(data_indices)}]")
+        if isinstance(node.offset, oir.AbsoluteKIndex):
+            # Absolute K offset subscript
+            abs_index = self.visit(node.offset.k, ctx=ctx, is_target=False)
+
+            if data_indices:
+                name_parts.append(f"[{abs_index}, {', '.join(data_indices)}]")
+            else:
+                name_parts.append(f"[{abs_index}]")
+        elif isinstance(node.offset, oir.VariableKOffset):
+            # Variable K offset subscript
+            symbol = tir.k_symbol(ctx.scope)
+            shift = ctx.tree.shift[node.name][tir.Axis.K]
+            offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
+            var_index = f"{symbol} + {shift} + {offset}"
+
+            if data_indices:
+                name_parts.append(f"[{var_index}, {', '.join(data_indices)}]")
+            else:
+                name_parts.append(f"[{var_index}]")
+        else:
+            # Cartesian offset is assumed in this case
+            if data_indices:
+                name_parts.append(f"[{', '.join(data_indices)}]")
 
         # In case this is the second access (inside the same tasklet), we can just return the
         # name and don't have to build a Memlet anymore.
@@ -255,10 +269,13 @@ class OIRToTasklet(eve.NodeVisitor):
 
     # Should _not_ be called
     def visit_CartesianOffset(self, node: common.CartesianOffset, **kwargs: Any) -> None:
-        raise RuntimeError("Cartesian Offset should be dealt in Access IRs.")
+        raise RuntimeError("Cartesian Offset should be dealt with in Access IRs.")
 
     def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs: Any) -> None:
-        raise RuntimeError("Variable K Offset should be dealt in Access IRs.")
+        raise RuntimeError("Variable K Offset should be dealt with in Access IRs.")
+
+    def visit_AbsoluteKIndex(self, node: oir.AbsoluteKIndex, **kwargs: Any) -> None:
+        raise RuntimeError("Absolute K Index should be dealt with in Access IRs.")
 
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
         raise RuntimeError("visit_MaskStmt should not be called")
@@ -267,7 +284,7 @@ class OIRToTasklet(eve.NodeVisitor):
         raise RuntimeError("visit_While should not be called")
 
     def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs: Any) -> None:
-        raise RuntimeError("visit_HorizontalRestriction: should be dealt in TreeIR")
+        raise RuntimeError("visit_HorizontalRestriction: should be dealt with in TreeIR")
 
     def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> None:
         raise RuntimeError("visit_LocalScalar should not be called")
@@ -314,17 +331,25 @@ def _field_offset_postfix(node: oir.FieldAccess) -> str:
     if isinstance(node.offset, oir.VariableKOffset):
         return "var_k"
 
-    offset_indicators = [
-        f"{k}{'p' if v > 0 else 'm'}{abs(v)}" for k, v in node.offset.to_dict().items() if v != 0
-    ]
-    return "_".join(offset_indicators)
+    if isinstance(node.offset, oir.AbsoluteKIndex):
+        return "abs_k"
+
+    if isinstance(node.offset, common.CartesianOffset):
+        offset_indicators = [
+            f"{k}{'p' if v > 0 else 'm'}{abs(v)}"
+            for k, v in node.offset.to_dict().items()
+            if v != 0
+        ]
+        return "_".join(offset_indicators)
+
+    raise NotImplementedError(f"_field_offset_postfix(): unknown offset type {type(node.offset)}")
 
 
 def _memlet_subset(node: oir.FieldAccess, data_domains: list[int], ctx: Context) -> subsets.Subset:
     if isinstance(node.offset, common.CartesianOffset):
         return _memlet_subset_cartesian(node, data_domains, ctx)
 
-    if isinstance(node.offset, oir.VariableKOffset):
+    if isinstance(node.offset, (oir.AbsoluteKIndex, oir.VariableKOffset)):
         return _memlet_subset_variable_offset(node, data_domains, ctx)
 
     raise NotImplementedError(f"_memlet_subset(): unknown offset type {type(node.offset)}")
@@ -367,7 +392,7 @@ def _memlet_subset_variable_offset(
     node: oir.FieldAccess, data_domains: list[int], ctx: Context
 ) -> subsets.Subset:
     """
-    Generates the memlet subset for a field access with a variable K offset.
+    Generates the memlet subset for a field access with a variable K offset or an absolute K index.
 
     While we know that we are reading at one specific i/j/k access, the K-access point is only
     determined at runtime. We thus pass the K-axis as array into the Tasklet.
@@ -375,10 +400,22 @@ def _memlet_subset_variable_offset(
     # Handle cartesian indices
     shift = ctx.tree.shift[node.name]
     offset_dict = node.offset.to_dict()
-    i = f"({tir.Axis.I.iteration_symbol()}) + ({shift[tir.Axis.I]}) + ({offset_dict[tir.Axis.I.lower()]})"
-    j = f"({tir.Axis.J.iteration_symbol()}) + ({shift[tir.Axis.J]}) + ({offset_dict[tir.Axis.J.lower()]})"
-    K = f"({tir.Axis.K.domain_symbol()}) + ({shift[tir.Axis.K]}) - 1"  # ranges are inclusive
-    ranges: list[tuple[str | int, str | int, int]] = [(i, i, 1), (j, j, 1), (0, K, 1)]
+    field_shape = ctx.tree.containers[node.name].shape
+    domain_indices: list[str] = []
+    for domain_axis in [
+        tir.Axis.I,
+        tir.Axis.J,
+    ]:
+        if domain_axis.domain_dace_symbol() in field_shape:
+            domain_indices.append(
+                f"({domain_axis.iteration_symbol()}) + ({shift[domain_axis]}) + ({offset_dict[domain_axis.lower()]})"
+            )
+
+    K_index = f"({tir.Axis.K.domain_symbol()}) + ({shift[tir.Axis.K]}) - 1"  # ranges are inclusive
+    ranges: list[tuple[str | int, str | int, int]] = []
+    for domain_index in domain_indices:
+        ranges.append((domain_index, domain_index, 1))
+    ranges.append((0, K_index, 1))
 
     # Append data dimensions
     for domain_size in data_domains:

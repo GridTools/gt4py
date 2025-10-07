@@ -30,5 +30,5 @@ We realized this challenges some assumptions built deep into GT4Py. This would n
 
 ## References
 
-- Why we have [DaCe backends](./backend-dace.md) in the first place.
-- Where the [schedule tree](./backend-dace-schedule-tree.md) comes from.
+- Why we have [DaCe backends](./dace.md) in the first place.
+- Where the [schedule tree](./dace-schedule-tree.md) comes from.
