@@ -113,7 +113,7 @@ def tree_map(
 
         >>> tree_map(
         ...     collection_type=(list, tuple),
-        ...     result_constructor_maker=lambda type_: tuple if type_ is list else list,
+        ...     result_constructor_maker=lambda value: tuple if isinstance(value, list) else list,
         ... )(lambda x: x + 1)([(1, 2), 3])
         ([2, 3], 4)
 
@@ -140,7 +140,8 @@ def tree_map(
                     isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
                 )
                 assert result_constructor_maker is not None
-                return result_constructor_maker(type(args[0]))(impl(*arg) for arg in zip(*args))
+                actual_constructor = result_constructor_maker(args[0])
+                return actual_constructor(impl(*arg) for arg in zip(*args))
 
             return fun(  # type: ignore[call-arg]
                 *cast(_P.args, args)  # type: ignore[valid-type]
