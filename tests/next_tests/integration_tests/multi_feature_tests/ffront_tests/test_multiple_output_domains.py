@@ -74,7 +74,7 @@ def test_program_no_tuple(cartesian_case):
 
 
 @gtx.field_operator
-def testee_orig(a: IField, b: IField) -> tuple[IField, IField]:
+def fop_original(a: IField, b: IField) -> tuple[IField, IField]:
     return b, a
 
 
@@ -86,7 +86,7 @@ def prog_orig(
     out_b: IField,
     i_size: gtx.int32,
 ):
-    testee_orig(a, b, out=(out_b, out_a), domain={IDim: (0, i_size)})
+    fop_original(a, b, out=(out_b, out_a), domain={IDim: (0, i_size)})
 
 
 def test_program_orig(cartesian_case):
@@ -115,7 +115,7 @@ def prog_no_domain(
     out_a: IField,
     out_b: IField,
 ):
-    testee_orig(a, b, out=(out_b, out_a))
+    fop_original(a, b, out=(out_b, out_a))
 
 
 def test_program_no_domain(cartesian_case):
@@ -137,7 +137,7 @@ def test_program_no_domain(cartesian_case):
 
 
 @gtx.field_operator
-def testee(a: IField, b: JField) -> tuple[JField, IField]:
+def fop_different_fields(a: IField, b: JField) -> tuple[JField, IField]:
     return b, a
 
 
@@ -148,7 +148,7 @@ def prog_no_domain_different_fields(
     out_a: IField,
     out_b: JField,
 ):
-    testee(a, b, out=(out_b, out_a))
+    fop_different_fields(a, b, out=(out_b, out_a))
 
 
 def test_program_no_domain_different_fields(
@@ -180,7 +180,9 @@ def prog(
     i_size: gtx.int32,
     j_size: gtx.int32,
 ):
-    testee(a, b, out=(out_b, out_a), domain=({JDim: (0, j_size)}, {IDim: (0, i_size)}))
+    fop_different_fields(
+        a, b, out=(out_b, out_a), domain=({JDim: (0, j_size)}, {IDim: (0, i_size)})
+    )
 
 
 def test_program(cartesian_case):
@@ -210,7 +212,7 @@ def prog_slicing(
     out_a: IField,
     out_b: JField,
 ):
-    testee(
+    fop_different_fields(
         a,
         b,
         out=(out_b[2:-2], out_a[1:-1]),
@@ -247,7 +249,7 @@ def prog_out_as_tuple(
     i_size: gtx.int32,
     j_size: gtx.int32,
 ):
-    testee(a, b, out=out, domain=({JDim: (0, j_size)}, {IDim: (0, i_size)}))
+    fop_different_fields(a, b, out=out, domain=({JDim: (0, j_size)}, {IDim: (0, i_size)}))
 
 
 def test_program_out_as_tuple(
@@ -282,7 +284,7 @@ def prog_out_as_tuple_different_sizes(
     restrict_j_0: gtx.int32,
     restrict_j_1: gtx.int32,
 ):
-    testee(
+    fop_different_fields(
         a,
         b,
         out=out,
@@ -330,7 +332,7 @@ def test_program_out_as_tuple_different_sizes(
 
 
 @gtx.field_operator
-def testee_nested_tuples(
+def fop_nested_tuples(
     a: IField,
     b: JField,
     c: KField,
@@ -353,7 +355,7 @@ def prog_nested_tuples(
     j_size: gtx.int32,
     k_size: gtx.int32,
 ):
-    testee_nested_tuples(
+    fop_nested_tuples(
         a,
         b,
         c,
@@ -390,7 +392,7 @@ def test_program_nested_tuples(
 
 
 @gtx.field_operator
-def testee_double_nested_tuples(
+def fop_double_nested_tuples(
     a: IField,
     b: JField,
     c: KField,
@@ -417,7 +419,7 @@ def prog_double_nested_tuples(
     j_size: gtx.int32,
     k_size: gtx.int32,
 ):
-    testee_double_nested_tuples(
+    fop_double_nested_tuples(
         a,
         b,
         c,
@@ -459,7 +461,7 @@ def test_program_double_nested_tuples(
 
 
 @gtx.field_operator
-def testee_two_vertical_dims(
+def fop_two_vertical_dims(
     a: KField, b: gtx.Field[[KHalfDim], gtx.float32]
 ) -> tuple[gtx.Field[[KHalfDim], gtx.float32], KField]:
     return b, a
@@ -474,7 +476,7 @@ def prog_two_vertical_dims(
     k_size: gtx.int32,
     k_half_size: gtx.int32,
 ):
-    testee_two_vertical_dims(
+    fop_two_vertical_dims(
         a, b, out=(out_b, out_a), domain=({KHalfDim: (0, k_half_size)}, {KDim: (0, k_size)})
     )
 
@@ -500,7 +502,7 @@ def test_program_two_vertical_dims(cartesian_case):
 
 
 @gtx.field_operator
-def testee_shift_e2c(a: EField) -> tuple[CField, EField]:
+def fop_shift_e2c(a: EField) -> tuple[CField, EField]:
     return a(C2E[1]), a
 
 
@@ -512,9 +514,7 @@ def prog_unstructured(
     c_size: gtx.int32,
     e_size: gtx.int32,
 ):
-    testee_shift_e2c(
-        a, out=(out_a_shifted, out_a), domain=({Cell: (0, c_size)}, {Edge: (0, e_size)})
-    )
+    fop_shift_e2c(a, out=(out_a_shifted, out_a), domain=({Cell: (0, c_size)}, {Edge: (0, e_size)}))
 
 
 def test_program_unstructured(unstructured_case):
@@ -536,7 +536,7 @@ def test_program_unstructured(unstructured_case):
 
 
 @gtx.field_operator
-def testee_temporary(a: VField):
+def fop_temporary(a: VField):
     edge = a(E2V[1])
     cell = edge(C2E[1])
     return edge, cell
@@ -554,7 +554,7 @@ def prog_temporary(
     restrict_cell_0: gtx.int32,
     restrict_cell_1: gtx.int32,
 ):
-    testee_temporary(
+    fop_temporary(
         a,
         out=(out_edge, out_cell),
         domain=(
@@ -607,13 +607,13 @@ def test_program_temporary(unstructured_case):
 
 
 def test_direct_fo_orig(cartesian_case):
-    a = cases.allocate(cartesian_case, testee_orig, "a")()
-    b = cases.allocate(cartesian_case, testee_orig, "b")()
-    out = cases.allocate(cartesian_case, testee_orig, cases.RETURN)()
+    a = cases.allocate(cartesian_case, fop_original, "a")()
+    b = cases.allocate(cartesian_case, fop_original, "b")()
+    out = cases.allocate(cartesian_case, fop_original, cases.RETURN)()
 
     cases.verify(
         cartesian_case,
-        testee_orig,
+        fop_original,
         a,
         b,
         out=out,
@@ -623,14 +623,14 @@ def test_direct_fo_orig(cartesian_case):
 
 
 def test_direct_fo_nested(cartesian_case):
-    a = cases.allocate(cartesian_case, testee_nested_tuples, "a")()
-    b = cases.allocate(cartesian_case, testee_nested_tuples, "b")()
-    c = cases.allocate(cartesian_case, testee_nested_tuples, "c")()
-    out = cases.allocate(cartesian_case, testee_nested_tuples, cases.RETURN)()
+    a = cases.allocate(cartesian_case, fop_nested_tuples, "a")()
+    b = cases.allocate(cartesian_case, fop_nested_tuples, "b")()
+    c = cases.allocate(cartesian_case, fop_nested_tuples, "c")()
+    out = cases.allocate(cartesian_case, fop_nested_tuples, cases.RETURN)()
 
     cases.verify(
         cartesian_case,
-        testee_nested_tuples,
+        fop_nested_tuples,
         a,
         b,
         c,
@@ -647,13 +647,13 @@ def test_direct_fo_nested(cartesian_case):
 
 
 def test_direct_fo(cartesian_case):
-    a = cases.allocate(cartesian_case, testee, "a")()
-    b = cases.allocate(cartesian_case, testee, "b")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    a = cases.allocate(cartesian_case, fop_different_fields, "a")()
+    b = cases.allocate(cartesian_case, fop_different_fields, "b")()
+    out = cases.allocate(cartesian_case, fop_different_fields, cases.RETURN)()
 
     cases.verify(
         cartesian_case,
-        testee,
+        fop_different_fields,
         a,
         b,
         out=out,
@@ -666,14 +666,14 @@ def test_direct_fo(cartesian_case):
 
 
 def test_direct_fo_nested_no_domain(cartesian_case):
-    a = cases.allocate(cartesian_case, testee_nested_tuples, "a")()
-    b = cases.allocate(cartesian_case, testee_nested_tuples, "b")()
-    c = cases.allocate(cartesian_case, testee_nested_tuples, "c")()
-    out = cases.allocate(cartesian_case, testee_nested_tuples, cases.RETURN)()
+    a = cases.allocate(cartesian_case, fop_nested_tuples, "a")()
+    b = cases.allocate(cartesian_case, fop_nested_tuples, "b")()
+    c = cases.allocate(cartesian_case, fop_nested_tuples, "c")()
+    out = cases.allocate(cartesian_case, fop_nested_tuples, cases.RETURN)()
 
     cases.verify(
         cartesian_case,
-        testee_nested_tuples,
+        fop_nested_tuples,
         a,
         b,
         c,
