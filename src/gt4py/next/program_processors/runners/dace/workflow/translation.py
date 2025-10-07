@@ -17,7 +17,7 @@ import factory
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config, metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import arguments, languages, stages, step_types, workflow
+from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
@@ -289,9 +289,7 @@ class DaCeTranslator(
             inp.args.column_axis,
         )
 
-        arg_types = tuple(
-            arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
-        )
+        arg_types = inp.args.args
 
         program_parameters = tuple(
             interface.Parameter(param.id, arg_type)
