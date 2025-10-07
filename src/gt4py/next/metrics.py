@@ -13,8 +13,10 @@ import contextlib
 import contextvars
 import dataclasses
 import functools
+import json
+import pathlib
 import sys
-from collections.abc import Generator
+from collections.abc import Generator, Iterable, Mapping, Hashable
 
 import numpy as np
 
@@ -81,8 +83,8 @@ class Metric:
 
 
 class MetricCollection(collections.defaultdict[str, Metric]):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
 
     def __missing__(self, key: str) -> Metric:
         assert isinstance(key, str)
@@ -90,14 +92,12 @@ class MetricCollection(collections.defaultdict[str, Metric]):
         return metric
 
 
-@dataclasses.dataclass(slots=True, init=False)
+@dataclasses.dataclass(slots=True)
 class Source:
-    metadata: dict[str, Any]
-    metrics: MetricCollection
+    """A source of metrics, typically associated with a program."""
 
-    def __init__(self, **kwargs: Any) -> None:
-        self.metadata = kwargs
-        self.metrics = MetricCollection()
+    metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
+    metrics: MetricCollection = dataclasses.field(default_factory=MetricCollection)
 
 
 #: Global store for all measurements.
@@ -106,6 +106,8 @@ sources: collections.defaultdict[int, Source] = collections.defaultdict(Source)
 
 @dataclasses.dataclass
 class SourceHandle:
+    """A handle to a metrics source to support incremental construction of its key."""
+
     key_parts: tuple[Hashable, ...] = ()
 
     def is_finalized(self) -> bool:
@@ -129,7 +131,7 @@ class SourceHandle:
         return sources[self.key].metadata
 
     def append_to_key(self, *args: Hashable) -> None:
-        if "key" in self.__dict__:
+        if "key" in self.__dict__:  # equivalent to `self.is_finalized()`
             raise RuntimeError("Metrics collector key is already finalized.")
         self.key_parts += args
 
@@ -141,15 +143,15 @@ _source_cvar: contextvars.ContextVar[SourceHandle | None] = contextvars.ContextV
 
 
 def in_collection_mode() -> bool:
-    """Check if we are currently in a metrics collection context."""
+    """Check if there is an on-going metrics collection."""
     return _source_cvar.get() is not None
 
 
 def get_current_source() -> SourceHandle:
     """Retrieve the active measured entity state."""
-    state = _source_cvar.get()
-    assert state is not None
-    return state
+    source_handler = _source_cvar.get()
+    assert source_handler is not None
+    return source_handler
 
 
 @contextlib.contextmanager
@@ -208,22 +210,34 @@ def collect(*args: Hashable) -> Generator[SourceHandle | None, None, None]:
 #     pathlib.Path(filename).write_text(dumps(metric_cs))
 
 
-# def dumps_json(metric_cs: MetricCollectionStore | None = None) -> str:
-#     """
-#     Export metrics as a JSON string with structure: {program: {metric_name: [samples]}}
+def dumps_json(dump_sources: Mapping[Hashable, Source] | None = None) -> str:
+    """
+    Export metrics as a JSON string with structure:
+    {
+        source_id: {
+            'metadata': {key: value},
+            'metrics': {metric_name: [samples]}
+        }
+    }
 
-#     If no explicit collection store is provided, uses the global `program_metrics`.
-#     """
-#     if metric_cs is None:
-#         metric_cs = program_metrics
+    If no explicit source IDs are provided, the global `program_metrics` will be used.
+    """
+    if dump_sources is None:
+        dump_sources = sources
+    assert dump_sources is not None
 
-#     return json.dumps(
-#         {
-#             program: {name: metric.samples for name, metric in collection.items()}
-#             for program, collection in metric_cs.items()
-#         },
-#     )
+    return json.dumps(
+        {
+            f"{source_id}": {
+                "metadata": {key: f"{value!s}" for key, value in source.metadata.items()},
+                "metrics": {name: metric.samples for name, metric in source.metrics.items()},
+            }
+            for source_id, source in dump_sources.items()
+        },
+    )
 
 
-# def dump_json(filename: str | pathlib.Path, metric_cs: MetricCollectionStore | None = None) -> None:
-#     pathlib.Path(filename).write_text(dumps_json(metric_cs))
+def dump_json(
+    filename: str | pathlib.Path, dump_sources: Mapping[Hashable, Source] | None = None
+) -> None:
+    pathlib.Path(filename).write_text(dumps_json(dump_sources))
