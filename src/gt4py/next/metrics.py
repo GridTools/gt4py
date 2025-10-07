@@ -119,7 +119,7 @@ sources: collections.defaultdict[str, Source] = collections.defaultdict(Source)
 
 class SourceHandler:
     """
-    A handler to manage addition to metrics sources to the global store.
+    A handler to manage addition of metrics sources to the global store.
 
     This object is used to collect metrics for a specific source (e.g., a program)
     before a final key is assigned to it. The key is typically set when the program
@@ -153,6 +153,9 @@ class SourceHandler:
 
         self._key = value
 
+    # The following attributes are implemented as `cached_properties`
+    # for efficiency and to be able to initialize them lazily when needed,
+    # even if the key is not set.
     @functools.cached_property
     def source(self) -> Source:
         return Source()
