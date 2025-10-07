@@ -179,14 +179,14 @@ def _transform_by_pattern(
             tmp_names: str | tuple[str | tuple, ...] = type_info.apply_to_primitive_constituents(
                 lambda x: uids.sequential_id(),
                 tmp_expr.type,
-                tuple_constructor=lambda _, *elements: tuple(elements),
+                tuple_constructor=lambda *elements: tuple(elements),
             )
             tmp_dtypes: (
                 ts.ScalarType | ts.ListType | tuple[ts.ScalarType | ts.ListType | tuple, ...]
             ) = type_info.apply_to_primitive_constituents(
                 type_info.extract_dtype,
                 tmp_expr.type,
-                tuple_constructor=lambda _, *elements: elements,
+                tuple_constructor=lambda *elements: elements,
             )
 
             tmp_domains: SymbolicDomain | tuple[SymbolicDomain | tuple, ...] = tmp_expr.annex.domain
@@ -219,7 +219,7 @@ def _transform_by_pattern(
                 get_domain,
                 tmp_expr.type,
                 with_path_arg=True,
-                tuple_constructor=lambda _, *elements: tuple(elements),
+                tuple_constructor=lambda *elements: tuple(elements),
             )
 
             declarations.extend(

@@ -6,13 +6,46 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from functools import reduce
-from typing import Iterator, Sequence, cast
+import functools
+from typing import Callable, Iterator, Sequence, overload
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.type_system import type_info
+
+
+@overload
+def _tree_map_typespec_constructor(
+    func: Callable[..., ts.TupleType],
+) -> Callable[..., ts.TupleType]: ...
+
+
+@overload
+def _tree_map_typespec_constructor(
+    func: Callable[..., ts.NamedTupleType],
+) -> Callable[..., ts.NamedTupleType]: ...
+
+
+def _tree_map_typespec_constructor(
+    value: ts.NamedTupleType | ts.TupleType,
+) -> Callable[..., ts.NamedTupleType] | Callable[..., ts.TupleType]:
+    return (
+        (
+            lambda elems: ts.NamedTupleType(
+                keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
+            )
+        )
+        if isinstance(value, ts.NamedTupleType)
+        else (lambda elems: ts.TupleType(types=list(elems)))  # type: ignore[return-value]
+    )
+
+
+tree_map_typespec = functools.partial(
+    utils.tree_map,
+    collection_type=(ts.TupleType, ts.NamedTupleType),
+    result_constructor_maker=_tree_map_typespec_constructor,
+)
 
 
 def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
@@ -175,7 +208,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
     def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:
         assert isinstance(dtype, ts.ScalarType)
         try:
-            el_type = reduce(
+            el_type = functools.reduce(
                 lambda type_, idx: type_.types[idx],  # type: ignore[attr-defined]
                 path,
                 arg,
@@ -304,7 +337,4 @@ def return_type_scanop(
         #  field
         [callable_type.axis],
     )
-    # Note: the following line implicitly promotes custom containers of scalars to containers of fields.
-    return type_info.apply_to_primitive_constituents(
-        lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)), carry_dtype
-    )
+    return tree_map_typespec(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(carry_dtype)

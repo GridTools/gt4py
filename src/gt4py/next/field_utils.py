@@ -58,7 +58,9 @@ def field_from_typespec(
             return lambda elems: containers.make_container_constructor_from_type_spec(type_)(elems)
         return tuple
 
-    @utils.tree_map(collection_type=ts.TupleType, result_constructor_maker=_constructor)
+    @utils.tree_map(
+        collection_type=(ts.TupleType, ts.NamedTupleType), result_constructor_maker=_constructor
+    )
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(
             xp.empty(domain.shape, dtype=xp.dtype(type_translation.as_dtype(type_).scalar_type)),

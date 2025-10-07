@@ -24,7 +24,7 @@ from typing import (
 
 import numpy as np
 
-from gt4py.eve import datamodels, extended_typing as xtyping, utils
+from gt4py.eve import extended_typing as xtyping, utils
 from gt4py.next import common
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
@@ -143,25 +143,16 @@ def primitive_constituents(
 _R = TypeVar("_R", covariant=True)
 _T = TypeVar("_T")
 
-_TTup = TypeVar("_TTup", bound=ts.TupleType)
-
 
 class TupleConstructorType(Protocol, Generic[_R]):
-    def __call__(self, original_type: ts.TupleType, *elements: Any) -> _R: ...
-
-
-def _default_tuple_constructor(original_type: _TTup, *elements: Any) -> _TTup:
-    """Create TupleType (or subclass) from elements preserving original type and other properties."""
-    values = datamodels.asdict(original_type)  # in case of `NamedTupleType` copy over all fields
-    values.update(types=[*elements])
-    return original_type.__class__(**values)
+    def __call__(self, *args: Any) -> _R: ...
 
 
 def apply_to_primitive_constituents(
     fun: Callable[..., _T],
     *symbol_types: ts.TypeSpec,
     with_path_arg: bool = False,
-    tuple_constructor: TupleConstructorType[_R] = _default_tuple_constructor,  # type: ignore[assignment] # probably related to https://github.com/python/mypy/issues/10854
+    tuple_constructor: TupleConstructorType[_R] = lambda *elements: ts.TupleType(types=[*elements]),  # type: ignore[assignment] # probably related to https://github.com/python/mypy/issues/10854
     _path: tuple[int, ...] = (),
 ) -> _T | _R:
     """
@@ -181,17 +172,14 @@ def apply_to_primitive_constituents(
     ...     lambda primitive_type, path: (path, primitive_type),
     ...     tuple_type,
     ...     with_path_arg=True,
-    ...     tuple_constructor=lambda _, *elements: dict(elements),
+    ...     tuple_constructor=lambda *elements: dict(elements),
     ... )
     {(0,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None)}
     """
     if isinstance(symbol_types[0], ts.TupleType):
-        assert all(
-            symbol_type.__class__ is symbol_types[0].__class__ for symbol_type in symbol_types
-        )
+        assert all(isinstance(symbol_type, ts.TupleType) for symbol_type in symbol_types)
 
         return tuple_constructor(
-            symbol_types[0],
             *[
                 apply_to_primitive_constituents(
                     fun,
@@ -203,7 +191,7 @@ def apply_to_primitive_constituents(
                 for i, el_types in enumerate(
                     zip(*(symbol_type.types for symbol_type in symbol_types))  # type: ignore[attr-defined]  # ensured by assert above
                 )
-            ],
+            ]
         )
     if with_path_arg:
         return fun(*symbol_types, path=_path)

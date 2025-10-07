@@ -102,7 +102,7 @@ def _make_param_context_from_func_type(
     params = func_type.pos_or_kw_args | func_type.kw_only_args
     return {
         param: type_info.apply_to_primitive_constituents(
-            type_map, type_, tuple_constructor=lambda _, *els: tuple(els)
+            type_map, type_, tuple_constructor=lambda *els: tuple(els)
         )
         for param, type_ in params.items()
     }
