@@ -345,6 +345,7 @@ class Program:
                     self.definition_stage.definition(*args, **kwargs)
 
             if collect_info_metrics:
+                assert metrics_source is not None
                 metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(time.time() - start)
 
     def compile(

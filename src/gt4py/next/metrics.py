@@ -91,7 +91,7 @@ class MetricsCollection(utils.CustomDefaultDictBase[str, Metric]):
         return Metric(name=key)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Source:
     """A source of metrics, typically associated with a program."""
 

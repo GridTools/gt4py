@@ -365,6 +365,7 @@ class CompiledProgramsPool:
 
         # If we are collecting metrics, create a new metrics entity for this compiled program
         if config.COLLECT_METRICS_LEVEL:
+            metric_source: metrics.Source | metrics.SourceHandler
             if metrics.in_collection_mode():
                 # Jitting within a metrics collection context
                 metric_source = metrics.get_current_source()
@@ -372,8 +373,8 @@ class CompiledProgramsPool:
                 # Precompiling outside of a metrics collection context.
                 # The key is not yet in the sources and should be computed
                 # exactly as in __call__() and added to the global mapping.
-                key = f"{self.definition_stage.definition.__name__}[{self._compiled_programs.internal_key(key)}]"
-                metric_source = metrics.sources[key]
+                metrics_key = f"{self.definition_stage.definition.__name__}[{self._compiled_programs.internal_key(key)}]"
+                metric_source = metrics.sources[metrics_key]
             metric_source.metadata |= dict(
                 name=self.definition_stage.definition.__name__,
                 argument_descriptor_contexts=argument_descriptor_contexts,

@@ -57,10 +57,7 @@ def convert_args(
             update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
             fun.fast_call()
 
-        metric_collection = metrics.get_active_metric_collection()
-        if (metric_collection is not None) and (
-            config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
-        ):
+        if config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE:
             # Observe that dace instrumentation adds runtime overhead:
             # DaCe writes an instrumentation report file for each SDFG run.
             with gtx_wfdcommon.dace_context(device_type=device):
@@ -80,6 +77,6 @@ def convert_args(
             duration_secs = (
                 prof_report.events[0].duration / 1e6
             )  # dace timer returns the duration in microseconds
-            metric_collection.add_sample(metrics.COMPUTE_METRIC, duration_secs)
+            metrics.get_current_source().metrics[metrics.COMPUTE_METRIC].add_sample(duration_secs)
 
     return decorated_program
