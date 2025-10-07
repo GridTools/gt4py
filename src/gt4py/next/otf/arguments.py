@@ -100,6 +100,9 @@ class StaticArg(ArgStaticDescriptor, Generic[core_defs.ScalarT]):
     def attribute_extractor_exprs(cls, arg_expr: str) -> dict[str, str]:
         return {"value": arg_expr}
 
+    def __str__(self) -> str:
+        return str(self.value)
+
 
 @dataclasses.dataclass(frozen=True)
 class JITArgs:
