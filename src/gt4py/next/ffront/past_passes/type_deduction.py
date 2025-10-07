@@ -8,7 +8,7 @@
 from typing import Any, Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next import common, errors
+from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
@@ -160,14 +160,14 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def visit_Dict(self, node: past.Dict, **kwargs: Any) -> past.Dict:
+        # the only supported dict for now is in domain specification
         keys = self.visit(node.keys_, **kwargs)
-        assert all(isinstance(key, past.Name) for key in keys)
         assert all(isinstance(key.type, ts.DimensionType) for key in keys)
         return past.Dict(
             keys_=keys,
             values_=self.visit(node.values_, **kwargs),
             location=node.location,
-            type=ts.DomainType(dims=[common.Dimension(key.id) for key in keys]),
+            type=ts.DomainType(dims=[key.type.dim for key in keys]),
         )
 
     def visit_TupleExpr(self, node: past.TupleExpr, **kwargs: Any) -> past.TupleExpr:
