@@ -267,7 +267,7 @@ def make_container_constructor_from_type_spec(
     """Create a constructor function for the given container type specification."""
     assert isinstance(container_type_spec, ts.NamedTupleType)
     return make_container_constructor(
-        pkgutil.resolve_name(container_type_spec.original_python_type), nested=True
+        pkgutil.resolve_name(container_type_spec.original_python_type), nested=nested
     )
 
 
