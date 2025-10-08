@@ -220,6 +220,7 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
         device_type=device_type,
         auto_optimize=False,
         async_sdfg_call=make_async_sdfg_call,
+        use_metrics=False,
     ).generate_sdfg(program, offset_provider={}, column_axis=None)
 
     if device_type == core_defs.DeviceType.CPU:
@@ -257,6 +258,7 @@ def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
         device_type=device_type,
         auto_optimize=False,
         async_sdfg_call=True,
+        use_metrics=False,
     ).generate_sdfg(program, offset_provider={}, column_axis=None)
 
     if device_type == core_defs.DeviceType.CPU:
