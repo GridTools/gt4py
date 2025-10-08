@@ -188,8 +188,14 @@ def get_current_source() -> SourceHandler:
 
 
 def get_source(key: str, *, assign_current: bool = True) -> Source:
+    """
+    Retrieve a metrics source by its key, optionally associating it to the current context.
+    """
     if in_collection_mode() and assign_current:
         metrics_source_handler = get_current_source()
+        # Set the key if not already set, which will also add the
+        # source to the global store. Note that if the key is already set,
+        # this will only succeed if the same object.
         metrics_source_handler.key = key
         metrics_source = metrics_source_handler.source
     else:
