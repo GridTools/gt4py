@@ -21,6 +21,7 @@ from .gpu_utils import (
     gt_gpu_transformation,
     gt_set_gpu_blocksize,
 )
+from .inline_fuser import inline_dataflow_into_map
 from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
 from .map_fusion import MapFusionHorizontal, MapFusionVertical
@@ -103,5 +104,6 @@ __all__ = [
     "gt_split_access_nodes",
     "gt_substitute_compiletime_symbols",
     "gt_vertical_map_split_fusion",
+    "inline_dataflow_into_map",
     "splitting_tools",
 ]
