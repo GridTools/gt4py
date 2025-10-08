@@ -463,24 +463,18 @@ class VerticalSplitMapRange(SplitMapRange):
         # Check that the data read by the second map from the intermediate AccessNode
         # are not copied to another AccessNode.
         access_node_out_edges = list(graph.out_edges(self.access_node))
-        access_node_out_edges_data = [
-            oedge.src.data
-            for oedge in access_node_out_edges
-            if isinstance(oedge.dst, dace_nodes.AccessNode)
-        ]
         second_map_in_edges = list(graph.in_edges(self.second_map_entry))
-        matching_data_subsets = {
-            second_map_edge.src.data: second_map_edge.data.src_subset
+        access_node_subset_into_second_map = [
+            second_map_edge.data.src_subset
             for second_map_edge in second_map_in_edges
-            if second_map_edge.src.data in access_node_out_edges_data
-            and isinstance(second_map_edge.src, dace_nodes.AccessNode)
-        }
+            if second_map_edge.src.data == self.access_node.data
+            and second_map_edge.dst_conn.startswith("IN_")
+        ]
         if any(
             out_edge.dst != self.second_map_entry
             and any(
-                out_edge.src.data == matching_data
-                and gtx_dace_split.are_intersecting(out_edge.data.src_subset, matching_subset)
-                for matching_data, matching_subset in matching_data_subsets.items()
+                gtx_dace_split.are_intersecting(out_edge.data.src_subset, matching_subset)
+                for matching_subset in access_node_subset_into_second_map
             )
             for out_edge in access_node_out_edges
         ):
