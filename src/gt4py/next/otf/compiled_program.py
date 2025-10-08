@@ -269,17 +269,18 @@ class CompiledProgramsPool:
             program = self._compiled_programs[key]
             if config.COLLECT_METRICS_LEVEL:
                 metrics_source = metrics.get_current_source()
-                # This key should be the same as in _compile_variant()
-                metrics_source.key = f"{self.definition_stage.definition.__name__}[{self._compiled_programs.internal_key(key)}]"
+                metrics_source.key = self._metrics_key_from_pool_key(key)
 
             program(*args, **kwargs, offset_provider=offset_provider)
 
-        except TypeError:
+        except TypeError as e:
             if "program" in locals() and isinstance(program, concurrent.futures.Future):
                 # 'Future' objects are not callable so they will generate a TypeError.
                 # Here we resolve the future and call it again.
                 program = self._resolve_future(key)
                 program(*args, **kwargs, offset_provider=offset_provider)
+            else:
+                raise e
 
         except KeyError as e:
             if enable_jit:
@@ -294,6 +295,15 @@ class CompiledProgramsPool:
                     *args, offset_provider=offset_provider, enable_jit=False, **kwargs
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
+
+    @functools.cached_property
+    def _metrics_key_from_pool_key(self) -> Callable[[CompiledProgramsKey], str]:
+        prefix = f"{self.definition_stage.definition.__name__}<{self.backend.name}>"
+
+        def key_to_str(key: CompiledProgramsKey) -> str:
+            return f"{prefix}[{self._compiled_programs.internal_key(key)}]"
+
+        return key_to_str
 
     @functools.cached_property
     def _argument_descriptor_cache_key_from_args(
@@ -399,25 +409,11 @@ class CompiledProgramsPool:
 
         # If we are collecting metrics, create a new metrics entity for this compiled program
         if config.COLLECT_METRICS_LEVEL:
-            metric_source: metrics.Source | metrics.SourceHandler
-            compiled_program_pool_key = self._compiled_programs.internal_key(key)
-
-            if metrics.in_collection_mode():
-                # Jitting within a metrics collection context
-                metric_source = metrics.get_current_source()
-            else:
-                # Precompiling outside of a metrics collection context.
-                # The key is not yet in the sources and should be computed
-                # exactly as in __call__() and added to the global mapping.
-                metrics_key = (
-                    f"{self.definition_stage.definition.__name__}[{compiled_program_pool_key}]"
-                )
-                metric_source = metrics.sources[metrics_key]
-
-            metric_source.metadata |= dict(
+            metrics_source = metrics.get_source(self._metrics_key_from_pool_key(key))
+            metrics_source.metadata |= dict(
                 name=self.definition_stage.definition.__name__,
                 backend=self.backend.name,
-                compiled_program_pool_key=compiled_program_pool_key,
+                compiled_program_pool_key=self._compiled_programs.internal_key(key),
                 **{
                     f"{_convert_pascal_to_snake_name(key.__name__)}s": value
                     for key, value in argument_descriptors.items()

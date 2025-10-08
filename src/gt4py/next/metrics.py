@@ -134,14 +134,14 @@ class SourceHandler:
             self.source = source
 
     @property
-    def key(self) -> str:
-        return self._key
+    def key(self) -> str | None:
+        return self.__dict__.get("_key", None)
 
     @key.setter
     def key(self, value: str) -> None:
         # The key can only be set once, and if it matches an existing source
         # in the global store, it must be the same object.
-        if "_key" in self.__dict__:
+        if self.key is not None and self.key != value:
             raise RuntimeError("Metrics source key is already set.")
 
         if value not in sources:
@@ -149,7 +149,7 @@ class SourceHandler:
         else:
             source_in_store = sources[value]
             if self.__dict__.setdefault("source", source_in_store) is not source_in_store:
-                raise RuntimeError("Metrics source is already set.")
+                raise RuntimeError("Conflicting metrics source data found in the global store.")
 
         self._key = value
 
@@ -185,6 +185,17 @@ def get_current_source() -> SourceHandler:
     source_handler = _source_cvar.get()
     assert source_handler is not None
     return source_handler
+
+
+def get_source(key: str, *, assign_current: bool = True) -> Source:
+    if in_collection_mode() and assign_current:
+        metrics_source_handler = get_current_source()
+        metrics_source_handler.key = key
+        metrics_source = metrics_source_handler.source
+    else:
+        metrics_source = sources[key]
+
+    return metrics_source
 
 
 @contextlib.contextmanager
