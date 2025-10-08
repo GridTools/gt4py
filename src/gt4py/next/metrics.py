@@ -143,14 +143,12 @@ class SourceHandler:
         if "_key" in self.__dict__:
             raise RuntimeError("Metrics source key is already set.")
 
-        if (
-            value in sources
-            and self.__dict__.setdefault("source", source_in_store := sources[value])
-            is not source_in_store
-        ):
-            raise RuntimeError("Metrics source is already set.")
-        else:
+        if value not in sources:
             sources[value] = self.source
+        else:
+            source_in_store = sources[value]
+            if self.__dict__.setdefault("source", source_in_store) is not source_in_store:
+                raise RuntimeError("Metrics source is already set.")
 
         self._key = value
 

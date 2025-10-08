@@ -18,6 +18,9 @@ from gt4py.next import metrics
 from gt4py.next.otf import arguments
 
 
+# TODO(egparedes): add tests for the logic around creating sources lazily
+# (SourceHandler class and the context manager).
+
 @pytest.fixture
 def sample_source_metadata() -> dict[str, Any]:
     from gt4py.eve import utils
