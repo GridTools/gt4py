@@ -11,6 +11,7 @@ import pathlib
 from collections.abc import Mapping
 from typing import Any
 
+import numpy as np
 import pytest
 
 from gt4py import eve
@@ -36,10 +37,13 @@ def sample_source_metadata() -> dict[str, Any]:
         }s""": {
             "horizontal_start": arguments.StaticArg(value=7701),
             "horizontal_end": arguments.StaticArg(value=67096),
-            "vertical_start": arguments.StaticArg(value=0),
-            "vertical_end": arguments.StaticArg(value=80),
-            "is_iau_active": arguments.StaticArg(value=False),
+            "vertical_start": arguments.StaticArg(value=np.int32(0)),
+            "vertical_end": arguments.StaticArg(value=np.int64(80)),
+            "is_foo_active": arguments.StaticArg(value=False),
             "limited_area": arguments.StaticArg(value=True),
+            "constant_bar": arguments.StaticArg(value=0.42),
+            "constant_baz": arguments.StaticArg(value=np.float32(1.234)),
+            "constant_complex": arguments.StaticArg(value=np.complex64(1.234)),
         }
     }
 

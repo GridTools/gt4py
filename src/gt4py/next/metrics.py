@@ -287,8 +287,10 @@ def dumps_json(metric_sources: Mapping[str, Source] | None = None) -> str:
                 return arg.value
             case xtyping.DataclassABC():
                 return dataclasses.asdict(obj)
-            case numbers.Number():
-                return obj
+            case numbers.Integral() as i:
+                return int(i)
+            case numbers.Real() as r:
+                return float(r)
 
         try:
             return str(obj)
