@@ -278,7 +278,7 @@ def test_oob_error():
         im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 3)})
     )
     with pytest.warns(
-            UserWarning,
-            match=r"out-of-bounds",
+        UserWarning,
+        match=r"out-of-bounds",
     ):
         domain.translate(shift_chain, offset_provider).as_expr()

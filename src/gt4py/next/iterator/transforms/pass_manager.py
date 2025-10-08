@@ -60,7 +60,7 @@ def _max_domain_range_sizes(offset_provider: Mapping[str, Any]) -> dict[str, iti
             )
             sizes[conn_type.codomain.value] = max(
                 sizes.get(conn_type.codomain.value, 0),
-                provider.ndarray.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
+                int(provider.ndarray.max()) + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
             )
     sizes_exprs = {k: im.literal_from_value(v) for k, v in sizes.items()}
     return sizes_exprs
