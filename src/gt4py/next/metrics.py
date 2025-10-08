@@ -94,7 +94,7 @@ class MetricsCollection(utils.CustomDefaultDictBase[str, Metric]):
     that do not exist.
 
     Example:
-        >>> metrics = MetricCollection()
+        >>> metrics = MetricsCollection()
         >>> metrics["execution_time"].add_sample(0.1)
         >>> metrics["execution_time"].add_sample(0.2)
         >>> metrics["execution_time"].samples
@@ -253,15 +253,23 @@ def dump(filename: str | pathlib.Path, metric_sources: Mapping[str, Source] | No
 
 def dumps_json(metric_sources: Mapping[str, Source] | None = None) -> str:
     """
-    Export metrics as a JSON string with structure:
-    {
-        source_id: {
-            'metadata': {key: value},
-            'metrics': {metric_name: [samples]}
-        }
-    }
+    Export metric sources as a JSON string.
 
-    If no explicit source IDs are provided, the global `program_metrics` will be used.
+    If no explicit metric sources mapping is provided, the global `sources`
+    will be used.
+
+    Note:
+
+        The exported JSON snippets have the following structure:
+
+        ```json
+        {
+            source_key: {
+                'metadata': {'key': value},
+                'metrics': {'metric_name': [samples]}
+            }
+        }
+        ```
     """
     if metric_sources is None:
         metric_sources = typing.cast(Mapping[str, Source], sources)
