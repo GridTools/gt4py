@@ -897,7 +897,8 @@ def test_compile_variants_decorator_static_domains(compile_variants_field_operat
     out = cases.allocate(cartesian_case, testee, "out")()
 
     testee(inp, out, offset_provider={})
-    assert np.allclose((inp[0].ndarray, inp[1].ndarray), (out[0].ndarray, out[1].ndarray))
+    assert np.allclose(inp[0].ndarray, out[0].ndarray)
+    assert np.allclose(inp[1].ndarray, out[1].ndarray)
 
     assert testee._compiled_programs.argument_descriptor_mapping[
         arguments.FieldDomainDescriptor
