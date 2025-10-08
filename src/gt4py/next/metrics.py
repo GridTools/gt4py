@@ -15,6 +15,7 @@ import dataclasses
 import functools
 import itertools
 import json
+import numbers
 import pathlib
 import sys
 import typing
@@ -286,13 +287,15 @@ def dumps_json(metric_sources: Mapping[str, Source] | None = None) -> str:
                 return arg.value
             case xtyping.DataclassABC():
                 return dataclasses.asdict(obj)
+            case numbers.Number():
+                return obj
 
         try:
             return str(obj)
         except Exception:
-            pass
-
-        raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+            raise TypeError(
+                f"Object of type {type(obj).__name__} is not JSON serializable"
+            ) from None
 
     return json.dumps(metric_sources, default=default_json_encoder)
 

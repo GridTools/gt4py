@@ -79,13 +79,11 @@ def _make_tuple_expr(el_exprs: list[str]) -> str:
 
 
 def _convert_pascal_to_snake_name(name: str) -> str:
-    return f"""{
-        eve_utils.CaseStyleConverter.convert(
-            name,
-            eve_utils.CaseStyleConverter.CASE_STYLE.PASCAL,
-            eve_utils.CaseStyleConverter.CASE_STYLE.SNAKE,
-        )
-    }s"""
+    return eve_utils.CaseStyleConverter.convert(
+        name,
+        eve_utils.CaseStyleConverter.CASE_STYLE.PASCAL,
+        eve_utils.CaseStyleConverter.CASE_STYLE.SNAKE,
+    )
 
 
 def _make_param_context_from_func_type(
@@ -269,7 +267,6 @@ class CompiledProgramsPool:
 
         try:
             program = self._compiled_programs[key]
-
             if config.COLLECT_METRICS_LEVEL:
                 metrics_source = metrics.get_current_source()
                 # This key should be the same as in _compile_variant()
@@ -277,10 +274,13 @@ class CompiledProgramsPool:
 
             program(*args, **kwargs, offset_provider=offset_provider)
 
-        except TypeError:  # 'Future' object is not callable
-            # ... otherwise we resolve the future and call again
-            program = self._resolve_future(key)
-            program(*args, **kwargs, offset_provider=offset_provider)
+        except TypeError:
+            if "program" in locals() and isinstance(program, concurrent.futures.Future):
+                # 'Future' objects are not callable so they will generate a TypeError.
+                # Here we resolve the future and call it again.
+                program = self._resolve_future(key)
+                program(*args, **kwargs, offset_provider=offset_provider)
+
         except KeyError as e:
             if enable_jit:
                 assert self.argument_descriptor_mapping is not None
