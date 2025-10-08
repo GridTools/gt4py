@@ -26,9 +26,8 @@ class GT4PyAutoOptHook(enum.Enum):
 
     The hook system allows to inject certain additional behaviour into `gt_auto_optimize()`.
     There are multiple hooks supported, see list below, that are called at different
-    stages of the optimization. A hook function receives two arguments, the first one
-    is the corresponding hook enum value and the second one is the SDFG that should be
-    processed. It is expected that the modification of the SDFG is done inplace.
+    stages of the optimization. A hook function receives the SDFG and should modify
+    it inplace.
 
     The supported values are:
     - TopLevelDataFlowPre: Called before the top level dataflow is optimized.
@@ -42,7 +41,7 @@ class GT4PyAutoOptHook(enum.Enum):
     TopLevelDataFlowPost = enum.auto()
 
 
-GT4PyAutoOptHookFun: TypeAlias = Callable[[GT4PyAutoOptHook, dace.SDFG], None]
+GT4PyAutoOptHookFun: TypeAlias = Callable[[dace.SDFG], None]
 
 
 def gt_auto_optimize(
@@ -291,9 +290,7 @@ def _gt_auto_process_top_level_maps(
     sdfg_hash = sdfg.hash_sdfg()
 
     if GT4PyAutoOptHook.TopLevelDataFlowPre in optimization_hooks:
-        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPre](
-            GT4PyAutoOptHook.TopLevelDataFlowPre, sdfg
-        )
+        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPre](sdfg)
 
     while True:
         # First we do scan the entire SDFG to figure out which data is only
@@ -409,9 +406,7 @@ def _gt_auto_process_top_level_maps(
 
         # TODO(phimuell): Figuring out if this is is the correct location for doing it.
         if GT4PyAutoOptHook.TopLevelDataFlow in optimization_hooks:
-            optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlow](
-                GT4PyAutoOptHook.TopLevelDataFlow, sdfg
-            )
+            optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlow](sdfg)
 
         # Determine if the SDFG has been modified by comparing the hash.
         old_sdfg_hash, sdfg_hash = sdfg_hash, sdfg.hash_sdfg()
@@ -428,9 +423,7 @@ def _gt_auto_process_top_level_maps(
         )
 
     if GT4PyAutoOptHook.TopLevelDataFlowPost in optimization_hooks:
-        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPost](
-            GT4PyAutoOptHook.TopLevelDataFlowPost, sdfg
-        )
+        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPost](sdfg)
 
     return sdfg
 
