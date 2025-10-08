@@ -279,6 +279,11 @@ def dumps_json(metric_sources: Mapping[str, Source] | None = None) -> str:
             case xtyping.DataclassABC():
                 return dataclasses.asdict(obj)
 
+        try:
+            return str(obj)
+        except Exception:
+            pass
+
         raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
     return json.dumps(metric_sources, default=default_json_encoder)
