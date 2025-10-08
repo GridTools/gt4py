@@ -9,17 +9,42 @@
 import json
 import pathlib
 from collections.abc import Mapping
+from typing import Any
 
 import pytest
 
+from gt4py import eve
 from gt4py.next import metrics
+from gt4py.next.otf import arguments
 
 
 @pytest.fixture
-def sample_source_metrics() -> Mapping[str, metrics.Source]:
+def sample_source_metadata() -> dict[str, Any]:
+    from gt4py.eve import utils
+
+    return {
+        f"""{
+            utils.CaseStyleConverter.convert(
+                arguments.StaticArg.__name__,
+                utils.CaseStyleConverter.CASE_STYLE.PASCAL,
+                utils.CaseStyleConverter.CASE_STYLE.SNAKE,
+            )
+        }s""": {
+            "horizontal_start": arguments.StaticArg(value=7701),
+            "horizontal_end": arguments.StaticArg(value=67096),
+            "vertical_start": arguments.StaticArg(value=0),
+            "vertical_end": arguments.StaticArg(value=80),
+            "is_iau_active": arguments.StaticArg(value=False),
+            "limited_area": arguments.StaticArg(value=True),
+        }
+    }
+
+
+@pytest.fixture
+def sample_source_metrics(sample_source_metadata: dict[str, Any]) -> Mapping[str, metrics.Source]:
     return {
         "program1": metrics.Source(
-            metadata={"description": "Test program 1"},
+            metadata={"description": "Test program 1", **sample_source_metadata},
             metrics=metrics.MetricsCollection(
                 **{
                     metrics.COMPUTE_METRIC: metrics.Metric(samples=[1.0, 2.0, 3.0]),
@@ -28,7 +53,7 @@ def sample_source_metrics() -> Mapping[str, metrics.Source]:
             ),
         ),
         "program2": metrics.Source(
-            metadata={"description": "Test program 2"},
+            metadata={"description": "Test program 2", **sample_source_metadata},
             metrics=metrics.MetricsCollection(
                 **{
                     metrics.COMPUTE_METRIC: metrics.Metric(samples=[10.0, 20.0, 30.0]),
@@ -40,14 +65,14 @@ def sample_source_metrics() -> Mapping[str, metrics.Source]:
 
 
 @pytest.fixture
-def empty_source_metrics() -> Mapping[str, metrics.Source]:
+def empty_source_metrics(sample_source_metadata: dict[str, Any]) -> Mapping[str, metrics.Source]:
     return {
         "program1": metrics.Source(
-            metadata={"description": "Test program 1"},
+            metadata={"description": "Test program 1", **sample_source_metadata},
             metrics=metrics.MetricsCollection(),
         ),
         "program2": metrics.Source(
-            metadata={"description": "Test program 2"},
+            metadata={"description": "Test program 2", **sample_source_metadata},
             metrics=metrics.MetricsCollection(),
         ),
     }

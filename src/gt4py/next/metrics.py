@@ -22,9 +22,10 @@ from collections.abc import Generator, Mapping
 
 import numpy as np
 
-from gt4py.eve import utils
+from gt4py.eve import extended_typing as xtyping, utils
 from gt4py.eve.extended_typing import Any, Final
 from gt4py.next import config
+from gt4py.next.otf import arguments
 
 
 # Common metric names
@@ -268,15 +269,21 @@ def dumps_json(metric_sources: Mapping[str, Source] | None = None) -> str:
         metric_sources = typing.cast(Mapping[str, Source], sources)
     assert metric_sources is not None
 
-    return json.dumps(
-        {
-            f"{source_id}": {
-                "metadata": source.metadata,
-                "metrics": {name: metric.samples for name, metric in source.metrics.items()},
-            }
-            for source_id, source in metric_sources.items()
-        },
-    )
+    def default_json_encoder(obj: object) -> object:
+        match obj:
+            case Source() as src:
+                return {
+                    "metadata": src.metadata,
+                    "metrics": {name: metric.samples for name, metric in src.metrics.items()},
+                }
+            case arguments.StaticArg() as arg:
+                return arg.value
+            case xtyping.DataclassABC():
+                return dataclasses.asdict(obj)
+
+        raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+    return json.dumps(metric_sources, default=default_json_encoder)
 
 
 def dump_json(
