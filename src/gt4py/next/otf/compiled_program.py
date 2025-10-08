@@ -26,7 +26,18 @@ from gt4py.next.utils import tree_map
 T = TypeVar("T")
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
-_async_compilation_pool = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
+_async_compilation_pool: concurrent.futures.Executor | None = None
+
+
+def _init_async_compilation_pool() -> None:
+    global _async_compilation_pool
+    if _async_compilation_pool is None and config.BUILD_JOBS > 0:
+        _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=config.BUILD_JOBS
+        )
+
+
+_init_async_compilation_pool()
 
 ScalarOrTupleOfScalars: TypeAlias = extended_typing.MaybeNestedInTuple[core_defs.Scalar]
 CompiledProgramsKey: TypeAlias = tuple[
@@ -42,6 +53,20 @@ ArgumentDescriptorContexts: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor],
     ArgumentDescriptorContext,
 ]
+
+
+def wait_for_compilation() -> None:
+    """
+    Waits for all ongoing compilations to finish.
+
+    This is useful to ensure that all compiled programs are ready before
+    proceeding with further operations. E.g. when the first call is included in timings.
+    """
+    global _async_compilation_pool
+    if _async_compilation_pool is not None:
+        _async_compilation_pool.shutdown(wait=True)
+        _async_compilation_pool = None
+        _init_async_compilation_pool()
 
 
 def _hash_compiled_program_unsafe(cp_key: CompiledProgramsKey) -> int:
@@ -360,9 +385,14 @@ class CompiledProgramsPool:
             kwargs=self.program_type.definition.kw_only_args,
             argument_descriptor_contexts=argument_descriptor_contexts,
         )
-        self._compiled_programs[key] = _async_compilation_pool.submit(
+        compile_call = functools.partial(
             self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
         )
+        if _async_compilation_pool is None:
+            # synchronous compilation
+            self._compiled_programs[key] = compile_call()
+        else:
+            self._compiled_programs[key] = _async_compilation_pool.submit(compile_call)
 
     def _offset_provider_to_type_unsafe(
         self,

@@ -133,7 +133,7 @@ def test_inlining_of_static_domain_works():
             kwargs={},
             offset_provider={},
             column_axis=None,
-            argument_descriptors={
+            argument_descriptor_contexts={
                 arguments.FieldDomainDescriptor: {"out": arguments.FieldDomainDescriptor(domain)}
             },
         ),

@@ -1,6 +1,6 @@
 # DaCe backends: Schedule tree
 
-In the context of [DaCe backends](./backend-dace.md), facing tech-debt, a lack of understanding of the current stack, and under performing map- & state fusion, we decided to rewrite substantial parts of the DaCe backends with so called "Schedule Trees" to achieve hardware dependent macro-level optimizations (e.g. loop merging and loop re-ordering) at a new IR level before going down to SDFGs. We considered writing custom SDFG fusion passes and accept that we have to contribute a conversion from Schedule Tree to SDFG in DaCe.
+In the context of [DaCe backends](./dace.md), facing tech-debt, a lack of understanding of the current stack, and under performing map- & state fusion, we decided to rewrite substantial parts of the DaCe backends with so called "Schedule Trees" to achieve hardware dependent macro-level optimizations (e.g. loop merging and loop re-ordering) at a new IR level before going down to SDFGs. We considered writing custom SDFG fusion passes and accept that we have to contribute a conversion from Schedule Tree to SDFG in DaCe.
 
 ## Context
 

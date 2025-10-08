@@ -277,5 +277,8 @@ def test_oob_error():
     domain = domain_utils.SymbolicDomain.from_expr(
         im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 3)})
     )
-    with pytest.raises(ValueError, match=r"out-of-bounds"):
+    with pytest.warns(
+            UserWarning,
+            match=r"out-of-bounds",
+    ):
         domain.translate(shift_chain, offset_provider).as_expr()
