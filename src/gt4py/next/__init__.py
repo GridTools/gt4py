@@ -50,14 +50,6 @@ from .program_processors.runners.roundtrip import default as itir_python
 
 
 __all__ = [
-    "CUPY_DEVICE_TYPE",
-    "Device",
-    "DeviceType",
-    "is_scalar_type",
-]
-
-
-__all__ = [
     # submodules
     "common",
     "ffront",
