@@ -14,7 +14,6 @@ from typing import Any
 import numpy as np
 import pytest
 
-from gt4py import eve
 from gt4py.next import metrics
 from gt4py.next.otf import arguments
 

@@ -181,7 +181,7 @@ def in_collection_mode() -> bool:
 
 
 def get_current_source() -> SourceHandler:
-    """Retrieve the active measured entity state."""
+    """Retrieve the active metrics collection source."""
     source_handler = _source_cvar.get()
     assert source_handler is not None
     return source_handler
