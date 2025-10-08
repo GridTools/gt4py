@@ -12,18 +12,24 @@ import functools
 from typing import Any, Sequence
 
 import dace
+import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
 from gt4py.next.otf import stages
-from gt4py.next.program_processors.runners.dace import sdfg_callable, workflow as dace_worflow
-from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
+from gt4py.next.program_processors.runners.dace import sdfg_callable
+from gt4py.next.program_processors.runners.dace.workflow import (
+    common as gtx_wfdcommon,
+    compilation as gtx_wfdcompilation,
+)
 
 
 def convert_args(
-    fun: dace_worflow.compilation.CompiledDaceProgram,
+    fun: gtx_wfdcompilation.CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
 ) -> stages.CompiledProgram:
+    # Retieve metrics level from GT4Py environment variable.
+    collect_time = config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
     # We use the callback function provided by the compiled program to update the SDFG arglist.
     update_sdfg_call_args = functools.partial(
         fun.update_sdfg_ctype_arglist, device, fun.sdfg_argtypes
@@ -33,7 +39,7 @@ def convert_args(
         *args: Any,
         offset_provider: gtx_common.OffsetProvider,
         out: Any = None,
-    ) -> None:
+    ) -> Any:
         if out is not None:
             args = (*args, out)
 
@@ -48,38 +54,28 @@ def convert_args(
                 *flat_args,
                 filter_args=False,
             )
+            this_call_args[gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL] = config.COLLECT_METRICS_LEVEL
             with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
-                fun(**this_call_args)
+                result = fun(**this_call_args)
 
         else:
             # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
             #  so we just update it with the current call arguments.
             update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
-            fun.fast_call()
+            result = fun.fast_call()
 
-        metric_collection = metrics.get_active_metric_collection()
-        if (metric_collection is not None) and (
-            config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
-        ):
-            # Observe that dace instrumentation adds runtime overhead:
-            # DaCe writes an instrumentation report file for each SDFG run.
-            with gtx_wfdcommon.dace_context(device_type=device):
-                # We need to set the cache folder and key config in order to retrieve
-                # the SDFG report file.
-                prof_report = fun.sdfg_program.sdfg.get_latest_report()
-            if prof_report is None:
+        if collect_time:
+            if result is None:
                 raise RuntimeError(
-                    "Config 'COLLECT_METRICS_LEVEL' is set but the SDFG profiling report was not found."
-                    " This might indicate that the backend is using a precompiled SDFG from persistent cache"
-                    " without instrumentation."
+                    "Config 'COLLECT_METRICS_LEVEL' is set but the SDFG profiling"
+                    " report was not found. This might indicate that the backend"
+                    " is using a precompiled SDFG from persistent cache without"
+                    " metrics instrumentation."
                 )
-            assert len(prof_report.events) == 1
-            # The event name gets truncated in dace, so we only check that
-            # it corresponds to the beginning of SDFG label.
-            assert f"SDFG {fun.sdfg_program.sdfg.label}".startswith(prof_report.events[0].name)
-            duration_secs = (
-                prof_report.events[0].duration / 1e6
-            )  # dace timer returns the duration in microseconds
-            metric_collection.add_sample(metrics.COMPUTE_METRIC, duration_secs)
+            assert len(result) == 1
+            assert isinstance(result[0], np.float64)
+            metric_collection = metrics.get_active_metric_collection()
+            if metric_collection is not None:
+                metric_collection.add_sample(metrics.COMPUTE_METRIC, result[0].item())
 
     return decorated_program
