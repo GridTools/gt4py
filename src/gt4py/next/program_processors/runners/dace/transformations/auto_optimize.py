@@ -37,12 +37,12 @@ class GT4PyAutoOptHook(enum.Enum):
         as `check_fusion_callback` argument to `MapFusionVertical` during the top level
         dataflow optimization stage. It is important that this hook is not passed to
         the `gt_vertical_map_split_fusion()` splitting transformation function.
-        Note that this hook as to meet the requirements of `VerticalMapFusionCallback`,
+        Note that this hook has to meet the requirements of `VerticalMapFusionCallback`,
         see the `map_fusion` module for more information.
     - TopLevelDataFlowMapFusionHorizontalCallBack: If provided this function is passed
         as `check_fusion_callback` argument to `MapFusionHorizontal` during the top
         level dataflow optimization. It is important that the hook is not  passed to
-        the splitting transformation. Note that this hook as to meet the requirements
+        the splitting transformation. Note that this hook has to meet the requirements
         of `HorizontalMapFusionCallback`, see the `map_fusion` module for more information.
     - TopLevelDataFlowMapPromotionCallBack: If provided then pass this function as
         `promotion_callback` argument to the `MapPromoter` during top level dataflow
