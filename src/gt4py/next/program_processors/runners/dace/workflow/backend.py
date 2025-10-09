@@ -25,9 +25,6 @@ class DaCeBackendFactory(factory.Factory):
 
     Args:
         auto_optimize: Enables the SDFG transformation pipeline.
-        make_persistent: Enables optimization in SDFG lowering and bindings generation
-            assuming that the layout of temporary and global fields does not change
-            across multiple SDFG calls.
     """
 
     class Meta:
@@ -54,10 +51,8 @@ class DaCeBackendFactory(factory.Factory):
             DaCeWorkflowFactory,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
-            make_persistent=factory.SelfAttribute("..make_persistent"),
         )
         auto_optimize = factory.Trait(name_postfix="_opt")
-        make_persistent = False
 
     name = factory.LazyAttribute(
         lambda o: f"run_dace_{o.name_device}{o.name_cached}{o.name_postfix}"
