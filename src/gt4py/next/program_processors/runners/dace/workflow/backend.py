@@ -92,6 +92,7 @@ def _make_dace_backend(
         gpu=gpu,
         cached=cached,
         auto_optimize=auto_optimize,
+        otf_workflow__cached_translation=cached,
         otf_workflow__bare_translation__auto_optimize_args={
             "assume_pointwise": True,
             "blocking_dim": None,
