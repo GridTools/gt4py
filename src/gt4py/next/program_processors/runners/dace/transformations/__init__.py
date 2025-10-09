@@ -13,7 +13,7 @@ that explains the general structure and requirements on the SDFGs.
 """
 
 from . import constants, splitting_tools
-from .auto_optimize import gt_auto_optimize
+from .auto_optimize import GT4PyAutoOptHook, GT4PyAutoOptHookFun, gt_auto_optimize
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow
 from .gpu_utils import (
     GPUSetBlockSize,
@@ -69,6 +69,8 @@ from .utils import gt_find_constant_arguments, gt_make_transients_persistent
 __all__ = [
     "CopyChainRemover",
     "GPUSetBlockSize",
+    "GT4PyAutoOptHook",
+    "GT4PyAutoOptHookFun",
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
     "GT4PyStateFusion",
