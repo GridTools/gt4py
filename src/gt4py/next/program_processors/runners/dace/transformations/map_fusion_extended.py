@@ -123,7 +123,9 @@ def gt_vertical_map_split_fusion(
     """Performs vertical map splitting on the provided SDFG.
 
     The function essentially runs `VerticalSplitMapRange`, `MapFusionVertical` and
-    `SplitAccessNode` until a fixpoint is reached.
+    `SplitAccessNode` until a fixpoint is reached. However, `MapFusionVertical` and
+    `SplitAccessNode` are restricted to involve only the parts of the graph that
+    were affected by the splitting.
 
     Args:
         sdfg: The SDFG on which we operate.
@@ -140,26 +142,13 @@ def gt_vertical_map_split_fusion(
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
-    # TODO: Restrict MapFusion such that it only applies to the Maps that have
-    #   been split and not some other random Maps.
-    transformations = [
+    ret = sdfg.apply_transformations_repeated(
         VerticalSplitMapRange(
             only_toplevel_maps=True,
             check_split_callback=check_split_callback,
+            fuse_possible_maps=True,
+            single_use_data=single_use_data,
         ),
-        gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
-        gtx_transformations.MapFusionVertical(
-            only_inner_maps=False,
-            only_toplevel_maps=True,
-            consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
-        ),
-    ]
-    # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
-    #   has been solved.
-    transformations[-1]._single_use_data = single_use_data  # type: ignore[attr-defined]
-
-    ret = sdfg.apply_transformations_repeated(
-        transformations,
         validate=False,
         validate_all=validate_all,
     )
@@ -468,6 +457,8 @@ class VerticalSplitMapRange(SplitMapRange):
         only_toplevel_maps: Only applies to top level maps.
         check_split_callback: Callback used to check if a split should be performed
             or not, see `VerticalMapSplitCallback` for more.
+        fuse_possible_maps: Immediately use fusing and splitting on the generated Maps.
+        single_use_data: Use this as single use data and do not compute it on the fly.
     """
 
     # Pattern Matching
@@ -475,16 +466,43 @@ class VerticalSplitMapRange(SplitMapRange):
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
+    fuse_possible_maps = dace_properties.Property(
+        dtype=bool,
+        default=False,  # NOTE: For backwards compatibility.
+        desc="If `True`, the transformation will try to fuse the maps that were generated together.",
+    )
+    consolidate_edges_only_if_not_extending = dace_properties.Property(
+        dtype=bool,
+        default=False,
+        desc="Only consolidate if this does not lead to an extension of the subset.",
+    )
+
     _check_split_callback: Optional[VerticalMapSplitCallback]
+
+    # Name of all data that is used at only one place. Is computed by the
+    #  `FindSingleUseData` pass and be passed at construction time. Needed until
+    #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
+    _single_use_data: Optional[dict[dace.SDFG, set[str]]]
 
     def __init__(
         self,
         *args: Any,
         check_split_callback: Optional[VerticalMapSplitCallback] = None,
+        fuse_possible_maps: Optional[bool] = None,
+        single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+        consolidate_edges_only_if_not_extending: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
+        self._check_split_callback = None
+        self._single_use_data = None
         if check_split_callback is not None:
             self._check_split_callback = check_split_callback
+        if fuse_possible_maps is not None:
+            self.fuse_possible_maps = fuse_possible_maps
+        if single_use_data is not None:
+            self._single_use_data = single_use_data
+        if consolidate_edges_only_if_not_extending is not None:
+            self.consolidate_edges_only_if_not_extending = consolidate_edges_only_if_not_extending
         super().__init__(*args, **kwargs)
 
     @classmethod
@@ -558,6 +576,72 @@ class VerticalSplitMapRange(SplitMapRange):
         second_map_entry: dace_nodes.MapEntry = self.second_map_entry
         second_map_exit: dace_nodes.MapExit = graph.exit_node(self.second_map_entry)
 
-        self.split_maps(
-            graph, sdfg, first_map_entry, first_map_exit, second_map_entry, second_map_exit
+        intermediates_that_might_need_splitting: list[dace_nodes.AccessNode] = []
+        for oedge in graph.out_edges(first_map_exit):
+            if isinstance(oedge.dst, dace_nodes.AccessNode) and any(
+                ooedge.dst is second_map_entry for ooedge in graph.out_edges(oedge.dst)
+            ):
+                intermediates_that_might_need_splitting.append(oedge.dst)
+
+        new_first_map_entries, new_second_map_entries = self.split_maps(
+            graph,
+            sdfg,
+            first_map_entry,
+            first_map_exit,
+            second_map_entry,
+            second_map_exit,
         )
+
+        # Now perform the splitting.
+        if self.fuse_possible_maps:
+            assert len(intermediates_that_might_need_splitting) >= 1
+
+            has_performed_a_split = False
+            for intermediate_to_split in intermediates_that_might_need_splitting:
+                if gtx_transformations.SplitAccessNode.can_be_applied_to(
+                    sdfg=sdfg,
+                    options={},
+                    access_node=intermediate_to_split,
+                ):
+                    gtx_transformations.SplitAccessNode.apply_to(
+                        sdfg=sdfg, options={}, access_node=intermediate_to_split
+                    )
+                    has_performed_a_split = True
+
+            if not has_performed_a_split:
+                # TODO(phimuell, iomaganaris): Is this an error?
+                return
+
+            # Now perform the fusing but restrict the application to chases where
+            #  we only involve a Maps that have been the result of a split.
+            new_first_map_exits = [
+                graph.exit_node(new_first_map_entry)
+                for new_first_map_entry in new_first_map_entries
+            ]
+
+            def _restrict_fusion_to_newly_created_maps(
+                this: gtx_transformations.MapFusionVertical,
+                first_map_exit: dace_nodes.MapExit,
+                second_map_entry: dace_nodes.MapEntry,
+                _state: dace.SDFGState,
+                _sdfg: dace.SDFG,
+            ) -> bool:
+                if (
+                    first_map_exit in new_first_map_exits
+                    and second_map_entry in new_second_map_entries
+                ):
+                    return True
+                return False
+
+            # NOTE: After here it is dangerous to access `self.PATTERN_NODE`.
+            sdfg.reset_cfg_list()
+
+            trafo = gtx_transformations.MapFusionVertical(
+                check_fusion_callback=_restrict_fusion_to_newly_created_maps,
+                only_toplevel_maps=self.only_toplevel_maps,
+                consolidate_edges_only_if_not_extending=self.consolidate_edges_only_if_not_extending,
+            )
+            trafo._single_use_data = self._single_use_data
+
+            # This is not efficient, but it is currently the only way to run it
+            sdfg.apply_transformations_repeated(trafo, validate=False, validate_all=False)
