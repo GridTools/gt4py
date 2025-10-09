@@ -38,6 +38,21 @@ def gt_horizontal_map_split_fusion(
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
+    """Performs horizontal map splitting on the provided SDFG.
+
+    The function essentially runs `HorizontalSplitMapRange`, `MapFusionHorizontal`
+    until a fixpoint is reached.
+
+    Args:
+        sdfg: The SDFG on which we operate.
+        run_simplify: Run `gt_simplify()` at the end.
+        fuse_possible_maps: Directly fuse the Maps inside `HorizontalSplitMapRange`.
+        consolidate_edges_only_if_not_extending: See `MapFusionVertical` for more.
+        skip: Skip these transformation during simplification.
+        validate: Perform validation during the steps.
+        validate_all: Perform extensive validation.
+    """
+
     transformations = [
         HorizontalSplitMapRange(
             fuse_possible_maps=fuse_possible_maps,
@@ -84,6 +99,20 @@ def gt_vertical_map_split_fusion(
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
+    """Performs vertical map splitting on the provided SDFG.
+
+    The function essentially runs `VerticalSplitMapRange`, `MapFusionVertical` and
+    `SplitAccessNode` until a fixpoint is reached.
+
+    Args:
+        sdfg: The SDFG on which we operate.
+        run_simplify: Run `gt_simplify()` at the end.
+        consolidate_edges_only_if_not_extending: See `MapFusionVertical` for more.
+        single_use_data: Precomputed single use data.
+        skip: Skip these transformation during simplification.
+        validate: Perform validation during the steps.
+        validate_all: Perform extensive validation.
+    """
     if single_use_data is None:
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
