@@ -8,8 +8,8 @@
 
 import pytest
 
-
 dace = pytest.importorskip("dace")
+import copy
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
@@ -18,13 +18,7 @@ from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
 
-import copy
-
-
 from . import util
-
-
-import dace
 
 
 def _make_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:

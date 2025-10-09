@@ -19,8 +19,6 @@ from sympy.core.numbers import Number
 
 from . import util
 
-import dace
-
 
 def _make_sdfg_with_multiple_maps_that_share_inputs(
     N: str | int,
