@@ -471,8 +471,7 @@ class VerticalSplitMapRange(SplitMapRange):
             and second_map_edge.dst_conn.startswith("IN_")
         ]
         if any(
-            out_edge.dst != self.second_map_entry
-            and any(
+            any(
                 gtx_dace_split.are_intersecting(out_edge.data.src_subset, matching_subset)
                 for matching_subset in access_node_subset_into_second_map
             )
