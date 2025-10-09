@@ -9,7 +9,7 @@
 """Fast access to the auto optimization on DaCe."""
 
 import enum
-from typing import Any, Callable, Optional, Sequence, TypeAlias
+from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
 
 import dace
 from dace import data as dace_data
@@ -24,24 +24,53 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 class GT4PyAutoOptHook(enum.Enum):
     """Allows to hook into different stages of the auto optimizer.
 
-    The hook system allows to inject certain additional behaviour into `gt_auto_optimize()`.
-    There are multiple hooks supported, see list below, that are called at different
-    stages of the optimization. A hook function receives the SDFG and should modify
-    it inplace.
+    The hook system allows to inject certain additional behaviour at various places
+    during the execution of `gt_auto_optimize()`. See the list below for more specific
+    instructions. Most of the hooks are expected to conform to the signature specified
+    by `GT4PyAutoOptHookStage`. However, some hooks require a different signature.
 
     The supported values are:
     - TopLevelDataFlowPre: Called before the top level dataflow is optimized.
     - TopLevelDataFlow: Called during the top level optimization stage, which might be
         called multiple times.
+    - TopLevelDataFlowMapFusionVerticalCallBack: If provided this function is passed
+        as `check_fusion_callback` argument to `MapFusionVertical` during the top level
+        dataflow optimization stage. See the `map_fusion` module for more information.
+        Note that this hook as to meet the requirements of `VerticalMapFusionCallback`.
+    - TopLevelDataFlowMapFusionHorizontalCallBack: If provided this function is passed
+        as `check_fusion_callback` argument to `MapFusionHorizontal` during the top
+        level dataflow optimization. See the `map_fusion` module for more information.
+        Note that this hook as to meet the requirements of `HorizontalMapFusionCallback`.
+    - TopLevelDataFlowMapPromotionCallBack: If provided then pass this function as
+        `promotion_callback` argument to the `MapPromoter` during top level dataflow
+        optimization. If not provided then `gt4py_default_auto_optimizer_map_promotion_checker()`
+        is used. Note that this callback has to meet the requirements of
+        `MapPromotionCallBack`.
     - TopLevelDataFlowPost: Called after the top level dataflow has been optimized.
     """
 
     TopLevelDataFlowPre = enum.auto()
+    TopLevelDataFlowMapFusionVerticalCallBack = enum.auto()
+    TopLevelDataFlowMapFusionHorizontalCallBack = enum.auto()
+    TopLevelDataFlowMapPromotionCallBack = enum.auto()
     TopLevelDataFlow = enum.auto()
     TopLevelDataFlowPost = enum.auto()
 
 
-GT4PyAutoOptHookFun: TypeAlias = Callable[[dace.SDFG], None]
+GT4PyAutoOptHookStage: TypeAlias = Callable[[dace.SDFG], None]
+"""Signature of a regular "stage hook" of the optimizer.
+
+The function gets the SDFG as its single argument and processes it in-place.
+Most of the hooks `gt_auto_optimize()` provides are expected to be of that type.
+"""
+
+
+GT4PyAutoOptHookFun: TypeAlias = Union[
+    GT4PyAutoOptHookStage,
+    gtx_transformations.HorizontalMapFusionCallback,
+    gtx_transformations.VerticalMapFusionCallback,
+    gtx_transformations.MapPromotionCallBack,
+]
 
 
 def gt_auto_optimize(
@@ -290,7 +319,7 @@ def _gt_auto_process_top_level_maps(
     sdfg_hash = sdfg.hash_sdfg()
 
     if GT4PyAutoOptHook.TopLevelDataFlowPre in optimization_hooks:
-        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPre](sdfg)
+        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPre](sdfg)  # type: ignore[call-arg]
 
     while True:
         # First we do scan the entire SDFG to figure out which data is only
@@ -303,6 +332,9 @@ def _gt_auto_process_top_level_maps(
         vertical_map_fusion = gtx_transformations.MapFusionVertical(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=True,
+            check_fusion_callback=optimization_hooks.get(  # type: ignore[arg-type]
+                GT4PyAutoOptHook.TopLevelDataFlowMapFusionVerticalCallBack, None
+            ),
         )
         # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
         #   has been solved.
@@ -313,6 +345,9 @@ def _gt_auto_process_top_level_maps(
             consolidate_edges_only_if_not_extending=True,
             # TODO(phimuell): Should we enable this flag?
             only_if_common_ancestor=False,
+            check_fusion_callback=optimization_hooks.get(  # type: ignore[arg-type]
+                GT4PyAutoOptHook.TopLevelDataFlowMapFusionHorizontalCallBack, None
+            ),
         )
 
         # NOTE: Since horizontal Map fusion matches _any_ two Maps, running it on large
@@ -344,7 +379,10 @@ def _gt_auto_process_top_level_maps(
                 promote_vertical=True,
                 promote_horizontal=True,
                 promote_local=False,
-                promotion_callback=_check_if_horizontal_map_promotion_is_appropriate,
+                promotion_callback=optimization_hooks.get(
+                    GT4PyAutoOptHook.TopLevelDataFlowMapPromotionCallBack,
+                    gt4py_default_auto_optimizer_map_promotion_checker,
+                ),
                 single_use_data=single_use_data,
             ),
             validate=False,
@@ -406,7 +444,7 @@ def _gt_auto_process_top_level_maps(
 
         # TODO(phimuell): Figuring out if this is is the correct location for doing it.
         if GT4PyAutoOptHook.TopLevelDataFlow in optimization_hooks:
-            optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlow](sdfg)
+            optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlow](sdfg)  # type: ignore[call-arg]
 
         # Determine if the SDFG has been modified by comparing the hash.
         old_sdfg_hash, sdfg_hash = sdfg_hash, sdfg.hash_sdfg()
@@ -423,7 +461,7 @@ def _gt_auto_process_top_level_maps(
         )
 
     if GT4PyAutoOptHook.TopLevelDataFlowPost in optimization_hooks:
-        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPost](sdfg)
+        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPost](sdfg)  # type: ignore[call-arg]
 
     return sdfg
 
@@ -622,7 +660,7 @@ def _gt_auto_post_processing(
     return sdfg
 
 
-def _check_if_horizontal_map_promotion_is_appropriate(
+def gt4py_default_auto_optimizer_map_promotion_checker(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
     first_map_exit: dace_nodes.MapExit,

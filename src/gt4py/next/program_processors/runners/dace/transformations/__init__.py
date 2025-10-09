@@ -24,10 +24,15 @@ from .gpu_utils import (
 from .inline_fuser import inline_dataflow_into_map
 from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
-from .map_fusion import MapFusionHorizontal, MapFusionVertical
+from .map_fusion import (
+    HorizontalMapFusionCallback,
+    MapFusionHorizontal,
+    MapFusionVertical,
+    VerticalMapFusionCallback,
+)
 from .map_fusion_extended import gt_horizontal_map_split_fusion, gt_vertical_map_split_fusion
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
-from .map_promoter import MapPromoter
+from .map_promoter import MapPromoter, MapPromotionCallBack
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
 from .multi_state_global_self_copy_elimination import (
     MultiStateGlobalSelfCopyElimination,
@@ -67,11 +72,13 @@ __all__ = [
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
     "GT4PyStateFusion",
+    "HorizontalMapFusionCallback",
     "LoopBlocking",
     "MapFusionHorizontal",
     "MapFusionVertical",
     "MapIterationOrder",
     "MapPromoter",
+    "MapPromotionCallBack",
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
     "MultiStateGlobalSelfCopyElimination2",
@@ -80,6 +87,7 @@ __all__ = [
     "SingleStateGlobalSelfCopyElimination",
     "SplitAccessNode",
     "SplitConsumerMemlet",
+    "VerticalMapFusionCallback",
     "constants",
     "gt_auto_optimize",
     "gt_change_transient_strides",
