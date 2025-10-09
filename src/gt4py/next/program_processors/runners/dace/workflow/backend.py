@@ -101,6 +101,7 @@ def _make_dace_backend(
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=False,
         otf_workflow__bare_translation__make_persistent=False,
+        otf_workflow__bare_translation__optimization_hooks=None,
         otf_workflow__bare_translation__use_memory_pool=use_memory_pool,
         otf_workflow__bare_translation__use_metrics=True,
         otf_workflow__bindings__make_persistent=False,
