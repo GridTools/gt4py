@@ -12,7 +12,7 @@ import factory
 
 import gt4py.next.allocators as next_allocators
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend
+from gt4py.next import backend, common as gtx_common, config
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
@@ -92,13 +92,26 @@ def _make_dace_backend(
         gpu=gpu,
         cached=cached,
         auto_optimize=auto_optimize,
-        otf_workflow__bare_translation__blocking_dim=None,
+        otf_workflow__bare_translation__auto_optimize_args={
+            "assume_pointwise": True,
+            "blocking_dim": None,
+            "blocking_size": 10,
+            "gpu_block_size": (32, 8, 1),
+            "gpu_memory_pool": (use_memory_pool if gpu else False),
+            "make_persistent": False,
+            "optimization_hooks": None,
+            "unit_strides_kind": (
+                gtx_common.DimensionKind.HORIZONTAL
+                if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+                else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
+            ),
+            "validate": False,
+            "validate_all": False,
+        },
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
-        otf_workflow__bare_translation__disable_field_origin_on_program_arguments=False,
-        otf_workflow__bare_translation__make_persistent=False,
-        otf_workflow__bare_translation__optimization_hooks=None,
-        otf_workflow__bare_translation__use_memory_pool=use_memory_pool,
         otf_workflow__bare_translation__use_metrics=True,
+        # TODO(edopao): the two fields below will soon be depracated
+        otf_workflow__bare_translation__disable_field_origin_on_program_arguments=False,
         otf_workflow__bindings__make_persistent=False,
     )
 

@@ -148,6 +148,9 @@ def gt_auto_optimize(
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
     optimization_hooks = optimization_hooks or {}
 
+    if gpu_memory_pool and device != dace.DeviceType.GPU:
+        raise NotImplementedError("Memory pool only available for GPU device.")
+
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.
         dace.Config.set("store_history", value=False)
