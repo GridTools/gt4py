@@ -31,29 +31,42 @@ class GT4PyAutoOptHook(enum.Enum):
 
     The supported values are:
     - TopLevelDataFlowPre: Called before the top level dataflow is optimized.
-    - TopLevelDataFlow: Called during the top level optimization stage, which might be
+    - TopLevelDataFlowStep: Called during the top level optimization stage, which might be
         called multiple times.
     - TopLevelDataFlowMapFusionVerticalCallBack: If provided this function is passed
         as `check_fusion_callback` argument to `MapFusionVertical` during the top level
-        dataflow optimization stage. See the `map_fusion` module for more information.
-        Note that this hook as to meet the requirements of `VerticalMapFusionCallback`.
+        dataflow optimization stage. It is important that this hook is not passed to
+        the `gt_vertical_map_split_fusion()` splitting transformation function.
+        Note that this hook as to meet the requirements of `VerticalMapFusionCallback`,
+        see the `map_fusion` module for more information.
     - TopLevelDataFlowMapFusionHorizontalCallBack: If provided this function is passed
         as `check_fusion_callback` argument to `MapFusionHorizontal` during the top
-        level dataflow optimization. See the `map_fusion` module for more information.
-        Note that this hook as to meet the requirements of `HorizontalMapFusionCallback`.
+        level dataflow optimization. It is important that the hook is not  passed to
+        the splitting transformation. Note that this hook as to meet the requirements
+        of `HorizontalMapFusionCallback`, see the `map_fusion` module for more information.
     - TopLevelDataFlowMapPromotionCallBack: If provided then pass this function as
         `promotion_callback` argument to the `MapPromoter` during top level dataflow
         optimization. If not provided then `gt4py_default_auto_optimizer_map_promotion_checker()`
         is used. Note that this callback has to meet the requirements of
         `MapPromotionCallBack`.
     - TopLevelDataFlowPost: Called after the top level dataflow has been optimized.
+
+    Note:
+        The `TopLevelDataFlowMapFusionVerticalCallBack` and `TopLevelDataFlowMapFusionHorizontalCallBack`
+        hooks are not passed to the splitting transformations, this is a limitation of
+        the toolchain and should be fixed soon. If they are used it is advised to
+        pass `disable_splitting` to `gt_auto_optimize()` and call the splitting
+        transformations directly if desired.
+
+    Todo:
+        - Implement a hook for the splitting transformation.
     """
 
     TopLevelDataFlowPre = enum.auto()
     TopLevelDataFlowMapFusionVerticalCallBack = enum.auto()
     TopLevelDataFlowMapFusionHorizontalCallBack = enum.auto()
     TopLevelDataFlowMapPromotionCallBack = enum.auto()
-    TopLevelDataFlow = enum.auto()
+    TopLevelDataFlowStep = enum.auto()
     TopLevelDataFlowPost = enum.auto()
 
 
@@ -82,6 +95,7 @@ def gt_auto_optimize(
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
+    disable_splitting: bool = False,
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
@@ -137,6 +151,7 @@ def gt_auto_optimize(
         blocking_only_if_independent_nodes: If `True`, the default, only apply loop
             blocking if there are independent nodes in the Map, see the
             `require_independent_nodes` option of the `LoopBlocking` transformation.
+        disable_splitting: Disable the splitting transformations.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
@@ -219,6 +234,7 @@ def gt_auto_optimize(
         sdfg = _gt_auto_process_top_level_maps(
             sdfg=sdfg,
             assume_pointwise=assume_pointwise,
+            disable_splitting=disable_splitting,
             optimization_hooks=optimization_hooks,
             validate_all=validate_all,
         )
@@ -278,6 +294,7 @@ def _gt_auto_process_top_level_maps(
     sdfg: dace.SDFG,
     assume_pointwise: bool,
     optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
+    disable_splitting: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimize the Maps at the top level of the SDFG inplace.
@@ -395,56 +412,66 @@ def _gt_auto_process_top_level_maps(
             sdfg, validate=False, validate_all=validate_all
         )
 
-        # TODO(phimuell): Find out how to skip the propagation and integrating it
-        #   into the split transformation.
-        sdfg.apply_transformations_repeated(
-            gtx_transformations.SplitConsumerMemlet(single_use_data=single_use_data),
-            validate=False,
-            validate_all=validate_all,
-        )
-        dace_propagation.propagate_memlets_sdfg(sdfg)
+        if not disable_splitting:
+            # TODO(phimuell): Find out how to skip the propagation and integrating it
+            #   into the split transformation.
+            sdfg.apply_transformations_repeated(
+                gtx_transformations.SplitConsumerMemlet(single_use_data=single_use_data),
+                validate=False,
+                validate_all=validate_all,
+            )
+            dace_propagation.propagate_memlets_sdfg(sdfg)
 
-        sdfg.apply_transformations_repeated(
-            [
-                # TODO(phimuell): The transformation is also active inside Maps.
-                #   Which is against the description of this function, but it should
-                #   not matter that much.
-                gtx_transformations.SplitAccessNode(
-                    single_use_data=single_use_data,
-                ),
+            sdfg.apply_transformations_repeated(
+                [
+                    # TODO(phimuell): The transformation is also active inside Maps.
+                    #   Which is against the description of this function, but it should
+                    #   not matter that much.
+                    gtx_transformations.SplitAccessNode(
+                        single_use_data=single_use_data,
+                    ),
+                    gtx_transformations.GT4PyMapBufferElimination(
+                        assume_pointwise=assume_pointwise,
+                    ),
+                ],
+                validate=False,
+                validate_all=validate_all,
+            )
+
+            # Call vertical and horizontal map fusion to fuse together maps on partially
+            #  overlapping range. This is an iterative process that splits the maps to
+            #  expose overlapping range and applies serial/parallel map fusion.
+            gtx_transformations.gt_vertical_map_split_fusion(
+                sdfg=sdfg,
+                run_simplify=False,
+                skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
+                consolidate_edges_only_if_not_extending=True,
+                single_use_data=single_use_data,
+                validate=False,
+                validate_all=validate_all,
+            )
+            gtx_transformations.gt_horizontal_map_split_fusion(
+                sdfg=sdfg,
+                run_simplify=False,
+                skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
+                fuse_possible_maps=True,
+                consolidate_edges_only_if_not_extending=True,
+                validate=False,
+                validate_all=validate_all,
+            )
+
+        else:
+            sdfg.apply_transformations_repeated(
                 gtx_transformations.GT4PyMapBufferElimination(
                     assume_pointwise=assume_pointwise,
                 ),
-            ],
-            validate=False,
-            validate_all=validate_all,
-        )
-
-        # Call vertical and horizontal map fusion to fuse together maps on partially
-        #  overlapping range. This is an iterative process that splits the maps to
-        #  expose overlapping range and applies serial/parallel map fusion.
-        gtx_transformations.gt_vertical_map_split_fusion(
-            sdfg=sdfg,
-            run_simplify=False,
-            skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
-            consolidate_edges_only_if_not_extending=True,
-            single_use_data=single_use_data,
-            validate=False,
-            validate_all=validate_all,
-        )
-        gtx_transformations.gt_horizontal_map_split_fusion(
-            sdfg=sdfg,
-            run_simplify=False,
-            skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
-            fuse_possible_maps=True,
-            consolidate_edges_only_if_not_extending=True,
-            validate=False,
-            validate_all=validate_all,
-        )
+                validate=False,
+                validate_all=validate_all,
+            )
 
         # TODO(phimuell): Figuring out if this is is the correct location for doing it.
-        if GT4PyAutoOptHook.TopLevelDataFlow in optimization_hooks:
-            optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlow](sdfg)  # type: ignore[call-arg]
+        if GT4PyAutoOptHook.TopLevelDataFlowStep in optimization_hooks:
+            optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowStep](sdfg)  # type: ignore[call-arg]
 
         # Determine if the SDFG has been modified by comparing the hash.
         old_sdfg_hash, sdfg_hash = sdfg_hash, sdfg.hash_sdfg()
