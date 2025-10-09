@@ -14,7 +14,7 @@ from gt4py.next.program_processors.runners.dace.transformations import (
     GT4PyAutoOptHookFun,
 )
 from gt4py.next.program_processors.runners.dace.workflow.backend import (
-    DaCeBackendFactory,
+    make_dace_backend,
     run_dace_cpu,
     run_dace_cpu_cached,
     run_dace_cpu_noopt,
@@ -25,11 +25,11 @@ from gt4py.next.program_processors.runners.dace.workflow.backend import (
 
 
 __all__ = [
-    "DaCeBackendFactory",
     "GT4PyAutoOptHook",
     "GT4PyAutoOptHookFun",
     "build_sdfg_from_gtir",
     "get_sdfg_args",
+    "make_dace_backend",
     "run_dace_cpu",
     "run_dace_cpu_cached",
     "run_dace_cpu_noopt",

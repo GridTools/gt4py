@@ -8,12 +8,15 @@
 
 from __future__ import annotations
 
+from typing import Any, Final
+
 import factory
 
 import gt4py.next.allocators as next_allocators
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend, common as gtx_common, config
 from gt4py.next.otf import stages, workflow
+from gt4py.next.program_processors.runners import dace as gtx_dace
 from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
 
@@ -63,75 +66,91 @@ class DaCeBackendFactory(factory.Factory):
     transforms = backend.DEFAULT_TRANSFORMS
 
 
-def _make_dace_backend(
+def make_dace_backend(
     gpu: bool,
-    cached: bool,
-    auto_optimize: bool,
-    async_sdfg_call: bool,
-    use_memory_pool: bool,
+    cached: bool = True,
+    auto_optimize: bool = True,
+    async_sdfg_call: bool = True,
+    optimization_args: dict[str, Any] | None = None,
+    optimization_hooks: dict[gtx_dace.GT4PyAutoOptHook, gtx_dace.GT4PyAutoOptHookFun] | None = None,
+    use_memory_pool: bool = True,
+    use_metrics: bool = True,
 ) -> backend.Backend:
-    """Helper function to create a dace cached backend with custom config for SDFG
-    lowering and auto-optimize.
-
-    Note that `async_sdfg_call=True` on GPU device relies on the dace configuration
-    with 1 cuda stream, so that all kernels and memory operations are executed
-    sequentially on the default stream.
+    """Customize the dace backend with the given configuration parameters.
 
     Args:
         gpu: Enable GPU transformations and code generation.
         cached: Cache the lowered SDFG as a JSON file and the compiled programs.
         auto_optimize: Enable the SDFG auto-optimize pipeline.
-        async_sdfg_call: Enable asynchronous SDFG execution, only applicable
-            when `gpu=True` because it relies on the gpu kernel queue.
-        use_memory_pool: Enable memory pool for allocation of temporary fields.
+        async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
+            of GPU kernel execution with the Python driver code.
+        optimization_args: A `dict` containing configuration parameters for
+            the SDFG auto-optimize pipeline.
+        optimization_hooks: A `dict` containing the hooks that should be called,
+            in the SDFG auto-optimize pipeline. Only applicable when `auto_optimize=True`.
+        use_memory_pool: Allocate temporaries in memory pool, currently only
+            supported for GPU (based on CUDA memory pool).
+        use_metrics: Add SDFG instrumentation to collect the metric for stencil
+            compute time.
 
     Returns:
-        A custom dace backend object.
+        A dace backend with custom configuration for the target device.
     """
+    fixed_optimization_args: Final[dict[str, Any]] = {
+        "assume_pointwise": True,
+        "gpu_memory_pool": (use_memory_pool if gpu else False),
+        "optimization_hooks": optimization_hooks,
+        "unit_strides_kind": (
+            gtx_common.DimensionKind.HORIZONTAL
+            if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+            else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
+        ),
+        "validate": False,
+        "validate_all": False,
+    }
+
+    if optimization_hooks and not auto_optimize:
+        raise ValueError("Optimizations hook given, but auto-optimize pipeline is disabled.")
+    if optimization_args and not auto_optimize:
+        raise ValueError("Optimizations args given, but auto-optimize pipeline is disabled.")
+    if optimization_args is None:
+        optimization_args = {}
+    elif any(arg in fixed_optimization_args for arg in optimization_args):
+        raise ValueError(
+            f"The following arguments cannot be overriden: {set(optimization_args.keys()).intersection(fixed_optimization_args.keys())}."
+        )
+
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
         cached=cached,
         auto_optimize=auto_optimize,
         otf_workflow__cached_translation=cached,
-        otf_workflow__bare_translation__auto_optimize_args={
-            "assume_pointwise": True,
-            "blocking_dim": None,
-            "blocking_size": 10,
-            "gpu_block_size": (32, 8, 1),
-            "gpu_memory_pool": (use_memory_pool if gpu else False),
-            "make_persistent": False,
-            "optimization_hooks": None,
-            "unit_strides_kind": (
-                gtx_common.DimensionKind.HORIZONTAL
-                if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
-                else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
-            ),
-            "validate": False,
-            "validate_all": False,
-        },
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
-        otf_workflow__bare_translation__use_metrics=True,
+        otf_workflow__bare_translation__auto_optimize_args=(
+            optimization_args | fixed_optimization_args
+        ),
+        otf_workflow__bare_translation__use_metrics=use_metrics,
         # TODO(edopao): the two fields below will soon be depracated
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=False,
         otf_workflow__bindings__make_persistent=False,
     )
 
 
-run_dace_cpu = _make_dace_backend(
+run_dace_cpu = make_dace_backend(
     gpu=False,
     cached=False,
     auto_optimize=True,
     async_sdfg_call=False,
     use_memory_pool=False,
 )
-run_dace_cpu_noopt = _make_dace_backend(
+run_dace_cpu_noopt = make_dace_backend(
     gpu=False,
     cached=False,
     auto_optimize=False,
     async_sdfg_call=False,
     use_memory_pool=False,
 )
-run_dace_cpu_cached = _make_dace_backend(
+run_dace_cpu_cached = make_dace_backend(
     gpu=False,
     cached=True,
     auto_optimize=True,
@@ -139,21 +158,21 @@ run_dace_cpu_cached = _make_dace_backend(
     use_memory_pool=False,
 )
 
-run_dace_gpu = _make_dace_backend(
+run_dace_gpu = make_dace_backend(
     gpu=True,
     cached=False,
     auto_optimize=True,
     async_sdfg_call=True,
     use_memory_pool=(core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.CUDA),
 )
-run_dace_gpu_noopt = _make_dace_backend(
+run_dace_gpu_noopt = make_dace_backend(
     gpu=True,
     cached=False,
     auto_optimize=False,
     async_sdfg_call=True,
     use_memory_pool=(core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.CUDA),
 )
-run_dace_gpu_cached = _make_dace_backend(
+run_dace_gpu_cached = make_dace_backend(
     gpu=True,
     cached=True,
     auto_optimize=True,
