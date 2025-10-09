@@ -280,7 +280,8 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
 class HorizontalSplitMapRange(SplitMapRange):
     """
     Identify overlapping range between parallel maps, and split the range in order
-    to promote parallel map fusion.
+    to promote parallel map fusion. The transformation will merge the Maps that
+    were created by the split among themselves.
     """
 
     first_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
@@ -455,8 +456,11 @@ class HorizontalSplitMapRange(SplitMapRange):
 class VerticalSplitMapRange(SplitMapRange):
     """
     Identify overlapping range between serial maps, and split the range in order
-    to promote serial map fusion. In contrast to `HorizontalSplitMapRange` this
-    class is not able to automatically fuse.
+    to promote serial map fusion.
+
+    If `fuse_possible_maps` is set to `True`, the default is `False`, then the
+    transformation will also perform MapFusionVertical, but limited to the newly
+    created Maps.
 
     Args:
         only_toplevel_maps: Only applies to top level maps.
@@ -464,6 +468,10 @@ class VerticalSplitMapRange(SplitMapRange):
             or not, see `VerticalMapSplitCallback` for more.
         fuse_possible_maps: Immediately use fusing and splitting on the generated Maps.
         single_use_data: Use this as single use data and do not compute it on the fly.
+
+    Note:
+        Even if `fuse_possible_maps` is `True` it might be that some fusion involving
+        the split Maps is still possible, this is a bug.
     """
 
     # Pattern Matching
@@ -631,9 +639,14 @@ class VerticalSplitMapRange(SplitMapRange):
                 _state: dace.SDFGState,
                 _sdfg: dace.SDFG,
             ) -> bool:
+                # NOTE: We use an `or` here this means that in principle every fusion
+                #   that involves a Map we created might be done. However, there is
+                #   an interesting aspect. Map fusion essentially essentially removes
+                #   one MapEntry and MapExit node from the graph. If it happens that
+                #   this node is one that was newly created then we will "lose" it.
                 if (
                     first_map_exit in new_first_map_exits
-                    and second_map_entry in new_second_map_entries
+                    or second_map_entry in new_second_map_entries
                 ):
                     return True
                 return False
