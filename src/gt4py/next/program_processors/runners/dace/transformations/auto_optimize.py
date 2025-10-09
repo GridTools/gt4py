@@ -67,9 +67,9 @@ Most of the hooks `gt_auto_optimize()` provides are expected to be of that type.
 
 GT4PyAutoOptHookFun: TypeAlias = Union[
     GT4PyAutoOptHookStage,
-    gtx_transformations.HorizontalMapFusionCallback,
-    gtx_transformations.VerticalMapFusionCallback,
-    gtx_transformations.MapPromotionCallBack,
+    "gtx_transformations.HorizontalMapFusionCallback",
+    "gtx_transformations.VerticalMapFusionCallback",
+    "gtx_transformations.MapPromotionCallBack",
 ]
 
 
