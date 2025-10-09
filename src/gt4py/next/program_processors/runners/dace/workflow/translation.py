@@ -302,6 +302,9 @@ class DaCeTranslator(
     use_metrics: bool
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
+    optimization_hooks: (
+        dict[gtx_transformations.GT4PyAutoOptHook, gtx_transformations.GT4PyAutoOptHookFun] | None
+    ) = None
 
     # auto-optimize arguments
     gpu_block_size: tuple[int, int, int] = (32, 8, 1)
