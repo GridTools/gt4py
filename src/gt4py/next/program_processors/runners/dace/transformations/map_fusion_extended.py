@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, TypeAlias, Union
 
 import dace
 from dace import (
@@ -27,6 +27,26 @@ from gt4py.next.program_processors.runners.dace import (
 from gt4py.next.program_processors.runners.dace.transformations import (
     map_fusion_utils as gtx_mfutils,
 )
+
+
+VerticalMapSplitCallback: TypeAlias = Callable[
+    ["VerticalSplitMapRange", dace_nodes.MapExit, dace_nodes.MapEntry, dace.SDFGState, dace.SDFG],
+    bool,
+]
+"""Callback used to influence the behaviour of `VerticalSplitMapRange`.
+
+The function is used by `can_be_applied()`, before any other check is performed, thus
+it might be that the split would not apply. If the function returns `True` then the
+transformation will continue and if `False` is returned then the transformation will
+not continue. This is similar to the callback function offered by `MapFusionVertical`.
+
+It has the following arguments:
+- The transformation object itself.
+- The MaxExit node of the first Map.
+- The MapEntry node of the second Map.
+- The SDFGState in which the nodes where found.
+- The SDFG itself.
+"""
 
 
 def gt_horizontal_map_split_fusion(
@@ -96,6 +116,7 @@ def gt_vertical_map_split_fusion(
     consolidate_edges_only_if_not_extending: bool,
     single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
     skip: Optional[set[str]] = None,
+    check_split_callback: Optional[VerticalMapSplitCallback] = None,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
@@ -110,6 +131,8 @@ def gt_vertical_map_split_fusion(
         consolidate_edges_only_if_not_extending: See `MapFusionVertical` for more.
         single_use_data: Precomputed single use data.
         skip: Skip these transformation during simplification.
+        check_split_callback: Use this as callback for the split transformation, see
+            `VerticalMapSplitCallback` for more information.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
     """
@@ -122,6 +145,7 @@ def gt_vertical_map_split_fusion(
     transformations = [
         VerticalSplitMapRange(
             only_toplevel_maps=True,
+            check_split_callback=check_split_callback,
         ),
         gtx_transformations.SplitAccessNode(single_use_data=single_use_data),
         gtx_transformations.MapFusionVertical(
@@ -439,6 +463,11 @@ class VerticalSplitMapRange(SplitMapRange):
     Identify overlapping range between serial maps, and split the range in order
     to promote serial map fusion. In contrast to `HorizontalSplitMapRange` this
     class is not able to automatically fuse.
+
+    Args:
+        only_toplevel_maps: Only applies to top level maps.
+        check_split_callback: Callback used to check if a split should be performed
+            or not, see `VerticalMapSplitCallback` for more.
     """
 
     # Pattern Matching
@@ -446,11 +475,16 @@ class VerticalSplitMapRange(SplitMapRange):
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
+    _check_split_callback: Optional[VerticalMapSplitCallback]
+
     def __init__(
         self,
         *args: Any,
+        check_split_callback: Optional[VerticalMapSplitCallback] = None,
         **kwargs: Any,
     ) -> None:
+        if check_split_callback is not None:
+            self._check_split_callback = check_split_callback
         super().__init__(*args, **kwargs)
 
     @classmethod
@@ -470,9 +504,15 @@ class VerticalSplitMapRange(SplitMapRange):
     ) -> bool:
         """Check non overlapping range in the first and second map."""
         assert self.expr_index == expr_index
+
         first_map = self.first_map_exit.map
         first_map_entry: dace_nodes.MapEntry = graph.entry_node(self.first_map_exit)
         second_map = self.second_map_entry.map
+
+        # Check the callback
+        if self._check_split_callback is not None:
+            if not self._check_split_callback(self, first_map, second_map, graph, sdfg):
+                return False
 
         # Test if the map is in the right scope.
         map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[first_map_entry]

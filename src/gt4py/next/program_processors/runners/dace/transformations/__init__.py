@@ -30,7 +30,11 @@ from .map_fusion import (
     MapFusionVertical,
     VerticalMapFusionCallback,
 )
-from .map_fusion_extended import gt_horizontal_map_split_fusion, gt_vertical_map_split_fusion
+from .map_fusion_extended import (
+    VerticalMapSplitCallback,
+    gt_horizontal_map_split_fusion,
+    gt_vertical_map_split_fusion,
+)
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import MapPromoter, MapPromotionCallBack
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
@@ -90,6 +94,7 @@ __all__ = [
     "SplitAccessNode",
     "SplitConsumerMemlet",
     "VerticalMapFusionCallback",
+    "VerticalMapSplitCallback",
     "constants",
     "gt_auto_optimize",
     "gt_change_transient_strides",

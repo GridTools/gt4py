@@ -49,6 +49,9 @@ class GT4PyAutoOptHook(enum.Enum):
         optimization. If not provided then `gt4py_default_auto_optimizer_map_promotion_checker()`
         is used. Note that this callback has to meet the requirements of
         `MapPromotionCallBack`.
+    - `TopLevelDataFlowVerticalSplitCallBack`: If provided it is passed as `check_split_callback`
+        to `gt_vertical_map_split_fusion()` and allows to control how map splitting is done.
+        See `VerticalMapSplitCallback` for more details.
     - TopLevelDataFlowPost: Called after the top level dataflow has been optimized.
 
     Note:
@@ -66,6 +69,7 @@ class GT4PyAutoOptHook(enum.Enum):
     TopLevelDataFlowMapFusionVerticalCallBack = enum.auto()
     TopLevelDataFlowMapFusionHorizontalCallBack = enum.auto()
     TopLevelDataFlowMapPromotionCallBack = enum.auto()
+    TopLevelDataFlowVerticalSplitCallBack = enum.auto()
     TopLevelDataFlowStep = enum.auto()
     TopLevelDataFlowPost = enum.auto()
 
@@ -83,6 +87,7 @@ GT4PyAutoOptHookFun: TypeAlias = Union[
     "gtx_transformations.HorizontalMapFusionCallback",
     "gtx_transformations.VerticalMapFusionCallback",
     "gtx_transformations.MapPromotionCallBack",
+    "gtx_transformations.VerticalMapSplitCallback",
 ]
 
 
@@ -447,6 +452,9 @@ def _gt_auto_process_top_level_maps(
                 skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
                 consolidate_edges_only_if_not_extending=True,
                 single_use_data=single_use_data,
+                check_split_callback=optimization_hooks.get(  # type: ignore[arg-type]
+                    GT4PyAutoOptHook.TopLevelDataFlowVerticalSplitCallBack, None
+                ),
                 validate=False,
                 validate_all=validate_all,
             )
