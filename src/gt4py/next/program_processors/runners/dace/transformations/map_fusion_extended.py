@@ -137,6 +137,11 @@ def gt_vertical_map_split_fusion(
             `VerticalMapSplitCallback` for more information.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
+
+    Note:
+        In previous versions this function also called `MapFusionVertical` and
+        `SplitAccessNode` without any restriction, which had the side effect
+        that all Maps in the SDFG were subject to Map fusion. This was changed.
     """
     if single_use_data is None:
         find_single_use_data = dace_analysis.FindSingleUseData()
