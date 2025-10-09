@@ -445,13 +445,12 @@ class HorizontalSplitMapRange(SplitMapRange):
         matched_map_fragments: list[tuple[dace_nodes.MapEntry, dace_nodes.MapEntry]] = []
         unmatched_second_map_fragments = second_map_fragments.copy()
         for first_map_fragment in first_map_fragments:
-            for unmatched_second_map_fragment in unmatched_second_map_fragments:
+            for unmatched_second_map_fragment in unmatched_second_map_fragments.copy():
                 if first_map_fragment.map.range == unmatched_second_map_fragment.map.range:
                     matched_map_fragments.append(
                         (first_map_fragment, unmatched_second_map_fragment)
                     )
                     unmatched_second_map_fragments.remove(unmatched_second_map_fragment)
-                    break
 
         assert len(matched_map_fragments) > 0
 
