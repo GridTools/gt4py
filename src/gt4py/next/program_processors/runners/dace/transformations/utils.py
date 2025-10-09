@@ -599,6 +599,8 @@ def find_upstream_nodes(
 ) -> set[dace_nodes.Node]:
     """Finds all upstream nodes, i.e. all producers, of `start`.
 
+    Note that `start` and `limit_node` are not part of the returned set.
+
     Args:
         start: Start the exploring from this node.
         state: The state in which it should be explored.

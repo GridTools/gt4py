@@ -8,7 +8,8 @@
 
 """Fast access to the auto optimization on DaCe."""
 
-from typing import Any, Optional, Sequence
+import enum
+from typing import Any, Callable, Optional, Sequence, TypeAlias
 
 import dace
 from dace import data as dace_data
@@ -18,6 +19,29 @@ from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+
+
+class GT4PyAutoOptHook(enum.Enum):
+    """Allows to hook into different stages of the auto optimizer.
+
+    The hook system allows to inject certain additional behaviour into `gt_auto_optimize()`.
+    There are multiple hooks supported, see list below, that are called at different
+    stages of the optimization. A hook function receives the SDFG and should modify
+    it inplace.
+
+    The supported values are:
+    - TopLevelDataFlowPre: Called before the top level dataflow is optimized.
+    - TopLevelDataFlow: Called during the top level optimization stage, which might be
+        called multiple times.
+    - TopLevelDataFlowPost: Called after the top level dataflow has been optimized.
+    """
+
+    TopLevelDataFlowPre = enum.auto()
+    TopLevelDataFlow = enum.auto()
+    TopLevelDataFlowPost = enum.auto()
+
+
+GT4PyAutoOptHookFun: TypeAlias = Callable[[dace.SDFG], None]
 
 
 def gt_auto_optimize(
@@ -37,6 +61,7 @@ def gt_auto_optimize(
     assume_pointwise: bool = True,
     validate: bool = True,
     validate_all: bool = False,
+    optimization_hooks: Optional[dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun]] = None,
     **kwargs: Any,
 ) -> dace.SDFG:
     """Performs GT4Py specific optimizations on the SDFG in place.
@@ -92,6 +117,8 @@ def gt_auto_optimize(
             respective value inside the SDFG. This might increase performance.
         assume_pointwise: Assume that the SDFG has no risk for race condition in
             global data access. See the `GT4PyMapBufferElimination` transformation for more.
+        optimization_hooks: A `dict` containing the hooks that should be called,
+            see `GT4PyAutoOptHook` for more information.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -119,6 +146,7 @@ def gt_auto_optimize(
             not if we have too much internal space (register pressure).
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
+    optimization_hooks = optimization_hooks or {}
 
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.
@@ -162,6 +190,7 @@ def gt_auto_optimize(
         sdfg = _gt_auto_process_top_level_maps(
             sdfg=sdfg,
             assume_pointwise=assume_pointwise,
+            optimization_hooks=optimization_hooks,
             validate_all=validate_all,
         )
 
@@ -219,6 +248,7 @@ def gt_auto_optimize(
 def _gt_auto_process_top_level_maps(
     sdfg: dace.SDFG,
     assume_pointwise: bool,
+    optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimize the Maps at the top level of the SDFG inplace.
@@ -259,6 +289,9 @@ def _gt_auto_process_top_level_maps(
     # TODO(phimuell): Remove this hack as soon as DaCe is fixed.
     # TODO(phimuell): Maybe switch to `reset_cfg_list()`?
     sdfg_hash = sdfg.hash_sdfg()
+
+    if GT4PyAutoOptHook.TopLevelDataFlowPre in optimization_hooks:
+        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPre](sdfg)
 
     while True:
         # First we do scan the entire SDFG to figure out which data is only
@@ -357,6 +390,10 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
+        # TODO(phimuell): Figuring out if this is is the correct location for doing it.
+        if GT4PyAutoOptHook.TopLevelDataFlow in optimization_hooks:
+            optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlow](sdfg)
+
         # Determine if the SDFG has been modified by comparing the hash.
         old_sdfg_hash, sdfg_hash = sdfg_hash, sdfg.hash_sdfg()
         if old_sdfg_hash == sdfg_hash:
@@ -387,6 +424,9 @@ def _gt_auto_process_top_level_maps(
         validate=False,
         validate_all=validate_all,
     )
+
+    if GT4PyAutoOptHook.TopLevelDataFlowPost in optimization_hooks:
+        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPost](sdfg)
 
     return sdfg
 
