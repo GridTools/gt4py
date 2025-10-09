@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 import copy
+import operator
+from functools import reduce
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
 import dace
@@ -385,7 +387,12 @@ def gt_set_gpu_blocksize(
             "launch_bounds": launch_bounds,
             "launch_factor": launch_factor,
         }.items():
-            if f"{arg}_{dim}d" not in kwargs:
+            if (
+                (arg == "block_size" or arg == "launch_bounds") and dim == 1
+            ) and block_size is not None:
+                # Set block_size_1d as the product of all entries in block_size
+                kwargs[f"{arg}_{dim}d"] = tuple([reduce(operator.mul, block_size, 1), 1, 1])
+            elif f"{arg}_{dim}d" not in kwargs:
                 kwargs[f"{arg}_{dim}d"] = val
 
     setter = GPUSetBlockSize(**kwargs)
