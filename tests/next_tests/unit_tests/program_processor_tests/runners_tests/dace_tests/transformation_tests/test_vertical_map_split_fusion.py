@@ -84,9 +84,7 @@ def test_vertical_map_fusion():
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
 
-    # It will apply `VerticalSplitMapRange` on the first Map, then run
-    #  `SplitAccessNode`  and finally call MapFusion.
-    assert ret == 3
+    assert ret == 1
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
 
     map_entry = next(node for node in st.nodes() if isinstance(node, dace_nodes.MapEntry))
@@ -306,7 +304,8 @@ def test_vertical_map_fusion_with_neighbor_access():
     )
 
     sdfg.validate()
-    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 7
+    initial_map_entries_nb = util.count_nodes(sdfg, dace_nodes.MapEntry)
+    assert initial_map_entries_nb == 7
 
     res, ref = util.make_sdfg_args(sdfg)
     ref["gt_conn_E2C"] = np.random.randint(0, N, ref["gt_conn_E2C"].shape, dtype=np.int32)
@@ -328,5 +327,5 @@ def test_vertical_map_fusion_with_neighbor_access():
 
     # `VerticalSplitMapRange` cannot be applied on the map that has neighbor access
     # to the temporary field.
-    assert ret == 2
-    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 5
+    assert ret == 0
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == initial_map_entries_nb
