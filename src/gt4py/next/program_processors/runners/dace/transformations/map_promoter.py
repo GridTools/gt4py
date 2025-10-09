@@ -18,6 +18,8 @@ from dace import (
 )
 from dace.sdfg import nodes as dace_nodes
 
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+
 
 MapPromotionCallBack: TypeAlias = Callable[
     [dace.SDFGState, dace.SDFG, dace_nodes.MapExit, dace_nodes.MapEntry, list[str]], bool
@@ -312,10 +314,6 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         first_map_exit.map.range = copy.deepcopy(second_map_entry.map.range)
 
     def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
-        from gt4py.next.program_processors.runners.dace import (  # Avoid cyclic import.
-            transformations as gtx_transformations,
-        )
-
         first_map_exit: dace_nodes.MapExit = self.exit_first_map
         access_node: dace_nodes.AccessNode = self.access_node
         second_map_entry: dace_nodes.MapEntry = self.entry_second_map
@@ -397,9 +395,6 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
             state: The state in which we operate.
             sdfg: The SDFG we process.
         """
-        from gt4py.next.program_processors.runners.dace import (  # Avoid cyclic import.
-            transformations as gtx_transformations,
-        )
 
         first_map_exit: dace_nodes.MapExit = self.exit_first_map
         access_node: dace_nodes.AccessNode = self.access_node
