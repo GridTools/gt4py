@@ -72,7 +72,8 @@ def serial_map_sdfg(N, extra_intermediate_edge=False):
 
     if extra_intermediate_edge:
         D_node = st.add_access(D)
-        st.add_nedge(tmp_node, D_node, dace.Memlet(data=tmp, subset="78:80", other_subset="0:2"))
+        assert N >= 2
+        st.add_nedge(tmp_node, D_node, dace.Memlet(data=tmp, subset="N-2:N", other_subset="0:2"))
 
     sdfg.validate()
 
