@@ -1006,6 +1006,8 @@ def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
 
 OffsetProviderElem: TypeAlias = Dimension | NeighborConnectivity
 OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
+# Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
+# use the `get_offset` and `get_offset_type` functions instead.
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
 
@@ -1035,22 +1037,33 @@ def _get_dimension_name_from_implicit_offset(offset: str) -> str:
     return offset[len(_IMPLICIT_OFFSET_PREFIX) :]
 
 
+def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProviderElem:
+    """
+    Get the `OffsetProviderElem` for the given `offset` string.
+
+    Note: This function handles implicit offsets. All accesses of `OffsetProvider` should go through this function.
+    """
+    # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
+    if offset_tag.startswith(_IMPLICIT_OFFSET_PREFIX):
+        return Dimension(value=_get_dimension_name_from_implicit_offset(offset_tag))
+    if offset_tag not in offset_provider:
+        raise KeyError(f"Offset '{offset_tag}' not found in offset provider.")
+    return offset_provider[offset_tag]  # TODO return a valid dimension
+
+
 def get_offset_type(
-    offset_provider_type: OffsetProviderType, offset: str
+    offset_provider_type: OffsetProviderType, offset_tag: str
 ) -> OffsetProviderTypeElem:
-    if offset.startswith(_IMPLICIT_OFFSET_PREFIX):
-        return Dimension(value=_get_dimension_name_from_implicit_offset(offset))
-    if offset not in offset_provider_type:
-        raise KeyError(f"Offset '{offset}' not found in offset provider type.")
-    return offset_provider_type[offset]
+    """
+    Get the `OffsetProviderTypeElem` for the given `offset` string.
 
-
-def get_offset(offset_provider: OffsetProvider, offset: str) -> OffsetProviderElem:
-    if offset.startswith(_IMPLICIT_OFFSET_PREFIX):
-        return Dimension(value=_get_dimension_name_from_implicit_offset(offset))
-    if offset not in offset_provider:
-        raise KeyError(f"Offset '{offset}' not found in offset provider.")
-    return offset_provider[offset]  # TODO return a valid dimension
+    See also 'get_offset'.
+    """
+    if offset_tag.startswith(_IMPLICIT_OFFSET_PREFIX):
+        return Dimension(value=_get_dimension_name_from_implicit_offset(offset_tag))
+    if offset_tag not in offset_provider_type:
+        raise KeyError(f"Offset '{offset_tag}' not found in offset provider type.")
+    return offset_provider_type[offset_tag]
 
 
 def hash_offset_provider_unsafe(offset_provider: OffsetProvider) -> int:
