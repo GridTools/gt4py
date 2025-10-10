@@ -8,7 +8,7 @@
 
 import copy
 
-import diskcache
+from gt4py._core import filecache
 import numpy as np
 import pytest
 
@@ -77,9 +77,7 @@ def test_codegen(program_example):
     module = gtfn_module.translate_program_cpu(
         stages.CompilableProgram(
             data=fencil,
-            args=arguments.CompileTimeArgs.from_concrete_no_size(
-                *parameters, **{"offset_provider": {}}
-            ),
+            args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
         )
     )
     assert module.entry_point.name == fencil.id
@@ -91,21 +89,19 @@ def test_hash_and_diskcache(program_example, tmp_path):
     fencil, parameters = program_example
     compilable_program = stages.CompilableProgram(
         data=fencil,
-        args=arguments.CompileTimeArgs.from_concrete_no_size(
-            *parameters, **{"offset_provider": {}}
-        ),
+        args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
     hash = stages.fingerprint_compilable_program(compilable_program)
 
-    with diskcache.Cache(tmp_path) as cache:
-        cache[hash] = compilable_program
+    cache = filecache.FileCache(tmp_path)
+    cache[hash] = compilable_program
 
     # check content of cash file
-    with diskcache.Cache(tmp_path) as reopened_cache:
-        assert hash in reopened_cache
-        compilable_program_from_cache = reopened_cache[hash]
-        assert compilable_program == compilable_program_from_cache
-        del reopened_cache[hash]  # delete data
+    reopened_cache = filecache.FileCache(tmp_path)
+    assert hash in reopened_cache
+    compilable_program_from_cache = reopened_cache[hash]
+    assert compilable_program == compilable_program_from_cache
+    del reopened_cache[hash]  # delete data
 
     # hash creation is deterministic
     assert hash == stages.fingerprint_compilable_program(compilable_program)
@@ -135,9 +131,7 @@ def test_gtfn_file_cache(program_example):
     fencil, parameters = program_example
     compilable_program = stages.CompilableProgram(
         data=fencil,
-        args=arguments.CompileTimeArgs.from_concrete_no_size(
-            *parameters, **{"offset_provider": {}}
-        ),
+        args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
     cached_gtfn_translation_step = gtfn.GTFNBackendFactory(
         gpu=False, cached=True, otf_workflow__cached_translation=True

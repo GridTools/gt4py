@@ -458,7 +458,7 @@ class NdArrayField(
 
 
 @dataclasses.dataclass(frozen=True)
-class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
+class NdArrayConnectivityField(
     common.Connectivity[common.DimsT, common.DimT],
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
@@ -480,8 +480,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         raise NotImplementedError()
 
     @property
-    # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
-    def codomain(self) -> common.DimT:
+    def codomain(self) -> common.DimT:  # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
         return self._codomain
 
     @property

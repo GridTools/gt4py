@@ -9,9 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
-import importlib
 import os
-import pathlib
 from typing import Any, Callable, Sequence
 
 import dace
@@ -20,6 +18,7 @@ import factory
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
 
@@ -29,26 +28,29 @@ def _get_sdfg_ctype_arglist_callback(
     [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]], None
 ]:
     """
-    Helper method to load dynamically generated Python code as a module and return
-    a function to update the list of SDFG call arguments.
+    Helper method to load dynamically generated Python code which will be used
+    to update the list of SDFG call arguments.
+
+    It loads the Python code inside an empty namespace, without modifying the current
+    global namespace. This is done to support parallel compilation, in which it can
+    happen that two threads generate the same `bind_func_name` for the callback function.
 
     Args:
-        module_name: Name to use to load the python code as a module.
+        module_name: Set on the loaded callback function for debugging.
         bind_func_name: Name to use for the translation function.
-        python_code: String containg the Python code to load.
+        python_code: String containing the Python code to load.
 
     Returns:
         A callable object to update the list of SDFG call arguments.
     """
-    spec = importlib.util.spec_from_loader(module_name, loader=None)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    exec(python_code, module.__dict__)
-    assert bind_func_name in module.__dict__
-    return module.__dict__[bind_func_name]
+    exec(python_code, global_namespace := {})  # type: ignore[var-annotated]
+    assert bind_func_name not in globals()
+    assert bind_func_name in global_namespace
+    global_namespace[bind_func_name].__module__ = module_name
+    return global_namespace[bind_func_name]
 
 
-class CompiledDaceProgram(stages.ExtendedCompiledProgram):
+class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_program: dace.CompiledSDFG
 
     # Sorted list of SDFG arguments as they appear in program ABI and corresponding data type;
@@ -66,10 +68,8 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
         program: dace.CompiledSDFG,
         bind_func_name: str,
         binding_source: stages.BindingSource[languages.SDFG, languages.Python],
-        implicit_domain: bool,
     ):
         self.sdfg_program = program
-        self.implicit_domain = implicit_domain
 
         # `dace.CompiledSDFG.arglist()` returns an ordered dictionary that maps the argument
         # name to its data type, in the same order as arguments appear in the program ABI.
@@ -85,13 +85,11 @@ class CompiledDaceProgram(stages.ExtendedCompiledProgram):
             binding_module_name, bind_func_name, binding_source.source_code
         )
 
-    def __call__(self, *args: Any, **kwargs: Any) -> None:
-        result = self.sdfg_program(*args, **kwargs)
-        assert result is None
+    def __call__(self, **kwargs: Any) -> Any:
+        return self.sdfg_program(**kwargs)
 
-    def fast_call(self) -> None:
-        result = self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
-        assert result is None
+    def fast_call(self) -> Any:
+        return self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -121,9 +119,11 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-            sdfg_build_folder = pathlib.Path(sdfg.build_folder)
+            sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
+
+            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
                 sdfg_program = sdfg.compile(validate=False)
 
@@ -132,7 +132,6 @@ class DaCeCompiler(
             sdfg_program,
             self.bind_func_name,
             inp.binding_source,
-            inp.program_source.implicit_domain,
         )
 
 

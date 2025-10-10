@@ -355,10 +355,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             # ITIR has no support for keyword arguments. Instead, we concatenate both positional
             # and keyword arguments and use the unique order as given in the function signature.
             lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
-                node.func.type,
-                self.visit(node.args, **kwargs),
-                self.visit(node.kwargs, **kwargs),
-                use_signature_ordering=True,
+                node.func.type, self.visit(node.args, **kwargs), self.visit(node.kwargs, **kwargs)
             )
             result = im.call(self.visit(node.func, **kwargs))(
                 *lowered_args, *lowered_kwargs.values()

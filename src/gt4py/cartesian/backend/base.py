@@ -135,8 +135,8 @@ def from_name(name: str) -> type[Backend]:
     """Return a backend by name."""
     backend_cls = REGISTRY.get(name, None)
     if backend_cls is None:
-        raise NotImplementedError(
-            f"Backend '{name}' is not implemented. Options are: {REGISTRY.names}."
+        raise ValueError(
+            f"Backend '{name}' is not registered. Valid options are: {REGISTRY.names}."
         )
     return backend_cls
 

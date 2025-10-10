@@ -7,12 +7,16 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import contextlib
-from typing import Any, Generator, Optional
+from typing import Any, Final, Generator, Optional
 
 import dace
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
+
+
+SDFG_ARG_METRIC_LEVEL: Final[str] = "gt_metrics_level"
+"""Name of SDFG argument to retrive the GT4Py metrics level."""
 
 
 def set_dace_config(
@@ -45,9 +49,13 @@ def set_dace_config(
     #   is translating from `CompilableProgram` (ITIR.Program + CompileTimeArgs)
     #   to `ProgramSource`, so this step is storing in cache only the result
     #   of the SDFG transformations, not the compiled program binary.
-    dace.Config.set("cache", value="hash")  # use the SDFG hash as cache key
-    dace.Config.set("default_build_folder", value=str(config.BUILD_CACHE_DIR / "dace_cache"))
     dace.Config.set("compiler.use_cache", value=True)
+
+    # We rely on gt4py function `get_cache_folder` to get a unique build folder
+    #   for each program. Within this folder, by setting 'cache=single', dace will
+    #   cache the generated code and binary objects for the program SDFG, without
+    #   creating any further sub-folder to compile the SDFG.
+    dace.Config.set("cache", value="single")
 
     # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
@@ -69,6 +77,12 @@ def set_dace_config(
         "compiler.cuda.hip_args",
         value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
     )
+
+    # By design, we do not allow converting Memlets to Maps during code generation.
+    #  If needed, Memles are converted to Maps explicitly by gt4py in the `gt_auto_optimize`
+    #  pipeline, so that the iteration order is configured correctly for the GPU device.
+    #  This setting allows to throw an exception if any implicit Copy-Map slips thorugh.
+    dace.Config.set("compiler.cuda.allow_implicit_memlet_to_map", value=False)
 
     # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
     #  up with the cuda streams, i.e. it allocates N streams but uses N+1. The first

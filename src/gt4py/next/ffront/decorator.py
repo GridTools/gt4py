@@ -237,13 +237,17 @@ class Program:
         if self.static_params is None:
             object.__setattr__(self, "static_params", ())
 
+        argument_descriptor_mapping = {
+            arguments.StaticArg: self.static_params,
+        }
+
         program_type = self.past_stage.past_node.type
         assert isinstance(program_type, ts_ffront.ProgramType)
         return compiled_program.CompiledProgramsPool(
             backend=self.backend,
             definition_stage=self.definition_stage,
             program_type=program_type,
-            static_params=self.static_params,
+            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
         )
 
     def __call__(
@@ -259,16 +263,9 @@ class Program:
             enable_jit = (
                 self.enable_jit if self.enable_jit is not None else config.ENABLE_JIT_DEFAULT
             )
-        program_name = (
-            f"{self.__name__}[{getattr(self.backend, 'name', '<embedded>')}]"
-            if config.COLLECT_METRICS_LEVEL
-            else ""
-        )
-        with metrics.metrics_collection(program_name) as metrics_collection:
-            collect_metrics = metrics_collection is not None and (
-                config.COLLECT_METRICS_LEVEL >= metrics.INFO
-            )
-            if collect_metrics:
+
+        with metrics.collect() as metrics_source:
+            if collect_info_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.INFO):
                 start = time.time()
 
             if __debug__:
@@ -284,7 +281,14 @@ class Program:
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
             else:
-                # embedded
+                # Embedded execution.
+                # Metrics source key needs to be setup here, since embedded programs
+                # don't have variants and thus there's no other place we could do this.
+                if config.COLLECT_METRICS_LEVEL:
+                    assert metrics_source is not None
+                    metrics_source.key = (
+                        f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
+                    )
                 warnings.warn(
                     UserWarning(
                         f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
@@ -294,8 +298,9 @@ class Program:
                 with next_embedded.context.update(offset_provider=offset_provider):
                     self.definition_stage.definition(*args, **kwargs)
 
-            if metrics_collection is not None and collect_metrics:
-                metrics_collection[metrics.TOTAL_METRIC].add_sample(time.time() - start)
+            if collect_info_metrics:
+                assert metrics_source is not None
+                metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(time.time() - start)
 
     def compile(
         self,
