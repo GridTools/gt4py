@@ -845,10 +845,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     ) -> bool:
         """Test if the nodes are really independent nodes.
 
-        After the classification the function will examine the set to see if some
-        nodes were found that brings no benefit to move out. The classical example
-        is a Tasklet that writes a constant into an AccessNode. These kind of
-        nodes are filtered out.
+        After the classification this function will examine the set of independent
+        nodes to see if applying would be beneficial. The classical example is a
+        Tasklet that writes a constant.
 
         The function returns `True` if it decides that blocking is good and `False`
         otherwise. The function will not modify `self._independent_nodes`.
@@ -856,25 +855,29 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         assert self._independent_nodes is not None
         assert self._dependent_nodes is None
 
-        # There is nothing to move out so ignore it.
+        # There are no independent nodes, thus ignore this case.
         if len(self._independent_nodes) == 0:
             return False
 
-        # Currently we only filter out Tasklets that do not read any data, which
-        #  is the example above, Because of how DaCe works we also subtract all
-        #  of its output nodes, that are classified independent.
-        # TODO(phimuell): Think if we should expand on that.
+        # TODO(phimuell, iomaganaris): We have to refine this criteria. I think using
+        #   just the number of nodes is not enough, we should also consider what is
+        #   is not reused.
+        outer_entry: dace_nodes.MapEntry = self.outer_entry
         nb_independent_nodes = len(self._independent_nodes)
-
         for node in self._independent_nodes:
-            if isinstance(node, dace_nodes.Tasklet):
-                if not all(iedge.data.is_empty() for iedge in state.in_edges(node)):
-                    continue
-                nb_independent_nodes -= 1
-                for oedge in state.out_edges(node):
-                    assert isinstance(oedge.dst, dace_nodes.AccessNode)
-                    assert oedge.dst in self._independent_nodes
-                    nb_independent_nodes -= 1
-            assert nb_independent_nodes >= 0
+            match node:
+                case dace_nodes.Tasklet():
+                    # Ignore Tasklet that does not read anything.
+                    if all(iedge.data.is_empty() for iedge in state.in_edges(node)):
+                        nb_independent_nodes -= 1
+
+                case dace_nodes.AccessNode():
+                    # AccessNodes that are not connected to the outer Map entry are
+                    #  only needed for syntactical reasons, thus we ignore them.
+                    if not any(iedge.src is outer_entry for iedge in state.in_edges(node)):
+                        nb_independent_nodes -= 1
+
+                case _:
+                    pass
 
         return nb_independent_nodes > 0
