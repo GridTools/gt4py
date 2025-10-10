@@ -63,6 +63,8 @@ class GT4PyAutoOptHook(enum.Enum):
         Note that the function is called with `fuse_possible_maps=False` but
         `run_map_fusion=True`.
     - TopLevelDataFlowPost: Called after the top level dataflow has been optimized.
+    - AfterToGPU: This hook is called after the GPU transformation has been called,
+        if the SDFG should run on GPU.
 
     Note:
         The `TopLevelDataFlowMapFusionVerticalCallBack` and `TopLevelDataFlowMapFusionHorizontalCallBack`
@@ -83,6 +85,7 @@ class GT4PyAutoOptHook(enum.Enum):
     TopLevelDataFlowHorizontalSplitCallBack = enum.auto()
     TopLevelDataFlowStep = enum.auto()
     TopLevelDataFlowPost = enum.auto()
+    AfterToGPU = enum.auto()
 
 
 GT4PyAutoOptHookStage: TypeAlias = Callable[[dace.SDFG], None]
@@ -281,6 +284,7 @@ def gt_auto_optimize(
             gpu_block_size=gpu_block_size,
             gpu_launch_factor=gpu_launch_factor,
             gpu_launch_bounds=gpu_launch_bounds,
+            optimization_hooks=optimization_hooks,
             validate_all=validate_all,
         )
 
@@ -609,6 +613,7 @@ def _gt_auto_configure_maps_and_strides(
     gpu_block_size: Optional[Sequence[int | str] | str],
     gpu_launch_bounds: Optional[int | str],
     gpu_launch_factor: Optional[int],
+    optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
     validate_all: bool,
 ) -> dace.SDFG:
     """Configure the Maps and the strides of the SDFG inplace.
@@ -662,6 +667,8 @@ def _gt_auto_configure_maps_and_strides(
             validate_all=validate_all,
             try_removing_trivial_maps=True,
         )
+        if GT4PyAutoOptHook.AfterToGPU in optimization_hooks:
+            optimization_hooks[GT4PyAutoOptHook.AfterToGPU](sdfg)  # type: ignore[call-arg]
 
     return sdfg
 
