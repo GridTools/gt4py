@@ -710,6 +710,15 @@ def _is_datadims_indexing_name(name: str):
     return name.endswith(f".{_DATADIMS_INDEXER}")
 
 
+def _is_iterator_access(name: str, loc) -> bool:
+    if name in ["I", "J", "IJ"]:
+        raise GTScriptSyntaxError(
+            f"Parallel axis {name} can't be queried - only K - at line {loc.line} (column {loc.column})",
+            loc=loc,
+        )
+    return name == "K"
+
+
 def _trim_indexing_symbol(name: str):
     return name[: -1 * (len(_DATADIMS_INDEXER) + 1)]
 
@@ -1106,6 +1115,8 @@ class IRMaker(ast.NodeVisitor):
                 name=_trim_indexing_symbol(symbol),
                 loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
             )
+        elif _is_iterator_access(symbol, nodes.Location.from_ast_node(node)):
+            return nodes.IteratorAccess(name="K")
         else:
             raise AssertionError(f"Missing '{symbol}' symbol definition")
 
@@ -1492,8 +1503,19 @@ class IRMaker(ast.NodeVisitor):
                 "a list of values, e.g. `.at(K=..., ddim=[...])`.",
                 loc=nodes.Location.from_ast_node(node),
             )
-
         k_offset_value = self.visit(node.keywords[0].value)
+        if isinstance(k_offset_value, nodes.IteratorAccess) and k_offset_value.name == "K":
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, you cannot write `.at(K=K)` since `.at` denotes "
+                "an absolute index, this is equivalent to `field[0, 0, 0]` or simply `field`.",
+                loc=nodes.Location.from_ast_node(node),
+            )
+        if isinstance(k_offset_value, nodes.IteratorAccess):
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, you cannot use parallel axis in absolute, "
+                f"e.g. no `.at(K={k_offset_value.name})`",
+                loc=nodes.Location.from_ast_node(node),
+            )
         field = self.visit(node.func.value)
         assert isinstance(field, nodes.FieldRef)
         field.offset = nodes.AbsoluteKIndex(k=k_offset_value)

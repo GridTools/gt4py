@@ -37,7 +37,8 @@ ADRs about frontend and backend are separated in respective folders. General (e.
 
 Remember: [Experimental features](./experimental-features.md) might change at any time without prior warning and generally might not be available in all backends.
 
-- [Absolute indexing in `K`](./frontend/indexing-absolute-k.md): Tradeoffs behind absolute indexation vs. relative offsets
+- [Absolute indexing in `K`](./experimental/indexing-absolute-k.md): Tradeoffs behind absolute indexation vs. relative offsets
+- [Expose iteration index in `K`](./experimental/iteration-index-k.md): Pandora's box of accessing the current iteration index (in `K`)
 
 ### Backend
 
