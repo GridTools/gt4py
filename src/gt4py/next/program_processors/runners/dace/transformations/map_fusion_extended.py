@@ -83,36 +83,62 @@ def gt_horizontal_map_split_fusion(
     fuse_possible_maps: bool,
     consolidate_edges_only_if_not_extending: bool,
     skip: Optional[set[str]] = None,
+    run_map_fusion: bool = False,
     check_split_callback: Optional[HorizontalMapSplitCallback] = None,
+    check_fusion_callback: Optional["gtx_transformations.HorizontalMapFusionCallback"] = None,
+    only_if_common_ancestor: bool = True,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
     """Performs horizontal map splitting on the provided SDFG.
 
+    This function runs `HorizontalSplitMapRange` transformation until a fix point is
+    reached. Due to a limitation that transformation might not fuse all possible
+    Maps together. For this case the `run_map_fusion` flag is provided.
+    If it is set, then `MapFusionHorizontal` is also called. It is important to
+    note that Map fusion operates on all Maps in the SDFG.
+
     Args:
         sdfg: The SDFG on which we operate.
         run_simplify: Run `gt_simplify()` at the end.
+        run_map_fusion: If `True` also run `MapFusionHorizontal`. Note
+            that this will fuse Maps globally.
         fuse_possible_maps: Directly fuse the Maps inside `HorizontalSplitMapRange`.
-        consolidate_edges_only_if_not_extending: See `MapFusionVertical` for more.
+        consolidate_edges_only_if_not_extending: See `MapFusionHorizontal` for more.
         skip: Skip these transformation during simplification.
         check_split_callback: Use this as callback for the split transformation, see
             `HorizontalMapSplitCallback` for more information.
+        check_fusion_callback: Use this as callback for the `MapFusionHorizontal`
+            transformation, it only has an effect if `run_map_fusion`
+            has been set to `True`. Note that this call back is not passed to
+            `HorizontalSplitMapRange` thus it can not be used to limit fusion of Maps
+            that are created during the splitting, see `fuse_possible_maps`.
+        only_if_common_ancestor: Passed to `MapFusionHorizontal` only has an effect
+            if `run_map_fusion` is `True`.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
-
-    Note:
-        In previous versions the function also called `MapFusionHorizontal`, with the
-        side effect that other parts of the SDFG were processed. This behaviour was
-        removed and now fusion is only performed among the split Maps. This means
-        that there might still potential for fusing.
     """
 
-    ret = sdfg.apply_transformations_repeated(
+    transformations = [
         HorizontalSplitMapRange(
             fuse_possible_maps=fuse_possible_maps,
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
-        ),
+        )
+    ]
+
+    if run_map_fusion:
+        transformations.append(
+            gtx_transformations.MapFusionHorizontal(
+                check_fusion_callback=check_fusion_callback,
+                only_toplevel_maps=True,
+                consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
+                only_if_common_ancestor=only_if_common_ancestor,
+            )
+        )
+
+    ret = sdfg.apply_transformations_repeated(
+        transformations,
         validate=False,
         validate_all=validate_all,
     )
