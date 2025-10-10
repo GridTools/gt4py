@@ -8,7 +8,8 @@
 
 """Fast access to the auto optimization on DaCe."""
 
-from typing import Any, Optional, Sequence
+import enum
+from typing import Any, Callable, Optional, Sequence, TypeAlias
 
 import dace
 from dace import data as dace_data
@@ -20,12 +21,38 @@ from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
+class GT4PyAutoOptHook(enum.Enum):
+    """Allows to hook into different stages of the auto optimizer.
+
+    The hook system allows to inject certain additional behaviour into `gt_auto_optimize()`.
+    There are multiple hooks supported, see list below, that are called at different
+    stages of the optimization. A hook function receives the SDFG and should modify
+    it inplace.
+
+    The supported values are:
+    - TopLevelDataFlowPre: Called before the top level dataflow is optimized.
+    - TopLevelDataFlow: Called during the top level optimization stage, which might be
+        called multiple times.
+    - TopLevelDataFlowPost: Called after the top level dataflow has been optimized.
+    """
+
+    TopLevelDataFlowPre = enum.auto()
+    TopLevelDataFlow = enum.auto()
+    TopLevelDataFlowPost = enum.auto()
+
+
+GT4PyAutoOptHookFun: TypeAlias = Callable[[dace.SDFG], None]
+
+
 def gt_auto_optimize(
     sdfg: dace.SDFG,
     gpu: bool,
     unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
     make_persistent: bool = False,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
+    gpu_block_size_1d: Optional[Sequence[int | str] | str] = None,
+    gpu_block_size_2d: Optional[Sequence[int | str] | str] = None,
+    gpu_block_size_3d: Optional[Sequence[int | str] | str] = None,
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
@@ -37,6 +64,7 @@ def gt_auto_optimize(
     assume_pointwise: bool = True,
     validate: bool = True,
     validate_all: bool = False,
+    optimization_hooks: Optional[dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun]] = None,
     **kwargs: Any,
 ) -> dace.SDFG:
     """Performs GT4Py specific optimizations on the SDFG in place.
@@ -76,8 +104,11 @@ def gt_auto_optimize(
         make_persistent: Turn all transients to persistent lifetime, thus they are
             allocated over the whole lifetime of the program, even if the kernel exits.
             Thus the SDFG can not be called by different threads.
-        gpu_block_size: The thread block size for maps in GPU mode, currently only
-            one for all.
+        gpu_block_size: This is used as default thread block size for GPU Maps. See
+            also the `gpu_block_size_*d` arguments
+        gpu_block_size_{1, 2, 3}d: Allows to specify the GPU thread block size for
+            1, 2 and 3 dimension Maps individually. See the `gpu_block_size_spec`
+            argument of `gt_gpu_transformation()` for more.
         blocking_dim: On which dimension blocking should be applied.
         blocking_size: How many elements each block should process.
         blocking_only_if_independent_nodes: If `True`, the default, only apply loop
@@ -92,6 +123,8 @@ def gt_auto_optimize(
             respective value inside the SDFG. This might increase performance.
         assume_pointwise: Assume that the SDFG has no risk for race condition in
             global data access. See the `GT4PyMapBufferElimination` transformation for more.
+        optimization_hooks: A `dict` containing the hooks that should be called,
+            see `GT4PyAutoOptHook` for more information.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -119,6 +152,7 @@ def gt_auto_optimize(
             not if we have too much internal space (register pressure).
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
+    optimization_hooks = optimization_hooks or {}
 
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.
@@ -162,6 +196,7 @@ def gt_auto_optimize(
         sdfg = _gt_auto_process_top_level_maps(
             sdfg=sdfg,
             assume_pointwise=assume_pointwise,
+            optimization_hooks=optimization_hooks,
             validate_all=validate_all,
         )
 
@@ -183,6 +218,14 @@ def gt_auto_optimize(
         # Configure the Maps:
         #  Will also perform the GPU transformation.
         # TODO(phimuell): Maybe switch it with the inside map optimization.
+        gpu_block_size_spec: dict[str, Sequence[int | str] | str] = {}
+        if gpu_block_size_1d is not None:
+            gpu_block_size_spec["block_size_1d"] = gpu_block_size_1d
+        if gpu_block_size_2d is not None:
+            gpu_block_size_spec["block_size_2d"] = gpu_block_size_2d
+        if gpu_block_size_3d is not None:
+            gpu_block_size_spec["block_size_3d"] = gpu_block_size_3d
+
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
             gpu=gpu,
@@ -190,6 +233,7 @@ def gt_auto_optimize(
             gpu_block_size=gpu_block_size,
             gpu_launch_factor=gpu_launch_factor,
             gpu_launch_bounds=gpu_launch_bounds,
+            gpu_block_size_spec=gpu_block_size_spec if gpu_block_size_spec else None,
             validate_all=validate_all,
         )
 
@@ -219,6 +263,7 @@ def gt_auto_optimize(
 def _gt_auto_process_top_level_maps(
     sdfg: dace.SDFG,
     assume_pointwise: bool,
+    optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimize the Maps at the top level of the SDFG inplace.
@@ -258,6 +303,9 @@ def _gt_auto_process_top_level_maps(
     #  computing the hash invalidates some caches that are not properly updated in Dace.
     # TODO(phimuell): Remove this hack as soon as DaCe is fixed.
     sdfg_hash = sdfg.hash_sdfg()
+
+    if GT4PyAutoOptHook.TopLevelDataFlowPre in optimization_hooks:
+        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPre](sdfg)
 
     while True:
         # First we do scan the entire SDFG to figure out which data is only
@@ -371,6 +419,10 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
+        # TODO(phimuell): Figuring out if this is is the correct location for doing it.
+        if GT4PyAutoOptHook.TopLevelDataFlow in optimization_hooks:
+            optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlow](sdfg)
+
         # Determine if the SDFG has been modified by comparing the hash.
         old_sdfg_hash, sdfg_hash = sdfg_hash, sdfg.hash_sdfg()
         if old_sdfg_hash == sdfg_hash:
@@ -384,6 +436,9 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
             skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
+
+    if GT4PyAutoOptHook.TopLevelDataFlowPost in optimization_hooks:
+        optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPost](sdfg)
 
     return sdfg
 
@@ -473,6 +528,7 @@ def _gt_auto_configure_maps_and_strides(
     gpu_block_size: Optional[Sequence[int | str] | str],
     gpu_launch_bounds: Optional[int | str],
     gpu_launch_factor: Optional[int],
+    gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]],
     validate_all: bool,
 ) -> dace.SDFG:
     """Configure the Maps and the strides of the SDFG inplace.
@@ -522,6 +578,7 @@ def _gt_auto_configure_maps_and_strides(
             gpu_block_size=gpu_block_size,
             gpu_launch_bounds=gpu_launch_bounds,
             gpu_launch_factor=gpu_launch_factor,
+            gpu_block_size_spec=gpu_block_size_spec,
             validate=False,
             validate_all=validate_all,
             try_removing_trivial_maps=True,
