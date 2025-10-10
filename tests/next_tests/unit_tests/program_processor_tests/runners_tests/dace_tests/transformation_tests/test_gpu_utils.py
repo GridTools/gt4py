@@ -193,7 +193,7 @@ def test_set_gpu_properties(method: int):
             sdfg,
             gpu_block_size=(9, "11", 12),
             # Same logic as in `gt_auto_optimizer()`.
-            gpu_block_size_dims={
+            gpu_block_size_spec={
                 "launch_factor_2d": 2,
                 "block_size_2d": (2, "12", 2),
                 "launch_bounds_3d": 200,

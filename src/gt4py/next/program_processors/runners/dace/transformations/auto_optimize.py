@@ -50,7 +50,7 @@ def gt_auto_optimize(
     unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
     make_persistent: bool = False,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
-    gpu_block_size_dims: Optional[dict[str, Sequence[int | str] | str]] = None,
+    gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]] = None,
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
@@ -104,7 +104,7 @@ def gt_auto_optimize(
             Thus the SDFG can not be called by different threads.
         gpu_block_size: The thread block size for maps in GPU mode, currently only
             one for all.
-        gpu_block_size_dims: Specify thread block size per dimension, see
+        gpu_block_size_spec: Specify thread block size per dimension, see
             `gt_set_gpu_blocksize()` for more.
         blocking_dim: On which dimension blocking should be applied.
         blocking_size: How many elements each block should process.
@@ -222,7 +222,7 @@ def gt_auto_optimize(
             gpu_block_size=gpu_block_size,
             gpu_launch_factor=gpu_launch_factor,
             gpu_launch_bounds=gpu_launch_bounds,
-            gpu_block_size_dims=gpu_block_size_dims,
+            gpu_block_size_spec=gpu_block_size_spec,
             validate_all=validate_all,
         )
 
@@ -517,7 +517,7 @@ def _gt_auto_configure_maps_and_strides(
     gpu_block_size: Optional[Sequence[int | str] | str],
     gpu_launch_bounds: Optional[int | str],
     gpu_launch_factor: Optional[int],
-    gpu_block_size_dims: Optional[dict[str, Sequence[int | str] | str]],
+    gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]],
     validate_all: bool,
 ) -> dace.SDFG:
     """Configure the Maps and the strides of the SDFG inplace.
@@ -567,7 +567,7 @@ def _gt_auto_configure_maps_and_strides(
             gpu_block_size=gpu_block_size,
             gpu_launch_bounds=gpu_launch_bounds,
             gpu_launch_factor=gpu_launch_factor,
-            gpu_block_size_dims=gpu_block_size_dims,
+            gpu_block_size_spec=gpu_block_size_spec,
             validate=False,
             validate_all=validate_all,
             try_removing_trivial_maps=True,

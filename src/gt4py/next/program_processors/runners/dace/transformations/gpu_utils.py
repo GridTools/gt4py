@@ -32,7 +32,7 @@ def gt_gpu_transformation(
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
-    gpu_block_size_dims: Optional[dict[str, Sequence[int | str] | str]] = None,
+    gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]] = None,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -58,7 +58,7 @@ def gt_gpu_transformation(
             Will only take effect if `gpu_block_size` is specified.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             Will only take effect if `gpu_block_size` is specified.
-        gpu_block_size_dims: Specify thread block size per dimension, see
+        gpu_block_size_spec: Specify thread block size per dimension, see
             `gt_set_gpu_blocksize()` for more.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
@@ -114,14 +114,14 @@ def gt_gpu_transformation(
     )
 
     # Set the GPU block size if it is known.
-    if gpu_block_size is not None or gpu_block_size_dims is not None:
-        gpu_block_size_dims = gpu_block_size_dims or {}
+    if gpu_block_size is not None or gpu_block_size_spec is not None:
+        gpu_block_size_spec = gpu_block_size_spec or {}
         gt_set_gpu_blocksize(
             sdfg=sdfg,
             block_size=gpu_block_size,
             launch_bounds=gpu_launch_bounds,
             launch_factor=gpu_launch_factor,
-            **gpu_block_size_dims,
+            **gpu_block_size_spec,
             validate=False,
             validate_all=validate_all,
         )
