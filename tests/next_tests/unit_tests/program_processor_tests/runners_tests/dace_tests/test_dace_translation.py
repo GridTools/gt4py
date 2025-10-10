@@ -219,6 +219,7 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
     sdfg = dace_translation_stage.DaCeTranslator(
         device_type=device_type,
         auto_optimize=False,
+        auto_optimize_args=None,
         async_sdfg_call=make_async_sdfg_call,
         use_metrics=False,
     ).generate_sdfg(program, offset_provider={}, column_axis=None)
@@ -257,6 +258,7 @@ def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
     sdfg = dace_translation_stage.DaCeTranslator(
         device_type=device_type,
         auto_optimize=False,
+        auto_optimize_args=None,
         async_sdfg_call=True,
         use_metrics=False,
     ).generate_sdfg(program, offset_provider={}, column_axis=None)
