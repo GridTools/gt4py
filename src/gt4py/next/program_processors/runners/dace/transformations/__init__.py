@@ -31,6 +31,7 @@ from .map_fusion import (
     VerticalMapFusionCallback,
 )
 from .map_fusion_extended import (
+    HorizontalMapSplitCallback,
     VerticalMapSplitCallback,
     gt_horizontal_map_split_fusion,
     gt_vertical_map_split_fusion,
@@ -79,6 +80,7 @@ __all__ = [
     "GT4PyMoveTaskletIntoMap",
     "GT4PyStateFusion",
     "HorizontalMapFusionCallback",
+    "HorizontalMapSplitCallback",
     "LoopBlocking",
     "MapFusionHorizontal",
     "MapFusionVertical",

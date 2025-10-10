@@ -35,23 +35,33 @@ class GT4PyAutoOptHook(enum.Enum):
         called multiple times.
     - TopLevelDataFlowMapFusionVerticalCallBack: If provided this function is passed
         as `check_fusion_callback` argument to `MapFusionVertical` during the top level
-        dataflow optimization stage. It is important that this hook is not passed to
-        the `gt_vertical_map_split_fusion()` splitting transformation function.
-        Note that this hook has to meet the requirements of `VerticalMapFusionCallback`,
-        see the `map_fusion` module for more information.
+        dataflow optimization stage. This hook is also forwarded to the
+        `gt_vertical_map_split_fusion()` function, which is called with
+        `fuse_possible_maps=False` but `run_map_fusion=True`. Note that this hook has
+        to meet the requirements of `VerticalMapFusionCallback`, see the `map_fusion`
+        module for more information.
     - TopLevelDataFlowMapFusionHorizontalCallBack: If provided this function is passed
         as `check_fusion_callback` argument to `MapFusionHorizontal` during the top
-        level dataflow optimization. It is important that the hook is not  passed to
-        the splitting transformation. Note that this hook has to meet the requirements
-        of `HorizontalMapFusionCallback`, see the `map_fusion` module for more information.
+        level dataflow optimization. This hook is also forwarded to the
+        `gt_horizontal_map_split_fusion()` function, which is called with
+        `fuse_possible_maps=False` but `run_map_fusion=True`. Note that this hook has
+        to meet the requirements of `HorizontalMapFusionCallback`, see the `map_fusion`
+        module for more information.
     - TopLevelDataFlowMapPromotionCallBack: If provided then pass this function as
         `promotion_callback` argument to the `MapPromoter` during top level dataflow
         optimization. If not provided then `gt4py_default_auto_optimizer_map_promotion_checker()`
         is used. Note that this callback has to meet the requirements of
         `MapPromotionCallBack`.
     - `TopLevelDataFlowVerticalSplitCallBack`: If provided it is passed as `check_split_callback`
-        to `gt_vertical_map_split_fusion()` and allows to control how map splitting is done.
-        See `VerticalMapSplitCallback` for more details.
+        to `gt_vertical_map_split_fusion()` and allows to control how a vertical Map
+        split is done. See `VerticalMapSplitCallback` for more details.
+        Note that the function is called with `fuse_possible_maps=False` but
+        `run_map_fusion=True`.
+    - `TopLevelDataFlowHorizontalSplitCallBack`: If provided it is passed as `check_split_callback`
+        to `gt_horizontal_map_split_fusion()` and allows to control how a horizontal
+        Map split is done. See `HorizontalMapSplitCallback` for more details.
+        Note that the function is called with `fuse_possible_maps=False` but
+        `run_map_fusion=True`.
     - TopLevelDataFlowPost: Called after the top level dataflow has been optimized.
 
     Note:
@@ -70,6 +80,7 @@ class GT4PyAutoOptHook(enum.Enum):
     TopLevelDataFlowMapFusionHorizontalCallBack = enum.auto()
     TopLevelDataFlowMapPromotionCallBack = enum.auto()
     TopLevelDataFlowVerticalSplitCallBack = enum.auto()
+    TopLevelDataFlowHorizontalSplitCallBack = enum.auto()
     TopLevelDataFlowStep = enum.auto()
     TopLevelDataFlowPost = enum.auto()
 
@@ -88,6 +99,7 @@ GT4PyAutoOptHookFun: TypeAlias = Union[
     "gtx_transformations.VerticalMapFusionCallback",
     "gtx_transformations.MapPromotionCallBack",
     "gtx_transformations.VerticalMapSplitCallback",
+    "gtx_transformations.HorizontalMapSplitCallback",
 ]
 
 
@@ -449,11 +461,16 @@ def _gt_auto_process_top_level_maps(
             gtx_transformations.gt_vertical_map_split_fusion(
                 sdfg=sdfg,
                 run_simplify=False,
+                run_map_fusion=True,
+                fuse_possible_maps=False,  # To avoid uncontrolled Map fusing.
                 skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
                 consolidate_edges_only_if_not_extending=True,
                 single_use_data=single_use_data,
                 check_split_callback=optimization_hooks.get(  # type: ignore[arg-type]
                     GT4PyAutoOptHook.TopLevelDataFlowVerticalSplitCallBack, None
+                ),
+                check_fusion_callback=optimization_hooks.get(  # type: ignore[arg-type]
+                    GT4PyAutoOptHook.TopLevelDataFlowMapFusionVerticalCallBack, None
                 ),
                 validate=False,
                 validate_all=validate_all,
@@ -461,21 +478,27 @@ def _gt_auto_process_top_level_maps(
             gtx_transformations.gt_horizontal_map_split_fusion(
                 sdfg=sdfg,
                 run_simplify=False,
+                run_map_fusion=True,
+                fuse_possible_maps=False,  # To avoid uncontrolled Map fusing.
                 skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
-                fuse_possible_maps=True,
                 consolidate_edges_only_if_not_extending=True,
-                validate=False,
-                validate_all=validate_all,
-            )
-
-        else:
-            sdfg.apply_transformations_repeated(
-                gtx_transformations.GT4PyMapBufferElimination(
-                    assume_pointwise=assume_pointwise,
+                check_split_callback=optimization_hooks.get(  # type: ignore[arg-type]
+                    GT4PyAutoOptHook.TopLevelDataFlowHorizontalSplitCallBack, None
+                ),
+                check_fusion_callback=optimization_hooks.get(  # type: ignore[arg-type]
+                    GT4PyAutoOptHook.TopLevelDataFlowMapFusionHorizontalCallBack, None
                 ),
                 validate=False,
                 validate_all=validate_all,
             )
+
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.GT4PyMapBufferElimination(
+                assume_pointwise=assume_pointwise,
+            ),
+            validate=False,
+            validate_all=validate_all,
+        )
 
         # TODO(phimuell): Figuring out if this is is the correct location for doing it.
         if GT4PyAutoOptHook.TopLevelDataFlowStep in optimization_hooks:
