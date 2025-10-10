@@ -209,7 +209,8 @@ def _make_sdfg_with_multiple_maps_that_share_inputs(
     return sdfg, state
 
 
-def test_horizontal_map_fusion():
+@pytest.mark.parametrize("run_map_fusion", [True, False])
+def test_horizontal_map_fusion(run_map_fusion: bool):
     N = 20
     sdfg, state = _make_sdfg_with_multiple_maps_that_share_inputs(N)
 
@@ -217,30 +218,52 @@ def test_horizontal_map_fusion():
         sdfg=sdfg,
         run_simplify=False,
         fuse_map_fragments=True,
+        run_map_fusion=run_map_fusion,
         consolidate_edges_only_if_not_extending=False,
         validate=True,
         validate_all=True,
     )
-    assert nb_applications == 3
+    scope_dict = state.scope_dict()
 
     expected_in_degree_of_outputs = {"out1": 3, "out2": 2, "out3": 2, "out4": 2}
     for ac in state.data_nodes():
         if ac.data in expected_in_degree_of_outputs:
             assert expected_in_degree_of_outputs[ac.data] == state.in_degree(ac)
 
-    # NOTE: Ideally we would check that no Maps with overlapping ranges exists anymore.
-    #   This was done in previous versions, where `gt_horizontal_map_split_fusion()`
-    #   was calling `MapFusionHorizontal`. But now it is no longer possible as this
-    #   transformation is not implicitly called. Thus we will now it manually.
-    aux_fuses = sdfg.apply_transformations_repeated(
-        gtx_transformations.MapFusionHorizontal(
-            only_if_common_ancestor=True,
-            consolidate_edges_only_if_not_extending=False,
-        ),
-        validate=True,
-        validate_all=True,
+    if run_map_fusion:
+        # Automatic fusion was requested.
+        assert nb_applications == 5
+
+    else:
+        # Automatic fusion was not enabled, thus only 3 applications and there are
+        #  some overlapping maps. That we have to fuse later.
+        assert nb_applications == 3
+        assert (
+            sum(
+                1
+                for map_entry in util.count_nodes(state, dace_nodes.MapEntry, True)
+                if scope_dict[map_entry] is None
+            )
+            == 5
+        )
+        aux_fuses = sdfg.apply_transformations_repeated(
+            gtx_transformations.MapFusionHorizontal(
+                only_if_common_ancestor=True,
+                consolidate_edges_only_if_not_extending=False,
+            ),
+            validate=True,
+            validate_all=True,
+        )
+        assert aux_fuses == 2
+
+    assert (
+        sum(
+            1
+            for map_entry in util.count_nodes(state, dace_nodes.MapEntry, True)
+            if scope_dict[map_entry] is None
+        )
+        == 3
     )
-    assert aux_fuses == 2
 
     # check that there is no overlap between the maps' ranges
     map_entries = util.count_nodes(sdfg, dace_nodes.MapEntry, return_nodes=True)
