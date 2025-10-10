@@ -75,6 +75,7 @@ def make_dace_backend(
     optimization_hooks: dict[gtx_dace.GT4PyAutoOptHook, gtx_dace.GT4PyAutoOptHookFun] | None = None,
     use_memory_pool: bool = True,
     use_metrics: bool = True,
+    use_zero_origin: bool = False,
 ) -> backend.Backend:
     """Customize the dace backend with the given configuration parameters.
 
@@ -92,6 +93,9 @@ def make_dace_backend(
             supported for GPU (based on CUDA memory pool).
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
             compute time.
+        use_zero_origin: Can be set to `True` when all fields passed as program
+            arguments have zero-based origin. This setting will skip generation
+            of range start-symbols `_range_0` since they can be assumed to be zero.
 
     Returns:
         A dace backend with custom configuration for the target device.
@@ -130,9 +134,7 @@ def make_dace_backend(
             optimization_args | fixed_optimization_args
         ),
         otf_workflow__bare_translation__use_metrics=use_metrics,
-        # TODO(edopao): the two fields below will soon be depracated
-        otf_workflow__bare_translation__disable_field_origin_on_program_arguments=False,
-        otf_workflow__bindings__make_persistent=False,
+        otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
     )
 
 
