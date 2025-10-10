@@ -315,15 +315,11 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        # We have to call it here, such that some other transformations, most
-        #  importantly the split transformations run.
-        #  We allow promotion of vertical (which is beneficial for Nabla4 type
-        #  stencils and if `LoopBlocking` is enabled. However, we also allow
-        #  horizontal promotion, this is an empirical choice. If the computation
-        #  on the horizontal are very complicated, it might degrade performance
-        #  but such cases should be rare.
-        # TODO(phimuell): Add a criteria to decide if we should promote or not.
-        # TODO(phimuell): Think about relocating this before horizontal Map fusion.
+        # Promote Maps. This will remove transients between 1D and 2D Maps, at the
+        #  code of more data loads from memory. Empirical observations have shown
+        #  that this is beneficial; Especially for Nabla4 type kernel in conjunction
+        #  with `LoopBlocking`.
+        # NOTE: We have to promote before we do horizontal Map fusion.
         sdfg.apply_transformations_repeated(
             gtx_transformations.MapPromoter(
                 only_toplevel_maps=True,
@@ -333,6 +329,22 @@ def _gt_auto_process_top_level_maps(
                 promotion_callback=_check_if_horizontal_map_promotion_is_appropriate,
                 single_use_data=single_use_data,
             ),
+            validate=False,
+            validate_all=validate_all,
+        )
+
+        # Now run horizontal Map fusion, also run vertical Map fusion, because it
+        #  might have become possible.
+        # TODO(phimuell): Think of moving horizontal Map fusion after the splitting.
+        horizontal_map_fusion = gtx_transformations.MapFusionHorizontal(
+            only_toplevel_maps=True,
+            consolidate_edges_only_if_not_extending=True,
+            # Setting this to `True` should lead to reduced loads as the data
+            #  can be reused inside a kernel.
+            only_if_common_ancestor=True,
+        )
+        sdfg.apply_transformations_repeated(
+            [horizontal_map_fusion, vertical_map_fusion],
             validate=False,
             validate_all=validate_all,
         )
@@ -407,23 +419,6 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
             skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
-
-    # Reduce the number of kernel launches, by combining multiple, unrelated kernels,
-    #  together. This only works if the Maps have the same parameter space.
-    # NOTE: Before MapFusionHorizontal was used inside the loop above, but this created
-    #   some problems, because it coupled some otherwise unrelated Maps together.
-    #   Probably the most sever issue was that it also interfered with MapPromotion,
-    #   see [PR#2284](https://github.com/GridTools/gt4py/pull/2284).
-    sdfg.apply_transformations_repeated(
-        gtx_transformations.MapFusionHorizontal(
-            only_toplevel_maps=True,
-            consolidate_edges_only_if_not_extending=False,
-            never_consolidate_edges=False,
-            only_if_common_ancestor=False,
-        ),
-        validate=False,
-        validate_all=validate_all,
-    )
 
     if GT4PyAutoOptHook.TopLevelDataFlowPost in optimization_hooks:
         optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPost](sdfg)
