@@ -302,6 +302,7 @@ def _gt_auto_process_top_level_maps(
     #  We use the hash instead of the return values of the transformation, because
     #  computing the hash invalidates some caches that are not properly updated in Dace.
     # TODO(phimuell): Remove this hack as soon as DaCe is fixed.
+    # TODO(phimuell): Maybe switch to `reset_cfg_list()`?
     sdfg_hash = sdfg.hash_sdfg()
 
     if GT4PyAutoOptHook.TopLevelDataFlowPre in optimization_hooks:
@@ -323,36 +324,17 @@ def _gt_auto_process_top_level_maps(
         #   has been solved.
         vertical_map_fusion._single_use_data = single_use_data
 
-        horizontal_map_fusion = gtx_transformations.MapFusionHorizontal(
-            only_toplevel_maps=True,
-            consolidate_edges_only_if_not_extending=True,
-            # TODO(phimuell): Should we enable this flag?
-            only_if_common_ancestor=False,
-        )
-
-        # NOTE: Since horizontal Map fusion matches _any_ two Maps, running it on large
-        #  SDFGs is expensive. Thus we run vertical Map fusion first to reduce the search
-        #  space.
         sdfg.apply_transformations_repeated(
             vertical_map_fusion,
             validate=False,
             validate_all=validate_all,
         )
-        sdfg.apply_transformations_repeated(
-            [horizontal_map_fusion, vertical_map_fusion],
-            validate=False,
-            validate_all=validate_all,
-        )
 
-        # We have to call it here, such that some other transformations, most
-        #  importantly the split transformations run.
-        #  We allow promotion of vertical (which is beneficial for Nabla4 type
-        #  stencils and if `LoopBlocking` is enabled. However, we also allow
-        #  horizontal promotion, this is an empirical choice. If the computation
-        #  on the horizontal are very complicated, it might degrade performance
-        #  but such cases should be rare.
-        # TODO(phimuell): Add a criteria to decide if we should promote or not.
-        # TODO(phimuell): Think about relocating this before horizontal Map fusion.
+        # Promote Maps. This will remove transients between 1D and 2D Maps, at the
+        #  code of more data loads from memory. Empirical observations have shown
+        #  that this is beneficial; Especially for Nabla4 type kernel in conjunction
+        #  with `LoopBlocking`.
+        # NOTE: We have to promote before we do horizontal Map fusion.
         sdfg.apply_transformations_repeated(
             gtx_transformations.MapPromoter(
                 only_toplevel_maps=True,
@@ -362,6 +344,22 @@ def _gt_auto_process_top_level_maps(
                 promotion_callback=_check_if_horizontal_map_promotion_is_appropriate,
                 single_use_data=single_use_data,
             ),
+            validate=False,
+            validate_all=validate_all,
+        )
+
+        # Now run horizontal Map fusion, also run vertical Map fusion, because it
+        #  might have become possible.
+        # TODO(phimuell): Think of moving horizontal Map fusion after the splitting.
+        horizontal_map_fusion = gtx_transformations.MapFusionHorizontal(
+            only_toplevel_maps=True,
+            consolidate_edges_only_if_not_extending=True,
+            # Setting this to `True` should lead to reduced loads as the data
+            #  can be reused inside a kernel.
+            only_if_common_ancestor=True,
+        )
+        sdfg.apply_transformations_repeated(
+            [horizontal_map_fusion, vertical_map_fusion],
             validate=False,
             validate_all=validate_all,
         )

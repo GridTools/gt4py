@@ -244,6 +244,8 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
     ) -> None:
         a1: dace_nodes.AccessNode = self.node_a1
         a2: dace_nodes.AccessNode = self.node_a2
+        copy_chain_mode = self._get_copy_chain_mode(sdfg, graph)
+
         a1_to_a2_edge: dace_graph.MultiConnectorEdge = next(
             oedge for oedge in graph.out_edges(a1) if oedge.dst is a2
         )
@@ -264,7 +266,6 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         new_node: dace_nodes.AccessNode
         old_node: dace_nodes.AccessNode
         new_node_offsets: Sequence[dace_sym.SymbolicType]
-        copy_chain_mode = self._get_copy_chain_mode(sdfg, graph)
         if copy_chain_mode == CopyChainRemoverMode.PULL:
             old_node = a1
             new_node = a2
