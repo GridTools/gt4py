@@ -395,6 +395,7 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
             state: The state in which we operate.
             sdfg: The SDFG we process.
         """
+
         first_map_exit: dace_nodes.MapExit = self.exit_first_map
         access_node: dace_nodes.AccessNode = self.access_node
         second_map_entry: dace_nodes.MapEntry = self.entry_second_map
