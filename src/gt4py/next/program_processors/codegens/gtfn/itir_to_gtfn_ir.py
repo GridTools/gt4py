@@ -8,6 +8,7 @@
 
 import dataclasses
 import functools
+from collections.abc import Set
 from typing import Any, Callable, ClassVar, Iterable, Optional, Type, TypeGuard, Union
 
 import gt4py.eve as eve
@@ -131,6 +132,7 @@ def _collect_offset_definitions(
     node: itir.Node,
     grid_type: common.GridType,
     offset_provider_type: common.OffsetProviderType,
+    dimension_tags: Set[str],
 ) -> dict[str, TagDefinition]:
     used_offset_tags: set[itir.OffsetLiteral] = (
         node.walk_values()
@@ -138,9 +140,19 @@ def _collect_offset_definitions(
         .filter(lambda offset_literal: isinstance(offset_literal.value, str))
         .getattr("value")
     ).to_set()
-    if not used_offset_tags.issubset(set(offset_provider_type.keys())):
+    if not used_offset_tags.issubset(
+        offset_provider_type.keys()
+        | {common.dimension_to_implicit_offset(dim) for dim in dimension_tags}
+    ):
         raise AssertionError("ITIR contains an offset tag without a corresponding offset provider.")
     offset_definitions = {}
+
+    for dim_tag in dimension_tags:
+        implicit_offset = common.dimension_to_implicit_offset(dim_tag)
+        if implicit_offset in used_offset_tags:
+            offset_definitions[implicit_offset] = TagDefinition(
+                name=Sym(id=implicit_offset), alias=SymRef(id=dim_tag)
+            )
 
     for offset_name, dim_or_connectivity_type in offset_provider_type.items():
         if isinstance(dim_or_connectivity_type, common.Dimension):
@@ -153,17 +165,6 @@ def _collect_offset_definitions(
                 )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
-                # TODO(tehrengruber): The implicit offset providers added to support syntax like
-                #  `KDim+1` can also include horizontal dimensions. Cartesian shifts in this
-                #  dimension are not supported by the backend and also never occur in user code.
-                #  We just skip these here for now, but this is not a clean solution. Not having
-                #  any unstructured dimensions in here would be preferred.
-                if (
-                    dim.kind == common.DimensionKind.HORIZONTAL
-                    and offset_name == common.dimension_to_implicit_offset(dim.value)
-                ):
-                    continue
-
                 if not dim.kind == common.DimensionKind.VERTICAL:
                     raise ValueError(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
@@ -673,9 +674,12 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         executions = self.visit(node.body, extracted_functions=extracted_functions)
         executions = self._merge_scans(executions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions
+        dimensions_from_domain = _collect_dimensions_from_domain(node.body)
         offset_definitions = {
-            **_collect_dimensions_from_domain(node.body),
-            **_collect_offset_definitions(node, self.grid_type, self.offset_provider_type),
+            **dimensions_from_domain,
+            **_collect_offset_definitions(
+                node, self.grid_type, self.offset_provider_type, dimensions_from_domain.keys()
+            ),
         }
         return Program(
             id=SymbolName(node.id),
