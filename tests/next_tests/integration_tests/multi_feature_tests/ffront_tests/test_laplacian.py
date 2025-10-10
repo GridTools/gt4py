@@ -25,7 +25,7 @@ def lap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JDim], "
     return (
         -4.0 * in_field
         + in_field(IDim + 1)
-        + in_field(Joff[1])  # TODO remove (just to make sure that syntax is not broken)
+        + in_field(JDim + 1)
         + in_field(IDim - 1)
         + in_field(JDim - 1)
     )

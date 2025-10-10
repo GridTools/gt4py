@@ -140,10 +140,19 @@ def _collect_offset_definitions(
         .filter(lambda offset_literal: isinstance(offset_literal.value, str))
         .getattr("value")
     ).to_set()
-    implicit_offsets = {common.dimension_to_implicit_offset(dim) for dim in dimension_tags}
-    if not used_offset_tags.issubset(offset_provider_type.keys() | implicit_offsets):
+    if not used_offset_tags.issubset(
+        offset_provider_type.keys()
+        | {common.dimension_to_implicit_offset(dim) for dim in dimension_tags}
+    ):
         raise AssertionError("ITIR contains an offset tag without a corresponding offset provider.")
     offset_definitions = {}
+
+    for dim_tag in dimension_tags:
+        implicit_offset = common.dimension_to_implicit_offset(dim_tag)
+        if implicit_offset in used_offset_tags:
+            offset_definitions[implicit_offset] = TagDefinition(
+                name=Sym(id=implicit_offset), alias=SymRef(id=dim_tag)
+            )
 
     for offset_name, dim_or_connectivity_type in offset_provider_type.items():
         if isinstance(dim_or_connectivity_type, common.Dimension):
