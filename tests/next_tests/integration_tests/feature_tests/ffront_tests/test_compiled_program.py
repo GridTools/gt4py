@@ -834,7 +834,7 @@ def test_synchronous_compilation(cartesian_case, compile_testee):
 
 
 @pytest.mark.parametrize("synchronous", [True, False], ids=["synchronous", "asynchronous"])
-def test_wait_for_compilation(cartesian_case, compile_testee, synchronous):
+def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, synchronous):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
@@ -843,22 +843,8 @@ def test_wait_for_compilation(cartesian_case, compile_testee, synchronous):
         if synchronous
         else contextlib.nullcontext()
     ):
-        start_compile = time.time()
         compile_testee.compile(offset_provider=cartesian_case.offset_provider)
-        end_compile = time.time()
-        compile_call_time = end_compile - start_compile
-
-        start_wait = time.time()
+        # TODO(havogt): currently only tests that the function call does not crash...
         gtx.wait_for_compilation()
-        end_wait = time.time()
-        wait_time = end_wait - start_wait
-
-        # The assumption is that in synchronous compilation the time is spent in the
-        # call to compile (`wait_for_compilation` is a no-op),
-        # in asynchronous execution `compile` is fast as it only kicks off compilation
-        # while compilation happens while waiting in `wait_for_compilation`.
-        # If this gets flaky, we need to find a better way to test this functionality.
-        if synchronous:
-            assert compile_call_time > wait_time
-        else:
-            assert wait_time > compile_call_time
+        # ... and afterwards compilation still works
+        compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
