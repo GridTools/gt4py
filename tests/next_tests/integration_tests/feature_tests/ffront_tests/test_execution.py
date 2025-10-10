@@ -370,8 +370,9 @@ def test_scalar_scan(cartesian_case):
 
     qc = cases.allocate(cartesian_case, testee, "qc").zeros()()
     scalar = 1.0
+    isize = cartesian_case.default_sizes[IDim]
     ksize = cartesian_case.default_sizes[KDim]
-    expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
+    expected = np.full((isize, ksize), np.arange(start=1, stop=ksize + 1, step=1).astype(float64))
 
     cases.verify(cartesian_case, testee, qc, scalar, inout=qc, ref=expected)
 
@@ -394,8 +395,9 @@ def test_tuple_scalar_scan(cartesian_case):
 
     qc = cases.allocate(cartesian_case, testee_op, "qc").zeros()()
     tuple_scalar = (1.0, (1.0, 0.0))
+    isize = cartesian_case.default_sizes[IDim]
     ksize = cartesian_case.default_sizes[KDim]
-    expected = np.full((ksize, ksize), np.arange(start=1.0, stop=11.0), dtype=float)
+    expected = np.full((isize, ksize), np.arange(start=1.0, stop=ksize + 1), dtype=float)
     cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
@@ -754,7 +756,7 @@ def test_tuple_arg(cartesian_case):
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
-    expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[IDim], 1)
+    expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[KDim], 1)
     out = cartesian_case.as_field([KDim], np.zeros((cartesian_case.default_sizes[KDim],)))
 
     if not forward:
@@ -1052,22 +1054,22 @@ def test_domain(cartesian_case):
         return a + a
 
     @gtx.program
-    def program_domain(a: cases.IField, out: cases.IField):
-        fieldop_domain(a, out=out, domain={IDim: (minimum(1, 2), 9)})
+    def program_domain(a: cases.IField, size: int32, out: cases.IField):
+        fieldop_domain(a, out=out, domain={IDim: (minimum(1, 2), size)})
 
     a = cases.allocate(cartesian_case, program_domain, "a")()
     out = cases.allocate(cartesian_case, program_domain, "out")()
-
+    size = cartesian_case.default_sizes[IDim]
     ref = out.asnumpy().copy()  # ensure we are not writing to out outside the domain
-    ref[1:9] = a.asnumpy()[1:9] * 2
+    ref[1:size] = a.asnumpy()[1:size] * 2
 
-    cases.verify(cartesian_case, program_domain, a, out, inout=out, ref=ref)
+    cases.verify(cartesian_case, program_domain, a, size, out, inout=out, ref=ref)
 
 
 @pytest.mark.uses_floordiv
 def test_domain_input_bounds(cartesian_case):
     lower_i = 1
-    upper_i = 10
+    upper_i = cartesian_case.default_sizes[IDim] + 1
 
     @gtx.field_operator
     def fieldop_domain(a: cases.IField) -> cases.IField:
@@ -1090,9 +1092,9 @@ def test_domain_input_bounds(cartesian_case):
 
 def test_domain_input_bounds_1(cartesian_case):
     lower_i = 1
-    upper_i = 9
-    lower_j = 4
-    upper_j = 6
+    upper_i = cartesian_case.default_sizes[IDim]
+    lower_j = cartesian_case.default_sizes[JDim] - 3
+    upper_j = cartesian_case.default_sizes[JDim] - 1
 
     @gtx.field_operator
     def fieldop_domain(a: cases.IJField) -> cases.IJField:
@@ -1142,19 +1144,30 @@ def test_domain_tuple(cartesian_case):
 
     @gtx.program
     def program_domain_tuple(
-        inp0: cases.IJField, inp1: cases.IJField, out0: cases.IJField, out1: cases.IJField
+        inp0: cases.IJField,
+        inp1: cases.IJField,
+        out0: cases.IJField,
+        out1: cases.IJField,
+        isize: int32,
+        jsize: int32,
     ):
-        fieldop_domain_tuple(inp0, inp1, out=(out0, out1), domain={IDim: (1, 9), JDim: (4, 6)})
+        fieldop_domain_tuple(
+            inp0, inp1, out=(out0, out1), domain={IDim: (1, isize), JDim: (jsize - 2, jsize)}
+        )
 
     inp0 = cases.allocate(cartesian_case, program_domain_tuple, "inp0")()
     inp1 = cases.allocate(cartesian_case, program_domain_tuple, "inp1")()
     out0 = cases.allocate(cartesian_case, program_domain_tuple, "out0")()
     out1 = cases.allocate(cartesian_case, program_domain_tuple, "out1")()
 
+    isize = cartesian_case.default_sizes[IDim]
+    jsize = cartesian_case.default_sizes[JDim] - 1
     ref0 = out0.asnumpy().copy()
-    ref0[1:9, 4:6] = inp0.asnumpy()[1:9, 4:6] + inp1.asnumpy()[1:9, 4:6]
+    ref0[1:isize, jsize - 2 : jsize] = (
+        inp0.asnumpy()[1:isize, jsize - 2 : jsize] + inp1.asnumpy()[1:isize, jsize - 2 : jsize]
+    )
     ref1 = out1.asnumpy().copy()
-    ref1[1:9, 4:6] = inp1.asnumpy()[1:9, 4:6]
+    ref1[1:isize, jsize - 2 : jsize] = inp1.asnumpy()[1:isize, jsize - 2 : jsize]
 
     cases.verify(
         cartesian_case,
@@ -1163,6 +1176,8 @@ def test_domain_tuple(cartesian_case):
         inp1,
         out0,
         out1,
+        isize,
+        jsize,
         inout=(out0, out1),
         ref=(ref0, ref1),
     )

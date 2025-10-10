@@ -29,6 +29,7 @@ from gt4py.eve.extended_typing import (
     Final,
     Generic,
     Literal,
+    MaybeNestedInTuple,
     NamedTuple,
     Never,
     Optional,
@@ -590,6 +591,16 @@ FiniteDomain: TypeAlias = Domain[FiniteUnitRange]
 DomainLike: TypeAlias = (
     Sequence[tuple[Dimension, RangeLike]] | Mapping[Dimension, RangeLike]
 )  # `Domain` is `Sequence[NamedRange]` and therefore a subset
+
+
+def normalize_domains(domain_like: MaybeNestedInTuple[DomainLike]) -> MaybeNestedInTuple[Domain]:
+    """
+    Convert a potentially nested tuple structure of `DomainLike` objects to `Domain` objects.
+    """
+    if isinstance(domain_like, tuple):
+        return tuple(normalize_domains(item) for item in domain_like)
+    else:
+        return domain(domain_like)
 
 
 def domain(domain_like: DomainLike) -> Domain:
