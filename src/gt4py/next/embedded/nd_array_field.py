@@ -496,7 +496,7 @@ class NdArrayConnectivityField(
                 common.ConnectivityKind.ALTER_STRUCT
                 | (
                     common.ConnectivityKind.ALTER_DIMS
-                    if self.domain.dim_index(self.codomain) is None
+                    if any(dim.kind == common.DimensionKind.LOCAL for dim in self.domain.dims)
                     else common.ConnectivityKind(0)
                 ),
             )
