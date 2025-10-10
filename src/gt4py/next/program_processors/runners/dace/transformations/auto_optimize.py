@@ -112,6 +112,9 @@ def gt_auto_optimize(
     unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
     make_persistent: bool = False,
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
+    gpu_block_size_1d: Optional[Sequence[int | str] | str] = None,
+    gpu_block_size_2d: Optional[Sequence[int | str] | str] = None,
+    gpu_block_size_3d: Optional[Sequence[int | str] | str] = None,
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
@@ -164,8 +167,11 @@ def gt_auto_optimize(
         make_persistent: Turn all transients to persistent lifetime, thus they are
             allocated over the whole lifetime of the program, even if the kernel exits.
             Thus the SDFG can not be called by different threads.
-        gpu_block_size: The thread block size for maps in GPU mode, currently only
-            one for all.
+        gpu_block_size: This is used as default thread block size for GPU Maps. See
+            also the `gpu_block_size_*d` arguments
+        gpu_block_size_{1, 2, 3}d: Allows to specify the GPU thread block size for
+            1, 2 and 3 dimension Maps individually. See the `gpu_block_size_spec`
+            argument of `gt_gpu_transformation()` for more.
         blocking_dim: On which dimension blocking should be applied.
         blocking_size: How many elements each block should process.
         blocking_only_if_independent_nodes: If `True`, the default, only apply loop
@@ -277,6 +283,14 @@ def gt_auto_optimize(
         # Configure the Maps:
         #  Will also perform the GPU transformation.
         # TODO(phimuell): Maybe switch it with the inside map optimization.
+        gpu_block_size_spec: dict[str, Sequence[int | str] | str] = {}
+        if gpu_block_size_1d is not None:
+            gpu_block_size_spec["block_size_1d"] = gpu_block_size_1d
+        if gpu_block_size_2d is not None:
+            gpu_block_size_spec["block_size_2d"] = gpu_block_size_2d
+        if gpu_block_size_3d is not None:
+            gpu_block_size_spec["block_size_3d"] = gpu_block_size_3d
+
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
             gpu=gpu,
@@ -285,6 +299,7 @@ def gt_auto_optimize(
             gpu_launch_factor=gpu_launch_factor,
             gpu_launch_bounds=gpu_launch_bounds,
             optimization_hooks=optimization_hooks,
+            gpu_block_size_spec=gpu_block_size_spec if gpu_block_size_spec else None,
             validate_all=validate_all,
         )
 
@@ -614,6 +629,7 @@ def _gt_auto_configure_maps_and_strides(
     gpu_launch_bounds: Optional[int | str],
     gpu_launch_factor: Optional[int],
     optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
+    gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]],
     validate_all: bool,
 ) -> dace.SDFG:
     """Configure the Maps and the strides of the SDFG inplace.
@@ -663,6 +679,7 @@ def _gt_auto_configure_maps_and_strides(
             gpu_block_size=gpu_block_size,
             gpu_launch_bounds=gpu_launch_bounds,
             gpu_launch_factor=gpu_launch_factor,
+            gpu_block_size_spec=gpu_block_size_spec,
             validate=False,
             validate_all=validate_all,
             try_removing_trivial_maps=True,
