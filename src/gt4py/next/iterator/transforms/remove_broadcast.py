@@ -50,6 +50,7 @@ class RemoveBroadcast(PreserveLocationVisitor, NodeTranslator):
 
         if cpm.is_call_to(node, "broadcast"):
             expr = node.args[0]
+            assert isinstance(node.annex.domain, domain_utils.SymbolicDomain)
             node = im.as_fieldop("deref", domain_utils.SymbolicDomain.as_expr(node.annex.domain))(
                 expr
             )

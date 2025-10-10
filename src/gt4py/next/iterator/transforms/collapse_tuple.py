@@ -63,8 +63,8 @@ def _is_trivial_or_tuple_thereof_expr(node: itir.Node) -> bool:
     """
     Return `true` if the expr is a trivial expression (`SymRef` or `Literal`) or tuple thereof.
 
-    Let forms with trivial body and args as well as `if` calls with trivial branches are also
-    considered trivial.
+    Let forms with trivial body and args as well as `if` and `concat_where` calls with trivial
+    branches are also considered trivial.
 
     >>> _is_trivial_or_tuple_thereof_expr(im.make_tuple("a", "b"))
     True
@@ -83,7 +83,7 @@ def _is_trivial_or_tuple_thereof_expr(node: itir.Node) -> bool:
         return _is_trivial_or_tuple_thereof_expr(node.args[1])
     # This will duplicate the condition and increase the size of the tree, but this is probably
     # acceptable.
-    if cpm.is_call_to(node, "if_"):
+    if cpm.is_call_to(node, ("if_", "concat_where")):
         return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args[1:])
     if cpm.is_let(node):
         return _is_trivial_or_tuple_thereof_expr(node.fun.expr) and all(
