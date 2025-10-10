@@ -13,6 +13,7 @@ pytest.importorskip("dace")
 
 
 from dace import nodes
+from dace import sdfg as dace_sdfg
 
 from gt4py.cartesian import backend
 from gt4py.cartesian.backend.dace_backend import SDFGManager
@@ -46,6 +47,14 @@ def copy_stencil(
         out_field = in_field
 
 
+def copy_forward_stencil(
+    in_field: Field[float],  # type: ignore
+    out_field: Field[float],  # type: ignore
+):
+    with computation(FORWARD), interval(...):
+        out_field = in_field
+
+
 def test_dace_cpu_loop_structure():
     builder = StencilBuilder(copy_stencil, backend="dace:cpu")
     manager = SDFGManager(builder)
@@ -69,4 +78,24 @@ def test_dace_cpu_kfirst_loop_structure():
     assert [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)] == [
         ["__i", "__j"],
         ["__k_0"],
+    ]
+
+    builder = StencilBuilder(copy_forward_stencil, backend="dace:cpu_kfirst")
+    manager = SDFGManager(builder)
+
+    sdfg = manager.sdfg_via_schedule_tree()
+    state = sdfg.states()[0]
+
+    # Expect IJ Map and For loop construct (Nested SDFG, four guard states)
+    assert [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)] == [
+        ["__i", "__j"]
+    ]
+    for_nested_nodes = [
+        node.sdfg.nodes() for node in state.nodes() if isinstance(node, nodes.NestedSDFG)
+    ]
+    assert [isinstance(node, dace_sdfg.SDFGState) for node in for_nested_nodes[0]] == [
+        True,
+        True,
+        True,
+        True,
     ]
