@@ -71,6 +71,22 @@ class DimensionKind(StrEnum):
 
 _DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
 
+_IMPLICIT_OFFSET_PREFIX: Final[str] = "_Off"
+
+
+def dimension_to_implicit_offset(dim: str) -> str:
+    """
+    Return name of offset implicitly defined by a dimension.
+
+    Each dimension implicitly also defines an offset, such that we can allow syntax like::
+
+        field(TDim + 1)
+
+    without having to explicitly define an offset for ``TDim``. This function defines the respective
+    naming convention.
+    """
+    return f"{_IMPLICIT_OFFSET_PREFIX}{dim}"
+
 
 @dataclasses.dataclass(frozen=True)
 class Dimension:
@@ -1014,16 +1030,27 @@ def offset_provider_to_type(
     }
 
 
+def _get_dimension_name_from_implicit_offset(offset: str) -> str:
+    assert offset.startswith(_IMPLICIT_OFFSET_PREFIX)
+    return offset[len(_IMPLICIT_OFFSET_PREFIX) :]
+
+
 def get_offset_type(
     offset_provider_type: OffsetProviderType, offset: str
 ) -> OffsetProviderTypeElem:
-    return offset_provider_type.get(
-        offset, Dimension(value=offset)
-    )  # TODO return a valid dimension
+    if offset.startswith(_IMPLICIT_OFFSET_PREFIX):
+        return Dimension(value=_get_dimension_name_from_implicit_offset(offset))
+    if offset not in offset_provider_type:
+        raise KeyError(f"Offset '{offset}' not found in offset provider type.")
+    return offset_provider_type[offset]
 
 
 def get_offset(offset_provider: OffsetProvider, offset: str) -> OffsetProviderElem:
-    return offset_provider.get(offset, Dimension(value=offset))  # TODO return a valid dimension
+    if offset.startswith(_IMPLICIT_OFFSET_PREFIX):
+        return Dimension(value=_get_dimension_name_from_implicit_offset(offset))
+    if offset not in offset_provider:
+        raise KeyError(f"Offset '{offset}' not found in offset provider.")
+    return offset_provider[offset]  # TODO return a valid dimension
 
 
 def hash_offset_provider_unsafe(offset_provider: OffsetProvider) -> int:

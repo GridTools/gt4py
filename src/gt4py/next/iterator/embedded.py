@@ -1352,12 +1352,7 @@ def constant_field(value: Any, dtype_like: Optional[core_defs.DTypeLike] = None)
 @builtins.shift.register(EMBEDDED)
 def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIterator]:
     def impl(it: ItIterator) -> ItIterator:
-        return it.shift(
-            # TODO
-            *list(
-                o.value if isinstance(o, (runtime.Offset, common.Dimension)) else o for o in offsets
-            )
-        )
+        return it.shift(*list(o.value if isinstance(o, runtime.Offset) else o for o in offsets))
 
     return impl
 

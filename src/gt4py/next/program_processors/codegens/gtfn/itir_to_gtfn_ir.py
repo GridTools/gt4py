@@ -140,7 +140,8 @@ def _collect_offset_definitions(
         .filter(lambda offset_literal: isinstance(offset_literal.value, str))
         .getattr("value")
     ).to_set()
-    if not used_offset_tags.issubset(offset_provider_type.keys() | dimension_tags):
+    implicit_offsets = {common.dimension_to_implicit_offset(dim) for dim in dimension_tags}
+    if not used_offset_tags.issubset(offset_provider_type.keys() | implicit_offsets):
         raise AssertionError("ITIR contains an offset tag without a corresponding offset provider.")
     offset_definitions = {}
 

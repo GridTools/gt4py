@@ -13,6 +13,7 @@ from typing import Any, Callable, Optional
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Never
+from gt4py.next import common
 from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental as experimental_builtins,
@@ -304,11 +305,17 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     left=foast.Name(id=dimension),  # TODO(tehrengruber): use type of lhs
                     right=foast.Constant(value=offset_index),
                 ):
-                    # TODO lookup common.get_offset_type to do more fancy stuff
                     if arg.op == dialect_ast_enums.BinaryOperator.SUB:
                         offset_index *= -1
+                    # TODO(havogt): we rely on the naming-convention for implicit offsets, see `dimension_to_implicit_offset`
                     current_expr = im.as_fieldop(
-                        im.lambda_("__it")(im.deref(im.shift(dimension, offset_index)("__it")))
+                        im.lambda_("__it")(
+                            im.deref(
+                                im.shift(
+                                    common.dimension_to_implicit_offset(dimension), offset_index
+                                )("__it")
+                            )
+                        )
                     )(current_expr)
                 # `field(Off)`
                 case foast.Name(id=offset_name):
