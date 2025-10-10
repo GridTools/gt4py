@@ -70,7 +70,7 @@ or `VerticalMapSplitCallback`.
 
 It has the following arguments:
 - The transformation object itself.
-- The MaxENtry node of the first Map.
+- The MapEntry node of the first Map.
 - The MapEntry node of the second Map.
 - The SDFGState in which the nodes where found.
 - The SDFG itself.
@@ -80,7 +80,7 @@ It has the following arguments:
 def gt_horizontal_map_split_fusion(
     sdfg: dace.SDFG,
     run_simplify: bool,
-    fuse_possible_maps: bool,
+    fuse_map_fragments: bool,
     consolidate_edges_only_if_not_extending: bool,
     skip: Optional[set[str]] = None,
     run_map_fusion: bool = False,
@@ -101,18 +101,18 @@ def gt_horizontal_map_split_fusion(
     Args:
         sdfg: The SDFG on which we operate.
         run_simplify: Run `gt_simplify()` at the end.
-        run_map_fusion: If `True` also run `MapFusionHorizontal`. Note
-            that this will fuse Maps globally.
-        fuse_possible_maps: Directly fuse the Maps inside `HorizontalSplitMapRange`.
+        fuse_map_fragments: Directly fuse the Maps inside `HorizontalSplitMapRange`.
         consolidate_edges_only_if_not_extending: See `MapFusionHorizontal` for more.
         skip: Skip these transformation during simplification.
+        run_map_fusion: If `True` also run `MapFusionHorizontal`. Note
+            that this will fuse Maps globally.
         check_split_callback: Use this as callback for the split transformation, see
             `HorizontalMapSplitCallback` for more information.
         check_fusion_callback: Use this as callback for the `MapFusionHorizontal`
             transformation, it only has an effect if `run_map_fusion`
-            has been set to `True`. Note that this call back is not passed to
+            has been set to `True`. Note that this callback is not passed to
             `HorizontalSplitMapRange` thus it can not be used to limit fusion of Maps
-            that are created during the splitting, see `fuse_possible_maps`.
+            that are created during the splitting, see `fuse_map_fragments`.
         only_if_common_ancestor: Passed to `MapFusionHorizontal` only has an effect
             if `run_map_fusion` is `True`.
         validate: Perform validation during the steps.
@@ -121,9 +121,10 @@ def gt_horizontal_map_split_fusion(
 
     transformations = [
         HorizontalSplitMapRange(
-            fuse_possible_maps=fuse_possible_maps,
+            fuse_map_fragments=fuse_map_fragments,
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
+            check_split_callback=check_split_callback,
         )
     ]
 
@@ -165,7 +166,7 @@ def gt_vertical_map_split_fusion(
     run_simplify: bool,
     run_map_fusion: bool,
     consolidate_edges_only_if_not_extending: bool,
-    fuse_possible_maps: bool,
+    fuse_map_fragments: bool,
     single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
     skip: Optional[set[str]] = None,
     check_split_callback: Optional[VerticalMapSplitCallback] = None,
@@ -177,17 +178,19 @@ def gt_vertical_map_split_fusion(
 
     The function essentially runs `VerticalSplitMapRange` until a fix point is reached.
 
-
-    Note that do
-    Note that the transformation is called with `fuse_possible_maps` set to `True`,
-    thus `MapFusionVertical` and `SplitAccessNode` are run, but their activities
-    are restricted to Maps that were created by the splitting.
+    Note that if the function is called with `fuse_map_fragments` set to `True`,
+    then the `VerticalSplitMapRange` will also run `MapFusionVertical` and
+    `SplitAccessNode` but their activities are restricted to Maps that were created
+    by the splitting.
+    This is a different behaviour compared to `run_map_fusion` where `MapFusionVertical`
+    is run as an independent transformation, which acts on the entire SDFG, it will
+    however, respect `check_fusion_callback`.
 
     Args:
         sdfg: The SDFG on which we operate.
         run_simplify: Run `gt_simplify()` at the end.
         consolidate_edges_only_if_not_extending: See `MapFusionVertical` for more.
-        fuse_possible_maps: Run `MapFusionVertical` directly inside the split transformation.
+        fuse_map_fragments: Run `MapFusionVertical` directly inside the split transformation.
             Note that this is limited to the Maps that are were created. Furthermore,
             `check_fusion_callback` is not used.
         single_use_data: Precomputed single use data.
@@ -216,7 +219,7 @@ def gt_vertical_map_split_fusion(
             only_toplevel_maps=True,
             check_split_callback=check_split_callback,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
-            fuse_possible_maps=fuse_possible_maps,
+            fuse_map_fragments=fuse_map_fragments,
             single_use_data=single_use_data,
         )
     ]
@@ -371,7 +374,7 @@ class HorizontalSplitMapRange(SplitMapRange):
     first_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
     second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
-    fuse_possible_maps = dace_properties.Property(
+    fuse_map_fragments = dace_properties.Property(
         dtype=bool,
         default=True,
         desc="If `True`, the transformation will try to fuse maps that have the same range together.",
@@ -387,27 +390,25 @@ class HorizontalSplitMapRange(SplitMapRange):
         desc="Only consolidate if this does not lead to an extension of the subset.",
     )
 
-    _check_split_callback: Optional[HorizontalSplitMapRange]
+    _check_split_callback: Optional[HorizontalMapSplitCallback]
 
     def __init__(
         self,
-        fuse_possible_maps: Optional[bool] = None,
+        fuse_map_fragments: Optional[bool] = None,
         consolidate_edges_only_if_not_extending: Optional[bool] = None,
         never_consolidate_edges: Optional[bool] = None,
-        check_split_callback: Optional[HorizontalSplitMapRange] = None,
+        check_split_callback: Optional[HorizontalMapSplitCallback] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        super().__init__(*args, **kwargs)
-        if fuse_possible_maps is not None:
-            self.fuse_possible_maps = fuse_possible_maps
+        if fuse_map_fragments is not None:
+            self.fuse_map_fragments = fuse_map_fragments
         if consolidate_edges_only_if_not_extending is not None:
             self.consolidate_edges_only_if_not_extending = consolidate_edges_only_if_not_extending
         if never_consolidate_edges is not None:
             self.never_consolidate_edges = never_consolidate_edges
-        self._check_split_callback = None
-        if check_split_callback is not None:
-            self._check_split_callback = check_split_callback
+        self._check_split_callback = check_split_callback
+        super().__init__(*args, **kwargs)
 
     @classmethod
     def expressions(cls) -> Any:
@@ -487,7 +488,7 @@ class HorizontalSplitMapRange(SplitMapRange):
         )
 
         # If we do not want to fuse the maps, we can stop here.
-        if not self.fuse_possible_maps:
+        if not self.fuse_map_fragments:
             return
 
         # Look which Maps can be fused together. It is important that a Map can be listed multiple
@@ -552,7 +553,7 @@ class VerticalSplitMapRange(SplitMapRange):
     to promote serial map fusion. Furthermore, this transformation also performs
     `SplitAccessNode` on all intermediates of the first and second Map.
 
-    If `fuse_possible_maps` is set to `True`, the default is `False`, then the
+    If `fuse_map_fragments` is set to `True`, the default is `False`, then the
     transformation will also perform MapFusionVertical, but limited to the newly
     created Maps.
 
@@ -560,11 +561,12 @@ class VerticalSplitMapRange(SplitMapRange):
         only_toplevel_maps: Only applies to top level maps.
         check_split_callback: Callback used to check if a split should be performed
             or not, see `VerticalMapSplitCallback` for more.
-        fuse_possible_maps: Immediately use fusing and splitting on the generated Maps.
+        fuse_map_fragments: Immediately apply fusion and node splitting on the
+            generated Maps.
         single_use_data: Use this as single use data and do not compute it on the fly.
 
     Note:
-        - Even if `fuse_possible_maps` is `True` it might be that some fusion involving
+        - Even if `fuse_map_fragments` is `True` it might be that some fusion involving
             the split Maps is still possible, this is a bug.
         - Currently all AccessNodes between the first and second Map are subjected to
             `SplitAccessNode`, not just the ones that defined the split. This is a bug.
@@ -575,7 +577,7 @@ class VerticalSplitMapRange(SplitMapRange):
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     second_map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
-    fuse_possible_maps = dace_properties.Property(
+    fuse_map_fragments = dace_properties.Property(
         dtype=bool,
         default=False,  # NOTE: For backwards compatibility.
         desc="If `True`, the transformation will try to fuse the maps that were generated together.",
@@ -597,21 +599,17 @@ class VerticalSplitMapRange(SplitMapRange):
         self,
         *args: Any,
         check_split_callback: Optional[VerticalMapSplitCallback] = None,
-        fuse_possible_maps: Optional[bool] = None,
+        fuse_map_fragments: Optional[bool] = None,
         single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
         consolidate_edges_only_if_not_extending: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
-        self._check_split_callback = None
-        self._single_use_data = None
-        if check_split_callback is not None:
-            self._check_split_callback = check_split_callback
-        if fuse_possible_maps is not None:
-            self.fuse_possible_maps = fuse_possible_maps
-        if single_use_data is not None:
-            self._single_use_data = single_use_data
+        if fuse_map_fragments is not None:
+            self.fuse_map_fragments = fuse_map_fragments
         if consolidate_edges_only_if_not_extending is not None:
             self.consolidate_edges_only_if_not_extending = consolidate_edges_only_if_not_extending
+        self._check_split_callback = check_split_callback
+        self._single_use_data = single_use_data
         super().__init__(*args, **kwargs)
 
     @classmethod
@@ -701,7 +699,7 @@ class VerticalSplitMapRange(SplitMapRange):
             second_map_exit,
         )
 
-        # We always split the AccessNode that are involved, regardless of `fuse_possible_maps`.
+        # We always split the AccessNode that are involved, regardless of `fuse_map_fragments`.
         # TODO(phimuell, iomaganaris): Refine this such that only the AccessNodes that
         #   defined the split are actually split and not some other random nodes.
         # TODO(phimuell): Make it possible to pass `self.single_use_data` to transformation.
@@ -722,7 +720,7 @@ class VerticalSplitMapRange(SplitMapRange):
             return
 
         # If requested perform the fusion.
-        if self.fuse_possible_maps:
+        if self.fuse_map_fragments:
             assert len(intermediates_that_might_need_splitting) >= 1
 
             new_second_map_exits = [
@@ -737,14 +735,19 @@ class VerticalSplitMapRange(SplitMapRange):
                 state: dace.SDFGState,
                 _sdfg: dace.SDFG,
             ) -> bool:
-                # NOTE: We use the "opposite" node here for the comparison, because
-                #   the current implementation keeps them alive.
+                # NOTE: For the check we have to use the entry of the first and the
+                #   exit of the second Map, although there were not matched. The
+                #   reason is that `MapFusionVertical` will remove the matched nodes,
+                #   thus we will "loose sight of them". However, the "opposite" nodes
+                #   of the Maps should survive, except in strange situation, but this
+                #   is why we do not guarantee that everything related to the split
+                #   has been merged.
                 # NOTE: We use `or` here such that every fusion which involves
                 #   a Map is is generated is considered. This should even work over
                 #   chains, I guess.
                 if (
                     state.entry_node(first_map_exit) in new_first_map_entries
-                    or state.exit_node(second_map_exit) in new_second_map_exits
+                    or state.exit_node(second_map_entry) in new_second_map_exits
                 ):
                     return True
                 return False
