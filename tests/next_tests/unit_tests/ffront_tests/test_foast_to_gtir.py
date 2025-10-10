@@ -10,6 +10,8 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import dataclasses
+
 
 import numpy as np
 import pytest
@@ -926,3 +928,19 @@ def test_scalar_broadcast():
         1,
         im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))),
     )
+
+
+@dataclasses.dataclass
+class DataclassContainer:
+    a: gtx.Field[[TDim], float64]
+    b: gtx.Field[[TDim], float64]
+
+
+def test_containers():
+    def foo(inp: DataclassContainer) -> DataclassContainer:
+        return DataclassContainer(a=inp.a, b=inp.b)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    # assert False  # TODO

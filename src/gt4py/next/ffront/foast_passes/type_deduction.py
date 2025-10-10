@@ -1044,7 +1044,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         @utils.tree_map(
             collection_type=ts.TupleType,
-            result_collection_constructor=lambda el: ts.TupleType(types=list(el)),
+            result_constructor_maker=lambda _: lambda el: ts.TupleType(types=list(el)),
         )
         def deduce_return_type(
             tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType
