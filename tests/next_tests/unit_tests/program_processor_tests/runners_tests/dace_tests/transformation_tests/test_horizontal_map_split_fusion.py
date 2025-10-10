@@ -216,7 +216,7 @@ def test_horizontal_map_fusion():
     nb_applications = gtx_transformations.gt_horizontal_map_split_fusion(
         sdfg=sdfg,
         run_simplify=False,
-        fuse_possible_maps=True,
+        fuse_map_fragments=True,
         consolidate_edges_only_if_not_extending=False,
         validate=True,
         validate_all=True,

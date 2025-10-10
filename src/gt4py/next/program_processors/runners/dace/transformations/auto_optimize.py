@@ -466,7 +466,7 @@ def _gt_auto_process_top_level_maps(
                 sdfg=sdfg,
                 run_simplify=False,
                 run_map_fusion=True,
-                fuse_possible_maps=False,  # To avoid uncontrolled Map fusing.
+                fuse_map_fragments=False,  # To avoid uncontrolled Map fusing.
                 skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
                 consolidate_edges_only_if_not_extending=True,
                 single_use_data=single_use_data,
@@ -483,7 +483,7 @@ def _gt_auto_process_top_level_maps(
                 sdfg=sdfg,
                 run_simplify=False,
                 run_map_fusion=True,
-                fuse_possible_maps=False,  # To avoid uncontrolled Map fusing.
+                fuse_map_fragments=False,  # To avoid uncontrolled Map fusing.
                 skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
                 consolidate_edges_only_if_not_extending=True,
                 check_split_callback=optimization_hooks.get(  # type: ignore[arg-type]
