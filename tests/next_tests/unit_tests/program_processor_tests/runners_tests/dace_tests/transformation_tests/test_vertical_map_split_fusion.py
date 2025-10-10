@@ -76,6 +76,8 @@ def test_vertical_map_fusion():
     ret = gtx_transformations.gt_vertical_map_split_fusion(
         sdfg=sdfg,
         run_simplify=True,
+        run_map_fusion=False,
+        fuse_possible_maps=True,
         consolidate_edges_only_if_not_extending=False,
         validate=True,
         validate_all=True,
@@ -315,6 +317,8 @@ def test_vertical_map_fusion_with_neighbor_access():
     ret = gtx_transformations.gt_vertical_map_split_fusion(
         sdfg=sdfg,
         run_simplify=True,
+        run_map_fusion=False,
+        fuse_possible_maps=True,
         consolidate_edges_only_if_not_extending=False,
         validate=True,
         validate_all=True,
