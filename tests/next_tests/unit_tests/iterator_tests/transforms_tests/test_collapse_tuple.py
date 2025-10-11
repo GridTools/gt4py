@@ -5,11 +5,14 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import pytest
+
 from gt4py.next import common
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
-from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.type_system import type_specifications as it_ts
+from gt4py.next.type_system import type_specifications as ts
+
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
@@ -89,18 +92,6 @@ def test_incompatible_size_make_tuple_tuple_get():
     assert actual == testee  # did nothing
 
 
-def test_merged_with_smaller_outer_size_make_tuple_tuple_get():
-    testee = im.make_tuple(im.tuple_get(0, im.make_tuple("first", "second")))
-    actual = CollapseTuple.apply(
-        testee,
-        ignore_tuple_size=True,
-        enabled_transformations=CollapseTuple.Transformation.COLLAPSE_MAKE_TUPLE_TUPLE_GET,
-        allow_undeclared_symbols=True,
-        within_stencil=False,
-    )
-    assert actual == im.make_tuple("first", "second")
-
-
 def test_simple_tuple_get_make_tuple():
     expected = im.ref("bar")
     testee = im.tuple_get(1, im.make_tuple("foo", expected))
@@ -114,7 +105,27 @@ def test_simple_tuple_get_make_tuple():
     assert expected == actual
 
 
-def test_propagate_tuple_get():
+@pytest.mark.parametrize("fun", ["if_", "concat_where"])
+def test_propagate_tuple_get(fun):
+    testee = im.tuple_get(
+        0, im.call(fun)("cond", im.make_tuple("el1", "el2"), im.make_tuple("el1", "el2"))
+    )
+    expected = im.call(fun)(
+        "cond",
+        im.tuple_get(0, im.make_tuple("el1", "el2")),
+        im.tuple_get(0, im.make_tuple("el1", "el2")),
+    )
+    actual = CollapseTuple.apply(
+        testee,
+        remove_letified_make_tuple_elements=False,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_TUPLE_GET,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert expected == actual
+
+
+def test_propagate_tuple_get_let():
     expected = im.let(("el1", 1), ("el2", 2))(im.tuple_get(0, im.make_tuple("el1", "el2")))
     testee = im.tuple_get(0, im.let(("el1", 1), ("el2", 2))(im.make_tuple("el1", "el2")))
     actual = CollapseTuple.apply(
@@ -213,9 +224,26 @@ def test_propagate_to_if_on_tuples_with_let():
     assert actual == expected
 
 
-def test_propagate_nested_lift():
+def test_propagate_nested_let():
     testee = im.let("a", im.let("b", 1)("a_val"))("a")
     expected = im.let("b", 1)(im.let("a", "a_val")("a"))
+    actual = CollapseTuple.apply(
+        testee,
+        remove_letified_make_tuple_elements=False,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert actual == expected
+
+
+def test_propagate_nested_let_with_collision():
+    testee = im.let(("a", im.let("c", 1)("c")), ("b", im.let("c", 2)("c")))(
+        im.call("plus")("a", "b")
+    )
+    expected = im.let(("c", 1), ("c_", 2))(
+        im.let(("a", "c"), ("b", "c_"))(im.call("plus")("a", "b"))
+    )
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,

@@ -458,7 +458,7 @@ class NdArrayField(
 
 
 @dataclasses.dataclass(frozen=True)
-class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
+class NdArrayConnectivityField(
     common.Connectivity[common.DimsT, common.DimT],
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
@@ -480,8 +480,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         raise NotImplementedError()
 
     @property
-    # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
-    def codomain(self) -> common.DimT:
+    def codomain(self) -> common.DimT:  # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
         return self._codomain
 
     @property
@@ -974,7 +973,7 @@ def _concat_where(
     return cls_.from_array(result_array, domain=result_domain)
 
 
-NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[arg-type]
+NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[arg-type] # TODO(havogt): this is still the "old" concat_where, needs to be replaced in a next PR
 
 
 def _make_reduction(
@@ -994,7 +993,7 @@ def _make_reduction(
                 "Reducing a field with more than one local dimension is not supported."
             )
         reduce_dim_index = field.domain.dims.index(axis)
-        current_offset_provider = embedded_context.offset_provider.get(None)
+        current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[
             axis.value

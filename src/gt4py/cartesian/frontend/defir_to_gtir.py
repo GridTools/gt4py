@@ -20,6 +20,7 @@ from gt4py.cartesian.frontend.node_util import (
     location_to_source_location,
 )
 from gt4py.cartesian.frontend.nodes import (
+    AbsoluteKIndex,
     ArgumentInfo,
     Assign,
     AxisBound,
@@ -340,6 +341,14 @@ class DefIRToGTIR(IRNodeVisitor):
         NativeFunction.FLOOR: common.NativeFunction.FLOOR,
         NativeFunction.CEIL: common.NativeFunction.CEIL,
         NativeFunction.TRUNC: common.NativeFunction.TRUNC,
+        NativeFunction.INT32: common.NativeFunction.INT32,
+        NativeFunction.INT64: common.NativeFunction.INT64,
+        NativeFunction.FLOAT32: common.NativeFunction.FLOAT32,
+        NativeFunction.FLOAT64: common.NativeFunction.FLOAT64,
+        NativeFunction.ERF: common.NativeFunction.ERF,
+        NativeFunction.ERFC: common.NativeFunction.ERFC,
+        NativeFunction.ROUND: common.NativeFunction.ROUND,
+        NativeFunction.ROUND_AWAY_FROM_ZERO: common.NativeFunction.ROUND_AWAY_FROM_ZERO,
     }
 
     GT4PY_BUILTIN_TO_GTIR: Final[dict[Builtin, common.BuiltInLiteral]] = {
@@ -564,12 +573,16 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def transform_offset(
-        self, offset: Dict[str, Union[int, Expr]], **kwargs: Any
-    ) -> Union[common.CartesianOffset, gtir.VariableKOffset]:
+        self, offset: dict[str, int | Expr | AbsoluteKIndex], **kwargs: Any
+    ) -> common.CartesianOffset | gtir.VariableKOffset | gtir.AbsoluteKIndex:
+        if isinstance(offset, AbsoluteKIndex):
+            return gtir.AbsoluteKIndex(k=self.visit(offset.k, **kwargs))
+
         k_val = offset.get("K", 0)
         if isinstance(k_val, numbers.Integral):
             return common.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)
+
         if isinstance(k_val, Expr):
             return gtir.VariableKOffset(k=self.visit(k_val, **kwargs))
 
-        raise TypeError("Unrecognized vertical offset type")
+        raise TypeError("Unrecognized vertical offset type.")

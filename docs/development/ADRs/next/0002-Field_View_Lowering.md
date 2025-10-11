@@ -53,8 +53,8 @@ Example (type annotations omitted):
 ```python
 @fieldop
 def temp(a):
-  tmp = a
-  return tmp
+    tmp = a
+    return tmp
 ```
 
 Would need to be turned into a single expression. While this case is trivial to solve by hand by simply replacing of `a` for `tmp` (yielding `deref(a)`), we require an algorithm that works in all cases.
@@ -177,6 +177,6 @@ In the course of implementing the lowering it turned out that while it is clear 
 
 Since temporary variables are no longer inlined, the renaming that happens in the SSA pass now goes through into the lowered IR, requiring the new names to be valid `SymbolNames`. This renaming should consequently be checked for and made more robust against user variable name collisions.
 
-## Operator signature FOAST <-> ITIR
+## Operator signature FOAST \<-> ITIR
 
-On iterator level the arguments to all stencils / functions used inside a fencil closure need to be iterators (due to the compiled backend using a single SID composite to pass the arguments). Following the FOAST value <-> ITIR value, FOAST field <-> ITIR iterator correspondence, all field operator arguments whose type on FOAST level is a value, i.e. scalar or composite thereof, are expected to be values on ITIR level by the rest of the lowering. As a consequence we transform all values into iterators before calling field operators (to satisfy the former constraint) and deref them immediately inside every field operator (to satisfy the latter constraint).
+On iterator level the arguments to all stencils / functions used inside a fencil closure need to be iterators (due to the compiled backend using a single SID composite to pass the arguments). Following the FOAST value \<-> ITIR value, FOAST field \<-> ITIR iterator correspondence, all field operator arguments whose type on FOAST level is a value, i.e. scalar or composite thereof, are expected to be values on ITIR level by the rest of the lowering. As a consequence we transform all values into iterators before calling field operators (to satisfy the former constraint) and deref them immediately inside every field operator (to satisfy the latter constraint).

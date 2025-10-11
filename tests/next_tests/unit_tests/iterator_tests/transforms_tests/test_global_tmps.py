@@ -11,10 +11,13 @@ import pytest
 import functools
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import global_tmps, infer_domain, collapse_tuple
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.iterator.ir_utils import (
+    ir_makers as im,
+    misc as ir_utils_misc,
+)
 
 
 IDim = common.Dimension(value="IDim")
@@ -311,16 +314,10 @@ def test_tuple_different_domain():
         params=params,
         body=[
             itir.SetAt(
-                # val = if_(cond, make_tuple(as_fieldop(...), as_fieldop(...)), make_tuple())
-                # val1 = if_(cond, as_fieldop(...), as_fieldop(...))
-                # val2 = if_(cond, as_fieldop(...), as_fieldop(...))
-                # materialize_into(out, make_tuple(as_fieldop(...), ...))
                 target=im.ref("out"),
                 expr=im.let(
                     "val",
-                    im.if_(
-                        "cond", im.make_tuple("inp1", "inp2"), im.make_tuple("inp2", "inp1")
-                    ),  # todo: fix, the domain is strange
+                    im.if_("cond", im.make_tuple("inp1", "inp2"), im.make_tuple("inp2", "inp1")),
                 )(add_shifted(None)(im.tuple_get(0, "val"), im.tuple_get(1, "val"))),
                 domain=domain01,
             )
@@ -491,3 +488,78 @@ def test_tuple_different_domain_nested():
     actual = global_tmps.create_global_tmps(testee, offset_provider)
     actual = collapse_tuple.CollapseTuple.apply(actual)
     assert actual == expected
+
+
+def test_domain_preservation():
+    domain = im.domain("cartesian_domain", {IDim: (0, 2)})
+    domain_tb = im.domain("cartesian_domain", {IDim: (0, 1)})
+    domain_fb = im.domain("cartesian_domain", {IDim: (1, 2)})
+    offset_provider = {}
+    testee = program_factory(
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.op_as_fieldop("plus")(  # no domain here
+                    # smaller domain for the next two exprs, must not be re-inferred
+                    im.as_fieldop("deref", domain_tb)("inp"),
+                    im.as_fieldop("deref", domain_fb)("inp"),
+                ),
+                domain=domain,
+            )
+        ],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+
+    expected = program_factory(
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
+        declarations=[
+            itir.Temporary(id="__tmp_1", domain=domain_tb, dtype=float_type),
+            itir.Temporary(id="__tmp_2", domain=domain_fb, dtype=float_type),
+        ],
+        body=[
+            itir.SetAt(
+                target=im.ref("__tmp_1"),
+                expr=im.as_fieldop("deref", domain_tb)("inp"),
+                domain=domain_tb,
+            ),
+            itir.SetAt(
+                target=im.ref("__tmp_2"),
+                expr=im.as_fieldop("deref", domain_fb)("inp"),
+                domain=domain_fb,
+            ),
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.op_as_fieldop("plus", domain)("__tmp_1", "__tmp_2"),
+                domain=domain,
+            ),
+        ],
+    )
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider)
+    assert actual == expected
+
+
+def test_non_scan_projector():
+    domain = im.domain("cartesian_domain", {IDim: (0, 2)})
+    offset_provider = {}
+    stmt = itir.SetAt(
+        target=im.ref("out"),
+        expr=im.make_tuple(im.tuple_get(0, "inp")),
+        domain=domain,
+    )
+    testee = program_factory(
+        params=[
+            im.sym("inp", ts.TupleType(types=[i_field_type, float_type])),
+            im.sym("out", ts.TupleType(types=[i_field_type])),
+        ],
+        body=[stmt],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+
+    # make sure the statement actually has a projector
+    projector, expr = ir_utils_misc.extract_projector(stmt.expr)
+    assert projector is not None
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider)
+    assert actual == testee

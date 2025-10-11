@@ -23,8 +23,7 @@ import textwrap
 from typing import Any, Optional
 
 from gt4py.eve import SourceLocation
-
-from . import formatting
+from gt4py.next.errors import formatting
 
 
 class GT4PyError(Exception):
@@ -115,3 +114,8 @@ class InvalidParameterAnnotationError(DSLTypeError):
 class CompilationError(GT4PyError):
     def __init__(self, compilation_error: str) -> None:
         super().__init__(f"See attached compilation log.\n{compilation_error}")
+
+
+class EmbeddedExecutionError(GT4PyError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)

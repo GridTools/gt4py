@@ -79,7 +79,7 @@ AOT_PRG: typing.TypeAlias = toolchain.CompilableProgram[PRG, arguments.CompileTi
 def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:
     hasher: xtyping.HashlibAlgorithm
     if not algorithm:
-        hasher = xxhash.xxh64()
+        hasher = xxhash.xxh64()  # type: ignore[assignment]  # fixing this requires https://github.com/ifduyue/python-xxhash/issues/104
     elif isinstance(algorithm, str):
         hasher = hashlib.new(algorithm)
     else:
@@ -129,9 +129,15 @@ def add_func_to_fingerprint(obj: types.FunctionType, hasher: xtyping.HashlibAlgo
 
 @add_content_to_fingerprint.register
 def add_dict_to_fingerprint(obj: dict, hasher: xtyping.HashlibAlgorithm) -> None:
-    for key, value in sorted(obj.items()):
+    # just a small helper to additionally allow sorting types (by just using their name)
+    def key_function(key: Any) -> Any:
+        if isinstance(key, type):
+            return key.__module__, key.__qualname__
+        return key
+
+    for key in sorted(obj.keys(), key=key_function):
         add_content_to_fingerprint(key, hasher)
-        add_content_to_fingerprint(value, hasher)
+        add_content_to_fingerprint(obj[key], hasher)
 
 
 @add_content_to_fingerprint.register

@@ -12,10 +12,12 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import (
+    concat_where,
     dead_code_elimination,
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
+    infer_domain_ops,
     inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
@@ -52,7 +54,6 @@ def apply_common_transforms(
     unroll_reduce=False,
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
-    unconditionally_collapse_tuples=False,
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
@@ -81,12 +82,18 @@ def apply_common_transforms(
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir
     )  # domain inference does not support dynamic offsets yet
+    ir = infer_domain_ops.InferDomainOps.apply(ir)
+    ir = concat_where.canonicalize_domain_argument(ir)
+
+    ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
     ir = infer_domain.infer_program(
         ir,
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
+
+    ir = concat_where.transform_to_as_fieldop(ir)
 
     for _ in range(10):
         inlined = ir
@@ -132,18 +139,6 @@ def apply_common_transforms(
             uids=tmp_uids,
         )
 
-    # Since `CollapseTuple` relies on the type inference which does not support returning tuples
-    # larger than the number of closure outputs as given by the unconditional collapse, we can
-    # only run the unconditional version here instead of in the loop above.
-    if unconditionally_collapse_tuples:
-        ir = CollapseTuple.apply(
-            ir,
-            ignore_tuple_size=True,
-            uids=collapse_tuple_uids,
-            enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
-            offset_provider_type=offset_provider_type,
-        )  # type: ignore[assignment]  # always an itir.Program
-
     ir = NormalizeShifts().visit(ir)
 
     ir = FuseMaps().visit(ir)
@@ -152,15 +147,15 @@ def apply_common_transforms(
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce.apply(ir, offset_provider_type=offset_provider_type)
-            if unrolled == ir:
-                break
-            ir = unrolled  # type: ignore[assignment] # still a `itir.Program`
-            ir = CollapseListGet().visit(ir)
-            ir = NormalizeShifts().visit(ir)
+            unrolled = CollapseListGet().visit(unrolled)
+            unrolled = NormalizeShifts().visit(unrolled)
             # this is required as nested neighbor reductions can contain lifts, e.g.,
             # `neighbors(V2Eₒ, ↑f(...))`
-            ir = inline_lifts.InlineLifts().visit(ir)
-            ir = NormalizeShifts().visit(ir)
+            unrolled = inline_lifts.InlineLifts().visit(unrolled)
+            unrolled = NormalizeShifts().visit(unrolled)
+            if unrolled == ir:
+                break
+            ir = unrolled
         else:
             raise RuntimeError("Reduction unrolling failed.")
 
@@ -183,6 +178,11 @@ def apply_fieldview_transforms(
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir
     )  # domain inference does not support dynamic offsets yet
+
+    ir = infer_domain_ops.InferDomainOps.apply(ir)
+    ir = concat_where.canonicalize_domain_argument(ir)
+    ir = ConstantFolding.apply(ir)  # type: ignore[assignment]  # always an itir.Program
+
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
     return ir

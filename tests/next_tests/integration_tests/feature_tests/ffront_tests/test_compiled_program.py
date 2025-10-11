@@ -10,9 +10,12 @@ from unittest import mock
 
 import numpy as np
 import pytest
+import time
+import contextlib
 
 from gt4py import next as gtx
-from gt4py.next import errors
+from gt4py.next import errors, config
+from gt4py.next.otf import compiled_program
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
@@ -211,17 +214,17 @@ def test_compile_unstructured_jit(
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
-    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
 
-    # compiled for skip_value_mesh, simple_mesh
+    # compiled for skip_value_mesh and simple_mesh
     compile_testee_unstructured.compile(
         offset_provider=[
             skip_value_mesh_descriptor.offset_provider,
             unstructured_case.offset_provider,
         ],
+        enable_jit=False,
     )
 
-    # but executing the simple_mesh
+    # and executing the simple_mesh
     args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
     compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
 
@@ -237,11 +240,11 @@ def test_compile_unstructured_wrong_offset_provider(
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
-    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
 
     # compiled for skip_value_mesh
     compile_testee_unstructured.compile(
         offset_provider=skip_value_mesh_descriptor.offset_provider,
+        enable_jit=False,
     )
 
     # but executing the simple_mesh
@@ -261,11 +264,11 @@ def test_compile_unstructured_modified_offset_provider(
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
-    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
 
     # compiled for skip_value_mesh
     compile_testee_unstructured.compile(
         offset_provider=skip_value_mesh_descriptor.offset_provider,
+        enable_jit=False,
     )
 
     # but executing the simple_mesh
@@ -285,7 +288,6 @@ def test_compile_unstructured_for_two_offset_providers(
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
-    object.__setattr__(compile_testee_unstructured, "enable_jit", False)
 
     # compiled for skip_value_mesh and simple_mesh
     compile_testee_unstructured.compile(
@@ -293,6 +295,7 @@ def test_compile_unstructured_for_two_offset_providers(
             skip_value_mesh_descriptor.offset_provider,
             unstructured_case.offset_provider,
         ],
+        enable_jit=False,
     )
 
     # make sure the backend is never called
@@ -434,6 +437,77 @@ def test_compile_variants_not_compiled(cartesian_case, compile_variants_testee):
             out=out,
             offset_provider=cartesian_case.offset_provider,
         )
+
+
+def test_compile_variants_not_compiled_but_jit_enabled_on_call(
+    cartesian_case, compile_variants_testee
+):
+    # disable jit on the program
+    object.__setattr__(compile_variants_testee, "enable_jit", False)
+
+    field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
+    field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
+    out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
+
+    with pytest.raises(RuntimeError):
+        # fails because jit is disabled on the program and not explicitly enabled on the call
+        compile_variants_testee(
+            field_a,
+            int32(3),  # variant does not exist
+            4.0,
+            False,
+            field_b,
+            out=out,
+            offset_provider=cartesian_case.offset_provider,
+        )
+
+    compile_variants_testee(
+        field_a,
+        int32(3),  # variant does not exist
+        4.0,
+        False,
+        field_b,
+        out=out,
+        offset_provider=cartesian_case.offset_provider,
+        enable_jit=True,  # explicitly enable jit on the call
+    )
+    assert np.allclose(out[0].ndarray, field_a.ndarray - 3)
+    assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
+
+
+def test_compile_variants_config_default_disable_jit(cartesian_case, compile_variants_testee):
+    """
+    Checks that changing the config default will be picked up at call time.
+    """
+    field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
+    field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
+    out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
+
+    # One of the 2 cases will be the non-default.
+    with mock.patch.object(config, "ENABLE_JIT_DEFAULT", True):
+        compile_variants_testee(
+            field_a,
+            int32(3),  # variant does not exist
+            4.0,
+            False,
+            field_b,
+            out=out,
+            offset_provider=cartesian_case.offset_provider,
+        )
+        assert np.allclose(out[0].ndarray, field_a.ndarray - 3)
+        assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
+
+    with mock.patch.object(config, "ENABLE_JIT_DEFAULT", False):
+        with pytest.raises(RuntimeError):
+            compile_variants_testee(
+                field_a,
+                int32(-42),  # other value than before
+                4.0,
+                False,
+                field_b,
+                out=out,
+                offset_provider=cartesian_case.offset_provider,
+            )
 
 
 def test_compile_variants_not_compiled_then_reset_static_params(
@@ -677,13 +751,13 @@ def test_compile_variants_non_existing_param(cartesian_case, compile_variants_te
 
 
 def test_compile_variants_wrong_type(cartesian_case, compile_variants_testee_not_compiled):
-    with pytest.raises(errors.DSLTypeError, match="Expected.*'scalar_int'.*int32"):
+    with pytest.raises(errors.DSLTypeError, match="'scalar_int'.*expected.*int32"):
         compile_variants_testee_not_compiled.compile(scalar_int=[1.0], offset_provider={})
 
 
 def test_compile_variants_error_static_field(cartesian_case, compile_variants_testee_not_compiled):
     field_a = cases.allocate(cartesian_case, compile_variants_testee_not_compiled, "field_a")()
-    with pytest.raises(errors.DSLTypeError, match="field_a.*cannot be static"):
+    with pytest.raises(errors.DSLTypeError, match="Invalid static argument.*field_a"):
         compile_variants_testee_not_compiled.compile(field_a=[field_a], offset_provider={})
 
 
@@ -741,3 +815,50 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
         offset_provider=cartesian_case.offset_provider,
     )
     assert np.allclose(out.asnumpy(), field_a.asnumpy() * 3 + field_b.asnumpy() * 4)
+
+
+def test_synchronous_compilation(cartesian_case, compile_testee):
+    # This test is not perfect: only tests that compilation works if '_async_compilation_pool' is not initialized.
+    with mock.patch.object(compiled_program, "_async_compilation_pool", None):
+        a = cases.allocate(cartesian_case, compile_testee, "a")()
+        b = cases.allocate(cartesian_case, compile_testee, "b")()
+
+        out = cases.allocate(cartesian_case, compile_testee, "out")()
+        compile_testee(
+            a,
+            b,
+            out=out,
+            offset_provider=cartesian_case.offset_provider,
+        )
+        assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
+
+
+@pytest.mark.parametrize("synchronous", [True, False], ids=["synchronous", "asynchronous"])
+def test_wait_for_compilation(cartesian_case, compile_testee, synchronous):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    with (
+        mock.patch.object(compiled_program, "_async_compilation_pool", None)
+        if synchronous
+        else contextlib.nullcontext()
+    ):
+        start_compile = time.time()
+        compile_testee.compile(offset_provider=cartesian_case.offset_provider)
+        end_compile = time.time()
+        compile_call_time = end_compile - start_compile
+
+        start_wait = time.time()
+        gtx.wait_for_compilation()
+        end_wait = time.time()
+        wait_time = end_wait - start_wait
+
+        # The assumption is that in synchronous compilation the time is spent in the
+        # call to compile (`wait_for_compilation` is a no-op),
+        # in asynchronous execution `compile` is fast as it only kicks off compilation
+        # while compilation happens while waiting in `wait_for_compilation`.
+        # If this gets flaky, we need to find a better way to test this functionality.
+        if synchronous:
+            assert compile_call_time > wait_time
+        else:
+            assert wait_time > compile_call_time

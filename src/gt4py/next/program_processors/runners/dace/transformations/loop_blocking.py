@@ -16,11 +16,11 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from dace.sdfg import graph as dace_graph, nodes as dace_nodes, propagation as dace_propagation
 from dace.transformation import helpers as dace_helpers
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import gtir_sdfg_utils
+from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_utils
 
 
 @dace_properties.make_properties
@@ -84,7 +84,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     ) -> None:
         super().__init__()
         if isinstance(blocking_parameter, gtx_common.Dimension):
-            blocking_parameter = gtir_sdfg_utils.get_map_variable(blocking_parameter)
+            blocking_parameter = gtir_to_sdfg_utils.get_map_variable(blocking_parameter)
         if blocking_parameter is not None:
             self.blocking_parameter = blocking_parameter
         if blocking_size is not None:
@@ -220,15 +220,15 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         inner_label = f"inner_{outer_map.label}"
         inner_range = {
             self.blocking_parameter: dace_subsets.Range.from_string(
-                f"(({rng_start}) + ({coarse_block_var}) * ({self.blocking_size}))"
-                + ":"
-                + f"min(({rng_start}) + ({coarse_block_var} + 1) * ({self.blocking_size}), ({rng_stop}) + 1)"
+                f"(({rng_start}) + ({coarse_block_var}) * ({self.blocking_size})):"
+                f"min(({rng_start}) + ({coarse_block_var} + 1) * ({self.blocking_size}), ({rng_stop}) + 1)"
             )
         }
         inner_entry, inner_exit = state.add_map(
             name=inner_label,
             ndrange=inner_range,
             schedule=dace.dtypes.ScheduleType.Sequential,
+            debuginfo=copy.copy(outer_map.debuginfo),
         )
 
         # TODO(phimuell): Investigate if we want to prevent unrolling here
@@ -836,9 +836,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # There is an invalid cache state in the SDFG, that makes the memlet
         #  propagation fail, to clear the cache we call the hash function.
         #  See: https://github.com/spcl/dace/issues/1703
-        _ = sdfg.hash_sdfg()
-        # TODO(phimuell): Use a less expensive method.
-        dace.sdfg.propagation.propagate_memlets_state(sdfg, state)
+        _ = sdfg.reset_cfg_list()
+        dace_propagation.propagate_memlets_map_scope(sdfg, state, outer_entry)
 
     def _check_if_blocking_is_favourable(
         self,

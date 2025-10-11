@@ -303,10 +303,8 @@ def test_intermediate_access_node():
     state.remove_edge(edge)
 
     # Test if after the modification the SDFG still works
-    csdfg = sdfg.compile()
-    csdfg(a=a, b=b, c=c, N=N, M=M)
+    util.compile_and_run_sdfg(sdfg, a=a, b=b, c=c, N=N, M=M)
     assert np.allclose(ref, c)
-    del csdfg
 
     # Apply the transformation.
     count = sdfg.apply_transformations_repeated(
@@ -327,10 +325,8 @@ def test_intermediate_access_node():
     assert bottom_node is not top_node
 
     c[:] = 0
-    csdfg = sdfg.compile()
-    csdfg(a=a, b=b, c=c, N=N, M=M)
+    util.compile_and_run_sdfg(sdfg, a=a, b=b, c=c, N=N, M=M)
     assert np.allclose(ref, c)
-    del csdfg
 
 
 def test_chained_access() -> None:
@@ -345,10 +341,8 @@ def test_chained_access() -> None:
     ref = reff(a, b)
 
     # Before the optimization
-    csdfg = sdfg.compile()
-    csdfg(a=a, b=b, c=c, M=M, N=N)
+    util.compile_and_run_sdfg(sdfg, a=a, b=b, c=c, M=M, N=N)
     assert np.allclose(c, ref)
-    del csdfg
     c[:] = 0
 
     # Apply the transformation.
@@ -360,10 +354,8 @@ def test_chained_access() -> None:
     assert count == 1
 
     # Now run the SDFG to see if it is still the same
-    csdfg = sdfg.compile()
-    csdfg(a=a, b=b, c=c, M=M, N=N)
+    util.compile_and_run_sdfg(sdfg, a=a, b=b, c=c, M=M, N=N)
     assert np.allclose(c, ref)
-    del csdfg
 
     # Now look for the outer map.
     outer_map = None
@@ -371,9 +363,9 @@ def test_chained_access() -> None:
         if not isinstance(node, dace_nodes.MapEntry):
             continue
         if state.scope_dict()[node] is None:
-            assert (
-                outer_map is None
-            ), f"Found multiple outer maps, first '{outer_map}', second '{node}'."
+            assert outer_map is None, (
+                f"Found multiple outer maps, first '{outer_map}', second '{node}'."
+            )
             outer_map = node
     assert outer_map is not None, "Could not found the outer map."
     assert len(outer_map.map.params) == 2
@@ -661,7 +653,6 @@ def _make_loop_blocking_sdfg_with_inner_map(
                 )
                 nsdfg_node = state.add_nested_sdfg(
                     nsdfg,
-                    sdfg,
                     inputs={nsdfg_inp},
                     outputs={nsdfg_out},
                     symbol_mapping={nsdfg_sym: 0},
@@ -759,9 +750,9 @@ def test_loop_blocking_inner_map_with_independent_part(independent_part):
     assert all(oedge.dst is inner_blocking_map for oedge in state.out_edges(i_access_node))
 
 
-def _make_loop_blocking_sdfg_with_independent_inner_map() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]
-):
+def _make_loop_blocking_sdfg_with_independent_inner_map() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry
+]:
     """
     Creates a nested Map that is independent from the blocking parameter.
     """
@@ -1038,8 +1029,7 @@ def _apply_and_run_mixed_memlet_sdfg(
         "C": np.array(np.random.rand(10, 10), dtype=np.float64, copy=True),
     }
     res = copy.deepcopy(ref)
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     require_independent_nodes = True
     if not tskl1_independent:
@@ -1062,11 +1052,8 @@ def _apply_and_run_mixed_memlet_sdfg(
     )
     assert count == 1, f"Expected one application, but git {count}"
 
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref)
-
-    del csdfg_ref, csdfg_res
 
 
 def _make_conditional_block_sdfg(sdfg_label: str, sym: str, inp: str, out: str):
@@ -1184,7 +1171,7 @@ def test_loop_blocking_no_independent_nodes():
     nsdfg_sym, nsdfg_inp, nsdfg_out = ("S", "I", "V")
     nsdfg = _make_conditional_block_sdfg("dependent_component", nsdfg_sym, nsdfg_inp, nsdfg_out)
     nsdfg_node = state.add_nested_sdfg(
-        nsdfg, sdfg, inputs={nsdfg_inp}, outputs={nsdfg_out}, symbol_mapping={nsdfg_sym: "__i1"}
+        nsdfg, inputs={nsdfg_inp}, outputs={nsdfg_out}, symbol_mapping={nsdfg_sym: "__i1"}
     )
     state.add_memlet_path(A, me, nsdfg_node, dst_conn=nsdfg_inp, memlet=dace.Memlet("A[1,1]"))
     state.add_memlet_path(
@@ -1282,9 +1269,7 @@ def test_only_last_two_elements_sdfg():
     res = copy.deepcopy(ref)
 
     ref_comp(**ref)
-    csdfg = sdfg.compile()
-    csdfg(**res)
-    del csdfg
+    util.compile_and_run_sdfg(sdfg, **res)
 
     assert np.allclose(ref["c"], res["c"])
 
@@ -1337,9 +1322,9 @@ def test_blocking_size_too_big():
     assert count == 1
 
 
-def _make_loop_blocking_sdfg_with_semi_independent_map() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]
-):
+def _make_loop_blocking_sdfg_with_semi_independent_map() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry
+]:
     sdfg = dace.SDFG(util.unique_name("sdfg_with_inner_semi_independent_map"))
     state = sdfg.add_state(is_start_block=True)
 
@@ -1427,9 +1412,9 @@ def test_loop_blocking_sdfg_with_semi_independent_map():
     assert new_scope_of_inner_map is not me
 
 
-def _make_loop_blocking_only_independent_inner_map() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]
-):
+def _make_loop_blocking_only_independent_inner_map() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry
+]:
     sdfg = dace.SDFG(util.unique_name("sdfg_with_only_independent_inner_map"))
     state = sdfg.add_state(is_start_block=True)
 
@@ -1541,8 +1526,7 @@ def test_loop_blocking_direct_access_node_array():
         "B": np.array(np.random.rand(40, 10), dtype=np.float64, copy=True),
     }
     res = copy.deepcopy(ref)
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     # Because of the direct connection, of `t` with the Map exit node and the resulting
     #  removal of `tlet` from the set of independent node, the transformation will
@@ -1577,11 +1561,8 @@ def test_loop_blocking_direct_access_node_array():
     assert scope_dict_after[t] is not me
     assert util.count_nodes(state, dace_nodes.Tasklet) == 1
 
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref)
-
-    del csdfg_ref, csdfg_res
 
 
 def test_loop_blocking_direct_access_node_scalar():
@@ -1598,8 +1579,7 @@ def test_loop_blocking_direct_access_node_scalar():
         "B": np.array(np.random.rand(40, 10), dtype=np.float64, copy=True),
     }
     res = copy.deepcopy(ref)
-    csdfg_ref = sdfg.compile()
-    csdfg_ref(**ref)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     # Because the intermediate is a scalar, it will be handled and both
     #  the scalar and the tasklet will be independent.
@@ -1626,8 +1606,5 @@ def test_loop_blocking_direct_access_node_scalar():
     assert new_copy_tlet.label.startswith("loop_blocking_copy_tlet_t_")
     assert new_copy_tlet.code == "__out = __in"
 
-    csdfg_res = sdfg.compile()
-    csdfg_res(**res)
+    util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref)
-
-    del csdfg_ref, csdfg_res

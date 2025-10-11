@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Iterator, Optional, Sequence, Union
+from typing import Iterator, Optional, Sequence
 
 from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
 from gt4py.next import common
@@ -23,7 +23,7 @@ class DataType(TypeSpec):
     """
 
 
-class CallableType:
+class CallableType(TypeSpec):
     """
     A base type for all types are callable.
 
@@ -48,6 +48,20 @@ class VoidType(TypeSpec):
 
 class DimensionType(TypeSpec):
     dim: common.Dimension
+
+    def __str__(self) -> str:
+        return str(self.dim)
+
+
+class IndexType(TypeSpec):
+    """
+    Represents the type of an index into a dimension.
+    """
+
+    dim: common.Dimension
+
+    def __str__(self) -> str:
+        return f"Index[{self.dim}]"
 
 
 class OffsetType(TypeSpec):
@@ -127,14 +141,22 @@ class TupleType(DataType):
         return len(self.types)
 
 
-class FunctionType(TypeSpec, CallableType):
+class FunctionType(CallableType):
     pos_only_args: Sequence[TypeSpec]
     pos_or_kw_args: dict[str, TypeSpec]
     kw_only_args: dict[str, TypeSpec]
-    returns: Union[TypeSpec]
+    returns: TypeSpec
 
     def __str__(self) -> str:
         arg_strs = [str(arg) for arg in self.pos_only_args]
         kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
+
+
+class ConstructorType(CallableType):
+    definition: FunctionType
+
+
+class DomainType(DataType):
+    dims: list[common.Dimension]

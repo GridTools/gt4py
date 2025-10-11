@@ -18,7 +18,9 @@ to create a streamlined user experience. `from module import *` can be used but 
 module in question is a submodule, defines `__all__` and exports many public API objects.
 """
 
-from . import common, ffront, iterator, program_processors
+# ruff: noqa: F401
+from .._core.definitions import CUPY_DEVICE_TYPE, Device, DeviceType, is_scalar_type
+from . import common, ffront, iterator, program_processors, typing
 from .common import (
     Connectivity,
     Dimension,
@@ -39,11 +41,7 @@ from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
 from .ffront.fbuiltins import *  # noqa: F403 [undefined-local-with-import-star]  explicitly reexport all from fbuiltins.__all__
 from .ffront.fbuiltins import FieldOffset
-from .iterator.embedded import (
-    NeighborTableOffsetProvider,  # TODO(havogt): deprecated
-    index_field,
-    np_as_located_field,
-)
+from .otf.compiled_program import wait_for_compilation
 from .program_processors.runners.gtfn import (
     run_gtfn_cached as gtfn_cpu,
     run_gtfn_gpu_cached as gtfn_gpu,
@@ -52,14 +50,29 @@ from .program_processors.runners.roundtrip import default as itir_python
 
 
 __all__ = [
+    "CUPY_DEVICE_TYPE",
+    "Device",
+    "DeviceType",
+    "is_scalar_type",
+]
+
+
+__all__ = [
     # submodules
     "common",
     "ffront",
     "iterator",
     "program_processors",
+    "typing",
+    # from _core.definitions
+    "CUPY_DEVICE_TYPE",
+    "Device",
+    "DeviceType",
+    "is_scalar_type",
     # from common
     "Dimension",
     "DimensionKind",
+    "Dims",
     "Field",
     "Connectivity",
     "GridType",
@@ -74,15 +87,13 @@ __all__ = [
     "full",
     "as_field",
     "as_connectivity",
-    # from iterator
-    "NeighborTableOffsetProvider",
-    "index_field",
-    "np_as_located_field",
     # from ffront
     "FieldOffset",
     "field_operator",
     "program",
     "scan_operator",
+    # from otf
+    "wait_for_compilation",
     # from program_processor
     "gtfn_cpu",
     "gtfn_gpu",

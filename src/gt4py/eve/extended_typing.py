@@ -14,6 +14,8 @@ Definitions in 'typing_extensions' take priority over those in 'typing'.
 
 from __future__ import annotations
 
+# ruff: noqa: F401, F405
+import abc as _abc
 import array as _array
 import dataclasses as _dataclasses
 import functools as _functools
@@ -139,31 +141,23 @@ MaybeNestedInList = Union[_T_co, NestedList[_T_co]]
 MaybeNestedInTuple = Union[_T_co, NestedTuple[_T_co]]
 
 # -- Typing annotations --
-if _sys.version_info >= (3, 9):
-    SolvedTypeAnnotation = Union[
-        Type,
-        _typing._SpecialForm,
-        _types.GenericAlias,  # type: ignore[name-defined]  # Python 3.8 does not include `_types.GenericAlias`
-        _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
-    ]
-else:
-    SolvedTypeAnnotation = Union[  # type: ignore[misc]  # mypy consider this assignment a redefinition
-        Type, _typing._SpecialForm, _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
-    ]
+SolvedTypeAnnotation = Union[
+    Type,
+    _typing._SpecialForm,
+    _types.GenericAlias,
+    _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
+]
 
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
 
 StdGenericAliasType: Final[Type] = type(List[int])
 
-if _sys.version_info >= (3, 9):
-    if TYPE_CHECKING:
-        StdGenericAlias: TypeAlias = _types.GenericAlias  # type: ignore[name-defined,attr-defined]  # Python 3.8 does not include `_types.GenericAlias`
+if TYPE_CHECKING:
+    StdGenericAlias: TypeAlias = _types.GenericAlias
 
 _TypingSpecialFormType: Final[Type] = _typing._SpecialForm
-_TypingGenericAliasType: Final[Type] = (
-    _typing._BaseGenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
-)
+_TypingGenericAliasType: Final[Type] = _typing._BaseGenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
 
 
 # -- Standard Python protocols --
@@ -326,13 +320,11 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # -- Added functionality --
-_ArtefactTypes: tuple[type, ...] = tuple()
-if _sys.version_info >= (3, 9):
-    _ArtefactTypes = (_types.GenericAlias,)  # type: ignore[attr-defined]  # GenericAlias only from >= 3.8
+_ArtefactTypes: tuple[type, ...] = (_types.GenericAlias,)
 
-    # `Any` is a class since Python 3.11
-    if isinstance(_typing.Any, type):  # Python >= 3.11
-        _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
+# `Any` is a class since Python 3.11
+if isinstance(_typing.Any, type):  # Python >= 3.11
+    _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
 
 # `Any` is a class since typing_extensions >= 4.4 and Python 3.11
 if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
@@ -442,12 +434,131 @@ def is_value_hashable_typing(
     return type_annotation is None
 
 
-def _is_protocol(type_: type, /) -> bool:
-    """Check if a type is a Protocol definition."""
-    return getattr(type_, "_is_protocol", False)
+class TypedNamedTupleABC(_abc.ABC, Generic[_T_co]):
+    """ABC for `tuple` subclasses created with `collections.abc.namedtuple()`."""
+
+    # Replicate the standard tuple API
+    @overload
+    @_abc.abstractmethod
+    def __getitem__(self, index: int) -> _T_co: ...
+
+    @overload
+    @_abc.abstractmethod
+    def __getitem__(self, index: slice) -> Self: ...
+
+    @_abc.abstractmethod
+    def __getitem__(self, index: Union[int, slice]) -> Union[_T_co, Self]: ...
+
+    @_abc.abstractmethod
+    def __len__(self) -> int: ...
+
+    @_abc.abstractmethod
+    def __contains__(self, value: object) -> bool: ...
+
+    @_abc.abstractmethod
+    def __iter__(self) -> Iterator[_T_co]: ...
+
+    @_abc.abstractmethod
+    def __add__(self, other: Self) -> Self: ...
+
+    @_abc.abstractmethod
+    def __mul__(self, other: int) -> Self: ...
+
+    @_abc.abstractmethod
+    def __rmul__(self, other: int) -> Self: ...
+
+    @_abc.abstractmethod
+    def index(self, value: Any, start: int = 0, stop: Optional[int] = None) -> int: ...
+
+    @_abc.abstractmethod
+    def count(self, value: Any) -> int: ...
+
+    # Add specific namedtuple methods
+    _fields: ClassVar[tuple[str, ...]]
+
+    @_abc.abstractmethod
+    def _make(self, iterable: Iterable) -> Self: ...
+
+    @_abc.abstractmethod
+    def _asdict(self) -> dict[str, Any]: ...
+
+    @_abc.abstractmethod
+    def _replace(self, **kwargs: Any) -> Self: ...
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        return (
+            issubclass(subclass, tuple)
+            and (_typing.NamedTuple in getattr(subclass, "__orig_bases__", ()))
+        ) or (
+            (field_names := getattr(subclass, "_fields", None)) is not None
+            and {*field_names} <= _typing.get_type_hints(subclass).keys()
+        )
 
 
-is_protocol = getattr(_typing_extensions, "is_protocol", _is_protocol)
+class DataclassABC(_abc.ABC):
+    """ABC for data classes."""
+
+    __dataclass_fields__: ClassVar[dict[str, _dataclasses.Field]]
+    __dataclass_params__: ClassVar[_DataclassParamsABC]
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        return _dataclasses.is_dataclass(subclass)
+
+
+class _DataclassParamsABC(_abc.ABC):
+    init: bool
+    repr: bool
+    eq: bool
+    order: bool
+    unsafe_hash: bool
+    frozen: bool
+    match_args: bool
+    kw_only: bool
+    slots: bool
+    weakref_slot: bool
+
+
+class FrozenDataclass(DataclassABC):
+    """ABC for frozen data classes."""
+
+    __dataclass_params__: ClassVar[_FrozenDataclassParamsABC]
+
+    @_abc.abstractmethod
+    def __setattr__(self, name: str, value: Any) -> Never: ...
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        try:
+            return _dataclasses.is_dataclass(subclass) and (
+                subclass.__dataclass_params__.frozen is not None  # type: ignore[attr-defined]  # subclass.__dataclass_params__ is ok after check
+            )
+        except AttributeError:
+            return False
+
+
+class _FrozenDataclassParamsABC(_DataclassParamsABC):
+    frozen: Literal[True]
+
+
+_KT = TypeVar("_KT", contravariant=True)
+_VT = TypeVar("_VT")
+
+
+class OpaqueMutableMapping(Protocol[_KT, _VT]):
+    """
+    Mutable mapping without access to the keys, just setting, getting, deleting with a given key.
+    """
+
+    def __getitem__(self, key: _KT) -> _VT: ...
+
+    def __setitem__(self, key: _KT, value: _VT) -> None: ...
+
+    def __delitem__(self, key: _KT) -> None: ...
+
+
+is_protocol = _typing_extensions.is_protocol
 
 
 def get_partial_type_hints(
@@ -468,14 +579,14 @@ def get_partial_type_hints(
 ) -> Dict[str, Union[Type, ForwardRef]]:
     """Return a dictionary with type hints (using forward refs for undefined names) for a function, method, module or class object.
 
-    For each member type hint in the object a :class:`typing.ForwarRef` instance will be
+    For each member type hint in the object a :class:`typing.ForwardRef` instance will be
     returned if some names in the string annotation have not been found. For additional
     information see :func:`typing.get_type_hints`.
     """
     if getattr(obj, "__no_type_check__", None):
         return {}
     if not hasattr(obj, "__annotations__"):
-        return get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+        return get_type_hints(
             obj, globalns=globalns, localns=localns, include_extras=include_extras
         )
 
@@ -484,7 +595,7 @@ def get_partial_type_hints(
     for name, hint in annotations.items():
         obj.__annotations__ = {name: hint}
         try:
-            resolved_hints = get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+            resolved_hints = get_type_hints(
                 obj, globalns=globalns, localns=localns, include_extras=include_extras
             )
             hints[name] = resolved_hints[name]
@@ -526,21 +637,16 @@ def eval_forward_ref(
         Result: ...ict[str, ...uple[int, float]]
 
     """
-    actual_type = ForwardRef(ref) if isinstance(ref, str) else ref
 
-    def _f() -> None:
-        pass
+    def f() -> None: ...
 
-    _f.__annotations__ = {"ref": actual_type}
+    f.__annotations__ = {"return": ForwardRef(ref) if isinstance(ref, str) else ref}
 
-    if localns:
-        safe_localns = {**localns}
-        safe_localns.setdefault("typing", _sys.modules[__name__])
-        safe_localns.setdefault("NoneType", type(None))
-    else:
-        safe_localns = {"typing": _sys.modules[__name__], "NoneType": type(None)}
+    safe_localns = {**localns} if localns else {}
+    safe_localns.setdefault("typing", _sys.modules[__name__])
+    safe_localns.setdefault("NoneType", type(None))
 
-    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+    actual_type = get_type_hints(f, globalns, safe_localns, include_extras=include_extras)["return"]
     assert not isinstance(actual_type, ForwardRef)
 
     return actual_type

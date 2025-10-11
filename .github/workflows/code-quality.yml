@@ -3,27 +3,40 @@ name: Code Quality
 on:
   push:
     branches:
-    - main
+      - main
   pull_request:
     branches:
-    - main
+      - main
 
 jobs:
+  # First job to read Python versions from .python-versions file
+  get-python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      python-versions: ${{ steps.get-versions.outputs.python-versions }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: get-versions
+        uses: ./.github/actions/get-python-versions
+        with:
+          which: 'default'
+
   code-quality:
+    needs: [get-python-versions]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version-file: ".default-python-version"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v5
-      with:
-        enable-cache: true
-        cache-dependency-glob: "uv.lock"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-    - name: "Run pre-commit"
-      uses: pre-commit/action@v3.0.1
+      - name: "Run pre-commit"
+        uses: pre-commit/action@v3.0.1

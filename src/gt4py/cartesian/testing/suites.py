@@ -18,15 +18,13 @@ import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
-import gt4py.cartesian.gtc.utils as gtc_utils
-from gt4py import cartesian as gt, cartesian as gt4pyc, storage as gt_storage
-from gt4py.cartesian import gtscript, utils as gt_utils
+from gt4py import storage as gt_storage
+from gt4py.cartesian import backend as gt_backend, gtscript, utils as gt_utils
 from gt4py.cartesian.definitions import AccessKind, FieldInfo
+from gt4py.cartesian.gtc import utils as gtc_utils
 from gt4py.cartesian.gtc.definitions import Boundary, CartesianSpace, Index, Shape
 from gt4py.cartesian.stencil_object import StencilObject
-from gt4py.storage.cartesian import utils as storage_utils
-
-from .input_strategies import (
+from gt4py.cartesian.testing.input_strategies import (
     SymbolKind,
     composite_implementation_strategy_factory,
     composite_strategy_factory,
@@ -34,7 +32,8 @@ from .input_strategies import (
     ndarray_shape_st,
     ndarray_st,
 )
-from .utils import annotate_function, standardize_dtype_dict
+from gt4py.cartesian.testing.utils import annotate_function, standardize_dtype_dict
+from gt4py.storage.cartesian import utils as storage_utils
 
 
 ParameterSet = type(pytest.param())
@@ -214,7 +213,7 @@ class SuiteMeta(type):
                 )
 
                 marks = test["marks"].copy()
-                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
                     marks.append(pytest.mark.requires_gpu)
                 # Run generation and implementation tests in the same group to ensure
                 # (thread-) safe parallelization of stencil tests.
@@ -248,7 +247,7 @@ class SuiteMeta(type):
                 )
 
                 marks = test["marks"].copy()
-                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
                     marks.append(pytest.mark.requires_gpu)
                 # Run generation and implementation tests in the same group to ensure
                 # (thread-) safe parallelization of stencil tests.
@@ -286,14 +285,14 @@ class SuiteMeta(type):
         assert isinstance(cls_dict["symbols"], collections.abc.Mapping), "Invalid 'symbols' mapping"
 
         # Check domain and ndims
-        assert 1 <= len(domain_range) <= 3 and all(
-            len(d) == 2 for d in domain_range
-        ), "Invalid 'domain_range' definition"
+        assert 1 <= len(domain_range) <= 3 and all(len(d) == 2 for d in domain_range), (
+            "Invalid 'domain_range' definition"
+        )
 
         if any(cls_name.endswith(suffix) for suffix in ("1D", "2D", "3D")):
-            assert cls_dict["ndims"] == int(
-                cls_name[-2:-1]
-            ), "Suite name does not match the actual 'ndims'"
+            assert cls_dict["ndims"] == int(cls_name[-2:-1]), (
+                "Suite name does not match the actual 'ndims'"
+            )
 
         # Check dtypes
         assert isinstance(
@@ -309,7 +308,7 @@ class SuiteMeta(type):
             raise TypeError("'backends' must be a sequence of strings")
         backends = [pytest.param(b) if isinstance(b, str) else b for b in backends]
         for b in backends:
-            if b.values[0] not in gt.backend.REGISTRY.names:
+            if b.values[0] not in gt_backend.REGISTRY.names:
                 raise ValueError("backend '{backend}' not supported".format(backend=b))
 
         # Check definition and validation functions
@@ -341,7 +340,7 @@ class SuiteMeta(type):
         cls_dict["backends"] = [
             backend
             for backend in cls_dict["backends"]
-            if gt4pyc.backend.from_name(backend if isinstance(backend, str) else backend.values[0])
+            if gt_backend.from_name(backend if isinstance(backend, str) else backend.values[0])
             is not None
         ]
 
@@ -404,7 +403,10 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
         .. code-block:: python
 
-                    {"float_symbols": (np.float32, np.float64), "int_symbols": (int, np.int_, np.int64)}
+                    {
+                        "float_symbols": (np.float32, np.float64),
+                        "int_symbols": (int, np.int_, np.int64),
+                    }
 
     domain_range : `Sequence` of pairs like `((int, int), (int, int) ... )`
         Required class attribute.
@@ -614,9 +616,9 @@ class StencilTestSuite(metaclass=SuiteMeta):
         test execution.
         """
         implementation = test["implementation"]
-        assert (
-            implementation is not None
-        ), "Stencil implementation not found. This usually means code generation failed."
+        assert implementation is not None, (
+            "Stencil implementation not found. This usually means code generation failed."
+        )
         assert isinstance(implementation, StencilObject)
 
         cls._run_test_implementation(parameters_dict, implementation)

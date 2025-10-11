@@ -13,8 +13,8 @@ import pathlib
 from typing import Protocol, TypeVar
 
 import factory
-from flufl import lock
 
+from gt4py._core import locking
 from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
@@ -65,12 +65,12 @@ class Compiler(
     def __call__(
         self,
         inp: stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
-    ) -> stages.ExtendedCompiledProgram:
+    ) -> stages.CompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.
-        with lock.Lock(str(src_dir / "compilation.lock"), lifetime=600):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
+        with locking.lock(src_dir):
             data = build_data.read_data(src_dir)
 
             if not data or not is_compiled(data) or self.force_recompile:
@@ -87,12 +87,7 @@ class Compiler(
             importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
         )
 
-        @dataclasses.dataclass(frozen=True)
-        class Wrapper(stages.ExtendedCompiledProgram):
-            implicit_domain: bool = inp.program_source.implicit_domain
-            __call__: stages.CompiledProgram = compiled_prog
-
-        return Wrapper()
+        return compiled_prog
 
 
 class CompilerFactory(factory.Factory):

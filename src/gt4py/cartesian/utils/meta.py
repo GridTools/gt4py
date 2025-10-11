@@ -12,13 +12,10 @@ import ast
 import copy
 import inspect
 import operator
-import platform
 import textwrap
 from typing import Callable, Dict, Final, List, Tuple, Type
 
-from packaging import version
-
-from .base import shashed_id
+from gt4py.cartesian.utils.base import shashed_id
 
 
 def get_closure(func, *, include_globals=True, included_nonlocals=True, include_builtins=True):
@@ -115,16 +112,6 @@ def ast_dump(
     dumped_ast = _dump(get_ast(definition, feature_version=feature_version), skip_node_names)
 
     return dumped_ast
-
-
-def ast_unparse(ast_node):
-    """Call ast.unparse, but use astunparse for Python prior to 3.9."""
-    if version.parse(platform.python_version()) < version.parse("3.9"):
-        import astunparse
-
-        return astunparse.unparse(ast_node)
-    else:
-        return ast.unparse(ast_node)
 
 
 def ast_shash(ast_node, *, skip_decorators=True):
@@ -362,6 +349,14 @@ class AssignTargetsCollector(ASTPass):
         self.defs = []
         self.visit(ast_root)
         return self.assign_targets
+
+    def visit_AnnAssign(self, node: ast.AnnAssign):
+        if isinstance(node.target, ast.Tuple):
+            for t in node.target.elts:
+                assert isinstance(t, ast.Name)
+                self.assign_targets.append(t)
+        else:
+            self.assign_targets.append(node.target)
 
     def visit_Assign(self, node: ast.Assign):
         if len(node.targets) > 1 and not self.allow_multiple_targets:

@@ -13,9 +13,9 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, cast
 
-import gt4py.eve.utils
+from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.cartesian.gtc.definitions import CenteredExtent, Extent
 from gt4py.cartesian.gtc.passes.horizontal_masks import mask_overlap_with_extent
 
 
@@ -39,21 +39,31 @@ class GenericAccess(Generic[OffsetT]):
     def is_read(self) -> bool:
         return not self.is_write
 
-    def to_extent(self, horizontal_extent: Extent) -> Optional[Extent]:
+    def to_extent(
+        self,
+        horizontal_extent: Extent,
+        centered: bool = False,
+        ignore_horizontal_mask: bool = False,
+    ) -> Optional[Extent]:
         """
         Convert the access to an extent provided a horizontal extent for the access.
 
-        This returns None if no overlap exists between the horizontal mask and interval.
+        This returns None if no overlap exists between the horizontal mask and interval if
+        `ignore_horizontal_mask` is not set.
         """
-        offset_as_extent = Extent.from_offset(cast(Tuple[int, int, int], self.offset)[:2])
+        if centered:
+            offset_as_extent = CenteredExtent.from_offset(
+                cast(Tuple[int, int, int], self.offset)[:2]
+            )
+        else:
+            offset_as_extent = Extent.from_offset(cast(Tuple[int, int, int], self.offset)[:2])
         zeros = Extent.zeros(ndims=2)
-        if self.horizontal_mask:
+        if self.horizontal_mask and not ignore_horizontal_mask:
             if dist_from_edge := mask_overlap_with_extent(self.horizontal_mask, horizontal_extent):
                 return ((horizontal_extent - dist_from_edge) + offset_as_extent) | zeros
-            else:
-                return None
-        else:
-            return horizontal_extent + offset_as_extent
+            return None
+
+        return horizontal_extent + offset_as_extent
 
 
 class CartesianAccess(GenericAccess[Tuple[int, int, int]]):
@@ -67,7 +77,7 @@ class GeneralAccess(GenericAccess[GeneralOffsetTuple]):
 AccessT = TypeVar("AccessT", bound=GenericAccess)
 
 
-class AccessCollector(gt4py.eve.NodeVisitor):
+class AccessCollector(eve.NodeVisitor):
     """Collects all field accesses and corresponding offsets."""
 
     def visit_FieldAccess(
@@ -111,38 +121,34 @@ class AccessCollector(gt4py.eve.NodeVisitor):
         _ordered_accesses: List[AccessT]
 
         @staticmethod
-        def _offset_dict(accesses: gt4py.eve.utils.XIterable) -> Dict[str, Set[OffsetT]]:
+        def _offset_dict(accesses: eve.utils.XIterable) -> Dict[str, Set[OffsetT]]:
             return accesses.reduceby(
                 lambda acc, x: acc | {x.offset}, "field", init=set(), as_dict=True
             )
 
         def offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictionary, mapping all accessed fields' names to sets of offset tuples."""
-            return self._offset_dict(gt4py.eve.utils.XIterable(self._ordered_accesses))
+            return self._offset_dict(eve.utils.XIterable(self._ordered_accesses))
 
         def read_offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictionary, mapping read fields' names to sets of offset tuples."""
             return self._offset_dict(
-                gt4py.eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read)
+                eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read)
             )
 
         def read_accesses(self) -> List[AccessT]:
             """Get the sub-list of read accesses."""
-            return list(
-                gt4py.eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read)
-            )
+            return list(eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read))
 
         def write_offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictionary, mapping written fields' names to sets of offset tuples."""
             return self._offset_dict(
-                gt4py.eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write)
+                eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write)
             )
 
         def write_accesses(self) -> List[AccessT]:
             """Get the sub-list of write accesses."""
-            return list(
-                gt4py.eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write)
-            )
+            return list(eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write))
 
         def fields(self) -> Set[str]:
             """Get a set of all accessed fields' names."""
@@ -182,9 +188,7 @@ class AccessCollector(gt4py.eve.NodeVisitor):
             return any(acc.offset[2] is None for acc in self._ordered_accesses)
 
     @classmethod
-    def apply(
-        cls, node: gt4py.eve.RootNode, **kwargs: Any
-    ) -> AccessCollector.GeneralAccessCollection:
+    def apply(cls, node: eve.RootNode, **kwargs: Any) -> AccessCollector.GeneralAccessCollection:
         result = cls.GeneralAccessCollection([])
         cls().visit(node, accesses=result._ordered_accesses, **kwargs)
         return result
@@ -215,24 +219,40 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
     return new_symbol_name
 
 
-def collect_symbol_names(node: gt4py.eve.RootNode) -> Set[str]:
+def collect_symbol_names(node: eve.RootNode) -> Set[str]:
     return (
-        gt4py.eve.walk_values(node)
-        .if_isinstance(gt4py.eve.SymbolTableTrait)
+        eve.walk_values(node)
+        .if_isinstance(eve.SymbolTableTrait)
         .getattr("annex")
         .getattr("symtable")
         .reduce(lambda names, symtable: names.union(symtable.keys()), init=set())
     )
 
 
-class StencilExtentComputer(gt4py.eve.NodeVisitor):
+class StencilExtentComputer(eve.NodeVisitor):
+    """Compute extent for fields and horizontal blocks.
+
+    Args:
+        add_k: Add an extent for the K axis. Defaults to `False`.
+        centered_extent: Center the extent on 0 (negative left, positive right). Defaults to `False`.
+        ignore_horizontal_mask: When computing extent, do not restrict it by reading the masks of
+            horizontal regions. Defaults to `False`.
+    """
+
     @dataclass
     class Context:
         fields: Dict[str, Extent] = dataclasses.field(default_factory=dict)
         blocks: Dict[int, Extent] = dataclasses.field(default_factory=dict)
 
-    def __init__(self, add_k: bool = False):
+    def __init__(
+        self,
+        add_k: bool = False,
+        centered_extent: bool = False,
+        ignore_horizontal_mask: bool = False,
+    ):
         self.add_k = add_k
+        self.centered_extent = centered_extent
+        self.ignore_horizontal_mask = ignore_horizontal_mask
         self.zero_extent = Extent.zeros(ndims=2)
 
     def visit_Stencil(self, node: oir.Stencil) -> Context:
@@ -261,7 +281,11 @@ class StencilExtentComputer(gt4py.eve.NodeVisitor):
         ctx.blocks[id(node)] = horizontal_extent
 
         for access in results.ordered_accesses():
-            extent = access.to_extent(horizontal_extent)
+            extent = access.to_extent(
+                horizontal_extent,
+                centered=self.centered_extent,
+                ignore_horizontal_mask=self.ignore_horizontal_mask,
+            )
             if extent is None:
                 continue
 

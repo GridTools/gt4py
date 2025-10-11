@@ -9,12 +9,13 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 from typing import Any, Optional, cast
 
 import devtools
 
-from gt4py.eve import NodeTranslator, concepts, traits
-from gt4py.next import common, config, errors
+from gt4py.eve import NodeTranslator, concepts, traits, utils as eve_utils
+from gt4py.next import common, config, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     fbuiltins,
     gtcallable,
@@ -24,7 +25,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.stages import AOT_PRG
-from gt4py.next.iterator import builtins, ir as itir
+from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import remap_symbols
 from gt4py.next.otf import arguments, stages, workflow
@@ -47,7 +48,9 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         ...     return a
 
         >>> @gtx.program
-        ... def copy_program(a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]):
+        ... def copy_program(
+        ...     a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]
+        ... ):
         ...     copy(a, out=out)
 
         >>> compile_time_args = arguments.CompileTimeArgs(
@@ -55,6 +58,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         ...     kwargs={},
         ...     offset_provider={"I": IDim},
         ...     column_axis=None,
+        ...     argument_descriptor_contexts={},
         ... )
 
         >>> itir_copy = past_to_gtir(
@@ -92,25 +96,31 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         inp.data.past_node, function_definitions=lowered_funcs, grid_type=grid_type
     )
 
-    static_args_index = {
-        i: arg.value for i, arg in enumerate(inp.args.args) if isinstance(arg, arguments.StaticArg)
-    }
-    static_args = {
-        str(itir_program.params[i].id): im.literal_from_tuple_value(value)
-        for i, value in static_args_index.items()
-    }
-    body = [
-        remap_symbols.RemapSymbolRefs.apply(stmt, symbol_map=static_args)
-        for stmt in itir_program.body
-    ]  # type: ignore[arg-type]
-    itir_program = itir.Program(
-        id=itir_program.id,
-        function_definitions=itir_program.function_definitions,
-        params=itir_program.params,
-        declarations=itir_program.declarations,
-        body=body,
-        implicit_domain=itir_program.implicit_domain,
-    )
+    # TODO(tehrengruber): Put this in a dedicated transformation step.
+    if arguments.StaticArg in inp.args.argument_descriptor_contexts:
+        static_arg_descriptors = inp.args.argument_descriptor_contexts[arguments.StaticArg]
+        if not all(
+            isinstance(arg_descriptor, arguments.StaticArg)
+            or all(el is None for el in gtx_utils.flatten_nested_tuple(arg_descriptor))  # type: ignore[arg-type]
+            for arg_descriptor in static_arg_descriptors.values()
+        ):
+            raise NotImplementedError("Only top-level arguments can be static.")
+        static_args = {
+            name: im.literal_from_tuple_value(descr.value)  # type: ignore[union-attr]  # type checked above
+            for name, descr in static_arg_descriptors.items()
+            if not any(el is None for el in gtx_utils.flatten_nested_tuple(descr))  # type: ignore[arg-type]
+        }
+        body = [
+            remap_symbols.RemapSymbolRefs.apply(stmt, symbol_map=static_args)
+            for stmt in itir_program.body
+        ]  # type: ignore[arg-type]
+        itir_program = itir.Program(
+            id=itir_program.id,
+            function_definitions=itir_program.function_definitions,
+            params=itir_program.params,
+            declarations=itir_program.declarations,
+            body=body,
+        )
 
     if config.DEBUG or inp.data.debug:
         devtools.debug(itir_program)
@@ -145,15 +155,13 @@ def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]
         return None
 
     if len(scanops_per_axis.values()) != 1:
-        scanops_per_axis_strs = [
+        scanops_per_axis_str = "\n".join(
             f"- {dim.value}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
-        ]
+        )
 
         raise TypeError(
             "Only 'ScanOperator's defined on the same axis "
-            + "can be used in a 'Program', found:\n"
-            + "\n".join(scanops_per_axis_strs)
-            + "."
+            f"can be used in a 'Program', found:\n{scanops_per_axis_str}\n"
         )
 
     return iter(scanops_per_axis.keys()).__next__()
@@ -225,32 +233,6 @@ class ProgramLowering(
     ) -> itir.Program:
         return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
 
-    def _gen_size_params_from_program(self, node: past.Program) -> list[itir.Sym]:
-        """Generate symbols for each field param and dimension."""
-        size_params = []
-        for param in node.params:
-            fields_dims: list[list[common.Dimension]] = (
-                type_info.primitive_constituents(param.type)
-                .if_isinstance(ts.FieldType)
-                .getattr("dims")
-                .filter(lambda dims: len(dims) > 0)
-                .to_list()
-            )
-            if len(fields_dims) > 0:  # otherwise `param` has no constituent which is of `FieldType`
-                assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
-                index_type = ts.ScalarType(
-                    kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper())
-                )
-                for dim_idx in range(len(fields_dims[0])):
-                    size_params.append(
-                        itir.Sym(
-                            id=_range_arg_from_field(param.id, dim_idx),
-                            type=ts.TupleType(types=[index_type, index_type]),
-                        )
-                    )
-
-        return size_params
-
     def visit_Program(
         self,
         node: past.Program,
@@ -265,11 +247,6 @@ class ProgramLowering(
 
         params = self.visit(node.params)
 
-        implicit_domain = False
-        if any("domain" not in body_entry.kwargs for body_entry in node.body):
-            params = params + self._gen_size_params_from_program(node)
-            implicit_domain = True
-
         set_ats = [self._visit_field_operator_call(stmt, **kwargs) for stmt in node.body]
         return itir.Program(
             id=node.id,
@@ -277,7 +254,6 @@ class ProgramLowering(
             params=params,
             declarations=[],
             body=set_ats,
-            implicit_domain=implicit_domain,
         )
 
     def _visit_field_operator_call(self, node: past.Call, **kwargs: Any) -> itir.SetAt:
@@ -292,9 +268,7 @@ class ProgramLowering(
 
         assert isinstance(node.func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
 
-        args, node_kwargs = type_info.canonicalize_arguments(
-            node.func.type, node.args, node_kwargs, use_signature_ordering=True
-        )
+        args, node_kwargs = type_info.canonicalize_arguments(node.func.type, node.args, node_kwargs)
 
         lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
 
@@ -365,12 +339,22 @@ class ProgramLowering(
                 " fields defined on the same dimensions. This error should be "
                 " caught in type deduction already."
             )
+        # if the out_field is a (potentially nested) tuple we get the domain from its first
+        # element
+        first_out_el_path = eve_utils.first(
+            type_info.primitive_constituents(out_field.type, with_path_arg=True)
+        )[1]
+        first_out_el = functools.reduce(
+            lambda expr, i: im.tuple_get(i, expr), first_out_el_path, out_field.id
+        )
 
         domain_args = []
         domain_args_kind = []
         for dim_i, dim in enumerate(out_dims):
             # an expression for the range of a dimension
-            dim_range = itir.SymRef(id=_range_arg_from_field(out_field.id, dim_i))
+            dim_range = im.call("get_domain_range")(
+                first_out_el, itir.AxisLiteral(value=dim.value, kind=dim.kind)
+            )
             dim_start, dim_stop = im.tuple_get(0, dim_range), im.tuple_get(1, dim_range)
             # bounds
             lower: itir.Expr
@@ -481,9 +465,9 @@ class ProgramLowering(
 
             field_slice = None
             if isinstance(first_field, past.Subscript):
-                assert all(
-                    isinstance(field, past.Subscript) for field in flattened
-                ), "Incompatible field in tuple: either all fields or no field must be sliced."
+                assert all(isinstance(field, past.Subscript) for field in flattened), (
+                    "Incompatible field in tuple: either all fields or no field must be sliced."
+                )
                 assert all(
                     concepts.eq_nonlocated(
                         first_field.slice_,

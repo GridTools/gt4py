@@ -12,8 +12,7 @@ from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-
-from .utils import AccessCollector, symbol_name_creator
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import AccessCollector, symbol_name_creator
 
 
 """Utilities for cache detection and modifications on the OIR level.
@@ -538,7 +537,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
             first_unfilled: Dict[str, int] = dict()
             split_sections: List[oir.VerticalLoopSection] = []
             for section in node.sections:
-                split_section, previous_fills = self._split_section_with_multiple_fills(
+                split_section, _previous_fills = self._split_section_with_multiple_fills(
                     node.loop_order, section, filling_fields, first_unfilled, new_symbol_name
                 )
                 split_sections += split_section

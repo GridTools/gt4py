@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import functools
 from typing import TypeAlias
 
 import numpy as np
@@ -134,7 +135,7 @@ def test_neighbor_sum(unstructured_case_3d, fop):
 
 
 @pytest.mark.uses_unstructured_shift
-def test_reduction_execution_with_offset(unstructured_case):
+def test_reduction_execution_with_offset(unstructured_case_3d):
     EKField: TypeAlias = gtx.Field[[Edge, KDim], np.int32]
     VKField: TypeAlias = gtx.Field[[Vertex, KDim], np.int32]
 
@@ -151,12 +152,12 @@ def test_reduction_execution_with_offset(unstructured_case):
     def fencil(edge_f: EKField, out: VKField):
         fencil_op(edge_f, out=out)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
-    field = cases.allocate(unstructured_case, fencil, "edge_f", sizes={KDim: 2})()
-    out = cases.allocate(unstructured_case, fencil_op, cases.RETURN, sizes={KDim: 1})()
+    v2e_table = unstructured_case_3d.offset_provider["V2E"].asnumpy()
+    field = cases.allocate(unstructured_case_3d, fencil, "edge_f", sizes={KDim: 2})()
+    out = cases.allocate(unstructured_case_3d, fencil_op, cases.RETURN, sizes={KDim: 1})()
 
     cases.verify(
-        unstructured_case,
+        unstructured_case_3d,
         fencil,
         field,
         out,
@@ -167,7 +168,7 @@ def test_reduction_execution_with_offset(unstructured_case):
             initial=0,
             where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ).reshape(out.shape),
-        offset_provider=unstructured_case.offset_provider | {"Koff": KDim},
+        offset_provider=unstructured_case_3d.offset_provider,
     )
 
 
@@ -317,6 +318,8 @@ def test_conditional_nested_tuple(cartesian_case):
     a = cases.allocate(cartesian_case, conditional_nested_tuple, "a")()
     b = cases.allocate(cartesian_case, conditional_nested_tuple, "b")()
 
+    where_with_mask = functools.partial(np.where, mask.asnumpy())
+
     cases.verify(
         cartesian_case,
         conditional_nested_tuple,
@@ -324,10 +327,15 @@ def test_conditional_nested_tuple(cartesian_case):
         a,
         b,
         out=cases.allocate(cartesian_case, conditional_nested_tuple, cases.RETURN)(),
-        ref=np.where(
-            mask.asnumpy(),
-            ((a.asnumpy(), b.asnumpy()), (b.asnumpy(), a.asnumpy())),
-            ((np.full(size, 5.0), np.full(size, 7.0)), (np.full(size, 7.0), np.full(size, 5.0))),
+        ref=(
+            (
+                where_with_mask(a.asnumpy(), np.full(size, 5.0)),
+                where_with_mask(b.asnumpy(), np.full(size, 7.0)),
+            ),
+            (
+                where_with_mask(b.asnumpy(), np.full(size, 7.0)),
+                where_with_mask(a.asnumpy(), np.full(size, 5.0)),
+            ),
         ),
     )
 

@@ -138,7 +138,9 @@ def _add_local_double_buffering_to_single_data(
         storage=dace_dtypes.StorageType.Register,
         find_new_name=True,
     )
-    new_double_inner_buff_node = state.add_access(new_double_inner_buff_name)
+    new_double_inner_buff_node = state.add_access(
+        new_double_inner_buff_name, copy.copy(input_node.debuginfo)
+    )
 
     # Now reroute the data flow through the new access node.
     reconfigured_dataflow: set[tuple[dace_nodes.Node, str]] = set()
@@ -356,12 +358,12 @@ def _check_if_map_must_be_handled(
         input_node, output_node = inout_datas[inout_data_name]
         input_edges = state.edges_between(input_node, map_entry)
         output_edges = state.edges_between(map_exit, output_node)
-        assert (
-            len(input_edges) == 1
-        ), f"Expected a single connection between input node and map entry, but found {len(input_edges)}."
-        assert (
-            len(output_edges) == 1
-        ), f"Expected a single connection between map exit and write back node, but found {len(output_edges)}."
+        assert len(input_edges) == 1, (
+            f"Expected a single connection between input node and map entry, but found {len(input_edges)}."
+        )
+        assert len(output_edges) == 1, (
+            f"Expected a single connection between map exit and write back node, but found {len(output_edges)}."
+        )
 
         # If there is only one edge on the inside of the map, that goes into an
         #  AccessNode, then we assume it is double buffered.

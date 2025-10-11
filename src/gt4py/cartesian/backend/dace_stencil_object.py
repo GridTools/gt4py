@@ -19,7 +19,7 @@ import dace.data
 import dace.frontend.python.common
 from dace.frontend.python.common import SDFGClosure, SDFGConvertible
 
-from gt4py import cartesian as gt4pyc
+from gt4py.cartesian import backend as gt_backend
 from gt4py.cartesian.backend.dace_backend import freeze_origin_domain_sdfg
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo
 from gt4py.cartesian.stencil_object import ArgsInfo, FrozenStencil, StencilObject
@@ -39,22 +39,26 @@ def _extract_array_infos(field_args, device) -> Dict[str, Optional[ArgsInfo]]:
 
 
 def add_optional_fields(
-    sdfg: dace.SDFG, field_info: Dict[str, Any], parameter_info: Dict[str, Any], **kwargs: Any
+    sdfg: dace.SDFG,
+    field_info: Dict[str, Any],
+    parameter_info: Dict[str, Any],
+    **kwargs: Any,
 ) -> dace.SDFG:
     sdfg = copy.deepcopy(sdfg)
     for name, info in field_info.items():
         if info.access == AccessKind.NONE and name in kwargs and name not in sdfg.arrays:
             outer_array = kwargs[name]
             sdfg.add_array(
-                name, shape=outer_array.shape, dtype=outer_array.dtype, strides=outer_array.strides
+                name,
+                shape=outer_array.shape,
+                dtype=outer_array.dtype,
+                strides=outer_array.strides,
             )
 
     for name, info in parameter_info.items():
         if info.access == AccessKind.NONE and name in kwargs and name not in sdfg.symbols:
             if isinstance(kwargs[name], dace.data.Scalar):
                 sdfg.add_scalar(name, dtype=kwargs[name].dtype)
-            else:
-                sdfg.add_symbol(name, stype=dace.typeclass(type(kwargs[name])))
     return sdfg
 
 
@@ -67,7 +71,10 @@ class DaCeFrozenStencil(FrozenStencil, SDFGConvertible):
 
     def __sdfg__(self, **kwargs):
         return add_optional_fields(
-            self.sdfg, self.stencil_object.field_info, self.stencil_object.parameter_info, **kwargs
+            self.sdfg,
+            self.stencil_object.field_info,
+            self.stencil_object.parameter_info,
+            **kwargs,
         )
 
     def __sdfg_signature__(self):
@@ -97,33 +104,33 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         return domain, origins_tuple
 
     def freeze(
-        self: DaCeStencilObject, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
+        self: DaCeStencilObject,
+        *,
+        origin: Dict[str, Tuple[int, ...]],
+        domain: Tuple[int, ...],
     ) -> DaCeFrozenStencil:
         key = DaCeStencilObject._get_domain_origin_key(domain, origin)
+
+        # check if same sdfg already cached on disk
         if key in self._frozen_cache:
             return self._frozen_cache[key]
 
-        frozen_hash = shash(origin, domain)
-
-        # check if same sdfg already cached on disk
-        basename = os.path.splitext(self.SDFG_PATH)[0]
-        filename = basename + "_" + str(frozen_hash) + ".sdfg"
-        try:
-            frozen_sdfg = dace.SDFG.from_file(filename)
-        except FileNotFoundError:
-            # otherwise, wrap and save sdfg from scratch
-            inner_sdfg = self.sdfg()
-
-            frozen_sdfg = freeze_origin_domain_sdfg(
-                inner_sdfg,
-                arg_names=self.__sdfg_signature__()[0],
-                field_info=self.field_info,
-                origin=origin,
-                domain=domain,
-            )
-            frozen_sdfg.save(filename)
-
+        # otherwise, wrap and save sdfg from scratch
+        backend_class = gt_backend.from_name(self.backend)
+        frozen_sdfg = freeze_origin_domain_sdfg(
+            self.sdfg(),
+            arg_names=list(self.__sdfg_signature__()[0]),
+            field_info=self.field_info,
+            layout_info=backend_class.storage_info,
+            origin=origin,
+            domain=domain,
+        )
         self._frozen_cache[key] = DaCeFrozenStencil(self, origin, domain, frozen_sdfg)
+
+        basename = os.path.splitext(self.SDFG_PATH)[0]
+        filename = f"{basename}_{shash(origin, domain)}.sdfg"
+        frozen_sdfg.save(filename)
+
         return self._frozen_cache[key]
 
     @classmethod
@@ -143,7 +150,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
 
     def __sdfg__(self, *args, **kwargs) -> dace.SDFG:
         arg_names, _ = self.__sdfg_signature__()
-        norm_kwargs = DaCeStencilObject.normalize_args(
+        norm_kwargs = DaCeStencilObject.normalize_arg_fields(
             *args,
             backend=self.backend,
             arg_names=arg_names,
@@ -170,7 +177,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         return (args, [])
 
     @staticmethod
-    def normalize_args(
+    def normalize_arg_fields(
         *args,
         backend: str,
         arg_names: Iterable[str],
@@ -180,12 +187,19 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         origin: Optional[Dict[str, Tuple[int, ...]]] = None,
         **kwargs,
     ):
-        backend_cls = gt4pyc.backend.from_name(backend)
-        assert backend_cls is not None
+        """Normalize Fields in argument list to the proper domain/origin"""
+        backend_cls = gt_backend.from_name(backend)
         args_iter = iter(args)
-        args_as_kwargs = {
-            name: (kwargs[name] if name in kwargs else next(args_iter)) for name in arg_names
-        }
+
+        args_as_kwargs = {}
+        for name in arg_names:
+            if name not in field_info.keys():
+                continue
+            if name in kwargs.keys():
+                args_as_kwargs[name] = kwargs[name]
+            else:
+                args_as_kwargs[name] = next(args_iter)
+
         arg_infos = _extract_array_infos(
             field_args=args_as_kwargs, device=backend_cls.storage_info["device"]
         )

@@ -27,6 +27,8 @@ from gt4py.cartesian.gtscript import (
     computation,
     cos,
     cosh,
+    erf,
+    erfc,
     exp,
     floor,
     gamma,
@@ -39,6 +41,8 @@ from gt4py.cartesian.gtscript import (
     log10,
     mod,
     region,
+    round,
+    round_away_from_zero,
     sin,
     sinh,
     sqrt,
@@ -61,6 +65,7 @@ def register(func=None, *, externals=None, name=None):
     return _register_decorator(func) if func else _register_decorator
 
 
+Field2D = gtscript.Field[gtscript.IJ, np.float64]
 Field3D = gtscript.Field[np.float64]
 Field3DBool = gtscript.Field[np.bool_]
 
@@ -72,7 +77,7 @@ def copy_stencil(field_a: Field3D, field_b: Field3D):
 
 
 @gtscript.function
-def afunc(b):
+def a_gtscript_function(b):
     return sqrt(abs(b[0, 1, 0]))
 
 
@@ -80,6 +85,27 @@ def afunc(b):
 def arithmetic_ops(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
         field_a = (((((field_b + 42.0) - 42.0) * +42.0) / -42.0) % 42.0) ** 2
+
+
+@register
+def scalar_inputs(field_a: Field3D, scalar_in: float):
+    with computation(PARALLEL), interval(...):
+        field_a = field_a * scalar_in
+
+
+@register
+def unary_operation(field_a: Field3D, scalar_in: float):
+    with computation(PARALLEL), interval(...):
+        field_a = -scalar_in
+
+
+@register
+def temporary_stencil(field_a: Field3D, field_b: Field2D, scalar_in: float):
+    with computation(PARALLEL), interval(...):
+        tmp = field_a * scalar_in
+
+    with computation(FORWARD), interval(0, 1):
+        field_b += tmp
 
 
 @register
@@ -127,7 +153,7 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         acosh_res = acosh(cosh_res)
         tanh_res = tanh(acosh_res)
         atanh_res = atanh(tanh_res)
-        sqrt_res = afunc(atanh_res)
+        sqrt_res = a_gtscript_function(atanh_res)
         pow10_res = 10 ** (sqrt_res)
         log10_res = log10(pow10_res)
         exp_res = exp(log10_res)
@@ -137,15 +163,27 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         floor_res = floor(cbrt_res)
         ceil_res = ceil(floor_res)
         trunc_res = trunc(ceil_res)
+        round_res = round(trunc_res)
+        round_afz_res = round_away_from_zero(round_res)
+        erf_res = erf(round_afz_res)
+        erfc_res = erfc(erf_res)
         field_b = (
             trunc_res
-            if isfinite(trunc_res)
+            if isfinite(erfc_res)
             else field_a
-            if isinf(trunc_res)
+            if isinf(erfc_res)
             else field_b
-            if isnan(trunc_res)
+            if isnan(erfc_res)
             else 0.0
         )
+
+
+@register
+def while_stencil(field_a: Field3D, field_b: Field3D):
+    with computation(BACKWARD), interval(...):
+        while field_a > 2.0:
+            field_b = -1
+            field_a = -field_b
 
 
 @register
@@ -295,7 +333,7 @@ def large_k_interval(in_field: Field3D, out_field: Field3D):
     with computation(PARALLEL):
         with interval(0, 6):
             out_field = in_field
-        # this stenicl is only legal to call with fields that have more than 16 elements
+        # this stencil is only legal to call with fields that have more than 16 elements
         with interval(6, -10):
             out_field = in_field + 1
         with interval(-10, None):

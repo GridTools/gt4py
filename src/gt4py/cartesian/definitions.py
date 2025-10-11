@@ -8,6 +8,8 @@
 
 import enum
 import functools
+import os
+import platform
 from dataclasses import dataclass
 from typing import Literal, Tuple, Union
 
@@ -23,6 +25,21 @@ from gt4py.cartesian.utils.attrib import (
     attribkwclass,
     attribute,
 )
+
+
+# Dev note: platform.architecture() returns "('64bit', 'ELF')" for example.
+_ARCHITECTURE_LITERAL_PRECISION = platform.architecture()[0][:2]
+"""Literal precision of the architecture; expected 64 or 32."""
+
+LITERAL_INT_PRECISION = int(
+    os.environ.get("GT4PY_LITERAL_INT_PRECISION", default=_ARCHITECTURE_LITERAL_PRECISION)
+)
+"""Default literal precision used for unspecific `int` types and casts."""
+
+LITERAL_FLOAT_PRECISION = int(
+    os.environ.get("GT4PY_LITERAL_FLOAT_PRECISION", default=_ARCHITECTURE_LITERAL_PRECISION)
+)
+"""Default literal precision used for unspecific `float` types and casts."""
 
 
 @enum.unique
@@ -102,19 +119,25 @@ class BuildOptions(AttributeClassLike):
     raise_if_not_cached = attribute(of=bool, default=False)
     cache_settings = attribute(of=DictOf[str, Any], factory=dict)
     _impl_opts = attribute(of=DictOf[str, Any], factory=dict)
+    literal_int_precision = attribute(of=int, default=LITERAL_INT_PRECISION)
+    "Literal precision for `int` types and casts. Defaults to architecture precision unless overwritten by the environment variable `GT4PY_LITERAL_INT_PRECISION`."
+    literal_float_precision = attribute(of=int, default=LITERAL_FLOAT_PRECISION)
+    "Literal precision for `float` types and casts. Defaults to architecture precision unless overwritten by the environment variable `GT4PY_LITERAL_FLOAT_PRECISION`."
 
     @property
     def qualified_name(self):
-        name = ".".join([self.module, self.name])
-        return name
+        return ".".join([self.module, self.name])
 
     @property
     def shashed_id(self):
-        result = gt_utils.shashed_id(
-            self.name, self.module, self.format_source, *tuple(sorted(self.backend_opts.items()))
+        return gt_utils.shashed_id(
+            self.name,
+            self.module,
+            self.format_source,
+            self.literal_int_precision,
+            self.literal_float_precision,
+            *tuple(sorted(self.backend_opts.items())),
         )
-
-        return result
 
 
 @attribclass(frozen=True)

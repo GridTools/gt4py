@@ -705,7 +705,7 @@ def test_compare_chain():
     def foo(
         a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64], c: gtx.Field[[TDim], float64]
     ) -> gtx.Field[[TDim], bool]:
-        return a > b > c
+        return (a > b) & (b > c)
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
@@ -764,7 +764,7 @@ def test_reduction_lowering_neighbor_sum():
     reference = im.op_as_fieldop(
         im.reduce(
             "plus",
-            im.literal(value="0", typename="float64"),
+            im.literal(value="0", type_="float64"),
         )
     )(im.as_fieldop_neighbors("V2E", "edge_f"))
 
@@ -781,7 +781,7 @@ def test_reduction_lowering_max_over():
     reference = im.op_as_fieldop(
         im.reduce(
             "maximum",
-            im.literal(value=str(np.finfo(np.float64).min), typename="float64"),
+            im.literal(value=str(np.finfo(np.float64).min), type_="float64"),
         )
     )(im.as_fieldop_neighbors("V2E", "edge_f"))
 
@@ -798,7 +798,7 @@ def test_reduction_lowering_min_over():
     reference = im.op_as_fieldop(
         im.reduce(
             "minimum",
-            im.literal(value=str(np.finfo(np.float64).max), typename="float64"),
+            im.literal(value=str(np.finfo(np.float64).max), type_="float64"),
         )
     )(im.as_fieldop_neighbors("V2E", "edge_f"))
 
@@ -825,7 +825,7 @@ def test_reduction_lowering_expr():
         im.op_as_fieldop(
             im.reduce(
                 "plus",
-                im.literal(value="0", typename="float64"),
+                im.literal(value="0", type_="float64"),
             )
         )(mapped)
     )

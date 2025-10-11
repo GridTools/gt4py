@@ -9,41 +9,87 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any
+import os
+from typing import Any, Callable, Sequence
 
 import dace
 import factory
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
-from gt4py.next.otf.compilation import cache
+from gt4py.next.otf.compilation import cache as gtx_cache
+from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
 
-class CompiledDaceProgram(stages.ExtendedCompiledProgram):
+def _get_sdfg_ctype_arglist_callback(
+    module_name: str, bind_func_name: str, python_code: str
+) -> Callable[
+    [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]], None
+]:
+    """
+    Helper method to load dynamically generated Python code which will be used
+    to update the list of SDFG call arguments.
+
+    It loads the Python code inside an empty namespace, without modifying the current
+    global namespace. This is done to support parallel compilation, in which it can
+    happen that two threads generate the same `bind_func_name` for the callback function.
+
+    Args:
+        module_name: Set on the loaded callback function for debugging.
+        bind_func_name: Name to use for the translation function.
+        python_code: String containing the Python code to load.
+
+    Returns:
+        A callable object to update the list of SDFG call arguments.
+    """
+    exec(python_code, global_namespace := {})  # type: ignore[var-annotated]
+    assert bind_func_name not in globals()
+    assert bind_func_name in global_namespace
+    global_namespace[bind_func_name].__module__ = module_name
+    return global_namespace[bind_func_name]
+
+
+class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_program: dace.CompiledSDFG
 
     # Sorted list of SDFG arguments as they appear in program ABI and corresponding data type;
     # scalar arguments that are not used in the SDFG will not be present.
-    sdfg_arglist: list[tuple[str, dace.dtypes.Data]]
+    sdfg_argtypes: list[dace.dtypes.Data]
 
-    def __init__(self, program: dace.CompiledSDFG, implicit_domain: bool):
+    # The compiled program contains a callable object to update the SDFG arguments list.
+    update_sdfg_ctype_arglist: Callable[
+        [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]],
+        None,
+    ]
+
+    def __init__(
+        self,
+        program: dace.CompiledSDFG,
+        bind_func_name: str,
+        binding_source: stages.BindingSource[languages.SDFG, languages.Python],
+    ):
         self.sdfg_program = program
-        self.implicit_domain = implicit_domain
+
         # `dace.CompiledSDFG.arglist()` returns an ordered dictionary that maps the argument
         # name to its data type, in the same order as arguments appear in the program ABI.
         # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
-        self.sdfg_arglist = [
-            (arg_name, arg_type) for arg_name, arg_type in program.sdfg.arglist().items()
-        ]
+        self.sdfg_argtypes = list(program.sdfg.arglist().values())
 
-    def __call__(self, *args: Any, **kwargs: Any) -> None:
-        result = self.sdfg_program(*args, **kwargs)
-        assert result is None
+        # Note that `binding_source` contains Python code tailored to this specific SDFG.
+        #   We need to ensure that it is loaded as a Python module with a unique name,
+        #   in order to avoid conflicts with other variants of the same program.
+        #   Therefore, we use the name of the build folder as module name.
+        binding_module_name = os.path.basename(program.sdfg.build_folder)
+        self.update_sdfg_ctype_arglist = _get_sdfg_ctype_arglist_callback(
+            binding_module_name, bind_func_name, binding_source.source_code
+        )
 
-    def fast_call(self) -> None:
-        result = self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
-        assert result is None
+    def __call__(self, **kwargs: Any) -> Any:
+        return self.sdfg_program(**kwargs)
+
+    def fast_call(self) -> Any:
+        return self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -60,46 +106,33 @@ class DaCeCompiler(
 ):
     """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
+    bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
-    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+    device_type: core_defs.DeviceType
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
 
     def __call__(
         self,
         inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
     ) -> CompiledDaceProgram:
-        sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-        sdfg.build_folder = cache.get_cache_folder(inp, self.cache_lifetime)
+        with gtx_wfdcommon.dace_context(
+            device_type=self.device_type,
+            cmake_build_type=self.cmake_build_type,
+        ):
+            sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
+            sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
-        with dace.config.temporary_config():
-            dace.config.Config.set("compiler.build_type", value=self.cmake_build_type.value)
-            dace.config.Config.set("compiler.use_cache", value=False)  # we use the gt4py cache
+            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            sdfg.build_folder = sdfg_build_folder
+            with locking.lock(sdfg_build_folder):
+                sdfg_program = sdfg.compile(validate=False)
 
-            # dace dafault setting use fast-math in both cpu and gpu compilation, don't use it here
-            dace.config.Config.set(
-                "compiler.cpu.args",
-                value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
-            )
-            dace.config.Config.set(
-                "compiler.cuda.args",
-                value="-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
-            )
-            dace.config.Config.set(
-                "compiler.cuda.hip_args",
-                value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
-            )
-
-            # In some stencils, mostly in `apply_diffusion_to_w` the cuda codegen messes
-            #  up with the cuda streams, i.e. it allocates N streams but uses N+1.
-            #  This is a workaround until this issue if fixed in DaCe.
-            dace.config.Config.set("compiler.cuda.max_concurrent_streams", value=1)
-
-            if self.device_type == core_defs.DeviceType.ROCM:
-                dace.config.Config.set("compiler.cuda.backend", value="hip")
-
-            sdfg_program = sdfg.compile(validate=False)
-
-        return CompiledDaceProgram(sdfg_program, inp.program_source.implicit_domain)
+        assert inp.binding_source is not None
+        return CompiledDaceProgram(
+            sdfg_program,
+            self.bind_func_name,
+            inp.binding_source,
+        )
 
 
 class DaCeCompilationStepFactory(factory.Factory):

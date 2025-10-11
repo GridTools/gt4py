@@ -10,15 +10,9 @@ from typing import Any, Dict, Optional, Set
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor, SymbolTableTrait
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import ir_makers as im, misc as ir_misc
 from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as type_inference
-
-
-def unique_name(name, prohibited_symbols):
-    while name in prohibited_symbols:
-        name += "_"
-    return name
 
 
 class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
@@ -49,7 +43,7 @@ class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
             new_params: list[ir.Sym] = []
             for param in node.params:
                 if param.id in clashes:
-                    new_param = im.sym(unique_name(param.id, reserved_params), param.type)
+                    new_param = im.sym(ir_misc.unique_symbol(param.id, reserved_params), param.type)
                     assert new_param.id not in symbol_map
                     new_symbol_map[param.id] = im.ref(new_param.id, param.type)
                     reserved_params.add(new_param.id)
@@ -71,9 +65,9 @@ class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
         )
 
     def generic_visit(self, node: ir.Node, **kwargs: Any):  # type: ignore[override]
-        assert isinstance(node, SymbolTableTrait) == isinstance(
-            node, ir.Lambda
-        ), "found unexpected new symbol scope"
+        assert isinstance(node, SymbolTableTrait) == isinstance(node, ir.Lambda), (
+            "found unexpected new symbol scope"
+        )
         return super().generic_visit(node, **kwargs)
 
 

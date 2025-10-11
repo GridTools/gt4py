@@ -47,6 +47,7 @@ def make_program_source(name: str) -> stages.ProgramSource:
             ),
             interface.Parameter(name="sc", type_=ts.ScalarType(ts.ScalarKind.FLOAT32)),
         ],
+        returns=True,
     )
     func = cpp_interface.render_function_declaration(
         entry_point,
@@ -74,7 +75,6 @@ def make_program_source(name: str) -> stages.ProgramSource:
         library_deps=[interface.LibraryDependency("gridtools_cpu", "master")],
         language=languages.CPP,
         language_settings=cpp_interface.CPP_DEFAULT,
-        implicit_domain=False,
     )
 
 

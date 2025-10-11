@@ -11,11 +11,13 @@ from __future__ import annotations
 from typing import Any, Callable
 
 import numpy as np
+import sympy
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
 from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 
 
 MATH_BUILTINS_MAPPING = {
@@ -79,6 +81,14 @@ def builtin_cast(val: str, target_type: str) -> str:
     return MATH_BUILTINS_MAPPING[target_type].format(val)
 
 
+def builtin_get_domain_range(field: str, axis: str) -> str:
+    # The builtin function returns a tuple of two values, the range start and stop.
+    # Here we return part of the symbol name: the full name also contains an
+    # additional suffix '_0' for range start or '_1' for stop, which is obtained
+    # from to the `tuple_get` index.
+    return gtx_dace_utils.range_symbol(field, axis)
+
+
 def builtin_if(cond: str, true_val: str, false_val: str) -> str:
     return f"{true_val} if {cond} else {false_val}"
 
@@ -98,6 +108,7 @@ def make_const_list(arg: str) -> str:
 
 GENERAL_BUILTIN_MAPPING: dict[str, Callable[..., str]] = {
     "cast_": builtin_cast,
+    "get_domain_range": builtin_get_domain_range,
     "if_": builtin_if,
     "make_const_list": make_const_list,
     "tuple_get": builtin_tuple_get,
@@ -124,6 +135,9 @@ class PythonCodegen(codegen.TemplatedGenerator):
 
     Literal = as_fmt("{value}")
 
+    def visit_AxisLiteral(self, node: gtir.AxisLiteral, **kwargs: Any) -> str:
+        return node.value
+
     def visit_FunCall(self, node: gtir.FunCall, args_map: dict[str, gtir.Node]) -> str:
         if isinstance(node.fun, gtir.Lambda):
             # update the mapping from lambda parameters to corresponding argument expressions
@@ -142,6 +156,9 @@ class PythonCodegen(codegen.TemplatedGenerator):
             builtin_name = str(node.fun.id)
             return format_builtin(builtin_name, *args)
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
+
+    def visit_InfinityLiteral(self, node: gtir.InfinityLiteral, **kwargs: Any) -> str:
+        return str(sympy.oo) if node == gtir.InfinityLiteral.POSITIVE else str(-sympy.oo)
 
     def visit_SymRef(self, node: gtir.SymRef, args_map: dict[str, gtir.Node]) -> str:
         symbol = str(node.id)

@@ -44,15 +44,22 @@ def test_is_field_allocator():
     assert not next_allocators.is_field_allocator(invalid_obj)
 
 
-def test_is_field_allocator_for():
+@pytest.mark.parametrize(
+    "test_function",
+    [
+        next_allocators.is_field_allocator_for,
+        next_allocators.is_field_allocation_tool_for,  # since an allocator is an allocation_tool
+    ],
+)
+def test_is_field_allocator_for(test_function):
     # Test with a valid field allocator for the specified device
-    assert next_allocators.is_field_allocator_for(DummyAllocator(), core_defs.DeviceType.CPU)
+    assert test_function(DummyAllocator(), core_defs.DeviceType.CPU)
 
     # Test with a valid field allocator for a different device
-    assert not next_allocators.is_field_allocator_for(DummyAllocator(), core_defs.DeviceType.CUDA)
+    assert not test_function(DummyAllocator(), core_defs.DeviceType.CUDA)
 
     # Test with an invalid field allocator
-    assert not next_allocators.is_field_allocator_for("not an allocator", core_defs.DeviceType.CPU)
+    assert not test_function("not an allocator", core_defs.DeviceType.CPU)
 
 
 def test_is_field_allocator_factory():
@@ -65,22 +72,25 @@ def test_is_field_allocator_factory():
     assert not next_allocators.is_field_allocator_factory(invalid_obj)
 
 
-def test_is_field_allocator_factory_for():
+@pytest.mark.parametrize(
+    "test_function",
+    [
+        next_allocators.is_field_allocator_factory_for,
+        next_allocators.is_field_allocation_tool_for,  # since a factory is an allocation_tool
+    ],
+)
+def test_is_field_allocator_factory_for(test_function):
     # Test with a field allocator factory that matches the device type
     allocator_factory = DummyAllocatorFactory()
-    assert next_allocators.is_field_allocator_factory_for(
-        allocator_factory, core_defs.DeviceType.CPU
-    )
+    assert test_function(allocator_factory, core_defs.DeviceType.CPU)
 
     # Test with a field allocator factory that doesn't match the device type
     allocator_factory = DummyAllocatorFactory()
-    assert not next_allocators.is_field_allocator_factory_for(
-        allocator_factory, core_defs.DeviceType.CUDA
-    )
+    assert not test_function(allocator_factory, core_defs.DeviceType.CUDA)
 
     # Test with an object that is not a field allocator factory
     invalid_obj = "not an allocator factory"
-    assert not next_allocators.is_field_allocator_factory_for(invalid_obj, core_defs.DeviceType.CPU)
+    assert not test_function(invalid_obj, core_defs.DeviceType.CPU)
 
 
 def test_get_allocator():

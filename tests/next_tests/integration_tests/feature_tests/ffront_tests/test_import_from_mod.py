@@ -10,7 +10,7 @@ import pytest
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.next import broadcast
+from gt4py.next import broadcast, astype
 
 from next_tests import integration_tests
 from next_tests.integration_tests import cases
@@ -20,8 +20,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
     mesh_descriptor,
 )
-
-from next_tests.dummy_package import dummy_module
 
 
 def test_import_dims_module(cartesian_case):
@@ -56,6 +54,8 @@ def test_import_dims_module(cartesian_case):
 
 # TODO: these set of features should be allowed as module imports in a later PR
 def test_import_module_errors_future_allowed(cartesian_case):
+    from ....artifacts.dummy_package import dummy_module
+
     with pytest.raises(gtx.errors.DSLError):
 
         @gtx.field_operator
@@ -63,12 +63,12 @@ def test_import_module_errors_future_allowed(cartesian_case):
             f_i_k = gtx.broadcast(f, (cases.IDim, cases.KDim))
             return f_i_k
 
-    with pytest.raises(ValueError):
+    with pytest.raises(gtx.errors.DSLError):
 
         @gtx.field_operator
         def field_op(f: cases.IField):
             type_ = gtx.int32
-            return f
+            return astype(f, type_)
 
     with pytest.raises(gtx.errors.DSLError):
 

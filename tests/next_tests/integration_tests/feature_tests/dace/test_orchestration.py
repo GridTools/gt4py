@@ -130,7 +130,9 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
     def get_stride_from_numpy_to_dace(arg: core_defs.NDArrayObject, axis: int) -> int:
         # NumPy strides: number of bytes to jump
         # DaCe strides: number of elements to jump
-        return arg.strides[axis] // arg.itemsize
+        stride, remainder = divmod(arg.strides[axis], arg.itemsize)
+        assert remainder == 0
+        return stride
 
     # use unique SDFG folder in dace cache to avoid clashes between parallel pytest workers
     with dace.config.set_temporary("cache", value="unique"):
@@ -143,9 +145,9 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
             offset_provider,
             rows=3,
             cols=2,
-            connectivity_E2V=e2v,
-            __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
-            __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
+            gt_conn_E2V=e2v,
+            __gt_conn_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
+            __gt_conn_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
         )
 
         e2v_np = e2v.asnumpy()
@@ -164,9 +166,9 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
             offset_provider,
             rows=3,
             cols=2,
-            connectivity_E2V=e2v,
-            __connectivity_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
-            __connectivity_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
+            gt_conn_E2V=e2v,
+            __gt_conn_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
+            __gt_conn_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
         )
 
         e2v_np = e2v.asnumpy()

@@ -7,20 +7,17 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
-import pathlib
-import tempfile
-from typing import Any, Optional
+from typing import Any
 
-import diskcache
 import factory
 import numpy as np
-from flufl import lock
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
-from gt4py.next import backend, common, config, field_utils
+from gt4py._core import filecache
+from gt4py.next import backend, common, config, field_utils, metrics
 from gt4py.next.embedded import nd_array_field
-from gt4py.next.otf import arguments, recipes, stages, workflow
+from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -46,7 +43,7 @@ def convert_arg(arg: Any) -> Any:
 
 
 def convert_args(
-    inp: stages.ExtendedCompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
         *args: Any,
@@ -58,12 +55,30 @@ def convert_args(
             args = (*args, out)
         converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
+
+        opt_kwargs: dict[str, Any]
+        metric_collection = metrics.get_active_metric_collection()
+        if collect_metrics := (
+            metric_collection is not None and (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE)
+        ):
+            # If we are collecting metrics, we need to add the `exec_info` argument
+            # to the `inp` call, which will be used to collect performance metrics.
+            exec_info: dict[str, float] = {}
+            opt_kwargs = {"exec_info": exec_info}
+        else:
+            opt_kwargs = {}
+
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
-        return inp(
+        inp(
             *converted_args,
-            *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
             *conn_args,
+            **opt_kwargs,
         )
+
+        if collect_metrics:
+            assert metric_collection is not None
+            value = exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"]
+            metric_collection.add_sample(metrics.COMPUTE_METRIC, value)
 
     return decorated_program
 
@@ -84,49 +99,16 @@ def extract_connectivity_args(
     return args
 
 
-class FileCache(diskcache.Cache):
-    """
-    This class extends `diskcache.Cache` to ensure the cache is properly
-    - opened when accessed by multiple processes using a file lock. This guards the creating of the
-    cache object, which has been reported to cause `sqlite3.OperationalError: database is locked`
-    errors and slow startup times when multiple processes access the cache concurrently. While this
-    issue occurred frequently and was observed to be fixed on distributed file systems, the lock
-    does not guarantee correct behavior in particular for accesses to the cache (beyond opening)
-    since the underlying SQLite database is unreliable when stored on an NFS based file system.
-    It does however ensure correctness of concurrent cache accesses on a local file system. See
-    #1745 for more details.
-    - closed upon deletion, i.e. it ensures that any resources associated with the cache are
-    properly released when the instance is garbage collected.
-    """
-
-    def __init__(self, directory: Optional[str | pathlib.Path] = None, **settings: Any) -> None:
-        if directory:
-            lock_dir = pathlib.Path(directory).parent
-        else:
-            lock_dir = pathlib.Path(tempfile.gettempdir())
-
-        lock_dir.mkdir(parents=True, exist_ok=True)
-        lockfile = str(lock_dir / "file_cache.lock")
-        with lock.Lock(lockfile, lifetime=10):  # type: ignore[attr-defined] # mypy not smart enough to understand custom export logic
-            super().__init__(directory=directory, **settings)
-
-        self._init_complete = True
-
-    def __del__(self) -> None:
-        if getattr(self, "_init_complete", False):  # skip if `__init__` didn't finished
-            self.close()
-
-
 class GTFNCompileWorkflowFactory(factory.Factory):
     class Meta:
         model = recipes.OTFCompileWorkflow
 
     class Params:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
         )
-        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(
+        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
 
@@ -135,7 +117,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
                 lambda o: workflow.CachedStep(
                     o.bare_translation,
                     hash_function=stages.fingerprint_compilable_program,
-                    cache=FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
+                    cache=filecache.FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
                 )
             ),
         )
@@ -205,7 +187,9 @@ run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translati
 
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
-run_gtfn_gpu_cached = GTFNBackendFactory(gpu=True, cached=True)
+run_gtfn_gpu_cached = GTFNBackendFactory(
+    gpu=True, cached=True, otf_workflow__cached_translation=True
+)
 
 run_gtfn_no_transforms = GTFNBackendFactory(
     otf_workflow__bare_translation__enable_itir_transforms=False

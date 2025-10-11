@@ -11,7 +11,7 @@
 from typing import Any, Container, Optional, Sequence, TypeVar, Union
 
 import dace
-from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
+from dace import data as dace_data, libraries as dace_lib, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
@@ -129,7 +129,7 @@ def gt_find_constant_arguments(
     ret_value: dict[str, Any] = {}
 
     for name, value in call_args.items():
-        if name in include or (gtx_dace_utils.is_field_symbol(name) and value == 1):
+        if name in include or (gtx_dace_utils.is_stride_symbol(name) and value == 1):
             ret_value[name] = value
 
     return ret_value
@@ -244,7 +244,8 @@ def is_reachable(
     """Explores the graph from `start` and checks if `target` is reachable.
 
     The exploration of the graph is done in a way that ignores the connector names.
-    It is possible to pass multiple start nodes and targets. In case of multiple target nodes, the function returns True if any of them is reachable.
+    It is possible to pass multiple start nodes and targets. In case of multiple target
+    nodes, the function returns True if any of them is reachable.
 
     Args:
         start: The node from where to start.
@@ -261,6 +262,42 @@ def is_reachable(
             return True
         seen.add(node)
         to_visit.extend(oedge.dst for oedge in state.out_edges(node) if oedge.dst not in seen)
+
+    return False
+
+
+def is_source_node_of(
+    sink: dace_nodes.Node,
+    possible_sources: Union[dace_nodes.Node, Sequence[dace_nodes.Node]],
+    state: dace.SDFGState,
+) -> bool:
+    """Explores the graph and checks if `possible_sources` produce data for `sink`.
+
+    The function is similar to `is_reachable()` except that it explores the
+    graph in the reverse direction of the data flow. The function starts a
+    revers depth first search at `sink` and checks if it is possible to reach
+    any nodes listed in `possible_sources`.
+
+    Args:
+        sink: Start of the reverse DFS.
+        possible_sources: Look for these nodes.
+        state: The SDFG state on which we operate.
+    """
+    # TODO(phimuell): Think if this function could be implemented in terms of `is_reachable()`.
+    to_visit: list[dace_nodes.Node] = [sink] if isinstance(sink, dace_nodes.Node) else list(sink)
+    possible_sources = (
+        {possible_sources}
+        if isinstance(possible_sources, dace_nodes.Node)
+        else set(possible_sources)
+    )
+    seen: set[dace_nodes.Node] = set()
+
+    while to_visit:
+        node = to_visit.pop()
+        if node in possible_sources:
+            return True
+        seen.add(node)
+        to_visit.extend(iedge.src for iedge in state.in_edges(node) if iedge.src not in seen)
 
     return False
 
@@ -306,10 +343,10 @@ def track_view(
         raise RuntimeError(f"Failed to determine the direction of the view '{view}'.")
     if curr_edge.dst_conn == "views":
         # The view is used for reading.
-        next_node = lambda curr_edge: curr_edge.src  # noqa: E731
+        next_node = lambda curr_edge: curr_edge.src  # noqa: E731 [lambda-assignment]
     elif curr_edge.src_conn == "views":
         # The view is used for writing.
-        next_node = lambda curr_edge: curr_edge.dst  # noqa: E731
+        next_node = lambda curr_edge: curr_edge.dst  # noqa: E731 [lambda-assignment]
     else:
         raise RuntimeError(f"Failed to determine the direction of the view '{view}' | {curr_edge}.")
 
@@ -368,9 +405,9 @@ def reroute_edge(
     """
     current_memlet: dace.Memlet = current_edge.data
     if is_producer_edge:
-        # NOTE: See the note in `_reconfigure_dataflow()` why it is not save to
-        #  use the `get_{dst, src}_subset()` function, although it would be more
-        #  appropriate.
+        # NOTE: See the note in `reconfigure_dataflow_after_rerouting()` why it is not
+        #  safe to use the `get_{dst, src}_subset()` function, although it would be
+        #  more appropriate.
         assert current_edge.dst is old_node
         current_subset: dace_sbs.Range = current_memlet.dst_subset
         new_src = current_edge.src
@@ -466,6 +503,10 @@ def reconfigure_dataflow_after_rerouting(
         old_node: The old that was involved in the old, rerouted, edge.
         new_node: The new node that should be used instead of `old_node`.
     """
+
+    # NOTE: The base assumption of this function is that the subset on the side of
+    #   `new_node` is already correct and we have to adjust the subset on the side
+    #   of `other_node`.
     other_node = new_edge.src if is_producer_edge else new_edge.dst
 
     if isinstance(other_node, dace_nodes.AccessNode):
@@ -528,6 +569,21 @@ def reconfigure_dataflow_after_rerouting(
         #  the full array, but essentially slice a bit.
         pass
 
+    elif isinstance(other_node, dace_lib.standard.Reduce):
+        # For now we only handle the case that the reduction node is writing into
+        #  `new_node`, before the data was written into `old_node`. In that case
+        #  there is nothing to do, we just do some checks.
+        # TODO(phimuell): This about how to handle the other case or how to extend
+        #   to other library nodes.
+
+        if not is_producer_edge:
+            raise ValueError("Reduction nodes are only supported as output.")
+        assert isinstance(new_node, dace_nodes.AccessNode)
+
+        # The subset at the reduction node needs to be `None`, which means undefined.
+        other_subset = new_edge.data.src_subset if is_producer_edge else new_edge.data.dst_subset
+        assert other_subset is None
+
     else:
         # As we encounter them we should handle them case by case.
         raise NotImplementedError(
@@ -571,3 +627,52 @@ def find_upstream_nodes(
         to_visit.extend(iedge.src for iedge in state.in_edges(node) if iedge.src is not limit_node)
 
     return seen
+
+
+def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
+    """Finds the set of next states after `state`.
+
+    In the simplest case the function will return something like this.
+    `[e.dst for e in state.sdfg.out_edges(state)`].
+    If this set is empty, the function will go up the hierarchy of the control flow
+    regions and inspect the outputs. This means if `state` is a terminal node of
+    a control flow region the function will find the successor states of the
+    region.
+    If the set of successors contains an control flow region, the region will be
+    expanded, such that the result set only consists of `SDFGState`s.
+    """
+
+    def _impl(
+        state: Union[dace.SDFGState, dace.sdfg.state.AbstractControlFlowRegion],
+        graph: dace.sdfg.state.AbstractControlFlowRegion,
+    ) -> list[dace.sdfg.state.AbstractControlFlowRegion]:
+        assert state is not graph
+        assert state in graph.nodes()
+
+        curr_out_edges = [oedge.dst for oedge in graph.out_edges(state)]
+
+        # End recursion if we found some successor edges or we have reached the top.
+        if len(curr_out_edges) > 0 or graph.parent_graph is state.sdfg:
+            return curr_out_edges
+        elif isinstance(graph.parent_graph, dace.sdfg.state.ConditionalBlock):
+            # For conditional we go two levels up, because there is nothing
+            #  interesting inside it.
+            return _impl(graph.parent_graph, graph.parent_graph.parent_graph)
+        else:
+            # We have not found any successor edges, so we go one level up.
+            #  This time we look for the enclosing graph.
+            # NOTE: We do not handle the `LoopRegion` specially, as the successor
+            #   state could either be the one following the region or the first
+            #   state of the loop body.
+            return _impl(graph, graph.parent_graph)
+
+    # Expand the successors such that it contains only `SDFGState`s.
+    # TODO(phimuell): Only use the starting block instead of all.
+    all_successors: list[dace.SDFGState] = []
+    for successor in _impl(state, state.parent_graph):
+        if isinstance(successor, dace.SDFGState):
+            all_successors.append(successor)
+        else:
+            all_successors.extend(successor.all_states())
+
+    return all_successors

@@ -157,11 +157,6 @@ def _transform_by_pattern(
     # hide projector from extraction
     projector, expr = ir_utils_misc.extract_projector(stmt.expr)
 
-    # If we extracted a projector and the expression is not an as_fieldop of a scan,
-    # collapse tuple did not work as expected. We would expect that collapse
-    # tuple eleminated all top-level tuple expressions for non-scans.
-    assert projector is None or _is_as_fieldop_of_scan(expr)
-
     new_expr, extracted_fields, _ = cse.extract_subexpression(
         expr,
         predicate=predicate,
@@ -329,11 +324,20 @@ def create_global_tmps(
     This pass looks at all `as_fieldop` calls and transforms field-typed subexpressions of its
     arguments into temporaries.
     """
-    offset_provider_type = common.offset_provider_to_type(offset_provider)
     program = infer_domain.infer_program(
-        program, offset_provider=offset_provider, symbolic_domain_sizes=symbolic_domain_sizes
+        program,
+        offset_provider=offset_provider,
+        symbolic_domain_sizes=symbolic_domain_sizes,
+        # Previous passes are allowed to create expressions without domains, but we must not
+        # overwrite other domains here. Instead, only reinfer expressions without a domain. We must
+        # not overwrite them since e.g. a `concat_where` expression might be rewritten into an
+        # `if_(cond, tb, fb)` expression where re-inference might extend the domain of tb and fb.
+        # See :class:`infer_domain.infer_expr` for details.
+        keep_existing_domains=True,
     )
-    program = type_inference.infer(program, offset_provider_type=offset_provider_type)
+    program = type_inference.infer(
+        program, offset_provider_type=common.offset_provider_to_type(offset_provider)
+    )
 
     if not uids:
         uids = eve_utils.UIDGenerator(prefix="__tmp")
