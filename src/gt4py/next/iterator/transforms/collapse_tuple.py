@@ -24,7 +24,12 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_misc,
 )
-from gt4py.next.iterator.transforms import fixed_point_transformation, inline_lambdas, inline_lifts
+from gt4py.next.iterator.transforms import (
+    fixed_point_transformation,
+    inline_lambdas,
+    inline_lifts,
+    symbol_ref_utils,
+)
 from gt4py.next.iterator.type_system import (
     inference as itir_type_inference,
     type_specifications as it_ts,
@@ -481,15 +486,28 @@ class CollapseTuple(
             outer_vars: dict[itir.Sym, itir.Expr] = {}
             inner_vars: dict[itir.Sym, itir.Expr] = {}
             original_inner_expr = node.fun.expr
+
+            # Here we store all references used in let args and the inner expression. Variable
+            # is only populated below in case the transformation applies.
+            reserved_refs = None
+
             for arg_sym, arg in zip(node.fun.params, node.args):
                 assert arg_sym not in inner_vars
                 if cpm.is_let(arg):
+                    # TODO(tehrengruber): This is potentially expensive. Store the used symbol refs in the annex.
+                    if not reserved_refs:
+                        reserved_refs = symbol_ref_utils.collect_symbol_refs(
+                            [*node.args, original_inner_expr]
+                        )
                     rename_map: dict[
                         str, ir.SymRef
                     ] = {}  # mapping from symbol with a collision to its new (unique) name
                     for sym, val in zip(arg.fun.params, arg.args):
-                        unique_sym = ir_misc.unique_symbol(sym, [s.id for s in outer_vars.keys()])
+                        unique_sym = ir_misc.unique_symbol(
+                            sym, [s.id for s in outer_vars.keys()] + reserved_refs
+                        )
                         if sym != unique_sym:  # name collision, rename symbol to unique_sym later
+                            assert sym.id not in rename_map
                             rename_map[sym.id] = im.ref(unique_sym.id, sym.type)
 
                         outer_vars[unique_sym] = val

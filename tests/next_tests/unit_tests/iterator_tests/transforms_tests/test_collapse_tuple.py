@@ -5,6 +5,8 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import pickle
+
 import pytest
 
 from gt4py.next import common
@@ -237,7 +239,7 @@ def test_propagate_nested_let():
     assert actual == expected
 
 
-def test_propagate_nested_let_with_collision():
+def test_propagate_nested_let_with_let_param_collision():
     testee = im.let(("a", im.let("c", 1)("c")), ("b", im.let("c", 2)("c")))(
         im.call("plus")("a", "b")
     )
@@ -247,6 +249,30 @@ def test_propagate_nested_let_with_collision():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert actual == expected
+
+
+def test_propagate_nested_let_with_let_arg_collision():
+    ir = im.let(("a", im.let("c", 1)("c")), ("b", "c"))(im.make_tuple("a", "b"))
+    expected = im.make_tuple(1, "c")
+    actual = CollapseTuple.apply(
+        ir,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert actual == expected
+
+
+def test_propagate_nested_let_with_body_collision():
+    ir = im.let(("a", im.let("c", 1)("c")))(im.make_tuple("a", "c"))
+    expected = im.make_tuple(1, "c")
+    actual = CollapseTuple.apply(
+        ir,
         enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
         allow_undeclared_symbols=True,
         within_stencil=False,
@@ -423,3 +449,24 @@ def test_flatten_as_fieldop_args_scan():
         within_stencil=False,
     )
     assert actual == expected
+
+
+from gt4py.eve import utils as eve_utils
+
+
+def test_bug_icon4py():
+    with open("/home/tille/Development/icon4py/fafop_bug3.pkl", "rb") as f:
+        ir = pickle.load(f)
+    with open("/home/tille/Development/icon4py/fafop_bug_offset_provider.pkl", "rb") as f:
+        offset_provider = pickle.load(f)
+    uids = eve_utils.UIDGenerator()
+    uids._counter = 23
+    actual = CollapseTuple.apply(
+        ir,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
+        offset_provider_type=common.offset_provider_to_type(offset_provider),
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+        uids=uids,
+    )
+    breakpoint()
