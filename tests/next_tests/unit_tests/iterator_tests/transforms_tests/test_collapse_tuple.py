@@ -5,8 +5,6 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-import pickle
-
 import pytest
 
 from gt4py.next import common
@@ -449,24 +447,3 @@ def test_flatten_as_fieldop_args_scan():
         within_stencil=False,
     )
     assert actual == expected
-
-
-from gt4py.eve import utils as eve_utils
-
-
-def test_bug_icon4py():
-    with open("/home/tille/Development/icon4py/fafop_bug3.pkl", "rb") as f:
-        ir = pickle.load(f)
-    with open("/home/tille/Development/icon4py/fafop_bug_offset_provider.pkl", "rb") as f:
-        offset_provider = pickle.load(f)
-    uids = eve_utils.UIDGenerator()
-    uids._counter = 23
-    actual = CollapseTuple.apply(
-        ir,
-        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
-        offset_provider_type=common.offset_provider_to_type(offset_provider),
-        allow_undeclared_symbols=True,
-        within_stencil=False,
-        uids=uids,
-    )
-    breakpoint()
