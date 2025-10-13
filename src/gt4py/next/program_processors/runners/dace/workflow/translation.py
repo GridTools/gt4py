@@ -388,12 +388,19 @@ class DaCeTranslator(
                 validate_all=self.validate_all,
             )
         elif on_gpu:
+            # Note that `gt_substitute_compiletime_symbols()` will run `gt_simplify()`
+            # at entry, in order to avoid some issue in constant propagatation.
+            # Besides, `gt_simplify()` will bring the SDFG into a canonical form
+            # that the GPU transformations can handle. This is a workaround for
+            # an issue with scalar expressions that are promoted to symbolic expressions
+            # and computed on the host (CPU), but the intermediate result is written
+            # to a GPU global variable (https://github.com/spcl/dace/issues/1773).
             gtx_transformations.gt_substitute_compiletime_symbols(
                 sdfg, constant_symbols, validate=True
             )
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
-        else:
-            # on CPU without SDFG transformations, but still replace constant symbols
+        elif len(constant_symbols) != 0:
+            # Target CPU without SDFG transformations, but still replace constant symbols.
             gtx_transformations.gt_substitute_compiletime_symbols(
                 sdfg, constant_symbols, validate=True
             )
