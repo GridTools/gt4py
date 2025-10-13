@@ -1,4 +1,4 @@
-# Expose iteration index in `K`
+# ⚠️ Expose iteration index in `K`
 
 In the context of porting physics parametrizations, we decided to expose the current iteration index in `K` to increase code readability. We are actively looking for more targeted DSL features as a replacement.
 
