@@ -995,9 +995,9 @@ def _make_reduction(
         reduce_dim_index = field.domain.dims.index(axis)
         current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
-        offset_definition = current_offset_provider[
-            axis.value
-        ]  # assumes offset and local dimension have same name
+        offset_definition = common.get_offset(
+            current_offset_provider, axis.value
+        )  # assumes offset and local dimension have same name
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
