@@ -427,9 +427,12 @@ def _gt_auto_process_top_level_maps(
         horizontal_map_fusion = gtx_transformations.MapFusionHorizontal(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=True,
-            # Setting this to `True` should lead to reduced loads as the data
-            #  can be reused inside a kernel.
-            only_if_common_ancestor=True,
+            # NOTE: We should actually set it to `True` because it would prevent the
+            #   creation of some random dependencies. However, enabling it leads to
+            #   massive performance degradations, especially in
+            #   `compute_theta_rho_face_values_and_pressure_gradient_and_update_vn`.
+            #   It is important that the reason for this is an unintended side effect.
+            only_if_common_ancestor=False,
         )
         sdfg.apply_transformations_repeated(
             [horizontal_map_fusion, vertical_map_fusion],
