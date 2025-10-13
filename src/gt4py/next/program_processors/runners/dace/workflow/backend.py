@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Final
+from typing import Any
 
 import factory
 
@@ -97,14 +97,6 @@ def make_dace_backend(
     Returns:
         A dace backend with custom configuration for the target device.
     """
-    gt_optimization_args: Final[dict[str, Any]] = {
-        "unit_strides_kind": (
-            common.DimensionKind.HORIZONTAL
-            if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
-            else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
-        ),
-    }
-
     if optimization_args is None:
         optimization_args = {}
     elif optimization_args and not auto_optimize:
@@ -121,19 +113,13 @@ def make_dace_backend(
                 f"Configuration mismatch, received unit_strides_kind='{arg_value}', expected '{common.DimensionKind.HORIZONTAL}'."
             )
 
-    elif any(arg in gt_optimization_args for arg in optimization_args):
-        intersect_args = set(optimization_args.keys()).intersection(gt_optimization_args.keys())
-        raise ValueError(f"The following arguments cannot be overriden: {intersect_args}.")
-
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
         cached=cached,
         auto_optimize=auto_optimize,
         otf_workflow__cached_translation=cached,
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
-        otf_workflow__bare_translation__auto_optimize_args=(
-            optimization_args | gt_optimization_args
-        ),
+        otf_workflow__bare_translation__auto_optimize_args=optimization_args,
         otf_workflow__bare_translation__use_metrics=use_metrics,
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
     )
