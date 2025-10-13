@@ -52,12 +52,18 @@ from gt4py.next.program_processors.runners.dace import (
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
-TAKSLET_CONNECTOR_PREFIX: Final[str] = "__gtir_arg"
-"""Prefix for connector names in tasklets.
+TAKSLET_IN_CONNECTOR: Final[str] = "__gtir_inp"
+"""Prefix for input connector names in tasklets.
 
 Note that the tasklet connectors cannot have the same name as the arguments
 of GTIR expressions, because this would lead to name conflicts in SDFG validation,
 in case the arguments of GTIR expressions are lowered to data nodes.
+"""
+
+TAKSLET_OUT_CONNECTOR: Final[str] = "__gtir_out"
+"""Prefix for output connector names in tasklets.
+
+See note for input prefix `TAKSLET_IN_CONNECTOR_PREFIX`.
 """
 
 

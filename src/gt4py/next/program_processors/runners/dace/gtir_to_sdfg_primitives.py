@@ -515,16 +515,17 @@ def translate_index(
         dc_node=index_node,
         gt_dtype=gtx_dace_utils.as_itir_type(gtir_to_sdfg_types.INDEX_DTYPE),
     )
+    out_connector = gtir_to_sdfg.TAKSLET_OUT_CONNECTOR
     index_write_tasklet = sdfg_builder.add_tasklet(
         "index",
         ctx.state,
         inputs={},
-        outputs={"__val"},
-        code=f"__val = {dim_index}",
+        outputs={out_connector},
+        code=f"{out_connector} = {dim_index}",
     )
     ctx.state.add_edge(
         index_write_tasklet,
-        "__val",
+        out_connector,
         index_node,
         None,
         dace.Memlet(data=index_data, subset="0"),
@@ -575,12 +576,13 @@ def _get_symbolic_value(
     scalar_type: ts.ScalarType,
     temp_name: Optional[str] = None,
 ) -> dace.nodes.AccessNode:
+    out_connector = gtir_to_sdfg.TAKSLET_OUT_CONNECTOR
     tasklet_node = sdfg_builder.add_tasklet(
         "get_value",
         state,
         {},
-        {"__out"},
-        f"__out = {symbolic_expr}",
+        {out_connector},
+        f"{out_connector} = {symbolic_expr}",
     )
     temp_name, _ = sdfg.add_scalar(
         temp_name or sdfg.temp_data_name(),
@@ -591,7 +593,7 @@ def _get_symbolic_value(
     data_node = state.add_access(temp_name)
     state.add_edge(
         tasklet_node,
-        "__out",
+        out_connector,
         data_node,
         None,
         dace.Memlet(data=temp_name, subset="0"),
@@ -679,7 +681,7 @@ def translate_scalar_expr(
                 and isinstance(node.type, ts.ScalarType)
             ):
                 raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
-            param = f"{gtir_to_sdfg.TAKSLET_CONNECTOR_PREFIX}{i}"
+            param = f"{gtir_to_sdfg.TAKSLET_IN_CONNECTOR}{i}"
             args.append(arg.dc_node)
             connectors.append(param)
             scalar_expr_args.append(gtir.SymRef(id=param))
@@ -690,12 +692,13 @@ def translate_scalar_expr(
     # we visit the scalar expression replacing the input arguments with the corresponding data connectors
     scalar_node = gtir.FunCall(fun=node.fun, args=scalar_expr_args)
     python_code = gtir_python_codegen.get_source(scalar_node)
+    out_connector = gtir_to_sdfg.TAKSLET_OUT_CONNECTOR
     tasklet_node = sdfg_builder.add_tasklet(
         name="scalar_expr",
         state=ctx.state,
         inputs=set(connectors),
-        outputs={"__out"},
-        code=f"__out = {python_code}",
+        outputs={out_connector},
+        code=f"{out_connector} = {python_code}",
     )
     # create edges for the input data connectors
     for arg_node, conn in zip(args, connectors, strict=True):
@@ -711,7 +714,7 @@ def translate_scalar_expr(
     temp_node = ctx.state.add_access(temp_name)
     ctx.state.add_edge(
         tasklet_node,
-        "__out",
+        out_connector,
         temp_node,
         None,
         dace.Memlet(data=temp_name, subset="0"),
