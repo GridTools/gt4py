@@ -8,6 +8,7 @@
 
 """Test the translation stage of the dace backend workflow."""
 
+from unittest import mock
 import pytest
 
 import re
@@ -16,19 +17,19 @@ from typing import Callable
 dace = pytest.importorskip("dace")
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common, config
+from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.runners.dace.workflow import (
-    translation as dace_translation_stage,
+    translation as dace_wf_translation,
     common as dace_wf_common,
 )
 from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    V2E,
+    Edge,
     IDim,
-    KDim,
-    V2EDim,
     Vertex,
     skip_value_mesh,
 )
@@ -36,103 +37,91 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 from dace import nodes as dace_nodes
 
 
-FloatType = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-FieldType = ts.FieldType(dims=[IDim], dtype=FloatType)
-IntType = ts.ScalarType(kind=ts.ScalarKind.INT32)
+FLOAT_TYPE = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+IFTYPE = ts.FieldType(dims=[IDim], dtype=FLOAT_TYPE)
+EFTYPE = ts.FieldType(dims=[Edge], dtype=FLOAT_TYPE)
+VFTYPE = ts.FieldType(dims=[Vertex], dtype=FLOAT_TYPE)
 
 
 @pytest.fixture(
-    params=[core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM, core_defs.DeviceType.CPU]
+    params=[
+        pytest.param(core_defs.DeviceType.CPU),
+        pytest.param(core_defs.DeviceType.CUDA, marks=[pytest.mark.requires_gpu]),
+        pytest.param(core_defs.DeviceType.ROCM, marks=[pytest.mark.requires_gpu]),
+    ]
 )
 def device_type(request) -> str:
     return request.param
 
 
 @pytest.mark.parametrize("has_unit_stride", [False, True])
-def test_find_constant_symbols(has_unit_stride):
-    config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE = has_unit_stride
+@pytest.mark.parametrize("disable_field_origin", [False, True])
+def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     SKIP_VALUE_MESH = skip_value_mesh(None)
 
     ir = itir.Program(
-        id=f"find_constant_symbols_{int(has_unit_stride)}",
+        id="testee",
         function_definitions=[],
         params=[
-            itir.Sym(id="x", type=ts.FieldType(dims=[Vertex, V2EDim, KDim], dtype=FloatType)),
-            itir.Sym(id="y", type=ts.FieldType(dims=[Vertex, KDim], dtype=FloatType)),
-            itir.Sym(id="h_size", type=IntType),
-            itir.Sym(id="v_size", type=IntType),
+            itir.Sym(id="x", type=EFTYPE),
+            itir.Sym(id="y", type=VFTYPE),
         ],
         declarations=[],
         body=[
             itir.SetAt(
                 expr=im.as_fieldop(
-                    im.lambda_("it")(im.reduce("plus", im.literal_from_value(1.0))(im.deref("it"))),
-                )("x"),
-                domain=im.domain(
-                    gtx_common.GridType.UNSTRUCTURED,
-                    ranges={Vertex: (0, "h_size"), KDim: (0, "v_size")},
-                ),
+                    im.lambda_("it")(im.reduce("plus", im.literal_from_value(1.0))(im.deref("it")))
+                )(im.as_fieldop_neighbors(V2E.value, "x")),
+                domain=im.get_field_domain(gtx_common.GridType.UNSTRUCTURED, "y", VFTYPE.dims),
                 target=itir.SymRef(id="y"),
             )
         ],
     )
 
-    sdfg = dace.SDFG(ir.id)
-    x_size_0 = dace.symbol("__x_size_0", dace.int32)
-    x_size_1 = SKIP_VALUE_MESH.offset_provider_type["V2E"].max_neighbors
-    x_size_2 = dace.symbol("__x_size_0", dace.int32)
-    x_stride_0 = dace.symbol("__x_stride_0", dace.int32)
-    x_stride_1 = dace.symbol("__x_stride_1", dace.int32)
-    x_stride_2 = dace.symbol("__x_stride_2", dace.int32)
-    y_size_0 = dace.symbol("__y_size_0", dace.int32)
-    y_size_1 = dace.symbol("__y_size_1", dace.int32)
-    y_stride_0 = dace.symbol("__y_stride_0", dace.int32)
-    y_stride_1 = dace.symbol("__y_stride_1", dace.int32)
-    gt_conn_V2E_size_0 = dace.symbol("__gt_conn_V2E_size_0", dace.int32)
-    gt_conn_V2E_size_1 = SKIP_VALUE_MESH.offset_provider_type["V2E"].max_neighbors
-    gt_conn_V2E_stride_0 = dace.symbol("__gt_conn_V2E_stride_0", dace.int32)
-    gt_conn_V2E_stride_1 = dace.symbol("__gt_conn_V2E_stride_1", dace.int32)
-    sdfg.add_array(
-        "x",
-        [x_size_0, x_size_1, x_size_2],
-        dace.float64,
-        strides=[x_stride_0, x_stride_1, x_stride_2],
-    )
-    sdfg.add_array("y", [y_size_0, y_size_1], dace.float64, strides=[y_stride_0, y_stride_1])
-    sdfg.add_array(
-        "gt_conn_V2E",
-        [gt_conn_V2E_size_0, gt_conn_V2E_size_1],
-        dace.int32,
-        strides=[gt_conn_V2E_stride_0, gt_conn_V2E_stride_1],
-    )
+    with mock.patch("gt4py.next.config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", has_unit_stride):
+        sdfg = dace_wf_translation.DaCeTranslator(
+            device_type=core_defs.DeviceType.CPU,
+            auto_optimize=False,
+            async_sdfg_call=False,
+            use_metrics=False,
+        ).generate_sdfg(ir, offset_provider=SKIP_VALUE_MESH.offset_provider, column_axis=None)
 
-    for i, data in enumerate(["x", "y"]):
-        assert len(ir.params[i].type.dims) == len(sdfg.arrays[data].shape)
+        constant_symbols = dace_wf_translation.find_constant_symbols(
+            ir, sdfg, SKIP_VALUE_MESH.offset_provider_type, disable_field_origin
+        )
 
-    constant_symbols = dace_translation_stage.find_constant_symbols(
-        ir, sdfg, offset_provider_type=SKIP_VALUE_MESH.offset_provider_type
-    )
+    expected = {}
     if has_unit_stride:
-        assert all(sym in sdfg.free_symbols for sym in constant_symbols.keys())
-        assert constant_symbols == {
+        expected |= {
             "__x_stride_0": 1,
             "__y_stride_0": 1,
             "__gt_conn_V2E_stride_0": 1,
         }
-    else:
-        assert len(constant_symbols) == 0
+    if disable_field_origin:
+        expected |= {
+            "__x_Edge_range_0": 0,
+            "__y_Vertex_range_0": 0,
+        }
+    assert constant_symbols == expected
 
 
 def _are_streams_set_to_default_stream(sdfg: dace.SDFG) -> bool:
-    if "cuda" not in sdfg.init_code:  # Here 'cuda' equals 'GPU backend'.
-        return False
-
     return (
         re.match(
             r"__dace_gpu_set_all_streams\(__state\s*,\s*(cuda|hip)StreamDefault\);",
             sdfg.init_code["cuda"].as_string,
         )
         is not None
+    )
+
+
+def _are_streams_synchronized(sdfg: dace.SDFG) -> bool:
+    re_stream_sync = re.compile(r"\b(cuda|hip)StreamSynchronize\b")
+    # The synchronization calls are in the CPU not the GPU code.
+    return any(
+        re_stream_sync.match(code.clean_code)
+        for code in sdfg.generate_code()
+        if code.language == "cpp"
     )
 
 
@@ -150,9 +139,7 @@ def _check_sdfg_with_async_call(sdfg: dace.SDFG) -> None:
         for state in sdfg.sink_nodes()
         if isinstance(state, dace.SDFGState)
     )
-    # The synchronization calls are in the CPU not the GPU code.
-    cpu_code = sdfg.generate_code()[0].clean_code
-    assert re.match(r"\b(cuda|hip)StreamSynchronize\b", cpu_code) is None
+    assert not _are_streams_synchronized(sdfg)
     assert _are_streams_set_to_default_stream(sdfg)
 
 
@@ -174,22 +161,20 @@ def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
     assert sync_tlet.side_effects
     assert sync_tlet.label == "sync_tlet"
 
-    assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", sync_tlet.code.as_string)
+    assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", sync_tlet.code.as_string())
     assert _are_streams_set_to_default_stream(sdfg)
 
 
 def _check_cpu_sdfg_call(sdfg: dace.SDFG) -> None:
-    # CPU is always synchron execution, thus we check that there is no sync state.
+    # CPU is always synchronous execution, thus we check that there is no sync state.
     assert not any(
         state.label == "sync_state"
         for state in sdfg.sink_nodes()
         if isinstance(state, dace.SDFGState)
     )
-    cpu_code = sdfg.generate_code()[0].clean_code
-    assert re.match(r"\b(cuda|hip)StreamSynchronize\b", cpu_code) is None
+    assert not _are_streams_synchronized(sdfg)
 
 
-@pytest.mark.requires_gpu
 @pytest.mark.parametrize(
     "make_async_sdfg_call",
     [False, True],
@@ -203,20 +188,19 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
         declarations=[],
         function_definitions=[],
         params=[
-            itir.Sym(id="x", type=FieldType),
-            itir.Sym(id="y", type=FieldType),
-            itir.Sym(id="N", type=IntType),
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="y", type=IFTYPE),
         ],
         body=[
             itir.SetAt(
                 expr=im.op_as_fieldop("plus")("x", 1.0),
-                domain=im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "N")}),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", IFTYPE.dims),
                 target=itir.SymRef(id="y"),
             ),
         ],
     )
 
-    sdfg = dace_translation_stage.DaCeTranslator(
+    sdfg = dace_wf_translation.DaCeTranslator(
         device_type=device_type,
         auto_optimize=False,
         async_sdfg_call=make_async_sdfg_call,
@@ -231,30 +215,27 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
         _check_sdfg_without_async_call(sdfg)
 
 
-@pytest.mark.requires_gpu
 def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
     """Verify that the flag `async_sdfg_call=True` has no effect on an SDFG that does not contain any GPU map."""
-    program_name = "scalar_ir_with_async_call"
 
     program = itir.Program(
-        id=program_name,
+        id="scalar_ir_with_async_call",
         declarations=[],
         function_definitions=[],
         params=[
-            itir.Sym(id="x", type=FieldType),
-            itir.Sym(id="y", type=FieldType),
-            itir.Sym(id="N", type=IntType),
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="y", type=IFTYPE),
         ],
         body=[
             itir.SetAt(
                 expr=itir.SymRef(id="x"),
-                domain=im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (0, "N")}),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", IFTYPE.dims),
                 target=itir.SymRef(id="y"),
             ),
         ],
     )
 
-    sdfg = dace_translation_stage.DaCeTranslator(
+    sdfg = dace_wf_translation.DaCeTranslator(
         device_type=device_type,
         auto_optimize=False,
         async_sdfg_call=True,
@@ -358,7 +339,6 @@ def _make_multi_state_sdfg_3(
     return sdfg, first_state, second_state
 
 
-@pytest.mark.requires_gpu
 @pytest.mark.parametrize(
     "multi_state_config",
     [
@@ -375,14 +355,15 @@ def test_generate_sdfg_async_call_multi_state(
     Verify that states are not made async when a data descriptor is accessed
     on an outgoing InterState edge.
     """
+    on_gpu = device_type == core_defs.CUPY_DEVICE_TYPE
     expect_async_sdfg_call_on_first_state, make_multi_state_sdfg = multi_state_config
     sdfg, first_state, second_state = make_multi_state_sdfg()
 
     # NOTE: Here we should use a configuration context. But because of
     #   [DaCe issue#2125](https://github.com/spcl/dace/issues/2125) this is not possible.
     dace_wf_common.set_dace_config(device_type=device_type)
-    dace_translation_stage.make_sdfg_call_async(sdfg, device_type != core_defs.DeviceType.CPU)
-    if device_type != core_defs.DeviceType.CPU:
+    dace_wf_translation.make_sdfg_call_async(sdfg, on_gpu)
+    if on_gpu:
         assert _are_streams_set_to_default_stream(sdfg)
 
     # No synchronization state is added.
@@ -405,9 +386,7 @@ def test_generate_sdfg_async_call_multi_state(
         #   by this. See https://github.com/spcl/dace/issues/2120 for more.
         #   In the case of `_make_multi_state_sdfg_3()` there would be a sync after the Map, before
         #   the Tasklet, if the default stream was not used!
-        cpu_code = sdfg.generate_code()[0].clean_code
-        assert re.match(r"(cuda|hip)StreamSynchronize\b", cpu_code) is None
+        assert not _are_streams_synchronized(sdfg)
     else:
         # There is no dependency between the states, so no sync.
-        cpu_code = sdfg.generate_code()[0].clean_code
-        assert re.match(r"(cuda|hip)StreamSynchronize\b", cpu_code) is None
+        assert not _are_streams_synchronized(sdfg)
