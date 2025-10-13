@@ -187,7 +187,7 @@ class GTIRToOIR(eve.NodeTranslator):
 
         return statements
 
-    def visit_IteratorAccess(self, iterator_access: gtir.IteratorAccess):
+    def visit_IteratorAccess(self, iterator_access: gtir.IteratorAccess) -> oir.IteratorAccess:
         return oir.IteratorAccess(
             name=oir.IteratorAccess.AxisName(iterator_access.name.value),
             dtype=iterator_access.dtype,

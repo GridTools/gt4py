@@ -51,7 +51,9 @@ class _GTIRResolveAuto(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             loc=node.loc,
         )
 
-    def visit_IteratorAccess(self, iterator_access: gtir.IteratorAccess, **kwargs: Any):
+    def visit_IteratorAccess(
+        self, iterator_access: gtir.IteratorAccess, **kwargs: Any
+    ) -> gtir.IteratorAccess:
         return gtir.IteratorAccess(name=iterator_access.name, dtype=DataType.INT64)
 
     def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> gtir.ParAssignStmt:

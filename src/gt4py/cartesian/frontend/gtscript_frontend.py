@@ -1097,23 +1097,25 @@ class IRMaker(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name) -> nodes.Ref:
         symbol = node.id
         if self._is_field(symbol):
-            result = nodes.FieldRef.at_center(
+            return nodes.FieldRef.at_center(
                 symbol, axes=self.fields[symbol].axes, loc=nodes.Location.from_ast_node(node)
             )
-        elif self._is_parameter(symbol):
-            result = nodes.VarRef(name=symbol, loc=nodes.Location.from_ast_node(node))
-        elif self._is_local_symbol(symbol):
+
+        if self._is_parameter(symbol):
+            return nodes.VarRef(name=symbol, loc=nodes.Location.from_ast_node(node))
+
+        if self._is_local_symbol(symbol):
             raise AssertionError("Logic error")
-        elif _is_datadims_indexing_name(symbol):
-            result = nodes.FieldRef.datadims_index(
+
+        if _is_datadims_indexing_name(symbol):
+            return nodes.FieldRef.datadims_index(
                 name=_trim_indexing_symbol(symbol), loc=nodes.Location.from_ast_node(node)
             )
-        elif _is_iterator_access(symbol, nodes.Location.from_ast_node(node)):
-            return nodes.IteratorAccess(name="K")
-        else:
-            raise AssertionError(f"Missing '{symbol}' symbol definition")
 
-        return result
+        if _is_iterator_access(symbol, nodes.Location.from_ast_node(node)):
+            return nodes.IteratorAccess(name="K")
+
+        raise AssertionError(f"Missing '{symbol}' symbol definition")
 
     def visit_Index(self, node: ast.Index):
         index = self.visit(node.value)

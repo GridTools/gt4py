@@ -321,7 +321,7 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
         return f"ufuncs.{function}({arguments})"
 
     def visit_IteratorAccess(self, iterator_access: oir.IteratorAccess, **_) -> str:
-        "Returns the axis in lower letter (to match the index of the loop)"
+        """Returns the axis in lower letter (to match the index of the loop)"""
         return iterator_access.name.value.lower()
 
     def visit_UnaryOp(self, unary_operator: oir.UnaryOp, **kwargs) -> str:
