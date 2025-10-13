@@ -8,13 +8,14 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Final
 
 import factory
 
 import gt4py.next.allocators as next_allocators
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend, common as gtx_common, config
+from gt4py.next import backend, common, config
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors.runners import dace as gtx_dace
 from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
@@ -86,7 +87,8 @@ def make_dace_backend(
         async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
             of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
-            the SDFG auto-optimize pipeline.
+            the SDFG auto-optimize pipeline. Only the parameters that do not have
+            a dedicated parameter in `make_dace_backend()` can be listed here.
         optimization_hooks: A `dict` containing the hooks that should be called,
             in the SDFG auto-optimize pipeline. Only applicable when `auto_optimize=True`.
         use_memory_pool: Allocate temporaries in memory pool, currently only
@@ -101,11 +103,11 @@ def make_dace_backend(
         A dace backend with custom configuration for the target device.
     """
     fixed_optimization_args: Final[dict[str, Any]] = {
-        "assume_pointwise": True,
+        "assume_pointwise": True,  # SDFGs built from GTIR reaspect this assumption
         "gpu_memory_pool": (use_memory_pool if gpu else False),
         "optimization_hooks": optimization_hooks,
         "unit_strides_kind": (
-            gtx_common.DimensionKind.HORIZONTAL
+            common.DimensionKind.HORIZONTAL
             if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
             else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
         ),
@@ -114,15 +116,14 @@ def make_dace_backend(
     }
 
     if optimization_hooks and not auto_optimize:
-        raise ValueError("Optimizations hook given, but auto-optimize pipeline is disabled.")
+        warnings.warn("Optimizations hook given, but auto-optimize is disabled.", stacklevel=2)
     if optimization_args and not auto_optimize:
-        raise ValueError("Optimizations args given, but auto-optimize pipeline is disabled.")
+        warnings.warn("Optimizations args given, but auto-optimize is disabled.", stacklevel=2)
     if optimization_args is None:
         optimization_args = {}
     elif any(arg in fixed_optimization_args for arg in optimization_args):
-        raise ValueError(
-            f"The following arguments cannot be overriden: {set(optimization_args.keys()).intersection(fixed_optimization_args.keys())}."
-        )
+        intersect_args = set(optimization_args.keys()).intersection(fixed_optimization_args.keys())
+        raise ValueError(f"The following arguments cannot be overriden: {intersect_args}.")
 
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
