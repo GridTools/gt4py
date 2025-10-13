@@ -671,6 +671,10 @@ class VerticalSplitMapRange(SplitMapRange):
             )
             for out_edge in access_node_out_edges
             if out_edge.dst != self.second_map_entry
+            and isinstance(out_edge.dst, dace_nodes.AccessNode)
+            and not out_edge.dst.desc(
+                graph
+            ).transient  # limit to transient nodes to avoid unnecessary splits in "vertically_implicit_solver_at_{corrector, predictor}_step"
         ):
             return False
 
