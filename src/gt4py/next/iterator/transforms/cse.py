@@ -31,6 +31,9 @@ from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
+T = TypeVar("T", bound=itir.Expr | itir.Program)
+
+
 def _is_trivial_tuple_expr(node: itir.Expr):
     """Return if node is a `make_tuple` call with all elements `SymRef`s, `Literal`s or tuples thereof."""
     if cpm.is_call_to(node, "make_tuple") and all(
@@ -51,7 +54,7 @@ class _CanonicalizeNamesPostProcessing(remap_symbols.RenameSymbols):
     PRESERVED_ANNEX_ATTRS = ("type", "domain", "pre_canonicalization_name")
 
     @classmethod
-    def apply(cls, node, max_count: int) -> itir.Node:
+    def apply(cls, node: T, max_count: int) -> T:
         name_map = {f"_{i}": f"_{max_count - i}" for i in range(max_count + 1)}
         obj = cls()
         new_node = obj.visit(node, name_map=name_map)
@@ -69,7 +72,7 @@ class _CanonicalizeNames(PreserveLocationVisitor, NodeTranslator):
     max_count: int = 0
 
     @classmethod
-    def apply(cls, node: itir.Node, allow_external_symbols=False) -> itir.Node:
+    def apply(cls, node: T, allow_external_symbols=False) -> T:
         obj = cls(allow_external_symbols=allow_external_symbols)
         new_node = obj.visit(node, name_map={})
         return _CanonicalizeNamesPostProcessing.apply(new_node, obj.max_count)
