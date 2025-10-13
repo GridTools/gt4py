@@ -37,14 +37,14 @@ class GT4PyAutoOptHook(enum.Enum):
         as `check_fusion_callback` argument to `MapFusionVertical` during the top level
         dataflow optimization stage. This hook is also forwarded to the
         `gt_vertical_map_split_fusion()` function, which is called with
-        `fuse_possible_maps=False` but `run_map_fusion=True`. Note that this hook has
+        `fuse_map_fragments=False` but `run_map_fusion=True`. Note that this hook has
         to meet the requirements of `VerticalMapFusionCallback`, see the `map_fusion`
         module for more information.
     - TopLevelDataFlowMapFusionHorizontalCallBack: If provided this function is passed
         as `check_fusion_callback` argument to `MapFusionHorizontal` during the top
         level dataflow optimization. This hook is also forwarded to the
         `gt_horizontal_map_split_fusion()` function, which is called with
-        `fuse_possible_maps=False` but `run_map_fusion=True`. Note that this hook has
+        `fuse_map_fragments=False` but `run_map_fusion=True`. Note that this hook has
         to meet the requirements of `HorizontalMapFusionCallback`, see the `map_fusion`
         module for more information.
     - TopLevelDataFlowMapPromotionCallBack: If provided then pass this function as
@@ -55,12 +55,12 @@ class GT4PyAutoOptHook(enum.Enum):
     - `TopLevelDataFlowVerticalSplitCallBack`: If provided it is passed as `check_split_callback`
         to `gt_vertical_map_split_fusion()` and allows to control how a vertical Map
         split is done. See `VerticalMapSplitCallback` for more details.
-        Note that the function is called with `fuse_possible_maps=False` but
+        Note that the function is called with `fuse_map_fragments=False` but
         `run_map_fusion=True`.
     - `TopLevelDataFlowHorizontalSplitCallBack`: If provided it is passed as `check_split_callback`
         to `gt_horizontal_map_split_fusion()` and allows to control how a horizontal
         Map split is done. See `HorizontalMapSplitCallback` for more details.
-        Note that the function is called with `fuse_possible_maps=False` but
+        Note that the function is called with `fuse_map_fragments=False` but
         `run_map_fusion=True`.
     - TopLevelDataFlowPost: Called after the top level dataflow has been optimized.
     - AfterToGPU: This hook is called after the GPU transformation has been called,
