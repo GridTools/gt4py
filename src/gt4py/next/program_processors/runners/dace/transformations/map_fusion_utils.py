@@ -165,6 +165,7 @@ def copy_map_graph_with_new_range(
     """
     new_map_entry, new_map_exit = copy_map_graph(sdfg, state, map_entry, map_exit, suffix)
     update_map_range(new_map_entry.map, map_range)
+    dace.sdfg.propagation.propagate_memlets_map_scope(sdfg=sdfg, state=state, map_entry=map_entry)
     assert new_map_entry.range == map_range
     assert new_map_exit.map.range == map_range
     return new_map_entry, new_map_exit
