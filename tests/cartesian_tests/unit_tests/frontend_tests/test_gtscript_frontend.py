@@ -854,7 +854,7 @@ class TestRegions:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Cannot nest `with` node inside horizontal region",
+            match="Cannot nest `with` node inside a horizontal region.",
         ):
             parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
