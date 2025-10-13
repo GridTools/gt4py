@@ -243,7 +243,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     )
 
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
-        return self.offset_provider_type[offset]
+        return gtx_common.get_offset_type(self.offset_provider_type, offset)
 
     def make_field(
         self,
@@ -280,7 +280,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # the local dimension is converted into `ListType` data element
             if not isinstance(data_type.dtype, ts.ScalarType):
                 raise ValueError(f"Invalid field type {data_type}.")
-            if local_dim.value not in self.offset_provider_type:
+            if not gtx_common.has_offset(self.offset_provider_type, local_dim.value):
                 raise ValueError(
                     f"The provided local dimension {local_dim} does not match any offset provider type."
                 )

@@ -113,6 +113,116 @@ def _has_gpu_schedule(sdfg: dace.SDFG) -> bool:
     )
 
 
+def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
+    """
+    Instrument SDFG with measurement of total execution time.
+
+    We measure the execution time of one GT4Py program by instrumenting the top-level
+    SDFG with a cpp timer (std::chrono). This timer measures only the computation
+    time, it does not include the overhead of calling the SDFG from Python.
+
+    The execution time is measured in seconds and represented as a 'float64' value.
+    It is returned from the SDFG as a one-element array in the '__return' data node.
+    """
+    output, _ = sdfg.add_array("__return", [1], dace.float64)
+    start_time, _ = sdfg.add_scalar("gt_start_time", dace.float64, transient=True)
+    metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
+
+    #### 1. Synchronize the CUDA device, in order to wait for kernels completion.
+    # Even when the target device is GPU, it can happen that dace emits code without
+    # GPU kernels. In this case, the cuda headers are not imported and the SDFG is
+    # compiled as plain C++. Therefore, we also check here the schedule of SDFG maps.
+    if gpu and _has_gpu_schedule(sdfg):
+        dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
+        assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
+
+        # NOTE: We should actually wrap the `DeviceSynchronize` function inside a
+        #   `DACE_GPU_CHECK()` macro. However, this only works in GPU context, but
+        #   here we are in CPU context. Thus we cannot do it.
+        sync_code = f"{dace_gpu_backend}DeviceSynchronize();"
+        has_side_effects = True
+
+    else:
+        sync_code = ""
+        has_side_effects = False
+
+    #### 2. Timestamp the SDFG entry point.
+    entry_state = sdfg.add_state("gt_timer_entry")
+    begin_state = sdfg.add_state_after(
+        entry_state, "gt_timer_begin", condition=f"{metrics_level} >= {metrics.PERFORMANCE}"
+    )
+
+    for source_state in sdfg.source_nodes():
+        if source_state is entry_state:
+            continue
+        sdfg.add_edge(
+            entry_state,
+            source_state,
+            dace.InterstateEdge(condition=f"{metrics_level} < {metrics.PERFORMANCE}"),
+        )
+        sdfg.add_edge(begin_state, source_state, dace.InterstateEdge())
+    assert sdfg.out_degree(begin_state) > 0
+    assert sdfg.out_degree(entry_state) > 1
+
+    tlet_start_timer = begin_state.add_tasklet(
+        "gt_start_timer",
+        inputs={},
+        outputs={"time"},
+        code="""\
+time = static_cast<double>(
+    std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count()
+) / 1e9;
+        """,
+        language=dace.dtypes.Language.CPP,
+    )
+    begin_state.add_edge(
+        tlet_start_timer,
+        "time",
+        begin_state.add_access(start_time),
+        None,
+        dace.Memlet(f"{start_time}[0]"),
+    )
+
+    #### 3. Collect the SDFG end timestamp and produce the compute metric.
+    end_state = sdfg.add_state("gt_timer_end")
+    for sink_state in sdfg.sink_nodes():
+        if sink_state is end_state:
+            continue
+        sdfg.add_edge(
+            sink_state,
+            end_state,
+            dace.InterstateEdge(condition=f"{metrics_level} >= {metrics.PERFORMANCE}"),
+        )
+    assert sdfg.in_degree(end_state) > 0
+
+    tlet_stop_timer = end_state.add_tasklet(
+        "gt_stop_timer",
+        inputs={"run_cpp_start_time"},
+        outputs={"duration"},
+        code=sync_code
+        + """
+double run_cpp_end_time = static_cast<double>(
+    std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count()
+) / 1e9;
+duration = run_cpp_end_time - run_cpp_start_time;
+        """,
+        language=dace.dtypes.Language.CPP,
+        side_effects=has_side_effects,
+    )
+    end_state.add_edge(
+        end_state.add_access(start_time),
+        None,
+        tlet_stop_timer,
+        "run_cpp_start_time",
+        dace.Memlet(f"{start_time}[0]"),
+    )
+    end_state.add_edge(
+        tlet_stop_timer, "duration", end_state.add_access(output), None, dace.Memlet(f"{output}[0]")
+    )
+
+
 def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     """Process the SDFG such that the call is synchronous.
 
@@ -188,7 +298,8 @@ class DaCeTranslator(
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
-    async_sdfg_call: bool = False
+    async_sdfg_call: bool
+    use_metrics: bool
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
 
@@ -259,20 +370,13 @@ class DaCeTranslator(
             gtx_transformations.gt_simplify(sdfg)
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
 
-        async_sdfg_call = False
-        if config.COLLECT_METRICS_LEVEL != metrics.DISABLED:
-            # We measure the execution time of one program by instrumenting the
-            #   top-level SDFG with a cpp timer (std::chrono). This timer measures
-            #   only the computation time, it does not include the overhead of
-            #   calling the SDFG from Python.
-            sdfg.instrument = dace.dtypes.InstrumentationType.Timer
-        elif self.async_sdfg_call:
-            async_sdfg_call = True
-
-        if async_sdfg_call:
+        if self.async_sdfg_call:
             make_sdfg_call_async(sdfg, on_gpu)
         else:
             make_sdfg_call_sync(sdfg, on_gpu)
+
+        if self.use_metrics:
+            add_instrumentation(sdfg, on_gpu)
 
         return sdfg
 
