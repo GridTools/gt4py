@@ -10,14 +10,12 @@ import copy
 
 import pytest
 
-
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace.transformations import (
     gpu_utils as gtx_dace_fieldview_gpu_utils,
 )
-
 
 from . import util
 
@@ -154,9 +152,10 @@ def test_trivial_gpu_map_promoter_2():
     assert trivial_tasklet.code == expected_trivial_code
 
 
-def test_set_gpu_properties():
+@pytest.mark.parametrize("method", [0, 1])
+def test_set_gpu_properties(method: int):
     """Tests the `gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize()`."""
-    sdfg = dace.SDFG("gpu_properties_test")
+    sdfg = dace.SDFG(util.unique_name("gpu_properties_test"))
     state = sdfg.add_state(is_start_block=True)
 
     map_entries: dict[int, dace_nodes.MapEntry] = {}
@@ -177,17 +176,32 @@ def test_set_gpu_properties():
             external_edges=True,
         )
         map_entries[dim] = me
-
-    sdfg.apply_gpu_transformations()
     sdfg.validate()
 
-    gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
-        sdfg=sdfg,
-        block_size=(9, "11", 12),
-        launch_factor_2d=2,
-        block_size_2d=(2, "12", 2),
-        launch_bounds_3d=200,
-    )
+    if method == 0:
+        sdfg.apply_gpu_transformations()
+        gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
+            sdfg=sdfg,
+            block_size=(9, "11", 12),
+            launch_factor_2d=2,
+            block_size_2d=(2, "12", 2),
+            launch_bounds_3d=200,
+        )
+
+    elif method == 1:
+        gtx_dace_fieldview_gpu_utils.gt_gpu_transformation(
+            sdfg,
+            gpu_block_size=(9, "11", 12),
+            # Same logic as in `gt_auto_optimizer()`.
+            gpu_block_size_spec={
+                "launch_factor_2d": 2,
+                "block_size_2d": (2, "12", 2),
+                "launch_bounds_3d": 200,
+            },
+        )
+
+    else:
+        raise ValueError(f"Unknown method {method}")
 
     map1, map2, map3, map4 = (map_entries[d].map for d in [1, 2, 3, 4])
 
