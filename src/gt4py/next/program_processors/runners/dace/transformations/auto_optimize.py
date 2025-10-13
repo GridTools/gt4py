@@ -427,6 +427,9 @@ def _gt_auto_process_top_level_maps(
         horizontal_map_fusion = gtx_transformations.MapFusionHorizontal(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=True,
+            check_fusion_callback=optimization_hooks.get(  # type: ignore[arg-type]
+                GT4PyAutoOptHook.TopLevelDataFlowMapFusionHorizontalCallBack, None
+            ),
             # NOTE: We should actually set it to `True` because it would prevent the
             #   creation of some random dependencies. However, enabling it leads to
             #   massive performance degradations, especially in
