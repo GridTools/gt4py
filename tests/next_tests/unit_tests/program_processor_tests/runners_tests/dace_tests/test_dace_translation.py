@@ -106,6 +106,9 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
 
 
 def _are_streams_set_to_default_stream(sdfg: dace.SDFG) -> bool:
+    if "cuda" not in sdfg.init_code:  # Here 'cuda' equals 'GPU backend'.
+        return False
+
     return (
         re.match(
             r"__dace_gpu_set_all_streams\(__state\s*,\s*(cuda|hip)StreamDefault\);",
@@ -161,7 +164,7 @@ def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
     assert sync_tlet.side_effects
     assert sync_tlet.label == "sync_tlet"
 
-    assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", sync_tlet.code.as_string())
+    assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", sync_tlet.code.as_string)
     assert _are_streams_set_to_default_stream(sdfg)
 
 
