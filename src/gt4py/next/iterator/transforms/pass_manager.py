@@ -21,6 +21,7 @@ from gt4py.next.iterator.transforms import (
     inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
+    prune_empty_concat_where,
     remove_broadcast,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
@@ -32,7 +33,6 @@ from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.inline_scalar import InlineScalar
 from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
-from gt4py.next.iterator.transforms.prune_empty_concat_where import prune_empty_concat_where
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 from gt4py.next.iterator.type_system.inference import infer
 
@@ -92,7 +92,7 @@ def apply_common_transforms(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
-    ir = prune_empty_concat_where(ir)
+    ir = prune_empty_concat_where.prune_empty_concat_where(ir)
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
 
     ir = concat_where.transform_to_as_fieldop(ir)
@@ -188,6 +188,6 @@ def apply_fieldview_transforms(
     ir = ConstantFolding.apply(ir)  # type: ignore[assignment]  # always an itir.Program
 
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
-    ir = prune_empty_concat_where(ir)
+    ir = prune_empty_concat_where.prune_empty_concat_where(ir)
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
     return ir
