@@ -733,7 +733,7 @@ class IRMaker(ast.NodeVisitor):
         domain: nodes.Domain,
         options: gt_definitions.BuildOptions,
         temp_decls: Optional[Dict[str, nodes.FieldDecl]] = None,
-        dtypes: Optional[Dict[Type, Type]] = None,
+        dtypes: Optional[Dict[Type | str, Type]] = None,
     ):
         fields = fields or {}
         parameters = parameters or {}
@@ -807,7 +807,14 @@ class IRMaker(ast.NodeVisitor):
             "round_away_from_zero": nodes.NativeFunction.ROUND_AWAY_FROM_ZERO,
         }  # Conversion table for functions to NativeFunctions
 
-        self.temporary_type_to_native_type = {
+        # Filter the field type from `dtypes`
+        self.temporary_field_type = {}
+        if self.dtypes:
+            for name, _type in self.dtypes.items():
+                if isinstance(_type, gtscript._FieldDescriptor):
+                    self.temporary_field_type[name] = _type
+
+        self.temporary_type_as_str_to_native_type = {
             "int32": nodes.DataType.INT32,
             "int64": nodes.DataType.INT64,
             "float32": nodes.DataType.FLOAT32,
@@ -1607,20 +1614,31 @@ class IRMaker(ast.NodeVisitor):
                             loc=nodes.Location.from_ast_node(t, scope=self.stencil_name),
                         )
                     dtype = nodes.DataType.AUTO
+                    axes = nodes.Domain.LatLonGrid().axes_names
                     if target_annotation is not None:
                         source = ast.unparse(target_annotation)
                         try:
-                            dtype = eval(source, self.temporary_type_to_native_type)
+                            dtype = eval(
+                                source,
+                                self.temporary_type_as_str_to_native_type
+                                | self.temporary_field_type,
+                            )
                         except NameError:
                             raise GTScriptSyntaxError(
                                 message=f"Failed to recognize type {source} for local symbol {name}."
-                                f"Available types are {self.temporary_type_to_native_type.keys()}",
+                                f"Available types are {self.temporary_type_as_str_to_native_type.keys()} or {self.dtypes}",
                                 loc=nodes.Location.from_ast_node(t),
                             ) from None
+                        # If Field, we have to expand to resolve axes and true type
+                        if isinstance(dtype, gtscript._FieldDescriptor):
+                            field_desc = dtype
+                            axes = nodes.Domain.from_gtscript(field_desc.axes).axes_names
+                            dtype = nodes.DataType.from_dtype(field_desc.dtype)
+
                     field_decl = nodes.FieldDecl(
                         name=name,
                         data_type=dtype,
-                        axes=nodes.Domain.LatLonGrid().axes_names,
+                        axes=axes,
                         is_api=False,
                         loc=nodes.Location.from_ast_node(t, scope=self.stencil_name),
                     )
