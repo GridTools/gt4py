@@ -131,13 +131,15 @@ class MapSpliter(dace_transformation.SingleStateTransformation):
         assert len(map_subranges) > 1
 
         new_sub_map_entries = []
+        map_start_index = [map_exit.map.range[i][0] for i in range(len(map_exit.map.range))]
         for i, map_subrange in enumerate(map_subranges):
             sub_me, _ = gtx_mfutils.copy_map_graph_with_new_range(
                 sdfg=sdfg,
                 state=graph,
                 map_entry=map_entry,
                 map_exit=map_exit,
-                map_range=map_subrange,
+                # TODO(phimuell): Explain why.
+                map_range=map_subrange.offset_new(map_start_index, negative=False),
                 suffix=str(i),
             )
             new_sub_map_entries.append(sub_me)
