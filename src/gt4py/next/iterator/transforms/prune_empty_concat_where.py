@@ -40,7 +40,7 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
     @classmethod
-    def apply(cls, node: itir.Node):
+    def apply(cls: type[Self], node: itir.Node) -> Self:
         return cls().visit(node)
 
     def visit_FunCall(self, node: itir.FunCall) -> itir.Expr:
