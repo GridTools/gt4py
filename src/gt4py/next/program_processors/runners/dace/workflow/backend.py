@@ -84,10 +84,10 @@ def make_dace_backend(
         async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
             of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
-            the SDFG auto-optimize pipeline. Note that 'unit_strides_kind' is derived
-            from GT4Py config, thus it cannot be appear here (see `gt_optimization_args`).
-            If 'unit_strides_kind' is included in `optimization_args`, this function
-            will throw an exception.
+            the SDFG auto-optimize pipeline. Note that parameters that are derived
+            from GT4Py configuration cannot be overriden and therefore cannot appear
+            here (see `gt_optimization_args`). For example, this function will throw
+            an exception if 'unit_strides_kind' is included in `optimization_args`.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
             compute time.
         use_zero_origin: Can be set to `True` when all fields passed as program
