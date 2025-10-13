@@ -123,14 +123,16 @@ class MapSpliter(dace_transformation.SingleStateTransformation):
             ac_consumer_edge, graph
         )
 
+        # TODO: Explain why?
         map_subranges = gtx_stools.decompose_subset(
-            producer=produced_subset, consumer=consumed_subset
+            consumer=produced_subset, producer=consumed_subset
         )
         assert map_subranges is not None
         assert len(map_subranges) > 1
 
+        new_sub_map_entries = []
         for i, map_subrange in enumerate(map_subranges):
-            gtx_mfutils.copy_map_graph_with_new_range(
+            sub_me, _ = gtx_mfutils.copy_map_graph_with_new_range(
                 sdfg=sdfg,
                 state=graph,
                 map_entry=map_entry,
@@ -138,7 +140,16 @@ class MapSpliter(dace_transformation.SingleStateTransformation):
                 map_range=map_subrange,
                 suffix=str(i),
             )
+            new_sub_map_entries.append(sub_me)
         gtx_mfutils.delete_map(graph=graph, map_entry=map_entry, map_exit=map_exit)
+
+        # TODO(phimuell): WHy here and not in loop above.
+        for sub_me in new_sub_map_entries:
+            dace.sdfg.propagation.propagate_memlets_map_scope(
+                sdfg=sdfg,
+                state=graph,
+                map_entry=sub_me,
+            )
 
         # Call the splitting node transformation on the access node.
         # TODO(phimuell): Create a free function for this.
