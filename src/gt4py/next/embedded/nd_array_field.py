@@ -458,7 +458,7 @@ class NdArrayField(
 
 
 @dataclasses.dataclass(frozen=True)
-class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
+class NdArrayConnectivityField(
     common.Connectivity[common.DimsT, common.DimT],
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
@@ -480,8 +480,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         raise NotImplementedError()
 
     @property
-    # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
-    def codomain(self) -> common.DimT:
+    def codomain(self) -> common.DimT:  # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
         return self._codomain
 
     @property
@@ -996,9 +995,9 @@ def _make_reduction(
         reduce_dim_index = field.domain.dims.index(axis)
         current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
-        offset_definition = current_offset_provider[
-            axis.value
-        ]  # assumes offset and local dimension have same name
+        offset_definition = common.get_offset(
+            current_offset_provider, axis.value
+        )  # assumes offset and local dimension have same name
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 

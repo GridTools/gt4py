@@ -17,98 +17,32 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
 
 
-class SomeEnum(eve.IntEnum):
-    FOO = 1
+def test_static_arg_from_enum():
+    class SomeEnum(eve.IntEnum):
+        FOO = 1
+
+    static_arg = arguments.StaticArg(value=SomeEnum.FOO)
+    assert static_arg.value == 1
 
 
-@pytest.mark.parametrize(
-    "value, type_, expected",
-    [
-        (gtx.int32(1), ts.ScalarType(kind=ts.ScalarKind.INT32), gtx.int32(1)),
-        (gtx.int64(1), ts.ScalarType(kind=ts.ScalarKind.INT64), gtx.int64(1)),
-        (1, ts.ScalarType(kind=ts.ScalarKind.INT32), gtx.int32(1)),
-        (True, ts.ScalarType(kind=ts.ScalarKind.BOOL), True),
-        (False, ts.ScalarType(kind=ts.ScalarKind.BOOL), False),
-        (SomeEnum.FOO, ts.ScalarType(kind=ts.ScalarKind.INT32), gtx.int32(1)),
-        (
-            (1, (2.0, gtx.float32(3.0))),
-            ts.TupleType(
-                types=[
-                    ts.ScalarType(kind=ts.ScalarKind.INT32),
-                    ts.TupleType(
-                        types=[
-                            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-                            ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
-                        ]
-                    ),
-                ]
-            ),
-            (gtx.float32(1), (gtx.float64(2.0), gtx.float32(3.0))),
-        ),
-    ],
-)
-def test_sanitize_static_args(value, type_, expected):
-    program_type = ts_ffront.ProgramType(
-        definition=ts.FunctionType(
-            pos_only_args=[],
-            pos_or_kw_args={
-                "testee": type_,
-            },
-            kw_only_args={},
-            returns=ts.VoidType(),
-        )
-    )
-
-    result = compiled_program._sanitize_static_args(
-        "testee_program", {"testee": value}, program_type
-    )
-    assert result == {"testee": expected}
-
-
-def test_sanitize_static_args_non_scalar_type():
-    program_type = ts_ffront.ProgramType(
-        definition=ts.FunctionType(
-            pos_only_args=[],
-            pos_or_kw_args={
-                "foo": ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
-            },
-            kw_only_args={},
-            returns=ts.VoidType(),
-        )
-    )
+def test_static_args_non_scalar_type():
     with pytest.raises(
         errors.DSLTypeError,
-        match="foo.*cannot be static",
+        match="only scalars.*can be static",
     ):
-        compiled_program._sanitize_static_args("foo_program", {"foo": gtx.int32(1)}, program_type)
+        static_arg = arguments.StaticArg(value=1)
+        static_arg.validate(
+            "foo", ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
+        )
 
 
 def test_sanitize_static_args_wrong_type():
-    program_type = ts_ffront.ProgramType(
-        definition=ts.FunctionType(
-            pos_only_args=[],
-            pos_or_kw_args={"foo": ts.ScalarType(kind=ts.ScalarKind.INT32)},
-            kw_only_args={},
-            returns=ts.VoidType(),
-        )
-    )
-    with pytest.raises(errors.DSLTypeError, match="got 'int64'"):
-        compiled_program._sanitize_static_args("foo_program", {"foo": gtx.int64(1)}, program_type)
-
-
-def test_sanitize_static_args_non_existing_parameter():
-    program_type = ts_ffront.ProgramType(
-        definition=ts.FunctionType(
-            pos_only_args=[],
-            pos_or_kw_args={"foo": ts.ScalarType(kind=ts.ScalarKind.INT32)},
-            kw_only_args={},
-            returns=ts.VoidType(),
-        )
-    )
-    with pytest.raises(errors.DSLTypeError, match="'unknown_param'"):
-        compiled_program._sanitize_static_args(
-            "foo_program", {"unknown_param": gtx.int64(1)}, program_type
-        )
+    with pytest.raises(
+        errors.DSLTypeError,
+        match="expected 'int32'.*has.*'int64'",
+    ):
+        static_arg = arguments.StaticArg(value=gtx.int64(1))
+        static_arg.validate("foo", ts.ScalarType(kind=ts.ScalarKind.INT32))
 
 
 TDim = gtx.Dimension("TDim")
@@ -138,12 +72,17 @@ def _verify_program_has_expected_true_value(program: itir.Program):
 
 
 def test_inlining_of_scalars_works():
-    args = prog.past_stage.past_node.type.definition.pos_or_kw_args
-    args = [arguments.StaticArg(value=True, type_=v) if k == "cond" else v for k, v in args.items()]
-
     input_pair = toolchain.CompilableProgram(
         data=prog.definition_stage,
-        args=arguments.CompileTimeArgs(args=args, kwargs={}, offset_provider={}, column_axis=None),
+        args=arguments.CompileTimeArgs(
+            args=list(prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
+            kwargs={},
+            offset_provider={},
+            column_axis=None,
+            argument_descriptor_contexts={
+                arguments.StaticArg: {"cond": arguments.StaticArg(value=True)}
+            },
+        ),
     )
 
     transformed = backend.DEFAULT_TRANSFORMS(input_pair).data

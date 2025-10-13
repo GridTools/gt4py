@@ -61,6 +61,8 @@ MATH_BUILTINS = {
     "trunc",
     "erf",
     "erfc",
+    "round",
+    "round_away_from_zero",
 }
 
 TYPE_HINT_AND_CAST_BUILTINS = {
@@ -690,6 +692,12 @@ class _FieldDescriptor:
             f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
         )
 
+    def at(self, *, K):
+        """Stub function used to implement absolute K indexing"""
+        raise RuntimeError(
+            "`at(K=...)` stub function only, do not call outside of stencil field indexation."
+        )
+
 
 class _FieldDescriptorMaker:
     @staticmethod
@@ -955,11 +963,42 @@ def trunc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     pass
 
 
-def erf(x):
+def erf(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Computes the error function of `x`."""
     pass
 
 
-def erfc(x):
+def erfc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Computes the complementary error function of `x`, which is `1.0 - erf(x)`."""
+    pass
+
+
+def round(x) -> _gt_all_op_types:  # type: ignore[empty-body] # noqa: A001 [builtin-variable-shadowing]
+    """
+    Computes the nearest integer value to `x`, rounding halfway cases to even numbers.
+
+        Examples:
+        -0.5 -> -0.0, 0.5 -> 0.0, 1.5 -> 2.0, 2.5 -> 2.0
+
+    This is in alignment with the IEEE754 standard python's built-in round() function.
+
+    In contrast, `round_away_from_zero()` splits ties away from zero e.g. 2.5 will
+    round to 3.0 and -0.5 will round to -1.0.
+    """
+    pass
+
+
+def round_away_from_zero(x) -> _gt_all_op_types:  # type: ignore[empty-body]
+    """
+    Computes the nearest integer value to `x`, rounding halfway cases away from zero.
+
+        Examples:
+        -0.5 -> -1.0, 0.5 -> 0.0, 1.5 -> 2.0, 2.5 -> 3.0
+
+    This is in alignment with C(++) and FORTRAN standard round functions that round away
+    from zero by default.
+
+    In contrast, `round()` implements "Banker's rounding" and splits ties to the nearest
+    even integer, e.g. 1.5 and 2.5 both round to 2.0.
+    """
     pass

@@ -22,7 +22,7 @@ from . import util
 
 def _make_sdfg_with_multiple_maps_that_share_inputs(
     N: str | int,
-) -> dace.SDFG:
+) -> tuple[dace.SDFG, dace.SDFGState]:
     """
     Create a SDFG with multiple maps that share inputs and outputs.
     The SDFG has originally 4 maps:
@@ -206,51 +206,64 @@ def _make_sdfg_with_multiple_maps_that_share_inputs(
     dace_propagation.propagate_states(sdfg)
     sdfg.validate()
 
-    return sdfg
+    return sdfg, state
 
 
-def test_horizontal_map_fusion():
+@pytest.mark.parametrize("run_map_fusion", [True, False])
+def test_horizontal_map_fusion(run_map_fusion: bool):
     N = 20
-    sdfg = _make_sdfg_with_multiple_maps_that_share_inputs(N)
+    sdfg, state = _make_sdfg_with_multiple_maps_that_share_inputs(N)
 
-    _ = gtx_transformations.gt_horizontal_map_split_fusion(
+    nb_applications = gtx_transformations.gt_horizontal_map_split_fusion(
         sdfg=sdfg,
         run_simplify=False,
-        fuse_possible_maps=True,
+        fuse_map_fragments=True,
+        run_map_fusion=run_map_fusion,
         consolidate_edges_only_if_not_extending=False,
         validate=True,
         validate_all=True,
     )
+    scope_dict = state.scope_dict()
 
-    high_level_map_entries = 0
-    map_entries = util.count_nodes(sdfg, dace_nodes.MapEntry, return_nodes=True)
-    for map_entry in map_entries:
-        high_level_map_entries += (
-            1
-            if any(
-                isinstance(iedge.src, dace_nodes.AccessNode)
-                and iedge.src.label in ["a", "b", "c", "d"]
-                for iedge in sdfg.state(0).in_edges(map_entry)
+    expected_in_degree_of_outputs = {"out1": 3, "out2": 2, "out3": 2, "out4": 2}
+    for ac in state.data_nodes():
+        if ac.data in expected_in_degree_of_outputs:
+            assert expected_in_degree_of_outputs[ac.data] == state.in_degree(ac)
+
+    if run_map_fusion:
+        # Automatic fusion was requested.
+        assert nb_applications == 5
+
+    else:
+        # Automatic fusion was not enabled, thus only 3 applications and there are
+        #  some overlapping maps. That we have to fuse later.
+        assert nb_applications == 3
+        assert (
+            sum(
+                1
+                for map_entry in util.count_nodes(state, dace_nodes.MapEntry, True)
+                if scope_dict[map_entry] is None
             )
-            else 0
+            == 5
         )
+        aux_fuses = sdfg.apply_transformations_repeated(
+            gtx_transformations.MapFusionHorizontal(
+                only_if_common_ancestor=True,
+                consolidate_edges_only_if_not_extending=False,
+            ),
+            validate=True,
+            validate_all=True,
+        )
+        assert aux_fuses == 2
 
-    high_level_map_exits = 0
-    map_exits = util.count_nodes(sdfg, dace_nodes.MapExit, return_nodes=True)
-    for map_exit in map_exits:
-        high_level_map_exits += (
+    assert (
+        sum(
             1
-            if any(
-                isinstance(oedge.dst, dace_nodes.AccessNode)
-                and oedge.dst.label in ["out1", "out2", "out3", "out4"]
-                for oedge in sdfg.state(0).out_edges(map_exit)
-            )
-            else 0
+            for map_entry in util.count_nodes(state, dace_nodes.MapEntry, True)
+            if scope_dict[map_entry] is None
         )
-
-    # Check that the number of high level maps is correct
-    assert high_level_map_entries == 3
-    assert high_level_map_exits == 3
+        == 3
+    )
 
     # check that there is no overlap between the maps' ranges
     map_entries = util.count_nodes(sdfg, dace_nodes.MapEntry, return_nodes=True)

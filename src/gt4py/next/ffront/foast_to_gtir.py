@@ -30,7 +30,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import constant_folding
 from gt4py.next.otf import toolchain, workflow
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 
 def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.FunctionDefinition:
@@ -307,11 +307,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 ):
                     if arg.op == dialect_ast_enums.BinaryOperator.SUB:
                         offset_index *= -1
+                    # TODO(havogt): we rely on the naming-convention for implicit offsets, see `dimension_to_implicit_offset`
                     current_expr = im.as_fieldop(
-                        # TODO(SF-N): we rely on the naming-convention that the cartesian dimensions
-                        #  are passed suffixed with `off`, e.g. the `K` is passed as `Koff` in the
-                        #  offset provider. This is a rather unclean solution and should be
-                        #  improved.
                         im.lambda_("__it")(
                             im.deref(
                                 im.shift(
@@ -356,7 +353,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         ):
             visitor = getattr(self, f"_visit_{node.func.id}")
             return visitor(node, **kwargs)
-        elif isinstance(node.func, foast.Name) and node.func.id in fbuiltins.TYPE_BUILTIN_NAMES:
+        elif isinstance(node.func, foast.Name) and isinstance(node.func.type, ts.ConstructorType):
             return self._visit_type_constr(node, **kwargs)
         elif isinstance(
             node.func.type,
@@ -365,10 +362,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             # ITIR has no support for keyword arguments. Instead, we concatenate both positional
             # and keyword arguments and use the unique order as given in the function signature.
             lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
-                node.func.type,
-                self.visit(node.args, **kwargs),
-                self.visit(node.kwargs, **kwargs),
-                use_signature_ordering=True,
+                node.func.type, self.visit(node.args, **kwargs), self.visit(node.kwargs, **kwargs)
             )
             result = im.call(self.visit(node.func, **kwargs))(
                 *lowered_args, *lowered_kwargs.values()
@@ -381,11 +375,16 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
-        assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
-        obj, new_type = self.visit(node.args[0], **kwargs), node.args[1].id
+        # Note: the type to convert to is uniquely identified by its GT4Py type (`ConstructorType`),
+        # not by e.g. its name.
+        assert len(node.args) == 2
+        assert isinstance(node.args[1].type, ts.ConstructorType)
+        obj = self.visit(node.args[0], **kwargs)
+        new_type = node.args[1].type.definition.returns
+        assert isinstance(new_type, ts.ScalarType)
 
         def create_cast(expr: itir.Expr, t: tuple[ts.TypeSpec]) -> itir.FunCall:
-            return _map(im.lambda_("val")(im.cast_("val", str(new_type))), (expr,), t)
+            return _map(im.lambda_("val")(im.cast_("val", new_type)), (expr,), t)
 
         if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
             return create_cast(obj, (node.args[0].type,))
@@ -457,23 +456,38 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
     def _visit_type_constr(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
-        el = node.args[0]
-        node_kind = self.visit(node.type).kind.name.lower()
-        source_type = {**fbuiltins.BUILTINS, "string": str}[el.type.__str__().lower()]
-        target_type = fbuiltins.BUILTINS[node_kind]
+        # Note: the type to convert to is uniquely identified by its GT4Py type (`ConstructorType`),
+        # not by e.g. its name.
+        type_constructor = node.func
+        assert isinstance(type_constructor.type, ts.ConstructorType)
 
-        if isinstance(el, foast.Constant):
-            val = source_type(el.value)
-        elif isinstance(el, foast.UnaryOp) and isinstance(el.operand, foast.Constant):
-            operand = source_type(el.operand.value)
-            val = eval(f"lambda arg: {el.op}arg")(operand)
+        value = node.args[0]
+
+        source_type = value.type
+        assert isinstance(source_type, ts.ScalarType)
+        target_type = type_constructor.type.definition.returns
+        assert isinstance(target_type, ts.ScalarType)
+
+        if isinstance(value, foast.Constant):
+            val = (
+                value.value
+                if source_type.kind == ts.ScalarKind.STRING
+                else tt.unsafe_cast_to(value.value, source_type)
+            )
+        elif isinstance(value, foast.UnaryOp) and isinstance(value.operand, foast.Constant):
+            operand = (
+                value.operand.value
+                if source_type.kind == ts.ScalarKind.STRING
+                else tt.unsafe_cast_to(value.operand.value, source_type)
+            )
+            val = eval(f"lambda arg: {value.op}arg")(operand)
         else:
             raise FieldOperatorLoweringError(
                 f"Type cast only supports literal arguments, {node.type} not supported."
             )
-        val = target_type(val)
+        val = tt.unsafe_cast_to(val, target_type)
 
-        return im.literal(str(val), node_kind)
+        return im.literal(str(val), target_type)
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         if isinstance(type_, ts.TupleType):

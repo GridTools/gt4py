@@ -15,7 +15,7 @@ import enum
 import functools
 import math
 import types
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -71,6 +71,8 @@ class DimensionKind(StrEnum):
 
 _DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
 
+_IMPLICIT_OFFSET_PREFIX: Final[str] = "_Off"
+
 
 def dimension_to_implicit_offset(dim: str) -> str:
     """
@@ -83,7 +85,7 @@ def dimension_to_implicit_offset(dim: str) -> str:
     without having to explicitly define an offset for ``TDim``. This function defines the respective
     naming convention.
     """
-    return f"_{dim}Off"
+    return f"{_IMPLICIT_OFFSET_PREFIX}{dim}"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -98,13 +100,7 @@ class Dimension:
         return NamedIndex(self, val)
 
     def __add__(self, offset: int) -> Connectivity:
-        # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
-        from gt4py.next.ffront import fbuiltins
-
-        assert isinstance(self.value, str)
-        return fbuiltins.FieldOffset(
-            dimension_to_implicit_offset(self.value), source=self, target=(self,)
-        )[offset]
+        return CartesianConnectivity(self, offset)
 
     def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
@@ -645,7 +641,7 @@ if TYPE_CHECKING:
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
     class GTBuiltInFuncDispatcher(Protocol):
-        def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]: ...
+        def __call__(self, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]: ...
 
 
 # TODO(havogt): we need to describe when this interface should be used instead of the `Field` protocol.
@@ -849,7 +845,6 @@ class NeighborConnectivityType(ConnectivityType):
 
 
 @runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but then it breaks in other places
 class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
@@ -1011,6 +1006,8 @@ def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
 
 OffsetProviderElem: TypeAlias = Dimension | NeighborConnectivity
 OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
+# Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
+# use the `get_offset` and `get_offset_type` functions instead.
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
 
@@ -1033,6 +1030,38 @@ def offset_provider_to_type(
     return {
         k: v.__gt_type__() if isinstance(v, Connectivity) else v for k, v in offset_provider.items()
     }
+
+
+def _get_dimension_name_from_implicit_offset(offset: str) -> str:
+    assert offset.startswith(_IMPLICIT_OFFSET_PREFIX)
+    return offset[len(_IMPLICIT_OFFSET_PREFIX) :]
+
+
+def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProviderElem:
+    """
+    Get the `OffsetProviderElem` or `OffsetProviderTypeElem` for the given `offset` string.
+
+    Note: This function handles implicit offsets. All accesses of `OffsetProvider` or
+    `OffsetProviderType` should go through this function.
+    """
+    # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
+    if offset_tag.startswith(_IMPLICIT_OFFSET_PREFIX):
+        return Dimension(value=_get_dimension_name_from_implicit_offset(offset_tag))
+    if offset_tag not in offset_provider:
+        raise KeyError(f"Offset '{offset_tag}' not found in offset provider.")
+    return offset_provider[offset_tag]  # TODO return a valid dimension
+
+
+get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and OffsetProviderType overlap
+
+
+def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag: str) -> bool:
+    """Determine if offset provider has an element for the given offset tag."""
+    try:
+        get_offset(offset_provider, offset_tag)  # type: ignore[arg-type]  # implementation is shared with `get_offset_type`, no need to duplicate the function
+    except KeyError:
+        return False
+    return True
 
 
 def hash_offset_provider_unsafe(offset_provider: OffsetProvider) -> int:
@@ -1150,17 +1179,17 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
-def _ordered_dims(dims: list[Dimension] | set[Dimension]) -> list[Dimension]:
+def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
+    """Find the canonical ordering of the dimensions in `dims`."""
+    if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
+        raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
     return sorted(dims, key=lambda dim: (_DIM_KIND_ORDER[dim.kind], dim.value))
 
 
-def check_dims(dims: list[Dimension]) -> None:
-    if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
-        raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
-
-    if dims != _ordered_dims(dims):
+def check_dims(dims: Sequence[Dimension]) -> None:
+    if dims != order_dimensions(dims):
         raise ValueError(
-            f"Dimensions '{', '.join(map(str, dims))}' are not ordered correctly, expected '{', '.join(map(str, _ordered_dims(dims)))}'."
+            f"Dimensions '{', '.join(map(str, dims))}' are not ordered correctly, expected '{', '.join(map(str, order_dimensions(dims)))}'."
         )
 
 
@@ -1197,7 +1226,7 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         check_dims(list(dims))
     unique_dims = {dim for dims in dims_list for dim in dims}
 
-    promoted_dims = _ordered_dims(unique_dims)
+    promoted_dims = order_dimensions(unique_dims)
     check_dims(promoted_dims)
     return promoted_dims
 

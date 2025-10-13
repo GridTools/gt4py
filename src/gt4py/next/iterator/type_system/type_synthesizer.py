@@ -325,7 +325,7 @@ def neighbors(
         offset_literal.value, str
     )
     assert isinstance(it, it_ts.IteratorType)
-    conn_type = offset_provider_type[offset_literal.value]
+    conn_type = common.get_offset_type(offset_provider_type, offset_literal.value)
     assert isinstance(conn_type, common.NeighborConnectivityType)
     return ts.ListType(element_type=it.element_type, offset_type=conn_type.neighbor_dim)
 
@@ -511,7 +511,8 @@ def _resolve_dimensions(
         for off_literal in reversed(
             shift_tuple[::2]
         ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
-            offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
+            assert isinstance(off_literal.value, str)
+            offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
             if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
                 continue  # No shift applied
             if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
@@ -589,6 +590,14 @@ def as_fieldop(
 
 
 @_register_builtin_type_synthesizer
+def get_domain_range(field: ts.FieldType, dim: ts.DimensionType) -> ts.TupleType:
+    return ts.TupleType(
+        types=[ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))]
+        * 2
+    )
+
+
+@_register_builtin_type_synthesizer
 def scan(
     scan_pass: TypeSynthesizer, direction: ts.ScalarType, init: ts.ScalarType
 ) -> TypeSynthesizer:
@@ -655,7 +664,7 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
                 assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                     offset_axis.value, str
                 )
-                type_ = offset_provider_type[offset_axis.value]
+                type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
                 if isinstance(type_, common.Dimension):
                     pass
                 elif isinstance(type_, common.NeighborConnectivityType):

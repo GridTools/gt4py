@@ -60,7 +60,7 @@ def _make_simple_linear_chain_sdfg() -> dace.SDFG:
     return sdfg
 
 
-def _make_diff_sizes_linear_chain_sdfg() -> tuple[
+def _make_diff_sizes_pull_chain_sdfg() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.Tasklet
 ]:
     """Creates a linear chain of copies.
@@ -75,7 +75,7 @@ def _make_diff_sizes_linear_chain_sdfg() -> tuple[
     - The AccessNode that is used as final output, refers to `e`.
     - The Tasklet that is within the Map.
     """
-    sdfg = dace.SDFG(util.unique_name("diff_size_linear_chain_sdfg"))
+    sdfg = dace.SDFG(util.unique_name("diff_size_linear_pull_chain_sdfg"))
 
     array_size_increment = 10
     array_size = 10
@@ -108,6 +108,49 @@ def _make_diff_sizes_linear_chain_sdfg() -> tuple[
     state.add_nedge(d, e, dace.Memlet("d[0:40] -> [3:43]"))
     sdfg.validate()
     return sdfg, state, e, tasklet
+
+
+def _make_diff_sizes_push_chain_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.Tasklet
+]:
+    """Creates a linear chain of copies.
+
+    Same as `_make_simple_linear_pull_chain_sdfg()` but the intermediates become
+    smaller and smaller, so the full shape of the destination array is always written.
+    """
+    sdfg = dace.SDFG(util.unique_name("diff_size_linear_push_chain_sdfg"))
+
+    array_size_decrement = 10
+    array_size = 50
+    for name in ["a", "b", "c", "d", "e"]:
+        sdfg.add_array(
+            name,
+            shape=(array_size,),
+            dtype=dace.float64,
+            transient=True,
+        )
+        array_size -= array_size_decrement
+    sdfg.arrays["a"].transient = False
+    sdfg.arrays["e"].transient = False
+    assert sdfg.arrays["e"].shape[0] == 10
+
+    state = sdfg.add_state(is_start_block=True)
+    a, b, c, d = (state.add_access(name) for name in "abcd")
+
+    state.add_nedge(a, b, dace.Memlet("a[3:43] -> [0:40]"))
+    state.add_nedge(b, c, dace.Memlet("b[2:32] -> [0:30]"))
+    state.add_nedge(c, d, dace.Memlet("c[10:30] -> [0:20]"))
+    tasklet, _, _ = state.add_mapped_tasklet(
+        "comp1",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("d[__i + 3]")},
+        input_nodes={d},
+        code="__out = __in",
+        outputs={"__out": dace.Memlet("e[__i]")},
+        external_edges=True,
+    )
+    sdfg.validate()
+    return sdfg, state, a, tasklet
 
 
 def _make_multi_stage_reduction_sdfg() -> dace.SDFG:
@@ -469,17 +512,17 @@ def test_simple_linear_chain():
     assert nb_applies == 3
 
 
-def test_diff_size_linear_chain():
-    sdfg, state, output, tasklet = _make_diff_sizes_linear_chain_sdfg()
+def test_diff_size_linear_pull_chain():
+    sdfg, state, output, tasklet = _make_diff_sizes_pull_chain_sdfg()
 
     nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
 
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
         sdfg, dace_nodes.AccessNode, return_nodes=True
     )
+    assert nb_applies == 3
     assert len(acnodes) == 2
     assert not any(ac.desc(sdfg).transient for ac in acnodes)
-    assert nb_applies == 3
     assert output in acnodes
     assert state.in_degree(output) == 1
     assert state.out_degree(output) == 0
@@ -491,6 +534,31 @@ def test_diff_size_linear_chain():
     assert output_memlet.dst_subset.max_element()[0] == 27
 
     tasklet_memlet: dace.Memlet = next(iter(state.out_edges(tasklet))).data
+    assert str(tasklet_memlet.subset[0][0] - 18).strip() == "__i"
+
+
+def test_diff_size_linear_push_chain():
+    sdfg, state, input, tasklet = _make_diff_sizes_push_chain_sdfg()
+
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+
+    acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
+        sdfg, dace_nodes.AccessNode, return_nodes=True
+    )
+    assert nb_applies == 3
+    assert len(acnodes) == 2
+    assert not any(ac.desc(sdfg).transient for ac in acnodes)
+    assert input in acnodes
+    assert state.in_degree(input) == 0
+    assert state.out_degree(input) == 1
+
+    # Look if the subsets were correctly adapted, for that we look at the output
+    #  AccessNode and the tasklet inside the map.
+    input_memlet: dace.Memlet = next(iter(state.out_edges(input))).data
+    assert input_memlet.src_subset.min_element()[0] == 18
+    assert input_memlet.src_subset.max_element()[0] == 27
+
+    tasklet_memlet: dace.Memlet = next(iter(state.in_edges(tasklet))).data
     assert str(tasklet_memlet.subset[0][0] - 18).strip() == "__i"
 
 
@@ -567,17 +635,18 @@ def test_possible_cyclic_sdfg():
     sdfg = _make_possible_cyclic_sdfg()
 
     # Apply the transformation.
-    #  It will not remove `a1`, because it it would and replace it with `a2` then
-    #  the resulting SDFG is cyclic. It will, however, replace `a2` with `o1`.
+    #  The first iteration will replace `a2` with `o1`, in pull mode, since the
+    #  full shape of `a2` is copied into `o1`. In a second iteration, the transformation
+    #  will be applied in push mode: the full shape of the global `i1` is copied
+    #  into `a1`, thus `a1` will be replaced with `i1`.
     nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+    assert nb_applies == 2
 
     # Perform all the checks.
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
         sdfg, dace_nodes.AccessNode, return_nodes=True
     )
-    assert len(acnodes) == 3
-    assert nb_applies == 1
-    assert "o1" not in acnodes
+    assert {node.data for node in acnodes} == {"i1", "o1"}
 
 
 def test_a1_additional_output():

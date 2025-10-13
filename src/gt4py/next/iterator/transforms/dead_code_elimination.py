@@ -41,6 +41,17 @@ def dead_code_elimination(
     ```
     inp1
     ```
+
+    Note: `concat_where.expand_tuple_args` is required to be executed before, in order to eliminate
+    dead-code in cases like:
+    ```
+    let tmp = concat_where(cond, {a, b, c}, {d, e, f})
+      non_trivial_expr(tmp[0], tmp[2])
+    end
+    ```
+    That `tmp` is referenced twice in this example is important as otherwise function inlining
+    and `tuple_get` propagation would also remove the tuple. Additionally, `non_trivial_expr`,
+    must be a non-trivial expression as otherwise cps tuple inlining would also resolve this case.
     """
     # ensure all constant let bindings are inlined
     # `let var=True in if_(var, val1, val2) end` -> `if_(True, val1, val2)`

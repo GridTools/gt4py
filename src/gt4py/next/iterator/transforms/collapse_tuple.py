@@ -24,7 +24,12 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_misc,
 )
-from gt4py.next.iterator.transforms import fixed_point_transformation, inline_lambdas, inline_lifts
+from gt4py.next.iterator.transforms import (
+    fixed_point_transformation,
+    inline_lambdas,
+    inline_lifts,
+    symbol_ref_utils,
+)
 from gt4py.next.iterator.type_system import (
     inference as itir_type_inference,
     type_specifications as it_ts,
@@ -63,8 +68,8 @@ def _is_trivial_or_tuple_thereof_expr(node: itir.Node) -> bool:
     """
     Return `true` if the expr is a trivial expression (`SymRef` or `Literal`) or tuple thereof.
 
-    Let forms with trivial body and args as well as `if` calls with trivial branches are also
-    considered trivial.
+    Let forms with trivial body and args as well as `if` and `concat_where` calls with trivial
+    branches are also considered trivial.
 
     >>> _is_trivial_or_tuple_thereof_expr(im.make_tuple("a", "b"))
     True
@@ -83,7 +88,7 @@ def _is_trivial_or_tuple_thereof_expr(node: itir.Node) -> bool:
         return _is_trivial_or_tuple_thereof_expr(node.args[1])
     # This will duplicate the condition and increase the size of the tree, but this is probably
     # acceptable.
-    if cpm.is_call_to(node, "if_"):
+    if cpm.is_call_to(node, ("if_", "concat_where")):
         return all(_is_trivial_or_tuple_thereof_expr(arg) for arg in node.args[1:])
     if cpm.is_let(node):
         return _is_trivial_or_tuple_thereof_expr(node.fun.expr) and all(
@@ -171,7 +176,6 @@ class CollapseTuple(
             return functools.reduce(operator.or_, self.__members__.values())
 
     uids: eve_utils.UIDGenerator
-    ignore_tuple_size: bool
     enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     REINFER_TYPES = True
@@ -183,7 +187,6 @@ class CollapseTuple(
         cls,
         node: itir.Node,
         *,
-        ignore_tuple_size: bool = False,
         remove_letified_make_tuple_elements: bool = True,
         offset_provider_type: Optional[common.OffsetProviderType] = None,
         within_stencil: Optional[bool] = None,
@@ -200,8 +203,6 @@ class CollapseTuple(
             node: The node to transform.
 
         Keyword arguments:
-            ignore_tuple_size: Apply the transformation even if length of the inner tuple is greater
-                than the length of the outer tuple.
             remove_letified_make_tuple_elements: Run `InlineLambdas` as a post-processing step
                 to remove left-overs from `LETIFY_MAKE_TUPLE_ELEMENTS` transformation.
                 `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)` -> {1, 2}`
@@ -217,7 +218,14 @@ class CollapseTuple(
             False,
         ], "Parameter 'within_stencil' mandatory if node is not a 'Program'."
 
-        if not ignore_tuple_size:
+        requires_types = False
+        if enabled_transformations & (
+            cls.Transformation.PROPAGATE_TO_IF_ON_TUPLES_CPS
+            | cls.Transformation.FLATTEN_AS_FIELDOP_ARGS
+        ):
+            requires_types = True
+
+        if requires_types:
             node = itir_type_inference.infer(
                 node,
                 offset_provider_type=offset_provider_type,
@@ -225,7 +233,6 @@ class CollapseTuple(
             )
 
         new_node = cls(
-            ignore_tuple_size=ignore_tuple_size,
             enabled_transformations=enabled_transformations,
             uids=uids,
         ).visit(node, within_stencil=within_stencil)
@@ -266,12 +273,9 @@ class CollapseTuple(
                     return None
 
             itir_type_inference.reinfer(first_expr)  # type is needed so reinfer on-demand
-            assert self.ignore_tuple_size or isinstance(
-                first_expr.type, (ts.TupleType, ts.DeferredType)
-            )
-            if self.ignore_tuple_size or (
-                isinstance(first_expr.type, ts.TupleType)
-                and len(first_expr.type.types) == len(node.args)
+            assert isinstance(first_expr.type, (ts.TupleType, ts.DeferredType))
+            if isinstance(first_expr.type, ts.TupleType) and len(first_expr.type.types) == len(
+                node.args
             ):
                 return first_expr
         return None
@@ -482,15 +486,28 @@ class CollapseTuple(
             outer_vars: dict[itir.Sym, itir.Expr] = {}
             inner_vars: dict[itir.Sym, itir.Expr] = {}
             original_inner_expr = node.fun.expr
+
+            # Here we store all references used in let args and the inner expression. Variable
+            # is only populated below in case the transformation applies.
+            reserved_refs = None
+
             for arg_sym, arg in zip(node.fun.params, node.args):
                 assert arg_sym not in inner_vars
                 if cpm.is_let(arg):
+                    # TODO(tehrengruber): This is potentially expensive. Store the used symbol refs in the annex.
+                    if not reserved_refs:
+                        reserved_refs = symbol_ref_utils.collect_symbol_refs(
+                            [*node.args, original_inner_expr]
+                        )
                     rename_map: dict[
                         str, ir.SymRef
                     ] = {}  # mapping from symbol with a collision to its new (unique) name
                     for sym, val in zip(arg.fun.params, arg.args):
-                        unique_sym = ir_misc.unique_symbol(sym, [s.id for s in outer_vars.keys()])
+                        unique_sym = ir_misc.unique_symbol(
+                            sym, [*(s.id for s in outer_vars.keys()), *reserved_refs]
+                        )
                         if sym != unique_sym:  # name collision, rename symbol to unique_sym later
+                            assert sym.id not in rename_map
                             rename_map[sym.id] = im.ref(unique_sym.id, sym.type)
 
                         outer_vars[unique_sym] = val

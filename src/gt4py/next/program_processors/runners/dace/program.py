@@ -40,10 +40,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         if (self.backend is None) or "dace" not in self.backend.name.lower():
             raise ValueError("The SDFG can be generated only for the DaCe backend.")
 
-        offset_provider: common.OffsetProvider = {
-            **(self.connectivities or {}),
-            **self._implicit_offset_provider,
-        }
+        offset_provider: common.OffsetProvider = self.connectivities or {}
         column_axis = kwargs.get("column_axis", None)
 
         # TODO(ricoh): connectivity tables required here for now.
@@ -55,6 +52,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                     kwargs={},
                     column_axis=column_axis,
                     offset_provider=offset_provider,
+                    argument_descriptor_contexts={},
                 ),
             )
         )
@@ -95,7 +93,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         # the other parts of the workaround when possible.
         sdfg = dace.SDFG.from_json(
             compile_workflow_translation.replace(
-                disable_itir_transforms=True, disable_field_origin_on_program_arguments=True
+                disable_itir_transforms=True,
+                disable_field_origin_on_program_arguments=True,
+                use_metrics=False,
             )(gtir_stage).source_code
         )
 

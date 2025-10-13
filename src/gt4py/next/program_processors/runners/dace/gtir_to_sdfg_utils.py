@@ -159,11 +159,12 @@ def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
     return ReplaceSymbols().visit(ir, symtable=invalid_symbols_mapping)
 
 
-def get_symbolic(node: gtir.Expr) -> dace.symbolic.SymbolicType:
+def get_symbolic(ir: gtir.Expr) -> dace.symbolic.SymbolicType:
     """
     Specialized visit method for symbolic expressions.
 
     Returns:
         A dace symbolic expression of the given GTIR.
     """
-    return dace.symbolic.pystr_to_symbolic(gtir_python_codegen.get_source(node))
+    python_source = gtir_python_codegen.get_source(ir)
+    return dace.symbolic.pystr_to_symbolic(python_source)

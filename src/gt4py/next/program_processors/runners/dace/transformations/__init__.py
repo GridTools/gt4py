@@ -21,10 +21,21 @@ from .gpu_utils import (
     gt_gpu_transformation,
     gt_set_gpu_blocksize,
 )
+from .inline_fuser import inline_dataflow_into_map
 from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
-from .map_fusion import MapFusionHorizontal, MapFusionVertical
-from .map_fusion_extended import gt_horizontal_map_split_fusion, gt_vertical_map_split_fusion
+from .map_fusion import (
+    HorizontalMapFusionCallback,
+    MapFusionHorizontal,
+    MapFusionVertical,
+    VerticalMapFusionCallback,
+)
+from .map_fusion_extended import (
+    HorizontalMapSplitCallback,
+    VerticalMapSplitCallback,
+    gt_horizontal_map_split_fusion,
+    gt_vertical_map_split_fusion,
+)
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import MapPromoter
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
@@ -34,6 +45,7 @@ from .multi_state_global_self_copy_elimination import (
     gt_multi_state_global_self_copy_elimination,
 )
 from .redundant_array_removers import CopyChainRemover, gt_remove_copy_chain
+from .remove_views import RemovePointwiseViews
 from .simplify import (
     GT4PyMapBufferElimination,
     GT4PyMoveTaskletIntoMap,
@@ -65,6 +77,8 @@ __all__ = [
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
     "GT4PyStateFusion",
+    "HorizontalMapFusionCallback",
+    "HorizontalMapSplitCallback",
     "LoopBlocking",
     "MapFusionHorizontal",
     "MapFusionVertical",
@@ -73,10 +87,13 @@ __all__ = [
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
     "MultiStateGlobalSelfCopyElimination2",
+    "RemovePointwiseViews",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
     "SplitAccessNode",
     "SplitConsumerMemlet",
+    "VerticalMapFusionCallback",
+    "VerticalMapSplitCallback",
     "constants",
     "gt_auto_optimize",
     "gt_change_transient_strides",
@@ -101,5 +118,6 @@ __all__ = [
     "gt_split_access_nodes",
     "gt_substitute_compiletime_symbols",
     "gt_vertical_map_split_fusion",
+    "inline_dataflow_into_map",
     "splitting_tools",
 ]
