@@ -1204,7 +1204,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(node.type.element_type, ts.ScalarType)
         dc_dtype = gtx_dace_utils.as_dace_type(node.type.element_type)
 
-        input_connectors = [f"__arg{i}" for i in range(len(node.args))]
+        input_connectors = [
+            f"{gtir_to_sdfg.TAKSLET_CONNECTOR_PREFIX}{i}" for i in range(len(node.args))
+        ]
         output_connector = "__out"
 
         # Here we build the body of the tasklet
@@ -1723,7 +1725,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             arg_expr = self.visit(arg)
             if isinstance(arg_expr, MemletExpr | ValueExpr):
                 # the argument value is the result of a tasklet node or direct field access
-                connector = f"__arg{i}"
+                connector = f"{gtir_to_sdfg.TAKSLET_CONNECTOR_PREFIX}{i}"
                 node_connections[connector] = arg_expr
                 node_internals.append(connector)
             else:

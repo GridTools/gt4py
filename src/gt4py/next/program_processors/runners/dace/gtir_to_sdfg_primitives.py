@@ -679,7 +679,7 @@ def translate_scalar_expr(
                 and isinstance(node.type, ts.ScalarType)
             ):
                 raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
-            param = f"__arg{i}"
+            param = f"{gtir_to_sdfg.TAKSLET_CONNECTOR_PREFIX}{i}"
             args.append(arg.dc_node)
             connectors.append(param)
             scalar_expr_args.append(gtir.SymRef(id=param))

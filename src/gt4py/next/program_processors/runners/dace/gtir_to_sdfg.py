@@ -20,6 +20,7 @@ import itertools
 from typing import (
     Any,
     Dict,
+    Final,
     Iterable,
     List,
     Mapping,
@@ -49,6 +50,15 @@ from gt4py.next.program_processors.runners.dace import (
     utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+
+
+TAKSLET_CONNECTOR_PREFIX: Final[str] = "__gtir_arg"
+"""Prefix for connector names in tasklets.
+
+Note that the tasklet connectors cannot have the same name as the arguments
+of GTIR expressions, because this would lead to name conflicts in SDFG validation,
+in case the arguments of GTIR expressions are lowered to data nodes.
+"""
 
 
 class DataflowBuilder(Protocol):
