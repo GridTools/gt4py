@@ -60,5 +60,6 @@ def test_simple_split_case():
         validate=True,
         validate_all=True,
     )
-    sdfg.view()
     assert ret == 1
+
+    assert False, "Expand me"
