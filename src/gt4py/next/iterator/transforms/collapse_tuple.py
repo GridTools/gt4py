@@ -504,7 +504,7 @@ class CollapseTuple(
                     ] = {}  # mapping from symbol with a collision to its new (unique) name
                     for sym, val in zip(arg.fun.params, arg.args):
                         unique_sym = ir_misc.unique_symbol(
-                            sym, [s.id for s in outer_vars.keys()] + reserved_refs
+                            sym, [*(s.id for s in outer_vars.keys()), *reserved_refs]
                         )
                         if sym != unique_sym:  # name collision, rename symbol to unique_sym later
                             assert sym.id not in rename_map
