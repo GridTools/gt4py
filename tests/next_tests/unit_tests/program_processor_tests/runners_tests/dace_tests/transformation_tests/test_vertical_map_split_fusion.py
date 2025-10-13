@@ -73,7 +73,9 @@ def serial_map_sdfg(N, extra_intermediate_edge=False):
     if extra_intermediate_edge:
         D_node = st.add_access(D)
         assert N >= 2
-        st.add_nedge(tmp_node, D_node, dace.Memlet(data=tmp, subset="N-2:N", other_subset="0:2"))
+        st.add_nedge(
+            tmp_node, D_node, dace.Memlet(data=tmp, subset=f"{N}-2:{N}", other_subset="0:2")
+        )
 
     sdfg.validate()
 
@@ -116,6 +118,33 @@ def test_vertical_map_fusion():
     assert all(g_node in ac_nodes for g_node in [A_node, B_node, C_node])
     transient_node = next(iter(ac for ac in ac_nodes if ac.desc(sdfg).transient))
     assert st.scope_dict()[transient_node] is map_entry
+
+
+def test_vertical_map_fusion_disabled():
+    N = 80
+    sdfg, _, _, _ = serial_map_sdfg(N, extra_intermediate_edge=True)
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    ret = gtx_transformations.gt_vertical_map_split_fusion(
+        sdfg=sdfg,
+        run_simplify=True,
+        run_map_fusion=True,
+        fuse_map_fragments=True,
+        consolidate_edges_only_if_not_extending=False,
+        validate=True,
+        validate_all=True,
+    )
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+    # Check that vertical map split doesn't happen if part of the intermediate
+    # access node is used outside the maps.
+    assert ret == 0
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
 
 
 @pytest.mark.parametrize("run_map_fusion", [True, False])
