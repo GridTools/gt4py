@@ -10,7 +10,6 @@ import copy
 import functools
 import itertools
 import numbers
-import warnings
 from typing import Any, Dict, Final, List, Optional, Tuple, Union, cast
 
 import numpy as np
@@ -418,14 +417,6 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_IteratorAccess(self, iterator_access: IteratorAccess) -> gtir.IteratorAccess:
-        warnings.warn(
-            "Iterator access in `K` is an immature experimental feature. Please read "
-            "<https://github.com/GridTools/gt4py/blob/main/docs/development/ADRs/cartesian/experimental/iteration-index-k.md> "
-            "to understand the consequences.",
-            category=UserWarning,
-            stacklevel=2,
-        )
-
         return gtir.IteratorAccess(name=gtir.IteratorAccess.AxisName(iterator_access.name))
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
