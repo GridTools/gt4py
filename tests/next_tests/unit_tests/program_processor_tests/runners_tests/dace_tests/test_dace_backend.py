@@ -72,17 +72,6 @@ def test_make_backend(auto_optimize, use_memory_pool, device_type, monkeypatch):
             gtx_transformations.GT4PyAutoOptHook.TopLevelDataFlowPost: mock_top_level_dataflow_hook2,
         }
 
-    custom_backend = dace_wf_backend.make_dace_backend(
-        gpu=on_gpu,
-        cached=False,
-        auto_optimize=auto_optimize,
-        async_sdfg_call=True,
-        optimization_args=optimization_args,
-        optimization_hooks=optimization_hooks,
-        use_memory_pool=use_memory_pool,
-        use_metrics=True,
-    )
-
     sdfg: dace.SDFG | None = None
     mock_auto_optimize = mock.MagicMock()
     gt_auto_optimize = gtx_transformations.gt_auto_optimize
@@ -103,6 +92,16 @@ def test_make_backend(auto_optimize, use_memory_pool, device_type, monkeypatch):
     monkeypatch.setattr(gtx_transformations, "gt_gpu_transformation", mocked_gpu_transformation)
 
     with mock.patch("gt4py.next.config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", on_gpu):
+        custom_backend = dace_wf_backend.make_dace_backend(
+            gpu=on_gpu,
+            cached=False,
+            auto_optimize=auto_optimize,
+            async_sdfg_call=True,
+            optimization_args=optimization_args,
+            optimization_hooks=optimization_hooks,
+            use_memory_pool=use_memory_pool,
+            use_metrics=True,
+        )
         testee.with_backend(custom_backend).compile(offset_provider={})
         gtx.wait_for_compilation()
 
@@ -118,7 +117,6 @@ def test_make_backend(auto_optimize, use_memory_pool, device_type, monkeypatch):
             mock_auto_optimize.assert_called_once_with(
                 sdfg,
                 gpu=on_gpu,
-                assume_pointwise=True,
                 constant_symbols={
                     "__a_stride_0": 1,
                     "__b_stride_0": 1,
@@ -129,9 +127,7 @@ def test_make_backend(auto_optimize, use_memory_pool, device_type, monkeypatch):
                 gpu_block_size_2d=optimization_args["gpu_block_size_2d"],
                 gpu_memory_pool=use_memory_pool,
                 optimization_hooks=optimization_hooks,
-                unit_strides_kind=None,
-                validate=False,
-                validate_all=False,
+                unit_strides_kind=gtx.common.DimensionKind.HORIZONTAL,
             )
             mock_top_level_dataflow_hook1.assert_called_once_with(sdfg)
             mock_top_level_dataflow_hook2.assert_not_called()
@@ -139,7 +135,6 @@ def test_make_backend(auto_optimize, use_memory_pool, device_type, monkeypatch):
             mock_auto_optimize.assert_called_once_with(
                 sdfg,
                 gpu=on_gpu,
-                assume_pointwise=True,
                 constant_symbols={},
                 make_persistent=optimization_args["make_persistent"],
                 blocking_dim=optimization_args["blocking_dim"],
@@ -147,8 +142,6 @@ def test_make_backend(auto_optimize, use_memory_pool, device_type, monkeypatch):
                 gpu_memory_pool=False,
                 optimization_hooks=optimization_hooks,
                 unit_strides_kind=None,
-                validate=False,
-                validate_all=False,
             )
             mock_top_level_dataflow_hook1.assert_not_called()
             mock_top_level_dataflow_hook2.assert_called_once_with(sdfg)
