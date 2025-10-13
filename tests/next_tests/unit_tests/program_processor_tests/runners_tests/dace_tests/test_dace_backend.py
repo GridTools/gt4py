@@ -70,6 +70,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
             "optimization_hooks": {
                 gtx_transformations.GT4PyAutoOptHook.TopLevelDataFlowPost: mock_top_level_dataflow_hook2,
             },
+            "unit_strides_kind": gtx.common.DimensionKind.VERTICAL,
         }
 
     sdfg: dace.SDFG | None = None
@@ -139,7 +140,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
                 blocking_size=optimization_args["blocking_size"],
                 gpu_memory_pool=optimization_args["gpu_memory_pool"],
                 optimization_hooks=optimization_args["optimization_hooks"],
-                unit_strides_kind=None,
+                unit_strides_kind=optimization_args["unit_strides_kind"],
             )
             mock_top_level_dataflow_hook1.assert_not_called()
             mock_top_level_dataflow_hook2.assert_called_once_with(sdfg)
