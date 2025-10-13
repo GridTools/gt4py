@@ -6,9 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
-from typing import Container, Self
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
+from gt4py.eve.extended_typing import Container, Self
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
