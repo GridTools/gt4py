@@ -56,6 +56,7 @@ def device_type(request) -> str:
 
 def _translate_gtir_to_sdfg(
     ir: itir.Program,
+    offset_provider: gtx_common.OffsetProvider,
     device_type: core_defs.DeviceType,
     auto_optimize: bool,
     async_sdfg_call: bool,
@@ -68,7 +69,7 @@ def _translate_gtir_to_sdfg(
             auto_optimize=auto_optimize,
             async_sdfg_call=async_sdfg_call,
             use_metrics=use_metrics,
-        ).generate_sdfg(ir, offset_provider={}, column_axis=None)
+        ).generate_sdfg(ir, offset_provider=offset_provider, column_axis=None)
 
 
 @pytest.mark.parametrize("has_unit_stride", [False, True])
@@ -98,6 +99,7 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     with mock.patch("gt4py.next.config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", has_unit_stride):
         sdfg = _translate_gtir_to_sdfg(
             ir=ir,
+            offset_provider=SKIP_VALUE_MESH.offset_provider,
             device_type=core_defs.DeviceType.CPU,
             auto_optimize=False,
             async_sdfg_call=False,
@@ -222,6 +224,7 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
 
     sdfg = _translate_gtir_to_sdfg(
         ir=ir,
+        offset_provider={},
         device_type=device_type,
         auto_optimize=False,
         async_sdfg_call=make_async_sdfg_call,
@@ -256,7 +259,11 @@ def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
     )
 
     sdfg = _translate_gtir_to_sdfg(
-        ir=ir, device_type=device_type, auto_optimize=False, async_sdfg_call=True
+        ir=ir,
+        offset_provider={},
+        device_type=device_type,
+        auto_optimize=False,
+        async_sdfg_call=True,
     )
 
     if device_type == core_defs.DeviceType.CPU:
