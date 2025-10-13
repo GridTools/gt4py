@@ -67,6 +67,7 @@ def _translate_gtir_to_sdfg(
         return dace_wf_translation.DaCeTranslator(
             device_type=device_type,
             auto_optimize=auto_optimize,
+            auto_optimize_args=None,
             async_sdfg_call=async_sdfg_call,
             use_metrics=use_metrics,
         ).generate_sdfg(ir, offset_provider=offset_provider, column_axis=None)
@@ -227,7 +228,6 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
         offset_provider={},
         device_type=device_type,
         auto_optimize=False,
-        auto_optimize_args=None,
         async_sdfg_call=make_async_sdfg_call,
     )
 
@@ -264,7 +264,6 @@ def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
         offset_provider={},
         device_type=device_type,
         auto_optimize=False,
-        auto_optimize_args=None,
         async_sdfg_call=True,
     )
 
