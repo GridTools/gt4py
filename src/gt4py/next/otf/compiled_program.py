@@ -11,6 +11,7 @@ from __future__ import annotations
 import concurrent.futures
 import dataclasses
 import functools
+import inspect
 import itertools
 from collections.abc import Callable, Hashable, Sequence
 from typing import Any, TypeAlias, TypeVar
@@ -259,7 +260,7 @@ class CompiledProgramsPool:
         (defined by 'static_params') in case `enable_jit` is True. Otherwise,
         it is an error.
         """
-        args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
+        args, kwargs = self._signature_canonicalizer(args, kwargs)
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
         # TODO(tehrengruber): Dispatching over offset provider type is wrong, especially when we
         #  use compile time domains.
@@ -295,6 +296,11 @@ class CompiledProgramsPool:
                     *args, offset_provider=offset_provider, enable_jit=False, **kwargs
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
+
+    @functools.cached_property
+    def _signature_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
+        signature = inspect.signature(self.definition_stage.definition)
+        return gtx_utils.make_signature_canonicalizer(signature)
 
     @functools.cached_property
     def _metrics_key_from_pool_key(self) -> Callable[[CompiledProgramsKey], str]:

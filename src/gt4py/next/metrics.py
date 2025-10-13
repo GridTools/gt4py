@@ -18,6 +18,7 @@ import json
 import numbers
 import pathlib
 import sys
+import types
 import typing
 from collections.abc import Generator, Mapping
 
@@ -204,22 +205,52 @@ def get_source(key: str, *, assign_current: bool = True) -> Source:
     return metrics_source
 
 
-@contextlib.contextmanager
-def collect() -> Generator[SourceHandler | None, None, None]:
-    if not config.COLLECT_METRICS_LEVEL:
-        yield None
-        return
+class CollectorContextManager(contextlib.AbstractContextManager):
+    __slots__ = ("source_handler", "previous_collector_token")
 
-    assert _source_cvar.get() is None
-    source_handler = SourceHandler()
-    previous_collector_token = _source_cvar.set(source_handler)
+    def __enter__(self) -> SourceHandler | None:
+        if config.COLLECT_METRICS_LEVEL > 0:
+            assert _source_cvar.get() is None
+            self.source_handler = SourceHandler()
+            self.previous_collector_token = _source_cvar.set(self.source_handler)
+            return self.source_handler
+        else:
+            self.source_handler = self.previous_collector_token = None
+            return None
 
-    try:
-        yield source_handler
-    finally:
-        if source_handler.key is None:
-            raise RuntimeError("Metrics source key was not set during collection.")
-        _source_cvar.reset(previous_collector_token)
+    def __exit__(
+        self,
+        type: type[BaseException] | None,
+        value: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
+        if self.previous_collector_token is not None:
+            _source_cvar.reset(self.previous_collector_token)
+            if type is None:
+                if self.source_handler is not None and self.source_handler.key is None:
+                    raise RuntimeError("Metrics source key was not set during collection.")
+
+
+def collect() -> CollectorContextManager:
+    return CollectorContextManager()
+
+
+# @contextlib.contextmanager
+# def collect() -> Generator[SourceHandler | None, None, None]:
+#     if config.COLLECT_METRICS_LEVEL <= 0:
+#         yield None
+#         return
+
+#     assert _source_cvar.get() is None
+#     source_handler = SourceHandler()
+#     previous_collector_token = _source_cvar.set(source_handler)
+
+#     try:
+#         yield source_handler
+#     finally:
+#         if source_handler.key is None:
+#             raise RuntimeError("Metrics source key was not set during collection.")
+#         _source_cvar.reset(previous_collector_token)
 
 
 def dumps(metric_sources: Mapping[str, Source] | None = None) -> str:

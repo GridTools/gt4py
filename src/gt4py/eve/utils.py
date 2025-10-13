@@ -17,6 +17,7 @@ import dataclasses
 import enum
 import functools
 import hashlib
+import inspect
 import itertools
 import operator
 import pickle
@@ -26,6 +27,7 @@ import types
 import typing
 import uuid
 import warnings
+from collections.abc import Mapping
 
 import deepdiff
 import xxhash
