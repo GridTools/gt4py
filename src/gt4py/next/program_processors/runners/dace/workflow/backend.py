@@ -103,7 +103,6 @@ def make_dace_backend(
         A dace backend with custom configuration for the target device.
     """
     fixed_optimization_args: Final[dict[str, Any]] = {
-        "assume_pointwise": True,  # SDFGs built from GTIR reaspect this assumption
         "gpu_memory_pool": (use_memory_pool if gpu else False),
         "optimization_hooks": optimization_hooks,
         "unit_strides_kind": (
@@ -111,8 +110,6 @@ def make_dace_backend(
             if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
             else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
         ),
-        "validate": False,
-        "validate_all": False,
     }
 
     if optimization_hooks and not auto_optimize:
