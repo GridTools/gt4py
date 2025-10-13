@@ -11,16 +11,16 @@
 import pytest
 import unittest.mock as mock
 
-from gt4py import next as gtx
-from tests.next_tests.integration_tests import cases
-
 dace = pytest.importorskip("dace")
 
+from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
 )
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+
+from next_tests.integration_tests import cases
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import KDim
 
 
