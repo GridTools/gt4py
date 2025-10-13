@@ -28,6 +28,8 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
     """
     Prune `concat_where` expression with one branch never being accessed.
 
+    This pass requires domain inference to be executed before.
+
     This pass the true and false branch values to be fields, not tuples of fields. Execute
      `gt4py.next.iterator.transforms.concat_where.expand_tuple_args` before.
 
