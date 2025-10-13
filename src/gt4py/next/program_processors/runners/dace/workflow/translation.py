@@ -352,7 +352,10 @@ class DaCeTranslator(
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
         sdfg = gtir_to_sdfg.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
-        constant_symbols = find_constant_symbols(ir, sdfg, offset_provider_type)
+
+        constant_symbols = find_constant_symbols(
+            ir, sdfg, offset_provider_type, self.disable_field_origin_on_program_arguments
+        )
 
         if self.auto_optimize:
             auto_optimize_args = {} if self.auto_optimize_args is None else self.auto_optimize_args
