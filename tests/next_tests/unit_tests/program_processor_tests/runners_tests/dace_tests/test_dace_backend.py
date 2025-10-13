@@ -26,8 +26,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 @pytest.fixture(
     params=[
-        pytest.param(core_defs.DeviceType.CUDA, marks=pytest.mark.requires_gpu),
         pytest.param(core_defs.DeviceType.CPU),
+        pytest.param(core_defs.DeviceType.CUDA, marks=pytest.mark.requires_gpu),
     ]
 )
 def device_type(request) -> str:
