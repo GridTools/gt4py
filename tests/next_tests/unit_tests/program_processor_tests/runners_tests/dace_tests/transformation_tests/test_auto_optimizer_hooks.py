@@ -94,7 +94,8 @@ def test_auto_optimizer_without_callbacks():
     assert util.compare_sdfg_res(ref, res)
 
 
-def test_auto_optimizer_with_callbacks():
+@pytest.mark.parametrize("disable_splitting", [True, False])
+def test_auto_optimizer_with_callbacks(disable_splitting: bool):
     sdfg, _ = _make_sdfg()
 
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 4
@@ -224,10 +225,13 @@ def test_auto_optimizer_with_callbacks():
     }
 
     # Apply the auto optimization, with the hooks.
-    #  Because the split transformations do not honor the fusion callback hooks, we have
-    #  to disable them. This is a limitation in the current implementation.
+    #  Setting `disable_splitting` to `False` is used to see if there is an uncontrolled
+    #  MapFusion somewhere.
     gtx_transformations.gt_auto_optimize(
-        sdfg, gpu=False, optimization_hooks=callbacks, disable_splitting=True
+        sdfg,
+        gpu=False,
+        optimization_hooks=callbacks,
+        disable_splitting=disable_splitting,
     )
 
     # Note that some results are not very predictable, hence `> 0`.
