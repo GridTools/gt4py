@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
-from typing import KeysView
+from typing import Container
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next import common
@@ -14,7 +14,9 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 
 
-def _filter_domain(domain: domain_utils.SymbolicDomain, dims: KeysView[common.Dimension]):
+def _filter_domain(
+    domain: domain_utils.SymbolicDomain, dims: Container[common.Dimension]
+) -> domain_utils.SymbolicDomain:
     return domain_utils.SymbolicDomain(
         grid_type=domain.grid_type,
         ranges={d: r for d, r in domain.ranges.items() if d in dims},
@@ -23,7 +25,17 @@ def _filter_domain(domain: domain_utils.SymbolicDomain, dims: KeysView[common.Di
 
 @dataclasses.dataclass
 class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
-    """ """
+    """
+    Prune `concat_where` expression with one branch never being accessed.
+
+    This pass the true and false branch values to be fields, not tuples of fields. Execute
+     `gt4py.next.iterator.transforms.concat_where.expand_tuple_args` before.
+
+    >>> from gt4py.next.iterator.ir_utils import ir_makers as im
+    >>> IDim = common.Dimension("IDim")
+    >>> expr = im.concat_where(im.domain(common.GridType.UNSTRUCTURED, {IDim: (0, 0)}), "a", "b")
+    >>> assert prune_empty_concat_where(expr) == im.ref("b")
+    """
 
     PRESERVED_ANNEX_ATTRS = ("domain",)
 

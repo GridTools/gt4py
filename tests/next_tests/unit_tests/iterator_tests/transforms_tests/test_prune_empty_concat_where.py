@@ -23,7 +23,7 @@ K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
 @pytest.mark.parametrize(
     "accessed_domain, cond_domain, expected",
     [
-        # TODO(tehrengruber): Implement and enable symbolic test cases.
+        # TODO(tehrengruber): Implement in pass and enable commented out symbolic test cases below.
         # cond spans entire accessed domain of true branch value
         ({Vertex: (0, 10), K: (0, 10)}, {Vertex: (0, 10)}, "a"),
         # ({Vertex: ("v0", "v1")}, {Vertex: ("v0", "v1")}, "a"),
