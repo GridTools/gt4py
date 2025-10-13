@@ -237,7 +237,7 @@ def test_propagate_nested_let():
     assert actual == expected
 
 
-def test_propagate_nested_let_with_collision():
+def test_propagate_nested_let_collision_between_args():
     testee = im.let(("a", im.let("c", 1)("c")), ("b", im.let("c", 2)("c")))(
         im.call("plus")("a", "b")
     )
@@ -247,6 +247,30 @@ def test_propagate_nested_let_with_collision():
     actual = CollapseTuple.apply(
         testee,
         remove_letified_make_tuple_elements=False,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert actual == expected
+
+
+def test_propagate_nested_let_collision_between_args2():
+    ir = im.let(("a", im.let("c", 1)("c")), ("b", "c"))(im.make_tuple("a", "b"))
+    expected = im.make_tuple(1, "c")
+    actual = CollapseTuple.apply(
+        ir,
+        enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+    )
+    assert actual == expected
+
+
+def test_propagate_nested_let_collision_with_body():
+    ir = im.let(("a", im.let("c", 1)("c")))(im.make_tuple("a", "c"))
+    expected = im.make_tuple(1, "c")
+    actual = CollapseTuple.apply(
+        ir,
         enabled_transformations=CollapseTuple.Transformation.PROPAGATE_NESTED_LET,
         allow_undeclared_symbols=True,
         within_stencil=False,

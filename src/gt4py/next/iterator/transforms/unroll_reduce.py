@@ -72,7 +72,7 @@ def _get_connectivity(
 
     connectivities: list[common.NeighborConnectivityType] = []
     for o in _get_partial_offset_tags(applied_reduce_node.args):
-        conn = offset_provider_type[o]
+        conn = common.get_offset_type(offset_provider_type, o)
         assert isinstance(conn, common.NeighborConnectivityType)
         connectivities.append(conn)
 
