@@ -60,7 +60,7 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     SKIP_VALUE_MESH = skip_value_mesh(None)
 
     ir = itir.Program(
-        id="testee",
+        id="find_constant_symbols_sdfg",
         function_definitions=[],
         params=[
             itir.Sym(id="x", type=EFTYPE),
@@ -79,12 +79,13 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     )
 
     with mock.patch("gt4py.next.config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", has_unit_stride):
-        sdfg = dace_wf_translation.DaCeTranslator(
-            device_type=core_defs.DeviceType.CPU,
-            auto_optimize=False,
-            async_sdfg_call=False,
-            use_metrics=False,
-        ).generate_sdfg(ir, offset_provider=SKIP_VALUE_MESH.offset_provider, column_axis=None)
+        with dace.config.set_temporary("cache", value="hash"):
+            sdfg = dace_wf_translation.DaCeTranslator(
+                device_type=core_defs.DeviceType.CPU,
+                auto_optimize=False,
+                async_sdfg_call=False,
+                use_metrics=False,
+            ).generate_sdfg(ir, offset_provider=SKIP_VALUE_MESH.offset_provider, column_axis=None)
 
         constant_symbols = dace_wf_translation.find_constant_symbols(
             ir, sdfg, SKIP_VALUE_MESH.offset_provider_type, disable_field_origin
@@ -203,12 +204,13 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
         ],
     )
 
-    sdfg = dace_wf_translation.DaCeTranslator(
-        device_type=device_type,
-        auto_optimize=False,
-        async_sdfg_call=make_async_sdfg_call,
-        use_metrics=False,
-    ).generate_sdfg(program, offset_provider={}, column_axis=None)
+    with dace.config.set_temporary("cache", value="hash"):
+        sdfg = dace_wf_translation.DaCeTranslator(
+            device_type=device_type,
+            auto_optimize=False,
+            async_sdfg_call=make_async_sdfg_call,
+            use_metrics=False,
+        ).generate_sdfg(program, offset_provider={}, column_axis=None)
 
     if device_type == core_defs.DeviceType.CPU:
         _check_cpu_sdfg_call(sdfg)
@@ -238,12 +240,13 @@ def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
         ],
     )
 
-    sdfg = dace_wf_translation.DaCeTranslator(
-        device_type=device_type,
-        auto_optimize=False,
-        async_sdfg_call=True,
-        use_metrics=False,
-    ).generate_sdfg(program, offset_provider={}, column_axis=None)
+    with dace.config.set_temporary("cache", value="hash"):
+        sdfg = dace_wf_translation.DaCeTranslator(
+            device_type=device_type,
+            auto_optimize=False,
+            async_sdfg_call=True,
+            use_metrics=False,
+        ).generate_sdfg(program, offset_provider={}, column_axis=None)
 
     if device_type == core_defs.DeviceType.CPU:
         _check_cpu_sdfg_call(sdfg)
@@ -364,8 +367,9 @@ def test_generate_sdfg_async_call_multi_state(
 
     # NOTE: Here we should use a configuration context. But because of
     #   [DaCe issue#2125](https://github.com/spcl/dace/issues/2125) this is not possible.
-    dace_wf_common.set_dace_config(device_type=device_type)
-    dace_wf_translation.make_sdfg_call_async(sdfg, on_gpu)
+    with dace_wf_common.dace_context(device_type=device_type):
+        dace_wf_translation.make_sdfg_call_async(sdfg, on_gpu)
+
     if on_gpu:
         assert _are_streams_set_to_default_stream(sdfg)
 
