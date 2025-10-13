@@ -1297,13 +1297,10 @@ def test_absolute_K_index(backend):
 
 @pytest.mark.parametrize(
     "backend",
-    [
-        pytest.param("debug"),
-        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
-    ],
+    ["debug", pytest.param("dace:cpu", marks=[pytest.mark.requires_dace])],
 )
-def test_iterator_access(backend):
-    domain = (5, 5, 5)
+def test_iterator_access(backend: str) -> None:
+    domain = (3, 4, 5)
 
     field_A = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
     field_B = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
@@ -1320,3 +1317,31 @@ def test_iterator_access(backend):
     assert field_A[0, 0, 2] == 20.20
     for _k in range(domain[2]):
         assert field_B[0, 0, _k] == _k
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param(
+            backend,
+            marks=pytest.mark.xfail(
+                raises=NotImplementedError, reason="Iterator access (K) is not implemented for"
+            ),
+        )
+        for backend in ["gt:cpu_kfirst", "numpy"]
+    ],
+)
+def test_iterator_access_raises_in_unsupported_backends(backend: str) -> None:
+    domain = (3, 4, 5)
+
+    field_A = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+    field_B = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+
+    @gtscript.stencil(backend=backend)
+    def test_all_valid_usage(field_A: Field[np.float64], field_B: Field[np.float64]) -> None:
+        with computation(PARALLEL), interval(...):
+            if K == 2:
+                field_A = 20.20
+            field_B = K
+
+    test_all_valid_usage(field_A, field_B)

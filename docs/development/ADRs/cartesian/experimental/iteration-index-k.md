@@ -6,7 +6,7 @@ In the context of porting physics parametrizations, we decided to expose the cur
 
 ## Context
 
-Porting physics code, we came across patterns that are hard to map to current stencil concept. Specifically, we were seeing things that depend on the current iteration index in `K`. For example variable interval bounds, such as
+Porting physics code, we came across patterns that are hard to map to a stencil with current DSL features. Specifically, we are seeing things that depend on the current iteration index in `K`. For example variable interval bounds, such as
 
 ```py
 """
@@ -56,10 +56,10 @@ with computation(PARALLEL), interval(...):
     pmid0_in = pmid0_inv.at(K=k_inv)
 ```
 
-While `K` is short, we are aware that the letter is loaded. For now, we chose something short and easy to see (with real-world use-cases) if there are
+While `K` is short, we are aware that the letter is loaded. For now, we chose something short and easy. The plan is to see (with real-world use-cases) if there are
 
 1. ways to avoid exposing the iteration index, e.g. a set of more restrictive DSL features
-2. ways to conceptual problems with exposing the iteration index, e.g. ways to break the DSL
+2. conceptual problems with exposing the iteration index, e.g. ways to break the DSL.
 
 We are also aware of [issue #208](https://github.com/GridTools/gt4py/issues/208) and are using it to find a more suitable/permanent name for the case that we don't find any conceptual problems with exposing the current iteration index.
 
