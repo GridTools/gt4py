@@ -53,7 +53,7 @@ class SymbolicRange:
     def translate(self, distance: int) -> SymbolicRange:
         return SymbolicRange(im.plus(self.start, distance), im.plus(self.stop, distance))
 
-    def empty(self) -> Optional[bool]:
+    def empty(self) -> bool | None:
         if isinstance(self.start, itir.Literal) and isinstance(self.stop, itir.Literal):
             start, stop = int(self.start.value), int(self.stop.value)
             if start >= stop:
