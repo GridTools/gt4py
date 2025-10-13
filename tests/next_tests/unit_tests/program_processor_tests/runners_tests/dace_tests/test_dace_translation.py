@@ -54,6 +54,23 @@ def device_type(request) -> str:
     return request.param
 
 
+def _translate_gtir_to_sdfg(
+    program: itir.Program,
+    device_type: core_defs.DeviceType,
+    auto_optimize: bool,
+    async_sdfg_call: bool,
+    use_metrics: bool = False,
+) -> dace.SDFG:
+    with dace.config.set_temporary("cache", value="hash"):
+        # we use the SDFG hash in build cache to avoid clashes between CPU and GPU SDFGs
+        return dace_wf_translation.DaCeTranslator(
+            device_type=device_type,
+            auto_optimize=auto_optimize,
+            async_sdfg_call=async_sdfg_call,
+            use_metrics=use_metrics,
+        ).generate_sdfg(program, offset_provider={}, column_axis=None)
+
+
 @pytest.mark.parametrize("has_unit_stride", [False, True])
 @pytest.mark.parametrize("disable_field_origin", [False, True])
 def test_find_constant_symbols(has_unit_stride, disable_field_origin):
@@ -79,13 +96,12 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     )
 
     with mock.patch("gt4py.next.config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", has_unit_stride):
-        with dace.config.set_temporary("cache", value="hash"):
-            sdfg = dace_wf_translation.DaCeTranslator(
-                device_type=core_defs.DeviceType.CPU,
-                auto_optimize=False,
-                async_sdfg_call=False,
-                use_metrics=False,
-            ).generate_sdfg(ir, offset_provider=SKIP_VALUE_MESH.offset_provider, column_axis=None)
+        sdfg = _translate_gtir_to_sdfg(
+            ir=ir,
+            device_type=core_defs.DeviceType.CPU,
+            auto_optimize=False,
+            async_sdfg_call=False,
+        )
 
         constant_symbols = dace_wf_translation.find_constant_symbols(
             ir, sdfg, SKIP_VALUE_MESH.offset_provider_type, disable_field_origin
@@ -187,7 +203,7 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
     """Verify that the flag `async_sdfg_call` takes effect on the SDFG generation."""
     program_name = "field_ir_{}_async_call".format("with" if make_async_sdfg_call else "without")
 
-    program = itir.Program(
+    ir = itir.Program(
         id=program_name,
         declarations=[],
         function_definitions=[],
@@ -204,13 +220,12 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
         ],
     )
 
-    with dace.config.set_temporary("cache", value="hash"):
-        sdfg = dace_wf_translation.DaCeTranslator(
-            device_type=device_type,
-            auto_optimize=False,
-            async_sdfg_call=make_async_sdfg_call,
-            use_metrics=False,
-        ).generate_sdfg(program, offset_provider={}, column_axis=None)
+    sdfg = _translate_gtir_to_sdfg(
+        ir=ir,
+        device_type=device_type,
+        auto_optimize=False,
+        async_sdfg_call=make_async_sdfg_call,
+    )
 
     if device_type == core_defs.DeviceType.CPU:
         _check_cpu_sdfg_call(sdfg)
@@ -223,7 +238,7 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
 def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
     """Verify that the flag `async_sdfg_call=True` has no effect on an SDFG that does not contain any GPU map."""
 
-    program = itir.Program(
+    ir = itir.Program(
         id="scalar_ir_with_async_call",
         declarations=[],
         function_definitions=[],
@@ -240,13 +255,9 @@ def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
         ],
     )
 
-    with dace.config.set_temporary("cache", value="hash"):
-        sdfg = dace_wf_translation.DaCeTranslator(
-            device_type=device_type,
-            auto_optimize=False,
-            async_sdfg_call=True,
-            use_metrics=False,
-        ).generate_sdfg(program, offset_provider={}, column_axis=None)
+    sdfg = _translate_gtir_to_sdfg(
+        ir=ir, device_type=device_type, auto_optimize=False, async_sdfg_call=True
+    )
 
     if device_type == core_defs.DeviceType.CPU:
         _check_cpu_sdfg_call(sdfg)

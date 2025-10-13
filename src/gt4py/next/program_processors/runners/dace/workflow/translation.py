@@ -401,10 +401,13 @@ class DaCeTranslator(
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
         elif len(constant_symbols) != 0:
             # Target CPU without SDFG transformations, but still replace constant symbols.
-            # Replacing the constant symbols for `disable_field_origin_on_program_arguments=True`
-            # is strictly required by dace orchestration. This feature cannot handle
-            # field origin, and it also requires an unoptimized SDFG, so we have
-            # to explicitly apply `gt_substitute_compiletime_symbols` here.
+            # Replacing the SDFG symbols for field origin in global arrays is strictly
+            # required by dace orchestration, which runs the translation stage
+            # with `disable_field_origin_on_program_arguments=True`. The program
+            # decorator used by dace orchestartion cannot handle field origin.
+            # It also requires skipping auto-optimize on the `SDFGConvertible` objects,
+            # because it targets the full-application SDFG, so we have to explicitly
+            # apply `gt_substitute_compiletime_symbols()` here.
             gtx_transformations.gt_substitute_compiletime_symbols(
                 sdfg, constant_symbols, validate=True
             )
