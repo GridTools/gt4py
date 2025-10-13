@@ -56,10 +56,7 @@ class SymbolicRange:
     def empty(self) -> bool | None:
         if isinstance(self.start, itir.Literal) and isinstance(self.stop, itir.Literal):
             start, stop = int(self.start.value), int(self.stop.value)
-            if start >= stop:
-                return True
-            else:
-                return False
+            return start >= stop
         elif self.start == self.stop:
             return True
         return None
