@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
+from typing import TypeVar
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.extended_typing import Container, Self
@@ -21,6 +22,9 @@ def _filter_domain(
         grid_type=domain.grid_type,
         ranges={d: r for d, r in domain.ranges.items() if d in dims},
     )
+
+
+PRG = TypeVar("PRG", bound=itir.Program | itir.Expr)
 
 
 @dataclasses.dataclass
@@ -42,7 +46,7 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
     @classmethod
-    def apply(cls: type[Self], node: itir.Node) -> Self:
+    def apply(cls: type[Self], node: PRG) -> PRG:
         return cls().visit(node)
 
     def visit_FunCall(self, node: itir.FunCall) -> itir.Expr:
