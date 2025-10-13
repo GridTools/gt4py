@@ -35,8 +35,7 @@ def device_type(request) -> str:
 
 
 @pytest.mark.parametrize("auto_optimize", [False, True])
-@pytest.mark.parametrize("use_memory_pool", [False, True])
-def test_make_backend(auto_optimize, use_memory_pool, device_type, monkeypatch):
+def test_make_backend(auto_optimize, device_type, monkeypatch):
     on_gpu = device_type == core_defs.CUPY_DEVICE_TYPE
 
     @gtx.field_operator
@@ -52,24 +51,25 @@ def test_make_backend(auto_optimize, use_memory_pool, device_type, monkeypatch):
 
     if not auto_optimize:
         optimization_args = {}
-        optimization_hooks = {}
     elif on_gpu:
         optimization_args = {
             "make_persistent": False,
             "gpu_block_size": (32, 8, 1),
             "gpu_block_size_2d": (20, 20),
-        }
-        optimization_hooks = {
-            gtx_transformations.GT4PyAutoOptHook.TopLevelDataFlowPost: mock_top_level_dataflow_hook1,
+            "gpu_memory_pool": True,
+            "optimization_hooks": {
+                gtx_transformations.GT4PyAutoOptHook.TopLevelDataFlowPost: mock_top_level_dataflow_hook1,
+            },
         }
     else:
         optimization_args = {
             "make_persistent": True,
             "blocking_dim": KDim,
             "blocking_size": 10,
-        }
-        optimization_hooks = {
-            gtx_transformations.GT4PyAutoOptHook.TopLevelDataFlowPost: mock_top_level_dataflow_hook2,
+            "gpu_memory_pool": False,
+            "optimization_hooks": {
+                gtx_transformations.GT4PyAutoOptHook.TopLevelDataFlowPost: mock_top_level_dataflow_hook2,
+            },
         }
 
     sdfg: dace.SDFG | None = None
@@ -98,8 +98,6 @@ def test_make_backend(auto_optimize, use_memory_pool, device_type, monkeypatch):
             auto_optimize=auto_optimize,
             async_sdfg_call=True,
             optimization_args=optimization_args,
-            optimization_hooks=optimization_hooks,
-            use_memory_pool=use_memory_pool,
             use_metrics=True,
         )
         testee.with_backend(custom_backend).compile(offset_provider={})
@@ -125,8 +123,8 @@ def test_make_backend(auto_optimize, use_memory_pool, device_type, monkeypatch):
                 make_persistent=optimization_args["make_persistent"],
                 gpu_block_size=optimization_args["gpu_block_size"],
                 gpu_block_size_2d=optimization_args["gpu_block_size_2d"],
-                gpu_memory_pool=use_memory_pool,
-                optimization_hooks=optimization_hooks,
+                gpu_memory_pool=optimization_args["gpu_memory_pool"],
+                optimization_hooks=optimization_args["optimization_hooks"],
                 unit_strides_kind=gtx.common.DimensionKind.HORIZONTAL,
             )
             mock_top_level_dataflow_hook1.assert_called_once_with(sdfg)
@@ -139,8 +137,8 @@ def test_make_backend(auto_optimize, use_memory_pool, device_type, monkeypatch):
                 make_persistent=optimization_args["make_persistent"],
                 blocking_dim=optimization_args["blocking_dim"],
                 blocking_size=optimization_args["blocking_size"],
-                gpu_memory_pool=False,
-                optimization_hooks=optimization_hooks,
+                gpu_memory_pool=optimization_args["gpu_memory_pool"],
+                optimization_hooks=optimization_args["optimization_hooks"],
                 unit_strides_kind=None,
             )
             mock_top_level_dataflow_hook1.assert_not_called()
