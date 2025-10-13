@@ -86,8 +86,8 @@ def make_dace_backend(
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline. Note that parameters that are derived
             from GT4Py configuration cannot be overriden and therefore cannot appear
-            here (see `gt_optimization_args`). For example, this function will throw
-            an exception if 'unit_strides_kind' is included in `optimization_args`.
+            here. For example, this function will throw an exception if called with
+            'unit_strides_kind' different from the value in GT4Py configuration.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
             compute time.
         use_zero_origin: Can be set to `True` when all fields passed as program
@@ -109,6 +109,18 @@ def make_dace_backend(
         optimization_args = {}
     elif optimization_args and not auto_optimize:
         warnings.warn("Optimizations args given, but auto-optimize is disabled.", stacklevel=2)
+
+    if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE:
+        arg_value = optimization_args.get("unit_strides_kind", None)
+        if arg_value is None:
+            optimization_args = optimization_args | {
+                "unit_strides_kind": common.DimensionKind.HORIZONTAL
+            }
+        elif arg_value != common.DimensionKind.HORIZONTAL:
+            raise ValueError(
+                f"Configuration mismatch, received unit_strides_kind='{arg_value}', expected '{common.DimensionKind.HORIZONTAL}'."
+            )
+
     elif any(arg in gt_optimization_args for arg in optimization_args):
         intersect_args = set(optimization_args.keys()).intersection(gt_optimization_args.keys())
         raise ValueError(f"The following arguments cannot be overriden: {intersect_args}.")
