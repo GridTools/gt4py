@@ -76,7 +76,7 @@ class SymbolicDomain:
     def __hash__(self) -> int:
         return hash((self.grid_type, frozenset(self.ranges.items())))
 
-    def empty(self) -> Optional[bool]:
+    def empty(self) -> bool | None:
         if any(r.empty() for r in self.ranges.values()):
             return True
         if any(r.empty() is None for r in self.ranges.values()):
