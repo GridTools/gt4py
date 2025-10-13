@@ -1039,9 +1039,10 @@ def _get_dimension_name_from_implicit_offset(offset: str) -> str:
 
 def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProviderElem:
     """
-    Get the `OffsetProviderElem` for the given `offset` string.
+    Get the `OffsetProviderElem` or `OffsetProviderTypeElem` for the given `offset` string.
 
-    Note: This function handles implicit offsets. All accesses of `OffsetProvider` should go through this function.
+    Note: This function handles implicit offsets. All accesses of `OffsetProvider` or
+    `OffsetProviderType` should go through this function.
     """
     # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
     if offset_tag.startswith(_IMPLICIT_OFFSET_PREFIX):
@@ -1051,19 +1052,16 @@ def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProvid
     return offset_provider[offset_tag]  # TODO return a valid dimension
 
 
-def get_offset_type(
-    offset_provider_type: OffsetProviderType, offset_tag: str
-) -> OffsetProviderTypeElem:
-    """
-    Get the `OffsetProviderTypeElem` for the given `offset` string.
+get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and OffsetProviderType overlap
 
-    See also 'get_offset'.
-    """
-    if offset_tag.startswith(_IMPLICIT_OFFSET_PREFIX):
-        return Dimension(value=_get_dimension_name_from_implicit_offset(offset_tag))
-    if offset_tag not in offset_provider_type:
-        raise KeyError(f"Offset '{offset_tag}' not found in offset provider type.")
-    return offset_provider_type[offset_tag]
+
+def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag: str) -> bool:
+    """Determine if offset provider has an element for the given offset tag."""
+    try:
+        get_offset(offset_provider, offset_tag)  # type: ignore[arg-type]  # implementation is shared with `get_offset_type`, no need to duplicate the function
+    except KeyError:
+        return False
+    return True
 
 
 def hash_offset_provider_unsafe(offset_provider: OffsetProvider) -> int:

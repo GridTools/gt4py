@@ -325,7 +325,7 @@ def neighbors(
         offset_literal.value, str
     )
     assert isinstance(it, it_ts.IteratorType)
-    conn_type = offset_provider_type[offset_literal.value]
+    conn_type = common.get_offset_type(offset_provider_type, offset_literal.value)
     assert isinstance(conn_type, common.NeighborConnectivityType)
     return ts.ListType(element_type=it.element_type, offset_type=conn_type.neighbor_dim)
 
