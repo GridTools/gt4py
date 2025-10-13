@@ -55,7 +55,7 @@ def device_type(request) -> str:
 
 
 def _translate_gtir_to_sdfg(
-    program: itir.Program,
+    ir: itir.Program,
     device_type: core_defs.DeviceType,
     auto_optimize: bool,
     async_sdfg_call: bool,
@@ -68,7 +68,7 @@ def _translate_gtir_to_sdfg(
             auto_optimize=auto_optimize,
             async_sdfg_call=async_sdfg_call,
             use_metrics=use_metrics,
-        ).generate_sdfg(program, offset_provider={}, column_axis=None)
+        ).generate_sdfg(ir, offset_provider={}, column_axis=None)
 
 
 @pytest.mark.parametrize("has_unit_stride", [False, True])
