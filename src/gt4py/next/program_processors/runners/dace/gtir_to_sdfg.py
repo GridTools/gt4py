@@ -46,7 +46,6 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_to_sdfg_primitives,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
-    transformations as gtx_transformations,
     utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
@@ -1018,61 +1017,21 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return gtir_to_sdfg_primitives.translate_symbol_ref(node, ctx, self)
 
 
-def _remove_field_origin_symbols(ir: gtir.Program, sdfg: dace.SDFG) -> None:
-    """
-    Helper function to remove the origin symbols used in program field arguments,
-    that is only for non-transient data descriptors in the top-level SDFG.
-    The start symbol of field domain range is set to constant value 0, thus removing
-    the corresponding free symbol. These values are propagated to all nested SDFGs.
-
-    This function is only used by `build_sdfg_from_gtir()` when the option flag
-    `disable_field_origin_on_program_arguments` is set to True.
-    """
-
-    # collect symbols used as range start for all program arguments
-    range_start_symbols: dict[str, dace.symbolic.SymExpr] = {}
-    for p in ir.params:
-        if isinstance(p.type, ts.TupleType):
-            psymbols = [
-                sym
-                for sym in gtir_to_sdfg_utils.flatten_tuple_fields(p.id, p.type)
-                if isinstance(sym.type, ts.FieldType)
-            ]
-        elif isinstance(p.type, ts.FieldType):
-            psymbols = [p]
-        else:
-            psymbols = []
-        for psymbol in psymbols:
-            assert isinstance(psymbol.type, ts.FieldType)
-            if len(psymbol.type.dims) == 0:
-                # zero-dimensional field
-                continue
-            dataname = str(psymbol.id)
-            # set all range start symbols to constant value 0
-            range_start_symbols |= {
-                gtx_dace_utils.range_start_symbol(dataname, dim): 0 for dim in psymbol.type.dims
-            }
-    # we set all range start symbols to 0 in the top-level SDFG and proagate them to nested SDFGs
-    gtx_transformations.gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
-
-
 def build_sdfg_from_gtir(
     ir: gtir.Program,
     offset_provider_type: gtx_common.OffsetProviderType,
     column_axis: Optional[gtx_common.Dimension] = None,
-    disable_field_origin_on_program_arguments: bool = False,
 ) -> dace.SDFG:
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.
 
-    The lowering to SDFG requires that the program node is type-annotated, therefore this function
-    runs type ineference as first step.
+    The lowering to SDFG requires that the program node is type-annotated, therefore
+    this function runs type ineference as first step.
 
     Args:
         ir: The GTIR program node to be lowered to SDFG
         offset_provider_type: The definitions of offset providers used by the program node
         column_axis: Vertical dimension used for column scan expressions.
-        disable_field_origin_on_program_arguments: When True, the field range in all dimensions is assumed to start from 0
 
     Returns:
         An SDFG in the DaCe canonical form (simplified)
@@ -1094,8 +1053,5 @@ def build_sdfg_from_gtir(
     sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis, global_symbols)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
-
-    if disable_field_origin_on_program_arguments:
-        _remove_field_origin_symbols(ir, sdfg)
 
     return sdfg
