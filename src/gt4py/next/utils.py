@@ -337,7 +337,7 @@ def make_signature_canonicalizer_factory(
                     else f"a{next(passed_args_indices)}"
                     for key in pos_name_to_index
                 )
-            canonical_args_expr = str.join(", ", canonical_args_comprehension)
+            canonical_args_expr = f"{str.join(', ', canonical_args_comprehension)},"
         else:
             canonical_args_expr = "args"
 

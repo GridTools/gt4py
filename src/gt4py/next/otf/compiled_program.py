@@ -73,14 +73,6 @@ def _make_tuple_expr(el_exprs: list[str]) -> str:
     return "".join((f"{el},") for el in el_exprs)
 
 
-def _convert_pascal_to_snake_name(name: str) -> str:
-    return eve_utils.CaseStyleConverter.convert(
-        name,
-        eve_utils.CaseStyleConverter.CASE_STYLE.PASCAL,
-        eve_utils.CaseStyleConverter.CASE_STYLE.SNAKE,
-    )
-
-
 def _make_param_context_from_func_type(
     func_type: ts.FunctionType,
     type_map: Callable[[ts.TypeSpec], T] = lambda x: x,  # type: ignore[assignment, return-value]  # mypy not smart enough to narrow type for default
@@ -416,9 +408,9 @@ class CompiledProgramsPool:
             metrics_source.metadata |= dict(
                 name=self.definition_stage.definition.__name__,
                 backend=self.backend.name,
-                compiled_program_pool_key=key,
+                compiled_program_pool_key=hash(key),
                 **{
-                    f"{_convert_pascal_to_snake_name(key.__name__)}s": value
+                    f"{eve_utils.CaseStyleConverter.convert(key.__name__, 'pascal', 'snake')}s": value
                     for key, value in argument_descriptors.items()
                 },
             )
