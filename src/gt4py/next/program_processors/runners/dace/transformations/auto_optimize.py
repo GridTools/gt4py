@@ -59,7 +59,7 @@ def gt_auto_optimize(
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
-    gpu_memory_pool: bool = False,
+    gpu_memory_pool: bool = True,
     constant_symbols: Optional[dict[str, Any]] = None,
     assume_pointwise: bool = True,
     validate: bool = True,
