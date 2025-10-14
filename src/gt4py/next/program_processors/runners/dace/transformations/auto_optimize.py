@@ -430,12 +430,10 @@ def _gt_auto_process_top_level_maps(
             check_fusion_callback=optimization_hooks.get(  # type: ignore[arg-type]
                 GT4PyAutoOptHook.TopLevelDataFlowMapFusionHorizontalCallBack, None
             ),
-            # NOTE: We should actually set it to `True` because it would prevent the
-            #   creation of some random dependencies. However, enabling it leads to
-            #   massive performance degradations, especially in
-            #   `compute_theta_rho_face_values_and_pressure_gradient_and_update_vn`.
-            #   It is important that the reason for this is an unintended side effect.
-            only_if_common_ancestor=False,
+            # By specifying that flag we promote data reuse, i.e. load it once use it
+            #  many times. Furthermore, it also prevents that some, otherwise unrelated
+            #  Maps are merged together which creates artificial dependencies.
+            only_if_common_ancestor=True,
         )
         sdfg.apply_transformations_repeated(
             [horizontal_map_fusion, vertical_map_fusion],
@@ -453,10 +451,14 @@ def _gt_auto_process_top_level_maps(
             # TODO(phimuell): Find out how to skip the propagation and integrating it
             #   into the split transformation.
             sdfg.apply_transformations_repeated(
-                gtx_transformations.SplitConsumerMemlet(single_use_data=single_use_data),
+                [
+                    gtx_transformations.SplitConsumerMemlet(single_use_data=single_use_data),
+                    gtx_transformations.MapSplitter(single_use_data=single_use_data),
+                ],
                 validate=False,
                 validate_all=validate_all,
             )
+            # TODO(phimuell): Implement a data cleaner.
             dace_propagation.propagate_memlets_sdfg(sdfg)
 
             sdfg.apply_transformations_repeated(
