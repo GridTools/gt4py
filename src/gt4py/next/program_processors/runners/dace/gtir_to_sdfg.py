@@ -20,6 +20,7 @@ import itertools
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
 
 import dace
+from dace.frontend.python import astutils as dace_astutils
 
 from gt4py import eve
 from gt4py.eve import concepts
@@ -39,6 +40,17 @@ from gt4py.next.program_processors.runners.dace import (
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
+def _replace_connectors_in_code_string(
+    code: str, language: dace.dtypes.Language, connector_mapping: Mapping[str, str]
+) -> str:
+    """Helper function to replace connector names in the code of a Python tasklet."""
+    code_block = dace.properties.CodeBlock(code, language)
+    transformed_code_stmts = [
+        dace_astutils.ASTFindReplace(connector_mapping).visit(stmt) for stmt in code_block.code
+    ]
+    return dace.properties.CodeBlock(transformed_code_stmts, language).as_string
+
+
 class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
@@ -53,6 +65,9 @@ class DataflowBuilder(Protocol):
 
     @abc.abstractmethod
     def unique_tasklet_name(self, name: str) -> str: ...
+
+    @abc.abstractmethod
+    def unique_tasklet_connector(self) -> str: ...
 
     def add_temp_array(
         self, sdfg: dace.SDFG, shape: Sequence[Any], dtype: dace.dtypes.typeclass
@@ -95,6 +110,7 @@ class DataflowBuilder(Protocol):
         inputs: set[str] | None,
         outputs: set[str],
         code: str,
+        language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
         """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name.
@@ -105,19 +121,19 @@ class DataflowBuilder(Protocol):
         appear in `inputs` and `outputs` arguments, to the new unique names.
         """
         unique_name = self.unique_tasklet_name(name)
-        prefix = sdfg.temp_data_name().replace("tmp", "conn")
 
         if inputs is None:
             inputs = set()
 
-        connector_mapping = {conn: f"{prefix}_{conn}" for conn in (inputs | outputs)}
-        for connector, new_connector in connector_mapping.items():
-            code = code.replace(connector, new_connector)
+        connector_mapping = {conn: self.unique_tasklet_connector() for conn in (inputs | outputs)}
+        new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
 
         inputs = {connector_mapping[inp] for inp in inputs}
         outputs = {connector_mapping[out] for out in outputs}
 
-        tasklet_node = state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
+        tasklet_node = state.add_tasklet(
+            unique_name, inputs, outputs, new_code, language=language, **kwargs
+        )
         return tasklet_node, connector_mapping
 
     def add_mapped_tasklet(
@@ -129,6 +145,7 @@ class DataflowBuilder(Protocol):
         inputs: Mapping[str, dace.Memlet] | None,
         code: str,
         outputs: Mapping[str, dace.Memlet],
+        language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
         """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name.
@@ -139,22 +156,20 @@ class DataflowBuilder(Protocol):
         appear in `inputs` and `outputs` arguments, to the new unique names.
         """
         unique_name = self.unique_tasklet_name(name)
-        connector_prefix = sdfg.temp_data_name().replace("tmp", "conn")
 
         if inputs is None:
             inputs = {}
 
         connector_mapping = {
-            conn: f"{connector_prefix}_{conn}" for conn in (inputs.keys() | outputs.keys())
+            conn: self.unique_tasklet_connector() for conn in (inputs.keys() | outputs.keys())
         }
-        for connector, new_connector in connector_mapping.items():
-            code = code.replace(connector, new_connector)
+        new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
 
         inputs = {connector_mapping[inp]: memlet for inp, memlet in inputs.items()}
         outputs = {connector_mapping[out]: memlet for out, memlet in outputs.items()}
 
         tasklet_node, map_entry, map_exit = state.add_mapped_tasklet(
-            unique_name, map_ranges, inputs, code, outputs, **kwargs
+            unique_name, map_ranges, inputs, new_code, outputs, language=language, **kwargs
         )
         return tasklet_node, map_entry, map_exit, connector_mapping
 
@@ -270,6 +285,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     )
     tasklet_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
+    )
+    tasklet_connector_uids: eve.utils.UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="conn")
     )
 
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
@@ -410,6 +428,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def unique_tasklet_name(self, name: str) -> str:
         return f"{self.tasklet_uids.sequential_id()}_{name}"
+
+    def unique_tasklet_connector(self) -> str:
+        return self.tasklet_connector_uids.sequential_id()
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]

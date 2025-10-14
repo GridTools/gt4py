@@ -578,7 +578,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         the SDFG as a tasklet node.
         """
         # format used for field index tasklet connector
-        IndexConnectorFmt: Final = "__index_{dim}"
+        IndexConnectorFmt: Final = "index_{dim}"
 
         if isinstance(node.type, ts.TupleType):
             raise NotImplementedError("Tuple deref not supported.")
