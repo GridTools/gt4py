@@ -369,8 +369,8 @@ def canonicalizer_for_{signature_id}_{passed_args_count}_{str.join("_", passed_k
 
 canonicalizer = canonicalizer_for_{signature_id}_{passed_args_count}_{str.join("_", passed_kwargs_keys)}
 """
-        ns: dict[str, Any]
-        exec(canonicalizer_src, ns := {})
+        ns: dict[str, Any] = {}
+        exec(canonicalizer_src, ns)
         return cast(CallArgsCanonicalizer, ns["canonicalizer"])
 
     return cached_canonicalizer_factory
@@ -402,9 +402,9 @@ def make_signature_canonicalizer(
             `kwargs` dictionary.
 
     Note:
-        This function does not support variadic parameters (i.e., `*args` or `**kwargs`
-        in the signature). The implementation uses `make_signature_canonicalizer_factory`
-        internally.
+        This function does not support variadic parameters (i.e., `*args` or `**kwargs`)
+        nor parameters with default values in the signature. The implementation uses
+        `make_signature_canonicalizer_factory` internally.
     """
     cached_canonicalizer_factory: CallArgsCanonicalizerFactory = (
         make_signature_canonicalizer_factory(
