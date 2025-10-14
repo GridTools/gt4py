@@ -194,7 +194,10 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
             )
             # `copy_map_graph_with_new_range()` just copies all Memlets, thus the
             #  subsets that are read and written by the new Maps are still the same
-            #  as the original one. We must fix that.
+            #  as the original one. We must fix that otherwise `SplitAccessNode` will
+            #  fail.
+            # TODO(phimuell): Find out how to limit propagation only to the Maps that
+            #   are not dead dataflow, in case we remove them anyway.
             dace.sdfg.propagation.propagate_memlets_map_scope(
                 sdfg=sdfg,
                 state=graph,
