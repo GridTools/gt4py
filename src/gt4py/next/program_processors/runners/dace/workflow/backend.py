@@ -119,6 +119,16 @@ def make_dace_backend(
         else None
     }
 
+    if (
+        optimization_args.get("gpu_memory_pool", False)
+        and core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
+    ):
+        warnings.warn(
+            "Unsupported configuration, 'gpu_memory_pool=True' not compatible with RoCM GPU.",
+            stacklevel=2,
+        )
+        optimization_args["gpu_memory_pool"] = False
+
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
         cached=cached,
