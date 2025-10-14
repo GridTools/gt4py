@@ -430,10 +430,15 @@ def _gt_auto_process_top_level_maps(
             check_fusion_callback=optimization_hooks.get(  # type: ignore[arg-type]
                 GT4PyAutoOptHook.TopLevelDataFlowMapFusionHorizontalCallBack, None
             ),
-            # By specifying that flag we promote data reuse, i.e. load it once use it
-            #  many times. Furthermore, it also prevents that some, otherwise unrelated
-            #  Maps are merged together which creates artificial dependencies.
-            only_if_common_ancestor=True,
+            # NOTE: Setting this argument to `False` has the side effect that Maps
+            #   without any connection to each other are fused together and by this
+            #   creating dependencies between otherwise unrelated Maps. However,
+            #   also has the side effect of integrating Maps generated in
+            #   `broadcast+concat_where` situations into other Maps. We should handle
+            #   these cases through the splitting transformations.
+            # TODO(phimuell): Update the other transformations such that we can
+            #   set the falg to `True`.
+            only_if_common_ancestor=False,
         )
         sdfg.apply_transformations_repeated(
             [horizontal_map_fusion, vertical_map_fusion],
