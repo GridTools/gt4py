@@ -20,7 +20,6 @@ import itertools
 from typing import (
     Any,
     Dict,
-    Final,
     Iterable,
     List,
     Mapping,
@@ -50,21 +49,6 @@ from gt4py.next.program_processors.runners.dace import (
     utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
-
-
-TAKSLET_IN_CONNECTOR: Final[str] = "__gtir_inp"
-"""Prefix for input connector names in tasklets.
-
-Note that the tasklet connectors cannot have the same name as the arguments
-of GTIR expressions, because this would lead to name conflicts in SDFG validation,
-in case the arguments of GTIR expressions are lowered to data nodes.
-"""
-
-TAKSLET_OUT_CONNECTOR: Final[str] = "__gtir_out"
-"""Prefix for output connector names in tasklets.
-
-See note for input prefix `TAKSLET_IN_CONNECTOR_PREFIX`.
-"""
 
 
 class DataflowBuilder(Protocol):
@@ -118,19 +102,39 @@ class DataflowBuilder(Protocol):
     def add_tasklet(
         self,
         name: str,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
         inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
         outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
         code: str,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
-        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name."""
+        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name.
+
+        It also ensures that the tasklet connectors receive a unique name, different
+        from any other tasklet connector or data entity in the SDFG. Therefore,
+        this fuction returns the mapping from the given connector names, as they
+        appear in `inputs` and `outputs` arguments, to the new unique names.
+        """
         unique_name = self.unique_tasklet_name(name)
-        return state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
+        prefix = sdfg.temp_data_name().replace("tmp", "conn")
+
+        connector_mapping = {inp: f"{prefix}_{inp}" for inp in inputs} | {
+            out: f"{prefix}_{out}" for out in outputs
+        }
+        for connector, new_connector in connector_mapping.items():
+            code = code.replace(connector, new_connector)
+
+        inputs = {connector_mapping[inp] for inp in inputs}
+        outputs = {connector_mapping[out] for out in outputs}
+
+        tasklet_node = state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
+        return tasklet_node, connector_mapping
 
     def add_mapped_tasklet(
         self,
         name: str,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
         map_ranges: Dict[str, str | dace.subsets.Subset]
         | List[Tuple[str, str | dace.subsets.Subset]],
@@ -138,10 +142,30 @@ class DataflowBuilder(Protocol):
         code: str,
         outputs: Dict[str, dace.Memlet],
         **kwargs: Any,
-    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
-        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name."""
+    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
+        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name.
+
+        It also ensures that the tasklet connectors receive a unique name, different
+        from any other tasklet connector or data entity in the SDFG. Therefore,
+        this fuction returns the mapping from the given connector names, as they
+        appear in `inputs` and `outputs` arguments, to the new unique names.
+        """
         unique_name = self.unique_tasklet_name(name)
-        return state.add_mapped_tasklet(unique_name, map_ranges, inputs, code, outputs, **kwargs)
+        connector_prefix = sdfg.temp_data_name().replace("tmp", "conn")
+
+        connector_mapping = {inp: f"{connector_prefix}_{inp}" for inp in inputs.keys()} | {
+            out: f"{connector_prefix}_{out}" for out in outputs.keys()
+        }
+        for connector, new_connector in connector_mapping.items():
+            code = code.replace(connector, new_connector)
+
+        inputs = {connector_mapping[inp]: memlet for inp, memlet in inputs.items()}
+        outputs = {connector_mapping[out]: memlet for out, memlet in outputs.items()}
+
+        tasklet_node, map_entry, map_exit = state.add_mapped_tasklet(
+            unique_name, map_ranges, inputs, code, outputs, **kwargs
+        )
+        return tasklet_node, map_entry, map_exit, connector_mapping
 
 
 @dataclasses.dataclass(frozen=True)

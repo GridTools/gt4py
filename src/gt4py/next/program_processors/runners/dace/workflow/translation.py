@@ -191,13 +191,12 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     assert sdfg.out_degree(begin_state) > 0
     assert sdfg.out_degree(entry_state) > 1
 
-    time_connector = gtir_to_sdfg.TAKSLET_OUT_CONNECTOR
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
-        outputs={time_connector},
-        code=f"""\
-{time_connector} = static_cast<double>(
+        outputs={"time"},
+        code="""\
+time = static_cast<double>(
     std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count()
 ) / 1e9;
@@ -206,7 +205,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     )
     begin_state.add_edge(
         tlet_start_timer,
-        time_connector,
+        "time",
         begin_state.add_access(start_time),
         None,
         dace.Memlet(f"{start_time}[0]"),
@@ -224,19 +223,17 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         )
     assert sdfg.in_degree(end_state) > 0
 
-    duration_connector = gtir_to_sdfg.TAKSLET_OUT_CONNECTOR
-    start_time_connector = gtir_to_sdfg.TAKSLET_IN_CONNECTOR
     tlet_stop_timer = end_state.add_tasklet(
         "gt_stop_timer",
-        inputs={start_time_connector},
-        outputs={duration_connector},
+        inputs={"run_cpp_start_time"},
+        outputs={"duration"},
         code=sync_code
-        + f"""
+        + """
 double run_cpp_end_time = static_cast<double>(
     std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count()
 ) / 1e9;
-{duration_connector} = run_cpp_end_time - {start_time_connector};
+duration = run_cpp_end_time - run_cpp_start_time;
         """,
         language=dace.dtypes.Language.CPP,
         side_effects=has_side_effects,
@@ -245,15 +242,11 @@ double run_cpp_end_time = static_cast<double>(
         end_state.add_access(start_time),
         None,
         tlet_stop_timer,
-        start_time_connector,
+        "run_cpp_start_time",
         dace.Memlet(f"{start_time}[0]"),
     )
     end_state.add_edge(
-        tlet_stop_timer,
-        duration_connector,
-        end_state.add_access(output),
-        None,
-        dace.Memlet(f"{output}[0]"),
+        tlet_stop_timer, "duration", end_state.add_access(output), None, dace.Memlet(f"{output}[0]")
     )
 
 
