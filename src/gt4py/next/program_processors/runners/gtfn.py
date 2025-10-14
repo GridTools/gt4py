@@ -81,15 +81,22 @@ def extract_connectivity_args(
     offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
 ) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
     # Note: this function is on the hot path and needs to have minimal overhead.
-    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = []
+    zero_origin = (0, 0)
+    assert all(
+        hasattr(conn, "ndarray") or isinstance(conn, common.Dimension)
+        for conn in offset_provider.values()
+    )
     # Note: the order here needs to agree with the order of the generated bindings
-    for conn in offset_provider.values():
-        if (ndarray := getattr(conn, "ndarray", None)) is not None:
-            assert common.is_neighbor_table(conn)
-            assert field_utils.verify_device_field_type(conn, device)
-            args.append((ndarray, (0, 0)))
-            continue
-        assert isinstance(conn, common.Dimension)
+    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = [
+        (ndarray, zero_origin)
+        for conn in offset_provider.values()
+        if (ndarray := getattr(conn, "ndarray", None)) is not None
+    ]
+    assert all(
+        common.is_neighbor_table(conn) and field_utils.verify_device_field_type(conn, device)
+        for conn in args
+    )
+
     return args
 
 
