@@ -194,9 +194,9 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
-        outputs={"__time"},
+        outputs={"time"},
         code="""\
-__time = static_cast<double>(
+time = static_cast<double>(
     std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count()
 ) / 1e9;
@@ -205,7 +205,7 @@ __time = static_cast<double>(
     )
     begin_state.add_edge(
         tlet_start_timer,
-        "__time",
+        "time",
         begin_state.add_access(start_time),
         None,
         dace.Memlet(f"{start_time}[0]"),
@@ -226,14 +226,14 @@ __time = static_cast<double>(
     tlet_stop_timer = end_state.add_tasklet(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
-        outputs={"__duration"},
+        outputs={"duration"},
         code=sync_code
         + """
 double run_cpp_end_time = static_cast<double>(
     std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count()
 ) / 1e9;
-__duration = run_cpp_end_time - run_cpp_start_time;
+duration = run_cpp_end_time - run_cpp_start_time;
         """,
         language=dace.dtypes.Language.CPP,
         side_effects=has_side_effects,
@@ -246,11 +246,7 @@ __duration = run_cpp_end_time - run_cpp_start_time;
         dace.Memlet(f"{start_time}[0]"),
     )
     end_state.add_edge(
-        tlet_stop_timer,
-        "__duration",
-        end_state.add_access(output),
-        None,
-        dace.Memlet(f"{output}[0]"),
+        tlet_stop_timer, "duration", end_state.add_access(output), None, dace.Memlet(f"{output}[0]")
     )
 
     sdfg.validate()
