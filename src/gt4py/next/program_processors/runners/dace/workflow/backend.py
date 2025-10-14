@@ -107,8 +107,7 @@ def make_dace_backend(
         optimization_args = {}
     elif optimization_args and not auto_optimize:
         warnings.warn("Optimizations args given, but auto-optimize is disabled.", stacklevel=2)
-    elif any(arg in gt_optimization_args for arg in optimization_args):
-        intersect_args = gt_optimization_args.intersection(optimization_args.keys())
+    elif intersect_args := gt_optimization_args.intersection(optimization_args.keys()):
         raise ValueError(
             f"The following optimization arguments cannot be overriden: {intersect_args}."
         )
