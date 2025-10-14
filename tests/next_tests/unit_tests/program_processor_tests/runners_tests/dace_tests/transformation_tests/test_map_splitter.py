@@ -56,7 +56,7 @@ def test_simple_split_case():
     sdfg, state = _make_sdfg_simple()
 
     ret = sdfg.apply_transformations_repeated(
-        gtx_transformations.MapSpliter(),
+        gtx_transformations.MapSplitter(),
         validate=True,
         validate_all=True,
     )

@@ -28,7 +28,7 @@ from gt4py.next.program_processors.runners.dace.transformations import (
 
 
 @dace_properties.make_properties
-class MapSpliter(dace_transformation.SingleStateTransformation):
+class MapSplitter(dace_transformation.SingleStateTransformation):
     """ """
 
     map_exit = dace_transformation.PatternNode(dace_nodes.MapExit)
