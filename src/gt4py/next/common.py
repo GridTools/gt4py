@@ -1071,6 +1071,10 @@ def hash_offset_provider_unsafe(offset_provider: OffsetProvider) -> int:
     the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
     different `id` every time. Instead use the `id` of each individual offset provider.
     """
+    # Sorting the items to ensure consistent ordering for the hash computation
+    # would give more stable results, but it will make the function slower,
+    # so we skip it here. This should be fine in practice since the user should
+    # provide the same offset provider (or a few number of variants) everywhere.
     return hash(tuple((k, id(v)) for k, v in offset_provider.items()))
 
 

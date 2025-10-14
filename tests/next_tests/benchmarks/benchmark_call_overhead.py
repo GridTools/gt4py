@@ -112,8 +112,8 @@ def benchmark_call(
 
 
 if __name__ == "__main__":
-    horizontal_size = 1000
-    vertical_size = 50
+    horizontal_size = 5
+    vertical_size = 2
     domain = [(Cell, horizontal_size), (K, vertical_size)]
     all_fields = allocate_fields(
         domain, "out_e", "field1", "field2", "field3", "field4", "field5", "field6"

@@ -321,12 +321,6 @@ def make_signature_canonicalizer_factory(
                 f"Too many total arguments for the passed signature (expected {all_args_count}, got {total_arg_count})."
             )
 
-        unpack_args_stmt = (
-            f"{str.join(', ', (f'a{i}' for i in range(passed_args_count)))}, = args"
-            if passed_args_count
-            else "# No args to unpack"
-        )
-
         if pos_name_to_index.keys() & passed_kwargs_set:
             passed_args_indices = iter(range(passed_args_count))
             if allow_kwargs_mutation:
@@ -347,7 +341,19 @@ def make_signature_canonicalizer_factory(
         else:
             canonical_args_expr = "args"
 
-        src_template = f"""
+        if canonical_args_expr != "args":
+            if passed_args_count:
+                unpack_args_stmt = (
+                    f"{str.join(', ', (f'a{i}' for i in range(passed_args_count)))}, = args"
+                )
+            else:
+                unpack_args_stmt = "# No args to unpack"
+        else:
+            if canonical_kwargs_expr == "kwargs":
+                return cast(CallArgsCanonicalizer, lambda args, kwargs: (args, kwargs))
+            unpack_args_stmt = "# No unpacking needed"
+
+        canonicalizer_src = f"""
 from __future__ import annotations
 
 def canonicalizer_for_{signature_id}_{passed_args_count}_{str.join("_", passed_kwargs_keys)}(
@@ -364,7 +370,7 @@ def canonicalizer_for_{signature_id}_{passed_args_count}_{str.join("_", passed_k
 canonicalizer = canonicalizer_for_{signature_id}_{passed_args_count}_{str.join("_", passed_kwargs_keys)}
 """
         ns: dict[str, Any]
-        exec(src_template, ns := {})
+        exec(canonicalizer_src, ns := {})
         return cast(CallArgsCanonicalizer, ns["canonicalizer"])
 
     return cached_canonicalizer_factory
