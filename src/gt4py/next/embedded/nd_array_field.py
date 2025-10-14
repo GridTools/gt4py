@@ -127,7 +127,7 @@ class NdArrayField(
     def shape(self) -> tuple[int, ...]:
         return self._ndarray.shape
 
-    @property
+    @functools.cached_property
     def __gt_origin__(self) -> tuple[int, ...]:
         assert common.Domain.is_finite(self._domain)
         return tuple(-r.start for r in self._domain.ranges)
