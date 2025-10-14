@@ -452,8 +452,11 @@ def _gt_auto_process_top_level_maps(
             #   into the split transformation.
             sdfg.apply_transformations_repeated(
                 [
+                    gtx_transformations.MapSplitter(
+                        single_use_data=single_use_data,
+                        remove_dead_dataflow=True,
+                    ),
                     gtx_transformations.SplitConsumerMemlet(single_use_data=single_use_data),
-                    gtx_transformations.MapSplitter(single_use_data=single_use_data),
                 ],
                 validate=False,
                 validate_all=validate_all,
