@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any
+from typing import Any, Final
 
 import factory
 
@@ -84,34 +84,41 @@ def make_dace_backend(
         async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
             of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
-            the SDFG auto-optimize pipeline. Note that parameters that are derived
-            from GT4Py configuration cannot be overriden and therefore cannot appear
-            here. For example, this function will throw an exception if called with
-            'unit_strides_kind' different from the value in GT4Py configuration.
+            the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
             compute time.
         use_zero_origin: Can be set to `True` when all fields passed as program
             arguments have zero-based origin. This setting will skip generation
             of range start-symbols `_range_0` since they can be assumed to be zero.
 
+    Note that `gt_auto_optimize()` parameters that are derived from GT4Py configuration
+    cannot be overriden, and therefore cannot appear here. Thus, this function will
+    throw an exception if called with any argument included in `gt_optimization_args`.
+
     Returns:
         A dace backend with custom configuration for the target device.
     """
+
+    # The `gt_optimization_args` set contains the parameters of `gt_auto_optimize()`
+    # that are derived from the gt4py configuration, and therefore cannot be customized.
+    gt_optimization_args: Final[set[str]] = {"gpu", "constant_symbols", "unit_strides_kind"}
+
     if optimization_args is None:
         optimization_args = {}
     elif optimization_args and not auto_optimize:
         warnings.warn("Optimizations args given, but auto-optimize is disabled.", stacklevel=2)
+    elif any(arg in gt_optimization_args for arg in optimization_args):
+        intersect_args = gt_optimization_args.intersection(optimization_args.keys())
+        raise ValueError(
+            f"The following optimization arguments cannot be overriden: {intersect_args}."
+        )
 
-    if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE:
-        arg_value = optimization_args.get("unit_strides_kind", None)
-        if arg_value is None:
-            optimization_args = optimization_args | {
-                "unit_strides_kind": common.DimensionKind.HORIZONTAL
-            }
-        elif arg_value != common.DimensionKind.HORIZONTAL:
-            raise ValueError(
-                f"Configuration mismatch, received unit_strides_kind='{arg_value}', expected '{common.DimensionKind.HORIZONTAL}'."
-            )
+    # Set `unit_strides_kind` based on the gt4py env configuration.
+    optimization_args = optimization_args | {
+        "unit_strides_kind": common.DimensionKind.HORIZONTAL
+        if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+        else None
+    }
 
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
