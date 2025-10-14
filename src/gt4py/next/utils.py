@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-
 import functools
 import inspect
 import itertools
@@ -19,6 +18,7 @@ from typing import (
     ClassVar,
     Optional,
     ParamSpec,
+    Protocol,
     TypeAlias,
     TypeGuard,
     TypeVar,
@@ -233,8 +233,13 @@ def equalize_tuple_structure(
 
 
 CallArgs: TypeAlias = tuple[tuple, dict[str, Any]]
-CallArgsCanonicalizer: TypeAlias = Callable[[CallArgs], CallArgs]
-CallArgsCanonicalizerFactory: TypeAlias = Callable[[int, tuple[str, ...]], CallArgsCanonicalizer]
+CallArgsCanonicalizer: TypeAlias = Callable[[tuple, dict[str, Any]], CallArgs]
+
+
+class CallArgsCanonicalizerFactory(Protocol):
+    def __call__(
+        self, passed_args_count: int, passed_kwargs_keys: tuple[str, ...]
+    ) -> CallArgsCanonicalizer: ...
 
 
 def make_signature_canonicalizer_factory(
@@ -358,6 +363,7 @@ def canonicalizer_for_{signature_id}_{passed_args_count}_{str.join("_", passed_k
 
 canonicalizer = canonicalizer_for_{signature_id}_{passed_args_count}_{str.join("_", passed_kwargs_keys)}
 """
+        ns: dict[str, Any]
         exec(src_template, ns := {})
         return cast(CallArgsCanonicalizer, ns["canonicalizer"])
 
