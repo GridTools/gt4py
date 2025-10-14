@@ -266,8 +266,9 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         None,
         dace.Memlet(f"{output}[0]"),
     )
-
-    # Check SDFG validity after applying the above changes.
+    # We normally wrap `add_tasklet()` in order to rename tasklet connectors and
+    # avoid name conflicts with program symbols, see `gtir_to_sdfg.DataflowBuilder.add_tasklet()`.
+    # Since this wrapper is not available here, we run `validate()` on the instrumented SDFG.
     sdfg.validate()
 
 

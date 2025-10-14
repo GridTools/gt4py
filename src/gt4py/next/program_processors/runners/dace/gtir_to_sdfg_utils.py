@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, TypeVar
+from typing import Dict, Final, Optional, TypeVar
 
 import dace
 
@@ -19,6 +19,10 @@ from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.runners.dace import gtir_python_codegen
 from gt4py.next.type_system import type_specifications as ts
+
+
+_TASKLET_CONNECTOR_PREFIX: Final[str] = "__tlet_"
+"""Prefix string to be used for tasklet connectors."""
 
 
 def debug_info(
@@ -43,6 +47,13 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     """
     suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
+
+
+def get_tasklet_connector(name: str) -> str:
+    """
+    Format tasklet connector name based on the naming convention to avoid conflicts with GTIR program symbols.
+    """
+    return f"{_TASKLET_CONNECTOR_PREFIX}{name}"
 
 
 def make_symbol_tree(tuple_name: str, tuple_type: ts.TupleType) -> NestedTuple[gtir.Sym]:
@@ -116,6 +127,10 @@ def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
     # program arguments are checked separetely, because they cannot be replaced
     if not all(dace.dtypes.validate_name(str(sym.id)) for sym in ir.params):
         raise ValueError("Invalid symbol in program parameters.")
+
+    # check there are no conflicts with the connctor names generated in the lowering
+    if any(str(sym.id).startswith(_TASKLET_CONNECTOR_PREFIX) for sym in ir.params):
+        raise ValueError(f"Unexpectd symbol containing prefix '{_TASKLET_CONNECTOR_PREFIX}'.")
 
     ir_sym_ids = {str(sym.id) for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()}
     ir_ssa_uuid = eve.utils.UIDGenerator(prefix="gtir_tmp")
