@@ -1621,7 +1621,8 @@ class IRMaker(ast.NodeVisitor):
                             dtype = eval(
                                 source,
                                 self.temporary_type_as_str_to_native_type
-                                | self.temporary_field_type,
+                                | self.temporary_field_type
+                                | {"Field": gtscript.Field, "IJ": gtscript.IJ, "np": np},
                             )
                         except NameError:
                             raise GTScriptSyntaxError(

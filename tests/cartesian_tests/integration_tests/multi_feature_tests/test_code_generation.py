@@ -1296,3 +1296,27 @@ def test_absolute_K_index(backend):
     out_arr[:, :, :] = 0
     test_lower_dim_field(k_arr, out_arr)
     assert (out_arr[:, :, :] == 42.42).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_2d_temporaries(backend):
+    domain = (5, 5, 3)
+
+    in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+
+    @gtscript.stencil(backend=backend, dtypes={"Field[IJ, np.float64]": Field[IJ, np.float64]})
+    def test_with_user_dtypes(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
+        with computation(FORWARD), interval(0, 1):
+            tmp_2D: Field[IJ, np.float64] = 0
+
+        with computation(FORWARD), interval(...):
+            tmp_2D = tmp_2D + in_field
+
+        with computation(FORWARD), interval(...):
+            out_field = tmp_2D
+
+    in_arr[:, :, :] = 1
+    out_arr[:, :, :] = 0
+    test_with_user_dtypes(in_arr, out_arr)
+    assert (out_arr[:, :, :] == domain[2]).all()
