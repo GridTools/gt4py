@@ -420,6 +420,7 @@ class DaCeTranslator(
         if self.use_metrics:
             add_instrumentation(sdfg, on_gpu)
 
+        sdfg.validate()
         return sdfg
 
     def __call__(
