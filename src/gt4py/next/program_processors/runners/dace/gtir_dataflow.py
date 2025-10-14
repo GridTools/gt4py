@@ -16,10 +16,10 @@ from typing import (
     Final,
     Iterable,
     List,
+    Mapping,
     Optional,
     Protocol,
     Sequence,
-    Set,
     Tuple,
     TypeAlias,
     Union,
@@ -457,8 +457,8 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_tasklet(
         self,
         name: str,
-        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
-        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        inputs: set[str] | None,
+        outputs: set[str],
         code: str,
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dict[str, str]]:
@@ -471,7 +471,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         tasklet_node, connector_mapping = self.subgraph_builder.add_tasklet(
             name, self.sdfg, self.state, inputs, outputs, code, **kwargs
         )
-        if len(inputs) == 0:
+        if not inputs:
             # All nodes inside a map scope must have an in/out path that traverses
             # the entry and exit nodes. Therefore, a tasklet node with no arguments
             # still needs an (empty) input edge from map entry node.
@@ -483,11 +483,10 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_mapped_tasklet(
         self,
         name: str,
-        map_ranges: Dict[str, str | dace.subsets.Subset]
-        | List[Tuple[str, str | dace.subsets.Subset]],
-        inputs: Dict[str, dace.Memlet],
+        map_ranges: Mapping[str, str | dace.subsets.Subset],
+        inputs: Mapping[str, dace.Memlet] | None,
         code: str,
-        outputs: Dict[str, dace.Memlet],
+        outputs: Mapping[str, dace.Memlet],
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
         """
@@ -631,9 +630,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             for (dim, offset) in arg_expr.field_domain
         )
         deref_node, connector_mapping = self._add_tasklet(
-            "deref",
-            {"field"} | set(index_connectors),
-            {"val"},
+            name="deref",
+            inputs={"field"} | set(index_connectors),
+            outputs={"val"},
             code=f"val = field[{index_internals}]",
         )
         # add new termination point for the field parameter
@@ -1162,7 +1161,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 )
         elif isinstance(index_arg, ValueExpr):
             tasklet_node, connector_mapping = self._add_tasklet(
-                "list_get",
+                name="list_get",
                 inputs={"index", "data"},
                 outputs={"val"},
                 code="val = data[index]",
@@ -1408,11 +1407,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
         nsdfg.add_scalar("acc", desc.dtype)
         st_init = nsdfg.add_state(f"{nsdfg.label}_init")
-        init_tasklet, connector_mapping = st_init.add_tasklet(
-            "init_acc",
-            {},
-            {"val"},
-            f"val = {reduce_init.dc_dtype}({reduce_init.value})",
+        init_tasklet, connector_mapping = self.subgraph_builder.add_tasklet(
+            name="init_acc",
+            sdfg=self.sdfg,
+            state=st_init,
+            inputs=None,
+            outputs={"val"},
+            code=f"val = {reduce_init.dc_dtype}({reduce_init.value})",
         )
         st_init.add_edge(
             init_tasklet,
@@ -1427,8 +1428,10 @@ class LambdaToDataflow(eve.NodeVisitor):
         # Since this map operates on a pure local dimension, we explicitly set sequential
         # schedule and we set the flag 'wcr_nonatomic=True' on the write memlet.
         # TODO(phimuell): decide if auto-optimizer should reset `wcr_nonatomic` properties, as DaCe does.
-        st_reduce.add_mapped_tasklet(
+        self.subgraph_builder.add_mapped_tasklet(
             name="reduce_with_skip_values",
+            sdfg=self.sdfg,
+            state=st_reduce,
             map_ranges={"i": f"0:{offset_provider_type.max_neighbors}"},
             inputs={
                 "val": dace.Memlet(data="values", subset="i"),
@@ -1563,24 +1566,24 @@ class LambdaToDataflow(eve.NodeVisitor):
             new_index_connector = "shifted_index"
             if isinstance(index_expr, SymbolExpr):
                 dynamic_offset_tasklet, connector_mapping = self._add_tasklet(
-                    "dynamic_offset",
-                    {"offset"},
-                    {new_index_connector},
-                    f"{new_index_connector} = {index_expr.value} + offset",
+                    name="dynamic_offset",
+                    inputs={"offset"},
+                    outputs={new_index_connector},
+                    code=f"{new_index_connector} = {index_expr.value} + offset",
                 )
             elif isinstance(offset_expr, SymbolExpr):
                 dynamic_offset_tasklet, connector_mapping = self._add_tasklet(
-                    "dynamic_offset",
-                    {"index"},
-                    {new_index_connector},
-                    f"{new_index_connector} = index + {offset_expr}",
+                    name="dynamic_offset",
+                    inputs={"index"},
+                    outputs={new_index_connector},
+                    code=f"{new_index_connector} = index + {offset_expr}",
                 )
             else:
                 dynamic_offset_tasklet, connector_mapping = self._add_tasklet(
-                    "dynamic_offset",
-                    {"index", "offset"},
-                    {new_index_connector},
-                    f"{new_index_connector} = index + offset",
+                    name="dynamic_offset",
+                    inputs={"index", "offset"},
+                    outputs={new_index_connector},
+                    code=f"{new_index_connector} = index + offset",
                 )
             for input_expr, input_connector in [
                 (index_expr, connector_mapping["index"]),
@@ -1877,7 +1880,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 # special case where the field operator is simply copying data from source to destination node
                 output_dtype = output_expr.dc_node.desc(self.sdfg).dtype
                 tasklet_node, connector_mapping = self._add_tasklet(
-                    "copy", {"inp"}, {"out"}, "out = inp"
+                    name="copy", inputs={"inp"}, outputs={"out"}, code="out = inp"
                 )
                 self._add_input_data_edge(
                     output_expr.dc_node,
@@ -1889,7 +1892,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 # even simpler case, where a constant value is written to destination node
                 output_dtype = output_expr.dc_dtype
                 tasklet_node, connector_mapping = self._add_tasklet(
-                    "write", {}, {"out"}, f"out = {output_expr.value}"
+                    name="write", inputs=None, outputs={"out"}, code=f"out = {output_expr.value}"
                 )
 
             output_expr = self._construct_tasklet_result(

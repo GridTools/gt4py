@@ -516,10 +516,10 @@ def translate_index(
         gt_dtype=gtx_dace_utils.as_itir_type(gtir_to_sdfg_types.INDEX_DTYPE),
     )
     index_write_tasklet, connector_mapping = sdfg_builder.add_tasklet(
-        "index",
-        ctx.sdfg,
-        ctx.state,
-        inputs={},
+        name="index",
+        sdfg=ctx.sdfg,
+        state=ctx.state,
+        inputs=None,
         outputs={"val"},
         code=f"val = {dim_index}",
     )
@@ -577,12 +577,12 @@ def _get_symbolic_value(
     temp_name: Optional[str] = None,
 ) -> dace.nodes.AccessNode:
     tasklet_node, connector_mapping = sdfg_builder.add_tasklet(
-        "get_value",
-        sdfg,
-        state,
-        {},
-        {"out"},
-        f"out = {symbolic_expr}",
+        name="get_value",
+        sdfg=sdfg,
+        state=state,
+        inputs=None,
+        outputs={"out"},
+        code=f"out = {symbolic_expr}",
     )
     temp_name, _ = sdfg.add_scalar(
         temp_name or sdfg.temp_data_name(),

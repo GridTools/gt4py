@@ -17,19 +17,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import itertools
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Protocol,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
 
 import dace
 
@@ -104,8 +92,8 @@ class DataflowBuilder(Protocol):
         name: str,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
-        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        inputs: set[str] | None,
+        outputs: set[str],
         code: str,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
@@ -119,9 +107,10 @@ class DataflowBuilder(Protocol):
         unique_name = self.unique_tasklet_name(name)
         prefix = sdfg.temp_data_name().replace("tmp", "conn")
 
-        connector_mapping = {inp: f"{prefix}_{inp}" for inp in inputs} | {
-            out: f"{prefix}_{out}" for out in outputs
-        }
+        if inputs is None:
+            inputs = set()
+
+        connector_mapping = {conn: f"{prefix}_{conn}" for conn in (inputs | outputs)}
         for connector, new_connector in connector_mapping.items():
             code = code.replace(connector, new_connector)
 
@@ -136,11 +125,10 @@ class DataflowBuilder(Protocol):
         name: str,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        map_ranges: Dict[str, str | dace.subsets.Subset]
-        | List[Tuple[str, str | dace.subsets.Subset]],
-        inputs: Dict[str, dace.Memlet],
+        map_ranges: Mapping[str, str | dace.subsets.Subset],
+        inputs: Mapping[str, dace.Memlet] | None,
         code: str,
-        outputs: Dict[str, dace.Memlet],
+        outputs: Mapping[str, dace.Memlet],
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
         """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name.
@@ -153,8 +141,11 @@ class DataflowBuilder(Protocol):
         unique_name = self.unique_tasklet_name(name)
         connector_prefix = sdfg.temp_data_name().replace("tmp", "conn")
 
-        connector_mapping = {inp: f"{connector_prefix}_{inp}" for inp in inputs.keys()} | {
-            out: f"{connector_prefix}_{out}" for out in outputs.keys()
+        if inputs is None:
+            inputs = {}
+
+        connector_mapping = {
+            conn: f"{connector_prefix}_{conn}" for conn in (inputs.keys() | outputs.keys())
         }
         for connector, new_connector in connector_mapping.items():
             code = code.replace(connector, new_connector)
