@@ -52,7 +52,8 @@ def _make_sdfg_simple() -> tuple[dace.SDFG, dace.SDFGState]:
     return sdfg, state
 
 
-def test_simple_split_case():
+@pytest.mark.parametrize("remove_dead_dataflow", [True, False])
+def test_map_spliter_simple(remove_dead_dataflow: bool) -> None:
     sdfg, state = _make_sdfg_simple()
 
     initial_ac = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
@@ -64,18 +65,26 @@ def test_simple_split_case():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     ret = sdfg.apply_transformations_repeated(
-        gtx_transformations.MapSplitter(),
+        gtx_transformations.MapSplitter(remove_dead_dataflow=remove_dead_dataflow),
         validate=True,
         validate_all=True,
     )
     assert ret == 1
 
-    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    if remove_dead_dataflow:
+        expected_maps_after = 1
+        expected_ac_after = 3
+    else:
+        expected_maps_after = 2
+        expected_ac_after = 4
+
+    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == expected_maps_after
 
     access_nodes = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
     data_containers = {ac.data for ac in access_nodes}
-    assert len(access_nodes) == 4
-    assert len(data_containers) == 4
+
+    assert len(access_nodes) == expected_ac_after
+    assert len(data_containers) == expected_ac_after
     assert set("ac").issubset(data_containers)
 
     split_ac = {ac for ac in access_nodes if ac.data not in "abc"}
@@ -113,8 +122,13 @@ def test_simple_split_case():
             )
             reduced_map = source_node
 
-    assert not (reduced_map is None or dead_dataflow_map is None)
-    assert reduced_map != dead_dataflow_map
+    if remove_dead_dataflow:
+        assert dead_dataflow_map is None
+        assert isinstance(reduced_map, dace_nodes.MapExit)
+
+    else:
+        assert all(isinstance(mx, dace_nodes.MapExit) for mx in [reduced_map, dead_dataflow_map])
+        assert reduced_map != dead_dataflow_map
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
