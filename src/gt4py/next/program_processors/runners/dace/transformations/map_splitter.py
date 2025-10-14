@@ -29,7 +29,22 @@ from gt4py.next.program_processors.runners.dace.transformations import (
 
 @dace_properties.make_properties
 class MapSplitter(dace_transformation.SingleStateTransformation):
-    """ """
+    """Split a Map based on a transient.
+
+    The transformation matches the following pattern `MapExit -> (AccessNode)`,
+    where `AccessNode` needs to a transient single use data whose only producer
+    is the matched Map and has only a single consumer. Furthermore, more data
+    is written into `AccessNode` than is read from it. In that case the
+    producing Map and `AccessNode` is split into fragments, such that a fragment
+    either generates data that is fully consumed or not at all.
+
+    Note:
+        - This transformation might generate dead dataflow that must be handled
+            separately.
+        - The "more data is written into `AccessNode` than read from it" technically
+            violates ADR18, but is the result of some broadcast expressions in
+            relation to `concat_where`.
+    """
 
     map_exit = dace_transformation.PatternNode(dace_nodes.MapExit)
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
@@ -66,6 +81,8 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
 
         # The AccessNode must be single use data and have only one producer. Single use
         #  data is tested at the very end, to avoid computing it too often.
+        # NOTE: Requiring that `self.access_node` is a transient is mainly to simplify
+        #   the implementation, but the transient should always exists anyway.
         access_node: dace_nodes.AccessNode = self.access_node
         ac_desc: dace_data.Data = access_node.desc(sdfg)
         if not ac_desc.transient:
@@ -81,24 +98,37 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
             return False
 
         map_ac_edge = next(iter(graph.in_edges(access_node)))
-        produced_subset: dace_sbs.Range = map_ac_edge.data.get_dst_subset(map_ac_edge, graph)
-
         ac_consumer_edge = next(iter(graph.out_edges(access_node)))
+        produced_subset: dace_sbs.Range = map_ac_edge.data.get_dst_subset(map_ac_edge, graph)
         consumed_subset: dace_sbs.Range = ac_consumer_edge.data.get_src_subset(
             ac_consumer_edge, graph
         )
 
-        # That this transformation makes sense, we require that more data is written
-        #  to the AccessNode than read from it.
+        # This simplifies the implementation of the correction.
+        # TODO(phimuell): Not sure how useful lifting this restriction would be.
+        if len(map_exit.map.params) != produced_subset.dims():
+            return False
+        if not all(
+            (sbs[0] == 0) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            for sbs in produced_subset
+        ):
+            return False
+        if not all(
+            (psize == msize) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            for psize, msize in zip(produced_subset.size(), map_exit.map.range.size())
+        ):
+            return False
+
+        # In order for this transformation to make sense, we require that more data is
+        #  written to the AccessNode than read from it.
         if consumed_subset == produced_subset:
             return False
         if not produced_subset.covers(consumed_subset):
             return False
 
-        # Test for single use data here such that we can maybe avoid it.
+        # We now test if the AccessNode is a single used data. We do it here such that
+        #  we can postpone the scanning of the SDFG as long as possible.
         if self._single_use_data is None:
-            # This is actually to much, there should be a simple function to answer the
-            #  question for a single data.
             find_single_use_data = dace_analysis.FindSingleUseData()
             single_use_data = find_single_use_data.apply_pass(sdfg, None)
         else:
@@ -114,47 +144,51 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
         access_node: dace_nodes.AccessNode = self.access_node
 
         map_ac_edge = next(iter(graph.in_edges(access_node)))
-        assert graph.in_degree(access_node) == 1
         ac_consumer_edge = next(iter(graph.out_edges(access_node)))
-        assert graph.out_degree(access_node) == 1
+        assert graph.in_degree(access_node) == 1 and graph.out_degree(access_node) == 1
 
         produced_subset: dace_sbs.Range = map_ac_edge.data.get_dst_subset(map_ac_edge, graph)
         consumed_subset: dace_sbs.Range = ac_consumer_edge.data.get_src_subset(
             ac_consumer_edge, graph
         )
 
-        # TODO: Explain why?
-        map_subranges = gtx_stools.decompose_subset(
+        # Now decompose the production subset, we will use this information to "split"
+        #  the Map.
+        # NOTE: Name swapping is intentional.
+        split_production_subsets = gtx_stools.decompose_subset(
             consumer=produced_subset, producer=consumed_subset
         )
-        assert map_subranges is not None
-        assert len(map_subranges) > 1
+        assert split_production_subsets is not None and len(split_production_subsets) > 1
 
-        new_sub_map_entries = []
+        # Now create new Maps of the appropriate ranges.
+        # NOTE: `split_production_subsets` is only based on what is accessed at
+        #   `self.access_node`, however, we want to split the Map based on it.
+        #   The main problem is if there are offsets, i.e. `output[__i - 3]`.
+        #   To solve this we realize that while the actual decomposed ranges are
+        #   meaningless, they still have the same size. Thus we simply correct them.
         map_start_index = [map_exit.map.range[i][0] for i in range(len(map_exit.map.range))]
-        for i, map_subrange in enumerate(map_subranges):
+        for i, production_subset in enumerate(split_production_subsets):
             sub_me, _ = gtx_mfutils.copy_map_graph_with_new_range(
                 sdfg=sdfg,
                 state=graph,
                 map_entry=map_entry,
                 map_exit=map_exit,
-                # TODO(phimuell): Explain why.
-                map_range=map_subrange.offset_new(map_start_index, negative=False),
+                map_range=production_subset.offset_new(map_start_index, negative=False),
                 suffix=str(i),
             )
-            new_sub_map_entries.append(sub_me)
-        gtx_mfutils.delete_map(graph=graph, map_entry=map_entry, map_exit=map_exit)
-
-        # TODO(phimuell): WHy here and not in loop above.
-        for sub_me in new_sub_map_entries:
+            # `copy_map_graph_with_new_range()` just copies all Memlets, thus the
+            #  subsets that are read and written by the new Maps are still the same
+            #  as the original one. We must fix that.
             dace.sdfg.propagation.propagate_memlets_map_scope(
                 sdfg=sdfg,
                 state=graph,
                 map_entry=sub_me,
             )
+        gtx_mfutils.delete_map(graph=graph, map_entry=map_entry, map_exit=map_exit)
 
-        # Call the splitting node transformation on the access node.
-        # TODO(phimuell): Create a free function for this.
+        # Now perform the split of `self.access_node`. Parts that are not read will
+        #  later be eliminated by dead dataflow elimination.
+        # TODO(phimuell): Make it simpler to call the split function.
         gtx_transformations.SplitAccessNode.apply_to(
             sdfg=sdfg,
             options={
