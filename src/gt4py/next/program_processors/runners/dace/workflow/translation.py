@@ -248,9 +248,10 @@ duration = run_cpp_end_time - run_cpp_start_time;
     end_state.add_edge(
         tlet_stop_timer, "duration", end_state.add_access(output), None, dace.Memlet(f"{output}[0]")
     )
-
+    # We normally wrap `add_tasklet()` in order to ensure unique tasklet connector
+    # names, see `gtir_to_sdfg.DataflowBuilder.add_tasklet()`. Since this wrapper
+    # is not available here, we run `validate()` on the instrumented SDFG.
     sdfg.validate()
-    # End of `add_instrumentation` function.
 
 
 def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:

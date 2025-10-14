@@ -124,6 +124,8 @@ class DataflowBuilder(Protocol):
 
         if inputs is None:
             inputs = set()
+        else:
+            assert inputs.isdisjoint(outputs)
 
         connector_mapping = {conn: self.unique_tasklet_connector() for conn in (inputs | outputs)}
         new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
@@ -159,6 +161,8 @@ class DataflowBuilder(Protocol):
 
         if inputs is None:
             inputs = {}
+        else:
+            assert inputs.keys().isdisjoint(outputs.keys())
 
         connector_mapping = {
             conn: self.unique_tasklet_connector() for conn in (inputs.keys() | outputs.keys())

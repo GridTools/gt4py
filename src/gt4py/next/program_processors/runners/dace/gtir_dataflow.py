@@ -663,7 +663,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     dace.Memlet(data=index_expr.dc_node.data, subset="0"),
                 )
             else:
-                assert index_connector not in connector_mapping
+                assert isinstance(index_expr, SymbolExpr)
 
         return self._construct_tasklet_result(
             field_desc.dtype, deref_node, connector_mapping["val"]
