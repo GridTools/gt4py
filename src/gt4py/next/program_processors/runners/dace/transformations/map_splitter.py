@@ -37,10 +37,15 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
     is written into `AccessNode` than is read from it. In that case the
     producing Map and `AccessNode` is split into fragments, such that a fragment
     either generates data that is fully consumed or not at all.
+    Fragments that generate data that is not used are removed, unless
+    `remove_dead_dataflow` is set to `False`.
+
+    Args:
+        removed_dead_dataflow: If `True`, the default, remove dataflow that is not
+            read anywhere.
+        single_use_data: Use this to classify single use data, see `dace.FindSingleUseData()`.
 
     Note:
-        - This transformation might generate dead dataflow that must be handled
-            separately.
         - The "more data is written into `AccessNode` than read from it" technically
             violates ADR18, but is the result of some broadcast expressions in
             relation to `concat_where`.
@@ -48,6 +53,13 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
 
     map_exit = dace_transformation.PatternNode(dace_nodes.MapExit)
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+
+    remove_dead_dataflow = dace_properties.Property(
+        dtype=bool,
+        allow_none=True,
+        default=True,
+        desc="Remove dead dataflow directly.",
+    )
 
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
@@ -60,11 +72,14 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
 
     def __init__(
         self,
+        remove_dead_dataflow: Optional[bool] = None,
         single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
         self._single_use_data = single_use_data
+        if remove_dead_dataflow is not None:
+            self.remove_dead_dataflow = remove_dead_dataflow
         super().__init__(*args, **kwargs)
 
     def can_be_applied(
@@ -167,8 +182,9 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
         #   To solve this we realize that while the actual decomposed ranges are
         #   meaningless, they still have the same size. Thus we simply correct them.
         map_start_index = [map_exit.map.range[i][0] for i in range(len(map_exit.map.range))]
+        new_map_exits: list[dace_nodes.MapExit] = []
         for i, production_subset in enumerate(split_production_subsets):
-            sub_me, _ = gtx_mfutils.copy_map_graph_with_new_range(
+            sub_me, sub_mx = gtx_mfutils.copy_map_graph_with_new_range(
                 sdfg=sdfg,
                 state=graph,
                 map_entry=map_entry,
@@ -184,6 +200,7 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
                 state=graph,
                 map_entry=sub_me,
             )
+            new_map_exits.append(sub_mx)
         gtx_mfutils.delete_map(graph=graph, map_entry=map_entry, map_exit=map_exit)
 
         # Now perform the split of `self.access_node`. Parts that are not read will
@@ -197,3 +214,24 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
             verify=True,
             access_node=access_node,
         )
+
+        if not self.remove_dead_dataflow:
+            return
+
+        # Because `self.access_node` is single use data, we know that if the split
+        #  node is not directly used it is dead dataflow and we can remove it.
+        for mx in new_map_exits:
+            output_node = next(iter(graph.out_edges(mx))).dst
+            assert graph.out_degree(mx) == 1
+            assert (
+                isinstance(output_node, dace_nodes.AccessNode) and output_node.desc(sdfg).transient
+            )
+
+            if graph.out_degree(output_node) == 0:
+                gtx_transformations.gt_remove_map(
+                    sdfg=sdfg,
+                    state=graph,
+                    map_entry=graph.entry_node(mx),
+                    # We would need to update single use data to really use it.
+                    remove_unused_data=False,
+                )
