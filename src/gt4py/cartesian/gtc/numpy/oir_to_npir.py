@@ -49,6 +49,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return npir.TemporaryDecl(
             name=node.name,
             dtype=node.dtype,
+            dimensions=node.dimensions,
             data_dims=node.data_dims,
             offset=offset,
             padding=padding,

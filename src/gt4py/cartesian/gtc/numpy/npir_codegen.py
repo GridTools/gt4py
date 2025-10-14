@@ -88,12 +88,20 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_TemporaryDecl(
         self, node: npir.TemporaryDecl, **kwargs
     ) -> Union[str, Collection[str]]:
-        shape = [f"_dI_ + {node.padding[0]}", f"_dJ_ + {node.padding[1]}", "_dK_"] + [
-            str(dim) for dim in node.data_dims
-        ]
-        offset = [str(off) for off in node.offset] + ["0"] * (1 + len(node.data_dims))
+        # Cartesian IJ
+        shape = [f"_dI_ + {node.padding[0]}", f"_dJ_ + {node.padding[1]}"]
+        offset = [str(off) for off in node.offset]
+        # Vertical dimension K
+        if node.dimensions[2]:
+            shape += ["_dK_"]
+            offset += ["0"]
+        # Data dimensions
+        if len(node.data_dims) > 0:
+            shape += [str(dim) for dim in node.data_dims]
+            offset += ["0"] * len(node.data_dims)
         dtype = self.visit(node.dtype, **kwargs)
-        return f"{node.name} = Field.empty(({', '.join(shape)}), {dtype}, ({', '.join(offset)}))"
+        dims = node.dimensions
+        return f"{node.name} = Field.empty(({', '.join(shape)}), {dtype}, ({', '.join(offset)}), {dims})"
 
     LocalScalarDecl = as_fmt(
         "{name} = Field.empty((_dI_ + {upper[0] + lower[0]}, _dJ_ + {upper[1] + lower[1]}, {ksize}), {dtype}, ({', '.join(str(l) for l in lower)}, 0))"
@@ -102,19 +110,25 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     VarKOffset = as_fmt("lk + {k}")
 
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
-        k_offset = (
-            self.visit(node.k_offset, **kwargs)
-            if isinstance(node.k_offset, npir.VarKOffset)
-            else node.k_offset
-        )
+        symtable = kwargs.get("symtable", {})
+
         offsets: Tuple[Optional[int], Optional[int], Union[str, int, None]] = (
             node.i_offset,
             node.j_offset,
-            k_offset,
+            None,
         )
 
+        # Vertical offset - check K vertical exists
+        if node.name in symtable and symtable[node.name].dimensions[2]:
+            k_offset = (
+                self.visit(node.k_offset, **kwargs)
+                if isinstance(node.k_offset, npir.VarKOffset)
+                else node.k_offset
+            )
+            offsets = (offsets[0], offsets[1], k_offset)
+
         # To determine: when is the symbol name not in the symtable?
-        if node.name in kwargs.get("symtable", {}):
+        if node.name in symtable:
             decl = kwargs["symtable"][node.name]
             dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
             offsets = cast(
