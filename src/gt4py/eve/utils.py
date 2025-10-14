@@ -261,7 +261,7 @@ _K = TypeVar("_K")
 _V = TypeVar("_V")
 
 
-class CustomDefaultDictBase(collections.UserDict[_K, _V]):
+class CustomDefaultDictBase(collections.defaultdict[_K, _V]):
     """
     Base dict-like class using a value factory to compute default values per key.
 
@@ -282,16 +282,16 @@ class CustomDefaultDictBase(collections.UserDict[_K, _V]):
 
     """
 
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+
+    def __missing__(self, key: _K) -> _V:
+        self[key] = value = self.value_factory(key)
+        return value
+
     @abc.abstractmethod
     def value_factory(self, key: _K) -> _V:
         raise NotImplementedError
-
-    def __getitem__(self, key: _K) -> _V:
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            self.data[key] = (value := self.value_factory(key))
-            return value
 
 
 class CustomMapping(collections.abc.MutableMapping[_K, _V]):
@@ -350,6 +350,10 @@ class CustomMapping(collections.abc.MutableMapping[_K, _V]):
             + ", ".join(f"{self.key_map[k]!r}: {self.value_map[k]!r}" for k in self.key_map)
             + "}"
         )
+
+    def internal_key(self, key: _K) -> int:
+        """Return the internal key used to store the value associated with `key`."""
+        return self.key_func(key)
 
 
 class HashableBy(Generic[_T]):
