@@ -643,15 +643,15 @@ class LambdaToDataflow(eve.NodeVisitor):
             connector_mapping["field"],
         )
 
+        # add termination points for the dynamic iterator indices
         for dim, index_expr in field_indices:
-            # add termination points for the dynamic iterator indices
-            deref_connector = connector_mapping[IndexConnectorFmt.format(dim=dim.value)]
+            index_connector = IndexConnectorFmt.format(dim=dim.value)
             if isinstance(index_expr, MemletExpr):
                 self._add_input_data_edge(
                     index_expr.dc_node,
                     index_expr.subset,
                     deref_node,
-                    deref_connector,
+                    connector_mapping[index_connector],
                 )
 
             elif isinstance(index_expr, ValueExpr):
@@ -659,11 +659,11 @@ class LambdaToDataflow(eve.NodeVisitor):
                     index_expr.dc_node,
                     None,
                     deref_node,
-                    deref_connector,
+                    connector_mapping[index_connector],
                     dace.Memlet(data=index_expr.dc_node.data, subset="0"),
                 )
             else:
-                assert isinstance(index_expr, SymbolExpr)
+                assert index_connector not in connector_mapping
 
         return self._construct_tasklet_result(
             field_desc.dtype, deref_node, connector_mapping["val"]
@@ -1586,10 +1586,12 @@ class LambdaToDataflow(eve.NodeVisitor):
                     code=f"{new_index_connector} = index + offset",
                 )
             for input_expr, input_connector in [
-                (index_expr, connector_mapping["index"]),
-                (offset_expr, connector_mapping["offset"]),
+                (index_expr, connector_mapping.get("index", None)),
+                (offset_expr, connector_mapping.get("offset", None)),
             ]:
-                if isinstance(input_expr, MemletExpr):
+                if input_connector is None:
+                    assert isinstance(input_expr, SymbolExpr)
+                elif isinstance(input_expr, MemletExpr):
                     self._add_input_data_edge(
                         input_expr.dc_node,
                         input_expr.subset,
