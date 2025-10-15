@@ -22,7 +22,7 @@ def convert_args(
     fun: gtx_wfdcompilation.CompiledDaceProgram,
 ) -> stages.CompiledProgram:
     # Retieve metrics level from GT4Py environment variable.
-    collect_metrics_level = config.COLLECT_METRICS_LEVEL
+    collect_time = config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
 
     def decorated_program(
         *args: Any,
@@ -33,9 +33,9 @@ def convert_args(
             args = (*args, out)
 
         with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
-            result = fun(collect_metrics_level, offset_provider, *args)
+            result = fun(offset_provider, *args)
 
-        if collect_metrics_level >= metrics.PERFORMANCE:
+        if collect_time:
             if result is None:
                 raise RuntimeError(
                     "Config 'COLLECT_METRICS_LEVEL' is set but the SDFG profiling"
