@@ -99,15 +99,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
                 cpp_value = node.value
 
                 if node.value in ["inf", "-inf"]:
+                    sign = "-" if node.value == "-inf" else ""
                     cpp_value = (
                         f"std::numeric_limits<{cpp_utils.pytype_to_cpptype(node.type)}>::infinity()"
                     )
-                    return f"-{cpp_value}" if node.value == "-inf" else cpp_value
+                    return f"{sign}{cpp_value}"
                 elif node.value == "nan":
                     cpp_value = f"std::numeric_limits<{cpp_utils.pytype_to_cpptype(node.type)}>::signaling_NaN()"
                     return cpp_value
 
-                if "." not in cpp_value and "e" not in cpp_value and "E" not in cpp_value:
+                if not any(c in cpp_value for c in ".eE"):
                     cpp_value = f"{cpp_value}."
 
                 if node.type == "float32":
