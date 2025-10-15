@@ -53,6 +53,14 @@ class SymbolicRange:
     def translate(self, distance: int) -> SymbolicRange:
         return SymbolicRange(im.plus(self.start, distance), im.plus(self.stop, distance))
 
+    def empty(self) -> bool | None:
+        if isinstance(self.start, itir.Literal) and isinstance(self.stop, itir.Literal):
+            start, stop = int(self.start.value), int(self.stop.value)
+            return start >= stop
+        elif self.start == self.stop:
+            return True
+        return None
+
 
 _GRID_TYPE_MAPPING = {
     "unstructured_domain": common.GridType.UNSTRUCTURED,
@@ -67,6 +75,13 @@ class SymbolicDomain:
 
     def __hash__(self) -> int:
         return hash((self.grid_type, frozenset(self.ranges.items())))
+
+    def empty(self) -> bool | None:
+        if any(r.empty() for r in self.ranges.values()):
+            return True
+        if any(r.empty() is None for r in self.ranges.values()):
+            return None
+        return False
 
     @classmethod
     def from_expr(cls, node: itir.Node) -> SymbolicDomain:
