@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-import functools
-
 import factory
 
 from gt4py._core import definitions as core_defs, filecache
@@ -63,9 +61,4 @@ class DaCeWorkflowFactory(factory.Factory):
         device_type=factory.SelfAttribute("..device_type"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )
-    decoration = factory.LazyAttribute(
-        lambda o: functools.partial(
-            decoration_step.convert_args,
-            device=o.device_type,
-        )
-    )
+    decoration = decoration_step.convert_args

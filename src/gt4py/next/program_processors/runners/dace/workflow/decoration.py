@@ -13,7 +13,6 @@ from typing import Any
 import dace
 import numpy as np
 
-from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, config, metrics
 from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace.workflow import compilation as gtx_wfdcompilation
@@ -21,11 +20,9 @@ from gt4py.next.program_processors.runners.dace.workflow import compilation as g
 
 def convert_args(
     fun: gtx_wfdcompilation.CompiledDaceProgram,
-    device: core_defs.DeviceType = core_defs.DeviceType.CPU,
 ) -> stages.CompiledProgram:
     # Retieve metrics level from GT4Py environment variable.
     collect_metrics_level = config.COLLECT_METRICS_LEVEL
-    collect_metrics = collect_metrics_level >= metrics.PERFORMANCE
 
     def decorated_program(
         *args: Any,
@@ -38,7 +35,7 @@ def convert_args(
         with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
             result = fun(collect_metrics_level, offset_provider, *args)
 
-        if collect_metrics:
+        if collect_metrics_level >= metrics.PERFORMANCE:
             if result is None:
                 raise RuntimeError(
                     "Config 'COLLECT_METRICS_LEVEL' is set but the SDFG profiling"
