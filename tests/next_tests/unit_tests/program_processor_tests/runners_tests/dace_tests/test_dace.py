@@ -15,11 +15,9 @@ import unittest.mock
 import numpy as np
 import pytest
 
-import gt4py._core.definitions as core_defs
 import gt4py.next as gtx
 import gt4py.next.common as gtx_common
 from gt4py.next.ffront.fbuiltins import where
-from gt4py._core import ndarray_utils
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import E2V

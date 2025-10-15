@@ -329,19 +329,12 @@ class DaCeTranslator(
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
+    auto_optimize_args: dict[str, Any] | None
     async_sdfg_call: bool
     use_metrics: bool
+
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
-
-    # auto-optimize arguments
-    gpu_block_size: tuple[int, int, int] = (32, 8, 1)
-    make_persistent: bool = False
-    use_memory_pool: bool = False
-    blocking_dim: Optional[common.Dimension] = None
-    blocking_size: int = 10
-    validate: bool = False
-    validate_all: bool = False
 
     def generate_sdfg(
         self,
@@ -362,9 +355,6 @@ class DaCeTranslator(
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
-        if self.use_memory_pool and not on_gpu:
-            raise NotImplementedError("Memory pool only available for GPU device.")
-
         sdfg = gtir_to_sdfg.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
 
         constant_symbols = find_constant_symbols(
@@ -372,24 +362,13 @@ class DaCeTranslator(
         )
 
         if self.auto_optimize:
-            unit_strides_kind = (
-                common.DimensionKind.HORIZONTAL
-                if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
-                else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
-            )
+            auto_optimize_args = {} if self.auto_optimize_args is None else self.auto_optimize_args
+
             gtx_transformations.gt_auto_optimize(
                 sdfg,
                 gpu=on_gpu,
-                gpu_block_size=self.gpu_block_size,
-                unit_strides_kind=unit_strides_kind,
                 constant_symbols=constant_symbols,
-                assume_pointwise=True,
-                make_persistent=self.make_persistent,
-                gpu_memory_pool=self.use_memory_pool,
-                blocking_dim=self.blocking_dim,
-                blocking_size=self.blocking_size,
-                validate=self.validate,
-                validate_all=self.validate_all,
+                **auto_optimize_args,
             )
         elif on_gpu:
             # Note that `gt_substitute_compiletime_symbols()` will run `gt_simplify()`

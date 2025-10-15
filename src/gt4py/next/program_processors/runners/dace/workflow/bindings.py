@@ -120,8 +120,13 @@ def _parse_gt_param(
                 )
 
     elif param_name not in sdfg_arglist:
-        # symbols that are not used are removed from the SDFG arglist
-        assert isinstance(param_type, ts.ScalarType)
+        # There are two reasons for this case:
+        #   1) The argument is a symbol/scalar that is not used in the generated code.
+        #   2) The argument was demoted, see `demote_fields` argument of `gt_auto_optimize()`
+        #       and was not put back.
+        #  It would be nice to be able to check if we have an error, but this is not
+        #  possible.
+        pass
 
     else:
         sdfg_arg_desc = sdfg_arglist[param_name]
