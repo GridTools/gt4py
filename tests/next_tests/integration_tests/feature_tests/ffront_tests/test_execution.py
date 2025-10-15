@@ -88,7 +88,7 @@ def test_infinity(cartesian_case):
             testee,
             out=out,
             comparison=np.array_equal,
-            ref=np.full_like(out.ndarray, math.inf),
+            ref=np.full(out.ndarray.shape, math.inf),
         )
     except ZeroDivisionError:
         pass
@@ -109,7 +109,7 @@ def test_nan(cartesian_case):
             testee,
             out=out,
             comparison=functools.partial(np.array_equal, equal_nan=True),
-            ref=np.full_like(out.ndarray, math.nan),
+            ref=np.full(out.ndarray.shape, math.nan),
         )
     except ZeroDivisionError:
         pass
