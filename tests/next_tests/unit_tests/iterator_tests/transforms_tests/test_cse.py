@@ -5,6 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+from typing import Sequence
 
 import pytest
 import textwrap
@@ -16,6 +17,8 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.transforms.cse import (
     CommonSubexpressionElimination as CSE,
+    _CanonicalizeNames,
+    _RestoreSymbolNames,
     extract_subexpression,
 )
 
@@ -360,3 +363,67 @@ def test_sym_ref_collection_from_lambda(opaque_fun):
 
     actual = CSE.apply(testee, within_stencil=True)
     assert actual == expected  # no extraction should happen
+
+
+@pytest.mark.parametrize(
+    "testees",
+    (
+        [im.lambda_("a")("a"), im.lambda_("b")("b")],
+        [
+            im.lambda_("a1")(im.lambda_("b1")(im.plus("a1", "b1"))),
+            im.lambda_("a1")(im.lambda_("b2")(im.plus("a1", "b2"))),
+        ],
+        [
+            im.lambda_("a1")(im.lambda_("b1")(im.plus("a1", "b1"))),
+            im.lambda_("a2")(im.lambda_("b1")(im.plus("a2", "b1"))),
+        ],
+        [
+            im.lambda_("a1")(im.lambda_("b1")(im.plus("a1", "b1"))),
+            im.lambda_("a2")(im.lambda_("b2")(im.plus("a2", "b2"))),
+        ],
+        [
+            im.lambda_("a1")(im.make_tuple("a1", im.lambda_("a1")("a1"))),
+            im.lambda_("a2")(im.make_tuple("a2", im.lambda_("a2")("a2"))),
+        ],
+    ),
+)
+def test_equivalent_are_equal_after_canonicalization(testees: Sequence[ir.Expr]):
+    transformed = {
+        _CanonicalizeNames.apply(testee, allow_external_symbols=True) for testee in testees
+    }
+
+    assert len(transformed) == 1
+
+
+def test_canonicalize_symbol_names():
+    testee = im.let(("a", 1), ("b", 2))(
+        im.make_tuple(im.plus("a", "b"), im.let("c", 3)(im.plus("c", im.plus("a", "b"))))
+    )
+    expected = im.let(("_1", 1), ("_2", 2))(
+        im.make_tuple(im.plus("_1", "_2"), im.let("_0", 3)(im.plus("_0", im.plus("_1", "_2"))))
+    )
+
+    actual = _CanonicalizeNames.apply(testee, allow_external_symbols=True)
+    assert actual == expected
+
+    restored = _RestoreSymbolNames.apply(actual, allow_external_symbols=True)
+    assert restored == testee
+
+
+# TODO: collisions are likely not occuring in cse. describe in the pass why
+# def test_restore_symbol_names():
+#     testee = im.let(("a", 1), ("b", 2))(
+#         im.make_tuple(
+#             im.plus("external")(im.plus("a", "b")),
+#             im.let("c", 3)(im.plus("c", im.plus("a", "b")))
+#         )
+#     )
+#
+#     _CanonicalizeNames.apply(testee, allow_external_symbols=True)
+
+
+def test_cse_can_required():
+    testee = im.plus(im.let("x1", 1)(im.plus("x1", "y")), im.let("x2", 1)(im.plus("x2", "y")))
+    expected = im.let("_cs_1", im.let("x1", 1)(im.plus("x1", "y")))(im.plus("_cs_1", "_cs_1"))
+    actual = CSE.apply(testee, within_stencil=True)
+    assert actual == expected

@@ -25,9 +25,13 @@ from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.transforms import remap_symbols
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
+
+
+T = TypeVar("T", bound=itir.Expr | itir.Program)
 
 
 def _is_trivial_tuple_expr(node: itir.Expr):
@@ -46,8 +50,124 @@ def _is_trivial_tuple_expr(node: itir.Expr):
 
 
 @dataclasses.dataclass
-class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
+class _CanonicalizeNamesPostProcessing(remap_symbols.RenameSymbols):
+    PRESERVED_ANNEX_ATTRS = ("type", "domain", "pre_canonicalization_name")
+
+    @classmethod
+    def apply(cls, node: T, max_count: int) -> T:
+        name_map = {f"_{i}": f"_{max_count - i}" for i in range(max_count + 1)}
+        obj = cls()
+        new_node = obj.visit(node, name_map=name_map)
+        return new_node
+
+
+# TODO(tehrengruber): Canonicalize all let vars, then order by their hash
+@dataclasses.dataclass
+class _CanonicalizeNames(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type", "domain")
+
+    allow_external_symbols: bool
+
+    counter: int = 0
+    max_count: int = 0
+
+    @classmethod
+    def apply(cls, node: T, allow_external_symbols=False) -> T:
+        obj = cls(allow_external_symbols=allow_external_symbols)
+        new_node = obj.visit(node, name_map={})
+        return _CanonicalizeNamesPostProcessing.apply(new_node, obj.max_count)
+
+    # TODO: extend to program
+
+    def visit_Program(
+        self, node: itir.Program, *, name_map: collections.ChainMap | dict
+    ) -> itir.Program:
+        assert not name_map
+        # ignore all program params and builtins
+        return self.generic_visit(node, name_map={k: None for k in node.annex.symtable})
+
+    def visit_Lambda(
+        self, node: itir.Lambda, *, name_map: collections.ChainMap | dict
+    ) -> itir.Lambda:
+        initial_count = self.counter
+
+        local_name_map: dict[str, itir.Sym] = {}
+        # go in reverse order so that after postprocessing we have forward order
+        for param in reversed(node.params):
+            new_sym = im.sym(f"_{self.counter}", param.type)
+            self.counter += 1
+            new_sym.annex.pre_canonicalization_name = param.id
+            local_name_map[param.id] = new_sym
+
+        new_node = im.lambda_(*reversed(local_name_map.values()))(
+            # TODO: check what happens if there is a collision between local_name_map and name_map
+            self.visit(node.expr, name_map=collections.ChainMap(local_name_map, name_map))
+        )
+
+        self.max_count = max(0, self.counter - 1, self.max_count)
+        self.counter = initial_count
+
+        return new_node
+
+    def visit_SymRef(
+        self, node: itir.SymRef, *, name_map: collections.ChainMap | dict
+    ) -> itir.SymRef:
+        if self.allow_external_symbols and node.id not in name_map:
+            return node
+
+        if name_map[node.id] is None:
+            return node
+
+        return im.ref(name_map[node.id].id, node.type)
+
+
+@dataclasses.dataclass
+class _RestoreSymbolNames(PreserveLocationVisitor, NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = ("type", "domain")
+
+    allow_external_symbols: bool
+
+    @classmethod
+    def apply(cls, node: itir.Node, allow_external_symbols=False) -> itir.Node:
+        return cls(allow_external_symbols=allow_external_symbols).visit(node, name_map={})
+
+    def visit_Program(
+        self, node: itir.Program, *, name_map: collections.ChainMap | dict
+    ) -> itir.Program:
+        # ignore all program params and builtins
+        assert not name_map
+        return self.generic_visit(node, name_map={k: None for k in node.annex.symtable})
+
+    def visit_Lambda(
+        self, node: itir.Lambda, *, name_map: collections.ChainMap | dict
+    ) -> itir.Lambda:
+        local_name_map: dict[str, itir.Sym] = {}
+        for param in node.params:
+            # assert hasattr(param.annex, "pre_canonicalization_name")
+            if not hasattr(param.annex, "pre_canonicalization_name"):
+                local_name_map[param.id] = param  # TODO: check this is _cs...
+            else:
+                local_name_map[param.id] = im.sym(param.annex.pre_canonicalization_name, param.type)
+
+        return im.lambda_(*local_name_map.values())(
+            self.visit(node.expr, name_map=collections.ChainMap(local_name_map, name_map))
+        )
+
+    def visit_SymRef(
+        self, node: itir.SymRef, *, name_map: collections.ChainMap | dict
+    ) -> itir.SymRef:
+        if self.allow_external_symbols and node.id not in name_map:
+            return node
+
+        if name_map[node.id] is None:
+            return node
+
+        return im.ref(name_map[node.id].id, node.type)
+
+
+@dataclasses.dataclass
+class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = ("type", "domain", "pre_canonicalization_name")
 
     expr_map: dict[int, itir.SymRef]
 
@@ -416,6 +536,8 @@ ProgramOrExpr = TypeVar("ProgramOrExpr", bound=itir.Program | itir.Expr)
 
 @dataclasses.dataclass(frozen=True)
 class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = ("pre_canonicalization_name",)
+
     """
     Perform common subexpression elimination.
 
@@ -447,6 +569,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         node: ProgramOrExpr,
         within_stencil: bool | None = None,
         offset_provider_type: common.OffsetProviderType | None = None,
+        canonicalize: bool = True,
     ) -> ProgramOrExpr:
         is_program = isinstance(node, itir.Program)
         if is_program:
@@ -461,7 +584,21 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         node = itir_type_inference.infer(
             node, offset_provider_type=offset_provider_type, allow_undeclared_symbols=not is_program
         )
-        return cls().visit(node, within_stencil=within_stencil)
+
+        if canonicalize:
+            # TODO: double check if allow_external_symbols might be dangerous when not in testing and an expr, probably yes so warn
+            node = _CanonicalizeNames.apply(
+                node, allow_external_symbols=not isinstance(node, itir.Program)
+            )
+
+        new_node = cls().visit(node, within_stencil=within_stencil)
+
+        if canonicalize:
+            new_node = _RestoreSymbolNames.apply(
+                new_node, allow_external_symbols=not isinstance(node, itir.Program)
+            )
+
+        return new_node
 
     def generic_visit(self, node, **kwargs):
         if cpm.is_call_to(node, "as_fieldop"):
@@ -479,7 +616,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         def predicate(subexpr: itir.Expr, num_occurences: int):
             # note: be careful here with the syntatic context: the expression might be in local
             #  view, even though the syntactic context of `node` is in field view.
-            # note: what is extracted is sketched in the docstring above. keep it updated.
+            # note: what is extracted is sketched in the docstring above. keep it up-to-date.
             if num_occurences > 1:
                 if within_stencil:
                     # TODO(tehrengruber): Lists must not be extracted to avoid errors in partial

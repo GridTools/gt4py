@@ -40,7 +40,9 @@ class RenameSymbols(PreserveLocationVisitor, NodeTranslator):
         self, node: ir.Sym, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):
         if active and node.id in active:
-            return ir.Sym(id=name_map.get(node.id, node.id))
+            sym = ir.Sym(id=name_map.get(node.id, node.id))
+            type_inference.copy_type(from_=node, to=sym, allow_untyped=True)
+            return sym
         return node
 
     def visit_SymRef(
