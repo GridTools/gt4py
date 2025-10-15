@@ -122,7 +122,7 @@ def gt_auto_optimize(
         optimization_hooks: A `dict` containing the hooks that should be called,
             see `GT4PyAutoOptHook` for more information.
         demote_fields: Consider these fields as transients for the purpose of optimization.
-            Use at your own risk. See Notes for all implication.
+            Use at your own risk. See Notes for all implications.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -136,7 +136,7 @@ def gt_auto_optimize(
             global fields are already on the GPU.
         - When using the `demote_fields` feature the user has to ensure that the fields
             meet all constraints of a transient, see ADR18 for more. Furthermore, there
-            is no guarantee if the demoted field remain parts of the SDFG's call
+            is no guarantee whether the demoted field remains part of the SDFG's call
             signature or not.
 
     Todo:
@@ -194,8 +194,7 @@ def gt_auto_optimize(
         #  Actually they should probably be at the very start of this function, however,
         #  they have to be after constant substitution in case the descriptor is modified.
         original_demoted_descriptors: dict[str, dace_data.Data] = {}
-        if demote_fields:
-            assert isinstance(demote_fields, list)
+        if demote_fields is not None:
             for field_to_demote in demote_fields:
                 if field_to_demote not in sdfg.arrays:
                     warnings.warn(
