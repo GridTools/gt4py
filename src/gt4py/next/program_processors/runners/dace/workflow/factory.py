@@ -9,17 +9,13 @@
 from __future__ import annotations
 
 import functools
-from typing import Final
 
 import factory
 
 from gt4py._core import definitions as core_defs, filecache
 from gt4py.next import config
 from gt4py.next.otf import recipes, stages, workflow
-from gt4py.next.program_processors.runners.dace.workflow import (
-    bindings as bindings_step,
-    decoration as decoration_step,
-)
+from gt4py.next.program_processors.runners.dace.workflow import decoration as decoration_step
 from gt4py.next.program_processors.runners.dace.workflow.compilation import (
     DaCeCompilationStepFactory,
 )
@@ -28,7 +24,8 @@ from gt4py.next.program_processors.runners.dace.workflow.translation import (
 )
 
 
-_GT_DACE_BINDING_FUNCTION_NAME: Final[str] = "update_sdfg_args"
+def _no_bindings(inp: stages.ProgramSource) -> stages.CompilableSource:
+    return stages.CompilableSource(program_source=inp, binding_source=None)
 
 
 class DaCeWorkflowFactory(factory.Factory):
@@ -59,16 +56,9 @@ class DaCeWorkflowFactory(factory.Factory):
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
-    bindings = factory.LazyAttribute(
-        lambda o: functools.partial(
-            bindings_step.bind_sdfg,
-            bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
-            make_persistent=False,
-        )
-    )
+    bindings = _no_bindings
     compilation = factory.SubFactory(
         DaCeCompilationStepFactory,
-        bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         device_type=factory.SelfAttribute("..device_type"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),

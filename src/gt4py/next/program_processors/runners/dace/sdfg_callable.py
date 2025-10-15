@@ -14,7 +14,7 @@ from typing import Any, Optional
 import dace
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common, field_utils
+from gt4py.next import common as gtx_common, field_utils, utils as gtx_utils
 
 from . import utils as gtx_dace_utils
 
@@ -71,7 +71,8 @@ def _get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
     call_args = {}
     range_symbols: dict[str, int] = {}
     stride_symbols: dict[str, int] = {}
-    for name, arg in zip(sdfg.arg_names, args, strict=True):
+    flat_args = gtx_utils.flatten_nested_tuple(tuple(args))
+    for name, arg in zip(sdfg.arg_names, flat_args, strict=True):
         call_arg, domain = _convert_arg(arg)
         call_args[name] = call_arg
         if domain is not None:
