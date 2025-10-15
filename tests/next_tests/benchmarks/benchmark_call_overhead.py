@@ -77,8 +77,8 @@ def allocate_fields(domain: Sequence[tuple[gtx.Dimension, int]], *args: str) -> 
     return {arg: gtx.as_field(domain, np.random.rand(*sizes)) for arg in args}
 
 
-@pytest.mark.parametrize("vertical_size", [50])
-@pytest.mark.parametrize("horizontal_size", [1000])
+@pytest.mark.parametrize("vertical_size", [1])
+@pytest.mark.parametrize("horizontal_size", [1])
 def benchmark_call(
     benchmark: ptb_fixture.BenchmarkFixture, horizontal_size: int, vertical_size: int
 ):
