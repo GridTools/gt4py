@@ -36,67 +36,78 @@ def _get_stride(ndarray, dim_index):
 """
 
 
-_binding_source_not_persistent = (
+_binding_source = (
     _bind_header
     + f"""\
 def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
-    last_call_args[4] = ctypes.c_double(args[0])
-    last_call_args[0].value = args[1].data_ptr()
-    last_call_args[7] = ctypes.c_int(_get_stride(args[1].ndarray, 0))
-    last_call_args[1].value = args[2][0].data_ptr()
-    last_call_args[8] = ctypes.c_int(_get_stride(args[2][0].ndarray, 0))
-    last_call_args[9] = ctypes.c_int(_get_stride(args[2][0].ndarray, 1))
-    last_call_args[2].value = args[2][1][0].data_ptr()
-    last_call_args[10] = ctypes.c_int(_get_stride(args[2][1][0].ndarray, 0))
-    last_call_args[11] = ctypes.c_int(_get_stride(args[2][1][0].ndarray, 1))
-    last_call_args[5] = ctypes.c_double(args[2][1][1])
-    last_call_args[6] = ctypes.c_double(args[3])
-    last_call_args[3].value = args[4].data_ptr()
-    last_call_args[12] = ctypes.c_int(args[4].domain.ranges[0].start)
-    last_call_args[13] = ctypes.c_int(args[4].domain.ranges[0].stop)
-    last_call_args[14] = ctypes.c_int(args[4].domain.ranges[1].start)
-    last_call_args[15] = ctypes.c_int(args[4].domain.ranges[1].stop)
-    last_call_args[16] = ctypes.c_int(_get_stride(args[4].ndarray, 0))
-    last_call_args[17] = ctypes.c_int(_get_stride(args[4].ndarray, 1))\
+    arg0, arg1, arg2, arg3, arg4 = args
+    last_call_args[4] = ctypes.c_double(arg0)
+    last_call_args[0].value = arg1.data_ptr()
+    last_call_args[7] = ctypes.c_int(_get_stride(arg1.ndarray, 0))
+    arg2_0, arg2_1 = arg2
+    last_call_args[1].value = arg2_0.data_ptr()
+    last_call_args[8] = ctypes.c_int(_get_stride(arg2_0.ndarray, 0))
+    last_call_args[9] = ctypes.c_int(_get_stride(arg2_0.ndarray, 1))
+    arg2_1_0, arg2_1_1 = arg2_1
+    last_call_args[2].value = arg2_1_0.data_ptr()
+    last_call_args[10] = ctypes.c_int(_get_stride(arg2_1_0.ndarray, 0))
+    last_call_args[11] = ctypes.c_int(_get_stride(arg2_1_0.ndarray, 1))
+    last_call_args[5] = ctypes.c_double(arg2_1_1)
+    last_call_args[6] = ctypes.c_double(arg3)
+    last_call_args[3].value = arg4.data_ptr()
+    last_call_args[12] = ctypes.c_int(arg4.domain.ranges[0].start)
+    last_call_args[13] = ctypes.c_int(arg4.domain.ranges[0].stop)
+    last_call_args[14] = ctypes.c_int(arg4.domain.ranges[1].start)
+    last_call_args[15] = ctypes.c_int(arg4.domain.ranges[1].stop)
+    last_call_args[16] = ctypes.c_int(_get_stride(arg4.ndarray, 0))
+    last_call_args[17] = ctypes.c_int(_get_stride(arg4.ndarray, 1))\
 """
 )
 
 
-_binding_source_persistent = (
+_binding_source_with_static_domain = (
     _bind_header
     + f"""\
 def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
-    last_call_args[4] = ctypes.c_double(args[0])
-    last_call_args[0].value = args[1].data_ptr()
-    last_call_args[1].value = args[2][0].data_ptr()
-    last_call_args[2].value = args[2][1][0].data_ptr()
-    last_call_args[5] = ctypes.c_double(args[2][1][1])
-    last_call_args[6] = ctypes.c_double(args[3])
-    last_call_args[3].value = args[4].data_ptr()
-    last_call_args[12] = ctypes.c_int(args[4].domain.ranges[0].start)
-    last_call_args[13] = ctypes.c_int(args[4].domain.ranges[0].stop)
-    last_call_args[14] = ctypes.c_int(args[4].domain.ranges[1].start)
-    last_call_args[15] = ctypes.c_int(args[4].domain.ranges[1].stop)\
+    arg0, arg1, arg2, arg3, arg4 = args
+    last_call_args[4] = ctypes.c_double(arg0)
+    last_call_args[0].value = arg1.data_ptr()
+    last_call_args[7] = ctypes.c_int(_get_stride(arg1.ndarray, 0))
+    arg2_0, arg2_1 = arg2
+    last_call_args[1].value = arg2_0.data_ptr()
+    last_call_args[8] = ctypes.c_int(_get_stride(arg2_0.ndarray, 0))
+    last_call_args[9] = ctypes.c_int(_get_stride(arg2_0.ndarray, 1))
+    arg2_1_0, arg2_1_1 = arg2_1
+    last_call_args[2].value = arg2_1_0.data_ptr()
+    last_call_args[10] = ctypes.c_int(_get_stride(arg2_1_0.ndarray, 0))
+    last_call_args[11] = ctypes.c_int(_get_stride(arg2_1_0.ndarray, 1))
+    last_call_args[5] = ctypes.c_double(arg2_1_1)
+    last_call_args[6] = ctypes.c_double(arg3)
+    last_call_args[3].value = arg4.data_ptr()
+    last_call_args[12] = ctypes.c_int(_get_stride(arg4.ndarray, 0))
+    last_call_args[13] = ctypes.c_int(_get_stride(arg4.ndarray, 1))\
 """
 )
 
 
-# The difference between the two bindings versions is that the shape and strides
-# of array 'E' are not updated when 'make_persistent=True'. Therefore, the lines
-# for updating 'last_call_args[12-15]' are missing in this binding code.
-assert _binding_source_persistent != _binding_source_not_persistent
+# The difference between the two bindings versions is that one uses static domain
+# for the field arguments, therefore the range symbols are not present in the SDFG.
+assert _binding_source_with_static_domain != _binding_source
 
 
 def _language_settings() -> languages.LanguageSettings:
     return languages.LanguageSettings(formatter_key="", formatter_style="", file_extension="sdfg")
 
 
-def _make_sdfg(sdfg_name: str) -> dace.SDFG:
+def _make_sdfg(sdfg_name: str, use_static_domain: bool) -> dace.SDFG:
     sdfg = dace.SDFG(sdfg_name)
 
+    M, N = (20, 10)
     A, _ = sdfg.add_scalar("A", dace.float64)
 
-    B_dim0_rstart, B_dim0_rstop = (dace.symbol(f"__B_0_range_{i}") for i in (0, 1))
+    B_dim0_rstart, B_dim0_rstop = (
+        (0, M) if use_static_domain else (dace.symbol(f"__B_0_range_{i}") for i in (0, 1))
+    )
     # set 'B_dim1' size to constant value to test the case of constant size in one dimension
     B_shape = (B_dim0_rstop - B_dim0_rstart, 10)
     # set 'B_dim1' stride to constant value
@@ -104,24 +115,40 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
     B, _ = sdfg.add_array("B", B_shape, dace.int32, strides=(B_stride0, 1))
 
     C_0_dim0_rstart, C_0_dim0_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("C_0", ffront_test_utils.IDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("C_0", ffront_test_utils.IDim)),
+        (0, M)
+        if use_static_domain
+        else (
+            dace.symbol(gtx_dace_utils.range_start_symbol("C_0", ffront_test_utils.IDim)),
+            dace.symbol(gtx_dace_utils.range_stop_symbol("C_0", ffront_test_utils.IDim)),
+        )
     )
     C_0_dim1_rstart, C_0_dim1_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("C_0", ffront_test_utils.JDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("C_0", ffront_test_utils.JDim)),
+        (0, N)
+        if use_static_domain
+        else (
+            dace.symbol(gtx_dace_utils.range_start_symbol("C_0", ffront_test_utils.JDim)),
+            dace.symbol(gtx_dace_utils.range_stop_symbol("C_0", ffront_test_utils.JDim)),
+        )
     )
     C_0_shape = (C_0_dim0_rstop - C_0_dim0_rstart, C_0_dim1_rstop - C_0_dim1_rstart)
     C_0_strides = tuple(dace.symbol(f"__C_0_stride_{i}") for i in (0, 1))
     C_0, _ = sdfg.add_array("C_0", C_0_shape, dace.int32, strides=C_0_strides)
 
     C_1_0_dim0_rstart, C_1_0_dim0_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("C_1_0", ffront_test_utils.IDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("C_1_0", ffront_test_utils.IDim)),
+        (0, M)
+        if use_static_domain
+        else (
+            dace.symbol(gtx_dace_utils.range_start_symbol("C_1_0", ffront_test_utils.IDim)),
+            dace.symbol(gtx_dace_utils.range_stop_symbol("C_1_0", ffront_test_utils.IDim)),
+        )
     )
     C_1_0_dim1_rstart, C_1_0_dim1_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("C_1_0", ffront_test_utils.JDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("C_1_0", ffront_test_utils.JDim)),
+        (0, N)
+        if use_static_domain
+        else (
+            dace.symbol(gtx_dace_utils.range_start_symbol("C_1_0", ffront_test_utils.JDim)),
+            dace.symbol(gtx_dace_utils.range_stop_symbol("C_1_0", ffront_test_utils.JDim)),
+        )
     )
     C_1_0_shape = (C_1_0_dim0_rstop - C_1_0_dim0_rstart, C_1_0_dim1_rstop - C_1_0_dim1_rstart)
     C_1_0_strides = tuple(dace.symbol(f"__C_1_0_stride_{i}") for i in (0, 1))
@@ -132,12 +159,20 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
     D, _ = sdfg.add_scalar("D", dace.float64)
 
     E_dim0_rstart, E_dim0_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("E", ffront_test_utils.IDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("E", ffront_test_utils.IDim)),
+        (0, M)
+        if use_static_domain
+        else (
+            dace.symbol(gtx_dace_utils.range_start_symbol("E", ffront_test_utils.IDim)),
+            dace.symbol(gtx_dace_utils.range_stop_symbol("E", ffront_test_utils.IDim)),
+        )
     )
     E_dim1_rstart, E_dim1_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("E", ffront_test_utils.JDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("E", ffront_test_utils.JDim)),
+        (0, N)
+        if use_static_domain
+        else (
+            dace.symbol(gtx_dace_utils.range_start_symbol("E", ffront_test_utils.JDim)),
+            dace.symbol(gtx_dace_utils.range_stop_symbol("E", ffront_test_utils.JDim)),
+        )
     )
     E_shape = (E_dim0_rstop - E_dim0_rstart, E_dim1_rstop - E_dim1_rstart)
     E_strides = tuple(dace.symbol(f"__E_stride_{i}") for i in (0, 1))
@@ -167,18 +202,18 @@ def _make_sdfg(sdfg_name: str) -> dace.SDFG:
 
 
 @pytest.mark.parametrize(
-    "persistent_config",
-    [(False, _binding_source_not_persistent), (True, _binding_source_persistent)],
+    "static_domain_config",
+    [(False, _binding_source), (True, _binding_source_with_static_domain)],
 )
-def test_bind_sdfg(persistent_config):
-    make_persistent, binding_source_ref = persistent_config
-    program_name = "sdfg_bindings{}".format("_persistent" if make_persistent else "")
+def test_bind_sdfg(static_domain_config):
+    use_static_domain, binding_source_ref = static_domain_config
+    program_name = "sdfg_bindings{}".format("_static_domain" if use_static_domain else "")
 
     FloatType = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     FieldType = ts.FieldType(dims=[ffront_test_utils.IDim, ffront_test_utils.JDim], dtype=FloatType)
     TupleType = ts.TupleType(types=[FieldType, ts.TupleType(types=[FieldType, FloatType])])
 
-    sdfg = _make_sdfg(program_name)
+    sdfg = _make_sdfg(program_name, use_static_domain)
 
     program_parameters = (
         interface.Parameter("A", FloatType),
@@ -198,9 +233,7 @@ def test_bind_sdfg(persistent_config):
         )
     )
 
-    compilable_program_source = dace_bindings_stage.bind_sdfg(
-        program_source, _bind_func_name, make_persistent
-    )
+    compilable_program_source = dace_bindings_stage.bind_sdfg(program_source, _bind_func_name)
 
     assert compilable_program_source.program_source == program_source
     assert len(compilable_program_source.library_deps) == 0
