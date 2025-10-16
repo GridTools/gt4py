@@ -9,6 +9,7 @@
 """Fast access to the auto optimization on DaCe."""
 
 import enum
+import warnings
 from typing import Any, Callable, Optional, Sequence, TypeAlias
 
 import dace
@@ -59,12 +60,13 @@ def gt_auto_optimize(
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
-    gpu_memory_pool: bool = False,
+    gpu_memory_pool: bool = True,
     constant_symbols: Optional[dict[str, Any]] = None,
     assume_pointwise: bool = True,
+    optimization_hooks: Optional[dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun]] = None,
+    demote_fields: Optional[list[str]] = None,
     validate: bool = True,
     validate_all: bool = False,
-    optimization_hooks: Optional[dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun]] = None,
     **kwargs: Any,
 ) -> dace.SDFG:
     """Performs GT4Py specific optimizations on the SDFG in place.
@@ -125,6 +127,8 @@ def gt_auto_optimize(
             global data access. See the `GT4PyMapBufferElimination` transformation for more.
         optimization_hooks: A `dict` containing the hooks that should be called,
             see `GT4PyAutoOptHook` for more information.
+        demote_fields: Consider these fields as transients for the purpose of optimization.
+            Use at your own risk. See Notes for all implications.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -136,6 +140,10 @@ def gt_auto_optimize(
             has unit strides.
         - In case GPU optimizations are enabled, the function assumes that all
             global fields are already on the GPU.
+        - When using the `demote_fields` feature the user has to ensure that the fields
+            meet all constraints of a transient, see ADR18 for more. Furthermore, there
+            is no guarantee whether the demoted field remains part of the SDFG's call
+            signature or not.
 
     Todo:
         - Update the description. The Phases are nice, but they have lost their
@@ -187,6 +195,39 @@ def gt_auto_optimize(
                 validate=False,
                 validate_all=validate_all,
             )
+
+        # Demote the fields.
+        #  Actually they should probably be at the very start of this function, however,
+        #  they have to be after constant substitution in case the descriptor is modified.
+        original_demoted_descriptors: dict[str, dace_data.Data] = {}
+        if demote_fields is not None:
+            for field_to_demote in demote_fields:
+                if field_to_demote not in sdfg.arrays:
+                    warnings.warn(
+                        f"Requested the demotion of field '{field_to_demote}' but the field is unknown.",
+                        stacklevel=0,
+                    )
+                    continue
+                field_desc = sdfg.arrays[field_to_demote]
+
+                if field_desc.transient:
+                    warnings.warn(
+                        f"Requested the demotion of field '{field_to_demote}' but the field is a transient.",
+                        stacklevel=0,
+                    )
+                    continue
+
+                # Demote the field but keep a copy of it such that we can restore it later.
+                original_demoted_descriptors[field_to_demote] = field_desc.clone()
+                field_desc.transient = True
+
+            if len(original_demoted_descriptors) != 0:
+                gtx_transformations.gt_simplify(
+                    sdfg=sdfg,
+                    validate=False,
+                    skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
+                    validate_all=validate_all,
+                )
 
         gtx_transformations.gt_reduce_distributed_buffering(
             sdfg, validate=False, validate_all=validate_all
@@ -253,6 +294,30 @@ def gt_auto_optimize(
 
         # Set the implementation of the library nodes.
         dace_aoptimize.set_fast_implementations(sdfg, device)
+
+        # We now turn the demoted fields back into globals if possible, for ABI compatibility.
+        for demoted_field, original_field_desc in original_demoted_descriptors.items():
+            if demoted_field not in sdfg.arrays:
+                # The demoted field is not inside the SDFG anymore, just insert it.
+                sdfg.add_datadesc(demoted_field, original_field_desc)
+
+            elif original_field_desc.is_equivalent(sdfg.arrays[demoted_field]) and all(
+                (ostride == cstride) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                for ostride, cstride in zip(
+                    sdfg.arrays[demoted_field].strides, original_field_desc.strides
+                )
+            ):
+                # The demoted field is still inside the SDFG, we only add it back if it
+                #  still has the same layout as before.
+                # NOTE: Technically we could ignore the strides, the problem are nested
+                #   SDFG, where they might be mapped into.
+                sdfg.arrays[demoted_field].transient = False
+
+            else:
+                warnings.warn(
+                    f"Could not restore the demoted field '{demoted_field}' back to a global.",
+                    stacklevel=0,
+                )
 
         if validate:
             sdfg.validate()
