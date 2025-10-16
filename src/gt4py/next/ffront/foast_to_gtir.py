@@ -307,11 +307,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 ):
                     if arg.op == dialect_ast_enums.BinaryOperator.SUB:
                         offset_index *= -1
+                    # TODO(havogt): we rely on the naming-convention for implicit offsets, see `dimension_to_implicit_offset`
                     current_expr = im.as_fieldop(
-                        # TODO(SF-N): we rely on the naming-convention that the cartesian dimensions
-                        #  are passed suffixed with `off`, e.g. the `K` is passed as `Koff` in the
-                        #  offset provider. This is a rather unclean solution and should be
-                        #  improved.
                         im.lambda_("__it")(
                             im.deref(
                                 im.shift(

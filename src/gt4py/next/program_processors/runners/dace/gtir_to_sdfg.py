@@ -17,21 +17,10 @@ from __future__ import annotations
 import abc
 import dataclasses
 import itertools
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Protocol,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
 
 import dace
+from dace.frontend.python import astutils as dace_astutils
 
 from gt4py import eve
 from gt4py.eve import concepts
@@ -46,10 +35,20 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_to_sdfg_primitives,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
-    transformations as gtx_transformations,
     utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+
+
+def _replace_connectors_in_code_string(
+    code: str, language: dace.dtypes.Language, connector_mapping: Mapping[str, str]
+) -> str:
+    """Helper function to replace connector names in the code of a Python tasklet."""
+    code_block = dace.properties.CodeBlock(code, language)
+    transformed_code_stmts = [
+        dace_astutils.ASTFindReplace(connector_mapping).visit(stmt) for stmt in code_block.code
+    ]
+    return dace.properties.CodeBlock(transformed_code_stmts, language).as_string
 
 
 class DataflowBuilder(Protocol):
@@ -66,6 +65,9 @@ class DataflowBuilder(Protocol):
 
     @abc.abstractmethod
     def unique_tasklet_name(self, name: str) -> str: ...
+
+    @abc.abstractmethod
+    def unique_tasklet_connector(self) -> str: ...
 
     def add_temp_array(
         self, sdfg: dace.SDFG, shape: Sequence[Any], dtype: dace.dtypes.typeclass
@@ -103,30 +105,77 @@ class DataflowBuilder(Protocol):
     def add_tasklet(
         self,
         name: str,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
-        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
-        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        inputs: set[str] | None,
+        outputs: set[str],
         code: str,
+        language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
-        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name."""
+        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name.
+
+        It also ensures that the tasklet connectors receive a unique name, different
+        from any other tasklet connector or data entity in the SDFG. Therefore,
+        this fuction returns the mapping from the given connector names, as they
+        appear in `inputs` and `outputs` arguments, to the new unique names.
+        """
         unique_name = self.unique_tasklet_name(name)
-        return state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
+
+        if inputs is None:
+            inputs = set()
+        else:
+            assert inputs.isdisjoint(outputs)
+
+        connector_mapping = {conn: self.unique_tasklet_connector() for conn in (inputs | outputs)}
+        new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
+
+        inputs = {connector_mapping[inp] for inp in inputs}
+        outputs = {connector_mapping[out] for out in outputs}
+
+        tasklet_node = state.add_tasklet(
+            unique_name, inputs, outputs, new_code, language=language, **kwargs
+        )
+        return tasklet_node, connector_mapping
 
     def add_mapped_tasklet(
         self,
         name: str,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
-        map_ranges: Dict[str, str | dace.subsets.Subset]
-        | List[Tuple[str, str | dace.subsets.Subset]],
-        inputs: Dict[str, dace.Memlet],
+        map_ranges: Mapping[str, str | dace.subsets.Subset],
+        inputs: Mapping[str, dace.Memlet] | None,
         code: str,
-        outputs: Dict[str, dace.Memlet],
+        outputs: Mapping[str, dace.Memlet],
+        language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
-    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
-        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name."""
+    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
+        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name.
+
+        It also ensures that the tasklet connectors receive a unique name, different
+        from any other tasklet connector or data entity in the SDFG. Therefore,
+        this fuction returns the mapping from the given connector names, as they
+        appear in `inputs` and `outputs` arguments, to the new unique names.
+        """
         unique_name = self.unique_tasklet_name(name)
-        return state.add_mapped_tasklet(unique_name, map_ranges, inputs, code, outputs, **kwargs)
+
+        if inputs is None:
+            inputs = {}
+        else:
+            assert inputs.keys().isdisjoint(outputs.keys())
+
+        connector_mapping = {
+            conn: self.unique_tasklet_connector() for conn in (inputs.keys() | outputs.keys())
+        }
+        new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
+
+        inputs = {connector_mapping[inp]: memlet for inp, memlet in inputs.items()}
+        outputs = {connector_mapping[out]: memlet for out, memlet in outputs.items()}
+
+        tasklet_node, map_entry, map_exit = state.add_mapped_tasklet(
+            unique_name, map_ranges, inputs, new_code, outputs, language=language, **kwargs
+        )
+        return tasklet_node, map_entry, map_exit, connector_mapping
 
 
 @dataclasses.dataclass(frozen=True)
@@ -241,9 +290,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     tasklet_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
     )
+    tasklet_connector_uids: eve.utils.UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="conn")
+    )
 
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
-        return self.offset_provider_type[offset]
+        return gtx_common.get_offset_type(self.offset_provider_type, offset)
 
     def make_field(
         self,
@@ -280,7 +332,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # the local dimension is converted into `ListType` data element
             if not isinstance(data_type.dtype, ts.ScalarType):
                 raise ValueError(f"Invalid field type {data_type}.")
-            if local_dim.value not in self.offset_provider_type:
+            if not gtx_common.has_offset(self.offset_provider_type, local_dim.value):
                 raise ValueError(
                     f"The provided local dimension {local_dim} does not match any offset provider type."
                 )
@@ -380,6 +432,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def unique_tasklet_name(self, name: str) -> str:
         return f"{self.tasklet_uids.sequential_id()}_{name}"
+
+    def unique_tasklet_connector(self) -> str:
+        return self.tasklet_connector_uids.sequential_id()
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]
@@ -1018,61 +1073,21 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return gtir_to_sdfg_primitives.translate_symbol_ref(node, ctx, self)
 
 
-def _remove_field_origin_symbols(ir: gtir.Program, sdfg: dace.SDFG) -> None:
-    """
-    Helper function to remove the origin symbols used in program field arguments,
-    that is only for non-transient data descriptors in the top-level SDFG.
-    The start symbol of field domain range is set to constant value 0, thus removing
-    the corresponding free symbol. These values are propagated to all nested SDFGs.
-
-    This function is only used by `build_sdfg_from_gtir()` when the option flag
-    `disable_field_origin_on_program_arguments` is set to True.
-    """
-
-    # collect symbols used as range start for all program arguments
-    range_start_symbols: dict[str, dace.symbolic.SymExpr] = {}
-    for p in ir.params:
-        if isinstance(p.type, ts.TupleType):
-            psymbols = [
-                sym
-                for sym in gtir_to_sdfg_utils.flatten_tuple_fields(p.id, p.type)
-                if isinstance(sym.type, ts.FieldType)
-            ]
-        elif isinstance(p.type, ts.FieldType):
-            psymbols = [p]
-        else:
-            psymbols = []
-        for psymbol in psymbols:
-            assert isinstance(psymbol.type, ts.FieldType)
-            if len(psymbol.type.dims) == 0:
-                # zero-dimensional field
-                continue
-            dataname = str(psymbol.id)
-            # set all range start symbols to constant value 0
-            range_start_symbols |= {
-                gtx_dace_utils.range_start_symbol(dataname, dim): 0 for dim in psymbol.type.dims
-            }
-    # we set all range start symbols to 0 in the top-level SDFG and proagate them to nested SDFGs
-    gtx_transformations.gt_substitute_compiletime_symbols(sdfg, range_start_symbols, validate=True)
-
-
 def build_sdfg_from_gtir(
     ir: gtir.Program,
     offset_provider_type: gtx_common.OffsetProviderType,
     column_axis: Optional[gtx_common.Dimension] = None,
-    disable_field_origin_on_program_arguments: bool = False,
 ) -> dace.SDFG:
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.
 
-    The lowering to SDFG requires that the program node is type-annotated, therefore this function
-    runs type ineference as first step.
+    The lowering to SDFG requires that the program node is type-annotated, therefore
+    this function runs type ineference as first step.
 
     Args:
         ir: The GTIR program node to be lowered to SDFG
         offset_provider_type: The definitions of offset providers used by the program node
         column_axis: Vertical dimension used for column scan expressions.
-        disable_field_origin_on_program_arguments: When True, the field range in all dimensions is assumed to start from 0
 
     Returns:
         An SDFG in the DaCe canonical form (simplified)
@@ -1094,8 +1109,5 @@ def build_sdfg_from_gtir(
     sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis, global_symbols)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
-
-    if disable_field_origin_on_program_arguments:
-        _remove_field_origin_symbols(ir, sdfg)
 
     return sdfg

@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import collections.abc
 import copy
 import dataclasses
 import functools
@@ -207,39 +206,6 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         on_inferred(self._infer_type_listener, return_type_or_synthesizer, *args)  # type: ignore[arg-type] # ensured by assert above
 
         return return_type_or_synthesizer
-
-
-def _get_dimensions_from_offset_provider(
-    offset_provider_type: common.OffsetProviderType,
-) -> dict[str, common.Dimension]:
-    dimensions: dict[str, common.Dimension] = {}
-    for offset_name, provider in offset_provider_type.items():
-        dimensions[offset_name] = common.Dimension(
-            value=offset_name, kind=common.DimensionKind.LOCAL
-        )
-        if isinstance(provider, common.Dimension):
-            dimensions[provider.value] = provider
-        elif isinstance(provider, common.NeighborConnectivityType):
-            dimensions[provider.source_dim.value] = provider.source_dim
-            dimensions[provider.codomain.value] = provider.codomain
-    return dimensions
-
-
-def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
-    def _get_dimensions(obj: Any):
-        if isinstance(obj, common.Dimension):
-            yield obj
-        elif isinstance(obj, ts.TypeSpec):
-            for field in obj.__datamodel_fields__.keys():
-                yield from _get_dimensions(getattr(obj, field))
-        elif isinstance(obj, collections.abc.Mapping):
-            for el in obj.values():
-                yield from _get_dimensions(el)
-        elif isinstance(obj, collections.abc.Iterable) and not isinstance(obj, str):
-            for el in obj:
-                yield from _get_dimensions(el)
-
-    return {dim.value: dim for dim in _get_dimensions(types)}
 
 
 def _type_synthesizer_from_function_type(fun_type: ts.FunctionType):
