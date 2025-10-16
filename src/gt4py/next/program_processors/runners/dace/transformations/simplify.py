@@ -62,6 +62,7 @@ def gt_simplify(
         `concat_where` built-in function.
     - `GT4PyDeadDataflowElimination`: Run `gt_eliminate_dead_dataflow()` on the SDFG,
         which removes more dead dataflow than the native DaCe version.
+    - `TrivialTaskletElimination`: Removing trivial copies.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -151,6 +152,19 @@ def gt_simplify(
                 if "GT4PyDeadDataflowElimination" not in result:
                     result["GT4PyDeadDataflowElimination"] = 0
                 result["GT4PyDeadDataflowElimination"] += eliminate_dead_dataflow_res
+
+        if "TrivialTaskletElimination" not in skip:
+            eliminated_trivial_tasklets = sdfg.apply_transformations_once_everywhere(
+                dace.transformation.dataflow.TrivialTaskletElimination(),
+                validate=False,
+                validate_all=validate_all,
+            )
+            if eliminated_trivial_tasklets:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "TrivialTaskletElimination" not in result:
+                    result["TrivialTaskletElimination"] = 0
+                result["TrivialTaskletElimination"] += eliminated_trivial_tasklets
 
         if "CopyChainRemover" not in skip:
             copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
