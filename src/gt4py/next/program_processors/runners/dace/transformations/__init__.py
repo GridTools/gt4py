@@ -37,7 +37,7 @@ from .map_fusion_extended import (
     gt_vertical_map_split_fusion,
 )
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
-from .map_promoter import MapPromoter
+from .map_promoter import MapPromoter, MapPromotionCallBack
 from .map_to_copy import MapToCopy
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
 from .multi_state_global_self_copy_elimination import (
@@ -87,6 +87,7 @@ __all__ = [
     "MapFusionVertical",
     "MapIterationOrder",
     "MapPromoter",
+    "MapPromotionCallBack",
     "MapToCopy",
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
