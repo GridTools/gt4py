@@ -14,14 +14,13 @@ from typing import Final
 import dace
 
 from gt4py.eve import codegen
-from gt4py.next import common as gtx_common
+from gt4py.next import utils as gtx_utils
 from gt4py.next.iterator import builtins as itir_builtins
 from gt4py.next.otf import languages, stages
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
+from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_utils, utils as gtx_dace_utils
 from gt4py.next.type_system import type_specifications as ts
 
 
-FIELD_RANGE_PARAM_RE: Final[re.Pattern] = re.compile(r"^__(.+)_(\S+)_range$")
 FIELD_SYMBOL_GT_TYPE: Final[ts.ScalarType] = ts.ScalarType(
     kind=getattr(ts.ScalarKind, itir_builtins.INTEGER_INDEX_BUILTIN.upper())
 )
@@ -68,7 +67,6 @@ def _validate_sdfg_scalar_arg(
 def _parse_gt_param(
     param_name: str,
     param_type: ts.DataType,
-    arg: str,
     code: codegen.TextBlock,
     sdfg_arglist: dict[str, dace.data.Data],
     make_persistent: bool,
@@ -84,40 +82,21 @@ def _parse_gt_param(
     For tuple arguments, this function is recursively called on all elements of the tuple.
     """
     if isinstance(param_type, ts.TupleType):
-        # Special handling of tuples
-        if (m := FIELD_RANGE_PARAM_RE.match(param_name)) is not None:
-            # Domain range is expressed as a tuple in each dimension
-            gt_field_name, dim_value = m[1], m[2]
-            dim = gtx_common.Dimension(dim_value)
-            rstart = gtx_dace_utils.range_start_symbol(gt_field_name, dim)
-            rstop = gtx_dace_utils.range_stop_symbol(gt_field_name, dim)
-            for i, tuple_param_name in enumerate([rstart, rstop]):
-                tuple_arg = f"{arg}[{i}]"
-                tuple_param_type = param_type.types[i]
-                assert isinstance(tuple_param_type, ts.ScalarType)
-                _parse_gt_param(
-                    tuple_param_name,
-                    tuple_param_type,
-                    tuple_arg,
-                    code,
-                    sdfg_arglist,
-                    make_persistent,
-                )
-        else:
-            # For regular data tuples, each element of the tuple gets a name
-            # with an index-based suffix and it is recursively visited.
-            for i, tuple_param_type in enumerate(param_type.types):
-                tuple_arg = f"{arg}[{i}]"
-                tuple_param_name = f"{param_name}_{i}"
-                assert isinstance(tuple_param_type, ts.DataType)
-                _parse_gt_param(
-                    tuple_param_name,
-                    tuple_param_type,
-                    tuple_arg,
-                    code,
-                    sdfg_arglist,
-                    make_persistent,
-                )
+        # For data tuples, each element of the tuple gets a name with an index-based
+        # suffix and it is recursively visited.
+        gtx_utils.tree_map(lambda p, arg: )(param_name, arg_tree)
+        for i, tuple_param_type in enumerate(param_type.types):
+            tuple_arg = f"{arg}[{i}]"
+            tuple_param_name = f"{param_name}_{i}"
+            assert isinstance(tuple_param_type, ts.DataType)
+            _parse_gt_param(
+                tuple_param_name,
+                tuple_param_type,
+                tuple_arg,
+                code,
+                sdfg_arglist,
+                make_persistent,
+            )
 
     elif param_name not in sdfg_arglist:
         # There are two reasons for this case:
@@ -281,10 +260,11 @@ def {_cb_get_stride}(ndarray, dim_index):
     #   On the first time, we use the regular SDFG call, which constructs the SDFG
     #   arguments list and validates that all data containers and free symbols are set.
     with code.indented():
-        for i, param in enumerate(program_source.entry_point.parameters):
-            arg = f"{_cb_args}[{i}]"
+        arg_vars = ", ".join(p.id for p in program_source.entry_point.parameters)
+        code.append(f"{arg_vars} = {_cb_args}")
+        for param in program_source.entry_point.parameters:
             assert isinstance(param.type_, ts.DataType)
-            _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
+            _parse_gt_param(param.name, param.type_, code, sdfg_arglist, make_persistent)
 
     src = codegen.format_python_source(code.text)
     return stages.BindingSource(src, library_deps=tuple())

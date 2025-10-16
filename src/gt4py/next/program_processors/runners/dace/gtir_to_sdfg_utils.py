@@ -13,6 +13,7 @@ from typing import Dict, Optional, TypeVar
 import dace
 
 from gt4py import eve
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -71,7 +72,7 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
 
-def make_symbol_tree(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.Sym, ...]:
+def make_symbol_tree(tuple_name: str, tuple_type: ts.TupleType) -> MaybeNestedInTuple[gtir.Sym]:
     """
     Creates a tree representation of the symbols corresponding to the tuple fields.
     The constructed tree preserves the nested nature of the tuple type, if any.
