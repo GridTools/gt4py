@@ -16,6 +16,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import Field, Dims, gtfn_cpu
+from gt4py.next.program_processors.runners import dace as dace_backends
 
 
 # from .. import definitions
@@ -121,9 +122,10 @@ if __name__ == "__main__":
     input_fields = [all_fields[f] for f in all_fields if f.startswith("field")]
     output_field = all_fields["out_e"]
 
-    compiled_program = sample_program.with_backend(gtfn_cpu)
+    compiled_program = sample_program.with_backend(dace_backends.run_dace_cpu_cached)
+    # compiled_program = sample_program.with_backend(gtfn_cpu)
 
-    for i in range(5):
+    for i in range(6):
         compiled_program(
             *input_fields,
             output_field,

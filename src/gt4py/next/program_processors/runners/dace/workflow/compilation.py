@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import dataclasses
 import os
-from typing import Any, Callable, Sequence
+from collections.abc import Callable, MutableSequence, Sequence
+from typing import Any
 
 import dace
 import factory
@@ -25,7 +26,7 @@ from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wf
 def _get_sdfg_ctype_arglist_callback(
     module_name: str, bind_func_name: str, python_code: str
 ) -> Callable[
-    [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]], None
+    [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], MutableSequence[Any]], None
 ]:
     """
     Helper method to load dynamically generated Python code which will be used
@@ -59,7 +60,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
 
     # The compiled program contains a callable object to update the SDFG arguments list.
     update_sdfg_ctype_arglist: Callable[
-        [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]],
+        [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], MutableSequence[Any]],
         None,
     ]
 

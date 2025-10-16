@@ -43,11 +43,17 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        if not fun.sdfg_program._lastargs:
-            # First call, the SDFG is not intitalized, so forward the call to `CompiledSDFG`
-            # to proper initilize it. Later calls to this SDFG will be handled through
+        try:
+            # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
+            #  so we just update it with the current call arguments.
+            update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
+            result = fun.fast_call()
+        except IndexError:
+            # First call, the SDFG is not initialized, so forward the call to `CompiledSDFG`
+            # to properly initialize it. Later calls to this SDFG will be handled through
             # the `fast_call()` API.
-            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
+            assert len(fun.sdfg_program._lastargs) == 0  # `fun.sdfg_program._lastargs` is empty
+            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
             this_call_args = sdfg_callable.get_sdfg_args(
                 fun.sdfg_program.sdfg,
                 offset_provider,
@@ -57,12 +63,6 @@ def convert_args(
             this_call_args[gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL] = config.COLLECT_METRICS_LEVEL
             with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
                 result = fun(**this_call_args)
-
-        else:
-            # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
-            #  so we just update it with the current call arguments.
-            update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
-            result = fun.fast_call()
 
         if collect_time:
             if result is None:

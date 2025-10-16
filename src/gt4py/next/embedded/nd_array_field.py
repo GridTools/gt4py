@@ -117,7 +117,22 @@ class NdArrayField(
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
 
-    array_ns: ClassVar[ModuleType]  # TODO(havogt) introduce a NDArrayNamespace protocol
+    array_ns: ClassVar[ModuleType]  # TODO(havogt): introduce a NDArrayNamespace protocol
+    array_byte_bounds: ClassVar[  # TODO(egparedes): make this part of the previous protocol
+        Callable[[npt.NDArray], tuple[int, int]]
+        | Callable[[core_defs.NDArrayObject], tuple[int, int]]
+    ]
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if hasattr(cls, "array_ns") and not hasattr(cls, "array_byte_bounds"):
+            try:
+                cls.array_byte_bounds = staticmethod(
+                    getattr(cls.array_ns, "byte_bounds", None)
+                    or cls.array_ns.lib.array_utils.byte_bounds
+                )
+            except AttributeError:
+                pass
 
     @property
     def domain(self) -> common.Domain:
@@ -431,13 +446,7 @@ class NdArrayField(
     if dace:
         # Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs
         def _dace_data_ptr(self) -> int:
-            array_ns = self.array_ns
-            array_byte_bounds = (  # TODO(egparedes): make this part of some Array namespace protocol
-                array_ns.byte_bounds
-                if hasattr(array_ns, "byte_bounds")
-                else array_ns.lib.array_utils.byte_bounds
-            )
-            return array_byte_bounds(self.ndarray)[0]
+            return self.array_byte_bounds(self.ndarray)[0]  # type: ignore[call-arg,misc] # array_byte_bounds is a staticmethod
 
         def _dace_descriptor(self) -> dace.data.Data:
             return dace.data.create_datadescriptor(self.ndarray)
