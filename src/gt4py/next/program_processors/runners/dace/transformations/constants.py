@@ -39,6 +39,7 @@ _GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = GT_SIMPLIFY_D
     "ReferenceToView",
     "ConsolidateEdges",
     "MapToCopy",
+    "TrivialTaskletElimination",
 }
 """Simplify stages disabled during the optimization of dataflow of the top level Maps"."""
 
@@ -65,6 +66,7 @@ _GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
         "SingleStateGlobalSelfCopyElimination",
         "MultiStateGlobalSelfCopyElimination",
         "MapToCopy",
+        "TrivialTaskletElimination",
     }
 )
 """Simplify stages disabled during the optimization of dataflow inside the Maps."""
