@@ -69,19 +69,24 @@ def _make_sdfg_1(
             output_nodes={c},
         )
     else:
-        state.add_nedge(b, c, dace.Memlet("b[0:10, 2:5] -> [0:10, 0:3]"))
+        state.add_nedge(b, c, dace.Memlet("b[0:10, 2:4] -> [0:10, 1:3]"))
     sdfg.validate()
 
     return sdfg, state
 
 
 @pytest.mark.parametrize("bypass_node", [True, False])
-def test_map_to_copy_map_consumer(bypass_node: bool):
-    sdfg, state = _make_sdfg_1(consumer_is_map=True)
+@pytest.mark.parametrize("consumer_is_map", [True, False])
+def test_map_to_copy_map_consumer(bypass_node: bool, consumer_is_map: bool):
+    sdfg, state = _make_sdfg_1(consumer_is_map=consumer_is_map)
 
     assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 3
-    assert util.count_nodes(sdfg, dace_nodes.Tasklet) == 2
-    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    if consumer_is_map:
+        assert util.count_nodes(sdfg, dace_nodes.Tasklet) == 2
+        assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 2
+    else:
+        assert util.count_nodes(sdfg, dace_nodes.Tasklet) == 1
+        assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
 
     ref, res = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
@@ -95,10 +100,14 @@ def test_map_to_copy_map_consumer(bypass_node: bool):
     )
     assert nb_applied == 1
 
-    tlet_after = util.count_nodes(sdfg, dace_nodes.Tasklet, True)
-    assert len(tlet_after) == 1
-    assert {tlet.label for tlet in tlet_after} == {"computation"}
-    assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
+    if consumer_is_map:
+        tlet_after = util.count_nodes(sdfg, dace_nodes.Tasklet, True)
+        assert len(tlet_after) == 1
+        assert {tlet.label for tlet in tlet_after} == {"computation"}
+        assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
+    else:
+        assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 0
+        assert util.count_nodes(sdfg, dace_nodes.Tasklet) == 0
 
     ac_after = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
     if bypass_node:
