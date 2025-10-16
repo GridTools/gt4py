@@ -110,27 +110,26 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     VarKOffset = as_fmt("lk + {k}")
 
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
-        symtable = kwargs.get("symtable", {})
+        k_offset = (
+            self.visit(node.k_offset, **kwargs)
+            if isinstance(node.k_offset, npir.VarKOffset)
+            else node.k_offset
+        )
 
         offsets: Tuple[Optional[int], Optional[int], Union[str, int, None]] = (
             node.i_offset,
             node.j_offset,
-            None,
+            k_offset,
         )
 
-        # Vertical offset - check K vertical exists
-        if node.name in symtable and symtable[node.name].dimensions[2]:
-            k_offset = (
-                self.visit(node.k_offset, **kwargs)
-                if isinstance(node.k_offset, npir.VarKOffset)
-                else node.k_offset
-            )
-            offsets = (offsets[0], offsets[1], k_offset)
-
         # To determine: when is the symbol name not in the symtable?
-        if node.name in symtable:
+        if node.name in kwargs.get("symtable", {}):
             decl = kwargs["symtable"][node.name]
-            dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
+            dimensions = (
+                decl.dimensions
+                if isinstance(decl, npir.FieldDecl | npir.TemporaryDecl)
+                else [True] * 3
+            )
             offsets = cast(
                 Tuple[Optional[int], Optional[int], Union[str, int, None]],
                 tuple(off if has_dim else None for has_dim, off in zip(dimensions, offsets)),
