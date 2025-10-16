@@ -175,7 +175,9 @@ class MapToCopy(dace_transformation.SingleStateTransformation):
             # Instead of just connecting `src_access_node` to `dst_access_node` we
             #  fully eliminate `dst_access_node` and all of its consumer directly
             #  read from `src_access_node`.
-            offset_correction = src_subset.min_element()
+            offset_correction = [
+                sm - dm for sm, dm in zip(src_subset.min_element(), dst_subset.min_element())
+            ]
             already_reconfigured_nodes: set[tuple[dace_nodes.Node, str]] = set()
             for old_dst_consumer_edge in graph.out_edges(dst_access_node):
                 reconfigure_key = (old_dst_consumer_edge.dst, old_dst_consumer_edge.dst_conn)
