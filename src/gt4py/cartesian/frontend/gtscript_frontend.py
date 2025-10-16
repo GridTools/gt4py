@@ -15,6 +15,7 @@ import numbers
 import textwrap
 import time
 import types
+import warnings
 from typing import (
     Any,
     Callable,
@@ -1645,6 +1646,13 @@ class IRMaker(ast.NodeVisitor):
                                     "2D temporaries (e.g. `tmp: Field[IJ, float] = ...) is an experimental feature "
                                     "and not yet implemented for the `gt:X` backends."
                                 )
+                            warnings.warn(
+                                "2D temporaries is an experimental feature. Please read "
+                                "<https://github.com/GridTools/gt4py/blob/main/docs/development/ADRs/cartesian/experimental-features.md> "
+                                "to understand the consequences.",
+                                category=UserWarning,
+                                stacklevel=2,
+                            )
 
                             axes = nodes.Domain.from_gtscript(field_desc.axes).axes_names
                             dtype = nodes.DataType.from_dtype(field_desc.dtype)
