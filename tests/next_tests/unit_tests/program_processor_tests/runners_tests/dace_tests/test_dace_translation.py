@@ -67,6 +67,7 @@ def _translate_gtir_to_sdfg(
         return dace_wf_translation.DaCeTranslator(
             device_type=device_type,
             auto_optimize=auto_optimize,
+            auto_optimize_args=None,
             async_sdfg_call=async_sdfg_call,
             use_metrics=use_metrics,
         ).generate_sdfg(ir, offset_provider=offset_provider, column_axis=None)
