@@ -63,6 +63,7 @@ def gt_simplify(
     - `GT4PyDeadDataflowElimination`: Run `gt_eliminate_dead_dataflow()` on the SDFG,
         which removes more dead dataflow than the native DaCe version.
     - `TrivialTaskletElimination`: Removing trivial copies.
+    - `MapToCopy`: Called to remove some slices.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -151,6 +152,23 @@ def gt_simplify(
                 if "TrivialTaskletElimination" not in result:
                     result["TrivialTaskletElimination"] = 0
                 result["TrivialTaskletElimination"] += eliminated_trivial_tasklets
+
+        if "MapToCopy" not in skip:
+            find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()
+            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+            removed_maps = sdfg.apply_transformations_once_everywhere(
+                gtx_transformations.MapToCopy(
+                    single_use_data=single_use_data,
+                ),
+                validate=False,
+                validate_all=validate_all,
+            )
+            if removed_maps:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "MapToCopy" not in result:
+                    result["MapToCopy"] = 0
+                result["MapToCopy"] += removed_maps
 
         if "GT4PyDeadDataflowElimination" not in skip:
             eliminate_dead_dataflow_res = gtx_transformations.gt_eliminate_dead_dataflow(
