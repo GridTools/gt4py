@@ -123,6 +123,9 @@ def make_dace_backend(
         # Backend supports gpu memory pool only on CUDA target.
         optimization_args["gpu_memory_pool"] = False
 
+    optimization_args["gpu_block_size"] = (32, 8, 1)
+    optimization_args["gpu_block_size_1d"] = (256, 1, 1)
+
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
         cached=cached,
