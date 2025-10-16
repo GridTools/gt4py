@@ -658,7 +658,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         for axis_size in map_size:
             dims_to_inspect += 1
             if axis_size != 1:
-                num_map_params += 1
+                num_map_params += 1  # Handle 2D maps where one dimension has range 1 as 1D map
 
         # Because of a particularity of the DaCe code generator, the iteration
         #  variable that is associated to the `x` dimension of the block is the
@@ -666,9 +666,11 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         if num_map_params == 1:
             block_size = list(self.block_size_1d)
             launch_bounds = self.launch_bounds_1d
-            for node in graph.scope_subgraph(self.map_entry, include_entry=False, include_exit=False):
+            for node in graph.scope_subgraph(
+                self.map_entry, include_entry=False, include_exit=False
+            ):
                 if isinstance(node, dace_nodes.NestedSDFG) and "scan" in node.label:
-                    launch_bounds = "512"
+                    launch_bounds = "512"  # Use high launch bound in case of scans to limit register usage and increase occupancy
         elif num_map_params == 2:
             block_size = list(self.block_size_2d)
             launch_bounds = self.launch_bounds_2d
