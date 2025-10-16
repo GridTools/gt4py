@@ -89,7 +89,7 @@ class MapToCopy(dace_transformation.SingleStateTransformation):
         for memlet in [src_edge.data, dst_edge.data]:
             if memlet.wcr is not None:
                 return False
-            if memlet.allow_oob is not None:
+            if memlet.allow_oob:
                 return False
 
         # TODO: Should we disallow views?
@@ -116,9 +116,9 @@ class MapToCopy(dace_transformation.SingleStateTransformation):
         #   `concat_where`, but I am not sure how important that case is.
         if isinstance(sdfg.arrays[src_access_node.data], dace_data.Scalar):
             return False
-        if (src_subset.num_elements() == src_edge.data.volume()) != False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        if (src_subset.num_elements() == src_edge.data.volume) != True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             return False
-        if (dst_subset.num_elements() == dst_edge.data.volume()) != False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        if (dst_subset.num_elements() == dst_edge.data.volume) != True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             return False
         assert all(
             all(
