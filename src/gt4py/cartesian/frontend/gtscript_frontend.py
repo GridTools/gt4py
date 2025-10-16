@@ -1618,23 +1618,38 @@ class IRMaker(ast.NodeVisitor):
                     if target_annotation is not None:
                         source = ast.unparse(target_annotation)
                         try:
-                            dtype = eval(
+                            dtype_or_field_desc = eval(
                                 source,
                                 self.temporary_type_as_str_to_native_type
                                 | self.temporary_field_type
-                                | {"Field": gtscript.Field, "IJ": gtscript.IJ, "np": np},
+                                | gtscript.__dict__,
                             )
                         except NameError:
                             raise GTScriptSyntaxError(
                                 message=f"Failed to recognize type {source} for local symbol {name}."
-                                f"Available types are {self.temporary_type_as_str_to_native_type.keys()} or {self.dtypes}",
+                                f"Available types are {self.temporary_type_as_str_to_native_type.keys()}, {self.dtypes}, "
+                                "or `Field[IJ, dtype]`.",
                                 loc=nodes.Location.from_ast_node(t),
                             ) from None
                         # If Field, we have to expand to resolve axes and true type
-                        if isinstance(dtype, gtscript._FieldDescriptor):
-                            field_desc = dtype
+                        if isinstance(dtype_or_field_desc, gtscript._FieldDescriptor):
+                            field_desc = dtype_or_field_desc
+                            if field_desc.axes != gtscript.IJ:
+                                raise GTScriptSyntaxError(
+                                    message=f"Typed temporaries must be IJ, temporaries for axes {field_desc.axes}"
+                                    " is not yet available. Contact the team.",
+                                    loc=nodes.Location.from_ast_node(t),
+                                ) from None
+                            if self.backend_name.startswith("gt:"):
+                                raise NotImplementedError(
+                                    "2D temporaries (e.g. `tmp: Field[IJ, float] = ...) is an experimental feature "
+                                    "and not yet implemented for the `gt:X` backends."
+                                )
+
                             axes = nodes.Domain.from_gtscript(field_desc.axes).axes_names
                             dtype = nodes.DataType.from_dtype(field_desc.dtype)
+                        else:
+                            dtype = dtype_or_field_desc
 
                     field_decl = nodes.FieldDecl(
                         name=name,
