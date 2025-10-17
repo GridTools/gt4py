@@ -130,11 +130,11 @@ def _parse_gt_param(
                                 sdfg_arglist=sdfg_arglist,
                             )
                 for i, array_stride in enumerate(sdfg_arg_desc.strides):
-                    stride_value = f"{_cb_get_stride}({arg}.ndarray, {i})"
+                    dim_stride = f"{_cb_get_stride}({arg}.ndarray, {i})"
                     if isinstance(array_stride, int) or str(array_stride).isdigit():
                         # The array stride is set to constant value in this dimension.
                         code.append(
-                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {stride_value}"
+                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {dim_stride}"
                         )
                     else:
                         assert str(array_stride) == gtx_dace_utils.field_stride_symbol_name(
@@ -145,7 +145,7 @@ def _parse_gt_param(
                         _parse_gt_param(
                             param_name=array_stride.name,
                             param_type=FIELD_SYMBOL_GT_TYPE,
-                            arg=stride_value,
+                            arg=dim_stride,
                             code=code,
                             sdfg_arglist=sdfg_arglist,
                         )
