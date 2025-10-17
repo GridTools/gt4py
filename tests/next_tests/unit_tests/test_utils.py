@@ -72,14 +72,15 @@ def test_default_make_args_canonicalizer(options: dict[str, bool]):
     canonicalizer = utils.make_args_canonicalizer(signature, **options)
     canonical_form = ((1, 2), {"c": 3, "d": 4})
 
-    in_place_kwargs = options["allow_kwargs_mutation"] is False or options["sort_kwargs"] is True
+    in_place_kwargs = options["allow_kwargs_mutation"] is True and options["sort_kwargs"] is False
+
     output = canonicalizer((1, 2), kwargs := {"c": 3, "d": 4})
     assert output == canonical_form
-    assert output[1] is kwargs or in_place_kwargs
+    assert (output[1] is kwargs) == in_place_kwargs
     assert canonicalizer.cache_info().currsize == 1
 
     assert canonicalizer((1, 2), {"d": 4, "c": 3}) == canonical_form
-    assert output[1] is kwargs or in_place_kwargs
+    assert (output[1] is kwargs) == in_place_kwargs
     assert tuple(output[1].keys()) == ("c", "d") or not options["sort_kwargs"]
     assert canonicalizer.cache_info().currsize == 1
 
