@@ -81,7 +81,55 @@ def benchmark_copy_01_arg_program(
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
-def benchmark_copy_05_arg_horizontal_program(
+def benchmark_horizontal_copy_01_arg_program(
+    benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
+):
+    @gtx.field_operator
+    def identity_01_fop(
+        in_field: gtx.Field[Dims[Cell], gtx.float64],
+    ) -> gtx.Field[Dims[Cell], gtx.float64]:
+        return in_field
+
+    @gtx.program(grid_type=gtx.GridType.UNSTRUCTURED)
+    def horizontal_copy_01_arg_program(
+        in_field: gtx.Field[Dims[Cell], gtx.float64],
+        out: gtx.Field[Dims[Cell], gtx.float64],
+        horizontal_start: gtx.int32,
+        horizontal_end: gtx.int32,
+    ) -> None:
+        identity_01_fop(
+            in_field,
+            out=out,
+            domain={
+                Cell: (horizontal_start, horizontal_end),
+            },
+        )
+
+    size = 1
+    input_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
+    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
+
+    # Compilation and warm-up
+    compiled_program = horizontal_copy_01_arg_program.with_backend(backend)
+    for _ in range(WARMUP_ITERS):
+        compiled_program(
+            input_field,
+            out=out_field,
+            horizontal_start=0,
+            horizontal_end=size,
+        )
+
+    benchmark(
+        compiled_program,
+        input_field,
+        out=out_field,
+        horizontal_start=0,
+        horizontal_end=size,
+    )
+
+
+@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
+def benchmark_horizontal_copy_05_arg_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
     @gtx.field_operator
@@ -95,7 +143,7 @@ def benchmark_copy_05_arg_horizontal_program(
         return field4
 
     @gtx.program(grid_type=gtx.GridType.UNSTRUCTURED)
-    def copy_05_arg_horizontal_program(
+    def horizontal_copy_05_arg_program(
         field0: gtx.Field[Dims[Cell], gtx.float64],
         field1: gtx.Field[Dims[Cell], gtx.float64],
         field2: gtx.Field[Dims[Cell], gtx.float64],
@@ -122,7 +170,7 @@ def benchmark_copy_05_arg_horizontal_program(
     out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
 
     # Compilation and warm-up
-    compiled_program = copy_05_arg_horizontal_program.with_backend(backend)
+    compiled_program = horizontal_copy_05_arg_program.with_backend(backend)
     for _ in range(WARMUP_ITERS):
         compiled_program(
             *input_fields,
@@ -141,7 +189,7 @@ def benchmark_copy_05_arg_horizontal_program(
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
-def benchmark_copy_25_arg_horizontal_program(
+def benchmark_horizontal_copy_25_arg_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
     @gtx.field_operator
@@ -175,7 +223,7 @@ def benchmark_copy_25_arg_horizontal_program(
         return field24
 
     @gtx.program(grid_type=gtx.GridType.UNSTRUCTURED)
-    def copy_25_arg_horizontal_program(
+    def horizontal_copy_25_arg_program(
         field0: gtx.Field[Dims[Cell], gtx.float64],
         field1: gtx.Field[Dims[Cell], gtx.float64],
         field2: gtx.Field[Dims[Cell], gtx.float64],
@@ -242,7 +290,7 @@ def benchmark_copy_25_arg_horizontal_program(
     out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
 
     # Compilation and warm-up
-    compiled_program = copy_25_arg_horizontal_program.with_backend(backend)
+    compiled_program = horizontal_copy_25_arg_program.with_backend(backend)
     for _ in range(WARMUP_ITERS):
         compiled_program(
             *input_fields,
