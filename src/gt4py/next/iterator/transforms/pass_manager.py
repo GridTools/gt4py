@@ -22,6 +22,7 @@ from gt4py.next.iterator.transforms import (
     inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
+    prune_empty_concat_where,
     remove_broadcast,
     symbol_ref_utils,
 )
@@ -164,6 +165,7 @@ def apply_common_transforms(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
+    ir = prune_empty_concat_where.prune_empty_concat_where(ir)
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
 
     ir = concat_where.transform_to_as_fieldop(ir)
@@ -256,6 +258,7 @@ def apply_fieldview_transforms(
 
     ir = inline_fundefs.InlineFundefs().visit(ir)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
+    # required for dead-code-elimination and `prune_empty_concat_where` pass
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
     ir = dead_code_elimination.dead_code_elimination(ir, offset_provider_type=offset_provider_type)
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
@@ -271,5 +274,6 @@ def apply_fieldview_transforms(
         symbolic_domain_sizes=symbolic_domain_sizes,
         offset_provider=offset_provider,
     )
+    ir = prune_empty_concat_where.prune_empty_concat_where(ir)
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
     return ir
