@@ -96,9 +96,9 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             shape += ["_dK_"]
             offset += ["0"]
         # Data dimensions
-        if len(node.data_dims) > 0:
-            shape += [str(dim) for dim in node.data_dims]
-            offset += ["0"] * len(node.data_dims)
+        shape += [str(dim) for dim in node.data_dims]
+        offset += ["0"] * len(node.data_dims)
+
         dtype = self.visit(node.dtype, **kwargs)
         dims = node.dimensions
         return f"{node.name} = Field.empty(({', '.join(shape)}), {dtype}, ({', '.join(offset)}), {dims})"

@@ -218,8 +218,7 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
 
         # Data dimensions
         data_dimensions: list[str] = [str(dim) for dim in temporary_declaration.data_dims]
-        if len(temporary_declaration.data_dims) > 0:
-            offset += ["0"] * len(temporary_declaration.data_dims)
+        offset += ["0"] * len(temporary_declaration.data_dims)
 
         # All together to write the `Field.empty` call
         dims = temporary_declaration.dimensions
