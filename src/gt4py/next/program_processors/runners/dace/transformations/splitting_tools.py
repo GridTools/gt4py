@@ -215,6 +215,27 @@ def maybe_intersecting(
     return dace_sbs.intersects(sbs1, sbs2) is not False
 
 
+def union_of_subsets(ranges: Iterable[dace_sbs.Subset]) -> Optional[dace_sbs.Subset]:
+    """Computes the union of a list of ranges.
+    The function will compute the union of a list of ranges. If the
+    ranges are not compatible or if the union is not a range, the
+    function will return `None`.
+    Args:
+        ranges: The ranges whose union should be computed.
+    """
+    total_range = None
+    for r in ranges:
+        if not isinstance(r, dace_sbs.Subset):
+            return None
+        if total_range is None:
+            total_range = r
+        else:
+            total_range = dace_sbs.bounding_box_union(total_range, r)
+            if total_range is None or not isinstance(total_range, dace_sbs.Subset):
+                return None
+    return total_range
+
+
 def split_node(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
