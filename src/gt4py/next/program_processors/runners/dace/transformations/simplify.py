@@ -262,21 +262,6 @@ def gt_inline_nested_sdfg(
                 cleaner.apply(parent_state, parent_sdfg)
                 nb_preproccess_total += 1
 
-        # Block the inlining of NestedSDFG containing a scan.
-        #  we do this to avoid a bug in DaCe simplify transformations, see
-        #  [issue#2182](https://github.com/spcl/dace/issues/2182) for more.
-        #  Before the bug was hidden but once we started running `TrivialTaskletElimination`
-        #  it was no longer the case. The solution is to block the inlining and keep
-        #  scans localized inside their NestedSDFG.
-        # NOTE: Currently there is no transformation that takes advantages in any way
-        #   of a scan and they are mostly inside Maps anyway, except of unit tests,
-        #   where inlining is not possible anyway.
-        if nsdfg_node.label.startswith("scan_"):
-            # TODO(phimuell, edopao): The canonical name should be `^scan_[0-9]+`,
-            #   however, due to some inlining renaming it might be altered. Let's
-            #   hope it is good enough.
-            continue
-
         # NOTE: In [PR#2178](https://github.com/GridTools/gt4py/pull/2178) this function was
         #   modified to be more efficient. It also changed the order in which the inlining
         #   transformations of DaCe were applied. Instead of trying `InlineMultistateSDFG`

@@ -678,6 +678,17 @@ def translate_scan(
         symbol_mapping=nsdfg_symbols_mapping,
     )
 
+    # Block the inlining of NestedSDFG containing a scan.
+    #  We do this to avoid a bug in DaCe simplify transformations, see
+    #  [issue#2182](https://github.com/spcl/dace/issues/2182) for more. Before the bug
+    #  was hidden but once we started running `TrivialTaskletElimination` it was no
+    #  longer the case. The solution is to block the inlining and keep scans localized
+    #  inside their NestedSDFG.
+    # NOTE: Currently there is no transformation that takes advantages in any way
+    #   of a scan and they are mostly inside Maps anyway, except of unit tests,
+    #   where inlining is not possible anyway.
+    nsdfg_node.no_inline = True
+
     lambda_input_edges = []
     for input_connector, outer_arg in lambda_arg_nodes.items():
         arg_desc = outer_arg.dc_node.desc(ctx.sdfg)
