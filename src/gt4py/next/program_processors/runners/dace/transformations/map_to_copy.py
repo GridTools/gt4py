@@ -21,7 +21,25 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 
 @dace_properties.make_properties
 class MapToCopy(dace_transformation.SingleStateTransformation):
-    """Promotes a Map such that it can be fused together."""
+    """Changes a copy Map into a Memlet.
+
+    The transformation matches the pattern `MapEntry --> Tasklet --> MapExit`. Being
+    a copy Map, the MapEntry has exactly one incoming edge that reads from an
+    AccessNode (`Input`), the Tasklet is trivial and MapExit writes into an
+    AccessNode (`Output`).
+
+    The transformation has two modes. In the first mode the Map is just replaced by
+    a Memlet between `Input` and `Output`, thus the copy still takes place.
+    The second mode, known as bypass mode `Output` is completely bypassed, i.e.
+    all ready from `Output` will now be satisfied directly by `Input`.
+    Which mode is used depends on the concrete situation, but in order for the
+    bypass mode to be selected the set of single use data has to be passed to the
+    transformation at construction.
+
+    Args:
+        single_use_data: The result of `SingleUseData`, needs to be passed if
+            bypass mode should be used.
+    """
 
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
