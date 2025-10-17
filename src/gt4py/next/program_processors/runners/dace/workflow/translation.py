@@ -382,6 +382,7 @@ class DaCeTranslator(
                 sdfg, constant_symbols, validate=True
             )
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+
         elif len(constant_symbols) != 0:
             # Target CPU without SDFG transformations, but still replace constant symbols.
             # Replacing the SDFG symbols for field origin in global arrays is strictly
