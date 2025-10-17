@@ -139,7 +139,7 @@ from __future__ import annotations
 import enum
 import operator
 import sys
-from typing import List, Optional, Self, Sequence
+from typing import List, Optional, Sequence
 
 import numpy as np
 
@@ -201,7 +201,7 @@ class Domain(Node):
     sequential_axis = attribute(of=Axis, optional=True)
 
     @classmethod
-    def from_gtscript(cls, gt_axis: list[gt_script.Axis]) -> Self:
+    def from_gtscript(cls, gt_axis: list[gt_script.Axis]) -> Domain:
         sequential_axis = None
         parallel_axes = []
         for axis in gt_axis:
