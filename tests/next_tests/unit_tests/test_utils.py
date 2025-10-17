@@ -55,20 +55,45 @@ def test_tree_map_multiple_input_types():
     assert testee([(1, [2]), 3]) == ((2, (3,)), 4)
 
 
-def test_make_signature_canonicalizer():
+@pytest.mark.parametrize(
+    "options",
+    [
+        dict(allow_kwargs_mutation=allow_kwargs_mutation, sort_kwargs=sort_kwargs)
+        for allow_kwargs_mutation in (True, False)
+        for sort_kwargs in (True, False)
+    ],
+    ids=lambda option: str.join(", ", (f"{k}={v}" for k, v in option.items())),
+)
+def test_default_make_args_canonicalizer(options: dict[str, bool]):
     def func(a, /, b, *, c, d):
         return a + b + c + d
 
     signature = inspect.signature(func)
-    canonicalizer = utils.make_signature_canonicalizer(signature)
+    canonicalizer = utils.make_args_canonicalizer(signature, **options)
+    canonical_form = ((1, 2), {"c": 3, "d": 4})
 
-    assert canonicalizer((1, 2), {"c": 3, "d": 4}) == ((1, 2), {"c": 3, "d": 4})
-    assert canonicalizer((1, 2), {"d": 4, "c": 3}) == ((1, 2), {"c": 3, "d": 4})
-    assert canonicalizer((1,), {"b": 2, "c": 3, "d": 4}) == ((1, 2), {"c": 3, "d": 4})
-    assert canonicalizer((), {"d": 4, "a": 1, "b": 2, "c": 3}) == ((1, 2), {"c": 3, "d": 4})
+    in_place_kwargs = options["allow_kwargs_mutation"] is False or options["sort_kwargs"] is True
+    output = canonicalizer((1, 2), kwargs := {"c": 3, "d": 4})
+    assert output == canonical_form
+    assert output[1] is kwargs or in_place_kwargs
+    assert canonicalizer.cache_info().currsize == 1
+
+    assert canonicalizer((1, 2), {"d": 4, "c": 3}) == canonical_form
+    assert output[1] is kwargs or in_place_kwargs
+    assert tuple(output[1].keys()) == ("c", "d") or not options["sort_kwargs"]
+    assert canonicalizer.cache_info().currsize == 1
+
+    assert canonicalizer((1,), {"b": 2, "c": 3, "d": 4}) == canonical_form
+    assert canonicalizer.cache_info().currsize == 2
+
+    assert canonicalizer((), {"d": 4, "a": 1, "b": 2, "c": 3}) == canonical_form
+    assert canonicalizer.cache_info().currsize == 3
 
     with pytest.raises(ValueError, match="Missing keyword arguments: {'c'}"):
         canonicalizer((1, 2), {"d": 4})
+
+    with pytest.raises(ValueError, match="Got unexpected keyword arguments: {'foo'}"):
+        canonicalizer((1, 2), {"d": 4, "foo": 5})
 
     with pytest.raises(ValueError, match="Too many positional arguments"):
         canonicalizer((1, 2, 3, 4, 5), {})  # too many positional arguments
