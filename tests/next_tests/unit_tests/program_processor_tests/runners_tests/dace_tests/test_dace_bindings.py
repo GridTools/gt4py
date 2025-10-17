@@ -223,6 +223,9 @@ def test_bind_sdfg(static_domain_config):
         interface.Parameter("E", FieldType),
     )
 
+    # TODO(edopao): once compile-time domain is merged (github.com/GridTools/gt4py/pull/2173)
+    #  update this test so that it starts from a DSL program and it uses the dace
+    #  backend workflow to generate the corresponding SDFG and bindings code.
     program_source: stages.ProgramSource[dace_bindings_stage.SrcL, languages.LanguageSettings] = (
         stages.ProgramSource(
             entry_point=interface.Function(program_name, tuple(program_parameters)),

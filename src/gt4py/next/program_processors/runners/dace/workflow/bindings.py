@@ -65,19 +65,17 @@ def _parse_gt_param(
     For tuple arguments, this function is recursively called on all elements of the tuple.
     """
     if isinstance(param_type, ts.TupleType):
-        # For data tuples, each element of the tuple gets a name with an index-based
-        # suffix and it is recursively visited.
+        # Each element of a tuple gets a name with an index-based suffix and it is recursively visited.
         tuple_args = [f"{arg}_{i}" for i in range(len(param_type.types))]
         code.append("{} = {}".format(", ".join(tuple_args), arg))
-        for i, (tuple_arg, tuple_param_type) in enumerate(zip(tuple_args, param_type.types)):
-            tuple_param_name = f"{param_name}_{i}"
-            assert isinstance(tuple_param_type, ts.DataType)
+        for i, (tuple_arg, tuple_arg_type) in enumerate(zip(tuple_args, param_type.types)):
+            assert isinstance(tuple_arg_type, ts.DataType)
             _parse_gt_param(
-                tuple_param_name,
-                tuple_param_type,
-                tuple_arg,
-                code,
-                sdfg_arglist,
+                param_name=f"{param_name}_{i}",
+                param_type=tuple_arg_type,
+                arg=tuple_arg,
+                code=code,
+                sdfg_arglist=sdfg_arglist,
             )
 
     elif param_name not in sdfg_arglist:
@@ -85,8 +83,6 @@ def _parse_gt_param(
         #   1) The argument is a symbol/scalar that is not used in the generated code.
         #   2) The argument was demoted, see `demote_fields` argument of `gt_auto_optimize()`
         #       and was not put back.
-        #  It would be nice to be able to check if we have an error, but this is not
-        #  possible.
         pass
 
     else:
@@ -113,52 +109,45 @@ def _parse_gt_param(
                 for i, (dim, array_size) in enumerate(
                     zip(param_type.dims, sdfg_arg_desc.shape, strict=True)
                 ):
-                    if (
-                        isinstance(array_size, dace.symbolic.SymbolicType)
-                        and not array_size.is_constant()
-                    ):
+                    if isinstance(array_size, int) or str(array_size).isdigit():
+                        # The array shape in this dimension is set at compile-time.
+                        code.append(
+                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.ndarray.shape[{i}]"
+                        )
+                    else:
                         # The array shape is defined as a sequence of expressions
                         # like 'range_stop - range_start', where 'range_start' and
-                        # 'range_stop' are SDFG symbols.
+                        # 'range_stop' are the SDFG symbols for the domain range.
                         dim_range = f"{arg}.domain.ranges[{i}]"
                         rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
                         rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
                         for suffix, symbol_name in [("start", rstart), ("stop", rstop)]:
-                            value = f"{dim_range}.{suffix}"
                             _parse_gt_param(
-                                symbol_name,
-                                FIELD_SYMBOL_GT_TYPE,
-                                value,
-                                code,
-                                sdfg_arglist,
+                                param_name=symbol_name,
+                                param_type=FIELD_SYMBOL_GT_TYPE,
+                                arg=f"{dim_range}.{suffix}",
+                                code=code,
+                                sdfg_arglist=sdfg_arglist,
                             )
-                    else:
-                        # The array shape is set to constant value in this dimension.
-                        code.append(
-                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.ndarray.shape[{i}]"
-                        )
                 for i, array_stride in enumerate(sdfg_arg_desc.strides):
-                    value = f"{_cb_get_stride}({arg}.ndarray, {i})"
-                    if (
-                        isinstance(array_stride, dace.symbolic.SymbolicType)
-                        and not array_stride.is_constant()
-                    ):
-                        assert array_stride.name == gtx_dace_utils.field_stride_symbol_name(
+                    stride_value = f"{_cb_get_stride}({arg}.ndarray, {i})"
+                    if isinstance(array_stride, int) or str(array_stride).isdigit():
+                        # The array stride is set to constant value in this dimension.
+                        code.append(
+                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {stride_value}"
+                        )
+                    else:
+                        assert str(array_stride) == gtx_dace_utils.field_stride_symbol_name(
                             param_name, i
                         )
                         # The strides of a global array are defined by a sequence
                         # of SDFG symbols.
                         _parse_gt_param(
-                            array_stride.name,
-                            FIELD_SYMBOL_GT_TYPE,
-                            value,
-                            code,
-                            sdfg_arglist,
-                        )
-                    else:
-                        # The array stride is set to constant value in this dimension.
-                        code.append(
-                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {value}"
+                            param_name=array_stride.name,
+                            param_type=FIELD_SYMBOL_GT_TYPE,
+                            arg=stride_value,
+                            code=code,
+                            sdfg_arglist=sdfg_arglist,
                         )
 
         elif isinstance(param_type, ts.ScalarType):
