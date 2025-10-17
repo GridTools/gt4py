@@ -69,7 +69,7 @@ class TemporaryDecl(Decl):
     Parameters
     ----------
     data_dims: Data dimensions sizes (static)
-    dimensions: Flag which cartesian dimensions is present
+    dimensions: Mask which cartesian dimensions are present
     offset: Origin of the temporary field.
     padding: Buffer added to compute domain as field size.
     """
