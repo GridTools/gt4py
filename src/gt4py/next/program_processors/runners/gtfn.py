@@ -86,7 +86,10 @@ def extract_connectivity_args(
         hasattr(conn, "ndarray") or isinstance(conn, common.Dimension)
         for conn in offset_provider.values()
     )
-    # Note: the order here needs to agree with the order of the generated bindings
+    # Note: the order here needs to agree with the order of the generated bindings.
+    # This is currently true only because when hashing offset provider dicts,
+    # the keys' order is taken into account. Any modification to the hashing
+    # of offset providers may break this assumption here.
     args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = [
         (ndarray, zero_origin)
         for conn in offset_provider.values()

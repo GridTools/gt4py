@@ -1064,17 +1064,16 @@ def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag:
     return True
 
 
-def hash_offset_provider_unsafe(offset_provider: OffsetProvider) -> int:
-    """Compute hash of an offset provider on the tuples of key and value id.
-
-    Directly using the `id` of the offset provider is not possible as the decorator adds
-    the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
-    different `id` every time. Instead use the `id` of each individual offset provider.
+def hash_offset_provider_items_by_id(offset_provider: OffsetProvider) -> int:
     """
-    # Sorting the items to ensure consistent ordering for the hash computation
-    # would give more stable results, but it will make the function slower,
-    # so we skip it here. This should be fine in practice since the user should
-    # provide the same offset provider (or a few number of variants) everywhere.
+    Compute hash of an offset provider on the tuples of key and value id.
+
+    This function is unsafe since it uses the `id` of the values in the
+    offset provider, which could generate different hashes for two
+    offset providers that are semantically equal. It additionally relies
+    on the ordering of the items in the mapping, which could also lead to
+    different hashes for semantically equal offset providers.
+    """
     return hash(tuple((k, id(v)) for k, v in offset_provider.items()))
 
 

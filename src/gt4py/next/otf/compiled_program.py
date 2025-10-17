@@ -244,7 +244,7 @@ class CompiledProgramsPool:
         """
         args, kwargs = self._signature_canonicalizer(args, kwargs)
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
-        key = (static_args_values, common.hash_offset_provider_unsafe(offset_provider))
+        key = (static_args_values, common.hash_offset_provider_items_by_id(offset_provider))
 
         try:
             program = self.compiled_programs[key]
@@ -395,7 +395,7 @@ class CompiledProgramsPool:
         )
         key = (
             self._argument_descriptor_cache_key_from_descriptors(argument_descriptor_contexts),
-            common.hash_offset_provider_unsafe(offset_provider),
+            common.hash_offset_provider_items_by_id(offset_provider),
         )
         assert call_key is None or call_key == key
 
