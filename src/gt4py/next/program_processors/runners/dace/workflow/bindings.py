@@ -118,34 +118,33 @@ def _parse_gt_param(
                         # The array shape is defined as a sequence of expressions
                         # like 'range_stop - range_start', where 'range_start' and
                         # 'range_stop' are the SDFG symbols for the domain range.
-                        dim_range = f"{arg}.domain.ranges[{i}]"
+                        arg_range = f"{arg}.domain.ranges[{i}]"
                         rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
                         rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
                         for suffix, symbol_name in [("start", rstart), ("stop", rstop)]:
                             _parse_gt_param(
                                 param_name=symbol_name,
                                 param_type=FIELD_SYMBOL_GT_TYPE,
-                                arg=f"{dim_range}.{suffix}",
+                                arg=f"{arg_range}.{suffix}",
                                 code=code,
                                 sdfg_arglist=sdfg_arglist,
                             )
                 for i, array_stride in enumerate(sdfg_arg_desc.strides):
-                    dim_stride = f"{_cb_get_stride}({arg}.ndarray, {i})"
+                    arg_stride = f"{_cb_get_stride}({arg}.ndarray, {i})"
                     if isinstance(array_stride, int) or str(array_stride).isdigit():
                         # The array stride is set to constant value in this dimension.
                         code.append(
-                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {dim_stride}"
+                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {arg_stride}"
                         )
                     else:
-                        assert str(array_stride) == gtx_dace_utils.field_stride_symbol_name(
-                            param_name, i
-                        )
+                        symbol_name = gtx_dace_utils.field_stride_symbol_name(param_name, i)
+                        assert str(array_stride) == symbol_name
                         # The strides of a global array are defined by a sequence
                         # of SDFG symbols.
                         _parse_gt_param(
-                            param_name=array_stride.name,
+                            param_name=symbol_name,
                             param_type=FIELD_SYMBOL_GT_TYPE,
-                            arg=dim_stride,
+                            arg=arg_stride,
                             code=code,
                             sdfg_arglist=sdfg_arglist,
                         )
