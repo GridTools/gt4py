@@ -635,6 +635,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         - If the block size of the map is already set.
         - If the map is at global scope.
         - If if the schedule of the map is correct.
+        - If launch_bounds_1d is not set then set the launch_bounds of maps with `scan`s to 512 to limit their register usage.
         """
         scope = graph.scope_dict()
         if scope[self.map_entry] is not None:
@@ -654,9 +655,8 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         gpu_map: dace_nodes.Map = self.map_entry.map
         map_size = gpu_map.range.size()
         num_map_params = 0
-        dims_to_inspect = 0
+        dims_to_inspect = len(map_size)
         for axis_size in map_size:
-            dims_to_inspect += 1
             if axis_size != 1:
                 num_map_params += 1  # Handle 2D maps where one dimension has range 1 as 1D map
 
@@ -666,11 +666,12 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         if num_map_params == 1:
             block_size = list(self.block_size_1d)
             launch_bounds = self.launch_bounds_1d
-            for node in graph.scope_subgraph(
-                self.map_entry, include_entry=False, include_exit=False
-            ):
-                if isinstance(node, dace_nodes.NestedSDFG) and "scan" in node.label:
-                    launch_bounds = "512"  # Use high launch bound in case of scans to limit register usage and increase occupancy
+            if launch_bounds is None:
+                for node in graph.scope_subgraph(
+                    self.map_entry, include_entry=False, include_exit=False
+                ):
+                    if isinstance(node, dace_nodes.NestedSDFG) and "scan" in node.label:
+                        launch_bounds = "512"  # Use high launch bound in case of scans to limit register usage and increase occupancy
         elif num_map_params == 2:
             block_size = list(self.block_size_2d)
             launch_bounds = self.launch_bounds_2d
@@ -682,6 +683,8 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
         # TODO(phimuell): Also think of how to connect this with the loop blocking.
         for i in range(dims_to_inspect):
+            if i > 2:  # Block size can have only three dimensions.
+                break
             map_dim_idx_to_inspect = len(gpu_map.params) - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
                 block_size[i] = map_size[map_dim_idx_to_inspect]

@@ -226,5 +226,5 @@ def test_set_gpu_properties(method: int):
     #  there are more than three dim, it will not regulate the z block.
     #  Even though `map4` is a 4D Map, the launch bound value for 3D map is used.
     assert len(map4.params) == 4
-    assert map4.gpu_block_size == [9, 10, 12]
+    assert map4.gpu_block_size == [9, 10, 10]
     assert map4.gpu_launch_bounds == "200"
