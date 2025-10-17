@@ -205,7 +205,7 @@ class Domain(Node):
         sequential_axis = None
         parallel_axes = []
         for axis in gt_axis:
-            if axis in ("I", "J"):
+            if axis in (gt_script.I, gt_script.J):
                 parallel_axes.append(Axis(name=axis.name))
             else:
                 sequential_axis = Axis(name=axis.name)
