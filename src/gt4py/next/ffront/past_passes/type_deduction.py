@@ -44,10 +44,11 @@ def _validate_domain_out(
 ) -> None:
     if isinstance(dom, past.Dict):
         # Only reject tuple outputs if nested
-        if is_nested and (isinstance(out, past.TupleExpr) or isinstance(out, ts.TupleType)):
+        if is_nested and isinstance(out, ts.TupleType):
             raise ValueError("Domain dict cannot map to tuple outputs.")
+        assert not (is_nested and isinstance(out, past.TupleExpr))
 
-        if len(dom.values_) == 0 and len(dom.keys_) == 0:
+        if len(dom.keys_) == 0:
             raise ValueError("Empty domain not allowed.")
 
         for dim in dom.keys_:
@@ -61,9 +62,7 @@ def _validate_domain_out(
                 raise ValueError(
                     f"Only 2 values allowed in domain range, got {len(domain_values.elts)}."
                 )
-            if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
-                domain_values.elts[1]
-            ):
+            if any(not _is_integral_scalar(el) for el in domain_values.elts):
                 raise ValueError(
                     f"Only integer values allowed in domain range, got '{domain_values.elts[0].type}' and '{domain_values.elts[1].type}'."
                 )
@@ -77,7 +76,7 @@ def _validate_domain_out(
         if len(dom.elts) != len(out_elts):
             raise ValueError("Mismatched tuple lengths between domain and output.")
 
-        for d, o in zip(dom.elts, out_elts):
+        for d, o in zip(dom.elts, out_elts, strict=True):
             assert isinstance(d, (past.Dict, past.TupleExpr))
             _validate_domain_out(d, o, is_nested=True)
 
@@ -103,7 +102,6 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
         raise ValueError("Missing required keyword argument 'out'.")
     if (domain := new_kwargs.get("domain")) is not None:
         _ensure_no_sliced_field(new_kwargs["out"])
-        assert isinstance(domain, (past.Dict, past.TupleExpr))
         out = new_kwargs["out"]
         assert isinstance(out, past.Expr) and out.type is not None
         _validate_domain_out(domain, out.type)
