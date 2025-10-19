@@ -29,7 +29,9 @@ from gt4py.eve.extended_typing import (
     Final,
     Generic,
     Literal,
+    MaybeNestedInTuple,
     NamedTuple,
+    NestedTuple,
     Never,
     Optional,
     ParamSpec,
@@ -455,7 +457,9 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     @overload
     def __getitem__(self, index: Dimension) -> NamedRange: ...
 
-    def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
+    def __getitem__(
+        self, index: int | slice | Dimension | Sequence[Dimension]
+    ) -> NamedRange | Domain:
         if isinstance(index, Dimension):
             try:
                 index = self.dims.index(index)
@@ -467,6 +471,12 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             dims_slice = self.dims[index]
             ranges_slice = self.ranges[index]
             return Domain(dims=dims_slice, ranges=ranges_slice)
+        if isinstance(index, Sequence) and all(isinstance(d, Dimension) for d in index):
+            indices = sorted(self.dims.index(d) for d in index)
+            return Domain(
+                dims=tuple(self.dims[i] for i in indices),
+                ranges=tuple(self.ranges[i] for i in indices),
+            )
 
         raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
@@ -582,13 +592,19 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
 
 FiniteDomain: TypeAlias = Domain[FiniteUnitRange]
 
-
-DomainLike: TypeAlias = (
-    Sequence[tuple[Dimension, RangeLike]] | Mapping[Dimension, RangeLike]
-)  # `Domain` is `Sequence[NamedRange]` and therefore a subset
+DomainLikeEl: TypeAlias = Domain | Mapping[Dimension, RangeLike]
+DomainLike: TypeAlias = MaybeNestedInTuple[DomainLikeEl]
 
 
-def domain(domain_like: DomainLike) -> Domain:
+@overload
+def domain(domain_like: DomainLikeEl) -> Domain: ...
+
+
+@overload
+def domain(domain_like: NestedTuple[DomainLikeEl]) -> NestedTuple[Domain]: ...
+
+
+def domain(domain_like: DomainLike) -> MaybeNestedInTuple[Domain]:
     """
     Construct `Domain` from `DomainLike` object.
 
@@ -610,8 +626,8 @@ def domain(domain_like: DomainLike) -> Domain:
     """
     if isinstance(domain_like, Domain):
         return domain_like
-    if isinstance(domain_like, Sequence):
-        return Domain(*tuple(named_range(d) for d in domain_like))
+    if isinstance(domain_like, tuple):
+        return tuple((domain(el) for el in domain_like))
     if isinstance(domain_like, Mapping):
         if all(isinstance(elem, core_defs.INTEGRAL_TYPES) for elem in domain_like.values()):
             return Domain(

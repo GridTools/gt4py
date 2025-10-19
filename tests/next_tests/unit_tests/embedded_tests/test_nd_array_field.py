@@ -803,7 +803,7 @@ def test_connectivity_field_inverse_image():
 
     e2v_conn = common._connectivity(
         np.roll(np.arange(E_START, E_STOP), 1),
-        domain=common.domain([common.named_range((E, (E_START, E_STOP)))]),
+        domain=common.domain({E: (E_START, E_STOP)}),
         codomain=V,
     )
 
@@ -835,10 +835,10 @@ def test_connectivity_field_inverse_image_2d_domain():
     c2v_conn = common._connectivity(
         np.asarray([[0, 0, 2], [1, 1, 2], [2, 2, 2]]),
         domain=common.domain(
-            [
-                common.named_range((C, (C_START, C_STOP))),
-                common.named_range((C2V, (C2V_START, C2V_STOP))),
-            ]
+            {
+                C: (C_START, C_STOP),
+                C2V: (C2V_START, C2V_STOP),
+            }
         ),
         codomain=V,
     )
@@ -890,7 +890,7 @@ def test_connectivity_field_inverse_image_non_contiguous():
 
     e2v_conn = common._connectivity(
         np.asarray([0, 1, 2, 3, 4, 9, 7, 5, 8, 6]),
-        domain=common.domain([common.named_range((E, (E_START, E_STOP)))]),
+        domain=common.domain({E: (E_START, E_STOP)}),
         codomain=V,
     )
 
