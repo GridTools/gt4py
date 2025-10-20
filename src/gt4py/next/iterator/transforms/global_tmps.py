@@ -237,7 +237,7 @@ def _transform_by_pattern(
             target_expr: itir.Expr = next_utils.tree_map(
                 lambda name, domain: im.ref(name, annex={"domain": domain}),
                 result_collection_constructor=lambda _, elts: im.make_tuple(*elts),
-            )(tmp_names, tmp_domains)  # type: ignore[assignment]  # typing of tree_map does not reflect action of `result_constructor_maker` yet
+            )(tmp_names, tmp_domains)  # type: ignore[assignment]  # typing of tree_map does not reflect action of `result_collection_constructor` yet
 
             # note: the let would be removed automatically by the `cse.extract_subexpression`, but
             # we remove it here for readability & debuggability.

@@ -84,7 +84,7 @@ def tree_map(
     result_collection_constructor: Optional[Callable] = None,
 ) -> Callable[
     [Callable[_P, _R]], Callable[..., Any]
-]: ...  # TODO(havogt): typing of result_constructor_maker is too weak here
+]: ...  # TODO(havogt): typing of `result_collection_constructor` is too weak here
 
 
 def tree_map(
