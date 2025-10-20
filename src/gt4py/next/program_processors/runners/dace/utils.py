@@ -67,7 +67,7 @@ def is_connectivity_identifier(
         # If no offset provider type is provided, we assume there is a connectivity identifier
         # that matches the CONNECTIVITY_INDENTIFIER_RE.
         return True
-    return m[1] in offset_provider_type
+    return gtx_common.has_offset(offset_provider_type, m[1])
 
 
 def is_connectivity_symbol(name: str, offset_provider_type: gtx_common.OffsetProviderType) -> bool:
@@ -77,7 +77,7 @@ def is_connectivity_symbol(name: str, offset_provider_type: gtx_common.OffsetPro
     m = CONNECTIVITY_INDENTIFIER_RE.match(m[1])
     if m is None:
         return False
-    return m[1] in offset_provider_type
+    return gtx_common.has_offset(offset_provider_type, m[1])
 
 
 def field_symbol_name(field_name: str, axis: int, sym: Literal["size", "stride"]) -> str:
