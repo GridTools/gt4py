@@ -151,6 +151,24 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     The execution time is measured in seconds and represented as a 'float64' value.
     It is returned from the SDFG as a one-element array in the '__return' data node.
     """
+
+    def make_if_region(
+        name: str,
+    ) -> tuple[dace.state.ConditionalBlock, dace.state.SDFGState, dace.state.SDFGState]:
+        if_region = dace.sdfg.state.ConditionalBlock(name)
+        sdfg.add_node(if_region, ensure_unique_name=True)
+        then_body = dace.sdfg.state.ControlFlowRegion(f"{if_region.label}_then_body", sdfg=sdfg)
+        then_state = then_body.add_state(f"{if_region.label}_then_branch")
+        if_region.add_branch(
+            dace.sdfg.state.CodeBlock(f"{metrics_level} >= {metrics.PERFORMANCE}"), then_body
+        )
+        else_body = dace.sdfg.state.ControlFlowRegion(f"{if_region.label}_else_body", sdfg=sdfg)
+        else_state = else_body.add_state(f"{if_region.label}_else_branch", is_start_block=True)
+        if_region.add_branch(
+            dace.sdfg.state.CodeBlock(f"{metrics_level} < {metrics.PERFORMANCE}"), else_body
+        )
+        return if_region, then_state, else_state
+
     output, _ = sdfg.add_array("__return", [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.float64, transient=True)
     metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
@@ -174,24 +192,16 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         has_side_effects = False
 
     #### 2. Timestamp the SDFG entry point.
-    entry_state = sdfg.add_state("gt_timer_entry")
-    begin_state = sdfg.add_state_after(
-        entry_state, "gt_timer_begin", condition=f"{metrics_level} >= {metrics.PERFORMANCE}"
-    )
+    entry_if_region, entry_then_state, _ = make_if_region("program_entry")
 
     for source_state in sdfg.source_nodes():
-        if source_state is entry_state:
+        if source_state is entry_if_region:
             continue
-        sdfg.add_edge(
-            entry_state,
-            source_state,
-            dace.InterstateEdge(condition=f"{metrics_level} < {metrics.PERFORMANCE}"),
-        )
-        sdfg.add_edge(begin_state, source_state, dace.InterstateEdge())
-    assert sdfg.out_degree(begin_state) > 0
-    assert sdfg.out_degree(entry_state) > 1
+        sdfg.add_edge(entry_if_region, source_state, dace.InterstateEdge())
+    assert sdfg.out_degree(entry_if_region) > 0
+    entry_if_region.is_start_block = True
 
-    tlet_start_timer = begin_state.add_tasklet(
+    tlet_start_timer = entry_then_state.add_tasklet(
         "gt_start_timer",
         inputs={},
         outputs={"time"},
@@ -203,27 +213,25 @@ time = static_cast<double>(
         """,
         language=dace.dtypes.Language.CPP,
     )
-    begin_state.add_edge(
+    entry_then_state.add_edge(
         tlet_start_timer,
         "time",
-        begin_state.add_access(start_time),
+        entry_then_state.add_access(start_time),
         None,
         dace.Memlet(f"{start_time}[0]"),
     )
 
     #### 3. Collect the SDFG end timestamp and produce the compute metric.
-    end_state = sdfg.add_state("gt_timer_end")
-    for sink_state in sdfg.sink_nodes():
-        if sink_state is end_state:
-            continue
-        sdfg.add_edge(
-            sink_state,
-            end_state,
-            dace.InterstateEdge(condition=f"{metrics_level} >= {metrics.PERFORMANCE}"),
-        )
-    assert sdfg.in_degree(end_state) > 0
+    exit_if_region, exit_then_state, exit_else_state = make_if_region("program_exit")
 
-    tlet_stop_timer = end_state.add_tasklet(
+    for sink_state in sdfg.sink_nodes():
+        if sink_state is exit_if_region:
+            continue
+        sdfg.add_edge(sink_state, exit_if_region, dace.InterstateEdge())
+    assert sdfg.in_degree(exit_if_region) > 0
+
+    # Populate the branch that computes the stencil time metric
+    tlet_stop_timer = exit_then_state.add_tasklet(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
         outputs={"duration"},
@@ -238,15 +246,30 @@ duration = run_cpp_end_time - run_cpp_start_time;
         language=dace.dtypes.Language.CPP,
         side_effects=has_side_effects,
     )
-    end_state.add_edge(
-        end_state.add_access(start_time),
+    exit_then_state.add_edge(
+        exit_then_state.add_access(start_time),
         None,
         tlet_stop_timer,
         "run_cpp_start_time",
         dace.Memlet(f"{start_time}[0]"),
     )
-    end_state.add_edge(
-        tlet_stop_timer, "duration", end_state.add_access(output), None, dace.Memlet(f"{output}[0]")
+    exit_then_state.add_edge(
+        tlet_stop_timer,
+        "duration",
+        exit_then_state.add_access(output),
+        None,
+        dace.Memlet(f"{output}[0]"),
+    )
+
+    # Populate the else-branch with a dummy tasklet that writes '-1.0' to the stencil time metric.
+    exit_else_state.add_edge(
+        exit_else_state.add_tasklet(
+            name="dummy", inputs={}, outputs={"__val"}, code="__val = -1.0"
+        ),
+        "__val",
+        exit_else_state.add_access(output),
+        None,
+        dace.Memlet(f"{output}[0]"),
     )
     # Check SDFG validity after applying the above changes.
     sdfg.validate()
