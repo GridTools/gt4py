@@ -198,6 +198,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         if source_state is entry_if_region:
             continue
         sdfg.add_edge(entry_if_region, source_state, dace.InterstateEdge())
+        source_state.is_start_block = False
     assert sdfg.out_degree(entry_if_region) > 0
     entry_if_region.is_start_block = True
 
