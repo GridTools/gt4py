@@ -248,6 +248,8 @@ duration = run_cpp_end_time - run_cpp_start_time;
     end_state.add_edge(
         tlet_stop_timer, "duration", end_state.add_access(output), None, dace.Memlet(f"{output}[0]")
     )
+    # Check SDFG validity after applying the above changes.
+    sdfg.validate()
 
 
 def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
