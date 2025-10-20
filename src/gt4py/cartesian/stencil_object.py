@@ -24,6 +24,7 @@ from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo, Param
 from gt4py.cartesian.gtc import utils as gtc_utils
 from gt4py.cartesian.gtc.definitions import Index, Shape
 from gt4py.storage.cartesian import utils as storage_utils
+from gt4py.cartesian import gtscript
 
 
 try:
@@ -558,8 +559,13 @@ class StencilObject(abc.ABC):
             exec_info["call_run_start_time"] = time.perf_counter()
         backend_cls = gt_backend.from_name(self.backend)
         device = backend_cls.storage_info["device"]
-        array_infos = _extract_array_infos(field_args, device)
 
+        # Normalize `gtscript.enum` to integers
+        for name, value in parameter_args.items():
+            if type(value) in gtscript._ENUM_REGISTER.values():
+                parameter_args[name] = value.value
+
+        array_infos = _extract_array_infos(field_args, device)
         cache_key = _compute_domain_origin_cache_key(array_infos, parameter_args, domain, origin)
         if cache_key not in self._domain_origin_cache:
             origin = self._normalize_origins(array_infos, self.field_info, origin)
