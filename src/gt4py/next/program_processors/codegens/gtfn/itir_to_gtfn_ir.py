@@ -236,7 +236,7 @@ def _process_elements(
     obj: Expr,
     type_: ts.TypeSpec,
     *,
-    tuple_constructor: Callable[..., Expr] = lambda *elements: FunCall(
+    tuple_constructor: Callable[..., Expr] = lambda _, *elements: FunCall(
         fun=SymRef(id="make_tuple"), args=list(elements)
     ),
 ) -> Expr:

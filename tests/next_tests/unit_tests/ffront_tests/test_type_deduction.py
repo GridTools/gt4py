@@ -7,7 +7,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import re
-from typing import TypeAlias
+import dataclasses
+from typing import NamedTuple, TypeAlias
+from collections.abc import Sequence
 
 import pytest
 
@@ -472,10 +474,14 @@ def test_astype_dtype():
     )
 
 
+@dataclasses.dataclass
+class WrongConstructorType:
+    foo: int
+
+
 def test_astype_wrong_dtype():
     def simple_astype(a: Field[[TDim], float64]):
-        # we just use broadcast here, but anything with type function is fine
-        return astype(a, broadcast)
+        return astype(a, WrongConstructorType)
 
     with pytest.raises(
         errors.DSLError,
@@ -566,3 +572,105 @@ def test_unexpected_closure_var_error():
 
     with pytest.raises(errors.DSLError, match=r"Unexpected object.*'_UnexpectedClosureVar'"):
         _ = FieldOperatorParser.apply_to_function(unexpected_closure_var)
+
+
+class NamedTupleContainer(NamedTuple):
+    x: Field[[TDim], float32]
+    y: Field[[TDim], float32]
+
+
+@dataclasses.dataclass
+class DataclassContainer:
+    x: Field[[TDim], float32]
+    y: Field[[TDim], float32]
+
+
+@dataclasses.dataclass
+class NestedDataclassContainer:
+    a: DataclassContainer
+    b: DataclassContainer
+    c: DataclassContainer
+
+
+class NestedNamedTupleDataclassContainer(NamedTuple):
+    a: DataclassContainer
+    b: DataclassContainer
+    c: DataclassContainer
+
+
+@dataclasses.dataclass
+class NestedDataclassNamedTupleContainer:
+    a: NamedTupleContainer
+    b: NamedTupleContainer
+    c: NamedTupleContainer
+
+
+@dataclasses.dataclass
+class NestedMixedTupleContainer:
+    a: NamedTupleContainer
+    b: DataclassContainer
+    c: NamedTupleContainer
+
+
+def _expected_named_tuple_type_maker(original_python_type: type) -> ts.NamedTupleType:
+    return ts.NamedTupleType(
+        types=[
+            ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+            ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+        ],
+        keys=["x", "y"],
+        original_python_type=f"{original_python_type.__module__}:{original_python_type.__qualname__}",
+    )
+
+
+def _expected_nested_named_tuple_type_maker(
+    original_python_type: type, element_types: Sequence[type]
+) -> ts.NamedTupleType:
+    inner_types = [_expected_named_tuple_type_maker(elem) for elem in element_types]
+
+    return ts.NamedTupleType(
+        types=inner_types,
+        keys=["a", "b", "c"],
+        original_python_type=f"{original_python_type.__module__}:{original_python_type.__qualname__}",
+    )
+
+
+@pytest.mark.parametrize(
+    "container",
+    [
+        NamedTupleContainer,
+        DataclassContainer,
+    ],
+)
+def test_containers(container):
+    def containers(a: container) -> container:
+        return container(x=a.x, y=a.y)
+
+    parsed = FieldOperatorParser.apply_to_function(containers)
+
+    expected = _expected_named_tuple_type_maker(container)
+    assert parsed.params[0].type == expected
+    assert parsed.body.stmts[-1].value.type == expected
+
+
+@pytest.mark.parametrize(
+    "container, nested_types",
+    [
+        (NestedDataclassContainer, [DataclassContainer] * 3),
+        (NestedNamedTupleDataclassContainer, [DataclassContainer] * 3),
+        (NestedDataclassNamedTupleContainer, [NamedTupleContainer] * 3),
+        (NestedMixedTupleContainer, [NamedTupleContainer, DataclassContainer, NamedTupleContainer]),
+    ],
+)
+def test_nested_containers(container, nested_types):
+    def containers(cont: container) -> container:
+        return container(a=cont.a, b=cont.b, c=cont.c)
+
+    parsed = FieldOperatorParser.apply_to_function(containers)
+
+    expected = _expected_nested_named_tuple_type_maker(container, nested_types)
+    assert parsed.params[0].type == expected
+    assert parsed.body.stmts[-1].value.type == expected
+
+
+# TODO add tests that mix NamedTupleType and TupleType

@@ -11,24 +11,36 @@ from __future__ import annotations
 import abc
 import dataclasses
 import enum
-import typing
-from typing import Any, Generic, Mapping, Optional, final
-
-from typing_extensions import Self
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import MaybeNestedInTuple
-from gt4py.next import common, errors
+from gt4py.eve.extended_typing import (
+    Any,
+    Callable,
+    Generic,
+    Hashable,
+    Mapping,
+    MaybeNestedInTuple,
+    Optional,
+    Self,
+    TypeAlias,
+    TypeGuard,
+    TypeVar,
+    TypeVarTuple,
+    Unpack,
+    cast,
+    final,
+)
+from gt4py.next import common, containers, errors
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-DATA_T = typing.TypeVar("DATA_T")
-T = typing.TypeVar("T")
+DATA_T = TypeVar("DATA_T")
 
 
 def _make_dict_expr(exprs: dict[str, str]) -> str:
-    return "{" + ",".join((f"'{k}': {v}" for k, v in exprs.items())) + "}"
+    items = str.join(",", (f"'{k}': {v}" for k, v in exprs.items()))
+    return f"{{{items}}}"
 
 
 class ArgStaticDescriptor(abc.ABC):
@@ -165,3 +177,110 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
 ]:
     """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
     return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
+
+
+Ts = TypeVarTuple("Ts")
+NeedsValueExtraction: TypeAlias = (  # This is not really accurate, just an approximation
+    containers.CustomContainer
+    | tuple[Unpack[Ts], "NeedsValueExtraction"]
+    | tuple["NeedsValueExtraction", Unpack[Ts]]
+)
+
+
+def needs_value_extraction(value: object) -> TypeGuard[NeedsValueExtraction]:
+    return isinstance(value, containers.CUSTOM_CONTAINER_TYPES) or (
+        isinstance(value, tuple) and any(needs_value_extraction(v) for v in value)
+    )
+
+
+T = TypeVar("T")
+
+
+def extract(
+    value: T, pass_through_values: bool = True
+) -> MaybeNestedInTuple[T | common.PrimitiveValue]:
+    """
+    Extract the values from a run-time argument into a digestible value form.
+
+    This functions is useful to do the extraction from run-time values
+    when the full type information is not available. For primitive values,
+    return them as-is if `pass_through_values` is `True`, otherwise raise a `TypeError`.
+    """
+    if isinstance(value, common.NUMERIC_VALUE_TYPES):
+        return value
+    if isinstance(value, containers.CUSTOM_CONTAINER_TYPES):
+        return containers.make_container_extractor(cast(Hashable, type(value)))(value)
+    if isinstance(value, tuple):
+        if needs_value_extraction(value):
+            return tuple(extract(v, pass_through_values=pass_through_values) for v in value)
+        else:
+            return value
+    if pass_through_values:
+        return value
+
+    raise TypeError(f"Cannot extract numeric value from {type(value)}.")
+
+
+ExtractedArgs: TypeAlias = tuple[MaybeNestedInTuple[common.PrimitiveValue]]
+ExtractedKwargs: TypeAlias = dict[str, MaybeNestedInTuple[common.PrimitiveValue]]
+
+
+# TODO(egparedes): memoize this function (and/or the one above) if TypeSpecs become hashable
+def make_primitive_value_args_extractor(
+    function: ts.FunctionType,
+) -> Callable[..., tuple[ExtractedArgs, ExtractedKwargs]] | None:
+    """
+    Make a function to extract primitive values from arguments that need it.
+
+    If no arguments need extraction, return `None`.
+
+    The returned function has the signature `(*args, **kwargs) -> (args, kwargs)`,
+    where `args` is a tuple of positional arguments and `kwargs` is a dictionary of
+    keyword arguments containing the extracted primitive values where needed.
+    """
+    args_param = "args"
+    kwargs_param = "kwargs"
+    num_args_to_extract = 0
+    num_kwargs_to_extract = 0
+    extractor_exprs: dict[int | str, str] = {}
+
+    for i, type_spec in enumerate(
+        pos_args := [
+            *function.pos_only_args,
+            *function.pos_or_kw_args.values(),
+        ]
+    ):
+        if type_info.needs_value_extraction(type_spec):
+            num_args_to_extract += 1
+            extractor_exprs[i] = containers.make_extractor_expr_from_type_spec(
+                type_spec, f"{args_param}[{i}]"
+            )
+        else:
+            extractor_exprs[i] = f"{args_param}[{i}]"
+
+    for name, type_spec in function.kw_only_args.items():
+        if type_info.needs_value_extraction(type_spec):
+            num_kwargs_to_extract += 1
+            extractor_exprs[name] = containers.make_extractor_expr_from_type_spec(
+                type_spec, f"{kwargs_param}['{name}']"
+            )
+        else:
+            extractor_exprs[name] = f"{kwargs_param}['{name}']"
+
+    if num_args_to_extract + num_kwargs_to_extract:
+        args_expr = (
+            f"({str.join(', ', (extractor_exprs[i] for i, _ in enumerate(pos_args)))}, )"
+            if num_args_to_extract
+            else args_param
+        )
+        kwargs_expr = (
+            _make_dict_expr({k: extractor_exprs[k] for k in function.kw_only_args})
+            if num_kwargs_to_extract
+            else kwargs_param
+        )
+
+        extractor_func_src = f"lambda *{args_param}, **{kwargs_param}: ({args_expr}, {kwargs_expr})"
+
+        return eval(extractor_func_src)
+
+    return None

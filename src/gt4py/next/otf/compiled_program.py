@@ -118,7 +118,7 @@ def _make_param_context_from_func_type(
 def _get_type_of_param_expr(program_type: ts_ffront.ProgramType, expr: str) -> ts.TypeSpec:
     structured_type_ = eval(expr, _make_param_context_from_func_type(program_type.definition))
     type_ = tree_map(
-        lambda v: v, result_collection_constructor=lambda elts: ts.TupleType(types=list(elts))
+        lambda v: v, result_collection_constructor=lambda _, elts: ts.TupleType(types=list(elts))
     )(structured_type_)
     assert isinstance(type_, ts.TypeSpec)
     return type_
@@ -173,7 +173,9 @@ def _convert_to_argument_descriptor_context(
         # convert tuples to list such that we can alter the context easily
         context = {
             k: gtx_utils.tree_map(
-                lambda v: v, collection_type=tuple, result_collection_constructor=list
+                lambda v: v,
+                collection_type=tuple,
+                result_collection_constructor=lambda _, elts: list(elts),
             )(v)
             for k, v in context.items()
         }
@@ -189,7 +191,9 @@ def _convert_to_argument_descriptor_context(
         # convert lists back to tuples
         context = {
             k: gtx_utils.tree_map(
-                lambda v: v, collection_type=list, result_collection_constructor=tuple
+                lambda v: v,
+                collection_type=list,
+                result_collection_constructor=lambda _, elts: tuple(elts),
             )(v)
             for k, v in context.items()
         }
@@ -232,15 +236,18 @@ class CompiledProgramsPool:
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
 
-    _compiled_programs: eve_utils.CustomMapping = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMapping(_hash_compiled_program_unsafe),
-        init=False,
-    )
+    @functools.cached_property
+    def _compiled_programs(self) -> eve_utils.CustomMapping:
+        return eve_utils.CustomMapping(_hash_compiled_program_unsafe)
 
-    _offset_provider_type_cache: eve_utils.CustomMapping = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMapping(common.hash_offset_provider_unsafe),
-        init=False,
-    )  # cache the offset provider type in order to avoid recomputing it at each program call
+    @functools.cached_property
+    def _offset_provider_type_cache(self) -> eve_utils.CustomMapping:
+        # cache the offset provider type in order to avoid recomputing it at each program call
+        return eve_utils.CustomMapping(common.hash_offset_provider_unsafe)
+
+    @functools.cached_property
+    def _numeric_values_extractor(self) -> Callable | None:
+        return arguments.make_primitive_value_args_extractor(self.program_type.definition)
 
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
@@ -248,6 +255,11 @@ class CompiledProgramsPool:
         assert not self.program_type.definition.kw_only_args
         assert not self.program_type.definition.pos_only_args
         self._validate_argument_descriptor_mapping()
+
+        # Force initialization of all cached properties here to minimize first-time call overhead
+        self._compiled_programs  # noqa: B018
+        self._offset_provider_type_cache  # noqa: B018
+        self._numeric_values_extractor  # noqa: B018
 
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
@@ -259,7 +271,14 @@ class CompiledProgramsPool:
         (defined by 'static_params') in case `enable_jit` is True. Otherwise,
         it is an error.
         """
-        args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
+        canonical_args, canonical_kwargs = type_info.canonicalize_arguments(
+            self.program_type, args, kwargs
+        )
+        if (extractor := self._numeric_values_extractor) is not None:
+            args, kwargs = extractor(*canonical_args, **canonical_kwargs)
+        else:
+            args, kwargs = canonical_args, canonical_kwargs
+
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
         # TODO(tehrengruber): Dispatching over offset provider type is wrong, especially when we
         #  use compile time domains.
@@ -292,7 +311,10 @@ class CompiledProgramsPool:
                     offset_provider=offset_provider,
                 )
                 return self(
-                    *args, offset_provider=offset_provider, enable_jit=False, **kwargs
+                    *canonical_args,
+                    offset_provider=offset_provider,
+                    enable_jit=False,
+                    **canonical_kwargs,
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 

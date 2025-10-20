@@ -73,7 +73,7 @@ def tree_map(
     fun: Callable[_P, _R],
     *,
     collection_type: type | tuple[type, ...] = tuple,
-    result_collection_constructor: Optional[type | Callable] = None,
+    result_collection_constructor: Optional[Callable] = None,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]]: ...
 
 
@@ -81,17 +81,17 @@ def tree_map(
 def tree_map(
     *,
     collection_type: type | tuple[type, ...] = tuple,
-    result_collection_constructor: Optional[type | Callable] = None,
+    result_collection_constructor: Optional[Callable] = None,
 ) -> Callable[
     [Callable[_P, _R]], Callable[..., Any]
-]: ...  # TODO(havogt): if result_collection_constructor is Callable, improve typing
+]: ...  # TODO(havogt): typing of `result_collection_constructor` is too weak here
 
 
 def tree_map(
     fun: Optional[Callable[_P, _R]] = None,
     *,
     collection_type: type | tuple[type, ...] = tuple,
-    result_collection_constructor: Optional[type | Callable] = None,
+    result_collection_constructor: Optional[Callable] = None,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]] | Callable[[Callable[_P, _R]], Callable[..., Any]]:
     """
     Apply `fun` to each entry of (possibly nested) collections (by default `tuple`s).
@@ -111,10 +111,13 @@ def tree_map(
         >>> tree_map(collection_type=list)(lambda x: x + 1)([[1, 2], 3])
         [[2, 3], 4]
 
-        >>> tree_map(collection_type=list, result_collection_constructor=tuple)(lambda x: x + 1)(
-        ...     [[1, 2], 3]
-        ... )
-        ((2, 3), 4)
+        >>> tree_map(
+        ...     collection_type=(list, tuple),
+        ...     result_collection_constructor=lambda value, elts: tuple(elts)
+        ...     if isinstance(value, list)
+        ...     else list(elts),
+        ... )(lambda x: x + 1)([(1, 2), 3])
+        ([2, 3], 4)
 
         >>> @tree_map
         ... def impl(x):
@@ -128,7 +131,7 @@ def tree_map(
             raise TypeError(
                 "tree_map() requires `result_collection_constructor` when `collection_type` is a tuple of types."
             )
-        result_collection_constructor = collection_type
+        result_collection_constructor = lambda _, elts: collection_type(elts)  # noqa: E731 # because a lambda is clearer
 
     if fun:
 
@@ -139,7 +142,7 @@ def tree_map(
                     isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
                 )
                 assert result_collection_constructor is not None
-                return result_collection_constructor(impl(*arg) for arg in zip(*args))
+                return result_collection_constructor(args[0], (impl(*arg) for arg in zip(*args)))
 
             return fun(  # type: ignore[call-arg]
                 *cast(_P.args, args)  # type: ignore[valid-type]
