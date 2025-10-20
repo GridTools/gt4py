@@ -99,7 +99,7 @@ def tree_map(
     Args:
         fun: Function to apply to each entry of the collection.
         collection_type: Type of the collection to be traversed. Can be a single type or a tuple of types.
-        result_constructor_maker: Type of the collection to be returned. If `None` the same type as `collection_type` is used.
+        result_collection_constructor: Type of the collection to be returned. If `None` the same type as `collection_type` is used.
 
     Examples:
         >>> tree_map(lambda x: x + 1)(((1, 2), 3))
@@ -129,7 +129,7 @@ def tree_map(
     if result_collection_constructor is None:
         if isinstance(collection_type, tuple):
             raise TypeError(
-                "tree_map() requires `result_constructor_maker` when `collection_type` is a tuple of types."
+                "tree_map() requires `result_collection_constructor` when `collection_type` is a tuple of types."
             )
         result_collection_constructor = lambda _, elts: collection_type(elts)  # noqa: E731 # because a lambda is clearer
 
