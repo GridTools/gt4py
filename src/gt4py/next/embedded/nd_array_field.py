@@ -169,7 +169,7 @@ class NdArrayField(
     def codomain(self) -> type[core_defs.ScalarT]:
         return self.dtype.scalar_type
 
-    @property
+    @functools.cached_property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
         return core_defs.dtype(self._ndarray.dtype.type)
 

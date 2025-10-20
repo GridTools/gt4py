@@ -97,7 +97,7 @@ def extract_connectivity_args(
     ]
     assert all(
         common.is_neighbor_table(conn) and field_utils.verify_device_field_type(conn, device)
-        for conn, _ in args
+        for conn in offset_provider.values()
     )
 
     return args

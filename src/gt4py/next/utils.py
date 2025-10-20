@@ -254,7 +254,7 @@ def make_args_canonicalizer_factory(
     """
     Create a factory for functions that canonicalize call arguments for a given signature.
 
-    For a full description of what canonicalization means, see `make_signature_canonicalizer`.
+    For a full description of what canonicalization means, see `make_args_canonicalizer`.
 
     Returns:
         A factory that creates canonicalizers for a given number of positional arguments
@@ -395,13 +395,13 @@ def make_args_canonicalizer(
         allow_kwargs_mutation: If `True`, the `kwargs` dictionary passed to the canonicalizer
             may be mutated. If `False`, the passed `kwargs` dictionary is copied first, which
             may introduce extra overhead in the canonicalizer.
-        sort_kwargs: Select if the canonicalizer functions should sort the keys of the output
-            `kwargs` dictionary.
+        sort_kwargs: Select if the canonicalizer functions should order the keys of the output
+            `kwargs` dictionary by the order of set in the function signature.
 
     Note:
         This function does not support variadic parameters (i.e., `*args` or `**kwargs`)
         nor parameters with default values in the signature. The implementation uses
-        `make_signature_canonicalizer_factory` internally.
+        `make_args_canonicalizer_factory` internally.
     """
     canonicalizer_factory: CustomCallArgsCanonicalizerFactory = make_args_canonicalizer_factory(
         signature,

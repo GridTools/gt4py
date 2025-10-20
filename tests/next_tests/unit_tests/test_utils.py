@@ -78,11 +78,14 @@ def test_default_make_args_canonicalizer(options: dict[str, bool]):
     assert output == canonical_form
     assert (output[1] is kwargs) == in_place_kwargs
     assert canonicalizer.cache_info().currsize == 1
+    del output, kwargs
 
-    assert canonicalizer((1, 2), {"d": 4, "c": 3}) == canonical_form
+    output = canonicalizer((1, 2), kwargs := {"d": 4, "c": 3})
+    assert output == canonical_form
     assert (output[1] is kwargs) == in_place_kwargs
     assert tuple(output[1].keys()) == ("c", "d") or not options["sort_kwargs"]
     assert canonicalizer.cache_info().currsize == 1
+    del output, kwargs
 
     assert canonicalizer((1,), {"b": 2, "c": 3, "d": 4}) == canonical_form
     assert canonicalizer.cache_info().currsize == 2

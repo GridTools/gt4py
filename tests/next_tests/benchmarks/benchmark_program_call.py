@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-import numpy as np
 import pytest
 
 from gt4py import next as gtx
