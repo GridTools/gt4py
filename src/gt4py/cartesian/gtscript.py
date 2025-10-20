@@ -16,6 +16,7 @@ import collections
 import inspect
 import numbers
 import types
+from enum import IntEnum
 from typing import Callable, Dict, Type, Union
 
 import numpy as np
@@ -157,6 +158,26 @@ def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
     for key, value in annotations.items():
         annotations[key] = _parse_annotation(key, value)
     return original_annotations
+
+
+_ENUM_REGISTER: dict[str, object] = {}
+"""Register of IntEnum that will be available to parsing in stencils. Register
+with @gtscript.enum()"""
+
+
+def enum(class_: type[IntEnum]):
+    class_name = class_.__name__
+    if class_name in _ENUM_REGISTER:
+        raise ValueError(
+            f"Cannot register @gtscript.enum {class_name} as a class"
+            "with the same name is already registered."
+        )
+
+    if not issubclass(class_, IntEnum):
+        raise ValueError(f"Enum {class_name} needs to derive from `enum.IntEnum`.")
+
+    _ENUM_REGISTER[class_name] = class_
+    return class_
 
 
 def function(func):
