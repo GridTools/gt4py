@@ -85,13 +85,11 @@ class CompiledDaceProgram(stages.CompiledProgram):
             binding_module_name, bind_func_name, binding_source.source_code
         )
 
-    def __call__(self, *args: Any, **kwargs: Any) -> None:
-        result = self.sdfg_program(*args, **kwargs)
-        assert result is None
+    def __call__(self, **kwargs: Any) -> Any:
+        return self.sdfg_program(**kwargs)
 
-    def fast_call(self) -> None:
-        result = self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
-        assert result is None
+    def fast_call(self) -> Any:
+        return self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
 
 
 @dataclasses.dataclass(frozen=True)

@@ -7,12 +7,16 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import contextlib
-from typing import Any, Generator, Optional
+from typing import Any, Final, Generator, Optional
 
 import dace
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
+
+
+SDFG_ARG_METRIC_LEVEL: Final[str] = "gt_metrics_level"
+"""Name of SDFG argument to retrive the GT4Py metrics level."""
 
 
 def set_dace_config(
