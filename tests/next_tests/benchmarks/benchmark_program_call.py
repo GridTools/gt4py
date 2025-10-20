@@ -14,7 +14,16 @@ import pytest
 
 from gt4py import next as gtx
 from gt4py.next import Dims, gtfn_cpu, broadcast, typing as gtx_typing
-from gt4py.next.program_processors.runners import dace as dace_backends
+
+BACKENDS: Final = [gtfn_cpu]
+
+try:
+    from gt4py.next.program_processors.runners import dace as dace_backends
+
+    BACKENDS.extend(dace_backends.get_dace_backends())
+except ImportError:
+    pass
+
 
 if TYPE_CHECKING:
     from pytest_benchmark import fixture as ptb_fixture
@@ -23,8 +32,6 @@ if TYPE_CHECKING:
 Cell = gtx.Dimension("Cell")
 IDim = gtx.Dimension("IDim")
 
-
-BACKENDS: Final = [gtfn_cpu, dace_backends.run_dace_cpu_cached]
 WARMUP_ITERS: Final = 5
 
 
