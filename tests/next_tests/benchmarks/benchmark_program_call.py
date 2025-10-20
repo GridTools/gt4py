@@ -20,7 +20,7 @@ BACKENDS: Final = [gtfn_cpu]
 try:
     from gt4py.next.program_processors.runners import dace as dace_backends
 
-    BACKENDS.extend(dace_backends.get_dace_backends())
+    BACKENDS += [dace_backends.run_dace_cpu]
 except ImportError:
     pass
 
