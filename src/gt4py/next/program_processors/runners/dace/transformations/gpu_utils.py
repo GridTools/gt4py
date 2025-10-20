@@ -654,8 +654,14 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         """Modify the map as requested."""
         gpu_map: dace_nodes.Map = self.map_entry.map
         map_size = gpu_map.range.size()
+        dims_to_inspect = len(map_size)
         num_map_params = 0
-        for axis_size in map_size:
+        for i, axis_size in enumerate(map_size):
+            if i > 0 and map_size[i - 1] == 1:
+                assert axis_size <= 1, (
+                    "GPU thread block size setting currently does not support maps where non-leading "
+                    "dimensions have size greater than one if the previous dimension has size one."
+                )
             if axis_size != 1:
                 num_map_params += 1  # Handle 2D maps where one dimension has range 1 as 1D map
 
@@ -678,17 +684,18 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             block_size = list(self.block_size_3d)
             launch_bounds = self.launch_bounds_3d
 
-        # If there are more than three dimensions DaCe will condense them into
-        #  the `z` dimension of the block, so we have to ignore the `z` dimension,
-        #  when we modify the block sizes.
-        dims_to_inspect = len(map_size) if len(map_size) <= 3 else 2
+            # If there are more than three dimensions DaCe will condense them into
+            #  the `z` dimension of the block, so we have to ignore the `z` dimension,
+            #  when we modify the block sizes.
+            if num_map_params > 3:
+                dims_to_inspect = 2
 
+        # block size can only have up to three dimensions
+        assert dims_to_inspect <= 3
         # Cut down the block size.
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
         # TODO(phimuell): Also think of how to connect this with the loop blocking.
         for i in range(dims_to_inspect):
-            if i > 2:  # Block size can have only three dimensions.
-                break
             map_dim_idx_to_inspect = len(gpu_map.params) - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
                 block_size[i] = map_size[map_dim_idx_to_inspect]
