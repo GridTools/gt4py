@@ -635,7 +635,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         - If the block size of the map is already set.
         - If the map is at global scope.
         - If if the schedule of the map is correct.
-        - If launch_bounds_1d is not set then set the launch_bounds of maps with `scan`s to 512 to limit their register usage.
+        - If launch_bounds_1d is not set then set the launch_bounds of `scan` maps to 512 to limit their register usage.
         """
         scope = graph.scope_dict()
         if scope[self.map_entry] is not None:
