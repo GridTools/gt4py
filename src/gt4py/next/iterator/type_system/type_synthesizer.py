@@ -205,7 +205,7 @@ def if_(
     if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
         return tree_map(
             collection_type=ts.TupleType,
-            result_constructor_maker=lambda _: lambda elts: ts.TupleType(types=[*elts]),
+            result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
         )(functools.partial(if_, pred))(true_branch, false_branch)
 
     assert not isinstance(true_branch, ts.TupleType) and not isinstance(false_branch, ts.TupleType)
@@ -274,7 +274,7 @@ def concat_where(
 
     @utils.tree_map(
         collection_type=ts.TupleType,
-        result_constructor_maker=lambda _: lambda el: ts.TupleType(types=list(el)),
+        result_collection_constructor=lambda _: lambda el: ts.TupleType(types=list(el)),
     )
     def deduce_return_type(tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType):
         if any(isinstance(b, ts.DeferredType) for b in [tb, fb]):

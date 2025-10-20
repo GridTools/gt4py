@@ -73,7 +73,7 @@ def tree_map(
     fun: Callable[_P, _R],
     *,
     collection_type: type | tuple[type, ...] = tuple,
-    result_constructor_maker: Optional[Callable] = None,
+    result_collection_constructor: Optional[Callable] = None,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]]: ...
 
 
@@ -81,7 +81,7 @@ def tree_map(
 def tree_map(
     *,
     collection_type: type | tuple[type, ...] = tuple,
-    result_constructor_maker: Optional[Callable] = None,
+    result_collection_constructor: Optional[Callable] = None,
 ) -> Callable[
     [Callable[_P, _R]], Callable[..., Any]
 ]: ...  # TODO(havogt): typing of result_constructor_maker is too weak here
@@ -91,7 +91,7 @@ def tree_map(
     fun: Optional[Callable[_P, _R]] = None,
     *,
     collection_type: type | tuple[type, ...] = tuple,
-    result_constructor_maker: Optional[Callable] = None,
+    result_collection_constructor: Optional[Callable] = None,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]] | Callable[[Callable[_P, _R]], Callable[..., Any]]:
     """
     Apply `fun` to each entry of (possibly nested) collections (by default `tuple`s).
@@ -113,7 +113,9 @@ def tree_map(
 
         >>> tree_map(
         ...     collection_type=(list, tuple),
-        ...     result_constructor_maker=lambda value: tuple if isinstance(value, list) else list,
+        ...     result_collection_constructor=lambda value, elts: tuple(elts)
+        ...     if isinstance(value, list)
+        ...     else list(elts),
         ... )(lambda x: x + 1)([(1, 2), 3])
         ([2, 3], 4)
 
@@ -124,12 +126,12 @@ def tree_map(
         ((2, 3), 4)
     """
 
-    if result_constructor_maker is None:
+    if result_collection_constructor is None:
         if isinstance(collection_type, tuple):
             raise TypeError(
                 "tree_map() requires `result_constructor_maker` when `collection_type` is a tuple of types."
             )
-        result_constructor_maker = lambda _: collection_type  # noqa: E731 # because a lambda is clearer
+        result_collection_constructor = lambda _, elts: collection_type(elts)  # noqa: E731 # because a lambda is clearer
 
     if fun:
 
@@ -139,9 +141,8 @@ def tree_map(
                 assert all(
                     isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
                 )
-                assert result_constructor_maker is not None
-                actual_constructor = result_constructor_maker(args[0])
-                return actual_constructor(impl(*arg) for arg in zip(*args))
+                assert result_collection_constructor is not None
+                return result_collection_constructor(args[0], (impl(*arg) for arg in zip(*args)))
 
             return fun(  # type: ignore[call-arg]
                 *cast(_P.args, args)  # type: ignore[valid-type]
@@ -152,7 +153,7 @@ def tree_map(
         return functools.partial(
             tree_map,
             collection_type=collection_type,
-            result_constructor_maker=result_constructor_maker,
+            result_collection_constructor=result_collection_constructor,
         )
 
 
