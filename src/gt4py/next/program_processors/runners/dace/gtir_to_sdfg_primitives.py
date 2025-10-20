@@ -515,17 +515,16 @@ def translate_index(
         dc_node=index_node,
         gt_dtype=gtx_dace_utils.as_itir_type(gtir_to_sdfg_types.INDEX_DTYPE),
     )
-    index_write_tasklet, connector_mapping = sdfg_builder.add_tasklet(
-        name="index",
-        sdfg=ctx.sdfg,
-        state=ctx.state,
-        inputs=None,
-        outputs={"val"},
-        code=f"val = {dim_index}",
+    index_write_tasklet = sdfg_builder.add_tasklet(
+        "index",
+        ctx.state,
+        inputs={},
+        outputs={"__val"},
+        code=f"__val = {dim_index}",
     )
     ctx.state.add_edge(
         index_write_tasklet,
-        connector_mapping["val"],
+        "__val",
         index_node,
         None,
         dace.Memlet(data=index_data, subset="0"),
@@ -576,13 +575,12 @@ def _get_symbolic_value(
     scalar_type: ts.ScalarType,
     temp_name: Optional[str] = None,
 ) -> dace.nodes.AccessNode:
-    tasklet_node, connector_mapping = sdfg_builder.add_tasklet(
-        name="get_value",
-        sdfg=sdfg,
-        state=state,
-        inputs=None,
-        outputs={"out"},
-        code=f"out = {symbolic_expr}",
+    tasklet_node = sdfg_builder.add_tasklet(
+        "get_value",
+        state,
+        {},
+        {"__out"},
+        f"__out = {symbolic_expr}",
     )
     temp_name, _ = sdfg.add_scalar(
         temp_name or sdfg.temp_data_name(),
@@ -593,7 +591,7 @@ def _get_symbolic_value(
     data_node = state.add_access(temp_name)
     state.add_edge(
         tasklet_node,
-        connector_mapping["out"],
+        "__out",
         data_node,
         None,
         dace.Memlet(data=temp_name, subset="0"),
@@ -681,7 +679,7 @@ def translate_scalar_expr(
                 and isinstance(node.type, ts.ScalarType)
             ):
                 raise ValueError(f"Invalid argument to scalar expression {arg_expr}.")
-            param = f"arg{i}"
+            param = f"__arg{i}"
             args.append(arg.dc_node)
             connectors.append(param)
             scalar_expr_args.append(gtir.SymRef(id=param))
@@ -692,13 +690,12 @@ def translate_scalar_expr(
     # we visit the scalar expression replacing the input arguments with the corresponding data connectors
     scalar_node = gtir.FunCall(fun=node.fun, args=scalar_expr_args)
     python_code = gtir_python_codegen.get_source(scalar_node)
-    tasklet_node, connector_mapping = sdfg_builder.add_tasklet(
+    tasklet_node = sdfg_builder.add_tasklet(
         name="scalar_expr",
-        sdfg=ctx.sdfg,
         state=ctx.state,
         inputs=set(connectors),
-        outputs={"out"},
-        code=f"out = {python_code}",
+        outputs={"__out"},
+        code=f"__out = {python_code}",
     )
     # create edges for the input data connectors
     for arg_node, conn in zip(args, connectors, strict=True):
@@ -706,7 +703,7 @@ def translate_scalar_expr(
             arg_node,
             None,
             tasklet_node,
-            connector_mapping[conn],
+            conn,
             dace.Memlet(data=arg_node.data, subset="0"),
         )
     # finally, create temporary for the result value
@@ -714,7 +711,7 @@ def translate_scalar_expr(
     temp_node = ctx.state.add_access(temp_name)
     ctx.state.add_edge(
         tasklet_node,
-        connector_mapping["out"],
+        "__out",
         temp_node,
         None,
         dace.Memlet(data=temp_name, subset="0"),
