@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from enum import IntEnum
 import inspect
 import textwrap
 import types
@@ -2029,3 +2030,33 @@ class TestNumpyTypedConstants:
         constant: nodes.ScalarLiteral = def_ir.computations[0].body.stmts[0].value
         assert isinstance(constant, nodes.ScalarLiteral)
         assert constant.data_type == nodes.DataType.FLOAT32
+
+
+@gtscript.enum
+class LocalEnum(IntEnum):
+    A = 42
+    B = 1000
+
+
+class TestEnum:
+    def setup_method(self):
+        def enum(field: gtscript.Field[float], order: LocalEnum):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                if order > LocalEnum.A:
+                    field[0, 0, 0] = LocalEnum.B
+
+        self.stencil = enum
+
+    def test_enum_in_stencil(self):
+        def_ir = parse_definition(
+            self.stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        assert isinstance(def_ir.computations[0].body.stmts[0].condition.rhs, nodes.ScalarLiteral)
+        assert def_ir.computations[0].body.stmts[0].condition.rhs.value == LocalEnum.A
+        assert isinstance(
+            def_ir.computations[0].body.stmts[0].main_body.stmts[0].value, nodes.ScalarLiteral
+        )
+        assert def_ir.computations[0].body.stmts[0].main_body.stmts[0].value.value == LocalEnum.B
