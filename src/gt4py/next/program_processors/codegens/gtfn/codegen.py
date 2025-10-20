@@ -92,26 +92,32 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
         return node.id
 
-    @staticmethod
-    def asfloat(value: str) -> str:
-        if "." not in value and "e" not in value and "E" not in value:
-            return f"{value}."
-        return value
-
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
-        if node.type == "axis_literal":
-            return node.value
-
         # TODO(tehrengruber): isn't this wrong and int32 should be casted to an actual int32?
-        match cpp_utils.pytype_to_cpptype(node.type):
-            case "float":
-                return self.asfloat(node.value) + "f"
-            case "double":
-                return self.asfloat(node.value)
+        match node.type:
+            case "float32" | "float64":
+                cpp_value = node.value
+
+                if node.value in ["inf", "-inf"]:
+                    sign = "-" if node.value == "-inf" else ""
+                    cpp_value = (
+                        f"std::numeric_limits<{cpp_utils.pytype_to_cpptype(node.type)}>::infinity()"
+                    )
+                    return f"{sign}{cpp_value}"
+                elif node.value == "nan":
+                    cpp_value = f"std::numeric_limits<{cpp_utils.pytype_to_cpptype(node.type)}>::signaling_NaN()"
+                    return cpp_value
+
+                if not any(c in cpp_value for c in ".eE"):
+                    cpp_value = f"{cpp_value}."
+
+                if node.type == "float32":
+                    cpp_value = f"{cpp_value}f"
+                return cpp_value
             case "bool":
                 return node.value.lower()
             case "axis_literal":
-                return node.value + "_t"
+                return node.value
             case _:
                 # TODO(tehrengruber): we should probably shouldn't just allow anything here. Revisit.
                 return node.value

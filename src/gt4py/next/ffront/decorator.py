@@ -23,7 +23,7 @@ from typing import Any, Generic, Optional, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping, utils as eve_utils
+from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self, override
 from gt4py.next import (
     allocators as next_allocators,
@@ -52,30 +52,6 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
-
-
-def _implicit_offset_providers_from_types(types: list[ts.TypeSpec]) -> common.OffsetProvider:
-    """
-    Add all implicit offset providers.
-    Each dimension implicitly defines an offset provider such that we can allow syntax like::
-        field(TDim + 1)
-    This function adds these implicit offset providers.
-    """
-    # TODO(tehrengruber): We add all dimensions here regardless of whether they are cartesian
-    #  or unstructured. While it is conceptually fine, but somewhat meaningless,
-    #  to do something `Cell+1` the GTFN backend for example doesn't support these. We should
-    #  find a way to avoid adding these dimensions, but since we don't have the grid type here
-    #  and since the dimensions don't this information either, we just add all dimensions here
-    #  and filter them out in the backends that don't support this.
-    implicit_offset_provider = {}
-    for type_ in types:
-        if isinstance(type_, ts.FieldType):
-            for dim in type_.dims:
-                if dim.kind in (common.DimensionKind.HORIZONTAL, common.DimensionKind.VERTICAL):
-                    implicit_offset_provider.update(
-                        {common.dimension_to_implicit_offset(dim.value): dim}
-                    )
-    return implicit_offset_provider
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -110,12 +86,6 @@ class Program:
     static_params: (
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
-
-    _extended_offset_provider_cache: eve_utils.CustomMapping = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMapping(common.hash_offset_provider_unsafe),
-        kw_only=True,
-        init=False,
-    )  # cache the extended dictionary of offset providers that includes the implicitly defined ones
 
     @classmethod
     def from_function(
@@ -260,12 +230,6 @@ class Program:
         return self._frontend_transforms.past_to_itir(no_args_past).data
 
     @functools.cached_property
-    def _implicit_offset_provider(self) -> common.OffsetProvider:
-        return _implicit_offset_providers_from_types(
-            [param.type for param in self.past_stage.past_node.params]
-        )
-
-    @functools.cached_property
     def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
@@ -286,17 +250,6 @@ class Program:
             argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
         )
 
-    def _extend_offset_provider(
-        self,
-        offset_provider: common.OffsetProvider,
-    ) -> common.OffsetProvider:
-        try:
-            extended_op = self._extended_offset_provider_cache[offset_provider]
-        except KeyError:
-            extended_op = {**self._implicit_offset_provider, **offset_provider}
-            self._extended_offset_provider_cache[offset_provider] = extended_op
-        return extended_op
-
     def __call__(
         self,
         *args: Any,
@@ -310,16 +263,9 @@ class Program:
             enable_jit = (
                 self.enable_jit if self.enable_jit is not None else config.ENABLE_JIT_DEFAULT
             )
-        program_name = (
-            f"{self.__name__}[{getattr(self.backend, 'name', '<embedded>')}]"
-            if config.COLLECT_METRICS_LEVEL
-            else ""
-        )
-        with metrics.metrics_collection(program_name) as metrics_collection:
-            collect_metrics = metrics_collection is not None and (
-                config.COLLECT_METRICS_LEVEL >= metrics.INFO
-            )
-            if collect_metrics:
+
+        with metrics.collect() as metrics_source:
+            if collect_info_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.INFO):
                 start = time.time()
 
             if __debug__:
@@ -330,13 +276,19 @@ class Program:
                     kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                 )
 
-            offset_provider = self._extend_offset_provider(offset_provider)
             if self.backend is not None:
                 self._compiled_programs(
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
             else:
-                # embedded
+                # Embedded execution.
+                # Metrics source key needs to be setup here, since embedded programs
+                # don't have variants and thus there's no other place we could do this.
+                if config.COLLECT_METRICS_LEVEL:
+                    assert metrics_source is not None
+                    metrics_source.key = (
+                        f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
+                    )
                 warnings.warn(
                     UserWarning(
                         f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
@@ -346,8 +298,9 @@ class Program:
                 with next_embedded.context.update(offset_provider=offset_provider):
                     self.definition_stage.definition(*args, **kwargs)
 
-            if metrics_collection is not None and collect_metrics:
-                metrics_collection[metrics.TOTAL_METRIC].add_sample(time.time() - start)
+            if collect_info_metrics:
+                assert metrics_source is not None
+                metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(time.time() - start)
 
     def compile(
         self,
@@ -389,7 +342,6 @@ class Program:
             common.is_offset_provider(op) or common.is_offset_provider_type(op)
             for op in offset_provider
         )
-        offset_provider = [self._extend_offset_provider(op) for op in offset_provider]  # type: ignore[arg-type] # cleanup offset_provider vs offset_provider_type
 
         self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
         return self
@@ -486,7 +438,7 @@ class ProgramFromPast(Program):
         self.backend(
             self.past_stage,
             *args,
-            **(kwargs | {"offset_provider": {**offset_provider, **self._implicit_offset_provider}}),
+            **(kwargs | {"offset_provider": {**offset_provider}}),
         )
 
     # TODO(ricoh): linting should become optional, up to the backend.
@@ -734,12 +686,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __gt_closure_vars__(self) -> dict[str, Any]:
         return self.foast_stage.closure_vars
 
-    @functools.cached_property
-    def _implicit_offset_provider(self) -> common.OffsetProvider:
-        return _implicit_offset_providers_from_types(
-            [param.type for param in self.foast_stage.foast_node.definition.params]
-        )
-
     def as_program(self, compiletime_args: arguments.CompileTimeArgs) -> Program:
         foast_with_types = (
             toolchain.CompilableProgram(
@@ -763,10 +709,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
-            offset_provider = {
-                **kwargs.pop("offset_provider", {}),
-                **self._implicit_offset_provider,
-            }
+            offset_provider = {**kwargs.pop("offset_provider", {})}
             if "out" not in kwargs:
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
@@ -789,10 +732,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         else:
             if not next_embedded.context.within_valid_context():
                 # field_operator as program
-                kwargs["offset_provider"] = {
-                    **kwargs.pop("offset_provider", {}),
-                    **self._implicit_offset_provider,
-                }
+                kwargs["offset_provider"] = {**kwargs.pop("offset_provider", {})}
             attributes = (
                 self.definition_stage.attributes
                 if self.definition_stage

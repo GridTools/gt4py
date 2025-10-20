@@ -74,8 +74,8 @@ def convert_args(
                 )
             assert len(result) == 1
             assert isinstance(result[0], np.float64)
-            metric_collection = metrics.get_active_metric_collection()
-            if metric_collection is not None:
-                metric_collection.add_sample(metrics.COMPUTE_METRIC, result[0].item())
+            metric_source = metrics.get_current_source()
+            assert metric_source is not None
+            metric_source.metrics[metrics.COMPUTE_METRIC].add_sample(result[0].item())
 
     return decorated_program
