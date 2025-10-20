@@ -29,22 +29,21 @@ def _tree_map_typespec_constructor(
 
 def _tree_map_typespec_constructor(
     value: ts.NamedTupleType | ts.TupleType,
+    elems: ts.DataType,
 ) -> Callable[..., ts.NamedTupleType] | Callable[..., ts.TupleType]:
     return (
-        (
-            lambda elems: ts.NamedTupleType(
-                keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
-            )
+        ts.NamedTupleType(
+            keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
         )
         if isinstance(value, ts.NamedTupleType)
-        else (lambda elems: ts.TupleType(types=list(elems)))  # type: ignore[return-value]
+        else ts.TupleType(types=list(elems))  # type: ignore[return-value]
     )
 
 
 tree_map_typespec = functools.partial(
     utils.tree_map,
     collection_type=(ts.TupleType, ts.NamedTupleType),
-    result_constructor_maker=_tree_map_typespec_constructor,
+    result_collection_constructor=_tree_map_typespec_constructor,
 )
 
 

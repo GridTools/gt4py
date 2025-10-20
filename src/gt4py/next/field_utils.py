@@ -53,13 +53,16 @@ def field_from_typespec(
     (NumPyArrayField(... dtype=int32...), NumPyArrayField(... dtype=float32...))
     """
 
-    def _constructor(type_: ts.TupleType) -> Callable[..., containers.Container]:
+    def _constructor(
+        type_: ts.TupleType, elems: ts.DataType
+    ) -> Callable[..., containers.Container]:
         if isinstance(type_, ts.NamedTupleType):
-            return lambda elems: containers.make_container_constructor_from_type_spec(type_)(elems)
-        return tuple
+            return containers.make_container_constructor_from_type_spec(type_)(elems)
+        return tuple(elems)
 
     @utils.tree_map(
-        collection_type=(ts.TupleType, ts.NamedTupleType), result_constructor_maker=_constructor
+        collection_type=(ts.TupleType, ts.NamedTupleType),
+        result_collection_constructor=_constructor,
     )
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(
