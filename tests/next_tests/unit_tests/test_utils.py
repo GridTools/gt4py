@@ -39,7 +39,7 @@ def test_tree_map_custom_input_type():
 
 
 def test_tree_map_custom_output_type():
-    @utils.tree_map(result_collection_constructor=list)
+    @utils.tree_map(result_collection_constructor=lambda _, elts: list(elts))
     def testee(x):
         return x + 1
 
@@ -47,8 +47,13 @@ def test_tree_map_custom_output_type():
 
 
 def test_tree_map_multiple_input_types():
-    @utils.tree_map(collection_type=(list, tuple), result_collection_constructor=tuple)
+    @utils.tree_map(
+        collection_type=(list, tuple),
+        result_collection_constructor=lambda value, elts: tuple(elts)
+        if isinstance(value, list)
+        else list(elts),
+    )
     def testee(x):
         return x + 1
 
-    assert testee([(1, [2]), 3]) == ((2, (3,)), 4)
+    assert testee([(1, [2]), 3]) == ([2, (3,)], 4)
