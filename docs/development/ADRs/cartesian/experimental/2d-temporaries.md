@@ -8,6 +8,18 @@ We thus decided to expand the DLS be able to port these stencils. We accept the 
 
 Porting physics parametrizations, we found temporary 2D fields used, mostly when computing particular levels (e.g. surface, phase change, etc.). The previous workaround was to define the temporaries outside and pass them as an argument. The goal is to undo this workaround that complexifies calling code.
 
+Another workaround, driven by how GridTools C++ behave, we forced all temporaries to be 3D. The way to do it would be to create you temporary and then propagate it's value throughout. E.g., from FV3 dynamics code:
+
+```python
+with computation(FORWARD):
+    with interval(0, 1):
+        bet = bb
+    with interval(1, -1):
+        bet = bet[0, 0, -1]
+```
+
+In this example `bet` can be _read_ at every grid point.
+
 Use case in GEOS's shallow convection parametrization: `total_pwo_solid_phase` will be used later in the stencil but not outside of it.
 
 ```python
