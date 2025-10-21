@@ -22,34 +22,6 @@ from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
 
-def _get_sdfg_ctype_arglist_callback(
-    module_name: str, bind_func_name: str, python_code: str
-) -> Callable[
-    [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]], None
-]:
-    """
-    Helper method to load dynamically generated Python code which will be used
-    to update the list of SDFG call arguments.
-
-    It loads the Python code inside an empty namespace, without modifying the current
-    global namespace. This is done to support parallel compilation, in which it can
-    happen that two threads generate the same `bind_func_name` for the callback function.
-
-    Args:
-        module_name: Set on the loaded callback function for debugging.
-        bind_func_name: Name to use for the translation function.
-        python_code: String containing the Python code to load.
-
-    Returns:
-        A callable object to update the list of SDFG call arguments.
-    """
-    exec(python_code, global_namespace := {})  # type: ignore[var-annotated]
-    assert bind_func_name not in globals()
-    assert bind_func_name in global_namespace
-    global_namespace[bind_func_name].__module__ = module_name
-    return global_namespace[bind_func_name]
-
-
 class CompiledDaceProgram(stages.CompiledProgram):
     sdfg_program: dace.CompiledSDFG
 
@@ -77,13 +49,11 @@ class CompiledDaceProgram(stages.CompiledProgram):
         self.sdfg_argtypes = list(program.sdfg.arglist().values())
 
         # Note that `binding_source` contains Python code tailored to this specific SDFG.
-        #   We need to ensure that it is loaded as a Python module with a unique name,
-        #   in order to avoid conflicts with other variants of the same program.
-        #   Therefore, we use the name of the build folder as module name.
-        binding_module_name = os.path.basename(program.sdfg.build_folder)
-        self.update_sdfg_ctype_arglist = _get_sdfg_ctype_arglist_callback(
-            binding_module_name, bind_func_name, binding_source.source_code
-        )
+        # Here we dinamically compile this function and add it to the compiled program.
+        exec(binding_source.source_code, global_namespace := {})  # type: ignore[var-annotated]
+        self.update_sdfg_ctype_arglist = global_namespace[bind_func_name]
+        # For debug purpose, we set a unique module name on the compiled function.
+        self.update_sdfg_ctype_arglist.__module__ = os.path.basename(program.sdfg.build_folder)
 
     def __call__(self, **kwargs: Any) -> Any:
         return self.sdfg_program(**kwargs)
