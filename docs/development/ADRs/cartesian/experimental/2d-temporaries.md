@@ -1,14 +1,14 @@
-# ⚠️ 2 Dimenions Temporaries
+# ⚠️ Two-dimensional Temporaries
 
-In the context of porting physics parametrizations, we have encoutered multiple examples of computation requiring a temporary 2D storage within a stencil.
+In the context of porting physics parametrizations, we have encountered multiple examples of computations requiring a temporary 2D storage within a stencil.
 
 We thus decided to expand the DLS be able to port these stencils. We accept the increase in DSL surface and test it as an [experimental feature](../experimental-features.md).
 
 ## Context
 
-Porting physics parametrizations, we found temporary 2D field used, mostly when computing particular level (surface, phase change, etc.). Previous workaround was to define the temporaries as an argument. The goal is to undo this workaround that complexify calling code.
+Porting physics parametrizations, we found temporary 2D fields used, mostly when computing particular levels (e.g. surface, phase change, etc.). The previous workaround was to define the temporaries outside and pass them as an argument. The goal is to undo this workaround that complexifies calling code.
 
-Use case in GEOS's shallow convection parametrization, `total_pwo_solid_phase` will be used later in the stencil but not out of it.
+Use case in GEOS's shallow convection parametrization: `total_pwo_solid_phase` will be used later in the stencil but not outside of it.
 
 ```python
     with computation(FORWARD), interval(...):
@@ -84,39 +84,39 @@ def vertical_interpolation(
         pt = 0
 ```
 
-2D temporaries would clean those code and allow for futher optimization (scalarization) in all performance backend.
+2D temporaries would clean those codes and allow for further optimizations (e.g. scalarization) in all performance backends.
 
 ## Decision
 
-All the guardraisls for 2D temporaries are already in place:
+All the guardrails for 2D temporaries are already in place:
 
 - allocation can only be done under `interval == 1` and `computation` in `FORWARD` or `BACKWARD`,
 - use of 2D fields are fully defined, using the above rules again.
 
 The main change is on the frontend of stencils and proper forwarding of dimensions through to code genreation, except for `gt:X` backend (see [Consequences](#consequences)).
 
-Type hint for temporaries have been introduced before for mixed precision e.g.:
+Type hints for temporaries have been introduced before for mixed precision e.g.:
 
 ```python
-with computation(PARALLEL), inteval(...):
+with computation(PARALLEL), interval(...):
     tmp_3D_as_f32: float32 = 0
 ```
 
 We propose to extend this type hint to allow specification of the dimensions re-using the `FieldDescriptor`, e.g.
 
 ```python
-with computation(FORWARD), inteval(...):
+with computation(FORWARD), interval(...):
     tmp_2D_as_f32: Field[IJ, np.float64] = 0
 ```
 
-We also guard against any definition of other type of temporaries (e.g. 1D temporary) because they are ill-defined within `gtscript` which pre-suppose that the horizontal dimensions are always computed upon.
+We also guard against any definition of other type of temporaries (e.g. 1D temporaries) because they are ill-defined within `gtscript` which pre-supposes that the horizontal dimensions are always computed upon.
 
-The type hint can be a little verbose, so we offer to expand upon the `dtypes` dictionnary present in stencil configuration to give a `str: type` pair that can be swapped at parsing time, as long as the type is a derivative of `FieldDescriptor` so the relevant informations can be retrieved.
+The type hint can be a little verbose, so we offer to expand upon the `dtypes` dictionary present in stencil configuration to give a `str: type` pair that can be swapped at parsing time, as long as the type is a derivative of `FieldDescriptor` so the relevant information can be retrieved.
 
 ```python
 @stencil(backend=..., dtype={"My2DType": Field[IJ, np.float64]})
 def the_stencil(...):
-    with computation(FORWARD), inteval(...):
+    with computation(FORWARD), interval(...):
         tmp_2D: My2DType = 0
         ...
 ```
@@ -125,10 +125,10 @@ def the_stencil(...):
 
 Users of GT4Py can now defined 2D temporaries in-stencil.
 
-There's one remaining hiccups: GridTools C++ does not natively offer 2D temporaries. GridTools pre-suppose that all computation of temporaries are done on the 3D grid at least - and won't allocate below that dimensionality.
+There's one remaining hiccup: GridTools C++ does not natively offer 2D temporaries. GridTools pre-supposes that all computations of temporaries are done on the 3D grid at least - and won't allocate below that dimensionality.
 This is a fair limitation since GridTools doesn't provide the guardrails against race condition that GT4Py does. We can circumvent this by creating a pool of buffers passed as arguments for `gt:X` backends - see [issue](https://github.com/GridTools/gt4py/issues/2322).
 
 ## References
 
-- [PR](https://github.com/GridTools/gt4py/pull/2314) PR where the proposal and the discussion occured.
+- [PR](https://github.com/GridTools/gt4py/pull/2314) PR where the proposal and the discussion occurred.
 - [Issue](https://github.com/GridTools/gt4py/issues/2322) to extend support to the `gt:X` backends
