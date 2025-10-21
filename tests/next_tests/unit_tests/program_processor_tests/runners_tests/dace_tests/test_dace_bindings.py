@@ -186,8 +186,13 @@ def test_bind_sdfg(static_domain_config, use_metrics, monkeypatch):
     b = cases.allocate(test_case, testee, "b", sizes=sizes, strategy=cases.UniqueInitializer())()
     c = cases.allocate(test_case, testee, "out", sizes=sizes, strategy=cases.UniqueInitializer())()
 
+    ref = c.asnumpy().copy()
+    ref[1 : M - 1, 2 : N - 2, 3 : K - 3] = (
+        a[0] + 2 * a[1][0] + 3 * a[1][1].asnumpy() + 4 * b[0][0].asnumpy() + 5 * b[1]
+    )[1 : M - 1, 2 : N - 2, 3 : K - 3]
+
     program(a, b, out=c, M=M, N=N, K=K)
-    assert np.all(c.asnumpy() == (a[0] + 2 * a[1][0] + 3 * a[1][1] + 4 * b[0][0] + 5 * b[1]))
+    assert np.all(c.asnumpy() == ref)
 
     assert compilable_source is not None
     assert len(compilable_source.library_deps) == 0
