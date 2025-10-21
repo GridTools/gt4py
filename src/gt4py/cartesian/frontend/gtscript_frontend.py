@@ -1567,7 +1567,7 @@ class IRMaker(ast.NodeVisitor):
     def visit_Assign(self, node: ast.Assign, **kwargs) -> list:
         return self._resolve_assign(node, node.targets)
 
-    def _domain_from_gtscript_axis(gt_axis: list[gtscript.Axis]) -> nodes.Domain:
+    def _domain_from_gtscript_axis(self, gt_axis: list[gtscript.Axis]) -> nodes.Domain:
         sequential_axis = None
         parallel_axes = []
         for axis in gt_axis:
