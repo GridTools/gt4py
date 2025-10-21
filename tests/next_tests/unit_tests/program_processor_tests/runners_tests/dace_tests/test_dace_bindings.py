@@ -40,27 +40,27 @@ _binding_source = (
     _bind_header
     + f"""\
 def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
-    arg0, arg1, arg2, arg3, arg4 = args
-    last_call_args[4] = ctypes.c_double(arg0)
-    last_call_args[0].value = arg1.data_ptr()
-    last_call_args[7] = ctypes.c_int(_get_stride(arg1.ndarray, 0))
-    arg2_0, arg2_1 = arg2
-    last_call_args[1].value = arg2_0.data_ptr()
-    last_call_args[8] = ctypes.c_int(_get_stride(arg2_0.ndarray, 0))
-    last_call_args[9] = ctypes.c_int(_get_stride(arg2_0.ndarray, 1))
-    arg2_1_0, arg2_1_1 = arg2_1
-    last_call_args[2].value = arg2_1_0.data_ptr()
-    last_call_args[10] = ctypes.c_int(_get_stride(arg2_1_0.ndarray, 0))
-    last_call_args[11] = ctypes.c_int(_get_stride(arg2_1_0.ndarray, 1))
-    last_call_args[5] = ctypes.c_double(arg2_1_1)
-    last_call_args[6] = ctypes.c_double(arg3)
-    last_call_args[3].value = arg4.data_ptr()
-    last_call_args[12] = ctypes.c_int(arg4.domain.ranges[0].start)
-    last_call_args[13] = ctypes.c_int(arg4.domain.ranges[0].stop)
-    last_call_args[14] = ctypes.c_int(arg4.domain.ranges[1].start)
-    last_call_args[15] = ctypes.c_int(arg4.domain.ranges[1].stop)
-    last_call_args[16] = ctypes.c_int(_get_stride(arg4.ndarray, 0))
-    last_call_args[17] = ctypes.c_int(_get_stride(arg4.ndarray, 1))\
+    args_0, args_1, args_2, args_3, args_4 = args
+    last_call_args[4] = ctypes.c_double(args_0)
+    last_call_args[0].value = args_1.data_ptr()
+    last_call_args[7] = ctypes.c_int(_get_stride(args_1.ndarray, 0))
+    args_2_0, args_2_1 = args_2
+    last_call_args[1].value = args_2_0.data_ptr()
+    last_call_args[8] = ctypes.c_int(_get_stride(args_2_0.ndarray, 0))
+    last_call_args[9] = ctypes.c_int(_get_stride(args_2_0.ndarray, 1))
+    args_2_1_0, args_2_1_1 = args_2_1
+    last_call_args[2].value = args_2_1_0.data_ptr()
+    last_call_args[10] = ctypes.c_int(_get_stride(args_2_1_0.ndarray, 0))
+    last_call_args[11] = ctypes.c_int(_get_stride(args_2_1_0.ndarray, 1))
+    last_call_args[5] = ctypes.c_double(args_2_1_1)
+    last_call_args[6] = ctypes.c_double(args_3)
+    last_call_args[3].value = args_4.data_ptr()
+    last_call_args[12] = ctypes.c_int(args_4.domain.ranges[0].start)
+    last_call_args[13] = ctypes.c_int(args_4.domain.ranges[0].stop)
+    last_call_args[14] = ctypes.c_int(args_4.domain.ranges[1].start)
+    last_call_args[15] = ctypes.c_int(args_4.domain.ranges[1].stop)
+    last_call_args[16] = ctypes.c_int(_get_stride(args_4.ndarray, 0))
+    last_call_args[17] = ctypes.c_int(_get_stride(args_4.ndarray, 1))\
 """
 )
 
@@ -69,23 +69,23 @@ _binding_source_with_static_domain = (
     _bind_header
     + f"""\
 def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
-    arg0, arg1, arg2, arg3, arg4 = args
-    last_call_args[4] = ctypes.c_double(arg0)
-    last_call_args[0].value = arg1.data_ptr()
-    last_call_args[7] = ctypes.c_int(_get_stride(arg1.ndarray, 0))
-    arg2_0, arg2_1 = arg2
-    last_call_args[1].value = arg2_0.data_ptr()
-    last_call_args[8] = ctypes.c_int(_get_stride(arg2_0.ndarray, 0))
-    last_call_args[9] = ctypes.c_int(_get_stride(arg2_0.ndarray, 1))
-    arg2_1_0, arg2_1_1 = arg2_1
-    last_call_args[2].value = arg2_1_0.data_ptr()
-    last_call_args[10] = ctypes.c_int(_get_stride(arg2_1_0.ndarray, 0))
-    last_call_args[11] = ctypes.c_int(_get_stride(arg2_1_0.ndarray, 1))
-    last_call_args[5] = ctypes.c_double(arg2_1_1)
-    last_call_args[6] = ctypes.c_double(arg3)
-    last_call_args[3].value = arg4.data_ptr()
-    last_call_args[12] = ctypes.c_int(_get_stride(arg4.ndarray, 0))
-    last_call_args[13] = ctypes.c_int(_get_stride(arg4.ndarray, 1))\
+    args_0, args_1, args_2, args_3, args_4 = args
+    last_call_args[4] = ctypes.c_double(args_0)
+    last_call_args[0].value = args_1.data_ptr()
+    last_call_args[7] = ctypes.c_int(_get_stride(args_1.ndarray, 0))
+    args_2_0, args_2_1 = args_2
+    last_call_args[1].value = args_2_0.data_ptr()
+    last_call_args[8] = ctypes.c_int(_get_stride(args_2_0.ndarray, 0))
+    last_call_args[9] = ctypes.c_int(_get_stride(args_2_0.ndarray, 1))
+    args_2_1_0, args_2_1_1 = args_2_1
+    last_call_args[2].value = args_2_1_0.data_ptr()
+    last_call_args[10] = ctypes.c_int(_get_stride(args_2_1_0.ndarray, 0))
+    last_call_args[11] = ctypes.c_int(_get_stride(args_2_1_0.ndarray, 1))
+    last_call_args[5] = ctypes.c_double(args_2_1_1)
+    last_call_args[6] = ctypes.c_double(args_3)
+    last_call_args[3].value = args_4.data_ptr()
+    last_call_args[12] = ctypes.c_int(_get_stride(args_4.ndarray, 0))
+    last_call_args[13] = ctypes.c_int(_get_stride(args_4.ndarray, 1))\
 """
 )
 

@@ -47,6 +47,31 @@ def _update_sdfg_scalar_arg(
     code.append(f"{_cb_last_call_args}[{sdfg_arg_index}] = {actype_call}({call_arg})")
 
 
+def _unpack_args(code: codegen.TextBlock, num_args: int, arg_name: str) -> list[str]:
+    """Unpack a sequence of arguments (either a list or a tuple) into variables.
+
+    Each element of the given sequence gets a name 'arg_name' with an index-based suffix.
+
+    >>> code = codegen.TextBlock()
+    >>> _unpack_args(code, 3, "var")
+    ['var_0', 'var_1', 'var_2']
+    >>> code.lines
+    ['var_0, var_1, var_2 = var']
+    >>> _unpack_args(code, 1, "var_2")
+    ['var_2_0']
+    >>> code.lines
+    ['var_0, var_1, var_2 = var', 'var_2_0 = var_2[0]']
+    """
+    tuple_args = [f"{arg_name}_{i}" for i in range(num_args)]
+    if num_args == 0:
+        raise ValueError("Cannot unpack argument with length zero.")
+    elif num_args == 1:
+        code.append(f"{tuple_args[0]} = {arg_name}[0]")
+    else:
+        code.append(f"{', '.join(tuple_args)} = {arg_name}")
+    return tuple_args
+
+
 def _parse_gt_param(
     param_name: str,
     param_type: ts.DataType,
@@ -66,8 +91,7 @@ def _parse_gt_param(
     """
     if isinstance(param_type, ts.TupleType):
         # Each element of a tuple gets a name with an index-based suffix and it is recursively visited.
-        tuple_args = [f"{arg}_{i}" for i in range(len(param_type.types))]
-        code.append("{} = {}".format(", ".join(tuple_args), arg))
+        tuple_args = _unpack_args(code=code, num_args=len(param_type.types), arg_name=arg)
         for i, (tuple_arg, tuple_arg_type) in enumerate(zip(tuple_args, param_type.types)):
             assert isinstance(tuple_arg_type, ts.DataType)
             _parse_gt_param(
@@ -211,8 +235,9 @@ def {_cb_get_stride}(ndarray, dim_index):
     #   On the first time, we use the regular SDFG call, which constructs the SDFG
     #   arguments list and validates that all data containers and free symbols are set.
     with code.indented():
-        arg_vars = [f"arg{i}" for i in range(len(program_source.entry_point.parameters))]
-        code.append("{} = {}".format(", ".join(arg_vars), _cb_args))
+        arg_vars = _unpack_args(
+            code=code, num_args=len(program_source.entry_point.parameters), arg_name=_cb_args
+        )
         for param, arg in zip(program_source.entry_point.parameters, arg_vars):
             assert isinstance(param.type_, ts.DataType)
             _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist)
