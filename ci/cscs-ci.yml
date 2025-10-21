@@ -11,7 +11,7 @@
 include:
   - local: 'ci/cscs-ci-base.yml'
 
-.test_python_versions: &test_python_versions ['3.10', '3.14']
+.test_python_versions: &test_python_versions ['3.11', '3.14']
 
 # -- Build stage --
 build_cscs_gh200:
