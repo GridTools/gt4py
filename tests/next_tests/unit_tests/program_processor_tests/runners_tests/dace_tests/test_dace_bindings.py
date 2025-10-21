@@ -8,6 +8,7 @@
 
 """Test the bindings stage of the dace backend workflow."""
 
+import functools
 import numpy as np
 import pytest
 
@@ -151,14 +152,33 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
 assert _binding_source_with_zero_origin != _binding_source
 
 
-@pytest.mark.parametrize(
-    "static_domain_config",
-    [(False, _binding_source), (True, _binding_source_with_zero_origin)],
-)
+_dace_compile_call = dace_workflow.compilation.DaCeCompiler.__call__
+
+
+def mocked_compile_call(
+    self,
+    inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+    use_metrics: bool,
+    use_zero_origin: bool,
+):
+    assert len(inp.library_deps) == 0
+
+    # ignore assert statements
+    binding_source_pruned = "\n".join(
+        line
+        for line in inp.binding_source.source_code.splitlines()
+        if not line.lstrip().startswith("assert")
+    )
+
+    binding_source_ref = _binding_source_with_zero_origin if use_zero_origin else _binding_source
+    assert binding_source_pruned == binding_source_ref(use_metrics)
+    return _dace_compile_call(self, inp)
+
+
 @pytest.mark.parametrize("use_metrics", [False, True])
-def test_bind_sdfg(static_domain_config, use_metrics, monkeypatch):
+@pytest.mark.parametrize("use_zero_origin", [False, True])
+def test_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     M, N, K = (30, 20, 10)
-    use_zero_origin, binding_source_ref = static_domain_config
 
     @gtx.field_operator
     def testee_op(
@@ -179,22 +199,6 @@ def test_bind_sdfg(static_domain_config, use_metrics, monkeypatch):
     ):
         testee_op(a, b, out=out, domain={IDim: (1, M - 1), JDim: (2, N - 2), KDim: (3, K - 3)})
 
-    compilable_source: (
-        stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python] | None
-    ) = None
-
-    dace_compile_call = dace_workflow.compilation.DaCeCompiler.__call__
-
-    def mocked_compile_call(
-        self,
-        inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
-    ):
-        nonlocal compilable_source
-        compilable_source = inp
-        return dace_compile_call(self, inp)
-
-    monkeypatch.setattr(dace_workflow.compilation.DaCeCompiler, "__call__", mocked_compile_call)
-
     backend = dace_runner.make_dace_backend(
         gpu=False,
         cached=False,
@@ -202,6 +206,14 @@ def test_bind_sdfg(static_domain_config, use_metrics, monkeypatch):
         use_metrics=use_metrics,
         use_zero_origin=use_zero_origin,
     )
+    monkeypatch.setattr(
+        dace_workflow.compilation.DaCeCompiler,
+        "__call__",
+        functools.partialmethod(
+            mocked_compile_call, use_metrics=use_metrics, use_zero_origin=use_zero_origin
+        ),
+    )
+
     static_args = {"M": [M], "N": [N], "K": [K]}
     program = (
         testee.with_grid_type(gtx_common.GridType.CARTESIAN)
@@ -227,15 +239,3 @@ def test_bind_sdfg(static_domain_config, use_metrics, monkeypatch):
 
     program(a, b, out=c, M=M, N=N, K=K)
     assert np.all(c.asnumpy() == ref)
-
-    assert compilable_source is not None
-    assert len(compilable_source.library_deps) == 0
-
-    # ignore assert statements
-    binding_source_pruned = "\n".join(
-        line
-        for line in compilable_source.binding_source.source_code.splitlines()
-        if not line.lstrip().startswith("assert")
-    )
-
-    assert binding_source_pruned == binding_source_ref(use_metrics)
