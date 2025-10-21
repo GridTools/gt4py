@@ -48,7 +48,7 @@ from gt4py.cartesian.frontend.exceptions import (
 from gt4py.cartesian.utils import meta as gt_meta, warn_experimental_feature
 
 
-PYTHON_AST_VERSION: Final = (3, 10)
+PYTHON_AST_VERSION: Final = (3, 11)
 ELLIPSIS_TYPE = getattr(ast, "Ellipsis", types.EllipsisType)
 
 
