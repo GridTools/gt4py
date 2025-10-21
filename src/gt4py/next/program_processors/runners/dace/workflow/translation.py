@@ -193,7 +193,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         has_side_effects = False
 
     #### 2. Timestamp the SDFG entry point.
-    entry_if_region, entry_state = _make_if_region_for_metrics_collection(
+    entry_if_region, begin_state = _make_if_region_for_metrics_collection(
         "program_entry", metrics_level, sdfg
     )
 
@@ -205,7 +205,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     assert sdfg.out_degree(entry_if_region) > 0
     entry_if_region.is_start_block = True
 
-    tlet_start_timer = entry_state.add_tasklet(
+    tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
         outputs={"time"},
@@ -217,16 +217,16 @@ time = static_cast<double>(
         """,
         language=dace.dtypes.Language.CPP,
     )
-    entry_state.add_edge(
+    begin_state.add_edge(
         tlet_start_timer,
         "time",
-        entry_state.add_access(start_time),
+        begin_state.add_access(start_time),
         None,
         dace.Memlet(f"{start_time}[0]"),
     )
 
     #### 3. Collect the SDFG end timestamp and produce the compute metric.
-    exit_if_region, exit_state = _make_if_region_for_metrics_collection(
+    exit_if_region, end_state = _make_if_region_for_metrics_collection(
         "program_exit", metrics_level, sdfg
     )
 
@@ -237,7 +237,7 @@ time = static_cast<double>(
     assert sdfg.in_degree(exit_if_region) > 0
 
     # Populate the branch that computes the stencil time metric
-    tlet_stop_timer = exit_state.add_tasklet(
+    tlet_stop_timer = end_state.add_tasklet(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
         outputs={"duration"},
@@ -252,17 +252,17 @@ duration = run_cpp_end_time - run_cpp_start_time;
         language=dace.dtypes.Language.CPP,
         side_effects=has_side_effects,
     )
-    exit_state.add_edge(
-        exit_state.add_access(start_time),
+    end_state.add_edge(
+        end_state.add_access(start_time),
         None,
         tlet_stop_timer,
         "run_cpp_start_time",
         dace.Memlet(f"{start_time}[0]"),
     )
-    exit_state.add_edge(
+    end_state.add_edge(
         tlet_stop_timer,
         "duration",
-        exit_state.add_access(output),
+        end_state.add_access(output),
         None,
         dace.Memlet(f"{output}[0]"),
     )
