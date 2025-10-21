@@ -56,19 +56,18 @@ def _unpack_args(code: codegen.TextBlock, num_args: int, arg_name: str) -> list[
     >>> _unpack_args(code, 3, "var")
     ['var_0', 'var_1', 'var_2']
     >>> code.lines
-    ['var_0, var_1, var_2 = var']
+    ['var_0, var_1, var_2, = var']
     >>> _unpack_args(code, 1, "var_2")
     ['var_2_0']
     >>> code.lines
-    ['var_0, var_1, var_2 = var', 'var_2_0 = var_2[0]']
+    ['var_0, var_1, var_2, = var', 'var_2_0, = var_2']
     """
     tuple_args = [f"{arg_name}_{i}" for i in range(num_args)]
     if num_args == 0:
         raise ValueError("Cannot unpack argument with length zero.")
-    elif num_args == 1:
-        code.append(f"{tuple_args[0]} = {arg_name}[0]")
     else:
-        code.append(f"{', '.join(tuple_args)} = {arg_name}")
+        # The trailing comma is needed to unpack single-element tuples
+        code.append(f"{', '.join(tuple_args)}, = {arg_name}")
     return tuple_args
 
 

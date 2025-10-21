@@ -47,10 +47,24 @@ def _binding_source(use_metrics: bool) -> str:
         _bind_header
         + f"""\
 def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
-    args_0, args_1, args_2, args_3, args_4, args_5 = args
-    args_0_0, args_0_1 = args_0
+    (
+        args_0,
+        args_1,
+        args_2,
+        args_3,
+        args_4,
+        args_5,
+    ) = args
+    (
+        args_0_0,
+        args_0_1,
+    ) = args_0
     last_call_args[{i + 21}] = ctypes.c_int(args_0_0)
-    args_0_1_0, args_0_1_1, args_0_1_2 = args_0_1
+    (
+        args_0_1_0,
+        args_0_1_1,
+        args_0_1_2,
+    ) = args_0_1
     last_call_args[{i + 22}] = ctypes.c_int(args_0_1_0)
     last_call_args[{i + 0}].value = args_0_1_1.data_ptr()
     last_call_args[{i + 3}] = ctypes.c_int(args_0_1_1.domain.ranges[0].start)
@@ -59,8 +73,11 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
     last_call_args[{i + 6}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 0))
     last_call_args[{i + 7}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 1))
     last_call_args[{i + 8}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 2))
-    args_1_0, args_1_1 = args_1
-    args_1_0_0 = args_1_0[0]
+    (
+        args_1_0,
+        args_1_1,
+    ) = args_1
+    (args_1_0_0,) = args_1_0
     last_call_args[{i + 1}].value = args_1_0_0.data_ptr()
     last_call_args[{i + 9}] = ctypes.c_int(args_1_0_0.domain.ranges[0].start)
     last_call_args[{i + 10}] = ctypes.c_int(args_1_0_0.domain.ranges[1].start)
@@ -88,17 +105,34 @@ def _binding_source_with_zero_origin(use_metrics: bool) -> str:
         _bind_header
         + f"""\
 def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
-    args_0, args_1, args_2, args_3, args_4, args_5 = args
-    args_0_0, args_0_1 = args_0
+    (
+        args_0,
+        args_1,
+        args_2,
+        args_3,
+        args_4,
+        args_5,
+    ) = args
+    (
+        args_0_0,
+        args_0_1,
+    ) = args_0
     last_call_args[{i + 12}] = ctypes.c_int(args_0_0)
-    args_0_1_0, args_0_1_1, args_0_1_2 = args_0_1
+    (
+        args_0_1_0,
+        args_0_1_1,
+        args_0_1_2,
+    ) = args_0_1
     last_call_args[{i + 13}] = ctypes.c_int(args_0_1_0)
     last_call_args[{i + 0}].value = args_0_1_1.data_ptr()
     last_call_args[{i + 3}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 0))
     last_call_args[{i + 4}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 1))
     last_call_args[{i + 5}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 2))
-    args_1_0, args_1_1 = args_1
-    args_1_0_0 = args_1_0[0]
+    (
+        args_1_0,
+        args_1_1,
+    ) = args_1
+    (args_1_0_0,) = args_1_0
     last_call_args[{i + 1}].value = args_1_0_0.data_ptr()
     last_call_args[{i + 6}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 0))
     last_call_args[{i + 7}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 1))
