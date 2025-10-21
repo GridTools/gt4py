@@ -313,14 +313,14 @@ class ValueInliner(ast.NodeTransformer):
         # > ast.Attribute("A")
         #   - value: ast.Name("MyEnum")
         # We want to replace the entire thing - so we capture the top level
-        # attribute. We don't use the `self.context` because of thise
-        # two-step AST structure which doesn't fit the generic `replace_node`
+        # attribute. We don't use the `self.context` because of this
+        # two-step AST structure which doesn't fit the generic `replace_node`.
 
         if isinstance(node.value, ast.Name) and node.value.id in gtscript._ENUM_REGISTER.keys():
             int_value = getattr(gtscript._ENUM_REGISTER[node.value.id], node.attr)
             return ast.Constant(value=int_value)
 
-        # Common replace for all other node in context
+        # Common replace for all other nodes in context.
         return self._replace_node(node)
 
     def visit_Name(self, node: ast.Name):
@@ -2038,7 +2038,7 @@ class GTScriptParser(ast.NodeVisitor):
         local_symbols = CollectLocalSymbolsAstVisitor.apply(gtscript_ast)
         nonlocal_symbols = {}
 
-        # De-pop from `context in Enum registered with `gtscript`
+        # Remove enums from `context`, they will be turned into integers in the ValueReplacer
         for enum_ in gtscript._ENUM_REGISTER.keys():
             context.pop(enum_, "")
 

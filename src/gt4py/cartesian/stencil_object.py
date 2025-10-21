@@ -19,12 +19,11 @@ from typing import Any, Callable, ClassVar, Literal, Union, cast
 
 import numpy as np
 
-from gt4py.cartesian import backend as gt_backend
+from gt4py.cartesian import backend as gt_backend, gtscript
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gt4py.cartesian.gtc import utils as gtc_utils
 from gt4py.cartesian.gtc.definitions import Index, Shape
 from gt4py.storage.cartesian import utils as storage_utils
-from gt4py.cartesian import gtscript
 
 
 try:

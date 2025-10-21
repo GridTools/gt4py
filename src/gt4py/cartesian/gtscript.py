@@ -166,11 +166,11 @@ with @gtscript.enum()"""
 
 
 def enum(class_: type[IntEnum]):
+    """Mark an IntEnum derived class as readable for GT4Py."""
     class_name = class_.__name__
     if class_name in _ENUM_REGISTER:
         raise ValueError(
-            f"Cannot register @gtscript.enum {class_name} as a class"
-            "with the same name is already registered."
+            f"Enum names must be unique. @gtscript.enum {class_name} is already taken."
         )
 
     if not issubclass(class_, IntEnum):
