@@ -173,12 +173,12 @@ As mentioned above, we use several tools to help us write high-quality code. New
 - [nox] for testing and task automation with different environments.
 - [pre-commit] for automating the execution of QA tools.
 - [pytest] for writing readable tests, extended with:
-    - [Coverage.py][coverage] and [pytest-cov] for test coverage reports.
-    - [pytest-xdist] for running tests in parallel.
+  - [Coverage.py][coverage] and [pytest-cov] for test coverage reports.
+  - [pytest-xdist] for running tests in parallel.
 - [ruff] for style enforcement and code linting.
 - [sphinx] for generating documentation, extended with:
-    - [sphinx-autodoc] and [sphinx-napoleon] for extracting API documentation from docstrings.
-    - [jupytext] for writing new user documentation with code examples.
+  - [sphinx-autodoc] and [sphinx-napoleon] for extracting API documentation from docstrings.
+  - [jupytext] for writing new user documentation with code examples.
 - [uv] for managing dependencies and environments.
 
 <!-- Reference links -->
