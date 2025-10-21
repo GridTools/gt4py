@@ -500,7 +500,7 @@ class OIRToTreeIR(eve.NodeVisitor):
     def visit_IteratorAccess(
         self, node: oir.IteratorAccess, ctx: tir.Context, **kwargs: Any
     ) -> str:
-        if node.name == "K":
+        if node.name == tir.Axis.K:
             return tir.k_symbol(ctx.current_scope)
 
         return tir.Axis(node.name).iteration_symbol()
