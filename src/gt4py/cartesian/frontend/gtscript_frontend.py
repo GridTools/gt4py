@@ -15,7 +15,6 @@ import numbers
 import textwrap
 import time
 import types
-import warnings
 from typing import (
     Any,
     Callable,
@@ -45,7 +44,7 @@ from gt4py.cartesian.frontend.exceptions import (
     GTScriptSyntaxError,
     GTScriptValueError,
 )
-from gt4py.cartesian.utils import meta as gt_meta
+from gt4py.cartesian.utils import meta as gt_meta, warn_experimental_feature
 
 
 PYTHON_AST_VERSION: Final = (3, 10)
@@ -1646,12 +1645,8 @@ class IRMaker(ast.NodeVisitor):
                                     "2D temporaries (e.g. `tmp: Field[IJ, float] = ...) is an experimental feature "
                                     "and not yet implemented for the `gt:X` backends."
                                 )
-                            warnings.warn(
-                                "2D temporaries is an experimental feature. Please read "
-                                "<https://github.com/GridTools/gt4py/blob/main/docs/development/ADRs/cartesian/experimental-features.md> "
-                                "to understand the consequences.",
-                                category=UserWarning,
-                                stacklevel=2,
+                            warn_experimental_feature(
+                                feature="2D temporaries", ADR="experimental/2d-temporaries.md"
                             )
 
                             axes = nodes.Domain.from_gtscript(field_desc.axes).axes_names
