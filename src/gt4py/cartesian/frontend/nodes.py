@@ -143,7 +143,6 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 
-import gt4py.cartesian.gtscript as gt_script
 from gt4py.cartesian.definitions import CartesianSpace
 from gt4py.cartesian.utils.attrib import (
     Any as Any,
