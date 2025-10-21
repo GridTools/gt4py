@@ -49,6 +49,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
         self.sdfg_argtypes = list(program.sdfg.arglist().values())
 
         # Note that `binding_source` contains Python code tailored to this specific SDFG.
+        # Here we dinamically compile this function and add it to the compiled program.
         exec(binding_source.source_code, global_namespace := {})  # type: ignore[var-annotated]
         self.update_sdfg_ctype_arglist = global_namespace[bind_func_name]
         # For debug purpose, we set a unique module name on the compiled function.
