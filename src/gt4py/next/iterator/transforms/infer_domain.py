@@ -477,9 +477,9 @@ def infer_expr(
         expr, offset_provider_type=common.offset_provider_to_type(offset_provider)
     )
     el_types, domain = gtx_utils.equalize_tuple_structure(
-        gtx_utils.tree_map(collection_type=ts.TupleType, result_collection_constructor=tuple)(
-            lambda x: x
-        )(expr.type),
+        gtx_utils.tree_map(
+            collection_type=ts.TupleType, result_collection_constructor=lambda _, elts: tuple(elts)
+        )(lambda x: x)(expr.type),
         domain,
         fill_value=DomainAccessDescriptor.NEVER,
         # el_types already has the right structure, we only want to change domain

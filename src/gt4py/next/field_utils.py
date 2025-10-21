@@ -52,7 +52,9 @@ def field_from_typespec(
     (NumPyArrayField(... dtype=int32...), NumPyArrayField(... dtype=float32...))
     """
 
-    @utils.tree_map(collection_type=ts.TupleType, result_collection_constructor=tuple)
+    @utils.tree_map(
+        collection_type=ts.TupleType, result_collection_constructor=lambda _, elts: tuple(elts)
+    )
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(
             xp.empty(domain.shape, dtype=xp.dtype(type_translation.as_dtype(type_).scalar_type)),
