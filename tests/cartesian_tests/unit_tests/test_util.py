@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import ast
+import pytest
 
 import gt4py.cartesian.utils as gt_util
 from gt4py.cartesian.frontend.gtscript_frontend import PYTHON_AST_VERSION
@@ -27,3 +28,17 @@ class TestGetQualifiedName:
             "submodule",
             "name",
         ]
+
+
+def test_warn_experimental_feature() -> None:
+    with pytest.warns(UserWarning, match="Test feature is an experimental feature."):
+        gt_util.warn_experimental_feature(feature="Test feature", ADR="experimental-features.md")
+
+    # even works with pre-fixed slash in (relative) ADR path
+    with pytest.warns(UserWarning, match="Test feature is an experimental feature."):
+        gt_util.warn_experimental_feature(feature="Test feature", ADR="/README.md")
+
+
+def test_warn_experimental_feature_raise_if_adr_not_found() -> None:
+    with pytest.raises(ValueError, match="Could not find ADR for 'asdf'."):
+        gt_util.warn_experimental_feature(feature="asdf", ADR="not/existing.md")
