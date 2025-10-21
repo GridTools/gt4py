@@ -345,7 +345,7 @@ def as_connectivity(
     if shape != actual_domain.shape:
         raise ValueError(f"Cannot construct 'Field' from array of shape '{shape}'.")
     if dtype is None:
-        dtype = storage_utils.asarray(data).dtype
+        dtype = core_defs.dtype(storage_utils.asarray(data).dtype)
     dtype = core_defs.dtype(dtype)
     assert dtype.tensor_shape == ()  # TODO
 
