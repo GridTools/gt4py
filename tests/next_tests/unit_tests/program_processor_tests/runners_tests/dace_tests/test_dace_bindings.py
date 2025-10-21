@@ -11,19 +11,17 @@
 import numpy as np
 import pytest
 
-from gt4py.next import int32
-from tests.next_tests.integration_tests import cases
-from tests.next_tests.unit_tests.test_common import IDim, JDim, KDim
-
 dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, int32
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.runners import dace as dace_runner
 from gt4py.next.program_processors.runners.dace import workflow as dace_workflow
 
+from next_tests.integration_tests import cases
 from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
+from next_tests.unit_tests.test_common import IDim, JDim, KDim
 
 
 _bind_func_name = "update_sdfg_args"
