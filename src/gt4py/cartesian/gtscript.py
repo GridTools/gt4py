@@ -160,23 +160,11 @@ def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
     return original_annotations
 
 
-_ENUM_REGISTER: dict[str, object] = {}
-"""Register of IntEnum that will be available to parsing in stencils. Register
-with @gtscript.enum()"""
-
-
 def enum(class_: type[IntEnum]):
     """Mark an IntEnum derived class as readable for GT4Py."""
-    class_name = class_.__name__
-    if class_name in _ENUM_REGISTER:
-        raise ValueError(
-            f"Enum names must be unique. @gtscript.enum {class_name} is already taken."
-        )
+    from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend
 
-    if not issubclass(class_, IntEnum):
-        raise ValueError(f"Enum {class_name} needs to derive from `enum.IntEnum`.")
-
-    _ENUM_REGISTER[class_name] = class_
+    gt_frontend.GTScriptParser.register_enum(class_)
     return class_
 
 

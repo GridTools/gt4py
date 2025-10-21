@@ -19,7 +19,7 @@ from typing import Any, Callable, ClassVar, Literal, Union, cast
 
 import numpy as np
 
-from gt4py.cartesian import backend as gt_backend, gtscript
+from gt4py.cartesian import backend as gt_backend
 from gt4py.cartesian.definitions import (
     AccessKind,
     DomainInfo,
@@ -27,6 +27,7 @@ from gt4py.cartesian.definitions import (
     ParameterInfo,
     get_integer_default_type,
 )
+from gt4py.cartesian.frontend import gtscript_frontend
 from gt4py.cartesian.gtc import utils as gtc_utils
 from gt4py.cartesian.gtc.definitions import Index, Shape
 from gt4py.storage.cartesian import utils as storage_utils
@@ -567,7 +568,7 @@ class StencilObject(abc.ABC):
 
         # Normalize `gtscript.enum` to integers
         for name, value in parameter_args.items():
-            if type(value) in gtscript._ENUM_REGISTER.values():
+            if type(value) in gtscript_frontend._ENUM_REGISTER.values():
                 parameter_args[name] = get_integer_default_type()(value.value)
 
         array_infos = _extract_array_infos(field_args, device)
