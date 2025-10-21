@@ -1567,6 +1567,19 @@ class IRMaker(ast.NodeVisitor):
     def visit_Assign(self, node: ast.Assign, **kwargs) -> list:
         return self._resolve_assign(node, node.targets)
 
+    def _domain_from_gtscript_axis(gt_axis: list[gtscript.Axis]) -> nodes.Domain:
+        sequential_axis = None
+        parallel_axes = []
+        for axis in gt_axis:
+            if axis in (gtscript.I, gtscript.J):
+                parallel_axes.append(nodes.Axis(name=axis.name))
+            else:
+                sequential_axis = nodes.Axis(name=axis.name)
+        return nodes.Domain(
+            parallel_axes=parallel_axes,
+            sequential_axis=sequential_axis,
+        )
+
     def _resolve_assign(
         self,
         node: Union[ast.AnnAssign, ast.Assign],
@@ -1649,7 +1662,7 @@ class IRMaker(ast.NodeVisitor):
                                 feature="2D temporaries", ADR="experimental/2d-temporaries.md"
                             )
 
-                            axes = nodes.Domain.from_gtscript(field_desc.axes).axes_names
+                            axes = self._domain_from_gtscript_axis(field_desc.axes).axes_names
                             dtype = nodes.DataType.from_dtype(field_desc.dtype)
                         else:
                             dtype = dtype_or_field_desc

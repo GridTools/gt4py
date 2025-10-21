@@ -201,20 +201,6 @@ class Domain(Node):
     sequential_axis = attribute(of=Axis, optional=True)
 
     @classmethod
-    def from_gtscript(cls, gt_axis: list[gt_script.Axis]) -> Domain:
-        sequential_axis = None
-        parallel_axes = []
-        for axis in gt_axis:
-            if axis in (gt_script.I, gt_script.J):
-                parallel_axes.append(Axis(name=axis.name))
-            else:
-                sequential_axis = Axis(name=axis.name)
-        return cls(
-            parallel_axes=parallel_axes,
-            sequential_axis=sequential_axis,
-        )
-
-    @classmethod
     def LatLonGrid(cls):
         return cls(
             parallel_axes=[
