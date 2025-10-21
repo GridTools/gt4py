@@ -288,7 +288,7 @@ def as_connectivity(
     domain: common.DomainLike | Sequence[common.Dimension],
     codomain: common.Dimension,
     data: core_defs.NDArrayObject,
-    dtype: Optional[core_defs.DType] = None,
+    dtype: Optional[core_defs.DTypeLike] = None,
     *,
     allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
@@ -345,7 +345,7 @@ def as_connectivity(
     if shape != actual_domain.shape:
         raise ValueError(f"Cannot construct 'Field' from array of shape '{shape}'.")
     if dtype is None:
-        dtype = core_defs.dtype(storage_utils.asarray(data).dtype)
+        dtype = storage_utils.asarray(data).dtype
     dtype = core_defs.dtype(dtype)
     assert dtype.tensor_shape == ()  # TODO
 
