@@ -8,20 +8,24 @@
 
 """Test the bindings stage of the dace backend workflow."""
 
+import functools
+import numpy as np
 import pytest
 
 dace = pytest.importorskip("dace")
 
+from gt4py import next as gtx
+from gt4py.next import common as gtx_common, int32
 from gt4py.next.otf import languages, stages
-from gt4py.next.otf.binding import interface
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
-from gt4py.next.program_processors.runners.dace.workflow import bindings as dace_bindings_stage
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.program_processors.runners import dace as dace_runner
+from gt4py.next.program_processors.runners.dace import workflow as dace_workflow
 
+from next_tests.integration_tests import cases
 from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
+from next_tests.unit_tests.test_common import IDim, JDim, KDim
 
 
-_bind_func_name = "dummy"
+_bind_func_name = "update_sdfg_args"
 
 
 _bind_header = """\
@@ -36,180 +40,202 @@ def _get_stride(ndarray, dim_index):
 """
 
 
-_binding_source_not_persistent = (
-    _bind_header
-    + f"""\
+def _binding_source(use_metrics: bool) -> str:
+    i = (
+        1 if use_metrics else 0
+    )  # 'last_call_args[0]' is reserved for '__return' value, which is used to collect the stencil compute time
+    return (
+        _bind_header
+        + f"""\
 def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
-    last_call_args[4] = ctypes.c_double(args[0])
-    last_call_args[0].value = args[1].data_ptr()
-    last_call_args[7] = ctypes.c_int(_get_stride(args[1].ndarray, 0))
-    last_call_args[1].value = args[2][0].data_ptr()
-    last_call_args[8] = ctypes.c_int(_get_stride(args[2][0].ndarray, 0))
-    last_call_args[9] = ctypes.c_int(_get_stride(args[2][0].ndarray, 1))
-    last_call_args[2].value = args[2][1][0].data_ptr()
-    last_call_args[10] = ctypes.c_int(_get_stride(args[2][1][0].ndarray, 0))
-    last_call_args[11] = ctypes.c_int(_get_stride(args[2][1][0].ndarray, 1))
-    last_call_args[5] = ctypes.c_double(args[2][1][1])
-    last_call_args[6] = ctypes.c_double(args[3])
-    last_call_args[3].value = args[4].data_ptr()
-    last_call_args[12] = ctypes.c_int(args[4].domain.ranges[0].start)
-    last_call_args[13] = ctypes.c_int(args[4].domain.ranges[0].stop)
-    last_call_args[14] = ctypes.c_int(args[4].domain.ranges[1].start)
-    last_call_args[15] = ctypes.c_int(args[4].domain.ranges[1].stop)
-    last_call_args[16] = ctypes.c_int(_get_stride(args[4].ndarray, 0))
-    last_call_args[17] = ctypes.c_int(_get_stride(args[4].ndarray, 1))\
+    (
+        args_0,
+        args_1,
+        args_2,
+        args_3,
+        args_4,
+        args_5,
+    ) = args
+    (
+        args_0_0,
+        args_0_1,
+    ) = args_0
+    last_call_args[{i + 21}] = ctypes.c_int(args_0_0)
+    (
+        args_0_1_0,
+        args_0_1_1,
+        args_0_1_2,
+    ) = args_0_1
+    last_call_args[{i + 22}] = ctypes.c_int(args_0_1_0)
+    last_call_args[{i + 0}].value = args_0_1_1.data_ptr()
+    last_call_args[{i + 3}] = ctypes.c_int(args_0_1_1.domain.ranges[0].start)
+    last_call_args[{i + 4}] = ctypes.c_int(args_0_1_1.domain.ranges[1].start)
+    last_call_args[{i + 5}] = ctypes.c_int(args_0_1_1.domain.ranges[2].start)
+    last_call_args[{i + 6}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 0))
+    last_call_args[{i + 7}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 1))
+    last_call_args[{i + 8}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 2))
+    (
+        args_1_0,
+        args_1_1,
+    ) = args_1
+    (args_1_0_0,) = args_1_0
+    last_call_args[{i + 1}].value = args_1_0_0.data_ptr()
+    last_call_args[{i + 9}] = ctypes.c_int(args_1_0_0.domain.ranges[0].start)
+    last_call_args[{i + 10}] = ctypes.c_int(args_1_0_0.domain.ranges[1].start)
+    last_call_args[{i + 11}] = ctypes.c_int(args_1_0_0.domain.ranges[2].start)
+    last_call_args[{i + 12}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 0))
+    last_call_args[{i + 13}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 1))
+    last_call_args[{i + 14}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 2))
+    last_call_args[{i + 23}] = ctypes.c_int(args_1_1)
+    last_call_args[{i + 2}].value = args_5.data_ptr()
+    last_call_args[{i + 15}] = ctypes.c_int(args_5.domain.ranges[0].start)
+    last_call_args[{i + 16}] = ctypes.c_int(args_5.domain.ranges[1].start)
+    last_call_args[{i + 17}] = ctypes.c_int(args_5.domain.ranges[2].start)
+    last_call_args[{i + 18}] = ctypes.c_int(_get_stride(args_5.ndarray, 0))
+    last_call_args[{i + 19}] = ctypes.c_int(_get_stride(args_5.ndarray, 1))
+    last_call_args[{i + 20}] = ctypes.c_int(_get_stride(args_5.ndarray, 2))\
 """
-)
+    )
 
 
-_binding_source_persistent = (
-    _bind_header
-    + f"""\
+def _binding_source_with_zero_origin(use_metrics: bool) -> str:
+    i = (
+        1 if use_metrics else 0
+    )  # 'last_call_args[0]' is reserved for '__return' value, which is used to collect the stencil compute time
+    return (
+        _bind_header
+        + f"""\
 def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
-    last_call_args[4] = ctypes.c_double(args[0])
-    last_call_args[0].value = args[1].data_ptr()
-    last_call_args[1].value = args[2][0].data_ptr()
-    last_call_args[2].value = args[2][1][0].data_ptr()
-    last_call_args[5] = ctypes.c_double(args[2][1][1])
-    last_call_args[6] = ctypes.c_double(args[3])
-    last_call_args[3].value = args[4].data_ptr()
-    last_call_args[12] = ctypes.c_int(args[4].domain.ranges[0].start)
-    last_call_args[13] = ctypes.c_int(args[4].domain.ranges[0].stop)
-    last_call_args[14] = ctypes.c_int(args[4].domain.ranges[1].start)
-    last_call_args[15] = ctypes.c_int(args[4].domain.ranges[1].stop)\
+    (
+        args_0,
+        args_1,
+        args_2,
+        args_3,
+        args_4,
+        args_5,
+    ) = args
+    (
+        args_0_0,
+        args_0_1,
+    ) = args_0
+    last_call_args[{i + 12}] = ctypes.c_int(args_0_0)
+    (
+        args_0_1_0,
+        args_0_1_1,
+        args_0_1_2,
+    ) = args_0_1
+    last_call_args[{i + 13}] = ctypes.c_int(args_0_1_0)
+    last_call_args[{i + 0}].value = args_0_1_1.data_ptr()
+    last_call_args[{i + 3}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 0))
+    last_call_args[{i + 4}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 1))
+    last_call_args[{i + 5}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 2))
+    (
+        args_1_0,
+        args_1_1,
+    ) = args_1
+    (args_1_0_0,) = args_1_0
+    last_call_args[{i + 1}].value = args_1_0_0.data_ptr()
+    last_call_args[{i + 6}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 0))
+    last_call_args[{i + 7}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 1))
+    last_call_args[{i + 8}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 2))
+    last_call_args[{i + 14}] = ctypes.c_int(args_1_1)
+    last_call_args[{i + 2}].value = args_5.data_ptr()
+    last_call_args[{i + 9}] = ctypes.c_int(_get_stride(args_5.ndarray, 0))
+    last_call_args[{i + 10}] = ctypes.c_int(_get_stride(args_5.ndarray, 1))
+    last_call_args[{i + 11}] = ctypes.c_int(_get_stride(args_5.ndarray, 2))\
 """
-)
-
-
-# The difference between the two bindings versions is that the shape and strides
-# of array 'E' are not updated when 'make_persistent=True'. Therefore, the lines
-# for updating 'last_call_args[12-15]' are missing in this binding code.
-assert _binding_source_persistent != _binding_source_not_persistent
-
-
-def _language_settings() -> languages.LanguageSettings:
-    return languages.LanguageSettings(formatter_key="", formatter_style="", file_extension="sdfg")
-
-
-def _make_sdfg(sdfg_name: str) -> dace.SDFG:
-    sdfg = dace.SDFG(sdfg_name)
-
-    A, _ = sdfg.add_scalar("A", dace.float64)
-
-    B_dim0_rstart, B_dim0_rstop = (dace.symbol(f"__B_0_range_{i}") for i in (0, 1))
-    # set 'B_dim1' size to constant value to test the case of constant size in one dimension
-    B_shape = (B_dim0_rstop - B_dim0_rstart, 10)
-    # set 'B_dim1' stride to constant value
-    B_stride0, _ = (dace.symbol(f"__B_stride_{i}") for i in (0, 1))
-    B, _ = sdfg.add_array("B", B_shape, dace.int32, strides=(B_stride0, 1))
-
-    C_0_dim0_rstart, C_0_dim0_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("C_0", ffront_test_utils.IDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("C_0", ffront_test_utils.IDim)),
-    )
-    C_0_dim1_rstart, C_0_dim1_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("C_0", ffront_test_utils.JDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("C_0", ffront_test_utils.JDim)),
-    )
-    C_0_shape = (C_0_dim0_rstop - C_0_dim0_rstart, C_0_dim1_rstop - C_0_dim1_rstart)
-    C_0_strides = tuple(dace.symbol(f"__C_0_stride_{i}") for i in (0, 1))
-    C_0, _ = sdfg.add_array("C_0", C_0_shape, dace.int32, strides=C_0_strides)
-
-    C_1_0_dim0_rstart, C_1_0_dim0_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("C_1_0", ffront_test_utils.IDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("C_1_0", ffront_test_utils.IDim)),
-    )
-    C_1_0_dim1_rstart, C_1_0_dim1_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("C_1_0", ffront_test_utils.JDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("C_1_0", ffront_test_utils.JDim)),
-    )
-    C_1_0_shape = (C_1_0_dim0_rstop - C_1_0_dim0_rstart, C_1_0_dim1_rstop - C_1_0_dim1_rstart)
-    C_1_0_strides = tuple(dace.symbol(f"__C_1_0_stride_{i}") for i in (0, 1))
-    C_1_0, _ = sdfg.add_array("C_1_0", C_1_0_shape, dace.int32, strides=C_1_0_strides)
-
-    C_1_1, _ = sdfg.add_scalar("C_1_1", dace.float64)
-
-    D, _ = sdfg.add_scalar("D", dace.float64)
-
-    E_dim0_rstart, E_dim0_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("E", ffront_test_utils.IDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("E", ffront_test_utils.IDim)),
-    )
-    E_dim1_rstart, E_dim1_rstop = (
-        dace.symbol(gtx_dace_utils.range_start_symbol("E", ffront_test_utils.JDim)),
-        dace.symbol(gtx_dace_utils.range_stop_symbol("E", ffront_test_utils.JDim)),
-    )
-    E_shape = (E_dim0_rstop - E_dim0_rstart, E_dim1_rstop - E_dim1_rstart)
-    E_strides = tuple(dace.symbol(f"__E_stride_{i}") for i in (0, 1))
-    E, _ = sdfg.add_array("E", E_shape, dace.int32, strides=E_strides)
-
-    st = sdfg.add_state()
-    st.add_mapped_tasklet(
-        "compute",
-        code="result = arg0 + arg1 + arg2 + arg3 + arg4 + arg5",
-        map_ranges=dict(i=f"{E_dim0_rstart}:{E_dim0_rstop}", j=f"{E_dim1_rstart}:{E_dim1_rstop}"),
-        inputs={
-            "arg0": dace.Memlet(data=A, subset="0"),
-            "arg1": dace.Memlet(data=B, subset=f"i-{E_dim0_rstart},j-{E_dim1_rstart}"),
-            "arg2": dace.Memlet(data=C_0, subset=f"i-{E_dim0_rstart},j-{E_dim1_rstart}"),
-            "arg3": dace.Memlet(data=C_1_0, subset=f"i-{E_dim0_rstart},j-{E_dim1_rstart}"),
-            "arg4": dace.Memlet(data=C_1_1, subset="0"),
-            "arg5": dace.Memlet(data=D, subset="0"),
-        },
-        outputs={
-            "result": dace.Memlet(data=E, subset=f"i-{E_dim0_rstart},j-{E_dim1_rstart}"),
-        },
-        external_edges=True,
     )
 
-    sdfg.validate()
-    return sdfg
+
+# The difference between the two bindings versions is that one uses field domain
+# with zero origin, therefore the range-start symbols are not present in the SDFG.
+assert _binding_source_with_zero_origin != _binding_source
 
 
-@pytest.mark.parametrize(
-    "persistent_config",
-    [(False, _binding_source_not_persistent), (True, _binding_source_persistent)],
-)
-def test_bind_sdfg(persistent_config):
-    make_persistent, binding_source_ref = persistent_config
-    program_name = "sdfg_bindings{}".format("_persistent" if make_persistent else "")
+_dace_compile_call = dace_workflow.compilation.DaCeCompiler.__call__
 
-    FloatType = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    FieldType = ts.FieldType(dims=[ffront_test_utils.IDim, ffront_test_utils.JDim], dtype=FloatType)
-    TupleType = ts.TupleType(types=[FieldType, ts.TupleType(types=[FieldType, FloatType])])
 
-    sdfg = _make_sdfg(program_name)
-
-    program_parameters = (
-        interface.Parameter("A", FloatType),
-        interface.Parameter("B", FieldType),
-        interface.Parameter("C", TupleType),
-        interface.Parameter("D", FloatType),
-        interface.Parameter("E", FieldType),
-    )
-
-    program_source: stages.ProgramSource[dace_bindings_stage.SrcL, languages.LanguageSettings] = (
-        stages.ProgramSource(
-            entry_point=interface.Function(program_name, tuple(program_parameters)),
-            source_code=sdfg.to_json(),
-            library_deps=tuple(),
-            language=languages.SDFG,
-            language_settings=_language_settings(),
-        )
-    )
-
-    compilable_program_source = dace_bindings_stage.bind_sdfg(
-        program_source, _bind_func_name, make_persistent
-    )
-
-    assert compilable_program_source.program_source == program_source
-    assert len(compilable_program_source.library_deps) == 0
+def mocked_compile_call(
+    self,
+    inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+    use_metrics: bool,
+    use_zero_origin: bool,
+):
+    assert len(inp.library_deps) == 0
 
     # ignore assert statements
     binding_source_pruned = "\n".join(
         line
-        for line in compilable_program_source.binding_source.source_code.splitlines()
+        for line in inp.binding_source.source_code.splitlines()
         if not line.lstrip().startswith("assert")
     )
 
-    assert binding_source_pruned == binding_source_ref
+    binding_source_ref = _binding_source_with_zero_origin if use_zero_origin else _binding_source
+    assert binding_source_pruned == binding_source_ref(use_metrics)
+    return _dace_compile_call(self, inp)
+
+
+@pytest.mark.parametrize("use_metrics", [False, True])
+@pytest.mark.parametrize("use_zero_origin", [False, True])
+def test_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
+    M, N, K = (30, 20, 10)
+
+    @gtx.field_operator
+    def testee_op(
+        a: tuple[int32, tuple[int32, cases.IJKField, int32]], b: tuple[tuple[cases.IJKField], int32]
+    ) -> cases.IJKField:
+        return (
+            a[0] + 2 * a[1][0] + 3 * a[1][1] + 4 * b[0][0] + 5 * b[1]
+        )  # skip 'a[1][2]' on purpose to cover unused scalar args
+
+    @gtx.program
+    def testee(
+        a: tuple[int32, tuple[int32, cases.IJKField, int32]],
+        b: tuple[tuple[cases.IJKField], int32],  # use 'b_0' to test tuple with single element
+        M: int32,
+        N: int32,
+        K: int32,
+        out: cases.IJKField,
+    ):
+        testee_op(a, b, out=out, domain={IDim: (1, M - 1), JDim: (2, N - 2), KDim: (3, K - 3)})
+
+    backend = dace_runner.make_dace_backend(
+        gpu=False,
+        cached=False,
+        auto_optimize=True,
+        use_metrics=use_metrics,
+        use_zero_origin=use_zero_origin,
+    )
+    monkeypatch.setattr(
+        dace_workflow.compilation.DaCeCompiler,
+        "__call__",
+        functools.partialmethod(
+            mocked_compile_call, use_metrics=use_metrics, use_zero_origin=use_zero_origin
+        ),
+    )
+
+    static_args = {"M": [M], "N": [N], "K": [K]}
+    program = (
+        testee.with_grid_type(gtx_common.GridType.CARTESIAN)
+        .with_backend(backend)
+        .compile(enable_jit=False, offset_provider={}, **static_args)
+    )
+
+    test_case = cases.Case.from_cartesian_grid_descriptor(
+        ffront_test_utils.simple_cartesian_grid(),
+        backend=backend,
+        allocator=backend,
+    )
+
+    sizes = {IDim: M, JDim: N, KDim: K}
+    a = cases.allocate(test_case, testee, "a", sizes=sizes, strategy=cases.UniqueInitializer())()
+    b = cases.allocate(test_case, testee, "b", sizes=sizes, strategy=cases.UniqueInitializer())()
+    c = cases.allocate(test_case, testee, "out", sizes=sizes, strategy=cases.UniqueInitializer())()
+
+    ref = c.asnumpy().copy()
+    ref[1 : M - 1, 2 : N - 2, 3 : K - 3] = (
+        a[0] + 2 * a[1][0] + 3 * a[1][1].asnumpy() + 4 * b[0][0].asnumpy() + 5 * b[1]
+    )[1 : M - 1, 2 : N - 2, 3 : K - 3]
+
+    program(a, b, out=c, M=M, N=N, K=K)
+    assert np.all(c.asnumpy() == ref)

@@ -143,9 +143,6 @@ rocm6_0 = ['cupy>=13.4.1']
 standard = ['clang-format>=18.1', 'scipy>=1.14.1']
 testing = ['hypothesis>=6.93', 'pytest>=7.0']
 
-[project.scripts]
-gtpyc = 'gt4py.cartesian.cli:gtpyc'
-
 [project.urls]
 Documentation = 'https://gridtools.github.io/gt4py'
 Homepage = 'https://gridtools.github.io/'
