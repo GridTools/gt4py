@@ -712,7 +712,7 @@ def _is_datadims_indexing_name(name: str):
 
 
 def _is_iterator_access(name: str, loc: nodes.Location) -> bool:
-    if name in ["I", "J", "IJ"]:
+    if name != "K":
         raise GTScriptSyntaxError(
             f"Parallel axis {name} can't be queried - only K - at line {loc.line} (column {loc.column})",
             loc=loc,
