@@ -1912,7 +1912,9 @@ class GTScriptParser(ast.NodeVisitor):
             ):
                 dtype_annotation = np.dtype(param.annotation)
             elif param.annotation in gtscript._ENUM_REGISTER.values():
-                dtype_annotation = int  # We will replace all enums with `int`
+                dtype_annotation = (
+                    gt_definitions.get_integer_default_type()
+                )  # We will replace all enums with `int`
             elif param.annotation is inspect.Signature.empty:
                 dtype_annotation = None
             else:
