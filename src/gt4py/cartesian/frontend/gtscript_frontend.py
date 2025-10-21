@@ -15,7 +15,6 @@ import numbers
 import textwrap
 import time
 import types
-import warnings
 from typing import (
     Any,
     Callable,
@@ -718,12 +717,8 @@ def _is_iterator_access(name: str, loc: nodes.Location) -> bool:
             loc=loc,
         )
 
-    warnings.warn(
-        "Iterator access in `K` is an immature experimental feature. Please read "
-        "<https://github.com/GridTools/gt4py/blob/main/docs/development/ADRs/cartesian/experimental/iteration-index-k.md> "
-        "to understand the consequences.",
-        category=UserWarning,
-        stacklevel=2,
+    gt_utils.warn_experimental_feature(
+        feature="Iterator access in K", ADR="experimental/iteration-index-k.md"
     )
 
     return name == "K"
