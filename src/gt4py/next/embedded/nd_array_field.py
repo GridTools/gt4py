@@ -126,6 +126,7 @@ class NdArrayField(
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if hasattr(cls, "array_ns") and not hasattr(cls, "array_byte_bounds"):
+            # This is needed to initialize `array_byte_bounds` only once per subclass
             try:
                 cls.array_byte_bounds = staticmethod(
                     getattr(cls.array_ns, "byte_bounds", None)

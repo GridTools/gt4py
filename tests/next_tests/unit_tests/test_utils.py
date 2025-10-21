@@ -8,6 +8,7 @@
 
 import inspect
 import pytest
+from typing import Final
 
 from gt4py.next import utils
 
@@ -60,49 +61,92 @@ def test_tree_map_multiple_input_types():
     assert testee([(1, [2]), 3]) == ([2, (3,)], 4)
 
 
-@pytest.mark.parametrize(
-    "options",
-    [
-        dict(allow_kwargs_mutation=allow_kwargs_mutation, sort_kwargs=sort_kwargs)
-        for allow_kwargs_mutation in (True, False)
-        for sort_kwargs in (True, False)
-    ],
-    ids=lambda option: str.join(", ", (f"{k}={v}" for k, v in option.items())),
-)
-def test_default_make_args_canonicalizer(options: dict[str, bool]):
-    def func(a, /, b, *, c, d):
-        return a + b + c + d
+class TestArgsCanonicalizer:
+    @pytest.fixture(
+        autouse=True,
+        params=(
+            options := [
+                dict(allow_kwargs_mutation=allow_kwargs_mutation, sort_kwargs=sort_kwargs)
+                for allow_kwargs_mutation in (True, False)
+                for sort_kwargs in (True, False)
+            ]
+        ),
+        ids=[str.join(", ", (f"{k}={v}" for k, v in option.items())) for option in options],
+    )
+    def setup(self, request):
+        def func(a, /, b, *, c, d):
+            return a + b + c + d
 
-    signature = inspect.signature(func)
-    canonicalizer = utils.make_args_canonicalizer(signature, **options)
-    canonical_form = ((1, 2), {"c": 3, "d": 4})
+        self.func = func
+        self.func_signature = inspect.signature(func)
 
-    in_place_kwargs = options["allow_kwargs_mutation"] is True and options["sort_kwargs"] is False
+        self.options = request.param
+        self.canonicalizer = utils.make_args_canonicalizer(
+            self.func_signature, name=self.func.__name__, **request.param
+        )
+        self.in_place_kwargs = (
+            request.param["allow_kwargs_mutation"] is True and request.param["sort_kwargs"] is False
+        )
 
-    output = canonicalizer((1, 2), kwargs := {"c": 3, "d": 4})
-    assert output == canonical_form
-    assert (output[1] is kwargs) == in_place_kwargs
-    assert canonicalizer.cache_info().currsize == 1
-    del output, kwargs
+    def test_canonical_form(self):
+        args, kwargs = (1, 2), {"c": 3, "d": 4}
+        bound_args = self.func_signature.bind(*args, **kwargs)
+        canonical_form = bound_args.args, bound_args.kwargs
+        assert self.canonicalizer(args, kwargs) == canonical_form
 
-    output = canonicalizer((1, 2), kwargs := {"d": 4, "c": 3})
-    assert output == canonical_form
-    assert (output[1] is kwargs) == in_place_kwargs
-    assert tuple(output[1].keys()) == ("c", "d") or not options["sort_kwargs"]
-    assert canonicalizer.cache_info().currsize == 1
-    del output, kwargs
+        args, kwargs = (1,), {"c": 3, "d": 4, "b": 2}
+        bound_args = self.func_signature.bind(*args, **kwargs)
+        canonical_form = bound_args.args, bound_args.kwargs
+        assert self.canonicalizer(args, kwargs) == canonical_form
 
-    assert canonicalizer((1,), {"b": 2, "c": 3, "d": 4}) == canonical_form
-    assert canonicalizer.cache_info().currsize == 2
+    def test_wrong_input(self):
+        with pytest.raises(ValueError, match="Missing keyword arguments: {'c'}"):
+            self.canonicalizer((1, 2), {"d": 4})
 
-    assert canonicalizer((), {"d": 4, "a": 1, "b": 2, "c": 3}) == canonical_form
-    assert canonicalizer.cache_info().currsize == 3
+        with pytest.raises(ValueError, match="Got unexpected keyword arguments: {'foo'}"):
+            self.canonicalizer((1, 2), {"d": 4, "foo": 5})
 
-    with pytest.raises(ValueError, match="Missing keyword arguments: {'c'}"):
-        canonicalizer((1, 2), {"d": 4})
+        with pytest.raises(ValueError, match="Got unexpected keyword arguments: {'a'}"):
+            self.canonicalizer((2,), {"a": 1, "c": 3, "d": 4})
 
-    with pytest.raises(ValueError, match="Got unexpected keyword arguments: {'foo'}"):
-        canonicalizer((1, 2), {"d": 4, "foo": 5})
+        with pytest.raises(ValueError, match="Too many positional arguments"):
+            self.canonicalizer((1, 2, 3, 4, 5), {})  # too many positional arguments
 
-    with pytest.raises(ValueError, match="Too many positional arguments"):
-        canonicalizer((1, 2, 3, 4, 5), {})  # too many positional arguments
+    def test_allow_kwargs_mutation(self):
+        args, kwargs = (1,), {"c": 3, "b": 2, "d": 4}
+        canonical_args, canonical_kwargs = self.canonicalizer(args, kwargs)
+
+        assert canonical_kwargs.keys() == {"c", "d"}
+        assert (canonical_kwargs is not kwargs) or self.canonicalizer.options.allow_kwargs_mutation
+        assert (
+            self.canonicalizer.options.allow_kwargs_mutation
+            == self.options["allow_kwargs_mutation"]
+        )
+        assert (
+            self.in_place_kwargs is self.options["allow_kwargs_mutation"]
+            or self.options["sort_kwargs"]
+        )
+
+    def test_cache(self):
+        args, kwargs = (1, 2), {"c": 3, "d": 4}
+
+        assert self.canonicalizer.cache_info().currsize == 0
+        _ = self.canonicalizer(args, kwargs)
+        assert self.canonicalizer.cache_info().currsize == 1
+        _ = self.canonicalizer(args, kwargs)
+        assert self.canonicalizer.cache_info().currsize == 1
+
+        self.canonicalizer.cache_clear()
+        assert self.canonicalizer.cache_info().currsize == 0
+        _ = self.canonicalizer(args, kwargs)
+        assert self.canonicalizer.cache_info().currsize == 1
+
+    def test_sort_kwargs(self):
+        args, kwargs = (1, 2), {"d": 3, "c": 4}
+        canonical_form = self.func_signature.bind(*args, **kwargs)
+        canonical_args, canonical_kwargs = self.canonicalizer(args, kwargs)
+
+        assert canonical_kwargs.keys() == {"c", "d"}
+        assert tuple(canonical_kwargs.keys()) == ("c", "d") or not self.options["sort_kwargs"]
+        assert (canonical_kwargs is not kwargs) or not self.canonicalizer.options.sort_kwargs
+        assert self.canonicalizer.options.sort_kwargs == self.options["sort_kwargs"]

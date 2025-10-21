@@ -32,8 +32,6 @@ if TYPE_CHECKING:
 Cell = gtx.Dimension("Cell")
 IDim = gtx.Dimension("IDim")
 
-WARMUP_ITERS: Final = 5
-
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def benchmark_const_no_args_program(
@@ -49,11 +47,10 @@ def benchmark_const_no_args_program(
 
     size = 1
     out_field = gtx.empty([(IDim, size)], dtype=gtx.float64)
-    compiled_program = const_no_args.with_backend(backend)
 
-    # Compilation and warm-up
-    for _ in range(WARMUP_ITERS):
-        compiled_program(out=out_field)
+    # Initial compilation
+    compiled_program = const_no_args.with_backend(backend)
+    compiled_program(out=out_field)
 
     benchmark(compiled_program, out=out_field)
 
@@ -78,10 +75,9 @@ def benchmark_copy_01_arg_program(
     in_field = gtx.full([(IDim, size)], 1, dtype=gtx.float64)
     out_field = gtx.empty([(IDim, size)], dtype=gtx.float64)
 
-    # Compilation and warm-up
+    # Initial compilation
     compiled_program = copy_01_arg.with_backend(backend)
-    for _ in range(WARMUP_ITERS):
-        compiled_program(in_field, out=out_field)
+    compiled_program(in_field, out=out_field)
 
     benchmark(compiled_program, in_field, out=out_field)
 
@@ -175,15 +171,14 @@ def benchmark_horizontal_copy_05_arg_program(
     input_fields = [gtx.empty([(Cell, size)], dtype=gtx.float64) for _ in range(5)]
     out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
 
-    # Compilation and warm-up
+    # Initial compilation
     compiled_program = horizontal_copy_05_arg_program.with_backend(backend)
-    for _ in range(WARMUP_ITERS):
-        compiled_program(
-            *input_fields,
-            out=out_field,
-            horizontal_start=0,
-            horizontal_end=size,
-        )
+    compiled_program(
+        *input_fields,
+        out=out_field,
+        horizontal_start=0,
+        horizontal_end=size,
+    )
 
     benchmark(
         compiled_program,
@@ -297,13 +292,12 @@ def benchmark_horizontal_copy_25_arg_program(
 
     # Compilation and warm-up
     compiled_program = horizontal_copy_25_arg_program.with_backend(backend)
-    for _ in range(WARMUP_ITERS):
-        compiled_program(
-            *input_fields,
-            out=out_field,
-            horizontal_start=0,
-            horizontal_end=size,
-        )
+    compiled_program(
+        *input_fields,
+        out=out_field,
+        horizontal_start=0,
+        horizontal_end=size,
+    )
 
     benchmark(
         compiled_program,
