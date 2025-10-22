@@ -72,6 +72,7 @@ class IteratorAccess(Expr):
         K = "K"
 
     name: AxisName
+    kind: common.ExprKind = common.ExprKind.SCALAR
 
 
 class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):

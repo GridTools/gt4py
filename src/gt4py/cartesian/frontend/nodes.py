@@ -371,6 +371,7 @@ class IteratorAccess(Ref):
     """Iterator query"""
 
     name = attribute(of=str)
+    data_type = attribute(of=DataType)
 
 
 @attribclass

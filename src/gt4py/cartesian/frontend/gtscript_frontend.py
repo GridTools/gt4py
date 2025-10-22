@@ -1125,7 +1125,9 @@ class IRMaker(ast.NodeVisitor):
             )
 
         if _is_iterator_access(symbol, nodes.Location.from_ast_node(node)):
-            return nodes.IteratorAccess(name="K")
+            value_type = np.dtype(f"i{int(self.literal_int_precision / 8)}")
+            data_type = nodes.DataType.from_dtype(value_type)
+            return nodes.IteratorAccess(name="K", data_type=data_type)
 
         raise AssertionError(f"Missing '{symbol}' symbol definition")
 

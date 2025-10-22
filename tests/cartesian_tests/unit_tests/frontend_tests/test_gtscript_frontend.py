@@ -2032,7 +2032,10 @@ class TestNumpyTypedConstants:
 
 
 class TestIteratorAccess:
-    def test_read_in_K_iterator(self):
+    @pytest.mark.parametrize(
+        "integer_precision,data_type", [(32, nodes.DataType.INT32), (64, nodes.DataType.INT64)]
+    )
+    def test_read_in_K_iterator(self, integer_precision: int, data_type: nodes.DataType):
         def stencil(field: gtscript.Field[float]):  # type: ignore
             with computation(PARALLEL), interval(...):
                 field[0, 0, 0] = K
@@ -2041,12 +2044,13 @@ class TestIteratorAccess:
             stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            literal_precision=64,
+            literal_int_precision=integer_precision,
         )
 
         assert isinstance(def_ir.computations[0].body.stmts[0].value, nodes.IteratorAccess)
         iterator_access = def_ir.computations[0].body.stmts[0].value
         assert iterator_access.name == "K"
+        assert iterator_access.data_type == data_type
 
     def test_K_as_cond_iterator(self):
         def stencil(field: gtscript.Field[float]):  # type: ignore
@@ -2058,7 +2062,6 @@ class TestIteratorAccess:
             stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            literal_precision=64,
         )
 
         assert isinstance(def_ir.computations[0].body.stmts[0].condition.lhs, nodes.IteratorAccess)
@@ -2074,7 +2077,6 @@ class TestIteratorAccess:
             stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            literal_precision=64,
         )
 
         assert isinstance(def_ir.computations[0].body.stmts[0].value.offset, dict)
