@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import contextlib
+import os
 from typing import Any, Final, Generator, Optional
 
 import dace
@@ -65,16 +66,17 @@ def set_dace_config(
         dace.Config.set("compiler.build_type", value=cmake_build_type.value)
 
     # The dace dafault settings use fast-math in both cpu and gpu compilation,
-    # we don't use it here. We also allow the user to append extra compiler arguments.
+    # we don't use it here. We also allow the user to append extra compiler arguments
+    # by means of environment variables.
     cxxflags = (
         "-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label"
     )
-    if gt_cxxargs := config.COMPILE_CXXFLAGS:
+    if gt_cxxargs := os.environ.get("CXXFLAGS", None):
         cxxflags = f"{cxxflags} {gt_cxxargs}"
     dace.Config.set("compiler.cpu.args", value=cxxflags)
 
     cudaflags = "-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter"
-    if gt_cudaargs := config.COMPILE_CUDAFLAGS:
+    if gt_cudaargs := os.environ.get("CUDAFLAGS", None):
         cudaflags = f"{cudaflags} {gt_cudaargs}"
     dace.Config.set("compiler.cuda.args", value=cudaflags)
 

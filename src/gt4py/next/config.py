@@ -113,8 +113,3 @@ COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", defa
 #: The default for whether to allow jit-compilation for a compiled program.
 #: This default can be overriden per program.
 ENABLE_JIT_DEFAULT: bool = env_flag_to_bool("GT4PY_ENABLE_JIT_DEFAULT", default=True)
-
-
-#: Extra user-defined compiler arguments to use in compiled backends.
-COMPILE_CXXFLAGS: str | None = os.environ.get("GT4PY_COMPILE_CXXFLAGS", None)
-COMPILE_CUDAFLAGS: str | None = os.environ.get("GT4PY_COMPILE_CUDAFLAGS", None)
