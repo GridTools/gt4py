@@ -42,6 +42,21 @@ LITERAL_FLOAT_PRECISION = int(
 """Default literal precision used for unspecific `float` types and casts."""
 
 
+def get_integer_default_type():
+    """Return the integer numpy type corresponding to the LITERAL_INT_PRECISION set."""
+    # I'd love to return `numpy.signedinteger[LITERAL_INT_PRECISION]` but that won't work
+    if LITERAL_INT_PRECISION == 8:
+        return numpy.int8
+    if LITERAL_INT_PRECISION == 32:
+        return numpy.int32
+    if LITERAL_INT_PRECISION == 64:
+        return numpy.int64
+    if LITERAL_INT_PRECISION == 128:
+        return numpy.int128
+
+    raise NotImplementedError("Unknown integer precision type")
+
+
 @enum.unique
 class AccessKind(enum.IntFlag):
     NONE = 0
