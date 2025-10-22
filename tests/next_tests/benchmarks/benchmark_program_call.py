@@ -111,15 +111,14 @@ def benchmark_horizontal_copy_01_arg_program(
     input_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
     out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
 
-    # Compilation and warm-up
+    # Initial compilation
     compiled_program = horizontal_copy_01_arg_program.with_backend(backend)
-    for _ in range(WARMUP_ITERS):
-        compiled_program(
-            input_field,
-            out=out_field,
-            horizontal_start=0,
-            horizontal_end=size,
-        )
+    compiled_program(
+        input_field,
+        out=out_field,
+        horizontal_start=0,
+        horizontal_end=size,
+    )
 
     benchmark(
         compiled_program,
@@ -290,7 +289,7 @@ def benchmark_horizontal_copy_25_arg_program(
     input_fields = [gtx.empty([(Cell, size)], dtype=gtx.float64) for _ in range(25)]
     out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
 
-    # Compilation and warm-up
+    # Initial compilation
     compiled_program = horizontal_copy_25_arg_program.with_backend(backend)
     compiled_program(
         *input_fields,
