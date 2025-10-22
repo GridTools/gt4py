@@ -320,6 +320,10 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
         function = gtc_common.OP_TO_UFUNC_NAME[gtc_common.NativeFunction][native_function_call.func]
         return f"ufuncs.{function}({arguments})"
 
+    def visit_IteratorAccess(self, iterator_access: oir.IteratorAccess, **_) -> str:
+        """Returns the axis in lower letter (to match the index of the loop)"""
+        return iterator_access.name.value.lower()
+
     def visit_UnaryOp(self, unary_operator: oir.UnaryOp, **kwargs) -> str:
         return f"{unary_operator.op.value} {self.visit(unary_operator.expr, **kwargs)}"
 
