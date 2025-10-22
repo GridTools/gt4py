@@ -56,11 +56,13 @@ class CompiledDaceProgram(stages.CompiledProgram):
         # For debug purpose, we set a unique module name on the compiled function.
         self.update_sdfg_ctype_arglist.__module__ = os.path.basename(program.sdfg.build_folder)
 
-    def __call__(self, **kwargs: Any) -> Any:
-        return self.sdfg_program(**kwargs)
+    def __call__(self, **kwargs: Any) -> None:
+        result = self.sdfg_program(**kwargs)
+        assert result is None
 
-    def fast_call(self) -> Any:
-        return self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
+    def fast_call(self) -> None:
+        result = self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
+        assert result is None
 
 
 @dataclasses.dataclass(frozen=True)
