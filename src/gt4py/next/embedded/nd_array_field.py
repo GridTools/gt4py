@@ -1076,8 +1076,8 @@ class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
     # It is only possible to cache the data buffer pointer in this way
-    # because the backing np.ndarray is never changed after creation
-    # (frozen dataclass).
+    # because the backing np.ndarray is never replaced after creation,
+    # since this is a frozen dataclass.
     @functools.cached_property
     def _data_buffer_ptr_(self) -> int:
         return self._ndarray.ctypes.data  # type: ignore[attr-defined]  # np.ndarray has `ctypes` attribute
@@ -1101,8 +1101,8 @@ if cp:
 
     # Same as in the NumPy case:
     # It is only possible to cache the data buffer pointer in this way
-    # because the backing np.ndarray is never changed after creation
-    # (frozen dataclass).
+    # because the backing np.ndarray is never replaced after creation
+    # since this is a frozen dataclass.
     @dataclasses.dataclass(frozen=True, eq=False)
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
