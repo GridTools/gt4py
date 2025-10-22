@@ -61,8 +61,11 @@ def convert_args(
                 *flat_args,
                 filter_args=False,
             )
-            this_call_args[gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL] = config.COLLECT_METRICS_LEVEL
-            this_call_args[gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME] = collect_time_arg
+            if collect_time:
+                this_call_args |= {
+                    gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.COLLECT_METRICS_LEVEL,
+                    gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
+                }
             with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
                 fun(**this_call_args)
 
