@@ -64,15 +64,20 @@ def set_dace_config(
     if cmake_build_type is not None:
         dace.Config.set("compiler.build_type", value=cmake_build_type.value)
 
-    # dace dafault setting use fast-math in both cpu and gpu compilation, don't use it here
-    dace.Config.set(
-        "compiler.cpu.args",
-        value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
+    # The dace dafault settings use fast-math in both cpu and gpu compilation,
+    # we don't use it here. We also allow the user to append extra compiler arguments.
+    cxxflags = (
+        "-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label"
     )
-    dace.Config.set(
-        "compiler.cuda.args",
-        value="--generate-line-info -Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
-    )
+    if gt_cxxargs := config.COMPILE_CXXFLAGS:
+        cxxflags = f"{cxxflags} {gt_cxxargs}"
+    dace.Config.set("compiler.cpu.args", value=cxxflags)
+
+    cudaflags = "-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter"
+    if gt_cudaargs := config.COMPILE_CUDAFLAGS:
+        cudaflags = f"{cudaflags} {gt_cudaargs}"
+    dace.Config.set("compiler.cuda.args", value=cudaflags)
+
     dace.Config.set(
         "compiler.cuda.hip_args",
         value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
