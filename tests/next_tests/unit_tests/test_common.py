@@ -277,14 +277,13 @@ def test_empty_domain(empty_domain, expected):
     "domain_like",
     [
         (Domain(dims=(IDim, JDim), ranges=(UnitRange(2, 4), UnitRange(3, 5)))),
-        ((IDim, (2, 4)), (JDim, (3, 5))),
         ({IDim: (2, 4), JDim: (3, 5)}),
     ],
 )
 def test_domain_like(domain_like):
-    assert domain(domain_like) == Domain(
-        dims=(IDim, JDim), ranges=(UnitRange(2, 4), UnitRange(3, 5))
-    )
+    expected = Domain(dims=(IDim, JDim), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+    assert domain(domain_like) == expected
+    assert domain((domain_like, (domain_like, domain_like))) == (expected, (expected, expected))
 
 
 def test_domain_iteration(a_domain):
