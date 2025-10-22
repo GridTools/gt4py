@@ -314,8 +314,9 @@ if __name__ == "__main__":
     import sys
 
     def benchmark(*args, **kwargs):
+        func = functools.partial(*args, **kwargs)
         for _ in range(5):
-            functools.partial(*args, **kwargs)()
+            func()
 
     backends = []
     for arg in sys.argv[1:]:

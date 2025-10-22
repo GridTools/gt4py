@@ -480,7 +480,7 @@ class NdArrayField(
 
     data_ptr = _dace_data_ptr
     """
-    Returns the pointer to the underlying data buffer.
+    Returns the pointer of the underlying data buffer.
 
     Fully equivalent to `self._data_buffer_ptr_`. It is only defined to emulate the
     PyTorch API for DaCe interoperability.
@@ -1075,6 +1075,9 @@ _nd_array_implementations = [np]
 class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
+    # It is only possible to cache the data buffer pointer in this way
+    # because the backing np.ndarray is never changed after creation
+    # (frozen dataclass).
     @functools.cached_property
     def _data_buffer_ptr_(self) -> int:
         return self._ndarray.ctypes.data  # type: ignore[attr-defined]  # np.ndarray has `ctypes` attribute
@@ -1096,6 +1099,10 @@ common._connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array
 if cp:
     _nd_array_implementations.append(cp)
 
+    # Same as in the NumPy case:
+    # It is only possible to cache the data buffer pointer in this way
+    # because the backing np.ndarray is never changed after creation
+    # (frozen dataclass).
     @dataclasses.dataclass(frozen=True, eq=False)
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
