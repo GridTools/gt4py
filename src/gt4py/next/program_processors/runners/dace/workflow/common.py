@@ -71,7 +71,7 @@ def set_dace_config(
         dace.Config.set("compiler.cpu.args", value=gt_cxxargs)
     else:
         dace.Config.set(
-            "compiler.cuda.args",
+            "compiler.cpu.args",
             value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
         )
     if gt_cudaargs := os.environ.get("CUDAFLAGS", None):
