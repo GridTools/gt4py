@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import dataclasses
 import os
-from typing import Any, Callable, Sequence
+from collections.abc import Callable, MutableSequence, Sequence
+from typing import Any
 
 import dace
 import factory
@@ -31,7 +32,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
 
     # The compiled program contains a callable object to update the SDFG arguments list.
     update_sdfg_ctype_arglist: Callable[
-        [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]],
+        [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], MutableSequence[Any]],
         None,
     ]
 
