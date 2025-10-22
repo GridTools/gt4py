@@ -22,6 +22,7 @@ from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
     gtir_to_sdfg,
+    gtir_to_sdfg_utils,
     transformations as gtx_transformations,
     utils as gtx_dace_utils,
 )
@@ -33,9 +34,11 @@ def find_constant_symbols(
     ir: itir.Program,
     sdfg: dace.SDFG,
     offset_provider_type: common.OffsetProviderType,
+    disable_field_origin_on_program_arguments: bool = False,
 ) -> dict[str, int]:
     """Helper function to find symbols to replace with constant values."""
     constant_symbols: dict[str, int] = {}
+
     if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE:
         # Search the stride symbols corresponding to the horizontal dimension
         for p in ir.params:
@@ -63,6 +66,30 @@ def find_constant_symbols(
                 assert not desc.transient
                 stride_name = gtx_dace_utils.field_stride_symbol_name(conn, 0)
                 constant_symbols[stride_name] = 1
+
+    if disable_field_origin_on_program_arguments:
+        # collect symbols used as range start for all program arguments
+        for p in ir.params:
+            if isinstance(p.type, ts.TupleType):
+                psymbols = [
+                    sym
+                    for sym in gtir_to_sdfg_utils.flatten_tuple_fields(p.id, p.type)
+                    if isinstance(sym.type, ts.FieldType)
+                ]
+            elif isinstance(p.type, ts.FieldType):
+                psymbols = [p]
+            else:
+                psymbols = []
+            for psymbol in psymbols:
+                assert isinstance(psymbol.type, ts.FieldType)
+                if len(psymbol.type.dims) == 0:
+                    # zero-dimensional field
+                    continue
+                dataname = str(psymbol.id)
+                # set all range start symbols to constant value 0
+                constant_symbols |= {
+                    gtx_dace_utils.range_start_symbol(dataname, dim): 0 for dim in psymbol.type.dims
+                }
 
     return constant_symbols
 
@@ -113,6 +140,25 @@ def _has_gpu_schedule(sdfg: dace.SDFG) -> bool:
     )
 
 
+def _make_if_region_for_metrics_collection(
+    name: str,
+    metrics_level: str,
+    sdfg: dace.SDFG,
+) -> tuple[dace.state.ConditionalBlock, dace.state.SDFGState]:
+    """
+    Helper function to create a conditional block in the given SDFG, with only one
+    branch to be executed if 'metric_level >= metrics.PERFORMANCE' is true.
+    """
+    if_region = dace.sdfg.state.ConditionalBlock(name)
+    sdfg.add_node(if_region, ensure_unique_name=True)
+    then_body = dace.sdfg.state.ControlFlowRegion(f"{if_region.label}_collect_metrics", sdfg=sdfg)
+    then_state = then_body.add_state(f"{if_region.label}_collect_metrics")
+    if_region.add_branch(
+        dace.sdfg.state.CodeBlock(f"{metrics_level} >= {metrics.PERFORMANCE}"), then_body
+    )
+    return if_region, then_state
+
+
 def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     """
     Instrument SDFG with measurement of total execution time.
@@ -147,22 +193,17 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         has_side_effects = False
 
     #### 2. Timestamp the SDFG entry point.
-    entry_state = sdfg.add_state("gt_timer_entry")
-    begin_state = sdfg.add_state_after(
-        entry_state, "gt_timer_begin", condition=f"{metrics_level} >= {metrics.PERFORMANCE}"
+    entry_if_region, begin_state = _make_if_region_for_metrics_collection(
+        "program_entry", metrics_level, sdfg
     )
 
     for source_state in sdfg.source_nodes():
-        if source_state is entry_state:
+        if source_state is entry_if_region:
             continue
-        sdfg.add_edge(
-            entry_state,
-            source_state,
-            dace.InterstateEdge(condition=f"{metrics_level} < {metrics.PERFORMANCE}"),
-        )
-        sdfg.add_edge(begin_state, source_state, dace.InterstateEdge())
-    assert sdfg.out_degree(begin_state) > 0
-    assert sdfg.out_degree(entry_state) > 1
+        sdfg.add_edge(entry_if_region, source_state, dace.InterstateEdge())
+        source_state.is_start_block = False
+    assert sdfg.out_degree(entry_if_region) > 0
+    entry_if_region.is_start_block = True
 
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
@@ -185,17 +226,17 @@ time = static_cast<double>(
     )
 
     #### 3. Collect the SDFG end timestamp and produce the compute metric.
-    end_state = sdfg.add_state("gt_timer_end")
-    for sink_state in sdfg.sink_nodes():
-        if sink_state is end_state:
-            continue
-        sdfg.add_edge(
-            sink_state,
-            end_state,
-            dace.InterstateEdge(condition=f"{metrics_level} >= {metrics.PERFORMANCE}"),
-        )
-    assert sdfg.in_degree(end_state) > 0
+    exit_if_region, end_state = _make_if_region_for_metrics_collection(
+        "program_exit", metrics_level, sdfg
+    )
 
+    for sink_state in sdfg.sink_nodes():
+        if sink_state is exit_if_region:
+            continue
+        sdfg.add_edge(sink_state, exit_if_region, dace.InterstateEdge())
+    assert sdfg.in_degree(exit_if_region) > 0
+
+    # Populate the branch that computes the stencil time metric
     tlet_stop_timer = end_state.add_tasklet(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
@@ -219,8 +260,15 @@ duration = run_cpp_end_time - run_cpp_start_time;
         dace.Memlet(f"{start_time}[0]"),
     )
     end_state.add_edge(
-        tlet_stop_timer, "duration", end_state.add_access(output), None, dace.Memlet(f"{output}[0]")
+        tlet_stop_timer,
+        "duration",
+        end_state.add_access(output),
+        None,
+        dace.Memlet(f"{output}[0]"),
     )
+
+    # Check SDFG validity after applying the above changes.
+    sdfg.validate()
 
 
 def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
@@ -298,19 +346,12 @@ class DaCeTranslator(
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
+    auto_optimize_args: dict[str, Any] | None
     async_sdfg_call: bool
     use_metrics: bool
+
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
-
-    # auto-optimize arguments
-    gpu_block_size: tuple[int, int, int] = (32, 8, 1)
-    make_persistent: bool = False
-    use_memory_pool: bool = False
-    blocking_dim: Optional[common.Dimension] = None
-    blocking_size: int = 10
-    validate: bool = False
-    validate_all: bool = False
 
     def generate_sdfg(
         self,
@@ -331,44 +372,45 @@ class DaCeTranslator(
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
-        if self.use_memory_pool and not on_gpu:
-            raise NotImplementedError("Memory pool only available for GPU device.")
+        sdfg = gtir_to_sdfg.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
 
-        sdfg = gtir_to_sdfg.build_sdfg_from_gtir(
-            ir,
-            offset_provider_type,
-            column_axis,
-            disable_field_origin_on_program_arguments=self.disable_field_origin_on_program_arguments,
+        constant_symbols = find_constant_symbols(
+            ir, sdfg, offset_provider_type, self.disable_field_origin_on_program_arguments
         )
 
         if self.auto_optimize:
-            unit_strides_kind = (
-                common.DimensionKind.HORIZONTAL
-                if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
-                else None  # let `gt_auto_optimize` select `unit_strides_kind` based on `gpu` argument
-            )
-            constant_symbols = find_constant_symbols(ir, sdfg, offset_provider_type)
+            auto_optimize_args = {} if self.auto_optimize_args is None else self.auto_optimize_args
+
             gtx_transformations.gt_auto_optimize(
                 sdfg,
                 gpu=on_gpu,
-                gpu_block_size=self.gpu_block_size,
-                unit_strides_kind=unit_strides_kind,
                 constant_symbols=constant_symbols,
-                assume_pointwise=True,
-                make_persistent=self.make_persistent,
-                gpu_memory_pool=self.use_memory_pool,
-                blocking_dim=self.blocking_dim,
-                blocking_size=self.blocking_size,
-                validate=self.validate,
-                validate_all=self.validate_all,
+                **auto_optimize_args,
             )
         elif on_gpu:
-            # We run simplify to bring the SDFG into a canonical form that the GPU transformations
-            # can handle. This is a workaround for an issue with scalar expressions that are
-            # promoted to symbolic expressions and computed on the host (CPU), but the intermediate
-            # result is written to a GPU global variable (https://github.com/spcl/dace/issues/1773).
-            gtx_transformations.gt_simplify(sdfg)
+            # Note that `gt_substitute_compiletime_symbols()` will run `gt_simplify()`
+            # at entry, in order to avoid some issue in constant propagatation.
+            # Besides, `gt_simplify()` will bring the SDFG into a canonical form
+            # that the GPU transformations can handle. This is a workaround for
+            # an issue with scalar expressions that are promoted to symbolic expressions
+            # and computed on the host (CPU), but the intermediate result is written
+            # to a GPU global variable (https://github.com/spcl/dace/issues/1773).
+            gtx_transformations.gt_substitute_compiletime_symbols(
+                sdfg, constant_symbols, validate=True
+            )
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+        elif len(constant_symbols) != 0:
+            # Target CPU without SDFG transformations, but still replace constant symbols.
+            # Replacing the SDFG symbols for field origin in global arrays is strictly
+            # required by dace orchestration, which runs the translation stage
+            # with `disable_field_origin_on_program_arguments=True`. The program
+            # decorator used by dace orchestartion cannot handle field origin.
+            # It also requires skipping auto-optimize on the `SDFGConvertible` objects,
+            # because it targets the full-application SDFG, so we have to explicitly
+            # apply `gt_substitute_compiletime_symbols()` here.
+            gtx_transformations.gt_substitute_compiletime_symbols(
+                sdfg, constant_symbols, validate=True
+            )
 
         if self.async_sdfg_call:
             make_sdfg_call_async(sdfg, on_gpu)

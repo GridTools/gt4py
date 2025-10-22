@@ -5,7 +5,8 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
+import functools
+import math
 from functools import reduce
 from typing import TypeAlias
 
@@ -70,6 +71,48 @@ def test_multicopy(cartesian_case):
         return a, b
 
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b: (a, b))
+
+
+def test_infinity(cartesian_case):
+    # TODO(tehrengruber): We actually want a GTIR test with a `nan` literal. This would then
+    #  also not raise a ZeroDivisionError error in embedded and roundtrip.
+    @gtx.field_operator
+    def testee() -> cases.IFloatField:
+        return broadcast(1.0 / 0.0, (IDim,))
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    try:
+        cases.verify(
+            cartesian_case,
+            testee,
+            out=out,
+            comparison=np.array_equal,
+            ref=np.full(out.ndarray.shape, math.inf),
+        )
+    except ZeroDivisionError:
+        pass
+
+
+def test_nan(cartesian_case):
+    # TODO(tehrengruber): We actually want a GTIR test with a `nan` literal. This would then
+    #  also not raise a ZeroDivisionError error in embedded and roundtrip.
+    @gtx.field_operator
+    def testee() -> cases.IFloatField:
+        return broadcast(0.0 / 0.0, (IDim,))
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    try:
+        cases.verify(
+            cartesian_case,
+            testee,
+            out=out,
+            comparison=functools.partial(np.array_equal, equal_nan=True),
+            ref=np.full(out.ndarray.shape, math.nan),
+        )
+    except ZeroDivisionError:
+        pass
 
 
 @pytest.mark.uses_cartesian_shift

@@ -440,7 +440,7 @@ class ProgramLowering(
             collection_type=ts.TupleType,
             with_path_arg=True,
             unpack=True,
-            result_collection_constructor=lambda elts: im.make_tuple(*elts),
+            result_collection_constructor=lambda _, elts: im.make_tuple(*elts),
         )
         def impl(out_type: ts.FieldType, path: tuple[int, ...]) -> tuple[itir.Expr, itir.Expr]:
             out_field, path_remainder = _unwrap_tuple_expr(out_arg, path)

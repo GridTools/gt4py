@@ -34,7 +34,37 @@ class _CanonicalizeDomainArgument(
     PreserveLocationVisitor, fixed_point_transformation.FixedPointTransformation
 ):
     """
-    TODO(tehrengruber): Explain why this is the canonical form.
+    Transform `concat_where` expressions into their canonical form.
+
+    The canonical form of a `concat_where(domain, tb, fb)` expression is an expression where
+    `domain` is a simple domain expression, i.e. no union or intersection, which is unbounded in
+    one and only one side, e.g. something like [-inf, 1] or [1, inf], but not [1, 2] or
+    d1 | d2.  This choice of a canonical form ensures that the domain inference can infer a
+    contiguous domain for `tb` and `fb` as the one-sided domain simply splits the contiguous
+    domain on which the entire expression is accessed into two contiguous parts. Or more
+    formally expressed:
+
+    The domain `tb` is inferred by intersecting the domain of the entire `concat_where` expression
+    with the domain argument. Intersection with a single bounded domain arg preserves the domain
+    contiguity. The domain of `fb` is inferred by intersection of the entire domain with the
+    complement of the domain argument. The complement of a single sided domain is another single
+    sided domain, so then following the same argument as before the domain of `fb` is contiguous.
+    To make this more concrete consider the `concat_where` expr is accessed on the domain [a, b]
+    and its domain argument is [-inf, c] then the domain of `tb` is inferred to be [a, min(b, c)]
+    and the domain of `fb` is [min(b, c), b].
+
+    Description of the transformation:
+
+    If the expression is not simple, but a union or intersection, e.g., [1, 2] | [3, 4], then this
+    transformation first expands into a nested `concat_where` of simple domain expressions.
+    In our example `concat_where([1, 2] | [3, 4], tb, fv)` is rewritten to
+    `concat_where([1, 2], tb, concat_where([3, 4], tb, fb))`.
+    If the expression is simple and bounded on both sides e.g. something like
+    `concat_where([1, 2], tb, fb)` then the expression is rewritten into a union of simple
+    domain expressions which are bounded on one side and unbounded in the other, namely
+    `concat_where([-inf, 1] | [2, inf], fb, tb)`. Both transformations are applied until a fixed
+    point is reached, ensuring first, a simple domain and second domain bounded on one side, in
+    other words the desired canonical form.
     """
 
     @classmethod
@@ -44,6 +74,7 @@ class _CanonicalizeDomainArgument(
     def transform(self, node: itir.Node) -> Optional[itir.Node]:  # type: ignore[override] # ignore kwargs for simplicity
         if cpm.is_call_to(node, "concat_where"):
             cond_expr, field_a, field_b = node.args
+            # `concat_where(d1 & d2, a, b)` -> concat_where(d1, concat_where(d2, a, b), b)
             if cpm.is_call_to(cond_expr, "and_"):
                 conds = cond_expr.args
                 return im.let(("__cwcda_field_a", field_a), ("__cwcda_field_b", field_b))(
@@ -57,6 +88,7 @@ class _CanonicalizeDomainArgument(
                         )
                     )
                 )
+            # `concat_where(d1 | d2, a, b)` -> concat_where(d1, a, concat_where(d2, a, b))
             if cpm.is_call_to(cond_expr, "or_"):
                 conds = cond_expr.args
                 return im.let(("__cwcda_field_a", field_a), ("__cwcda_field_b", field_b))(

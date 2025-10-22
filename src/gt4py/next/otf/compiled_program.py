@@ -12,11 +12,12 @@ import concurrent.futures
 import dataclasses
 import functools
 import itertools
-from typing import Any, Callable, Sequence, TypeAlias, TypeVar
+from collections.abc import Callable, Hashable, Sequence
+from typing import Any, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing, utils as eve_utils
-from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
+from gt4py.eve import extended_typing as xtyping, utils as eve_utils
+from gt4py.next import backend as gtx_backend, common, config, errors, metrics, utils as gtx_utils
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -39,15 +40,13 @@ def _init_async_compilation_pool() -> None:
 
 _init_async_compilation_pool()
 
-ScalarOrTupleOfScalars: TypeAlias = extended_typing.MaybeNestedInTuple[core_defs.Scalar]
-CompiledProgramsKey: TypeAlias = tuple[
-    tuple[ScalarOrTupleOfScalars, ...], common.OffsetProviderType
-]
+ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
+CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], common.OffsetProviderType]
 ArgumentDescriptors: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
 ArgumentDescriptorContext: TypeAlias = dict[
-    str, extended_typing.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]
+    str, xtyping.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]
 ]
 ArgumentDescriptorContexts: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor],
@@ -79,10 +78,18 @@ def _make_tuple_expr(el_exprs: list[str]) -> str:
     return "".join((f"{el},") for el in el_exprs)
 
 
+def _convert_pascal_to_snake_name(name: str) -> str:
+    return eve_utils.CaseStyleConverter.convert(
+        name,
+        eve_utils.CaseStyleConverter.CASE_STYLE.PASCAL,
+        eve_utils.CaseStyleConverter.CASE_STYLE.SNAKE,
+    )
+
+
 def _make_param_context_from_func_type(
     func_type: ts.FunctionType,
     type_map: Callable[[ts.TypeSpec], T] = lambda x: x,  # type: ignore[assignment, return-value]  # mypy not smart enough to narrow type for default
-) -> dict[str, extended_typing.MaybeNestedInTuple[T]]:
+) -> dict[str, xtyping.MaybeNestedInTuple[T]]:
     """
     Create a context to evaluate expressions in from a function type.
 
@@ -111,7 +118,7 @@ def _make_param_context_from_func_type(
 def _get_type_of_param_expr(program_type: ts_ffront.ProgramType, expr: str) -> ts.TypeSpec:
     structured_type_ = eval(expr, _make_param_context_from_func_type(program_type.definition))
     type_ = tree_map(
-        lambda v: v, result_collection_constructor=lambda elts: ts.TupleType(types=list(elts))
+        lambda v: v, result_collection_constructor=lambda _, elts: ts.TupleType(types=list(elts))
     )(structured_type_)
     assert isinstance(type_, ts.TypeSpec)
     return type_
@@ -166,7 +173,9 @@ def _convert_to_argument_descriptor_context(
         # convert tuples to list such that we can alter the context easily
         context = {
             k: gtx_utils.tree_map(
-                lambda v: v, collection_type=tuple, result_collection_constructor=list
+                lambda v: v,
+                collection_type=tuple,
+                result_collection_constructor=lambda _, elts: list(elts),
             )(v)
             for k, v in context.items()
         }
@@ -182,7 +191,9 @@ def _convert_to_argument_descriptor_context(
         # convert lists back to tuples
         context = {
             k: gtx_utils.tree_map(
-                lambda v: v, collection_type=list, result_collection_constructor=tuple
+                lambda v: v,
+                collection_type=list,
+                result_collection_constructor=lambda _, elts: tuple(elts),
             )(v)
             for k, v in context.items()
         }
@@ -257,12 +268,24 @@ class CompiledProgramsPool:
         # TODO(tehrengruber): Dispatching over offset provider type is wrong, especially when we
         #  use compile time domains.
         key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
+
         try:
-            self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)
-        except TypeError:  # 'Future' object is not callable
-            # ... otherwise we resolve the future and call again
-            program = self._resolve_future(key)
+            program = self._compiled_programs[key]
+            if config.COLLECT_METRICS_LEVEL:
+                metrics_source = metrics.get_current_source()
+                metrics_source.key = self._metrics_key_from_pool_key(key)
+
             program(*args, **kwargs, offset_provider=offset_provider)
+
+        except TypeError as e:
+            if "program" in locals() and isinstance(program, concurrent.futures.Future):
+                # 'Future' objects are not callable so they will generate a TypeError.
+                # Here we resolve the future and call it again.
+                program = self._resolve_future(key)
+                program(*args, **kwargs, offset_provider=offset_provider)
+            else:
+                raise e
+
         except KeyError as e:
             if enable_jit:
                 assert self.argument_descriptor_mapping is not None
@@ -278,7 +301,18 @@ class CompiledProgramsPool:
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 
     @functools.cached_property
-    def _argument_descriptor_cache_key_from_args(self) -> Callable:
+    def _metrics_key_from_pool_key(self) -> Callable[[CompiledProgramsKey], str]:
+        prefix = f"{self.definition_stage.definition.__name__}<{self.backend.name}>"
+
+        def key_to_str(key: CompiledProgramsKey) -> str:
+            return f"{prefix}[{self._compiled_programs.internal_key(key)}]"
+
+        return key_to_str
+
+    @functools.cached_property
+    def _argument_descriptor_cache_key_from_args(
+        self,
+    ) -> Callable[..., tuple[Hashable, ...]]:
         """
         Given the entire set of runtime arguments compute the cache key used to retrieve the
         instance of the compiled program which is compiled for the argument descriptors from
@@ -376,6 +410,19 @@ class CompiledProgramsPool:
         )
         if key in self._compiled_programs:
             raise ValueError(f"Program with key {key} already exists.")
+
+        # If we are collecting metrics, create a new metrics entity for this compiled program
+        if config.COLLECT_METRICS_LEVEL:
+            metrics_source = metrics.get_source(self._metrics_key_from_pool_key(key))
+            metrics_source.metadata |= dict(
+                name=self.definition_stage.definition.__name__,
+                backend=self.backend.name,
+                compiled_program_pool_key=self._compiled_programs.internal_key(key),
+                **{
+                    f"{_convert_pascal_to_snake_name(key.__name__)}s": value
+                    for key, value in argument_descriptors.items()
+                },
+            )
 
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
