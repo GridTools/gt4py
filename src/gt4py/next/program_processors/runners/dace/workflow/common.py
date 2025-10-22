@@ -72,7 +72,7 @@ def set_dace_config(
     else:
         dace.Config.set(
             "compiler.cuda.args",
-            value="-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
+            value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
         )
     if gt_cudaargs := os.environ.get("CUDAFLAGS", None):
         dace.Config.set("compiler.cuda.args", value=gt_cudaargs)
