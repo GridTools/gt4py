@@ -710,6 +710,20 @@ def _is_datadims_indexing_name(name: str):
     return name.endswith(f".{_DATADIMS_INDEXER}")
 
 
+def _is_iterator_access(name: str, loc: nodes.Location) -> bool:
+    if name != "K":
+        raise GTScriptSyntaxError(
+            f"Parallel axis {name} can't be queried - only K - at line {loc.line} (column {loc.column})",
+            loc=loc,
+        )
+
+    gt_utils.warn_experimental_feature(
+        feature="Iterator access in K", ADR="experimental/iteration-index-k.md"
+    )
+
+    return name == "K"
+
+
 def _trim_indexing_symbol(name: str):
     return name[: -1 * (len(_DATADIMS_INDEXER) + 1)]
 
@@ -1090,26 +1104,32 @@ class IRMaker(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name) -> nodes.Ref:
         symbol = node.id
         if self._is_field(symbol):
-            result = nodes.FieldRef.at_center(
+            return nodes.FieldRef.at_center(
                 symbol,
                 axes=self.fields[symbol].axes,
                 loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
             )
-        elif self._is_parameter(symbol):
-            result = nodes.VarRef(
+
+        if self._is_parameter(symbol):
+            return nodes.VarRef(
                 name=symbol, loc=nodes.Location.from_ast_node(node, scope=self.stencil_name)
             )
-        elif self._is_local_symbol(symbol):
+
+        if self._is_local_symbol(symbol):
             raise AssertionError("Logic error")
-        elif _is_datadims_indexing_name(symbol):
-            result = nodes.FieldRef.datadims_index(
+
+        if _is_datadims_indexing_name(symbol):
+            return nodes.FieldRef.datadims_index(
                 name=_trim_indexing_symbol(symbol),
                 loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
             )
-        else:
-            raise AssertionError(f"Missing '{symbol}' symbol definition")
 
-        return result
+        if _is_iterator_access(symbol, nodes.Location.from_ast_node(node)):
+            value_type = np.dtype(f"i{int(self.literal_int_precision / 8)}")
+            data_type = nodes.DataType.from_dtype(value_type)
+            return nodes.IteratorAccess(name="K", data_type=data_type)
+
+        raise AssertionError(f"Missing '{symbol}' symbol definition")
 
     def visit_Index(self, node: ast.Index):
         index = self.visit(node.value)
@@ -1492,8 +1512,19 @@ class IRMaker(ast.NodeVisitor):
                 "a list of values, e.g. `.at(K=..., ddim=[...])`.",
                 loc=nodes.Location.from_ast_node(node),
             )
-
         k_offset_value = self.visit(node.keywords[0].value)
+        if isinstance(k_offset_value, nodes.IteratorAccess) and k_offset_value.name == "K":
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, you cannot write `.at(K=K)` since `.at` denotes "
+                "an absolute index, this is equivalent to `field[0, 0, 0]` or simply `field`.",
+                loc=nodes.Location.from_ast_node(node),
+            )
+        if isinstance(k_offset_value, nodes.IteratorAccess):
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, you cannot use parallel axis in absolute, "
+                f"e.g. no `.at(K={k_offset_value.name})`",
+                loc=nodes.Location.from_ast_node(node),
+            )
         field = self.visit(node.func.value)
         assert isinstance(field, nodes.FieldRef)
         field.offset = nodes.AbsoluteKIndex(k=k_offset_value)
