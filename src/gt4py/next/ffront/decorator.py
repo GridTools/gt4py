@@ -714,8 +714,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
             if "domain" in kwargs:
-                domain = common.domain(kwargs.pop("domain"))
-                out = utils.tree_map(lambda f: f[domain])(out)
+                domain = common.normalize_domains(kwargs.pop("domain"))
+                if not isinstance(domain, tuple):
+                    domain = utils.tree_map(lambda _: domain)(out)
+                out = utils.tree_map(lambda f, dom: f[dom])(out, domain)
 
             args, kwargs = type_info.canonicalize_arguments(
                 self.foast_stage.foast_node.type, args, kwargs
