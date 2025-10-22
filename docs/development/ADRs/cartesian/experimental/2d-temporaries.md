@@ -8,7 +8,7 @@ We thus decided to expand the DLS be able to port these stencils. We accept the 
 
 Porting physics parametrizations, we found temporary 2D fields used, mostly when computing particular levels (e.g. surface, phase change, etc.). The previous workaround was to define the temporaries outside and pass them as an argument. The goal is to undo this workaround that complexifies calling code.
 
-Another workaround, driven by how GridTools C++ behave, we forced all temporaries to be 3D. The way to do it would be to create you temporary and then propagate it's value throughout. E.g., from FV3 dynamics code:
+Another workaround, driven by how GridTools C++ behaves, is to force all temporaries to be 3D. The way to do it would be to create you temporary and then propagate it's value throughout. E.g., from FV3 dynamics code:
 
 ```python
 with computation(FORWARD):
@@ -105,7 +105,7 @@ All the guardrails for 2D temporaries are already in place:
 - allocation can only be done under `interval == 1` and `computation` in `FORWARD` or `BACKWARD`,
 - use of 2D fields are fully defined, using the above rules again.
 
-The main change is on the frontend of stencils and proper forwarding of dimensions through to code genreation, except for `gt:X` backend (see [Consequences](#consequences)).
+The main change is on the frontend of stencils and proper forwarding of dimensions through to code generation, except for `gt:X` backend (see [Consequences](#consequences)).
 
 Type hints for temporaries have been introduced before for mixed precision e.g.:
 
@@ -135,7 +135,7 @@ def the_stencil(...):
 
 ## Consequences
 
-Users of GT4Py can now defined 2D temporaries in-stencil.
+Users of GT4Py can now define 2D temporaries inside stencils.
 
 There's one remaining hiccup: GridTools C++ does not natively offer 2D temporaries. GridTools pre-supposes that all computations of temporaries are done on the 3D grid at least - and won't allocate below that dimensionality.
 This is a fair limitation since GridTools doesn't provide the guardrails against race condition that GT4Py does. We can circumvent this by creating a pool of buffers passed as arguments for `gt:X` backends - see [issue](https://github.com/GridTools/gt4py/issues/2322).
