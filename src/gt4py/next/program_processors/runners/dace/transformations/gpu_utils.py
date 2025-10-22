@@ -656,11 +656,12 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         map_size = gpu_map.range.size()
         dims_to_inspect = len(map_size)
         num_map_params = 0
+        # Order of map parameters is from outer to inner, i.e. z,y,x
         for i, axis_size in enumerate(map_size):
-            if i > 0 and map_size[i - 1] == 1:
+            if i < len(map_size) - 1 and map_size[i + 1] == 1:
                 assert axis_size <= 1, (
                     "GPU thread block size setting currently does not support maps where non-leading "
-                    "dimensions have size greater than one if the previous dimension has size one."
+                    "dimensions have size greater than one if the next dimension has size one."
                 )
             if axis_size != 1:
                 num_map_params += 1  # Handle 2D maps where one dimension has range 1 as 1D map

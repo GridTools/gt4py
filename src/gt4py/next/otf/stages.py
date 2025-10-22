@@ -40,7 +40,7 @@ def compilation_hash(otf_closure: CompilableProgram) -> int:
             # As the frontend types contain lists they are not hashable. As a workaround we just
             # use content_hash here.
             utils.content_hash(tuple(arg for arg in otf_closure.args.args)),
-            common.hash_offset_provider_unsafe(offset_provider) if offset_provider else None,
+            common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
             otf_closure.args.column_axis,
         )
     )
