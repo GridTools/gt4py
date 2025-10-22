@@ -11,7 +11,7 @@ dace-cartesian = [
   'dace>=1.0.2,<2'  # renfined in [tool.uv.sources]
 ]
 dace-next = [
-  'dace>=1.0.0'  # refined in [tool.uv.sources]
+  'dace==2025.10.22'  # refined in [tool.uv.sources]
 ]
 dev = [
   {include-group = 'build'},
