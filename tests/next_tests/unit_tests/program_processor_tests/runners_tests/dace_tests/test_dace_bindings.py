@@ -41,7 +41,10 @@ def _get_stride(ndarray, dim_index):
 
 
 def _binding_source(use_metrics: bool) -> str:
-    metrics_arg_index = 2  # 'last_call_args[2]' is used to collect the stencil compute time
+    # In this SDFG 'last_call_args[2]' is used to collect the stencil compute time.
+    # Note that the position of 'gt_compute_time' in the SDFG arguments list is
+    # defined by dace, based on alphabetical order from index 0 ('a', 'b', 'gt_compute_time').
+    metrics_arg_index = 2
     idx = [21, 22, 0, 3, 4, 5, 6, 7, 8, 1, 9, 10, 11, 12, 13, 14, 23, 2, 15, 16, 17, 18, 19, 20]
     if use_metrics:
         idx = [idx + 1 if idx >= metrics_arg_index else idx for idx in idx]
@@ -100,7 +103,10 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
 
 
 def _binding_source_with_zero_origin(use_metrics: bool) -> str:
-    metrics_arg_index = 2  # 'last_call_args[2]' is used to collect the stencil compute time
+    # In this SDFG 'last_call_args[2]' is used to collect the stencil compute time.
+    # Note that the position of 'gt_compute_time' in the SDFG arguments list is
+    # defined by dace, based on alphabetical order from index 0 ('a', 'b', 'gt_compute_time').
+    metrics_arg_index = 2
     idx = [12, 13, 0, 3, 4, 5, 1, 6, 7, 8, 14, 2, 9, 10, 11]
     if use_metrics:
         idx = [idx + 1 if idx >= metrics_arg_index else idx for idx in idx]
