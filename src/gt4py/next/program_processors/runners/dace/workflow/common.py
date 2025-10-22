@@ -71,7 +71,7 @@ def set_dace_config(
     )
     dace.Config.set(
         "compiler.cuda.args",
-        value="-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
+        value="--generate-line-info -Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
     )
     dace.Config.set(
         "compiler.cuda.hip_args",
