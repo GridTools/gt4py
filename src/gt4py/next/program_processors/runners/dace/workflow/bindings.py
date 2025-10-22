@@ -128,7 +128,9 @@ def _parse_gt_param(
                 code.append(
                     f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes.c_void_p)"
                 )
-                code.append(f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}.data_ptr()")
+                code.append(
+                    f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}._data_buffer_ptr_"
+                )
                 for i, (dim, array_size) in enumerate(
                     zip(param_type.dims, sdfg_arg_desc.shape, strict=True)
                 ):
