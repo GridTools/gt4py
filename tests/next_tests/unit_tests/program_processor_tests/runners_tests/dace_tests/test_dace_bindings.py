@@ -67,7 +67,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
         args_0_1_2,
     ) = args_0_1
     last_call_args[{i + 22}] = ctypes.c_int(args_0_1_0)
-    last_call_args[{i + 0}].value = args_0_1_1.data_ptr()
+    last_call_args[{i + 0}].value = args_0_1_1._data_buffer_ptr_
     last_call_args[{i + 3}] = ctypes.c_int(args_0_1_1.domain.ranges[0].start)
     last_call_args[{i + 4}] = ctypes.c_int(args_0_1_1.domain.ranges[1].start)
     last_call_args[{i + 5}] = ctypes.c_int(args_0_1_1.domain.ranges[2].start)
@@ -79,7 +79,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
         args_1_1,
     ) = args_1
     (args_1_0_0,) = args_1_0
-    last_call_args[{i + 1}].value = args_1_0_0.data_ptr()
+    last_call_args[{i + 1}].value = args_1_0_0._data_buffer_ptr_
     last_call_args[{i + 9}] = ctypes.c_int(args_1_0_0.domain.ranges[0].start)
     last_call_args[{i + 10}] = ctypes.c_int(args_1_0_0.domain.ranges[1].start)
     last_call_args[{i + 11}] = ctypes.c_int(args_1_0_0.domain.ranges[2].start)
@@ -87,7 +87,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
     last_call_args[{i + 13}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 1))
     last_call_args[{i + 14}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 2))
     last_call_args[{i + 23}] = ctypes.c_int(args_1_1)
-    last_call_args[{i + 2}].value = args_5.data_ptr()
+    last_call_args[{i + 2}].value = args_5._data_buffer_ptr_
     last_call_args[{i + 15}] = ctypes.c_int(args_5.domain.ranges[0].start)
     last_call_args[{i + 16}] = ctypes.c_int(args_5.domain.ranges[1].start)
     last_call_args[{i + 17}] = ctypes.c_int(args_5.domain.ranges[2].start)
@@ -125,7 +125,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
         args_0_1_2,
     ) = args_0_1
     last_call_args[{i + 13}] = ctypes.c_int(args_0_1_0)
-    last_call_args[{i + 0}].value = args_0_1_1.data_ptr()
+    last_call_args[{i + 0}].value = args_0_1_1._data_buffer_ptr_
     last_call_args[{i + 3}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 0))
     last_call_args[{i + 4}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 1))
     last_call_args[{i + 5}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 2))
@@ -134,12 +134,12 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
         args_1_1,
     ) = args_1
     (args_1_0_0,) = args_1_0
-    last_call_args[{i + 1}].value = args_1_0_0.data_ptr()
+    last_call_args[{i + 1}].value = args_1_0_0._data_buffer_ptr_
     last_call_args[{i + 6}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 0))
     last_call_args[{i + 7}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 1))
     last_call_args[{i + 8}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 2))
     last_call_args[{i + 14}] = ctypes.c_int(args_1_1)
-    last_call_args[{i + 2}].value = args_5.data_ptr()
+    last_call_args[{i + 2}].value = args_5._data_buffer_ptr_
     last_call_args[{i + 9}] = ctypes.c_int(_get_stride(args_5.ndarray, 0))
     last_call_args[{i + 10}] = ctypes.c_int(_get_stride(args_5.ndarray, 1))
     last_call_args[{i + 11}] = ctypes.c_int(_get_stride(args_5.ndarray, 2))\
