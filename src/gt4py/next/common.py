@@ -1179,11 +1179,21 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
+def check_staggered(dim: Dimension) -> bool:
+    return dim.value.startswith(_STAGGERED_PREFIX)
+
+
 def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
     """Find the canonical ordering of the dimensions in `dims`."""
     if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
         raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
-    return sorted(dims, key=lambda dim: (_DIM_KIND_ORDER[dim.kind], dim.value))
+    return sorted(
+        dims,
+        key=lambda dim: (
+            _DIM_KIND_ORDER[dim.kind],
+            flip_staggered(dim).value if check_staggered(dim) else dim.value,
+        ),
+    )
 
 
 def check_dims(dims: Sequence[Dimension]) -> None:
@@ -1271,3 +1281,22 @@ class FieldBuiltinFuncRegistry:
 #: Equivalent to the `_FillValue` attribute in the UGRID Conventions
 #: (see: http://ugrid-conventions.github.io/ugrid-conventions/).
 _DEFAULT_SKIP_VALUE: Final[int] = -1
+_STAGGERED_PREFIX = "_Staggered"
+
+
+def flip_staggered(dim: Dimension) -> Dimension:
+    if dim.value.startswith(_STAGGERED_PREFIX):
+        return Dimension(dim.value[len(_STAGGERED_PREFIX) :], dim.kind)
+    else:
+        return Dimension(f"{_STAGGERED_PREFIX}{dim.value}", dim.kind)
+
+
+def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> CartesianConnectivity:
+    if isinstance(offset, float):
+        integral_offset, half = divmod(offset, 1)
+        assert half == 0.5
+        if dim.value.startswith(_STAGGERED_PREFIX):
+            integral_offset += 1
+        return CartesianConnectivity(dim, int(integral_offset), codomain=flip_staggered(dim))
+    else:
+        return CartesianConnectivity(dim, offset, codomain=dim)

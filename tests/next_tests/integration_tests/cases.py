@@ -46,10 +46,13 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     E2VDim,
     Edge,
     IDim,
+    IHalfDim,
     Ioff,
     JDim,
+    JHalfDim,
     Joff,
     KDim,
+    KHalfDim,
     Koff,
     V2EDim,
     Vertex,
@@ -64,6 +67,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 # mypy does not accept [IDim, ...] as a type
 
 IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
+IHalfField: TypeAlias = gtx.Field[[IHalfDim], np.int32]  # type: ignore [valid-type]
 JField: TypeAlias = gtx.Field[[JDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
 IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
@@ -701,6 +705,9 @@ class Case:
                 IDim: grid_descriptor.sizes[0],
                 JDim: grid_descriptor.sizes[1],
                 KDim: grid_descriptor.sizes[2],
+                IHalfDim: grid_descriptor.sizes[3],
+                JHalfDim: grid_descriptor.sizes[4],
+                KHalfDim: grid_descriptor.sizes[5],
             },
             grid_type=common.GridType.CARTESIAN,
             allocator=allocator,

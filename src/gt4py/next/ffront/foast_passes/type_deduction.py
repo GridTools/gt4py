@@ -10,7 +10,7 @@ from typing import Any, Optional, TypeAlias, TypeVar, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
-from gt4py.next import errors, utils
+from gt4py.next import common, errors, utils
 from gt4py.next.common import DimensionKind, promote_dims
 from gt4py.next.ffront import (  # noqa
     dialect_ast_enums,
@@ -655,13 +655,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _deduce_binop_type(
         self, node: foast.BinOp, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
-        # e.g. `IDim+1`
+        # e.g. `IDim+1` or `IDim+0.5`
         if (
             isinstance(left.type, ts.DimensionType)
             and isinstance(right.type, ts.ScalarType)
-            and type_info.is_integral(right.type)
+            and type_info.is_arithmetic(right.type)
         ):
-            return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
+            if not isinstance(right, foast.Constant):
+                raise NotImplementedError()
+            offset_index = right.value
+            if node.op == dialect_ast_enums.BinaryOperator.SUB:
+                offset_index *= -1
+            conn = common.connectivity_for_cartesian_shift(left.type.dim, offset_index)
+            return ts.OffsetType(source=conn.codomain, target=(conn.domain_dim,))
+
         if isinstance(left.type, ts.OffsetType):
             raise errors.DSLError(
                 node.location, f"Type '{left.type}' can not be used in operator '{node.op}'."

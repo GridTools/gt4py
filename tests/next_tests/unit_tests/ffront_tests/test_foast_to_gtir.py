@@ -129,9 +129,7 @@ def test_premap_cartesian_syntax():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.as_fieldop(
-        im.lambda_("__it")(
-            im.deref(im.shift(common.dimension_to_implicit_offset(TDim.value), 1)("__it"))
-        )
+        im.lambda_("__it")(im.deref(im.shift(im.cartesian_offset(TDim, TDim), 1)("__it")))
     )("inp")
 
     assert lowered.expr == reference

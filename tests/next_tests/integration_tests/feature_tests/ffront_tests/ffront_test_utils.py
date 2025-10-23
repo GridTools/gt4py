@@ -133,8 +133,11 @@ DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
 IDim = gtx.Dimension("IDim")
+IHalfDim = common.flip_staggered(IDim)
 JDim = gtx.Dimension("JDim")
+JHalfDim = common.flip_staggered(JDim)
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+KHalfDim = common.flip_staggered(KDim)
 Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 Joff = gtx.FieldOffset("Joff", source=JDim, target=(JDim,))
 Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
@@ -170,10 +173,12 @@ class CartesianGridDescriptor(Protocol):
     def offset_provider_type(self) -> common.OffsetProviderType: ...
 
 
-def simple_cartesian_grid(sizes: int | tuple[int, int, int] = 10) -> CartesianGridDescriptor:
+def simple_cartesian_grid(
+    sizes: int | tuple[int, int, int, int, int, int] = 10,
+) -> CartesianGridDescriptor:
     if isinstance(sizes, int):
-        sizes = (sizes,) * 3
-    assert len(sizes) == 3, "sizes must be a tuple of three integers"
+        sizes = (sizes,) * 6
+    assert len(sizes) == 6, "sizes must be a tuple of three integers"
 
     offset_provider = {
         "Ioff": IDim,

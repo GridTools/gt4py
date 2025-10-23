@@ -143,6 +143,11 @@ class PrettyPrinter(NodeTranslator):
     def visit_OffsetLiteral(self, node: ir.OffsetLiteral, *, prec: int) -> list[str]:
         return [str(node.value) + "ₒ"]
 
+    def visit_CartesianOffset(self, node: ir.CartesianOffset, *, prec: int) -> list[str]:
+        (domain,) = self.visit(node.domain, prec=0)
+        (codomain,) = self.visit(node.codomain, prec=0)
+        return [f"{domain}₂{codomain}"]
+
     def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
         kind = ""
         if node.kind == ir.DimensionKind.HORIZONTAL:

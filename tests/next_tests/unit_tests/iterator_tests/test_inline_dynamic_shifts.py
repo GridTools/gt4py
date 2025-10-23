@@ -14,7 +14,6 @@ from gt4py.next.iterator.transforms import inline_dynamic_shifts
 from gt4py.next.type_system import type_specifications as ts
 
 IDim = gtx.Dimension("IDim")
-field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
 
 def test_inline_dynamic_shift_as_fieldop_arg():

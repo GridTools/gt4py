@@ -20,6 +20,11 @@ class OffsetLiteralType(ts.TypeSpec):
     value: ts.ScalarType | str
 
 
+class CartesianOffsetType(ts.TypeSpec):
+    domain: common.Dimension
+    codomain: common.Dimension
+
+
 class IteratorType(ts.DataType, ts.CallableType):
     position_dims: list[common.Dimension] | Literal["unknown"]
     defined_dims: list[common.Dimension]

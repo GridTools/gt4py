@@ -373,8 +373,14 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)
 
+    def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> Literal:
+        return self.visit(node.codomain, **kwargs)
+
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
-        return Literal(value=node.value, type="axis_literal")
+        dim = node.type.dim
+        if common.check_staggered(dim):
+            dim = common.flip_staggered(dim)
+        return Literal(value=dim.value, type="axis_literal")
 
     def _make_domain(self, node: itir.FunCall) -> tuple[TaggedValues, TaggedValues]:
         tags = []

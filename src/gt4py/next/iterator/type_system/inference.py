@@ -473,6 +473,15 @@ class ITIRTypeInference(eve.NodeTranslator):
             assert isinstance(node.value, str)
             return it_ts.OffsetLiteralType(value=node.value)
 
+    def visit_CartesianOffset(
+        self, node: itir.CartesianOffset, *, ctx
+    ) -> it_ts.CartesianOffsetType:
+        self.visit(node.domain, ctx=ctx)
+        self.visit(node.codomain, ctx=ctx)
+        return it_ts.CartesianOffsetType(
+            domain=node.domain.type.dim, codomain=node.codomain.type.dim
+        )
+
     def visit_Literal(self, node: itir.Literal, **kwargs) -> ts.ScalarType:
         assert isinstance(node.type, ts.ScalarType)
         return node.type
