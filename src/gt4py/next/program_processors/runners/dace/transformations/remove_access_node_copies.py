@@ -71,6 +71,9 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
+        # Check that the SDFG is the vertically_implicit_solver SDFG
+        if not sdfg.name.startswith("vertically_implicit_solver"):
+            return False
         first_node: dace_nodes.AccessNode = self.first_node
         first_desc: dace_data.Data = first_node.desc(sdfg)
         second_node: dace_nodes.AccessNode = self.second_node

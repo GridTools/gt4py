@@ -22,7 +22,7 @@ from . import util
 def test_complex_copies_global_access_node():
     N = 64
     K = 80
-    sdfg = dace.SDFG(util.unique_name("complex_copies_global_access_node"))
+    sdfg = dace.SDFG(util.unique_name("vertically_implicit_solver_like_sdfg"))
     A, _ = sdfg.add_array("A", [N, K + 1], dtype=dace.float64)
     B, _ = sdfg.add_array("B", [N, K + 1], dtype=dace.float64)
     tmp0, _ = sdfg.add_temp_transient([N], dtype=dace.float64)
