@@ -106,10 +106,9 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
             # needs https://github.com/GridTools/gt4py/pull/2173 # return False
 
         # Make sure that there is no other AccessNode with the same data in the SDFG state
-        for node in graph.nodes():
+        for node in graph.data_nodes():
             if (
-                isinstance(node, dace_nodes.AccessNode)
-                and node not in [first_node, second_node, third_node, fourth_node]
+                node not in [first_node, second_node, third_node, fourth_node]
                 and node.data == first_node.data
             ):
                 return False
@@ -131,13 +130,13 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         # Make sure that the whole data of the first node is written
         first_node_range = first_desc.shape
 
-        union_written_to_first_node_data = gtx_dace_split.union_of_subsets(
-            ranges_written_to_first_node
+        union_written_to_first_node_data = next(
+            iter(gtx_dace_split.subset_merger(ranges_written_to_first_node))
         )
-        union_written_to_fourth_node_data = gtx_dace_split.union_of_subsets(
-            ranges_written_to_fourth_node
+        union_written_to_fourth_node_data = next(
+            iter(gtx_dace_split.subset_merger(ranges_written_to_fourth_node))
         )
-        union_written_to_common_data = gtx_dace_split.union_of_subsets(
+        union_written_to_common_data = gtx_dace_split.subset_merger(
             [union_written_to_first_node_data, union_written_to_fourth_node_data]
         )
         if union_written_to_common_data != first_node_range:
@@ -147,16 +146,12 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
             )
             # needs https://github.com/GridTools/gt4py/pull/2173 # return False
 
-        # Make sure that data written to first node are only copied from first to second and from second to third node (they don't have to be rewritten to the last node)
-        first_node_out_edges = list(graph.out_edges(first_node))
-
-        # Make sure that all the edges from the first node go to the second node
-        if any(edge.dst != second_node for edge in first_node_out_edges):
+        # Make sure that data written to first node are only copied from first to second node
+        if any(edge.dst != second_node for edge in graph.out_edges(first_node)):
             return False
 
         # Make sure that there are no edges from second node that end up in any node apart from the third node
-        second_node_out_edges = list(graph.out_edges(second_node))
-        for edge in second_node_out_edges:
+        for edge in graph.out_edges(second_node):
             if edge.dst != third_node and not gtx_transformations_utils.is_reachable(
                 start=edge.dst,
                 target=third_node,
@@ -183,15 +178,18 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
 
         # Find the edge between first and second access nodes (there should be only one)
         edge_between_first_and_second = next(
-            edge for edge in graph.edges() if edge.src == first_node and edge.dst == second_node
+            edge for edge in graph.edges_between(first_node, second_node)
         )
 
         # Compute the offset of the data between first and second node
+        assert len(edge_between_first_and_second.data.src_subset) == len(
+            edge_between_first_and_second.data.dst_subset
+        )
         node_offset = [
-            range_first[0] - range_second[0]
-            for range_first, range_second in zip(
-                edge_between_first_and_second.data.src_subset,
-                edge_between_first_and_second.data.dst_subset,
+            range_first_min - range_second_min
+            for range_first_min, range_second_min in zip(
+                edge_between_first_and_second.data.src_subset.min_element(),
+                edge_between_first_and_second.data.dst_subset.min_element(),
             )
         ]
         # Update all edges with the correct subsets that match the first node range

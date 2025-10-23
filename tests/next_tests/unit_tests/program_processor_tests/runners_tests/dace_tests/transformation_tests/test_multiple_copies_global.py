@@ -44,6 +44,19 @@ def test_complex_copies_global_access_node():
     )
 
     st.add_mapped_tasklet(
+        "map0",
+        map_ranges={"__i": f"0:{N}"},
+        code="__out = 0.0",
+        inputs={},
+        outputs={
+            "__out": dace.Memlet(data=tmp0, subset="__i"),
+        },
+        input_nodes={},
+        output_nodes={tmp0_node},
+        external_edges=True,
+    )
+
+    st.add_mapped_tasklet(
         "map1",
         map_ranges={"__i": f"0:{N}", "__j": f"0:{K}"},
         code="__out = 0.42",
@@ -130,7 +143,7 @@ def test_complex_copies_global_access_node():
     assert len([node for node in ac_nodes if "tmp" in node.data]) == 3
 
     edges = list(sdfg.all_edges_recursive())
-    assert len(edges) == 19
+    assert len(edges) == 22
 
     res, ref = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
@@ -152,9 +165,9 @@ def test_complex_copies_global_access_node():
 
     assert ret == 1
     ac_nodes = util.count_nodes(sdfg, dace_nodes.AccessNode, return_nodes=True)
-    assert len(ac_nodes) == 4
+    assert len(ac_nodes) == 3
     assert len([node for node in ac_nodes if node.data == "A"]) == 2
-    assert len([node for node in ac_nodes if "tmp0" in node.data]) == 1
+    assert len([node for node in ac_nodes if "tmp0" in node.data]) == 0  # tmp0 removed
 
     reduced_edges = list(sdfg.all_edges_recursive())
-    assert len(reduced_edges) == 12
+    assert len(reduced_edges) == 14
