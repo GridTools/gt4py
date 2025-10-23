@@ -41,19 +41,12 @@ from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
 from .ffront.fbuiltins import *  # noqa: F403 [undefined-local-with-import-star]  explicitly reexport all from fbuiltins.__all__
 from .ffront.fbuiltins import FieldOffset
+from .otf.compiled_program import wait_for_compilation
 from .program_processors.runners.gtfn import (
     run_gtfn_cached as gtfn_cpu,
     run_gtfn_gpu_cached as gtfn_gpu,
 )
 from .program_processors.runners.roundtrip import default as itir_python
-
-
-__all__ = [
-    "CUPY_DEVICE_TYPE",
-    "Device",
-    "DeviceType",
-    "is_scalar_type",
-]
 
 
 __all__ = [
@@ -91,6 +84,8 @@ __all__ = [
     "field_operator",
     "program",
     "scan_operator",
+    # from otf
+    "wait_for_compilation",
     # from program_processor
     "gtfn_cpu",
     "gtfn_gpu",

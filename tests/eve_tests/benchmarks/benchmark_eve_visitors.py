@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 @pytest.mark.parametrize("width", [2, 5, 10])
 @pytest.mark.parametrize("num_levels", [2, 3, 5])
-def test_empty_visit(benchmark: ptb_fixture.BenchmarkFixture, num_levels: int, width: int):
+def benchmark_empty_visit(benchmark: ptb_fixture.BenchmarkFixture, num_levels: int, width: int):
     class DummyVisitor(visitors.NodeVisitor): ...
 
     tree = definitions.make_recursive_compound_node(num_levels=num_levels, width=width)

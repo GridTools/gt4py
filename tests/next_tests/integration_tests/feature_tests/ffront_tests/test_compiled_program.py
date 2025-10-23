@@ -10,9 +10,12 @@ from unittest import mock
 
 import numpy as np
 import pytest
+import time
+import contextlib
 
 from gt4py import next as gtx
 from gt4py.next import errors, config
+from gt4py.next.otf import compiled_program
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
@@ -748,13 +751,13 @@ def test_compile_variants_non_existing_param(cartesian_case, compile_variants_te
 
 
 def test_compile_variants_wrong_type(cartesian_case, compile_variants_testee_not_compiled):
-    with pytest.raises(errors.DSLTypeError, match="Expected.*'scalar_int'.*int32"):
+    with pytest.raises(errors.DSLTypeError, match="'scalar_int'.*expected.*int32"):
         compile_variants_testee_not_compiled.compile(scalar_int=[1.0], offset_provider={})
 
 
 def test_compile_variants_error_static_field(cartesian_case, compile_variants_testee_not_compiled):
     field_a = cases.allocate(cartesian_case, compile_variants_testee_not_compiled, "field_a")()
-    with pytest.raises(errors.DSLTypeError, match="field_a.*cannot be static"):
+    with pytest.raises(errors.DSLTypeError, match="Invalid static argument.*field_a"):
         compile_variants_testee_not_compiled.compile(field_a=[field_a], offset_provider={})
 
 
@@ -812,3 +815,36 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
         offset_provider=cartesian_case.offset_provider,
     )
     assert np.allclose(out.asnumpy(), field_a.asnumpy() * 3 + field_b.asnumpy() * 4)
+
+
+def test_synchronous_compilation(cartesian_case, compile_testee):
+    # This test is not perfect: only tests that compilation works if '_async_compilation_pool' is not initialized.
+    with mock.patch.object(compiled_program, "_async_compilation_pool", None):
+        a = cases.allocate(cartesian_case, compile_testee, "a")()
+        b = cases.allocate(cartesian_case, compile_testee, "b")()
+
+        out = cases.allocate(cartesian_case, compile_testee, "out")()
+        compile_testee(
+            a,
+            b,
+            out=out,
+            offset_provider=cartesian_case.offset_provider,
+        )
+        assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
+
+
+@pytest.mark.parametrize("synchronous", [True, False], ids=["synchronous", "asynchronous"])
+def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, synchronous):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    with (
+        mock.patch.object(compiled_program, "_async_compilation_pool", None)
+        if synchronous
+        else contextlib.nullcontext()
+    ):
+        compile_testee.compile(offset_provider=cartesian_case.offset_provider)
+        # TODO(havogt): currently only tests that the function call does not crash...
+        gtx.wait_for_compilation()
+        # ... and afterwards compilation still works
+        compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)

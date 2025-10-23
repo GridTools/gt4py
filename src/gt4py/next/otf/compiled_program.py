@@ -11,100 +11,192 @@ from __future__ import annotations
 import concurrent.futures
 import dataclasses
 import functools
+import inspect
 import itertools
-from collections.abc import Sequence
-from typing import Any, TypeAlias
+from collections.abc import Callable, Hashable, Sequence
+from typing import Any, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing, utils as eve_utils
-from gt4py.next import backend as gtx_backend, common, config, errors
+from gt4py.eve import extended_typing as xtyping, utils as eve_utils
+from gt4py.next import backend as gtx_backend, common, config, errors, metrics, utils as gtx_utils
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
 from gt4py.next.otf import arguments, stages
-from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
+from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.utils import tree_map
 
+
+T = TypeVar("T")
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
-_async_compilation_pool = concurrent.futures.ThreadPoolExecutor(max_workers=config.BUILD_JOBS)
+_async_compilation_pool: concurrent.futures.Executor | None = None
 
-ScalarOrTupleOfScalars: TypeAlias = extended_typing.MaybeNestedInTuple[core_defs.Scalar]
-CompiledProgramsKey: TypeAlias = tuple[
-    tuple[ScalarOrTupleOfScalars, ...], common.OffsetProviderType
+
+def _init_async_compilation_pool() -> None:
+    global _async_compilation_pool
+    if _async_compilation_pool is None and config.BUILD_JOBS > 0:
+        _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=config.BUILD_JOBS
+        )
+
+
+_init_async_compilation_pool()
+
+ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
+CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int]
+ArgumentDescriptors: TypeAlias = dict[
+    type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
+]
+ArgumentDescriptorContext: TypeAlias = dict[
+    str, xtyping.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]
+]
+ArgumentDescriptorContexts: TypeAlias = dict[
+    type[arguments.ArgStaticDescriptor],
+    ArgumentDescriptorContext,
 ]
 
 
-def _hash_compiled_program_unsafe(cp_key: CompiledProgramsKey) -> int:
-    values, offset_provider = cp_key
-    assert common.is_offset_provider_type(offset_provider)
-    return hash((values, id(offset_provider)))
-
-
-def _validate_types(
-    program_name: str,
-    static_args: dict[str, ScalarOrTupleOfScalars],
-    program_type: ts_ffront.ProgramType,
-) -> None:
-    unknown_args = list(
-        set(static_args.keys()) - set(program_type.definition.pos_or_kw_args.keys())
-    )
-    if unknown_args:
-        raise errors.DSLTypeError(
-            message=f"Invalid static arguments provided for '{program_name}' with type '{program_type}', the following are not parameters of the program:\n"
-            + ("\n".join([f"  - '{arg}'" for arg in unknown_args])),
-            location=None,
-        )
-
-    param_types = program_type.definition.pos_or_kw_args
-
-    if type_errors := [
-        f"'{name}' with type '{param_types[name]}' cannot be static."
-        for name in static_args
-        if not type_info.is_type_or_tuple_of_type(param_types[name], ts.ScalarType)
-    ]:
-        raise errors.DSLTypeError(
-            message=f"Invalid static arguments provided for '{program_name}' with type '{program_type}' (only scalars or (nested) tuples of scalars can be static):\n"
-            + ("\n".join([f"  - {error}" for error in type_errors])),
-            location=None,
-        )
-
-    static_arg_types = {name: tt.from_value(value) for name, value in static_args.items()}
-    types_from_values = [
-        static_arg_types[name]  # use type of the provided value for the static arguments
-        if name in static_arg_types
-        else type_  # else use the type from progam_type which will never mismatch
-        for name, type_ in program_type.definition.pos_or_kw_args.items()
-    ]
-    assert not program_type.definition.pos_only_args
-    assert not program_type.definition.kw_only_args
-
-    if mismatch_errors := list(
-        type_info.function_signature_incompatibilities(
-            program_type, args=types_from_values, kwargs={}
-        )
-    ):
-        raise errors.DSLTypeError(
-            message=f"Invalid static argument types when trying to compile '{program_name}' with type '{program_type}':\n"
-            + ("\n".join([f"  - {error}" for error in mismatch_errors])),
-            location=None,
-        )
-
-
-def _sanitize_static_args(
-    program_name: str,
-    static_args: dict[str, ScalarOrTupleOfScalars],
-    program_type: ts_ffront.ProgramType,
-) -> dict[str, ScalarOrTupleOfScalars]:
+def wait_for_compilation() -> None:
     """
-    Sanitize static arguments to be used in the program compilation.
+    Waits for all ongoing compilations to finish.
 
-    This function will convert all values to their corresponding type
-    and check that the types are compatible with the program type.
+    This is useful to ensure that all compiled programs are ready before
+    proceeding with further operations. E.g. when the first call is included in timings.
     """
-    _validate_types(program_name, static_args, program_type)
+    global _async_compilation_pool
+    if _async_compilation_pool is not None:
+        _async_compilation_pool.shutdown(wait=True)
+        _async_compilation_pool = None
+        _init_async_compilation_pool()
 
+
+def _make_tuple_expr(el_exprs: list[str]) -> str:
+    return "".join((f"{el},") for el in el_exprs)
+
+
+def _make_param_context_from_func_type(
+    func_type: ts.FunctionType,
+    type_map: Callable[[ts.TypeSpec], T] = lambda x: x,  # type: ignore[assignment, return-value]  # mypy not smart enough to narrow type for default
+) -> dict[str, xtyping.MaybeNestedInTuple[T]]:
+    """
+    Create a context to evaluate expressions in from a function type.
+
+    >>> int32_t, int64_t = (
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT32),
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
+    ... )
+    >>> type_ = ts.FunctionType(
+    ...     pos_only_args=[],
+    ...     pos_or_kw_args={"inp1": ts.TupleType(types=[int32_t, int64_t])},
+    ...     kw_only_args={"inp2": int64_t},
+    ...     returns=int64_t,
+    ... )
+    >>> context = _make_param_context_from_func_type(type_)
+    >>> assert context == {"inp1": (int32_t, int64_t), "inp2": int64_t}
+    """
+    params = func_type.pos_or_kw_args | func_type.kw_only_args
     return {
-        name: tt.unsafe_cast_to(value, program_type.definition.pos_or_kw_args[name])  # type: ignore[arg-type] # checked in _validate_types
-        for name, value in static_args.items()
+        param: type_info.apply_to_primitive_constituents(
+            type_map, type_, tuple_constructor=lambda *els: tuple(els)
+        )
+        for param, type_ in params.items()
     }
+
+
+def _get_type_of_param_expr(program_type: ts_ffront.ProgramType, expr: str) -> ts.TypeSpec:
+    structured_type_ = eval(expr, _make_param_context_from_func_type(program_type.definition))
+    type_ = tree_map(
+        lambda v: v, result_collection_constructor=lambda _, elts: ts.TupleType(types=list(elts))
+    )(structured_type_)
+    assert isinstance(type_, ts.TypeSpec)
+    return type_
+
+
+def _make_argument_descriptors(
+    program_type: ts_ffront.ProgramType,
+    argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]],
+    args: tuple[Any],
+    kwargs: dict[str, Any],
+) -> ArgumentDescriptors:
+    """Given a set of runtime arguments construct all argument descriptors from them."""
+    func_type = program_type.definition
+    params = list(func_type.pos_or_kw_args.keys()) + list(func_type.kw_only_args.keys())
+    descriptors: ArgumentDescriptors = {}
+    for descriptor_cls, exprs in argument_descriptor_mapping.items():
+        descriptors[descriptor_cls] = {}
+        for expr in exprs:
+            argument = eval(f"""lambda {",".join(params)}: {expr}""")(*args, **kwargs)
+            descriptors[descriptor_cls][expr] = descriptor_cls.from_value(argument)
+    _validate_argument_descriptors(program_type, descriptors)
+    return descriptors
+
+
+def _convert_to_argument_descriptor_context(
+    func_type: ts.FunctionType, argument_descriptors: ArgumentDescriptors
+) -> ArgumentDescriptorContexts:
+    """
+    Given argument descriptors, i.e., a mapping from an expr to a descriptor, transform them into a
+    context of argument descriptors in which we can evaluate expressions.
+
+    >>> int32_t, int64_t = (
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT32),
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
+    ... )
+    >>> type_ = ts.FunctionType(
+    ...     pos_only_args=[],
+    ...     pos_or_kw_args={"inp1": ts.TupleType(types=[int32_t, int64_t])},
+    ...     kw_only_args={"inp2": int64_t},
+    ...     returns=int64_t,
+    ... )
+    >>> argument_descriptors = {arguments.StaticArg: {"inp1[1]": arguments.StaticArg(value=1)}}
+    >>> contexts = _convert_to_argument_descriptor_context(type_, argument_descriptors)
+    >>> contexts[arguments.StaticArg]
+    {'inp1': (None, StaticArg(value=1)), 'inp2': None}
+    """
+    descriptor_contexts: ArgumentDescriptorContexts = {}
+    for descriptor_cls, descriptor_expr_mapping in argument_descriptors.items():
+        context: ArgumentDescriptorContext = _make_param_context_from_func_type(
+            func_type, lambda x: None
+        )
+        # convert tuples to list such that we can alter the context easily
+        context = {
+            k: gtx_utils.tree_map(
+                lambda v: v,
+                collection_type=tuple,
+                result_collection_constructor=lambda _, elts: list(elts),
+            )(v)
+            for k, v in context.items()
+        }
+        assert "__descriptor" not in context
+        for expr, descriptor in descriptor_expr_mapping.items():
+            # note: we don't need to handle any errors here since the `expr` has been validated
+            #  in `_validate_argument_descriptor_mapping`
+            exec(
+                f"{expr} = __descriptor",
+                {"__descriptor": descriptor},
+                context,
+            )
+        # convert lists back to tuples
+        context = {
+            k: gtx_utils.tree_map(
+                lambda v: v,
+                collection_type=list,
+                result_collection_constructor=lambda _, elts: tuple(elts),
+            )(v)
+            for k, v in context.items()
+        }
+        descriptor_contexts[descriptor_cls] = context
+
+    return descriptor_contexts
+
+
+def _validate_argument_descriptors(
+    program_type: ts_ffront.ProgramType,
+    all_descriptors: ArgumentDescriptors,
+) -> None:
+    for descriptors in all_descriptors.values():
+        for expr, descriptor in descriptors.items():
+            param_type = _get_type_of_param_expr(program_type, expr)
+            descriptor.validate(expr, param_type)
 
 
 @dataclasses.dataclass
@@ -112,36 +204,37 @@ class CompiledProgramsPool:
     """
     A pool of compiled programs for a given program and backend.
 
-    If 'static_params' is set (or static arguments are passed to 'compile'),
-    the pool will create a program for each argument that is marked static
-    and each 'OffsetProviderType'.
+    If 'argument_descriptor_mapping' is populated the pool will create a program for each
+    argument that has an argument descriptor. E.g., if a param is marked static we create
+    a new program for each value of that parameter. See :ref:`arguments.ArgumentDescriptor` for
+    more information on argument descriptors.
 
     If `enable_jit` is True in the call to the pool, it will compile a program
-    with static arguments corresponding to the 'static_params', otherwise it
+    with static information as described in `argument_descriptor_mapping`, otherwise it
     will error. In the latter case, the pool needs to be filled with call(s)
-    to 'compile' before it can be used.
+    to `compile` before it can be used.
     """
 
     backend: gtx_backend.Backend
     definition_stage: ffront_stages.ProgramDefinition
     program_type: ts_ffront.ProgramType
-    static_params: Sequence[str] | None = None  # not ordered
+    #: mapping from an argument descriptor type to a list of parameters or expression thereof
+    #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
+    #: Note: The list is not ordered.
+    argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
 
-    _compiled_programs: eve_utils.CustomMapping = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMapping(_hash_compiled_program_unsafe),
-        init=False,
-    )
+    # cache the compiled programs
+    compiled_programs: dict[
+        CompiledProgramsKey,
+        stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
+    ] = dataclasses.field(default_factory=dict, init=False)
 
-    _offset_provider_type_cache: eve_utils.CustomMapping = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMapping(common.hash_offset_provider_unsafe),
-        init=False,
-    )  # cache the offset provider type in order to avoid recomputing it at each program call
-
-    def __postinit__(self) -> None:
+    def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
         assert not self.program_type.definition.kw_only_args
         assert not self.program_type.definition.pos_only_args
+        self._validate_argument_descriptor_mapping()
 
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
@@ -153,86 +246,198 @@ class CompiledProgramsPool:
         (defined by 'static_params') in case `enable_jit` is True. Otherwise,
         it is an error.
         """
-        args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
-        static_args_values = tuple(args[i] for i in self._static_arg_indices)
-        key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
+        args, kwargs = self._args_canonicalizer(args, kwargs)
+        static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
+        key = (static_args_values, common.hash_offset_provider_items_by_id(offset_provider))
+
         try:
-            self._compiled_programs[key](*args, **kwargs, offset_provider=offset_provider)
-        except TypeError:  # 'Future' object is not callable
-            # ... otherwise we resolve the future and call again
-            program = self._resolve_future(key)
-            program(*args, **kwargs, offset_provider=offset_provider)
+            program = self.compiled_programs[key]
+            if config.COLLECT_METRICS_LEVEL:
+                metrics_source = metrics.get_current_source()
+                metrics_source.key = self._metrics_key_from_pool_key(key)
+
+            program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator]  # the Future case is handled below
+
+        except TypeError as e:
+            if "program" in locals() and isinstance(program, concurrent.futures.Future):
+                # 'Future' objects are not callable so they will generate a TypeError.
+                # Here we resolve the future and call it again.
+                program = self._resolve_future(key)
+                program(*args, **kwargs, offset_provider=offset_provider)
+            else:
+                raise e
+
         except KeyError as e:
             if enable_jit:
-                assert self.static_params is not None
-                static_args = {
-                    name: value
-                    for name, value in zip(self.static_params, static_args_values, strict=True)
-                }
-                self._compile_variant(static_args=static_args, offset_provider=offset_provider)
+                assert self.argument_descriptor_mapping is not None
+                self._compile_variant(
+                    argument_descriptors=_make_argument_descriptors(
+                        self.program_type, self.argument_descriptor_mapping, args, kwargs
+                    ),
+                    offset_provider=offset_provider,
+                    call_key=key,
+                )
                 return self(
                     *args, offset_provider=offset_provider, enable_jit=False, **kwargs
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 
     @functools.cached_property
-    def _static_arg_indices(self) -> tuple[int, ...]:
-        if self.static_params is None:
-            # this could also be done in `__call__` but would be an extra if in the fast path
-            self.static_params = ()
+    def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
+        signature = inspect.signature(self.definition_stage.definition)
+        return gtx_utils.make_args_canonicalizer(signature)
 
-        all_params = list(self.program_type.definition.pos_or_kw_args.keys())
-        return tuple(all_params.index(p) for p in self.static_params)
+    @functools.cached_property
+    def _metrics_key_from_pool_key(self) -> Callable[[CompiledProgramsKey], str]:
+        prefix = f"{self.definition_stage.definition.__name__}<{self.backend.name}>"
+
+        return lambda key: f"{prefix}[{hash(key)}]"
+
+    @functools.cached_property
+    def _argument_descriptor_cache_key_from_args(
+        self,
+    ) -> Callable[..., tuple[Hashable, ...]]:
+        """
+        Given the entire set of runtime arguments compute the cache key used to retrieve the
+        instance of the compiled program which is compiled for the argument descriptors from
+        the given set of arguments.
+
+        This is part of the performance critical path that is called on every program call,
+        hence we code generate a single lambda expression here.
+        """
+        func_type = self.program_type.definition
+        params = list(func_type.pos_or_kw_args.keys()) + list(func_type.kw_only_args.keys())
+        elements: list[str] = []
+        for descriptor_cls, arg_exprs in self.argument_descriptor_mapping.items():  # type: ignore[union-attr]  # can never be `None` at this point
+            for arg_expr in arg_exprs:
+                attr_extractor = descriptor_cls.attribute_extractor_exprs(arg_expr)
+                elements.extend(attr_extractor.values())
+        return eval(f"""lambda {",".join(params)}: ({_make_tuple_expr(elements)})""")
+
+    def _argument_descriptor_cache_key_from_descriptors(
+        self,
+        argument_descriptor_contexts: ArgumentDescriptorContexts,
+    ) -> tuple:
+        """
+        Given a set of argument descriptors deduce the cache key used to retrieve the instance
+        of the compiled program which is compiled for the given argument descriptors.
+
+        This function is not performance critical as it is only called once when compiling a
+        variant.
+        """
+        elements = []
+        for descriptor_cls, arg_exprs in self.argument_descriptor_mapping.items():  # type: ignore[union-attr]  # can never be `None` at this point
+            for arg_expr in arg_exprs:
+                attr_extractor = descriptor_cls.attribute_extractor_exprs(arg_expr)
+                attrs = attr_extractor.keys()
+                for attr in attrs:
+                    elements.append(
+                        getattr(
+                            eval(f"{arg_expr}", {}, argument_descriptor_contexts[descriptor_cls]),
+                            attr,
+                        )
+                    )
+        return tuple(elements)
+
+    def _initialize_argument_descriptor_mapping(
+        self, argument_descriptors: ArgumentDescriptors
+    ) -> None:
+        if self.argument_descriptor_mapping is None:
+            self.argument_descriptor_mapping = {
+                descr_cls: list(descriptor_expr_mapping.keys())
+                for descr_cls, descriptor_expr_mapping in argument_descriptors.items()
+            }
+            self._validate_argument_descriptor_mapping()
+        else:
+            for descr_cls, descriptor_expr_mapping in argument_descriptors.items():
+                if (expected := set(self.argument_descriptor_mapping[descr_cls])) != (
+                    got := set(descriptor_expr_mapping.keys())
+                ):
+                    raise ValueError(
+                        f"Argument descriptor {descr_cls.__name__} must be the same for all compiled programs, got {list(got)} expected {list(expected)}."
+                    )
+
+    def _validate_argument_descriptor_mapping(self) -> None:
+        if self.argument_descriptor_mapping is None:
+            return
+        context = _make_param_context_from_func_type(self.program_type.definition, lambda x: None)
+        for descr_cls, exprs in self.argument_descriptor_mapping.items():
+            for expr in exprs:
+                try:
+                    # TODO(tehrengruber): Re-evaluate the way we validate here when we add support
+                    #  for containers.
+                    if any(
+                        v is not None for v in gtx_utils.flatten_nested_tuple(eval(expr, context))
+                    ):
+                        raise ValueError()
+                except (ValueError, KeyError, NameError):
+                    raise errors.DSLTypeError(  # noqa: B904 # we don't care about the original exception
+                        message=f"Invalid parameter expression '{expr}' for '{descr_cls.__name__}'. "
+                        f"Must be the name of a parameter or an access to one of its elements.",
+                        location=None,
+                    )
 
     def _compile_variant(
         self,
-        static_args: dict[str, ScalarOrTupleOfScalars],
+        argument_descriptors: ArgumentDescriptors,
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
+        call_key: CompiledProgramsKey | None = None,
     ) -> None:
-        assert self.static_params is not None
-        static_args = _sanitize_static_args(
-            self.definition_stage.definition.__name__, static_args, self.program_type
-        )
+        if not common.is_offset_provider(offset_provider):
+            if common.is_offset_provider_type(offset_provider):
+                raise ValueError(
+                    "Variant compilation of programs with 'OffsetProviderType' is not yet supported."
+                )
+            else:
+                raise ValueError(f"Invalid 'offset_provider': {offset_provider}")
 
-        args = tuple(
-            arguments.StaticArg(value=static_args[name], type_=type_)
-            if name in self.static_params
-            else type_
-            for name, type_ in self.program_type.definition.pos_or_kw_args.items()
-        )
+        self._initialize_argument_descriptor_mapping(argument_descriptors)
+        _validate_argument_descriptors(self.program_type, argument_descriptors)
 
+        argument_descriptor_contexts = _convert_to_argument_descriptor_context(
+            self.program_type.definition, argument_descriptors
+        )
         key = (
-            tuple(static_args[p] for p in self.static_params),
-            self._offset_provider_to_type_unsafe(offset_provider),
+            self._argument_descriptor_cache_key_from_descriptors(argument_descriptor_contexts),
+            common.hash_offset_provider_items_by_id(offset_provider),
         )
-        if key in self._compiled_programs:
+        assert call_key is None or call_key == key
+
+        if key in self.compiled_programs:
             raise ValueError(f"Program with key {key} already exists.")
 
+        # If we are collecting metrics, create a new metrics entity for this compiled program
+        if config.COLLECT_METRICS_LEVEL:
+            metrics_source = metrics.get_source(self._metrics_key_from_pool_key(key))
+            metrics_source.metadata |= dict(
+                name=self.definition_stage.definition.__name__,
+                backend=self.backend.name,
+                compiled_program_pool_key=hash(key),
+                **{
+                    f"{eve_utils.CaseStyleConverter.convert(key.__name__, 'pascal', 'snake')}s": value
+                    for key, value in argument_descriptors.items()
+                },
+            )
+
         compile_time_args = arguments.CompileTimeArgs(
-            offset_provider=offset_provider,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
+            offset_provider=offset_provider,
             column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
-            args=args,
-            kwargs={},
+            args=tuple(self.program_type.definition.pos_only_args)
+            + tuple(self.program_type.definition.pos_or_kw_args.values()),
+            kwargs=self.program_type.definition.kw_only_args,
+            argument_descriptor_contexts=argument_descriptor_contexts,
         )
-        self._compiled_programs[key] = _async_compilation_pool.submit(
+        compile_call = functools.partial(
             self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
         )
+        if _async_compilation_pool is None:
+            # synchronous compilation
+            self.compiled_programs[key] = compile_call()
+        else:
+            self.compiled_programs[key] = _async_compilation_pool.submit(compile_call)
 
-    def _offset_provider_to_type_unsafe(
-        self,
-        offset_provider: common.OffsetProvider | common.OffsetProviderType,
-    ) -> common.OffsetProviderType:
-        try:
-            op_type = self._offset_provider_type_cache[offset_provider]
-        except KeyError:
-            op_type = (
-                offset_provider
-                if common.is_offset_provider_type(offset_provider)
-                else common.offset_provider_to_type(offset_provider)
-            )
-            self._offset_provider_type_cache[offset_provider] = op_type
-        return op_type
-
+    # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
+    #  domains.
     def compile(
         self,
         offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
@@ -250,23 +455,24 @@ class CompiledProgramsPool:
             pool.compile(static_arg0=[0], static_arg1=[2]).compile(static_arg=[1], static_arg1=[3])
                 will compile for (0,2), (1,3)
         """
-        if self.static_params is None:
-            self.static_params = tuple(static_args.keys())
-        elif set(self.static_params) != set(static_args.keys()):
-            raise ValueError(
-                f"Static arguments must be the same for all compiled programs. Got {list(static_args.keys())}, expected {self.static_params}."
-            )
-
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
                 self._compile_variant(
-                    dict(zip(static_args.keys(), static_values, strict=True)),
+                    argument_descriptors={
+                        arguments.StaticArg: dict(
+                            zip(
+                                static_args.keys(),
+                                [arguments.StaticArg(value=v) for v in static_values],
+                                strict=True,
+                            )
+                        ),
+                    },
                     offset_provider=offset_provider,
                 )
 
     def _resolve_future(self, key: CompiledProgramsKey) -> stages.CompiledProgram:
-        program = self._compiled_programs[key]
+        program = self.compiled_programs[key]
         assert isinstance(program, concurrent.futures.Future)
         result = program.result()
-        self._compiled_programs[key] = result
+        self.compiled_programs[key] = result
         return result

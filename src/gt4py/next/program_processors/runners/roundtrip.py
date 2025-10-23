@@ -24,7 +24,7 @@ from gt4py.next import allocators as next_allocators, backend as next_backend, c
 from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import stages, workflow
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def _create_tmp(axes: str, origin: str, shape: str, dtype: ts.TypeSpec) -> str:
@@ -40,7 +40,22 @@ def _create_tmp(axes: str, origin: str, shape: str, dtype: ts.TypeSpec) -> str:
 class EmbeddedDSL(codegen.TemplatedGenerator):
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
-    Literal = as_fmt("{value}")
+
+    def visit_Literal(self, node: itir.Literal, **kwargs: Any) -> str:
+        if (
+            isinstance(node.type, ts.ScalarType)
+            and type_info.is_floating_point(node.type)
+            and node.value in ["inf", "-inf", "nan"]
+        ):
+            dtype = node.type.kind.name.lower()
+            if node.value == "inf":
+                return f"np.{dtype}(np.inf)"
+            elif node.value == "-inf":
+                return f"-np.{dtype}(np.inf)"
+            elif node.value == "nan":
+                return f"np.{dtype}(np.nan)"
+        return node.value
+
     NoneLiteral = as_fmt("None")
     OffsetLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")

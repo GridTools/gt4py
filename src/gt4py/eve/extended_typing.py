@@ -542,6 +542,22 @@ class _FrozenDataclassParamsABC(_DataclassParamsABC):
     frozen: Literal[True]
 
 
+_KT = TypeVar("_KT", contravariant=True)
+_VT = TypeVar("_VT")
+
+
+class OpaqueMutableMapping(Protocol[_KT, _VT]):
+    """
+    Mutable mapping without access to the keys, just setting, getting, deleting with a given key.
+    """
+
+    def __getitem__(self, key: _KT) -> _VT: ...
+
+    def __setitem__(self, key: _KT, value: _VT) -> None: ...
+
+    def __delitem__(self, key: _KT) -> None: ...
+
+
 is_protocol = _typing_extensions.is_protocol
 
 

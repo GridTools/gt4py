@@ -170,9 +170,12 @@ class Location(Node):
     scope = attribute(of=str, default="<source>")
 
     @classmethod
-    def from_ast_node(cls, ast_node, scope="<source>"):
+    def from_ast_node(cls, ast_node, scope: str | None = None):
         lineno = getattr(ast_node, "lineno", 0)
         col_offset = getattr(ast_node, "col_offset", 0)
+        scope = (
+            "<source>" if scope is None else scope
+        )  # scope is sometimes explicitly passed down as `None`
         return cls(line=lineno, column=col_offset + 1, scope=scope)
 
 
@@ -357,9 +360,24 @@ class VarRef(Ref):
 
 
 @attribclass
+class AbsoluteKIndex(Expr):
+    """See gtc.common.AbsoluteKIndex"""
+
+    k = attribute(of=Any)
+
+
+@attribclass
+class IteratorAccess(Ref):
+    """Iterator query"""
+
+    name = attribute(of=str)
+    data_type = attribute(of=DataType)
+
+
+@attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr, AbsoluteKIndex]])
     data_index = attribute(of=ListOf[Expr], factory=list)
     loc = attribute(of=Location, optional=True)
 

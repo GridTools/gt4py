@@ -888,7 +888,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # create states inside the nested SDFG for the if-branches
         if_region = dace.sdfg.state.ConditionalBlock("if")
-        nsdfg.add_node(if_region)
+        nsdfg.add_node(if_region, ensure_unique_name=True)
         entry_state = nsdfg.add_state("entry", is_start_block=True)
         nsdfg.add_edge(entry_state, if_region, dace.InterstateEdge())
 
@@ -1723,7 +1723,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             arg_expr = self.visit(arg)
             if isinstance(arg_expr, MemletExpr | ValueExpr):
                 # the argument value is the result of a tasklet node or direct field access
-                connector = f"__arg{i}"
+                connector = f"__var{i}"
                 node_connections[connector] = arg_expr
                 node_internals.append(connector)
             else:
@@ -1781,7 +1781,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             dc_dtype = gtx_dace_utils.as_dace_type(node.type)
             use_array = False
 
-        return self._construct_tasklet_result(dc_dtype, tasklet_node, "result", use_array=use_array)
+        return self._construct_tasklet_result(
+            dc_dtype, tasklet_node, out_connector, use_array=use_array
+        )
 
     def _visit_make_tuple(self, node: gtir.FunCall) -> tuple[IteratorExpr | DataExpr]:
         assert cpm.is_call_to(node, "make_tuple")

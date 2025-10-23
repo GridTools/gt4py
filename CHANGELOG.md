@@ -2,6 +2,39 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.10] - 2025-10-23
+
+### Cartesian
+
+- New backend `dace:cpu_kfirst`.
+- New experimental features:
+  - absolute indexing in K.
+  - expose K index.
+- Fixes and performance improvements in DaCe backends.
+- Improved error messages.
+
+### Development
+
+- Enabled DaCe backends on AMD MI300 CI.
+
+### Next
+
+See commit history.
+
+## [1.0.9] - 2025-09-12
+
+### General
+
+- Performance optimizations in `eve.visitors` classes, by caching visitor methods at class level.
+
+### Cartesian
+
+- Some fixes in dace backend.
+
+### Next
+
+See commit history.
+
 ## [1.0.8] - 2025-09-03
 
 ### Cartesian

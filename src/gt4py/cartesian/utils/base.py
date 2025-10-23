@@ -17,6 +17,7 @@ import importlib.util
 import itertools
 import json
 import os
+import pathlib
 import string
 import sys
 import time
@@ -438,3 +439,35 @@ class UniqueIdGenerator:
     @property
     def current(self):
         return self._current
+
+
+def warn_experimental_feature(*, feature: str, ADR: str) -> None:
+    """Warning message for experimental features.
+
+    Experimental features are required to print a (one-time) warning message such that users
+    know what to expect. We facilitate consistent warnings by providing this convenience
+    function.
+
+    Args:
+        feature (str): Name of the experimental feature.
+        ADR (str): Path to the associated ADR, relative to `docs/development/ADRs/cartesian/`
+
+    Raises:
+        ValueError: In case the the `ADR` can't be found.
+    """
+
+    # be nice and remove a potential `/` prefixed
+    ADR = ADR.removeprefix("/")
+
+    repo_root = pathlib.Path(__file__).parent.parent.parent.parent.parent
+    adr_location = repo_root / "docs" / "development" / "ADRs" / "cartesian" / ADR
+    if not adr_location.exists():
+        raise ValueError(f"Could not find ADR for '{feature}' in. Looked in `{adr_location}`.")
+
+    warnings.warn(
+        f"{feature} is an experimental feature. Please read "
+        f"<https://github.com/GridTools/gt4py/blob/main/docs/development/ADRs/cartesian/{ADR}> "
+        "to understand the consequences.",
+        category=UserWarning,
+        stacklevel=2,
+    )
