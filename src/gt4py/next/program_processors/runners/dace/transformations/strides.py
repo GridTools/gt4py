@@ -128,6 +128,10 @@ def _gt_change_transient_strides_non_recursive_impl(
                 ignore_symbol_mapping=True,
             )
 
+    # Now handle the views.
+    # TODO(phimuell): Remove once `gt_propagate_strides_from_access_node()` can handle views.
+    _gt_modify_strides_of_views_non_recursive(sdfg)
+
 
 def gt_propagate_strides_of(
     sdfg: dace.SDFG,
@@ -191,6 +195,10 @@ def gt_propagate_strides_from_access_node(
             of NestedSDFGs instead of manipulating the data descriptor.
         processed_nsdfgs: Set of NestedSDFG that were already processed and will be ignored.
             Only specify when you know what your are doing.
+
+    Todo:
+        Once this function supports the propagation to views `_gt_modify_strides_of_views()`
+        can be removed.
     """
     assert isinstance(state, dace.SDFGState)
 
@@ -612,15 +620,14 @@ def _gt_find_toplevel_data_accesses(
     scope and error is generated.
     By default the function will return transient and non transient data,
     however, if `only_transients` is `True` then only transient data will
-    be returned.
-    Furthermore, the function will ignore an access in the following cases:
-    - The AccessNode refers to data that is a register.
-    - The AccessNode refers to a View.
+    be returned. In addition by seeting `only_arrays` only arrays will be
+    returned.
 
     Args:
         sdfg: The SDFG to process.
         only_transients: If `True` only include transients.
         only_arrays: If `True`, defaults to `False`, only arrays are returned.
+        inlclude_views: Also returns Views.
 
     Returns:
         A `dict` that maps the name of a data container, to a list of tuples
@@ -682,3 +689,62 @@ def _gt_find_toplevel_data_accesses(
             # Now create the new entry in the list and record the AccessNode.
             top_level_data[data] = [(state, dnode)]
     return top_level_data
+
+
+def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
+    """The function determines the strides of Views.
+
+    The function should not be called directly, instead it is called by
+    `gt_change_transient_strides()` directly if needed. The function will recursively
+    process the SDFG and modifies the strides.
+
+    Todo:
+        Once `gt_propagate_strides_from_access_node()` can handle View updates
+        evaluate if this function is still needed.
+    """
+    for state in sdfg.states():
+        propagation_record: set[PropagatedStrideRecord] = set()
+        for view_node in state.data_nodes():
+            view_desc = view_node.desc(sdfg)
+            if not isinstance(view_desc, dace_data.View):
+                continue
+            viewed_node = gtx_transformations.utils.track_view(view_node, state, sdfg)
+            viewed_desc = viewed_node.desc(sdfg)
+
+            # We are not able to handle tower of Views
+            if isinstance(viewed_desc, dace_data.View):
+                raise NotImplementedError(
+                    f"Can not handle the view '{view_node.data}' that views view '{viewed_node.data}'"
+                )
+
+            # If the viewed data is global data, then we do not modify the strides because
+            #  we assume that it was set correctly from the beginning and the viewed strides
+            #  have not changed.
+            # TODO(phimuell): Check interaction with the demote feature of auto optimizer.
+            if not viewed_desc.transient:
+                continue
+
+            # There is a special case if the View is a scalar or has a shape of `(1,)`
+            #  then strides are meaningless.
+            if isinstance(view_desc, dace_data.Scalar) or (
+                len(view_desc.shape) == 1 and ((view_desc.shape[0] == 1) == True)  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            ):
+                continue
+
+            # If the dimensionality of the two data is different then we can not handle it.
+            #  This is probably the most difficult case to handle. However, instead of
+            #  handling the case, we should simply remove the View.
+            if len(view_desc.shape) != len(viewed_desc.shape):
+                raise NotImplementedError(
+                    f"Can not handle the change from {len(viewed_desc.shape)} ({viewed_node.data}) to {len(view_desc.shape)} ({view_node.data})."
+                )
+
+            # In case the dimensions are the same, we can simply copy the strides.
+            view_desc.strides = viewed_desc.strides
+            gt_propagate_strides_from_access_node(
+                sdfg=sdfg,
+                state=state,
+                outer_node=view_node,
+                ignore_symbol_mapping=True,
+                processed_nsdfgs=propagation_record,
+            )
