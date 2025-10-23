@@ -71,18 +71,17 @@ def run_test_program(
     assert actual == expected
 
 
-def domain_as_expr(domain: gtx.Domain) -> itir.Expr:
-    return im.domain(
-        common.GridType.UNSTRUCTURED,
-        {d: (r.start, r.stop) for d, r in zip(domain.dims, domain.ranges)},
-    )
-
-
 def test_get_domain():
     sizes = {"out": gtx.domain({Vertex: (0, 10), KDim: (0, 20)})}
     get_domain_expr = im.get_field_domain(common.GridType.UNSTRUCTURED, "out", sizes["out"].dims)
 
-    run_test_program(["inp", "out"], sizes, "out", domain_as_expr(sizes["out"]), get_domain_expr)
+    run_test_program(
+        ["inp", "out"],
+        sizes,
+        "out",
+        im.domain(common.GridType.UNSTRUCTURED, sizes["out"]),
+        get_domain_expr,
+    )
 
 
 def test_get_domain_tuples():
@@ -92,7 +91,13 @@ def test_get_domain_tuples():
         common.GridType.UNSTRUCTURED, im.tuple_get(1, "out"), sizes["out"][1].dims
     )
 
-    run_test_program(["inp", "out"], sizes, "out", domain_as_expr(sizes["out"][1]), get_domain_expr)
+    run_test_program(
+        ["inp", "out"],
+        sizes,
+        "out",
+        im.domain(common.GridType.UNSTRUCTURED, sizes["out"][1]),
+        get_domain_expr,
+    )
 
 
 def test_get_domain_nested_tuples():
@@ -110,5 +115,9 @@ def test_get_domain_nested_tuples():
     )
 
     run_test_program(
-        ["inp", "a", "b", "c", "d"], sizes, "a", domain_as_expr(sizes["a"]), get_domain_expr
+        ["inp", "a", "b", "c", "d"],
+        sizes,
+        "a",
+        im.domain(common.GridType.UNSTRUCTURED, sizes["a"]),
+        get_domain_expr,
     )
