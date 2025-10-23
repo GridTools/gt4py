@@ -2,12 +2,14 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [1.0.10] - 2025-10-22
+## [1.0.10] - 2025-10-23
 
 ### Cartesian
 
 - New backend `dace:cpu_kfirst`.
-- New experimental feature: absolute indexing in K.
+- New experimental features:
+  - absolute indexing in K.
+  - expose K index.
 - Fixes and performance improvements in DaCe backends.
 - Improved error messages.
 
