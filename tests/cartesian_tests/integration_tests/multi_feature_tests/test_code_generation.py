@@ -1284,10 +1284,7 @@ def test_absolute_K_index(backend):
     assert (out_arr[:, :, :] == 42.42).all()
 
     @gtscript.stencil(backend=backend)
-    def test_lower_dim_field(
-        k_field: Field[K, np.float64],
-        out_field: Field[np.float64],
-    ) -> None:
+    def test_lower_dim_field(k_field: Field[K, np.float64], out_field: Field[np.float64]) -> None:
         with computation(PARALLEL), interval(...):
             out_field = k_field.at(K=2)
 
@@ -1296,3 +1293,55 @@ def test_absolute_K_index(backend):
     out_arr[:, :, :] = 0
     test_lower_dim_field(k_arr, out_arr)
     assert (out_arr[:, :, :] == 42.42).all()
+
+
+@pytest.mark.parametrize(
+    "backend",
+    ["debug", pytest.param("dace:cpu", marks=[pytest.mark.requires_dace])],
+)
+def test_iterator_access(backend: str) -> None:
+    domain = (3, 4, 5)
+
+    field_A = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+    field_B = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+
+    @gtscript.stencil(backend=backend)
+    def test_all_valid_usage(field_A: Field[np.float64], field_B: Field[np.float64]) -> None:
+        with computation(PARALLEL), interval(...):
+            if K == 2:
+                field_A = 20.20
+            field_B = K
+
+    test_all_valid_usage(field_A, field_B)
+    assert field_A[0, 0, 1] == 0
+    assert field_A[0, 0, 2] == 20.20
+    for _k in range(domain[2]):
+        assert field_B[0, 0, _k] == _k
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param(
+            backend,
+            marks=pytest.mark.xfail(
+                raises=NotImplementedError, reason="Iterator access (K) is not implemented for"
+            ),
+        )
+        for backend in ["gt:cpu_kfirst", "numpy"]
+    ],
+)
+def test_iterator_access_raises_in_unsupported_backends(backend: str) -> None:
+    domain = (3, 4, 5)
+
+    field_A = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+    field_B = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+
+    @gtscript.stencil(backend=backend)
+    def test_all_valid_usage(field_A: Field[np.float64], field_B: Field[np.float64]) -> None:
+        with computation(PARALLEL), interval(...):
+            if K == 2:
+                field_A = 20.20
+            field_B = K
+
+    test_all_valid_usage(field_A, field_B)
