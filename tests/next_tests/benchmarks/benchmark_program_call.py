@@ -22,17 +22,17 @@ except ImportError:
 
 try:
     from gt4py.next.program_processors.runners import dace as dace_backends
-except ImportError:
-    dace_backends = None
 
-
-GTFN_BACKENDS = [gtfn_cpu, gtfn_gpu] if cp is not None else [gtfn_cpu]
-if dace_backends is not None:
     DACE_BACKENDS = (
         [dace_backends.run_dace_cpu_cached, dace_backends.run_dace_gpu_cached]
         if cp is not None
         else [dace_backends.run_dace_cpu_cached]
     )
+except ImportError:
+    DACE_BACKENDS = []
+
+
+GTFN_BACKENDS = [gtfn_cpu, gtfn_gpu] if cp is not None else [gtfn_cpu]
 
 BACKENDS: Final = GTFN_BACKENDS + DACE_BACKENDS
 
