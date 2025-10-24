@@ -11,6 +11,7 @@ import pytest
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import gtscript
+from gt4py.cartesian.frontend import gtscript_frontend
 from gt4py.cartesian.gtscript import (
     __INLINED,
     BACKWARD,
@@ -1284,7 +1285,10 @@ def test_absolute_K_index(backend):
     assert (out_arr[:, :, :] == 42.42).all()
 
     @gtscript.stencil(backend=backend)
-    def test_lower_dim_field(k_field: Field[K, np.float64], out_field: Field[np.float64]) -> None:
+    def test_lower_dim_field(
+        k_field: Field[K, np.float64],
+        out_field: Field[np.float64],
+    ) -> None:
         with computation(PARALLEL), interval(...):
             out_field = k_field.at(K=2)
 
@@ -1345,3 +1349,79 @@ def test_iterator_access_raises_in_unsupported_backends(backend: str) -> None:
             field_B = K
 
     test_all_valid_usage(field_A, field_B)
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param("debug"),
+        pytest.param("numpy"),
+        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
+        pytest.param("dace:gpu", marks=[pytest.mark.requires_dace, pytest.mark.requires_gpu]),
+    ],
+)
+def test_2d_temporaries(backend):
+    domain = (5, 5, 3)
+
+    in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+
+    @gtscript.stencil(backend=backend)
+    def test_with_plain_gt4py(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
+        with computation(FORWARD), interval(0, 1):
+            tmp_2D: Field[IJ, np.float64] = 0
+
+        with computation(FORWARD), interval(...):
+            tmp_2D = tmp_2D + in_field
+
+        with computation(FORWARD), interval(...):
+            out_field = tmp_2D
+
+    in_arr[:, :, :] = 1
+    out_arr[:, :, :] = 0
+    test_with_plain_gt4py(in_arr, out_arr)
+    assert (out_arr[:, :, :] == domain[2]).all()
+
+    @gtscript.stencil(backend=backend, dtypes={"MyFancySymbol": Field[IJ, np.float64]})
+    def test_with_user_dtype(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
+        with computation(FORWARD), interval(0, 1):
+            tmp_2D: MyFancySymbol = 0
+
+        with computation(FORWARD), interval(...):
+            out_field = tmp_2D
+
+    with pytest.raises(
+        gtscript_frontend.GTScriptSyntaxError, match="Typed temporaries must be IJ,"
+    ):
+
+        @gtscript.stencil(backend=backend)
+        def test_failing_on_non_IJ(
+            in_field: Field[np.float64], out_field: Field[np.float64]
+        ) -> None:
+            with computation(FORWARD), interval(0, 1):
+                tmp_2D: Field[K, np.float64] = 0
+
+            with computation(FORWARD), interval(...):
+                out_field = tmp_2D
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param(
+            backend,
+            marks=pytest.mark.xfail(
+                raises=NotImplementedError, reason="2D temporaries not yet supported."
+            ),
+        )
+        for backend in ["gt:cpu_ifirst", "gt:cpu_kfirst", "gt:gpu"]
+    ],
+)
+def test_2d_temporaries_raises(backend):
+    @gtscript.stencil(backend=backend)
+    def test_with_user_dtypes(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
+        with computation(FORWARD), interval(0, 1):
+            tmp_2D: Field[IJ, np.float64] = 0
+
+        with computation(FORWARD), interval(...):
+            out_field = tmp_2D
