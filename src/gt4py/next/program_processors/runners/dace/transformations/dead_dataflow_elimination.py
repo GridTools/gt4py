@@ -142,6 +142,7 @@ class DeadMapElimination(dace_transformation.SingleStateTransformation):
 
         # Now find all notes that are producer or consumer of the Map, after we removed
         #  the nodes of the Maps we need to check if they have become isolated.
+        # NOTE: Needs to be a `set` to handle multiple connections with the MapEntry node.
         adjacent_nodes: set[dace_nodes.AccessNode] = {
             iedge.src for iedge in graph.in_edges(map_entry)
         }
