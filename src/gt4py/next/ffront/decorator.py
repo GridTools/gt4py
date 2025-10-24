@@ -699,6 +699,10 @@ class FieldOperator(GTCallable, _CompiledVariantMixin, Generic[OperatorNodeT]):
             if "offset_provider" not in kwargs:
                 raise errors.MissingArgumentError(None, "offset_provider", True)
             offset_provider = kwargs.pop("offset_provider")
+            offset_provider = {
+                **offset_provider,
+                **self._implicit_offset_provider,  # TODO(havogt) cleanup implicit_offset_provider
+            }
 
             if "out" not in kwargs:
                 raise errors.MissingArgumentError(None, "out", True)
