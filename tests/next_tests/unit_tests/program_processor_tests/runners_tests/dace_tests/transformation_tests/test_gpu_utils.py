@@ -315,7 +315,7 @@ def test_set_gpu_properties_2D_3D():
         sdfg=sdfg,
         block_size_1d=(128, 1, 1),
         block_size_2d=(64, 2, 1),
-        block_size_3d=(32, 4, 1),
+        block_size_3d=(2, 2, 32),
         block_size=(32, 4, 1),
     )
 
@@ -326,15 +326,16 @@ def test_set_gpu_properties_2D_3D():
     assert map2.gpu_block_size == [1, 10, 1]
     assert map2.gpu_launch_bounds == "0"
 
-    # Set the `x` block size to 32, but the map size in this dimension is 1, so it regulates it to 1.
-    # Set the `y` block size to 4.
+    # Set the `x` block size to 2, but the map size in this dimension is 1, so it regulates it to 1.
+    # Set the `y` block size to 2.
+    # Set the `z` block size to 32, but the map size in this dimension is 1, so it regulates it to 1.
     assert len(map3.params) == 3
-    assert map3.gpu_block_size == [1, 4, 1]
+    assert map3.gpu_block_size == [1, 2, 10]
     assert map3.gpu_launch_bounds == "0"
 
-    # Set the `x` block size to 32, but the map size in this dimension is 1, so it regulates it to 1.
-    # Set the `y` block size to 4.
-    # Set the `z` block size to 1.
+    # Set the `x` block size to 2, but the map size in this dimension is 1, so it regulates it to 1.
+    # Set the `y` block size to 2.
+    # Set the `z` block size to 32 (the product of the two last dimensions is 100, so we pick the max(block_size_3d.z, product(map4.range.size()[2:]))).
     assert len(map4.params) == 4
-    assert map4.gpu_block_size == [1, 4, 1]
+    assert map4.gpu_block_size == [1, 2, 32]
     assert map4.gpu_launch_bounds == "0"

@@ -707,6 +707,8 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
                 int(block_size_1D) if dims_to_inspect <= 3 else map_size_3D[max_param_idx]
             )
             launch_bounds = self.launch_bounds_1d
+            # Already set the block size for the last dimension to either the specified block size or the
+            # product of the ranges that are going to be collapsed into the last dimension.
             if dims_to_inspect > 3:
                 dims_to_inspect = 2
             if launch_bounds is None:
