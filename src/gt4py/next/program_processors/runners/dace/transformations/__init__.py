@@ -46,6 +46,7 @@ from .multi_state_global_self_copy_elimination import (
     gt_multi_state_global_self_copy_elimination,
 )
 from .redundant_array_removers import CopyChainRemover, gt_remove_copy_chain
+from .remove_access_node_copies import RemoveAccessNodeCopies
 from .remove_views import RemovePointwiseViews
 from .simplify import (
     GT4PyMapBufferElimination,
@@ -92,6 +93,7 @@ __all__ = [
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
     "MultiStateGlobalSelfCopyElimination2",
+    "RemoveAccessNodeCopies",
     "RemovePointwiseViews",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
