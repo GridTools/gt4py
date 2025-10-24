@@ -784,12 +784,38 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
 
 
 class BufferInfo(NamedTuple):
+    """Holds information about a buffer in memory."""
+
     data_ptr: int
     ndim: int
     shape: tuple[int, ...]
     elem_strides: tuple[int, ...]
     byte_strides: tuple[int, ...]
     buffer_id: int
+
+    @classmethod
+    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> BufferInfo:
+        # TODO(egparedes): Implement this function using __dlpack__ and ctypes
+        array_ns = ndarray.__array_namespace__
+        array_byte_bounds_func = (
+            getattr(array_ns, "byte_bounds", None) or array_ns.lib.array_utils.byte_bounds
+        )
+
+        data_ptr = array_byte_bounds_func(ndarray)[0]
+        ndim = ndarray.ndim
+        shape = ndarray.shape
+        elem_strides = ndarray.strides
+        byte_strides = tuple(s // ndarray.dtype.itemsize for s in elem_strides)
+        buffer_id = hash((data_ptr, ndim, shape, elem_strides, byte_strides))
+
+        return cls(
+            data_ptr=data_ptr,
+            ndim=ndim,
+            shape=shape,
+            elem_strides=elem_strides,
+            byte_strides=byte_strides,
+            buffer_id=buffer_id,
+        )
 
 
 class ConnectivityKind(enum.Flag):

@@ -151,27 +151,7 @@ class NdArrayField(
 
     @property
     def __gt_buffer_info__(self) -> common.BufferInfo:
-        # TODO(egparedes): Implement this function using __dlpack__ and ctypes
-
-        array_byte_bounds_func = (
-            getattr(self.array_ns, "byte_bounds", None) or self.array_ns.lib.array_utils.byte_bounds
-        )
-
-        data_ptr = array_byte_bounds_func(self.ndarray)[0]
-        ndim = self.ndarray.ndim
-        shape = self.ndarray.shape
-        byte_strides = self.ndarray.strides
-        elem_strides = tuple(s // self.ndarray.dtype.itemsize for s in byte_strides)
-        buffer_id = id(self.ndarray)
-
-        return common.BufferInfo(
-            data_ptr=data_ptr,
-            ndim=ndim,
-            shape=shape,
-            elem_strides=elem_strides,
-            byte_strides=byte_strides,
-            buffer_id=buffer_id,
-        )
+        return common.BufferInfo.from_ndarray(self.ndarray)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -1077,7 +1057,7 @@ class NumPyArrayField(NdArrayField):
     # since this is a frozen dataclass.
     @functools.cached_property
     def __gt_buffer_info__(self) -> common.BufferInfo:
-        return super().__gt_buffer_info__
+        return common.BufferInfo.from_ndarray(self.ndarray)
 
 
 common._field.register(np.ndarray, NumPyArrayField.from_array)
@@ -1087,7 +1067,9 @@ common._field.register(np.ndarray, NumPyArrayField.from_array)
 class NumPyArrayConnectivityField(NdArrayConnectivityField):
     array_ns: ClassVar[ModuleType] = np
 
-    __gt_buffer_info__ = functools.cached_property(NumPyArrayField.__gt_buffer_info__.func)  # type: ignore[attr-defined]  # cached_property has `func` attribute
+    @functools.cached_property
+    def __gt_buffer_info__(self) -> common.BufferInfo:
+        return common.BufferInfo.from_ndarray(self.ndarray)
 
 
 common._connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array)
@@ -1104,8 +1086,9 @@ if cp:
         # It is only possible to cache the data buffer pointer in this way
         # because the backing np.ndarray is never replaced after creation
         # since this is a frozen dataclass.
+        @functools.cached_property
         def __gt_buffer_info__(self) -> common.BufferInfo:
-            return super().__gt_buffer_info__
+            return common.BufferInfo.from_ndarray(self.ndarray)
 
     common._field.register(cp.ndarray, CuPyArrayField.from_array)
 
@@ -1113,7 +1096,9 @@ if cp:
     class CuPyArrayConnectivityField(NdArrayConnectivityField):
         array_ns: ClassVar[ModuleType] = cp
 
-        __gt_buffer_info__ = functools.cached_property(CuPyArrayField.__gt_buffer_info__.func)  # type: ignore[attr-defined]  # cached_property has `func` attribute
+        @functools.cached_property
+        def __gt_buffer_info__(self) -> common.BufferInfo:
+            return common.BufferInfo.from_ndarray(self.ndarray)
 
     common._connectivity.register(cp.ndarray, CuPyArrayConnectivityField.from_array)
 
