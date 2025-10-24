@@ -116,6 +116,8 @@ class NdArrayField(
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
 
+    array_ns: ClassVar[ModuleType]  # TODO(havogt): introduce a NDArrayNamespace protocol
+
     @classmethod
     def from_array(
         cls,
@@ -156,10 +158,6 @@ class NdArrayField(
     @property
     def shape(self) -> tuple[int, ...]:
         return self._ndarray.shape
-
-    @property
-    def array_ns(self) -> ModuleType:
-        return self.ndarray.__array_namespace__()
 
     @property
     def domain(self) -> common.Domain:

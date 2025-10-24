@@ -795,8 +795,9 @@ class BufferInfo(NamedTuple):
 
     @classmethod
     def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> BufferInfo:
-        # TODO(egparedes): Implement this function using __dlpack__ and ctypes
-        array_ns = ndarray.__array_namespace__()
+        # TODO(egparedes): Implement this function using __dlpack__ and ctypes,
+        #   because the current implementation only works for numpy and cupy.
+        array_ns = ndarray.__array_namespace__()  # type: ignore[attr-defined]
         array_byte_bounds_func = (
             getattr(array_ns, "byte_bounds", None) or array_ns.lib.array_utils.byte_bounds
         )
