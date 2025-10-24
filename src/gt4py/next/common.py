@@ -695,14 +695,13 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def asnumpy(self) -> np.ndarray: ...
 
     @abc.abstractmethod
+    def as_scalar(self) -> core_defs.ScalarT: ...
+
+    @abc.abstractmethod
     def premap(self, index_field: Connectivity | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
     def restrict(self, item: AnyIndexSpec) -> Self: ...
-
-    @abc.abstractmethod
-    def as_scalar(self) -> core_defs.ScalarT: ...
-
     # Operators
     @abc.abstractmethod
     def __call__(
@@ -782,6 +781,15 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
 class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
+
+
+class BufferInfo(NamedTuple):
+    data_ptr: int
+    ndim: int
+    shape: tuple[int, ...]
+    elem_strides: tuple[int, ...]
+    byte_strides: tuple[int, ...]
+    buffer_id: int
 
 
 class ConnectivityKind(enum.Flag):
