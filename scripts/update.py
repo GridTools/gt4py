@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import enum
-import pathlib
 import re
 import subprocess
 
@@ -107,7 +106,7 @@ def package_version(new_version: str) -> None:
 
     # Hardcode the new default version in pyproject.toml
     pyproject_path = common.REPO_ROOT / "pyproject.toml"
-    pathlib.Path(pyproject_path).write_text(
+    pyproject_path.write_text(
         pyproject_path.read_text().replace(f'"{current_version}"', f"{formatted_new_version}", 1)
     )
 
@@ -120,7 +119,7 @@ def package_version(new_version: str) -> None:
         )
         raise typer.Exit(ExitCode.INVALID_CURRENT_VERSION_IN_ABOUT_PY)
 
-    pathlib.Path(about_path).write_text(
+    about_path.write_text(
         current_about_text.replace(
             f'\non_build_version: Final = "{current_version}"',
             f"\non_build_version: Final = {formatted_new_version}",
