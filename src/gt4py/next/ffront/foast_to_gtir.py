@@ -270,6 +270,13 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         else:
             raise NotImplementedError(f"Unary operator '{node.op}' is not supported.")
 
+    def _visit_domain(self, node: itir.FunCall) -> itir.FunCall:
+        keys = node.args[0].keys_
+        values = node.args[0].values_
+        dict_ = {key.type.dim: (im.tuple_get(0, self.visit(value)), im.tuple_get(1, self.visit(value))) for key, value in zip(keys, values)}
+
+        return im.domain(common.GridType.CARTESIAN, dict_) #TODO: fix grid_type
+
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> itir.FunCall:
         return self._lower_and_map(node.op.value, node.left, node.right)
 

@@ -234,6 +234,13 @@ def from_value(value: Any) -> ts.TypeSpec:
                 f"Value '{value}' is out of range to be representable as 'INT32' or 'INT64'."
             )
         return candidate_type
+    elif value is common.domain:
+        return ts.FunctionType(
+            pos_only_args=[ts.DeferredType(constraint=None)],
+            pos_or_kw_args={},
+            kw_only_args={},
+            returns=ts.DeferredType(constraint=ts.DomainType)
+        )
     elif isinstance(value, common.Dimension):
         symbol_type = ts.DimensionType(dim=value)
     elif isinstance(value, common.Field):

@@ -747,6 +747,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_type = ts.TupleType(types=[element.type for element in new_elts])
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
 
+    def visit_Dict(self, node: foast.Dict, **kwargs: Any) -> foast.Dict:
+        keys = self.visit(node.keys_, ** kwargs)
+        values = self.visit(node.values_, **kwargs)
+        key_types = [keys[i].type.dim for i in range(len(keys))]
+        value_types = [values[i].type for i in range(len(values))]
+        return foast.Dict(keys_=keys, values_=values, type=ts.DictType(keys=key_types, values=value_types), location=node.location)
+
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)
         new_args = self.visit(node.args, **kwargs)
@@ -826,6 +833,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return visitor(new_node, **kwargs)
 
         return new_node
+
+    def _visit_domain(self, node: foast.Call, **kwargs) -> foast.Call:
+        type =[node.args[0].keys_[i].type.dim for i in range(len(node.args[0].keys_))]
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            location=node.location,
+            type=ts.DomainType(type),
+        )
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         func_name = cast(foast.Name, node.func).id

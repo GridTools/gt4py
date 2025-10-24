@@ -80,6 +80,11 @@ class Constant(Expr):
     value: Any  # TODO: be more specific
 
 
+class Dict(Expr):
+    keys_: list[Union[Name | Attribute]]
+    values_: list[TupleExpr]
+
+
 class Subscript(Expr):
     value: Expr
     index: Expr

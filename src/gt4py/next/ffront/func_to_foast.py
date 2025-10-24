@@ -11,7 +11,7 @@ from __future__ import annotations
 import ast
 import textwrap
 import typing
-from typing import Any, Type
+from typing import Any, Type, cast
 
 import gt4py.eve as eve
 from gt4py.next import errors
@@ -458,6 +458,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_NotEq(self, node: ast.NotEq, **kwargs: Any) -> foast.CompareOperator:
         return foast.CompareOperator.NOTEQ
+
+    def visit_Dict(self, node: ast.Dict) -> foast.Dict:
+        return foast.Dict(
+            keys_=[self.visit(cast(ast.AST, param)) for param in node.keys],
+            values_=[self.visit(param) for param in node.values],
+            location=self.get_location(node),
+        )
 
     def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
         if len(node.args) > 0:

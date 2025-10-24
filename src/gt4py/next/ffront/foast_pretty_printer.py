@@ -120,6 +120,12 @@ class _PrettyPrinter(TemplatedGenerator):
 
     UnaryOp = as_fmt("{op}{operand}")
 
+    def visit_Dict(self, node: foast.Dict, **kwargs: Any) -> str:
+        keys = self.visit(node.keys_)
+        values = self.visit(node.values_)
+        keys_values = "{" + ','.join([f"{key}: {value}" for key, value in zip(keys, values)]) + "}"
+        return keys_values
+
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> str:
         if node.op is dialect_ast_enums.UnaryOperator.NOT:
             op = "not "
