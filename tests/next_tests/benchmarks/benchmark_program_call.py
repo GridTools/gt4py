@@ -338,4 +338,4 @@ if __name__ == "__main__":
 
     for backend in backends:
         print(f"Running benchmarks with backend: {backend.name}")
-        benchmark_horizontal_copy_05_arg_program(benchmark, backend)
+        benchmark_horizontal_copy_25_arg_program(benchmark, backend)

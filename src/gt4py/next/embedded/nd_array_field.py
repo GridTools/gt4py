@@ -1083,8 +1083,8 @@ if cp:
         array_ns: ClassVar[ModuleType] = cp
 
         # Same as in the NumPy case:
-        # It is only possible to cache the data buffer pointer in this way
-        # because the backing np.ndarray is never replaced after creation
+        # It is only possible to cache the data buffer info in this way
+        # because the backing cp.ndarray is never replaced after creation
         # since this is a frozen dataclass.
         @functools.cached_property
         def __gt_buffer_info__(self) -> common.BufferInfo:
