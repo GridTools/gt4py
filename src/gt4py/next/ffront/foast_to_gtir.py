@@ -302,17 +302,19 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 # `field(Dim + idx)`
                 case foast.BinOp(
                     op=dialect_ast_enums.BinaryOperator.ADD | dialect_ast_enums.BinaryOperator.SUB,
-                    left=foast.Name(id=dimension),  # TODO(tehrengruber): use type of lhs
+                    left=foast.Name(),  # TODO(tehrengruber): use type of lhs
                     right=foast.Constant(value=offset_index),
                 ):
                     if arg.op == dialect_ast_enums.BinaryOperator.SUB:
                         offset_index *= -1
-                    # TODO(havogt): we rely on the naming-convention for implicit offsets, see `dimension_to_implicit_offset`
+                    conn = common.connectivity_for_cartesian_shift(
+                        node.args[0].left.type.dim, offset_index
+                    )
                     current_expr = im.as_fieldop(
                         im.lambda_("__it")(
                             im.deref(
                                 im.shift(
-                                    common.dimension_to_implicit_offset(dimension), offset_index
+                                    im.cartesian_offset(conn.domain_dim, conn.codomain), conn.offset
                                 )("__it")
                             )
                         )
