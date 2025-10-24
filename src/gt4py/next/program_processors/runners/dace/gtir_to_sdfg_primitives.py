@@ -113,9 +113,7 @@ def _create_field_operator_impl(
     dataflow_output_desc = output_edge.result.dc_node.desc(ctx.sdfg)
 
     # the memory layout of the output field follows the field operator compute domain
-    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(
-        field_domain, ctx.target_domain
-    )
+    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(field_domain)
     if len(field_domain) == 0:
         # The field operator computes a zero-dimensional field, and the data subset
         # is set later depending on the element type (`ts.ListType` or `ts.ScalarType`)
@@ -321,9 +319,7 @@ def _construct_if_branch_output(
 
     assert isinstance(out_type, ts.FieldType)
     assert isinstance(sym.type, ts.FieldType)
-    dims, origin, shape = gtir_domain.get_field_layout(
-        gtir_domain.extract_domain(field_domain), ctx.target_domain
-    )
+    dims, origin, shape = gtir_domain.get_field_layout(gtir_domain.extract_domain(field_domain))
     assert dims == out_type.dims
 
     if isinstance(out_type.dtype, ts.ScalarType):
@@ -429,13 +425,13 @@ def translate_if(
 
     # expect true branch as second argument
     true_state = ctx.sdfg.add_state(ctx.state.label + "_true_branch")
-    tbranch_ctx = gtir_to_sdfg.SubgraphContext(ctx.sdfg, true_state, ctx.target_domain)
+    tbranch_ctx = gtir_to_sdfg.SubgraphContext(ctx.sdfg, true_state)
     ctx.sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=if_stmt))
     ctx.sdfg.add_edge(true_state, ctx.state, dace.InterstateEdge())
 
     # and false branch as third argument
     false_state = ctx.sdfg.add_state(ctx.state.label + "_false_branch")
-    fbranch_ctx = gtir_to_sdfg.SubgraphContext(ctx.sdfg, false_state, ctx.target_domain)
+    fbranch_ctx = gtir_to_sdfg.SubgraphContext(ctx.sdfg, false_state)
     ctx.sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=f"not({if_stmt})"))
     ctx.sdfg.add_edge(false_state, ctx.state, dace.InterstateEdge())
 
