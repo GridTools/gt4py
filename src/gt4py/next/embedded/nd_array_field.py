@@ -160,8 +160,8 @@ class NdArrayField(
         data_ptr = array_byte_bounds_func(self.ndarray)[0]
         ndim = self.ndarray.ndim
         shape = self.ndarray.shape
-        elem_strides = self.ndarray.strides
-        byte_strides = tuple(s // self.ndarray.dtype.itemsize for s in elem_strides)
+        byte_strides = self.ndarray.strides
+        elem_strides = tuple(s // self.ndarray.dtype.itemsize for s in byte_strides)
         buffer_id = id(self.ndarray)
 
         return common.BufferInfo(
