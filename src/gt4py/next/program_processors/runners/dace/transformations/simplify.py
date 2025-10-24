@@ -79,9 +79,6 @@ def gt_simplify(
         simplify. The custom inline pass is run at the beginning and the array
         elimination at the end. The whole process is run inside a loop that ensures
         that `gt_simplify()` results in a fix point.
-
-    Todo:
-        Figuring out why adding `TrivialTaskletElimination` causes an issue.
     """
     # Ensure that `skip` is a `set`
     skip = gtx_transformations.constants.GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
