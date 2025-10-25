@@ -695,14 +695,13 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def asnumpy(self) -> np.ndarray: ...
 
     @abc.abstractmethod
+    def as_scalar(self) -> core_defs.ScalarT: ...
+
+    @abc.abstractmethod
     def premap(self, index_field: Connectivity | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
     def restrict(self, item: AnyIndexSpec) -> Self: ...
-
-    @abc.abstractmethod
-    def as_scalar(self) -> core_defs.ScalarT: ...
-
     # Operators
     @abc.abstractmethod
     def __call__(
@@ -782,6 +781,42 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
 class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
+
+
+class BufferInfo(NamedTuple):
+    """Holds information about a buffer in memory."""
+
+    data_ptr: int
+    ndim: int
+    shape: tuple[int, ...]
+    elem_strides: tuple[int, ...]
+    byte_strides: tuple[int, ...]
+    buffer_info_id: int
+
+    @classmethod
+    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> BufferInfo:
+        # TODO(egparedes): Implement this function using __dlpack__ and ctypes,
+        #   because the current implementation only works for numpy and cupy.
+        array_ns = ndarray.__array_namespace__()  # type: ignore[attr-defined]
+        array_byte_bounds_func = (
+            getattr(array_ns, "byte_bounds", None) or array_ns.lib.array_utils.byte_bounds
+        )
+
+        data_ptr = array_byte_bounds_func(ndarray)[0]
+        ndim = ndarray.ndim
+        shape = ndarray.shape
+        byte_strides = ndarray.strides
+        elem_strides = tuple(s // ndarray.dtype.itemsize for s in byte_strides)
+        buffer_info_id = hash((data_ptr, ndim, shape, elem_strides, byte_strides))
+
+        return cls(
+            data_ptr=data_ptr,
+            ndim=ndim,
+            shape=shape,
+            elem_strides=elem_strides,
+            byte_strides=byte_strides,
+            buffer_info_id=buffer_info_id,
+        )
 
 
 class ConnectivityKind(enum.Flag):
