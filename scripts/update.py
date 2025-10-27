@@ -102,7 +102,7 @@ def package_version(new_version_number: str) -> None:
         )
         raise typer.Exit(ExitCode.UNRECOGNIZED_PYPROJECT_TOML) from e
 
-    new_version = f"{new_version_number!s}+missing.version.info"
+    new_version = f"{new_version_number!s}+unknown.version.details"
 
     # Hardcode the new default version in pyproject.toml
     pyproject_path = common.REPO_ROOT / "pyproject.toml"

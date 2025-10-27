@@ -458,7 +458,7 @@ dace = [
 
 # -- versioningit --
 [tool.versioningit]
-default-version = "1.0.10+missing.version.info"
+default-version = "1.0.10+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty
