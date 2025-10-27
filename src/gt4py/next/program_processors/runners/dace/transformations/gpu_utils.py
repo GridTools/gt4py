@@ -528,6 +528,14 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     four iteration in the second dimension, will get a block size of `(32, 4, 1)`.
     Note that this modification will not influence the launch bound value.
 
+    The block size and launch bounrds are set according to the aadditional following rules:
+        - Determine the number of map parameters that have range > 1.
+        - If there is only one such parameter then handle the map as 1D map,
+          else if there are more than 2 parameters with range > 1 then handle it as ordinary map.
+        - For 1D maps set the block size such that only the dimension with the largest
+          range is set to the specified block size, all other dimensions are set to 1.
+        - If launch_bounds_1d is not set then set the launch_bounds of `scan` maps to 512 to limit their register usage.
+
     Args:
         block_size_Xd: The size of a thread block on the GPU for `X` dimensional maps.
         launch_bounds_Xd: The value for the launch bound that should be used for `X`
@@ -607,11 +615,16 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             self.block_size_1d = block_size_1d
             if self.block_size_1d[1] != 1 or self.block_size_1d[2] != 1:
                 warnings.warn(
-                    f"1D map block size specified with mmore than one dimension larger than 1. Configured 1D block size: {self.block_size_1d}.",
+                    f"1D map block size specified with more than one dimension larger than 1. Configured 1D block size: {self.block_size_1d}.",
                     stacklevel=0,
                 )
         if block_size_2d is not None:
             self.block_size_2d = block_size_2d
+            if self.block_size_2d[2] != 1:
+                warnings.warn(
+                    f"2D map block size specified with more than twi dimensions larger than 1. Configured 2D block size: {self.block_size_2d}.",
+                    stacklevel=0,
+                )
         if block_size_3d is not None:
             self.block_size_3d = block_size_3d
         self.launch_bounds_1d = _gpu_launch_bound_parser(
@@ -656,16 +669,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         graph: Union[dace.SDFGState, dace.SDFG],
         sdfg: dace.SDFG,
     ) -> None:
-        """Modify the map as requested.
-
-        The block size is set according to the following rules:
-        - Determine the number of map parameters that have range > 1.
-        - If there is only one such parameter then handle the map as 1D map,
-          else if there are more than 2 parameters with range > 1 then handle it as ordinary map.
-        - For 1D maps set the block size such that only the dimension with the largest
-          range is set to the specified block size, all other dimensions are set to 1.
-        - If launch_bounds_1d is not set then set the launch_bounds of `scan` maps to 512 to limit their register usage.
-        """
+        """Modify the map as requested."""
         gpu_map: dace_nodes.Map = self.map_entry.map
         map_size = gpu_map.range.size()
         dims_to_inspect = len(map_size)
@@ -706,6 +710,12 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             block_size[block_idx] = (
                 int(block_size_1D) if dims_to_inspect <= 3 else map_size_3D[max_param_idx]
             )
+            if block_idx != 0:
+                warnings.warn(
+                    f"1D block size was set to {self.block_size_1d} but the largest map dimension in map '{gpu_map}' is not the x dimension. "
+                    f"Setting block size for index '{gpu_map.params[max_param_idx]}' to {block_size_1D} instead.",
+                    stacklevel=0,
+                )
             launch_bounds = self.launch_bounds_1d
             # Already set the block size for the last dimension to either the specified block size or the
             # product of the ranges that are going to be collapsed into the last dimension.
