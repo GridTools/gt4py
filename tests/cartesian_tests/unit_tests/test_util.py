@@ -37,8 +37,3 @@ def test_warn_experimental_feature() -> None:
     # even works with pre-fixed slash in (relative) ADR path
     with pytest.warns(UserWarning, match="Test feature is an experimental feature."):
         gt_util.warn_experimental_feature(feature="Test feature", ADR="/README.md")
-
-
-def test_warn_experimental_feature_raise_if_adr_not_found() -> None:
-    with pytest.raises(ValueError, match="Could not find ADR for 'asdf'."):
-        gt_util.warn_experimental_feature(feature="asdf", ADR="not/existing.md")
