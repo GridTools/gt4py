@@ -31,7 +31,7 @@ class MapToCopy(dace_transformation.SingleStateTransformation):
     The transformation has two modes. In the first mode the Map is just replaced by
     a Memlet between `Input` and `Output`, thus the copy still takes place.
     The second mode, known as bypass mode `Output` is completely bypassed, i.e.
-    all ready from `Output` will now be satisfied directly by `Input`.
+    all reads from `Output` will now be satisfied directly from `Input`.
     Which mode is used depends on the concrete situation, but in order for the
     bypass mode to be selected the set of single use data has to be passed to the
     transformation at construction.
@@ -130,7 +130,7 @@ class MapToCopy(dace_transformation.SingleStateTransformation):
         # This is a primitive test that ensures that we do not perform broadcasts,
         #  i.e. that we have a real copy operation and each element in source goes
         #  to a distinct location in destination.
-        # TODO(phimuell): May need to adapt if we ave to handle the results of
+        # TODO(phimuell): May need to adapt if we have to handle the results of
         #   `concat_where`, but I am not sure how important that case is.
         if isinstance(sdfg.arrays[src_access_node.data], dace_data.Scalar):
             return False
@@ -191,7 +191,7 @@ class MapToCopy(dace_transformation.SingleStateTransformation):
 
         if bypass_dst_node:
             # Instead of just connecting `src_access_node` to `dst_access_node` we
-            #  fully eliminate `dst_access_node` and all of its consumer directly
+            #  fully eliminate `dst_access_node` and all of its consumers directly
             #  read from `src_access_node`.
             offset_correction = [
                 sm - dm for sm, dm in zip(src_subset.min_element(), dst_subset.min_element())
@@ -228,7 +228,6 @@ class MapToCopy(dace_transformation.SingleStateTransformation):
             sdfg.remove_data(dst_access_node.data, validate=False)
 
             # Fixing up the strides.
-            # TODO(phimuell): Should we ignore the symbol mapping?
             gtx_transformations.gt_propagate_strides_from_access_node(
                 sdfg=sdfg,
                 state=graph,
@@ -236,7 +235,7 @@ class MapToCopy(dace_transformation.SingleStateTransformation):
             )
 
         else:
-            # We only eliminate the Map bit the copy into `dst_access_node` is still
+            # We only eliminate the Map but the copy into `dst_access_node` is still
             #  there, this is either because we can not handle it (different
             #  dimensionality) or we need it for consistency.
             graph.add_nedge(
