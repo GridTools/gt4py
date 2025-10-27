@@ -2030,10 +2030,14 @@ class TestTemporaryTypes:
             module=self.__class__.__name__,
         )
 
-        field32_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
-        field64_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[1]
-        assert field32_declaration.data_type == nodes.DataType.FLOAT32
-        assert field64_declaration.data_type == nodes.DataType.FLOAT64
+        field_decls = [
+            field_decl
+            for field_decl in def_ir.computations[0].body.stmts
+            if isinstance(field_decl, nodes.FieldDecl)
+        ]
+
+        assert field_decls[0].data_type == nodes.DataType.FLOAT32
+        assert field_decls[1].data_type == nodes.DataType.FLOAT64
 
     def test_explicit_int_precision_temp_defn(self):
         def_ir = parse_definition(
@@ -2042,10 +2046,14 @@ class TestTemporaryTypes:
             module=self.__class__.__name__,
         )
 
-        field32_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
-        field64_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[1]
-        assert field32_declaration.data_type == nodes.DataType.INTT32
-        assert field64_declaration.data_type == nodes.DataType.INTT64
+        field_decls = [
+            field_decl
+            for field_decl in def_ir.computations[0].body.stmts
+            if isinstance(field_decl, nodes.FieldDecl)
+        ]
+
+        assert field_decls[0].data_type == nodes.DataType.INT32
+        assert field_decls[1].data_type == nodes.DataType.INT64
 
 
 class TestNumpyTypedConstants:
