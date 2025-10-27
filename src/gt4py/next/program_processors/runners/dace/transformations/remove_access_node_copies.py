@@ -92,6 +92,17 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         ):
             return False
 
+        scope_dict = graph.scope_dict()
+        # Make sure that all the access nodes node are not in any scope
+        if scope_dict[first_node] is not None:
+            return False
+        if scope_dict[second_node] is not None:
+            return False
+        if scope_dict[third_node] is not None:
+            return False
+        if scope_dict[fourth_node] is not None:
+            return False
+
         # Make sure that first and fourth node refer to the same data
         if first_node.data != fourth_node.data:
             return False
@@ -195,46 +206,30 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
                 edge_between_first_and_second.data.dst_subset.min_element(),
             )
         ]
+
+        # Make sure that the `subset` and `other_subset` of all memlets inside the map scopes
+        # of the SDFG state are referring to the data of the access nodes which are outside the map scopes
+        scope_dict = graph.scope_dict()
+        for node in graph.nodes():
+            if isinstance(node, (dace_nodes.EntryNode)) and scope_dict[node] is None:
+                dace.sdfg.utils.canonicalize_memlet_trees_for_scope(graph, node)
+                dace.sdfg.utils.canonicalize_memlet_trees_for_scope(graph, graph.exit_node(node))
+
         # Update all edges with the correct subsets that match the first node range
         for edge in graph.edges():
-            # Update edges that have as destination or source the second access node
-            if edge.data.data == second_node.data:
-                # Update the edge data to the first node data
+            # Update edges that refer to second or third AccessNodes
+            if edge.data.data == second_node.data or edge.data.data == third_node.data:
+                # Replace data with data of first node
                 edge.data.data = first_node.data
-                if edge.data.dst_subset != tuple([0]):
-                    if edge.data.dst_subset is not None:
-                        for i, dst_subset_range in enumerate(edge.data.dst_subset):
-                            edge.data.dst_subset[i] = (
-                                dst_subset_range[0] + node_offset[i],
-                                dst_subset_range[1] + node_offset[i],
-                                dst_subset_range[2],
-                            )
-                    else:
-                        for i, src_subset_range in enumerate(edge.data.src_subset):
-                            edge.data.src_subset[i] = (
-                                src_subset_range[0] + node_offset[i],
-                                src_subset_range[1] + node_offset[i],
-                                src_subset_range[2],
-                            )
-            # Update edges that have as destination or source the third access node
-            if edge.data.data == third_node.data:
-                # Update the edge data to the first node data
-                edge.data.data = first_node.data
-                if edge.data.dst_subset != tuple([0]):
-                    if edge.data.dst_subset is not None:
-                        for i, dst_subset_range in enumerate(edge.data.dst_subset):
-                            edge.data.dst_subset[i] = (
-                                dst_subset_range[0] + node_offset[i],
-                                dst_subset_range[1] + node_offset[i],
-                                dst_subset_range[2],
-                            )
-                    else:
-                        for i, src_subset_range in enumerate(edge.data.src_subset):
-                            edge.data.src_subset[i] = (
-                                src_subset_range[0] + node_offset[i],
-                                src_subset_range[1] + node_offset[i],
-                                src_subset_range[2],
-                            )
+                # Add offset to subset
+                edge.data.subset.offset(node_offset, negative=False)
+                # Add offset to other_subset if it's necessary (src is either first, second or third node and dst is either second or third node)
+                if edge.dst in [second_node, third_node] and edge.data.other_subset is not None:
+                    edge.data.other_subset.offset(node_offset, negative=False)
+            elif edge.data.data == first_node.data and edge.dst in [second_node, third_node]:
+                # Edge from first node to second or third node
+                # Update other_subset to match the subset of the first node
+                edge.data.other_subset.offset(node_offset, negative=False)
 
         # Replace data of second and third node with data of first and fourth node
         second_node.data = first_node.data
