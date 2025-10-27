@@ -270,7 +270,9 @@ duration = run_cpp_end_time - run_cpp_start_time;
     if (config.COLLECT_METRICS_LEVEL == metrics.GPU_TX_MARKERS) and gpu:
         sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
         for node, _ in sdfg.all_nodes_recursive():
-            if isinstance(node, dace.nodes.MapEntry):
+            if isinstance(
+                node, dace.nodes.MapEntry
+            ):  # Add ranges to scopes and maps that are NOT scheduled to the GPU
                 node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
             elif isinstance(node, dace.sdfg.state.SDFGState):
                 node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
