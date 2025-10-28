@@ -8,20 +8,17 @@
 
 from __future__ import annotations
 
-import re
 from typing import Final
 
 import dace
 
 from gt4py.eve import codegen
-from gt4py.next import common as gtx_common
 from gt4py.next.iterator import builtins as itir_builtins
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 from gt4py.next.type_system import type_specifications as ts
 
 
-FIELD_RANGE_PARAM_RE: Final[re.Pattern] = re.compile(r"^__(.+)_(\S+)_range$")
 FIELD_SYMBOL_GT_TYPE: Final[ts.ScalarType] = ts.ScalarType(
     kind=getattr(ts.ScalarKind, itir_builtins.INTEGER_INDEX_BUILTIN.upper())
 )
@@ -50,19 +47,28 @@ def _update_sdfg_scalar_arg(
     code.append(f"{_cb_last_call_args}[{sdfg_arg_index}] = {actype_call}({call_arg})")
 
 
-def _validate_sdfg_scalar_arg(
-    code: codegen.TextBlock,
-    sdfg_arg_desc: dace.data.Data,
-    sdfg_arg_index: int,
-    call_arg: str,
-) -> None:
+def _unpack_args(code: codegen.TextBlock, num_args: int, arg_name: str) -> list[str]:
+    """Unpack a sequence of arguments (either a list or a tuple) into variables.
+
+    Each element of the given sequence gets a name 'arg_name' with an index-based suffix.
+
+    >>> code = codegen.TextBlock()
+    >>> _unpack_args(code, 3, "var")
+    ['var_0', 'var_1', 'var_2']
+    >>> code.lines
+    ['var_0, var_1, var_2, = var']
+    >>> _unpack_args(code, 1, "var_2")
+    ['var_2_0']
+    >>> code.lines
+    ['var_0, var_1, var_2, = var', 'var_2_0, = var_2']
     """
-    Emit Python asserts to validate a scalar argument in the SDFG arglist
-    against the argument value passed to the gt4py program call.
-    """
-    assert isinstance(sdfg_arg_desc, dace.data.Scalar)
-    code.append(f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes._SimpleCData)")
-    code.append(f"assert {_cb_last_call_args}[{sdfg_arg_index}] == {call_arg}")
+    tuple_args = [f"{arg_name}_{i}" for i in range(num_args)]
+    if num_args == 0:
+        raise ValueError("Cannot unpack argument with length zero.")
+    else:
+        # The trailing comma is needed to unpack single-element tuples
+        code.append(f"{', '.join(tuple_args)}, = {arg_name}")
+    return tuple_args
 
 
 def _parse_gt_param(
@@ -71,7 +77,6 @@ def _parse_gt_param(
     arg: str,
     code: codegen.TextBlock,
     sdfg_arglist: dict[str, dace.data.Data],
-    make_persistent: bool,
 ) -> None:
     """Emit Python code to parse a program argument and set the required fields in the SDFG arglist.
 
@@ -84,48 +89,23 @@ def _parse_gt_param(
     For tuple arguments, this function is recursively called on all elements of the tuple.
     """
     if isinstance(param_type, ts.TupleType):
-        # Special handling of tuples
-        if (m := FIELD_RANGE_PARAM_RE.match(param_name)) is not None:
-            # Domain range is expressed as a tuple in each dimension
-            gt_field_name, dim_value = m[1], m[2]
-            dim = gtx_common.Dimension(dim_value)
-            rstart = gtx_dace_utils.range_start_symbol(gt_field_name, dim)
-            rstop = gtx_dace_utils.range_stop_symbol(gt_field_name, dim)
-            for i, tuple_param_name in enumerate([rstart, rstop]):
-                tuple_arg = f"{arg}[{i}]"
-                tuple_param_type = param_type.types[i]
-                assert isinstance(tuple_param_type, ts.ScalarType)
-                _parse_gt_param(
-                    tuple_param_name,
-                    tuple_param_type,
-                    tuple_arg,
-                    code,
-                    sdfg_arglist,
-                    make_persistent,
-                )
-        else:
-            # For regular data tuples, each element of the tuple gets a name
-            # with an index-based suffix and it is recursively visited.
-            for i, tuple_param_type in enumerate(param_type.types):
-                tuple_arg = f"{arg}[{i}]"
-                tuple_param_name = f"{param_name}_{i}"
-                assert isinstance(tuple_param_type, ts.DataType)
-                _parse_gt_param(
-                    tuple_param_name,
-                    tuple_param_type,
-                    tuple_arg,
-                    code,
-                    sdfg_arglist,
-                    make_persistent,
-                )
+        # Each element of a tuple gets a name with an index-based suffix and it is recursively visited.
+        tuple_args = _unpack_args(code=code, num_args=len(param_type.types), arg_name=arg)
+        for i, (tuple_arg, tuple_arg_type) in enumerate(zip(tuple_args, param_type.types)):
+            assert isinstance(tuple_arg_type, ts.DataType)
+            _parse_gt_param(
+                param_name=f"{param_name}_{i}",
+                param_type=tuple_arg_type,
+                arg=tuple_arg,
+                code=code,
+                sdfg_arglist=sdfg_arglist,
+            )
 
     elif param_name not in sdfg_arglist:
         # There are two reasons for this case:
         #   1) The argument is a symbol/scalar that is not used in the generated code.
         #   2) The argument was demoted, see `demote_fields` argument of `gt_auto_optimize()`
         #       and was not put back.
-        #  It would be nice to be able to check if we have an error, but this is not
-        #  possible.
         pass
 
     else:
@@ -148,81 +128,60 @@ def _parse_gt_param(
                 code.append(
                     f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes.c_void_p)"
                 )
-                code.append(f"assert gtx_common.Domain.is_finite({arg}.domain)")
-                code.append(f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}.data_ptr()")
+                code.append(
+                    f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}._data_buffer_ptr_"
+                )
                 for i, (dim, array_size) in enumerate(
                     zip(param_type.dims, sdfg_arg_desc.shape, strict=True)
                 ):
-                    if (
-                        isinstance(array_size, dace.symbolic.SymbolicType)
-                        and not array_size.is_constant()
-                    ):
-                        # The array shape is defined as a sequence of expressions
-                        # like 'range_stop - range_start', where 'range_start' and
-                        # 'range_stop' are SDFG symbols.
-                        dim_range = f"{arg}.domain.ranges[{i}]"
-                        rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
-                        rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
-                        for suffix, symbol_name in [("start", rstart), ("stop", rstop)]:
-                            value = f"{dim_range}.{suffix}"
-                            _parse_gt_param(
-                                symbol_name,
-                                FIELD_SYMBOL_GT_TYPE,
-                                value,
-                                code,
-                                sdfg_arglist,
-                                make_persistent,
-                            )
-                    else:
-                        # The array shape is set to constant value in this dimension.
+                    if isinstance(array_size, int) or str(array_size).isdigit():
+                        # The array shape in this dimension is set at compile-time.
                         code.append(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.ndarray.shape[{i}]"
                         )
+                    else:
+                        # The array shape is defined as a sequence of expressions
+                        # like 'range_stop - range_start', where 'range_start' and
+                        # 'range_stop' are the SDFG symbols for the domain range.
+                        arg_range = f"{arg}.domain.ranges[{i}]"
+                        rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
+                        rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
+                        for suffix, symbol_name in [("start", rstart), ("stop", rstop)]:
+                            _parse_gt_param(
+                                param_name=symbol_name,
+                                param_type=FIELD_SYMBOL_GT_TYPE,
+                                arg=f"{arg_range}.{suffix}",
+                                code=code,
+                                sdfg_arglist=sdfg_arglist,
+                            )
                 for i, array_stride in enumerate(sdfg_arg_desc.strides):
-                    value = f"{_cb_get_stride}({arg}.ndarray, {i})"
-                    if (
-                        isinstance(array_stride, dace.symbolic.SymbolicType)
-                        and not array_stride.is_constant()
-                    ):
-                        assert array_stride.name == gtx_dace_utils.field_stride_symbol_name(
-                            param_name, i
+                    arg_stride = f"{_cb_get_stride}({arg}.ndarray, {i})"
+                    if isinstance(array_stride, int) or str(array_stride).isdigit():
+                        # The array stride is set to constant value in this dimension.
+                        code.append(
+                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {arg_stride}"
                         )
+                    else:
+                        symbol_name = gtx_dace_utils.field_stride_symbol_name(param_name, i)
+                        assert str(array_stride) == symbol_name
                         # The strides of a global array are defined by a sequence
                         # of SDFG symbols.
                         _parse_gt_param(
-                            array_stride.name,
-                            FIELD_SYMBOL_GT_TYPE,
-                            value,
-                            code,
-                            sdfg_arglist,
-                            make_persistent,
-                        )
-                    else:
-                        # The array stride is set to constant value in this dimension.
-                        code.append(
-                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {value}"
+                            param_name=symbol_name,
+                            param_type=FIELD_SYMBOL_GT_TYPE,
+                            arg=arg_stride,
+                            code=code,
+                            sdfg_arglist=sdfg_arglist,
                         )
 
         elif isinstance(param_type, ts.ScalarType):
             assert isinstance(sdfg_arg_desc, dace.data.Scalar)
-            if make_persistent and (
-                gtx_dace_utils.is_size_symbol(param_name)
-                or gtx_dace_utils.is_stride_symbol(param_name)
-            ):
-                # only emit some debug code
-                _validate_sdfg_scalar_arg(
-                    code=code,
-                    sdfg_arg_desc=sdfg_arg_desc,
-                    sdfg_arg_index=sdfg_arg_index,
-                    call_arg=arg,
-                )
-            else:
-                _update_sdfg_scalar_arg(
-                    code=code,
-                    sdfg_arg_desc=sdfg_arg_desc,
-                    sdfg_arg_index=sdfg_arg_index,
-                    call_arg=arg,
-                )
+            _update_sdfg_scalar_arg(
+                code=code,
+                sdfg_arg_desc=sdfg_arg_desc,
+                sdfg_arg_index=sdfg_arg_index,
+                call_arg=arg,
+            )
 
         else:
             raise ValueError(f"Unexpected paramter type {param_type}")
@@ -231,7 +190,6 @@ def _parse_gt_param(
 def _create_sdfg_bindings(
     program_source: stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
     bind_func_name: str,
-    make_persistent: bool,
 ) -> stages.BindingSource[languages.SDFG, languages.Python]:
     """
     Creates a Python translation function to convert the GT4Py arguments list
@@ -240,9 +198,6 @@ def _create_sdfg_bindings(
     Args:
         program_source: The json representation of the SDFG.
         bind_func_name: Name to use for the translation function.
-        make_persistent: When True, it is safe to assume that the field layout does
-            not change across mutiple program calls. It implies that
-            the `make_persistent` flag can also be set on the SDFG auto-optimizer.
 
     Returns:
         The Python code to convert call arguments from gt4py canonical form to the
@@ -281,10 +236,12 @@ def {_cb_get_stride}(ndarray, dim_index):
     #   On the first time, we use the regular SDFG call, which constructs the SDFG
     #   arguments list and validates that all data containers and free symbols are set.
     with code.indented():
-        for i, param in enumerate(program_source.entry_point.parameters):
-            arg = f"{_cb_args}[{i}]"
+        arg_vars = _unpack_args(
+            code=code, num_args=len(program_source.entry_point.parameters), arg_name=_cb_args
+        )
+        for param, arg in zip(program_source.entry_point.parameters, arg_vars):
             assert isinstance(param.type_, ts.DataType)
-            _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist, make_persistent)
+            _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist)
 
     src = codegen.format_python_source(code.text)
     return stages.BindingSource(src, library_deps=tuple())
@@ -293,7 +250,6 @@ def {_cb_get_stride}(ndarray, dim_index):
 def bind_sdfg(
     inp: stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
     bind_func_name: str,
-    make_persistent: bool,
 ) -> stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python]:
     """
     Method to be used as workflow stage for generation of SDFG bindings.
@@ -302,5 +258,5 @@ def bind_sdfg(
     """
     return stages.CompilableSource(
         program_source=inp,
-        binding_source=_create_sdfg_bindings(inp, bind_func_name, make_persistent),
+        binding_source=_create_sdfg_bindings(inp, bind_func_name),
     )

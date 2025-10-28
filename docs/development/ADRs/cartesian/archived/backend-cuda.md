@@ -1,4 +1,10 @@
-# Cuda backend: Feature freeze
+# Cuda backend
+
+Update: g4py version 1.0.9 was the last one to contain the `cuda` backend. It was removed afterwards and the ADR got moved here.
+
+Update: the `cuda` backend was officially deprecated with gt4py version 1.0.4
+
+## Cuda backend: feature freeze
 
 In the context of (backend) feature development, facing maintainability/duplication concerns, we decided to put a feature freeze on the `cuda` backend and focus on the `dace:gpu` backends instead to keep the number of backends manageable.
 
