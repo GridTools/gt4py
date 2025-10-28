@@ -635,6 +635,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         - If the block size of the map is already set.
         - If the map is at global scope.
         - If if the schedule of the map is correct.
+        - If launch_bounds_1d is not set then set the launch_bounds of `scan` maps to 512 to limit their register usage.
         """
         scope = graph.scope_dict()
         if scope[self.map_entry] is not None:
@@ -653,7 +654,17 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         """Modify the map as requested."""
         gpu_map: dace_nodes.Map = self.map_entry.map
         map_size = gpu_map.range.size()
-        num_map_params = len(gpu_map.params)
+        dims_to_inspect = len(map_size)
+        num_map_params = 0
+        # Order of map parameters is from outer to inner, i.e. z,y,x
+        for i, axis_size in enumerate(map_size):
+            if i < len(map_size) - 1 and map_size[i + 1] == 1:
+                assert axis_size <= 1, (
+                    "GPU thread block size setting currently does not support maps where non-leading "
+                    "dimensions have size greater than one if the next dimension has size one."
+                )
+            if axis_size != 1:
+                num_map_params += 1  # Handle 2D maps where one dimension has range 1 as 1D map
 
         # Because of a particularity of the DaCe code generator, the iteration
         #  variable that is associated to the `x` dimension of the block is the
@@ -661,24 +672,32 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         if num_map_params == 1:
             block_size = list(self.block_size_1d)
             launch_bounds = self.launch_bounds_1d
-            dims_to_inspect = 1
+            if launch_bounds is None:
+                for node in graph.scope_subgraph(
+                    self.map_entry, include_entry=False, include_exit=False
+                ):
+                    if isinstance(node, dace_nodes.NestedSDFG) and node.label.startswith("scan_"):
+                        launch_bounds = "512"  # Use high launch bound in case of scans to limit register usage and increase occupancy
         elif num_map_params == 2:
             block_size = list(self.block_size_2d)
             launch_bounds = self.launch_bounds_2d
-            dims_to_inspect = 2
         else:
             block_size = list(self.block_size_3d)
             launch_bounds = self.launch_bounds_3d
+
             # If there are more than three dimensions DaCe will condense them into
             #  the `z` dimension of the block, so we have to ignore the `z` dimension,
             #  when we modify the block sizes.
-            dims_to_inspect = 3 if num_map_params == 3 else 2
+            if num_map_params > 3:
+                dims_to_inspect = 2
 
+        # block size can only have up to three dimensions
+        assert dims_to_inspect <= 3
         # Cut down the block size.
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
         # TODO(phimuell): Also think of how to connect this with the loop blocking.
         for i in range(dims_to_inspect):
-            map_dim_idx_to_inspect = num_map_params - 1 - i
+            map_dim_idx_to_inspect = len(gpu_map.params) - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
                 block_size[i] = map_size[map_dim_idx_to_inspect]
 

@@ -23,6 +23,7 @@ class Temporary:
     name: str
     dtype: common.DataType
     extent: Extent
+    dimensions: tuple[bool, bool, bool]
 
 
 def _all_local_scalars_are_unique_type(stencil: npir.Computation) -> bool:
@@ -59,7 +60,10 @@ class ScalarsToTemporaries(eve.NodeTranslator):
         for decl in node.declarations:
             if decl.name not in temps_from_scalars:
                 temps_from_scalars[decl.name] = Temporary(
-                    name=decl.name, dtype=decl.dtype, extent=node.extent
+                    name=decl.name,
+                    dtype=decl.dtype,
+                    extent=node.extent,
+                    dimensions=(True, True, True),
                 )
             else:
                 temps_from_scalars[decl.name].extent |= node.extent
@@ -85,6 +89,7 @@ class ScalarsToTemporaries(eve.NodeTranslator):
                 name=d.name,
                 offset=(-d.extent[0][0], -d.extent[1][0]),
                 padding=(d.extent[0][1] - d.extent[0][0], d.extent[1][1] - d.extent[1][0]),
+                dimensions=d.dimensions,
                 dtype=d.dtype,
             )
             for d in temps_from_scalars.values()
