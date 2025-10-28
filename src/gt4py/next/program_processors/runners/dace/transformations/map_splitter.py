@@ -32,7 +32,7 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
     """Split a Map based on a transient.
 
     The transformation matches the following pattern `MapExit -> (AccessNode)`,
-    where `AccessNode` needs to a transient single use data whose only producer
+    where `AccessNode` needs to be a transient single use data whose only producer
     is the matched Map and has only a single consumer. Furthermore, more data
     is written into `AccessNode` than is read from it. In that case the
     producing Map and `AccessNode` is split into fragments, such that a fragment
@@ -56,7 +56,6 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
 
     remove_dead_dataflow = dace_properties.Property(
         dtype=bool,
-        allow_none=True,
         default=True,
         desc="Remove dead dataflow directly.",
     )
@@ -208,7 +207,6 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
 
         # Now perform the split of `self.access_node`. Parts that are not read will
         #  later be eliminated by dead dataflow elimination.
-        # TODO(phimuell): Make it simpler to call the split function.
         gtx_transformations.SplitAccessNode.apply_to(
             sdfg=sdfg,
             options={
@@ -222,7 +220,8 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
             return
 
         # Because `self.access_node` is single use data, we know that if the split
-        #  node is not directly used it is dead dataflow and we can remove it.
+        #  node is not directly used, i.e. has an output degree of 0, that it is dead
+        #  dataflow and we can remove it.
         for mx in new_map_exits:
             output_node = next(iter(graph.out_edges(mx))).dst
             assert graph.out_degree(mx) == 1

@@ -155,10 +155,10 @@ def gt_remove_map(
     """Remove the Map denoted by `map_entry` _unconditionally_.
 
     The function can only operate on top level Maps, nested Maps are not supported.
-    Furthermore, adjacent nodes that ave become isolated by the Map removal will
+    Furthermore, adjacent nodes that have become isolated by the Map removal will
     also be removed.
     If `remove_unused_data` is specified, then the function will also remove data
-    descriptors that are no longer used and were referenced by the Map.
+    descriptors that were referenced by the Map and are no longer used.
 
     Note, it is the user's responsibility to ensure that the removal of the Map is
     valid as no checks are performed.
@@ -193,7 +193,7 @@ def gt_remove_map(
     adjacent_nodes: set[dace_nodes.AccessNode] = {iedge.src for iedge in state.in_edges(map_entry)}
     adjacent_nodes.update(oedge.dst for oedge in state.out_edges(map_exit))
 
-    if any(not isinstance(ac, dace_nodes.AccessNode) for ac in adjacent_nodes):
+    if not all(isinstance(ac, dace_nodes.AccessNode) for ac in adjacent_nodes):
         raise ValueError(
             f"Expected that all adjacent nodes of '{map_entry.map.label}' are AccessNode"
         )
@@ -210,8 +210,7 @@ def gt_remove_map(
     #  Process them in deterministic order.
     for adjacent_node in sorted(adjacent_nodes, key=lambda ac: ac.data):
         if state.degree(adjacent_node) == 0:
-            if not isinstance(adjacent_node, dace_nodes.AccessNode):
-                map_scope_datas.add(adjacent_node.data)
+            map_scope_datas.add(adjacent_node.data)
             state.remove_node(adjacent_node)
             removed_number_nodes += 1
 
