@@ -532,7 +532,8 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     - If a Map with (at most 3 dimension) has only one non trivial dimension, i.e.
         > 1, then the Map is handled as a 1D Map.
     - If there is a 1D Map that contains a nested SDFG whose label starts with `scan_`
-        and `launch_bounds_1d` was not specified, then a value of 512 is assumed.
+        and `launch_bounds_1d` was not specified, then a value of 512 is assumed to
+        limit register usage.
 
     Args:
         block_size_Xd: The size of a thread block on the GPU for `X` dimensional maps.
@@ -684,15 +685,14 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             for dim, dim_size in enumerate(map_size):
                 if dim_size != 1:
                     if non_trivial_1d_map_degenerated_map_dimension is not None:
-                        # Found more than two non trivial dimension.
+                        # A non trivial dimension is already known, so do not handle the map.
                         non_trivial_1d_map_degenerated_map_dimension = None
+                        is_degenerated_1d_map = False
                         break
-                    non_trivial_1d_map_degenerated_map_dimension = dim
-            else:
-                # We found at most one non trivial Map dimensions. Find out if it is
-                #  exactly one such Map.
-                if non_trivial_1d_map_degenerated_map_dimension is not None:
-                    is_degenerated_1d_map = True
+                    else:
+                        # No non trivial dimension is known yet.
+                        non_trivial_1d_map_degenerated_map_dimension = dim
+                        is_degenerated_1d_map = True
 
             if is_degenerated_1d_map:
                 num_map_params = 1
