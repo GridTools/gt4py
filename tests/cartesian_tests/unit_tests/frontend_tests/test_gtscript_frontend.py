@@ -36,6 +36,10 @@ from gt4py.cartesian.gtscript import (
     isfinite,
     region,
     sin,
+    float32,
+    float64,
+    int32,
+    int64,
 )
 
 
@@ -1961,10 +1965,24 @@ class TestTemporaryTypes:
                 temporary: float = 12
                 field[0, 0, 0] = temporary
 
+        def temporary_float32_64_stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                temporary32: float32 = 12.12
+                temporary64: float64 = 34.34
+                field[0, 0, 0] = temporary32 + temporary64
+
+        def temporary_int32_64_stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                temporary32: int32 = 12
+                temporary64: int64 = 34
+                field[0, 0, 0] = temporary32 + temporary64
+
         self.int_stencil = temporary_int_stencil
         self.float_stencil = temporary_float_stencil
+        self.float_explicit_stencil = temporary_float32_64_stencil
+        self.int_explicit_stencil = temporary_int32_64_stencil
 
-    def test_explicit_64_int_temp_defn(self):
+    def test_default_to_64_int_temp_defn(self):
         def_ir = parse_definition(
             self.int_stencil,
             name=inspect.stack()[0][3],
@@ -1975,7 +1993,7 @@ class TestTemporaryTypes:
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.INT64
 
-    def test_explicit_32_int_temp_defn(self):
+    def test_default_to_32_int_temp_defn(self):
         def_ir = parse_definition(
             self.int_stencil,
             name=inspect.stack()[0][3],
@@ -1986,7 +2004,7 @@ class TestTemporaryTypes:
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.INT32
 
-    def test_explicit_64_float_temp_defn(self):
+    def test_default_to_64_float_temp_defn(self):
         def_ir = parse_definition(
             self.float_stencil,
             name=inspect.stack()[0][3],
@@ -1997,7 +2015,7 @@ class TestTemporaryTypes:
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.FLOAT64
 
-    def test_explicit_32_float_temp_defn(self):
+    def test_default_to_32_float_temp_defn(self):
         def_ir = parse_definition(
             self.float_stencil,
             name=inspect.stack()[0][3],
@@ -2005,8 +2023,37 @@ class TestTemporaryTypes:
             literal_float_precision=32,
         )
 
-        field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
-        assert field_declaration.data_type == nodes.DataType.FLOAT32
+    def test_explicit_float_precision_temp_defn(self):
+        def_ir = parse_definition(
+            self.float_explicit_stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        field_decls = [
+            field_decl
+            for field_decl in def_ir.computations[0].body.stmts
+            if isinstance(field_decl, nodes.FieldDecl)
+        ]
+
+        assert field_decls[0].data_type == nodes.DataType.FLOAT32
+        assert field_decls[1].data_type == nodes.DataType.FLOAT64
+
+    def test_explicit_int_precision_temp_defn(self):
+        def_ir = parse_definition(
+            self.int_explicit_stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        field_decls = [
+            field_decl
+            for field_decl in def_ir.computations[0].body.stmts
+            if isinstance(field_decl, nodes.FieldDecl)
+        ]
+
+        assert field_decls[0].data_type == nodes.DataType.INT32
+        assert field_decls[1].data_type == nodes.DataType.INT64
 
 
 class TestNumpyTypedConstants:

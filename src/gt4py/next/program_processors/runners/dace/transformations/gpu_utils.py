@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import copy
+import warnings
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
 import dace
@@ -527,6 +528,14 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     four iteration in the second dimension, will get a block size of `(32, 4, 1)`.
     Note that this modification will not influence the launch bound value.
 
+    The block size and launch bounrds are set according to the aadditional following rules:
+        - Determine the number of map parameters that have range > 1.
+        - If there is only one such parameter then handle the map as 1D map,
+          else if there are more than 2 parameters with range > 1 then handle it as ordinary map.
+        - For 1D maps set the block size such that only the dimension with the largest
+          range is set to the specified block size, all other dimensions are set to 1.
+        - If launch_bounds_1d is not set then set the launch_bounds of `scan` maps to 512 to limit their register usage.
+
     Args:
         block_size_Xd: The size of a thread block on the GPU for `X` dimensional maps.
         launch_bounds_Xd: The value for the launch bound that should be used for `X`
@@ -604,8 +613,18 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         super().__init__()
         if block_size_1d is not None:
             self.block_size_1d = block_size_1d
+            if self.block_size_1d[1] != 1 or self.block_size_1d[2] != 1:
+                warnings.warn(
+                    f"1D map block size specified with more than one dimension larger than 1. Configured 1D block size: {self.block_size_1d}.",
+                    stacklevel=0,
+                )
         if block_size_2d is not None:
             self.block_size_2d = block_size_2d
+            if self.block_size_2d[2] != 1:
+                warnings.warn(
+                    f"2D map block size specified with more than twi dimensions larger than 1. Configured 2D block size: {self.block_size_2d}.",
+                    stacklevel=0,
+                )
         if block_size_3d is not None:
             self.block_size_3d = block_size_3d
         self.launch_bounds_1d = _gpu_launch_bound_parser(
@@ -635,7 +654,6 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         - If the block size of the map is already set.
         - If the map is at global scope.
         - If if the schedule of the map is correct.
-        - If launch_bounds_1d is not set then set the launch_bounds of `scan` maps to 512 to limit their register usage.
         """
         scope = graph.scope_dict()
         if scope[self.map_entry] is not None:
@@ -657,21 +675,52 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         dims_to_inspect = len(map_size)
         num_map_params = 0
         # Order of map parameters is from outer to inner, i.e. z,y,x
-        for i, axis_size in enumerate(map_size):
-            if i < len(map_size) - 1 and map_size[i + 1] == 1:
-                assert axis_size <= 1, (
-                    "GPU thread block size setting currently does not support maps where non-leading "
-                    "dimensions have size greater than one if the next dimension has size one."
-                )
+        for axis_size in map_size:
             if axis_size != 1:
-                num_map_params += 1  # Handle 2D maps where one dimension has range 1 as 1D map
+                num_map_params += 1  # Count how many parameters have range > 1
+        # If the number of map parameters that have range > 1 is 1 then handle the map as 1D map else handle it as full dimensional map
+        if num_map_params > 1 and dims_to_inspect > num_map_params:
+            warnings.warn(
+                f"Map '{gpu_map}' has {dims_to_inspect} dimensions but only {num_map_params} map parameters with range > 1. "
+                "Handling it as a map with full dimensions.",
+                stacklevel=0,
+            )
+            num_map_params = dims_to_inspect
 
         # Because of a particularity of the DaCe code generator, the iteration
         #  variable that is associated to the `x` dimension of the block is the
         #  last parameter, i.e. `gpu_map.params[-1]`. The one for `y` the second last.
         if num_map_params == 1:
-            block_size = list(self.block_size_1d)
+            # Block size for 1D maps should only have a single non-one entry in the first dimension (x).
+            block_size_1D = self.block_size_1d[0]
+            # Initialize block size
+            block_size = [1, 1, 1]
+            # Collapse dimensions > 3 into a single z-dimension by taking the product of map_size[2:].
+            if dims_to_inspect <= 3:
+                map_size_3D = list(map_size)
+            else:
+                prod = 1
+                for s in map_size[2:]:
+                    prod = prod * s
+                map_size_3D = [map_size[0], map_size[1], prod]
+            # Find maximum range dimension index
+            max_param_idx = max(range(len(map_size_3D)), key=lambda i: map_size_3D[i])
+            # Convert map parameter index to block_size index (last param -> x -> index 0)
+            block_idx = len(map_size_3D) - 1 - max_param_idx
+            block_size[block_idx] = (
+                int(block_size_1D) if dims_to_inspect <= 3 else map_size_3D[max_param_idx]
+            )
+            if block_idx != 0:
+                warnings.warn(
+                    f"1D block size was set to {self.block_size_1d} but the largest map dimension in map '{gpu_map}' is not the x dimension. "
+                    f"Setting block size for index '{gpu_map.params[max_param_idx]}' to {block_size_1D} instead.",
+                    stacklevel=0,
+                )
             launch_bounds = self.launch_bounds_1d
+            # Already set the block size for the last dimension to either the specified block size or the
+            # product of the ranges that are going to be collapsed into the last dimension.
+            if dims_to_inspect > 3:
+                dims_to_inspect = 2
             if launch_bounds is None:
                 for node in graph.scope_subgraph(
                     self.map_entry, include_entry=False, include_exit=False
