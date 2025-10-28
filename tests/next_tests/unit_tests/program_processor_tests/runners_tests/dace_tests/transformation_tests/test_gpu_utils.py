@@ -230,16 +230,15 @@ def test_set_gpu_properties(method: int):
     assert map4.gpu_launch_bounds == "200"
 
 
-@pytest.mark.parametrize("reverse_4d_map_order", [True, False])
-def test_set_gpu_properties_1D(reverse_4d_map_order: bool):
+def test_set_gpu_properties_1D():
     """Tests the `gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize()` with 1D maps."""
     sdfg = dace.SDFG(util.unique_name("gpu_properties_test"))
     state = sdfg.add_state(is_start_block=True)
 
     map_entries: dict[int, dace_nodes.MapEntry] = {}
-    for dim in [1, 2, 3, 4]:
+    for dim in [1, 2, 3, 4, 5]:
         shape = (10,) + (dim - 1) * (1,)
-        if dim == 4 and reverse_4d_map_order:
+        if dim == 5:
             shape = tuple(reversed(shape))
 
         sdfg.add_array(
@@ -266,7 +265,7 @@ def test_set_gpu_properties_1D(reverse_4d_map_order: bool):
         block_size=(32, 8, 2),
     )
 
-    map1, map2, map3, map4 = (map_entries[d].map for d in [1, 2, 3, 4])
+    map1, map2, map3, map4, map5 = (map_entries[d].map for d in sorted(map_entries.keys()))
 
     # Set the `x` block size to 64, but the map size is 10, so it regulates it to 10.
     assert len(map1.params) == 1
@@ -283,18 +282,19 @@ def test_set_gpu_properties_1D(reverse_4d_map_order: bool):
     assert map3.gpu_block_size == [1, 1, 10]
     assert map3.gpu_launch_bounds == "0"
 
+    # NOTE: One could expect `[1, 1, 10]` here. However, because we handle degenerated
+    #   1d cases for Maps with less than 4 parameters. Furthermore in that case the
+    #   block size from the last dimension is simply used without modification.
     assert len(map4.params) == 4
-    if reverse_4d_map_order:
-        # NOTE: The reason why the z block size is 2 and not 1 is because for more than
-        #   three dimensions the z dimensions absorbs all additional dimensions and is
-        #   not regulated.
-        assert map4.gpu_block_size == [10, 1, 2]
-    else:
-        # NOTE: One could expect `[1, 1, 10]` here. However, because we handle degenerated
-        #   1d cases for Maps with less than 4 parameters. Furthermore in that case the
-        #   block size from the last dimension is simply used without modification.
-        assert map4.gpu_block_size == [1, 1, 2]
+    assert map4.gpu_block_size == [1, 1, 2]
     assert map4.gpu_launch_bounds == "0"
+
+    # NOTE: The reason why the z block size is 2 and not 1 is because for more than
+    #   three dimensions the z dimensions absorbs all additional dimensions and is
+    #   not regulated.
+    assert len(map5.params) == 5
+    assert map5.gpu_launch_bounds == "0"
+    assert map5.gpu_block_size == [10, 1, 2]
 
 
 def test_set_gpu_properties_2D_3D():
