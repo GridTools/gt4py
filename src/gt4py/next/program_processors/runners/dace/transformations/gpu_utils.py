@@ -528,13 +528,11 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     four iteration in the second dimension, will get a block size of `(32, 4, 1)`.
     Note that this modification will not influence the launch bound value.
 
-    The block size and launch bounrds are set according to the aadditional following rules:
-        - Determine the number of map parameters that have range > 1.
-        - If there is only one such parameter then handle the map as 1D map,
-          else if there are more than 2 parameters with range > 1 then handle it as ordinary map.
-        - For 1D maps set the block size such that only the dimension with the largest
-          range is set to the specified block size, all other dimensions are set to 1.
-        - If launch_bounds_1d is not set then set the launch_bounds of `scan` maps to 512 to limit their register usage.
+    Note there are some special rules:
+    - If a Map with (at most 3 dimension) has only one non trivial dimension, i.e.
+        > 1, then the Map is handled as a 1D Map.
+    - If there is a 1D Map that contains a nested SDFG whose label starts with `scan_`
+        and `launch_bounds_1d` was not specified, then a value of 512 is assumed.
 
     Args:
         block_size_Xd: The size of a thread block on the GPU for `X` dimensional maps.
@@ -673,63 +671,73 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         gpu_map: dace_nodes.Map = self.map_entry.map
         map_size = gpu_map.range.size()
         dims_to_inspect = len(map_size)
-        num_map_params = 0
-        # Order of map parameters is from outer to inner, i.e. z,y,x
-        for axis_size in map_size:
-            if axis_size != 1:
-                num_map_params += 1  # Count how many parameters have range > 1
-        # If the number of map parameters that have range > 1 is 1 then handle the map as 1D map else handle it as full dimensional map
-        if num_map_params > 1 and dims_to_inspect > num_map_params:
-            warnings.warn(
-                f"Map '{gpu_map}' has {dims_to_inspect} dimensions but only {num_map_params} map parameters with range > 1. "
-                "Handling it as a map with full dimensions.",
-                stacklevel=0,
-            )
-            num_map_params = dims_to_inspect
+        num_map_params = dims_to_inspect  # Might be modified
+
+        # Test if the Map is a degenerated 1d Map, i.e. a Map that only has one dimension
+        #  that is non trivial, i.e. > 1.
+        # NOTE: To simplify implementation, we only do this check for Maps with at most
+        #   three dimensions. We also do this because the outcome in DaCe is not fully
+        #   clear how the dimensions are lumped together.
+        is_degenerated_1d_map = False
+        non_trivial_1d_map_degenerated_map_dimension: Optional[int] = None
+        if 1 < dims_to_inspect <= 3:
+            for dim, dim_size in enumerate(map_size):
+                if dim_size != 1:
+                    if non_trivial_1d_map_degenerated_map_dimension is not None:
+                        # Found more than two non trivial dimension.
+                        non_trivial_1d_map_degenerated_map_dimension = None
+                        break
+                    non_trivial_1d_map_degenerated_map_dimension = dim
+            else:
+                # We found at most one non trivial Map dimensions. Find out if it is
+                #  exactly one such Map.
+                if non_trivial_1d_map_degenerated_map_dimension is not None:
+                    is_degenerated_1d_map = True
+
+            if is_degenerated_1d_map:
+                num_map_params = 1
+                warnings.warn(
+                    f"Map '{gpu_map}', size '{map_size}', is a degenerated 1d Map. Handle it as a 1d Map.",
+                    stacklevel=0,
+                )
+
+            elif non_trivial_1d_map_degenerated_map_dimension is None:
+                warnings.warn(
+                    f"Map '{gpu_map}' has {dims_to_inspect} dimensions but not all are non trivial (range > 1). "
+                    "Handling it as a map with full dimensions.",
+                    stacklevel=0,
+                )
 
         # Because of a particularity of the DaCe code generator, the iteration
         #  variable that is associated to the `x` dimension of the block is the
         #  last parameter, i.e. `gpu_map.params[-1]`. The one for `y` the second last.
         if num_map_params == 1:
-            # Block size for 1D maps should only have a single non-one entry in the first dimension (x).
-            block_size_1D = self.block_size_1d[0]
-            # Initialize block size
-            block_size = [1, 1, 1]
-            # Collapse dimensions > 3 into a single z-dimension by taking the product of map_size[2:].
-            if dims_to_inspect <= 3:
-                map_size_3D = list(map_size)
-            else:
-                prod = 1
-                for s in map_size[2:]:
-                    prod = prod * s
-                map_size_3D = [map_size[0], map_size[1], prod]
-            # Find maximum range dimension index
-            max_param_idx = max(range(len(map_size_3D)), key=lambda i: map_size_3D[i])
-            # Convert map parameter index to block_size index (last param -> x -> index 0)
-            block_idx = len(map_size_3D) - 1 - max_param_idx
-            block_size[block_idx] = (
-                int(block_size_1D) if dims_to_inspect <= 3 else map_size_3D[max_param_idx]
-            )
-            if block_idx != 0:
-                warnings.warn(
-                    f"1D block size was set to {self.block_size_1d} but the largest map dimension in map '{gpu_map}' is not the x dimension. "
-                    f"Setting block size for index '{gpu_map.params[max_param_idx]}' to {block_size_1D} instead.",
-                    stacklevel=0,
+            if is_degenerated_1d_map:
+                assert non_trivial_1d_map_degenerated_map_dimension is not None
+                assert 0 <= non_trivial_1d_map_degenerated_map_dimension <= 2
+                assert len(map_size) <= 3
+
+                block_size = [1, 1, 1]
+                # Order of Map parameters is from outer to inner, i.e. z,y,x
+                block_size[len(map_size) - non_trivial_1d_map_degenerated_map_dimension - 1] = (
+                    self.block_size_1d[0]
                 )
+            else:
+                block_size = list(self.block_size_1d)
+
+            # Launchbounds, if we have a scan and it is not specified use a special launch bound.
             launch_bounds = self.launch_bounds_1d
-            # Already set the block size for the last dimension to either the specified block size or the
-            # product of the ranges that are going to be collapsed into the last dimension.
-            if dims_to_inspect > 3:
-                dims_to_inspect = 2
             if launch_bounds is None:
                 for node in graph.scope_subgraph(
                     self.map_entry, include_entry=False, include_exit=False
                 ):
                     if isinstance(node, dace_nodes.NestedSDFG) and node.label.startswith("scan_"):
                         launch_bounds = "512"  # Use high launch bound in case of scans to limit register usage and increase occupancy
+
         elif num_map_params == 2:
             block_size = list(self.block_size_2d)
             launch_bounds = self.launch_bounds_2d
+
         else:
             block_size = list(self.block_size_3d)
             launch_bounds = self.launch_bounds_3d
@@ -740,11 +748,10 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             if num_map_params > 3:
                 dims_to_inspect = 2
 
-        # block size can only have up to three dimensions
-        assert dims_to_inspect <= 3
         # Cut down the block size.
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
         # TODO(phimuell): Also think of how to connect this with the loop blocking.
+        assert dims_to_inspect <= 3
         for i in range(dims_to_inspect):
             map_dim_idx_to_inspect = len(gpu_map.params) - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.

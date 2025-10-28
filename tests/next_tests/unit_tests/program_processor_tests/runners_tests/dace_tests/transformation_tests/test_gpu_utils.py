@@ -230,7 +230,8 @@ def test_set_gpu_properties(method: int):
     assert map4.gpu_launch_bounds == "200"
 
 
-def test_set_gpu_properties_1D():
+@pytest.mark.parametrize("reverse_4d_map_order", [True, False])
+def test_set_gpu_properties_1D(reverse_4d_map_order: bool):
     """Tests the `gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize()` with 1D maps."""
     sdfg = dace.SDFG(util.unique_name("gpu_properties_test"))
     state = sdfg.add_state(is_start_block=True)
@@ -238,6 +239,9 @@ def test_set_gpu_properties_1D():
     map_entries: dict[int, dace_nodes.MapEntry] = {}
     for dim in [1, 2, 3, 4]:
         shape = (10,) + (dim - 1) * (1,)
+        if dim == 4 and reverse_4d_map_order:
+            shape = tuple(reversed(shape))
+
         sdfg.add_array(
             f"A_{dim}", shape=shape, dtype=dace.float64, storage=dace.StorageType.GPU_Global
         )
@@ -259,7 +263,7 @@ def test_set_gpu_properties_1D():
     gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
         sdfg=sdfg,
         block_size_1d=(64, 1, 1),
-        block_size=(32, 8, 1),
+        block_size=(32, 8, 2),
     )
 
     map1, map2, map3, map4 = (map_entries[d].map for d in [1, 2, 3, 4])
@@ -279,9 +283,17 @@ def test_set_gpu_properties_1D():
     assert map3.gpu_block_size == [1, 1, 10]
     assert map3.gpu_launch_bounds == "0"
 
-    # Set the `z` block size to the max(block_size_3d.z, product(map4.range.size()[2:]))
     assert len(map4.params) == 4
-    assert map4.gpu_block_size == [1, 1, 10]
+    if reverse_4d_map_order:
+        # NOTE: The reason why the z block size is 2 and not 1 is because for more than
+        #   three dimensions the z dimensions absorbs all additional dimensions and is
+        #   not regulated.
+        assert map4.gpu_block_size == [10, 1, 2]
+    else:
+        # NOTE: One could expect `[1, 1, 10]` here. However, because we handle degenerated
+        #   1d cases for Maps with less than 4 parameters. Furthermore in that case the
+        #   block size from the last dimension is simply used without modification.
+        assert map4.gpu_block_size == [1, 1, 2]
     assert map4.gpu_launch_bounds == "0"
 
 
