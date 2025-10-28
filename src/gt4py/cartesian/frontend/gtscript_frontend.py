@@ -44,7 +44,7 @@ from gt4py.cartesian.frontend.exceptions import (
     GTScriptSyntaxError,
     GTScriptValueError,
 )
-from gt4py.cartesian.utils import meta as gt_meta
+from gt4py.cartesian.utils import meta as gt_meta, warn_experimental_feature
 
 
 PYTHON_AST_VERSION: Final = (3, 10)
@@ -747,7 +747,7 @@ class IRMaker(ast.NodeVisitor):
         domain: nodes.Domain,
         options: gt_definitions.BuildOptions,
         temp_decls: Optional[Dict[str, nodes.FieldDecl]] = None,
-        dtypes: Optional[Dict[Type, Type]] = None,
+        dtypes: Optional[Dict[Type | str, Type]] = None,
     ):
         fields = fields or {}
         parameters = parameters or {}
@@ -821,7 +821,14 @@ class IRMaker(ast.NodeVisitor):
             "round_away_from_zero": nodes.NativeFunction.ROUND_AWAY_FROM_ZERO,
         }  # Conversion table for functions to NativeFunctions
 
-        self.temporary_type_to_native_type = {
+        # Filter the field type from `dtypes`
+        self.temporary_field_type = {}
+        if self.dtypes:
+            for name, _type in self.dtypes.items():
+                if isinstance(_type, gtscript._FieldDescriptor):
+                    self.temporary_field_type[name] = _type
+
+        self.temporary_type_as_str_to_native_type = {
             "int32": nodes.DataType.INT32,
             "int64": nodes.DataType.INT64,
             "float32": nodes.DataType.FLOAT32,
@@ -1591,6 +1598,19 @@ class IRMaker(ast.NodeVisitor):
     def visit_Assign(self, node: ast.Assign, **kwargs) -> list:
         return self._resolve_assign(node, node.targets)
 
+    def _domain_from_gtscript_axis(self, gt_axis: list[gtscript.Axis]) -> nodes.Domain:
+        sequential_axis = None
+        parallel_axes = []
+        for axis in gt_axis:
+            if axis in (gtscript.I, gtscript.J):
+                parallel_axes.append(nodes.Axis(name=axis.name))
+            else:
+                sequential_axis = nodes.Axis(name=axis.name)
+        return nodes.Domain(
+            parallel_axes=parallel_axes,
+            sequential_axis=sequential_axis,
+        )
+
     def _resolve_assign(
         self,
         node: Union[ast.AnnAssign, ast.Assign],
@@ -1638,20 +1658,52 @@ class IRMaker(ast.NodeVisitor):
                             loc=nodes.Location.from_ast_node(t, scope=self.stencil_name),
                         )
                     dtype = nodes.DataType.AUTO
+                    axes = nodes.Domain.LatLonGrid().axes_names
                     if target_annotation is not None:
                         source = ast.unparse(target_annotation)
                         try:
-                            dtype = eval(source, self.temporary_type_to_native_type)
+                            dtype_or_field_desc = eval(
+                                source,
+                                self.temporary_type_as_str_to_native_type
+                                | self.temporary_field_type
+                                | gtscript.__dict__,
+                            )
                         except NameError:
                             raise GTScriptSyntaxError(
                                 message=f"Failed to recognize type {source} for local symbol {name}."
-                                f"Available types are {self.temporary_type_to_native_type.keys()}",
+                                f"Available types are {self.temporary_type_as_str_to_native_type.keys()}, {self.dtypes}, "
+                                "or `Field[IJ, dtype]`.",
                                 loc=nodes.Location.from_ast_node(t),
                             ) from None
+                        # If Field, we have to expand to resolve axes and true type
+                        if isinstance(dtype_or_field_desc, gtscript._FieldDescriptor):
+                            field_desc = dtype_or_field_desc
+                            if field_desc.axes != gtscript.IJ:
+                                raise GTScriptSyntaxError(
+                                    message=f"Typed temporaries must be IJ, temporaries for axes {field_desc.axes}"
+                                    " is not yet available. Contact the team.",
+                                    loc=nodes.Location.from_ast_node(t),
+                                ) from None
+                            if self.backend_name.startswith("gt:"):
+                                raise NotImplementedError(
+                                    "2D temporaries (e.g. `tmp: Field[IJ, float] = ...) is an experimental feature "
+                                    "and not yet implemented for the `gt:X` backends."
+                                )
+                            warn_experimental_feature(
+                                feature="2D temporaries", ADR="experimental/2d-temporaries.md"
+                            )
+
+                            axes = self._domain_from_gtscript_axis(field_desc.axes).axes_names
+                            dtype = nodes.DataType.from_dtype(field_desc.dtype)
+                        elif isinstance(dtype_or_field_desc, nodes.DataType):
+                            dtype = dtype_or_field_desc
+                        else:
+                            # If all failed, expect a proper type and try to convert it
+                            dtype = nodes.DataType.from_dtype(dtype_or_field_desc)
                     field_decl = nodes.FieldDecl(
                         name=name,
                         data_type=dtype,
-                        axes=nodes.Domain.LatLonGrid().axes_names,
+                        axes=axes,
                         is_api=False,
                         loc=nodes.Location.from_ast_node(t, scope=self.stencil_name),
                     )
