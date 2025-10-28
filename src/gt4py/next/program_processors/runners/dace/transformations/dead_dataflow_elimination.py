@@ -199,8 +199,9 @@ def gt_remove_map(
         )
 
     # Find all the data that is accessed inside the Map scope.
-    if remove_unused_data:
-        map_scope_datas = {ac.data for ac in map_scope.data_nodes()}
+    map_scope_datas: set[str] = (
+        {ac.data for ac in map_scope.data_nodes()} if remove_unused_data else set()
+    )
 
     # Now remove the nodes of the scope.
     removed_number_nodes = map_scope.number_of_nodes()
