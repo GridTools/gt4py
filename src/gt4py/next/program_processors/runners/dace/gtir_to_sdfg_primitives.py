@@ -308,13 +308,15 @@ def _construct_if_branch_output(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     field_domain: domain_utils.SymbolicDomain,
-    out_type: ts.TypeSpec | None,
+    true_br: gtir_to_sdfg_types.FieldopData,
+    false_br: gtir_to_sdfg_types.FieldopData,
 ) -> gtir_to_sdfg_types.FieldopData:
     """
     Helper function called by `translate_if()` to allocate a temporary field to store
     the result of an if expression.
     """
-    assert out_type is not None
+    assert true_br.gt_type == false_br.gt_type
+    out_type = true_br.gt_type
 
     if isinstance(out_type, ts.ScalarType):
         dtype = gtx_dace_utils.as_dace_type(out_type)
@@ -322,9 +324,9 @@ def _construct_if_branch_output(
         out_node = ctx.state.add_access(out)
         return gtir_to_sdfg_types.FieldopData(out_node, out_type, origin=())
 
-    dims, origin, shape = gtir_domain.get_field_layout(gtir_domain.get_field_domain(field_domain))
     assert isinstance(out_type, ts.FieldType)
-    assert out_type.dims == dims
+    dims, origin, shape = gtir_domain.get_field_layout(gtir_domain.get_field_domain(field_domain))
+    assert dims == out_type.dims
 
     if isinstance(out_type.dtype, ts.ScalarType):
         dtype = gtx_dace_utils.as_dace_type(out_type.dtype)
@@ -451,15 +453,21 @@ def translate_if(
             #   domain on a tuple of fields is not a tuple, see `test_execution.py::test_ternary_operator_tuple()`
             domain_tree = gtx_utils.tree_map(lambda _: node.annex.domain)(symbol_tree)
         node_output = gtx_utils.tree_map(
-            lambda sym, domain, _ctx=ctx, sdfg_builder=sdfg_builder: _construct_if_branch_output(
+            lambda domain,
+            true_br,
+            false_br,
+            _ctx=ctx,
+            sdfg_builder=sdfg_builder: _construct_if_branch_output(
                 _ctx,
                 sdfg_builder,
                 domain,
-                sym.type,
+                true_br,
+                false_br,
             )
         )(
-            symbol_tree,
             domain_tree,
+            true_br_result,
+            false_br_result,
         )
         gtx_utils.tree_map(
             lambda src, dst, _ctx=tbranch_ctx: _write_if_branch_output(_ctx, src, dst)
@@ -472,7 +480,8 @@ def translate_if(
             ctx,
             sdfg_builder,
             node.annex.domain,
-            node.type,
+            true_br_result,
+            false_br_result,
         )
         _write_if_branch_output(tbranch_ctx, true_br_result, node_output)
         _write_if_branch_output(fbranch_ctx, false_br_result, node_output)
