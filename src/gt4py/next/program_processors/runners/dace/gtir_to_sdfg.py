@@ -37,7 +37,7 @@ from gt4py import eve
 from gt4py.eve import concepts
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import (
@@ -530,7 +530,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
         use_temp: bool = True,
-    ) -> list[gtir_to_sdfg_types.FieldopData]:
+    ) -> gtir_to_sdfg_types.FieldopResult:
         """
         Specialized visit method for fieldview expressions.
 
@@ -538,7 +538,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         As such, it must preserve the property of single exit state in the SDFG.
 
         Returns:
-            A list of array nodes containing the result fields.
+            The SDFG array nodes containing the result of the fieldview expression.
         """
 
         ctx = SubgraphContext(sdfg, head_state)
@@ -550,7 +550,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert len(sink_states) == 1
         assert sink_states[0] == head_state
 
-        def make_temps(
+        def _visit_result(
             src: gtir_to_sdfg_types.FieldopData,
         ) -> gtir_to_sdfg_types.FieldopData:
             src_desc = sdfg.arrays[src.dc_node.data]
@@ -570,8 +570,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 )
                 return gtir_to_sdfg_types.FieldopData(dst_node, src.gt_type, src.origin)
 
-        temp_result = gtx_utils.tree_map(make_temps)(result)
-        return list(gtx_utils.flatten_nested_tuple((temp_result,)))
+        return gtx_utils.tree_map(_visit_result)(result)
 
     def _add_sdfg_params(
         self,
@@ -693,13 +692,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
           The SDFG head state, eventually updated if the target write requires a new state.
         """
 
-        # visit the domain expression
-        domain = gtir_domain.extract_domain(stmt.domain)
-        source_fields = self._visit_expression(stmt.expr, sdfg, state)
+        # Visit the domain expression.
+        assert isinstance(stmt.domain.type, ts.DomainType)
+        domain = domain_utils.SymbolicDomain.from_expr(stmt.domain)
 
-        # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
-        # in case the statement returns more than one field
-        target_fields = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
+        # Visit the field operator expression.
+        source_tree = self._visit_expression(stmt.expr, sdfg, state)
+
+        # The target expression could be a `SymRef` to an output field or a `make_tuple`
+        # expression in case the statement returns more than one field.
+        target_tree = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
 
         expr_input_args = {
             sym_id
@@ -713,13 +715,20 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         target_state: Optional[dace.SDFGState] = None
-        for source, target in zip(source_fields, target_fields, strict=True):
+
+        def _visit_target(
+            source: gtir_to_sdfg_types.FieldopData,
+            target: gtir_to_sdfg_types.FieldopData,
+            target_domain: domain_utils.SymbolicDomain,
+        ) -> None:
+            nonlocal target_state
             target_desc = sdfg.arrays[target.dc_node.data]
             assert not target_desc.transient
 
             assert source.gt_type == target.gt_type
-            source_subset = _make_access_index_for_field(domain, source)
-            target_subset = _make_access_index_for_field(domain, target)
+            compute_domain = gtir_domain.get_field_domain(target_domain)
+            source_subset = _make_access_index_for_field(compute_domain, source)
+            target_subset = _make_access_index_for_field(compute_domain, target)
 
             if target.dc_node.data in state_input_data:
                 # if inout argument, write the result in separate next state
@@ -744,6 +753,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                         data=target.dc_node.data, subset=target_subset, other_subset=source_subset
                     ),
                 )
+
+        gtx_utils.tree_map(
+            lambda source, target, _domain=domain: _visit_target(source, target, _domain)
+        )(source_tree, target_tree)
 
         return target_state or state
 

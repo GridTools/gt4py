@@ -31,7 +31,11 @@ from dace import subsets as dace_subsets
 from gt4py import eve
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    domain_utils,
+    ir_makers as im,
+)
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_domain,
@@ -581,11 +585,14 @@ def translate_scan(
 
     fun_node = node.fun
     assert len(fun_node.args) == 2
-    scan_expr, domain_expr = fun_node.args
+    scan_expr, scan_domain_expr = fun_node.args
     assert cpm.is_call_to(scan_expr, "scan")
 
     # parse the domain of the scan field operator
-    domain = gtir_domain.extract_domain(domain_expr)
+    assert isinstance(scan_domain_expr.type, ts.DomainType)
+    scan_domain = gtir_domain.get_field_domain(
+        domain_utils.SymbolicDomain.from_expr(scan_domain_expr)
+    )
 
     # parse scan parameters
     assert len(scan_expr.args) == 3
@@ -625,7 +632,7 @@ def translate_scan(
         stencil_expr,
         ctx,
         sdfg_builder,
-        domain,
+        scan_domain,
         init_data,
         lambda_symbols,
         scan_forward,
@@ -693,5 +700,5 @@ def translate_scan(
 
     # we call a helper method to create a map scope that will compute the entire field
     return _create_scan_field_operator(
-        ctx, domain, node.type, sdfg_builder, lambda_input_edges, lambda_output_tree
+        ctx, scan_domain, node.type, sdfg_builder, lambda_input_edges, lambda_output_tree
     )
