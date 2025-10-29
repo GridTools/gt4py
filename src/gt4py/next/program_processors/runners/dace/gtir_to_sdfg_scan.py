@@ -50,7 +50,7 @@ def _parse_scan_fieldop_arg(
     node: gtir.Expr,
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    domain: gtir_domain.FieldopDomain,
+    field_domain: gtir_domain.FieldopDomain,
 ) -> gtir_dataflow.MemletExpr | tuple[gtir_dataflow.MemletExpr | tuple[Any, ...], ...]:
     """Helper method to visit an expression passed as argument to a scan field operator.
 
@@ -64,7 +64,7 @@ def _parse_scan_fieldop_arg(
     def _parse_fieldop_arg_impl(
         arg: gtir_to_sdfg_types.FieldopData,
     ) -> gtir_dataflow.MemletExpr:
-        arg_expr = arg.get_local_view(domain, ctx.sdfg)
+        arg_expr = arg.get_local_view(field_domain, ctx.sdfg)
         if isinstance(arg_expr, gtir_dataflow.MemletExpr):
             return arg_expr
         # In scan field operator, the arguments to the vertical stencil are passed by value.

@@ -307,7 +307,7 @@ def translate_as_fieldop(
 def _construct_if_branch_output(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    domain: domain_utils.SymbolicDomain,
+    field_domain: gtir_domain.FieldopDomain,
     true_br: gtir_to_sdfg_types.FieldopData,
     false_br: gtir_to_sdfg_types.FieldopData,
 ) -> gtir_to_sdfg_types.FieldopData:
@@ -325,7 +325,7 @@ def _construct_if_branch_output(
         return gtir_to_sdfg_types.FieldopData(out_node, out_type, origin=())
 
     assert isinstance(out_type, ts.FieldType)
-    dims, origin, shape = gtir_domain.get_field_layout(gtir_domain.get_field_domain(domain))
+    dims, origin, shape = gtir_domain.get_field_layout(field_domain)
     assert dims == out_type.dims
 
     if isinstance(out_type.dtype, ts.ScalarType):
@@ -451,11 +451,11 @@ def translate_if(
             false_br,
             _ctx=ctx,
             sdfg_builder=sdfg_builder: _construct_if_branch_output(
-                _ctx,
-                sdfg_builder,
-                domain,
-                true_br,
-                false_br,
+                ctx=_ctx,
+                sdfg_builder=sdfg_builder,
+                field_domain=gtir_domain.get_field_domain(domain),
+                true_br=true_br,
+                false_br=false_br,
             )
         )(
             node.annex.domain,
@@ -472,11 +472,11 @@ def translate_if(
             _ctx=ctx,
             _domain=node.annex.domain,
             sdfg_builder=sdfg_builder: _construct_if_branch_output(
-                _ctx,
-                sdfg_builder,
-                _domain,
-                true_br,
-                false_br,
+                ctx=_ctx,
+                sdfg_builder=sdfg_builder,
+                field_domain=gtir_domain.get_field_domain(_domain),
+                true_br=true_br,
+                false_br=false_br,
             )
         )(
             true_br_result,

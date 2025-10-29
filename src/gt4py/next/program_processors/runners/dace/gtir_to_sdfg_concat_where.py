@@ -79,7 +79,6 @@ def _make_concat_scalar_broadcast(
     inp: gtir_to_sdfg_types.FieldopData,
     inp_desc: dace.data.Array,
     out_domain: domain_utils.SymbolicDomain,
-    out_type: ts.FieldType,
 ) -> tuple[gtir_to_sdfg_types.FieldopData, dace.data.Array]:
     """
     Helper function called by `_translate_concat_where_impl` to create a mapped
@@ -95,7 +94,6 @@ def _make_concat_scalar_broadcast(
     out_dims, out_origin, out_shape = gtir_domain.get_field_layout(
         gtir_domain.get_field_domain(out_domain)
     )
-    assert out_dims == out_type.dims
     concat_dim_index = out_dims.index(concat_dim)
 
     out_name, out_desc = ctx.sdfg.add_temp_transient(out_shape, inp_desc.dtype)
@@ -120,6 +118,7 @@ def _make_concat_scalar_broadcast(
         external_edges=True,
     )
 
+    out_type = ts.FieldType(dims=out_dims, dtype=inp.gt_type.dtype)
     out_field = gtir_to_sdfg_types.FieldopData(out_node, out_type, tuple(out_origin))
     return out_field, out_desc
 
@@ -128,7 +127,6 @@ def _translate_concat_where_impl(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     node_domain: domain_utils.SymbolicDomain,
-    node_type: ts.FieldType,
     mask_domain: domain_utils.SymbolicDomain,
     tb_field: gtir_to_sdfg_types.FieldopData,
     tb_domain: domain_utils.SymbolicDomain,
@@ -154,7 +152,6 @@ def _translate_concat_where_impl(
         mask_domain: Domain (only for concat dimension) of the true branch, infinite
             on lower or upper boundary.
         node_domain: Domain (all dimensions) of output field.
-        node_type:
         tb_field: Input field on the true branch.
         tb_domain: Domain of the field expression on the true branch.
         fb_field: Input field on the false branch.
@@ -163,10 +160,6 @@ def _translate_concat_where_impl(
     Returns:
         The field resulted from concatanating the input fields on the lower and upper domain.
     """
-
-    # sanity check
-    assert node_domain.ranges.keys() == set(node_type.dims)
-
     tb_data_desc, fb_data_desc = (inp.dc_node.desc(ctx.sdfg) for inp in [tb_field, fb_field])
     assert tb_data_desc.dtype == fb_data_desc.dtype
 
@@ -229,7 +222,6 @@ def _translate_concat_where_impl(
     # we use the concat domain, stored in the annex, as the domain of output field
     output_domain = gtir_domain.get_field_domain(node_domain)
     output_dims, output_origin, output_shape = gtir_domain.get_field_layout(output_domain)
-    assert output_dims == node_type.dims
     concat_dim_index = output_dims.index(concat_dim)
 
     if concat_dim not in lower.gt_type.dims:  # type: ignore[union-attr]
@@ -307,7 +299,6 @@ def _translate_concat_where_impl(
             inp=lower,
             inp_desc=lower_desc,
             out_domain=node_domain,
-            out_type=node_type,
         )
     elif isinstance(upper_desc, dace.data.Scalar) or (
         len(upper.gt_type.dims) == 1 and len(node_domain.ranges) > 1  # type: ignore[union-attr]
@@ -320,7 +311,6 @@ def _translate_concat_where_impl(
             inp=upper,
             inp_desc=upper_desc,
             out_domain=node_domain,
-            out_type=node_type,
         )
     else:
         """
@@ -471,7 +461,6 @@ def translate_concat_where(
         ctx,
         sdfg_builder,
         node.annex.domain,
-        node.type,
         mask_domain,
         tb,
         tb_domain,
