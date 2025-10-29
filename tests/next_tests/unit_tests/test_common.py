@@ -649,7 +649,7 @@ class TestBufferInfo:
         buffer_info = common.BufferInfo.from_ndarray(a)
         assert hash(buffer_info) == buffer_info.hash_key
 
-        # Create a view wit the same data pointer and shape
+        # Create a view with the same data pointer and shape
         b = a[0:None]
         assert np.allclose(a, b)
         assert a is not b
