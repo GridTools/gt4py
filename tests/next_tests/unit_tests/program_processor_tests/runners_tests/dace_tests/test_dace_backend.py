@@ -126,7 +126,6 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
                 gpu_memory_pool=optimization_args["gpu_memory_pool"],
                 optimization_hooks=optimization_args["optimization_hooks"],
                 unit_strides_kind=gtx.common.DimensionKind.HORIZONTAL,
-                validate=False,  # TODO(edopao): remove
             )
             mock_top_level_dataflow_hook1.assert_called_once_with(sdfg)
             mock_top_level_dataflow_hook2.assert_not_called()
@@ -141,7 +140,6 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
                 gpu_memory_pool=optimization_args["gpu_memory_pool"],
                 optimization_hooks=optimization_args["optimization_hooks"],
                 unit_strides_kind=None,
-                validate=False,  # TODO(edopao): remove
             )
             mock_top_level_dataflow_hook1.assert_not_called()
             mock_top_level_dataflow_hook2.assert_called_once_with(sdfg)

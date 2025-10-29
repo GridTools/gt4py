@@ -155,10 +155,10 @@ def gt_remove_map(
     """Remove the Map denoted by `map_entry` _unconditionally_.
 
     The function can only operate on top level Maps, nested Maps are not supported.
-    Furthermore, adjacent nodes that ave become isolated by the Map removal will
+    Furthermore, adjacent nodes that have become isolated by the Map removal will
     also be removed.
     If `remove_unused_data` is specified, then the function will also remove data
-    descriptors that are no longer used and were referenced by the Map.
+    descriptors that were referenced by the Map and are no longer used.
 
     Note, it is the user's responsibility to ensure that the removal of the Map is
     valid as no checks are performed.
@@ -187,24 +187,31 @@ def gt_remove_map(
     map_exit: dace_nodes.MapExit = state.exit_node(map_entry)
     map_scope = state.scope_subgraph(map_entry, include_exit=True, include_entry=True)
 
-    # Find all adjacent nodes, these might be conditionally removed.
-    adjacent_nodes: list[dace_nodes.AccessNode] = [
-        iedge.src for iedge in state.in_edges(map_entry)
-    ] + [oedge.dst for oedge in state.out_edges(map_exit)]
+    # Now find all notes that are producer or consumer of the Map, after we removed
+    #  the nodes of the Maps we need to check if they have become isolated.
+    # NOTE: Needs to be a `set` to handle multiple connections with the MapEntry node.
+    adjacent_nodes: set[dace_nodes.AccessNode] = {iedge.src for iedge in state.in_edges(map_entry)}
+    adjacent_nodes.update(oedge.dst for oedge in state.out_edges(map_exit))
+
+    if not all(isinstance(ac, dace_nodes.AccessNode) for ac in adjacent_nodes):
+        raise ValueError(
+            f"Expected that all adjacent nodes of '{map_entry.map.label}' are AccessNode"
+        )
 
     # Find all the data that is accessed inside the Map scope.
-    if remove_unused_data:
-        map_scope_datas = {ac.data for ac in map_scope.data_nodes()}
+    map_scope_datas: set[str] = (
+        {ac.data for ac in map_scope.data_nodes()} if remove_unused_data else set()
+    )
 
     # Now remove the nodes of the scope.
     removed_number_nodes = map_scope.number_of_nodes()
     state.remove_nodes_from(map_scope.nodes())
 
     # Now check for potentially isolated nodes.
-    for adjacent_node in adjacent_nodes:
+    #  Process them in deterministic order.
+    for adjacent_node in sorted(adjacent_nodes, key=lambda ac: ac.data):
         if state.degree(adjacent_node) == 0:
-            if not isinstance(adjacent_node, dace_nodes.AccessNode):
-                map_scope_datas.add(adjacent_node.data)
+            map_scope_datas.add(adjacent_node.data)
             state.remove_node(adjacent_node)
             removed_number_nodes += 1
 

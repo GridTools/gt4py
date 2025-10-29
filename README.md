@@ -26,13 +26,14 @@ In addition, GT4Py provides functions to allocate arrays with memory layout suit
 
 The following backends are supported:
 
-- `numpy`: Pure-Python backend
+- `numpy`: A vectorized python backend
 - `gt:cpu_ifirst`: GridTools C++ CPU backend using `I`-first data ordering
 - `gt:cpu_kfirst`: GridTools C++ CPU backend using `K`-first data ordering
 - `gt:gpu`: GridTools backend for CUDA
-- `cuda`: CUDA backend minimally using utilities from GridTools
 - `dace:cpu`: Dace code-generated CPU backend
+- `dace:cpu_kfirst`: Dace code-generated CPU backend using `K`-first data ordering
 - `dace:gpu`: Dace code-generated GPU backend
+- `debug`: A pure python backend used for prototyping new features
 
 ## 🚜 Installation
 
