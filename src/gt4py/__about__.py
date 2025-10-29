@@ -35,7 +35,7 @@ __version_info__: pkg_version.Version
 # run for any reason, the fallback value defined here would be used,
 # so, for consistency, it should be set to the same value as the one
 # in `tool.versioningit.default-version` in pyproject.toml.
-on_build_version: Final = "0.0.0+missing.version.info"
+on_build_version: Final = "1.0.10+unknown.version.details"
 
 _static_version: tuple[str, pkg_version.Version] | None = None
 _dir: list[str] | None = None
