@@ -595,12 +595,6 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        sdfg.apply_transformations_repeated(
-            gtx_transformations.RemoveAccessNodeCopies(single_use_data=single_use_data),
-            validate=False,
-            validate_all=validate_all,
-        )
-
         # TODO(phimuell): Figuring out if this is is the correct location for doing it.
         if GT4PyAutoOptHook.TopLevelDataFlowStep in optimization_hooks:
             optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowStep](sdfg)  # type: ignore[call-arg]

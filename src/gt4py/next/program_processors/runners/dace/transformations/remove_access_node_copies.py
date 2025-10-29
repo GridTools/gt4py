@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import warnings
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import dace
 from dace import (
@@ -40,6 +40,14 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
     third_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     fourth_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
 
+    # If given, only apply the transformation to the selected stencils (by SDFG name)
+    stencil_selection = dace_properties.Property(
+        dtype=Sequence,
+        allow_none=True,
+        default=None,
+        desc="If given, only apply the transformation to the selected stencils (by SDFG name)",
+    )
+
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
     #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
@@ -47,11 +55,13 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
 
     def __init__(
         self,
+        stencil_selection: Optional[Sequence[str]] = None,
         *args: Any,
         single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
+        self.stencil_selection = stencil_selection
         self._single_use_data = None
         if single_use_data is not None:
             self._single_use_data = single_use_data
@@ -71,8 +81,11 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        # Check that the SDFG is the vertically_implicit_solver SDFG
-        if not sdfg.name.startswith("vertically_implicit_solver"):
+        # SDFG name is the stencil name followed by a unique id (hash)
+        # If stencil_selection is given, only apply the transformation to the selected stencils
+        if self.stencil_selection is not None and not any(
+            sdfg.name.startswith(stencil_name) for stencil_name in self.stencil_selection
+        ):
             return False
         first_node: dace_nodes.AccessNode = self.first_node
         first_desc: dace_data.Data = first_node.desc(sdfg)
