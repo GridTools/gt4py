@@ -131,6 +131,11 @@ def build_dace_sdfg(
 def apply_margin_on_field_domain(
     node: gtir.Expr, dim: gtx_common.Dimension, margin: tuple[int, int]
 ) -> gtir.Expr:
+    """Helper function to narrow the domain in one dimension.
+
+    The `margin` argument specifies two offsets, the first to be added to the range
+    start, the second to be substracted from the range end.
+    """
     domain = domain_utils.SymbolicDomain.from_expr(node)
     domain.ranges[dim] = domain_utils.SymbolicRange(
         im.plus(domain.ranges[dim].start, margin[0]), im.minus(domain.ranges[dim].stop, margin[1])
