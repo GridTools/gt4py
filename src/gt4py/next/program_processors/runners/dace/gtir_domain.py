@@ -14,8 +14,11 @@ from typing import Optional, Sequence, TypeAlias
 import dace
 from dace import subsets as dace_subsets
 
+from gt4py import eve
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common
-from gt4py.next.iterator.ir_utils import domain_utils
+from gt4py.next.iterator import ir as gtir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_utils
 
 
@@ -55,6 +58,26 @@ def get_field_domain(domain: domain_utils.SymbolicDomain) -> FieldopDomain:
         )
         for dim in gtx_common.order_dimensions(domain.ranges.keys())
     ]
+
+
+TargetDomain: TypeAlias = MaybeNestedInTuple[domain_utils.SymbolicDomain]
+"""Symbolic domain which defines the range to write in the target field.
+
+For tuple output, the corresponding domain in fieldview is a tuple of domains.
+"""
+
+
+class TargetDomainParser(eve.visitors.NodeTranslator):
+    """Visitor class to build a `TargetDomain` symbolic domain."""
+
+    def visit_FunCall(self, node: gtir.FunCall) -> TargetDomain:
+        if cpm.is_call_to(node, "make_tuple"):
+            return tuple(self.visit(arg) for arg in node.args)
+        else:
+            return domain_utils.SymbolicDomain.from_expr(node)
+
+    def apply(cls, node: gtir.Expr) -> TargetDomain:
+        return cls.visit(node)
 
 
 def get_domain_indices(
@@ -99,7 +122,6 @@ def get_field_layout(
 
     Args:
         field_domain: The field operator domain.
-        target_domain: Domain of the target field in the root `SetAt` expression.
 
     Returns:
         A tuple of three lists containing:

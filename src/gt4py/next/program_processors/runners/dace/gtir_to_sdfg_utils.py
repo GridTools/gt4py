@@ -52,6 +52,8 @@ def get_arg_symbol_mapping(
         A mapping from inner symbol names to values or symbolic definitions
         in the parent SDFG.
     """
+    if arg is None:
+        return {}
     if isinstance(arg, gtir_to_sdfg_types.FieldopData):
         return arg.get_symbol_mapping(dataname, sdfg)
 

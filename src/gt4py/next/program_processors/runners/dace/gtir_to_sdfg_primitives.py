@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional, Protocol
 import dace
 from dace import subsets as dace_subsets
 
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import (
@@ -72,20 +73,16 @@ def _parse_fieldop_arg(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     domain: gtir_domain.FieldopDomain,
-) -> (
-    gtir_dataflow.IteratorExpr
-    | gtir_dataflow.MemletExpr
-    | tuple[gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr | tuple[Any, ...], ...]
-):
-    """Helper method to visit an expression passed as argument to a field operator."""
-
+) -> MaybeNestedInTuple[gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr]:
+    """
+    Helper method to visit an expression passed as argument to a field operator
+    and create the local view for the field argument.
+    """
     arg = sdfg_builder.visit(node, ctx=ctx)
 
-    if isinstance(arg, gtir_to_sdfg_types.FieldopData):
-        return arg.get_local_view(domain, ctx.sdfg)
-    else:
-        # handle tuples of fields
-        return gtx_utils.tree_map(lambda targ: targ.get_local_view(domain))(arg)
+    if not isinstance(arg, gtir_to_sdfg_types.FieldopData):
+        raise ValueError("Expected a field, found a tuple of fields.")
+    return arg.get_local_view(domain, ctx.sdfg)
 
 
 def _create_field_operator_impl(
@@ -234,8 +231,8 @@ def _create_field_operator(
         # handle tuples of fields
         output_symbol_tree = gtir_to_sdfg_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
-            lambda output_edge, output_sym: _create_field_operator_impl(
-                ctx, sdfg_builder, domain, output_edge, output_sym.type, map_exit
+            lambda edge, sym, ctx_=ctx: _create_field_operator_impl(
+                ctx_, sdfg_builder, domain, edge, sym.type, map_exit
             )
         )(output_tree, output_symbol_tree)
 
@@ -620,7 +617,7 @@ def translate_tuple_get(
     if isinstance(data_nodes, gtir_to_sdfg_types.FieldopData):
         raise ValueError(f"Invalid tuple expression {node}")
     unused_arg_nodes: Iterable[gtir_to_sdfg_types.FieldopData] = gtx_utils.flatten_nested_tuple(
-        tuple(arg for i, arg in enumerate(data_nodes) if i != index)
+        tuple(arg for i, arg in enumerate(data_nodes) if arg is not None and i != index)
     )
     ctx.state.remove_nodes_from(
         [arg.dc_node for arg in unused_arg_nodes if ctx.state.degree(arg.dc_node) == 0]
