@@ -160,3 +160,8 @@ class ConstructorType(CallableType):
 
 class DomainType(DataType):
     dims: list[common.Dimension]
+
+
+class DictType(DataType):
+    keys: list[common.Dimension | str]
+    values: list[DataType]

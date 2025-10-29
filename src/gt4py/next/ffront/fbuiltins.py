@@ -19,7 +19,7 @@ from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, ui
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
+from gt4py.next.common import Dimension, Field, domain  # noqa: F401 [unused-import] for TYPE_BUILTINS
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -300,6 +300,7 @@ FUN_BUILTIN_NAMES = [
     "broadcast",
     "where",
     "astype",
+    "domain",  # todo: this is the only builtin not defined in this module is this a problem?
     *MATH_BUILTIN_NAMES,
 ]
 
