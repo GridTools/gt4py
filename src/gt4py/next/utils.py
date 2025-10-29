@@ -364,8 +364,11 @@ def make_args_canonicalizer_factory(
                 # Args are already canonical, return identity
                 return cast(CallArgsCanonicalizer, lambda args, kwargs: (args, kwargs))
 
+        beautified_passed_kwargs_keys = str.join(
+            "_", (f"{key[:7]}{len(key)}" if len(key) > 8 else key for key in passed_kwargs_keys)
+        )
         canonicalizer_func_name = (
-            f"canonicalizer_for_{name}_{passed_pos_args_count}_{str.join('_', passed_kwargs_keys)}"
+            f"canonicalizer_for_{name}_{passed_pos_args_count}__{beautified_passed_kwargs_keys}"
         )
         canonicalizer_src = f"""
 from __future__ import annotations
