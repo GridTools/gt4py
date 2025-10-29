@@ -287,12 +287,12 @@ def translate_as_fieldop(
 
     # parse the domain of the field operator
     assert isinstance(fieldop_domain_expr.type, ts.DomainType)
-    fieldop_domain = gtir_domain.get_field_domain(
+    field_domain = gtir_domain.get_field_domain(
         domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
     )
 
     # visit the list of arguments to be passed to the lambda expression
-    fieldop_args = [_parse_fieldop_arg(arg, ctx, sdfg_builder, fieldop_domain) for arg in node.args]
+    fieldop_args = [_parse_fieldop_arg(arg, ctx, sdfg_builder, field_domain) for arg in node.args]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
     input_edges, output_edges = gtir_dataflow.translate_lambda_to_dataflow(
@@ -300,14 +300,14 @@ def translate_as_fieldop(
     )
 
     return _create_field_operator(
-        ctx, fieldop_domain, node.type, sdfg_builder, input_edges, output_edges
+        ctx, field_domain, node.type, sdfg_builder, input_edges, output_edges
     )
 
 
 def _construct_if_branch_output(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    field_domain: domain_utils.SymbolicDomain,
+    domain: domain_utils.SymbolicDomain,
     true_br: gtir_to_sdfg_types.FieldopData,
     false_br: gtir_to_sdfg_types.FieldopData,
 ) -> gtir_to_sdfg_types.FieldopData:
@@ -325,7 +325,7 @@ def _construct_if_branch_output(
         return gtir_to_sdfg_types.FieldopData(out_node, out_type, origin=())
 
     assert isinstance(out_type, ts.FieldType)
-    dims, origin, shape = gtir_domain.get_field_layout(gtir_domain.get_field_domain(field_domain))
+    dims, origin, shape = gtir_domain.get_field_layout(gtir_domain.get_field_domain(domain))
     assert dims == out_type.dims
 
     if isinstance(out_type.dtype, ts.ScalarType):
@@ -444,14 +444,7 @@ def translate_if(
     true_br_result = sdfg_builder.visit(true_expr, ctx=tbranch_ctx)
     false_br_result = sdfg_builder.visit(false_expr, ctx=fbranch_ctx)
 
-    if isinstance(node.type, ts.TupleType):
-        symbol_tree = gtir_to_sdfg_utils.make_symbol_tree("x", node.type)
-        if isinstance(node.annex.domain, tuple):
-            domain_tree = node.annex.domain
-        else:
-            # TODO(edopao): this is a workaround for some IR nodes where the inferred
-            #   domain on a tuple of fields is not a tuple, see `test_execution.py::test_ternary_operator_tuple()`
-            domain_tree = gtx_utils.tree_map(lambda _: node.annex.domain)(symbol_tree)
+    if isinstance(node.annex.domain, tuple):
         node_output = gtx_utils.tree_map(
             lambda domain,
             true_br,
@@ -465,26 +458,36 @@ def translate_if(
                 false_br,
             )
         )(
-            domain_tree,
-            true_br_result,
-            false_br_result,
-        )
-        gtx_utils.tree_map(
-            lambda src, dst, _ctx=tbranch_ctx: _write_if_branch_output(_ctx, src, dst)
-        )(true_br_result, node_output)
-        gtx_utils.tree_map(
-            lambda src, dst, _ctx=fbranch_ctx: _write_if_branch_output(_ctx, src, dst)
-        )(false_br_result, node_output)
-    else:
-        node_output = _construct_if_branch_output(
-            ctx,
-            sdfg_builder,
             node.annex.domain,
             true_br_result,
             false_br_result,
         )
-        _write_if_branch_output(tbranch_ctx, true_br_result, node_output)
-        _write_if_branch_output(fbranch_ctx, false_br_result, node_output)
+    else:
+        # TODO(edopao): This is a workaround for some IR nodes where the inferred
+        #   domain on a tuple of fields is not a tuple, but a single domain, see
+        #   `test_execution.py::test_ternary_operator_tuple()`
+        node_output = gtx_utils.tree_map(
+            lambda true_br,
+            false_br,
+            _ctx=ctx,
+            _domain=node.annex.domain,
+            sdfg_builder=sdfg_builder: _construct_if_branch_output(
+                _ctx,
+                sdfg_builder,
+                _domain,
+                true_br,
+                false_br,
+            )
+        )(
+            true_br_result,
+            false_br_result,
+        )
+    gtx_utils.tree_map(lambda src, dst, _ctx=tbranch_ctx: _write_if_branch_output(_ctx, src, dst))(
+        true_br_result, node_output
+    )
+    gtx_utils.tree_map(lambda src, dst, _ctx=fbranch_ctx: _write_if_branch_output(_ctx, src, dst))(
+        false_br_result, node_output
+    )
 
     return node_output
 
@@ -502,9 +505,9 @@ def translate_index(
     assert cpm.is_call_to(node, "index")
     assert isinstance(node.type, ts.FieldType)
 
-    output_domain = gtir_domain.get_field_domain(node.annex.domain)
-    assert len(output_domain) == 1
-    dim_index = gtir_to_sdfg_utils.get_map_variable(output_domain[0].dim)
+    field_domain = gtir_domain.get_field_domain(node.annex.domain)
+    assert len(field_domain) == 1
+    dim_index = gtir_to_sdfg_utils.get_map_variable(field_domain[0].dim)
 
     index_data, _ = sdfg_builder.add_temp_scalar(ctx.sdfg, gtir_to_sdfg_types.INDEX_DTYPE)
     index_node = ctx.state.add_access(index_data)
@@ -532,7 +535,7 @@ def translate_index(
     ]
     output_edge = gtir_dataflow.DataflowOutputEdge(ctx.state, index_value)
     return _create_field_operator(
-        ctx, output_domain, node.type, sdfg_builder, input_edges, (output_edge,)
+        ctx, field_domain, node.type, sdfg_builder, input_edges, (output_edge,)
     )
 
 

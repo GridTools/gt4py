@@ -539,6 +539,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         Returns:
             The SDFG array nodes containing the result of the fieldview expression.
+            The nodes are organized in tree form, in case of tuples.
         """
 
         ctx = SubgraphContext(sdfg, head_state)
@@ -726,9 +727,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             assert not target_desc.transient
 
             assert source.gt_type == target.gt_type
-            compute_domain = gtir_domain.get_field_domain(target_domain)
-            source_subset = _make_access_index_for_field(compute_domain, source)
-            target_subset = _make_access_index_for_field(compute_domain, target)
+            field_domain = gtir_domain.get_field_domain(target_domain)
+            source_subset = _make_access_index_for_field(field_domain, source)
+            target_subset = _make_access_index_for_field(field_domain, target)
 
             if target.dc_node.data in state_input_data:
                 # if inout argument, write the result in separate next state
