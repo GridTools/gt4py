@@ -121,6 +121,11 @@ def build_dace_sdfg(
     offset_provider: gtx_common.OffsetProvider,
     skip_domain_inference: bool = False,
 ) -> Callable[..., Any]:
+    """Wrapper of `dace_backend.build_sdfg_from_gtir()` to run domain inference.
+
+    Before calling `dace_backend.build_sdfg_from_gtir()`, it will infer the domain
+    of the given `ir`, unless called with `skip_domain_inference=True`.
+    """
     if not skip_domain_inference:
         # run domain inference in order to add the domain annex information to the IR nodes
         ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
@@ -133,8 +138,8 @@ def apply_margin_on_field_domain(
 ) -> gtir.Expr:
     """Helper function to narrow the domain in one dimension.
 
-    The `margin` argument specifies two offsets, the first to be added to the range
-    start, the second to be substracted from the range end.
+    The `margin` argument specifies two integer offsets, the first to be added
+    to the range start, the second to be substracted from the range end.
     """
     domain = domain_utils.SymbolicDomain.from_expr(node)
     domain.ranges[dim] = domain_utils.SymbolicRange(
