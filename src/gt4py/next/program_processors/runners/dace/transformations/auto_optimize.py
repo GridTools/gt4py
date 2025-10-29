@@ -466,8 +466,8 @@ def _gt_auto_process_top_level_maps(
         )
 
         # Promote Maps. This will remove transients between 1D and 2D Maps, at the
-        #  code of more data loads from memory. Empirical observations have shown
-        #  that this is beneficial; Especially for Nabla4 type kernel in conjunction
+        #  cost of more data loads from memory. Empirical observations have shown
+        #  that this is beneficial; especially for Nabla4-type kernel in conjunction
         #  with `LoopBlocking`.
         # NOTE: We have to promote before we do horizontal Map fusion.
         sdfg.apply_transformations_repeated(
