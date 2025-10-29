@@ -27,6 +27,7 @@ from gt4py.eve.extended_typing import (
     Iterator,
     Literal,
     Protocol,
+    Self,
     Sequence,
     Tuple,
     Type,
@@ -421,6 +422,10 @@ class Device(Generic[DeviceTypeT]):
 
     device_type: DeviceTypeT
     device_id: int
+
+    @classmethod
+    def from_dlpack_device(cls: type[Self], dlpack_device: tuple[DeviceTypeT, int]) -> Self:
+        return cls(*dlpack_device)
 
     def __iter__(self) -> Iterator[DeviceTypeT | int]:
         yield self.device_type
