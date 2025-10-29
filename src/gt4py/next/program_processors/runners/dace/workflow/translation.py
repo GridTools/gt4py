@@ -170,7 +170,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     The execution time is measured in seconds and represented as a 'float64' value.
     It is returned from the SDFG as a one-element array in the '__return' data node.
     """
-    output, _ = sdfg.add_array("__return", [1], dace.float64)
+    output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.float64, transient=True)
     metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
 
@@ -399,6 +399,7 @@ class DaCeTranslator(
                 sdfg, constant_symbols, validate=True
             )
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+
         elif len(constant_symbols) != 0:
             # Target CPU without SDFG transformations, but still replace constant symbols.
             # Replacing the SDFG symbols for field origin in global arrays is strictly
