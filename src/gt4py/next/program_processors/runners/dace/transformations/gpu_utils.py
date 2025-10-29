@@ -701,13 +701,6 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
                     stacklevel=0,
                 )
 
-            elif non_trivial_1d_map_degenerated_map_dimension is None:
-                warnings.warn(
-                    f"Map '{gpu_map}' has {dims_to_inspect} dimensions but not all are non trivial (range > 1). "
-                    "Handling it as a map with full dimensions.",
-                    stacklevel=0,
-                )
-
         # Because of a particularity of the DaCe code generator, the iteration
         #  variable that is associated to the `x` dimension of the block is the
         #  last parameter, i.e. `gpu_map.params[-1]`. The one for `y` the second last.
@@ -722,6 +715,12 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
                 block_size[len(map_size) - non_trivial_1d_map_degenerated_map_dimension - 1] = (
                     self.block_size_1d[0]
                 )
+                if non_trivial_1d_map_degenerated_map_dimension != 0:
+                    warnings.warn(
+                        f"Blocksize of 1d Map '{gpu_map}' was set to {block_size}, but the iteration index is not the x dimension.",
+                        stacklevel=0,
+                    )
+
             else:
                 block_size = list(self.block_size_1d)
 
