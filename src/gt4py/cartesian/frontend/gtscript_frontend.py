@@ -1695,9 +1695,11 @@ class IRMaker(ast.NodeVisitor):
 
                             axes = self._domain_from_gtscript_axis(field_desc.axes).axes_names
                             dtype = nodes.DataType.from_dtype(field_desc.dtype)
-                        else:
+                        elif isinstance(dtype_or_field_desc, nodes.DataType):
                             dtype = dtype_or_field_desc
-
+                        else:
+                            # If all failed, expect a proper type and try to convert it
+                            dtype = nodes.DataType.from_dtype(dtype_or_field_desc)
                     field_decl = nodes.FieldDecl(
                         name=name,
                         data_type=dtype,

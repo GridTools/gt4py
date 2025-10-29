@@ -461,6 +461,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             transient this is okay, as our rule guarantees this.
 
     Todo:
+        - Completely remove `temp_storage`, i.e. write directly into `dest_storage`.
         - Allow that `dest_storage` can also be transient.
         - Allow that `dest_storage` does not need to be a sink node, this is most
             likely most relevant if it is transient.
@@ -522,6 +523,8 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             final_dest_name: str = wb_edge.dst.data
 
             for def_an, def_state in def_locations:
+                # TODO(phimuell): Do not create a copy from `temp_storage` to the newly
+                #   created `dest_storage`. Instead bypass `temp_storage` fully.
                 def_state.add_edge(
                     def_an,
                     wb_edge.src_conn,
