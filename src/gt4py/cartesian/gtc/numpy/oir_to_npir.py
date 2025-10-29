@@ -49,6 +49,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return npir.TemporaryDecl(
             name=node.name,
             dtype=node.dtype,
+            dimensions=node.dimensions,
             data_dims=node.data_dims,
             offset=offset,
             padding=padding,
@@ -82,6 +83,9 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         raise NotImplementedError(
             "Absolute K indexation (e.g. `field.at(...)`) is an experimental feature and not yet implemented for the `numpy` backend."
         )
+
+    def visit_IteratorAccess(self, node: oir.IteratorAccess, **kwargs: Any) -> None:
+        raise NotImplementedError(f"Iterator access ({node.name}) is not implemented for numpy")
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> npir.FieldSlice:
         i_offset, j_offset, k_offset = self.visit(node.offset, **kwargs)

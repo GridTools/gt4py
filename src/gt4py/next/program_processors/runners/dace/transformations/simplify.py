@@ -62,6 +62,7 @@ def gt_simplify(
         `concat_where` built-in function.
     - `GT4PyDeadDataflowElimination`: Run `gt_eliminate_dead_dataflow()` on the SDFG,
         which removes more dead dataflow than the native DaCe version.
+    - `MapToCopy`: Called to remove some slices.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -137,6 +138,23 @@ def gt_simplify(
                 if "FuseStates" not in result:
                     result["FuseStates"] = 0
                 result["FuseStates"] += fuse_state_res
+
+        if "MapToCopy" not in skip:
+            find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()
+            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+            removed_maps = sdfg.apply_transformations_once_everywhere(
+                gtx_transformations.MapToCopy(
+                    single_use_data=single_use_data,
+                ),
+                validate=False,
+                validate_all=validate_all,
+            )
+            if removed_maps:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "MapToCopy" not in result:
+                    result["MapToCopy"] = 0
+                result["MapToCopy"] += removed_maps
 
         if "GT4PyDeadDataflowElimination" not in skip:
             eliminate_dead_dataflow_res = gtx_transformations.gt_eliminate_dead_dataflow(
@@ -443,6 +461,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             transient this is okay, as our rule guarantees this.
 
     Todo:
+        - Completely remove `temp_storage`, i.e. write directly into `dest_storage`.
         - Allow that `dest_storage` can also be transient.
         - Allow that `dest_storage` does not need to be a sink node, this is most
             likely most relevant if it is transient.
@@ -504,6 +523,8 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             final_dest_name: str = wb_edge.dst.data
 
             for def_an, def_state in def_locations:
+                # TODO(phimuell): Do not create a copy from `temp_storage` to the newly
+                #   created `dest_storage`. Instead bypass `temp_storage` fully.
                 def_state.add_edge(
                     def_an,
                     wb_edge.src_conn,

@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import dataclasses
 import os
-from typing import Any, Callable, Sequence
+from collections.abc import Callable, MutableSequence, Sequence
+from typing import Any
 
 import dace
 import factory
@@ -31,7 +32,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
 
     # The compiled program contains a callable object to update the SDFG arguments list.
     update_sdfg_ctype_arglist: Callable[
-        [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], Sequence[Any]],
+        [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], MutableSequence[Any]],
         None,
     ]
 
@@ -55,11 +56,13 @@ class CompiledDaceProgram(stages.CompiledProgram):
         # For debug purpose, we set a unique module name on the compiled function.
         self.update_sdfg_ctype_arglist.__module__ = os.path.basename(program.sdfg.build_folder)
 
-    def __call__(self, **kwargs: Any) -> Any:
-        return self.sdfg_program(**kwargs)
+    def __call__(self, **kwargs: Any) -> None:
+        result = self.sdfg_program(**kwargs)
+        assert result is None
 
-    def fast_call(self) -> Any:
-        return self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
+    def fast_call(self) -> None:
+        result = self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
+        assert result is None
 
 
 @dataclasses.dataclass(frozen=True)

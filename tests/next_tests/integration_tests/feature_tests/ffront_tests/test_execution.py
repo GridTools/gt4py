@@ -365,7 +365,6 @@ def test_scalar_arg_with_field(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
-@pytest.mark.uses_tuple_args
 def test_double_use_scalar(cartesian_case):
     # TODO(tehrengruber): This should be a regression test on ITIR level, but tracing doesn't
     #  work for this case.

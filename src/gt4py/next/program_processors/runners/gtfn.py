@@ -56,15 +56,12 @@ def convert_args(
         converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
 
-        opt_kwargs: dict[str, Any]
-
+        opt_kwargs: dict[str, Any] = {}
         if collect_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE):
             # If we are collecting metrics, we need to add the `exec_info` argument
             # to the `inp` call, which will be used to collect performance metrics.
             exec_info: dict[str, float] = {}
-            opt_kwargs = {"exec_info": exec_info}
-        else:
-            opt_kwargs = {}
+            opt_kwargs["exec_info"] = exec_info
 
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
         inp(
@@ -84,15 +81,26 @@ def extract_connectivity_args(
     offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
 ) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
     # Note: this function is on the hot path and needs to have minimal overhead.
-    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = []
-    # Note: the order here needs to agree with the order of the generated bindings
-    for conn in offset_provider.values():
-        if (ndarray := getattr(conn, "ndarray", None)) is not None:
-            assert common.is_neighbor_table(conn)
-            assert field_utils.verify_device_field_type(conn, device)
-            args.append((ndarray, (0, 0)))
-            continue
-        assert isinstance(conn, common.Dimension)
+    zero_origin = (0, 0)
+    assert all(
+        hasattr(conn, "ndarray") or isinstance(conn, common.Dimension)
+        for conn in offset_provider.values()
+    )
+    # Note: the order here needs to agree with the order of the generated bindings.
+    # This is currently true only because when hashing offset provider dicts,
+    # the keys' order is taken into account. Any modification to the hashing
+    # of offset providers may break this assumption here.
+    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = [
+        (ndarray, zero_origin)
+        for conn in offset_provider.values()
+        if (ndarray := getattr(conn, "ndarray", None)) is not None
+    ]
+    assert all(
+        common.is_neighbor_table(conn) and field_utils.verify_device_field_type(conn, device)
+        for conn in offset_provider.values()
+        if hasattr(conn, "ndarray")
+    )
+
     return args
 
 
