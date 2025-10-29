@@ -153,6 +153,11 @@ class NdArrayField(
 
     @property
     def __gt_buffer_info__(self) -> common.BufferInfo:
+        """
+        Fallback implementation to retrieve the 'BufferInfo' of a Field.
+        
+        See cached implementations on the NDArrayField subclasses.
+        """
         return common.BufferInfo.from_ndarray(self.ndarray)
 
     @property
