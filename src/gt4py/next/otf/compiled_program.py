@@ -285,7 +285,9 @@ class CompiledProgramsPool:
     @functools.cached_property
     def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
         signature = inspect.signature(self.definition_stage.definition)
-        return gtx_utils.make_args_canonicalizer(signature)
+        return gtx_utils.make_args_canonicalizer(
+            signature, name=self.definition_stage.definition.__name__
+        )
 
     @functools.cached_property
     def _metrics_key_from_pool_key(self) -> Callable[[CompiledProgramsKey], str]:

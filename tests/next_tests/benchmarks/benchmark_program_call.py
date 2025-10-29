@@ -15,14 +15,26 @@ import pytest
 from gt4py import next as gtx
 from gt4py.next import Dims, gtfn_cpu, gtfn_gpu, broadcast, typing as gtx_typing
 
-BACKENDS: Final = [gtfn_cpu]
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
 
 try:
     from gt4py.next.program_processors.runners import dace as dace_backends
 
-    BACKENDS += [dace_backends.run_dace_cpu_cached]
+    DACE_BACKENDS = (
+        [dace_backends.run_dace_cpu_cached, dace_backends.run_dace_gpu_cached]
+        if cp is not None
+        else [dace_backends.run_dace_cpu_cached]
+    )
 except ImportError:
-    pass
+    DACE_BACKENDS = []
+
+
+GTFN_BACKENDS = [gtfn_cpu, gtfn_gpu] if cp is not None else [gtfn_cpu]
+
+BACKENDS: Final = GTFN_BACKENDS + DACE_BACKENDS
 
 
 if TYPE_CHECKING:
@@ -309,6 +321,9 @@ def benchmark_horizontal_copy_25_arg_program(
 
 # This is useful for running this module as a python script,
 # mostly for profiling/debugging backends.
+# Example usage:
+#   python tests/next_tests/benchmarks/benchmark_program_call.py --backend=gtfn-cpu
+#   PYTHONOPTIMIZE=2 viztracer -o profile.json tests/next_tests/benchmarks/benchmark_program_call.py --backend=dace-cpu
 if __name__ == "__main__":
     import functools
     import sys
@@ -338,4 +353,4 @@ if __name__ == "__main__":
 
     for backend in backends:
         print(f"Running benchmarks with backend: {backend.name}")
-        benchmark_horizontal_copy_05_arg_program(benchmark, backend)
+        benchmark_horizontal_copy_25_arg_program(benchmark, backend)
