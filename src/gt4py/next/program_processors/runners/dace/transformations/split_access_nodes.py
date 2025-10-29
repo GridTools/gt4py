@@ -71,6 +71,10 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
     Args:
         single_use_data: The list of data that is used only once.
+        assume_single_use_data: Assume that `access_node` is single use data.
+            Note this flag should _only_ be used if the transformation is used
+            through the `apply_to()` interface and the caller has ensured that
+            `self.access_node` really is single use data.
 
     Todo:
         - Made it possible to merge splits, i.e. such that a fragment can
@@ -81,6 +85,12 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
 
+    assume_single_use_data = dace_properties.Property(
+        dtype=bool,
+        default=False,
+        desc="Always assume that `self.access_node` is single use data. Only useful if used through `SplitAccessNode.apply_to()`.",
+    )
+
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
     #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
@@ -90,12 +100,13 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         self,
         *args: Any,
         single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+        assume_single_use_data: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self._single_use_data = None
-        if single_use_data is not None:
-            self._single_use_data = single_use_data
+        self._single_use_data = single_use_data
+        if assume_single_use_data is not None:
+            self.assume_single_use_data = assume_single_use_data
 
     @classmethod
     def expressions(cls) -> Any:
@@ -144,6 +155,8 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         ):
             return False
 
+        if self.assume_single_use_data:
+            single_use_data = {sdfg: {access_node.data}}
         if self._single_use_data is None:
             find_single_use_data = dace_analysis.FindSingleUseData()
             single_use_data = find_single_use_data.apply_pass(sdfg, None)
