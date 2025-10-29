@@ -42,7 +42,7 @@ lint = [
   'tach>=0.23.0',
   'validate-pyproject-schema-store[all]>=2025.06.13'
 ]
-scripts = ["pyyaml>=6.0.1", "typer>=0.12.3"]
+scripts = ["pyyaml>=6.0.1", "typer>=0.12.3", "packaging"]
 test = [
   'coverage[toml]>=7.6.1',
   'hypothesis>=6.0.0',
@@ -458,7 +458,7 @@ dace = [
 
 # -- versioningit --
 [tool.versioningit]
-default-version = "0.0.0+missing.version.info"
+default-version = "1.0.10+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty
