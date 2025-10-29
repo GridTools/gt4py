@@ -151,12 +151,17 @@ class NdArrayField(
         assert common.Domain.is_finite(self.domain)
         return tuple(-r.start for r in self.domain.ranges)
 
-    @property
+    @functools.cached_property
     def __gt_buffer_info__(self) -> common.BufferInfo:
         """
-        Fallback implementation to retrieve the 'BufferInfo' of a Field.
+        Interface to retrieve the low-level description of a Field buffer.
 
-        See cached implementations on the NDArrayField subclasses.
+        Since by default NdArrayFields are implemented as frozen dataclasses,
+        and therefore the backing ndarray cannot be replaced after creation,
+        this is implemented as a cached property for performance reasons.
+
+        NDArrayField subclasses where the backing ndarray can be replaced
+        should override this and make it a regular property.
         """
         return common.BufferInfo.from_ndarray(self.ndarray)
 
@@ -1055,13 +1060,6 @@ _nd_array_implementations = [np]
 class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
-    # It is only possible to cache the data buffer info in this way
-    # because the backing np.ndarray can never be replaced after creation,
-    # since this is a frozen dataclass.
-    @functools.cached_property
-    def __gt_buffer_info__(self) -> common.BufferInfo:
-        return common.BufferInfo.from_ndarray(self.ndarray)
-
 
 common._field.register(np.ndarray, NumPyArrayField.from_array)
 
@@ -1069,10 +1067,6 @@ common._field.register(np.ndarray, NumPyArrayField.from_array)
 @dataclasses.dataclass(frozen=True, eq=False)
 class NumPyArrayConnectivityField(NdArrayConnectivityField):
     array_ns: ClassVar[ModuleType] = np
-
-    @functools.cached_property
-    def __gt_buffer_info__(self) -> common.BufferInfo:
-        return common.BufferInfo.from_ndarray(self.ndarray)
 
 
 common._connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array)
@@ -1085,23 +1079,11 @@ if cp:
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
 
-        # Same as in the NumPy case:
-        # It is only possible to cache the data buffer info in this way
-        # because the backing cp.ndarray is never replaced after creation
-        # since this is a frozen dataclass.
-        @functools.cached_property
-        def __gt_buffer_info__(self) -> common.BufferInfo:
-            return common.BufferInfo.from_ndarray(self.ndarray)
-
     common._field.register(cp.ndarray, CuPyArrayField.from_array)
 
     @dataclasses.dataclass(frozen=True, eq=False)
     class CuPyArrayConnectivityField(NdArrayConnectivityField):
         array_ns: ClassVar[ModuleType] = cp
-
-        @functools.cached_property
-        def __gt_buffer_info__(self) -> common.BufferInfo:
-            return common.BufferInfo.from_ndarray(self.ndarray)
 
     common._connectivity.register(cp.ndarray, CuPyArrayConnectivityField.from_array)
 
@@ -1112,6 +1094,10 @@ if jnp:
     @dataclasses.dataclass(frozen=True, eq=False)
     class JaxArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
+
+        @property
+        def __gt_buffer_info__(self) -> common.BufferInfo:
+            raise NotImplementedError("'__gt_buffer_info__' for JaxArrayField not yet implemented.")
 
         def __setitem__(
             self,
