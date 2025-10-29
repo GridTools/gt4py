@@ -43,18 +43,17 @@ def get_field_domain(domain: domain_utils.SymbolicDomain) -> FieldopDomain:
     """
     Visits the domain of a field operator and returns a list of dimensions and
     the corresponding lower and upper bounds. The returned lower bound is inclusive,
-    the upper bound is exclusive: [lower_bound, upper_bound[
+    the upper bound is exclusive, i.e. `[lower_bound, upper_bound[`
 
     Note that the doman dimensions are sorted in gt4py canonical order.
     """
-    sorted_dims = gtx_common.order_dimensions(domain.ranges.keys())
     return [
         FieldopDomainRange(
             dim,
             gtir_to_sdfg_utils.get_symbolic(domain.ranges[dim].start),
             gtir_to_sdfg_utils.get_symbolic(domain.ranges[dim].stop),
         )
-        for dim in sorted_dims
+        for dim in gtx_common.order_dimensions(domain.ranges.keys())
     ]
 
 

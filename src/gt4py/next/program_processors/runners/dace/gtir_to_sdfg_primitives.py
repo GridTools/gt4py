@@ -444,44 +444,23 @@ def translate_if(
     true_br_result = sdfg_builder.visit(true_expr, ctx=tbranch_ctx)
     false_br_result = sdfg_builder.visit(false_expr, ctx=fbranch_ctx)
 
-    if isinstance(node.annex.domain, tuple):
-        node_output = gtx_utils.tree_map(
-            lambda domain,
-            true_br,
-            false_br,
-            _ctx=ctx,
-            sdfg_builder=sdfg_builder: _construct_if_branch_output(
-                ctx=_ctx,
-                sdfg_builder=sdfg_builder,
-                field_domain=gtir_domain.get_field_domain(domain),
-                true_br=true_br,
-                false_br=false_br,
-            )
-        )(
-            node.annex.domain,
-            true_br_result,
-            false_br_result,
+    node_output = gtx_utils.tree_map(
+        lambda domain,
+        true_br,
+        false_br,
+        _ctx=ctx,
+        sdfg_builder=sdfg_builder: _construct_if_branch_output(
+            ctx=_ctx,
+            sdfg_builder=sdfg_builder,
+            field_domain=gtir_domain.get_field_domain(domain),
+            true_br=true_br,
+            false_br=false_br,
         )
-    else:
-        # TODO(edopao): This is a workaround for some IR nodes where the inferred
-        #   domain on a tuple of fields is not a tuple, but a single domain, see
-        #   `test_execution.py::test_ternary_operator_tuple()`
-        node_output = gtx_utils.tree_map(
-            lambda true_br,
-            false_br,
-            _ctx=ctx,
-            _domain=node.annex.domain,
-            sdfg_builder=sdfg_builder: _construct_if_branch_output(
-                ctx=_ctx,
-                sdfg_builder=sdfg_builder,
-                field_domain=gtir_domain.get_field_domain(_domain),
-                true_br=true_br,
-                false_br=false_br,
-            )
-        )(
-            true_br_result,
-            false_br_result,
-        )
+    )(
+        node.annex.domain,
+        true_br_result,
+        false_br_result,
+    )
     gtx_utils.tree_map(lambda src, dst, _ctx=tbranch_ctx: _write_if_branch_output(_ctx, src, dst))(
         true_br_result, node_output
     )
