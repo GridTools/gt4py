@@ -202,20 +202,30 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
         return ",".join([self.visit(interval.start, **kwargs), self.visit(interval.end, **kwargs)])
 
     def visit_Temporary(self, temporary_declaration: oir.Temporary, **kwargs) -> str:
+        # Cartesian IJ
         field_extents = kwargs["field_extents"]
         local_field_extent = field_extents[temporary_declaration.name]
         i_padding: int = local_field_extent[0][1] - local_field_extent[0][0]
         j_padding: int = local_field_extent[1][1] - local_field_extent[1][0]
-        shape: list[str] = [f"i_size + {i_padding}", f"j_size + {j_padding}", "k_size"]
-        data_dimensions: list[str] = [str(dim) for dim in temporary_declaration.data_dims]
-        shape = shape + data_dimensions
-        shape_decl = ", ".join(shape)
-        dtype: str = self.visit(temporary_declaration.dtype)
+        shape: list[str] = [f"i_size + {i_padding}", f"j_size + {j_padding}"]
         field_offset = tuple(-ext[0] for ext in local_field_extent)
-        offset = [str(off) for off in field_offset] + ["0"] * (
-            1 + len(temporary_declaration.data_dims)
-        )
-        return f"{temporary_declaration.name} = Field.empty(({shape_decl}), {dtype}, ({', '.join(offset)}))"
+        offset = [str(off) for off in field_offset]
+
+        # Cartesian vertical dimension K
+        if temporary_declaration.dimensions[2]:
+            shape.append("k_size")
+            offset.append("0")
+
+        # Data dimensions
+        data_dimensions: list[str] = [str(dim) for dim in temporary_declaration.data_dims]
+        offset += ["0"] * len(temporary_declaration.data_dims)
+
+        # All together to write the `Field.empty` call
+        dims = temporary_declaration.dimensions
+        shape_decl = ", ".join(shape + data_dimensions)
+        dtype: str = self.visit(temporary_declaration.dtype)
+
+        return f"{temporary_declaration.name} = Field.empty(({shape_decl}), {dtype}, ({', '.join(offset)}), {dims})"
 
     def visit_DataType(self, data_type: gtc_common.DataType, **_) -> str:
         if data_type in {gtc_common.DataType.BOOL}:

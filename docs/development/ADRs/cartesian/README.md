@@ -48,6 +48,5 @@ Backend ADRs are sorted per backend in the following table:
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `debug`      | [Debug backend](./backend/debug.md)                                                                                                                                                                |
 | `dace:*`     | [`dace:*` backends](./backend/dace.md) \| [`dace:cpu_kfirst`](./backend/dace-cpu-kfirst.md) <br/> [Schedule tree](./backend/dace-schedule-tree.md) <br/> [DaCe version](./backend/dace-version.md) |
-| `cuda`       | [Feature freeze](./backend/cuda-feature-freeze.md)                                                                                                                                                 |
 | `numpy`      | (none so far)                                                                                                                                                                                      |
 | `gt:*`       | (none so far)                                                                                                                                                                                      |
