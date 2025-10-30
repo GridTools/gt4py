@@ -75,8 +75,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
         #   used the first time the SDFG is called and only contains the symbols. We do not
         #   update it, thus we keep it in whatever container DaCe returns us.
         with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
-            # TODO(phimuell): Make a PR that makes this function public.
-            processed_csdfg_args = self.sdfg_program._construct_args(kwargs)
+            processed_csdfg_args = self.sdfg_program.construct_arguments(**kwargs)
         assert isinstance(processed_csdfg_args, tuple) and len(processed_csdfg_args) == 2
         self.csdfg_args = (list(processed_csdfg_args[0]), processed_csdfg_args[1])
 
