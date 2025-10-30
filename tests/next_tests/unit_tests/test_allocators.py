@@ -155,7 +155,7 @@ class TestInvalidFieldBufferAllocator:
         )
         I = common.Dimension("I")
         J = common.Dimension("J")
-        domain = common.domain(((I, (2, 4)), (J, (3, 5))))
+        domain = common.domain({I: (2, 4), J: (3, 5)})
         dtype = float
         with pytest.raises(ValueError, match="test error"):
             allocator.__gt_allocate__(domain, dtype)
@@ -166,7 +166,7 @@ def test_allocate():
 
     I = common.Dimension("I")
     J = common.Dimension("J")
-    domain = common.domain(((I, (0, 2)), (J, (0, 3))))
+    domain = common.domain({I: (0, 2), J: (0, 3)})
     dtype = core_defs.dtype(float)
 
     # Test with a explicit field allocator

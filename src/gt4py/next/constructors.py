@@ -247,10 +247,10 @@ def as_field(
         else:
             origin = {}
         actual_domain = common.domain(
-            [
-                (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
+            {
+                d: (-(start_offset := origin.get(d, 0)), s - start_offset)
                 for d, s in zip(domain, data.shape)
-            ]
+            }
         )
     else:
         if origin:
@@ -332,7 +332,7 @@ def as_connectivity(
             raise ValueError(
                 f"Cannot construct 'Field' from array of shape '{data.shape}' and domain '{domain}'."
             )
-        actual_domain = common.domain([(d, (0, s)) for d, s in zip(domain, data.shape)])
+        actual_domain = common.domain({d: (0, s) for d, s in zip(domain, data.shape)})
     else:
         actual_domain = common.domain(cast(common.DomainLike, domain))
 
